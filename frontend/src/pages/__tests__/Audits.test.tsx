@@ -11,20 +11,36 @@ const mockUpdateRun = vi.fn()
 const mockUpload = vi.fn()
 const mockCreateImportJob = vi.fn()
 const mockQueueImportJob = vi.fn()
+let mockSearchParams = new URLSearchParams()
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return {
     ...actual,
     useNavigate: () => mockNavigate,
-    // Provide a stable URLSearchParams with no params so deep-link logic is inert in tests
-    useSearchParams: () => [new URLSearchParams(), vi.fn()],
+    useSearchParams: () => [mockSearchParams, vi.fn()],
   }
 })
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, options?: Record<string, string>) => {
+      const translations: Record<string, string> = {
+        'audits.findings.type.positive': 'Positive practice',
+        'audits.findings.type.nonconformity': 'Nonconformity',
+        'audits.findings.empty.title': 'No findings recorded yet',
+        'audits.findings.empty.description':
+          'Complete an audit or inspection to record findings and positive practices.',
+        'audits.findings.actions.view_audits': 'View audits',
+        'audits.findings.actions.open_audit': 'Open audit workspace',
+        'audits.findings.deep_link_miss.title': 'Finding not found',
+        'audits.findings.deep_link_miss.description':
+          'Finding {{id}} is unavailable or outside the loaded results.',
+        'audits.findings.deep_link_miss.action': 'View all findings',
+      }
+      const value = translations[key] ?? key
+      return options?.id ? value.replace('{{id}}', options.id) : value
+    },
     i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
@@ -56,6 +72,7 @@ vi.mock('../../components/ui/Toast', () => ({
 describe('Audits external import flow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
     mockListRuns.mockResolvedValue({
       data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
     })
@@ -190,9 +207,12 @@ describe('Audits external import flow', () => {
       source_document_asset_id: 55,
     })
     expect(mockQueueImportJob).toHaveBeenCalledWith(72)
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/audits/41/import-review?jobId=72')
-    }, { timeout: 3000 })
+    await waitFor(
+      () => {
+        expect(mockNavigate).toHaveBeenCalledWith('/audits/41/import-review?jobId=72')
+      },
+      { timeout: 3000 },
+    )
   })
 
   it('requires a report before importing an external audit', async () => {
@@ -348,9 +368,12 @@ describe('Audits external import flow', () => {
     await waitFor(() => {
       expect(mockQueueImportJob).toHaveBeenCalledWith(72)
     })
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/audits/41/import-review?jobId=72&queueError=1')
-    }, { timeout: 3000 })
+    await waitFor(
+      () => {
+        expect(mockNavigate).toHaveBeenCalledWith('/audits/41/import-review?jobId=72&queueError=1')
+      },
+      { timeout: 3000 },
+    )
   })
 
   it('surfaces structured backend import errors instead of schedule fallback text', async () => {
@@ -463,6 +486,7 @@ describe('Audits external import flow', () => {
 describe('Audits findings CUJ deep-links', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
     mockListRuns.mockResolvedValue({
       data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
     })
@@ -523,5 +547,74 @@ describe('Audits findings CUJ deep-links', () => {
     expect(screen.queryByTestId('finding-open-capa-502')).not.toBeInTheDocument()
     fireEvent.click(screen.getByTestId('finding-open-risk-502'))
     expect(mockNavigate).toHaveBeenCalledWith('/risk-register?auditOnly=1&auditRef=AF-00502')
+  })
+
+  it('visually distinguishes positive practices from nonconformities', async () => {
+    render(<Audits />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Findings' }))
+
+    expect(await screen.findByText('Nonconformity')).toBeInTheDocument()
+    expect(screen.getByText('Positive practice')).toBeInTheDocument()
+    expect(screen.getByTestId('finding-type-501')).toHaveClass('text-destructive')
+    expect(screen.getByTestId('finding-type-502')).toHaveClass('text-success')
+    expect(screen.getByTestId('finding-card-501')).toHaveClass('border-l-destructive')
+    expect(screen.getByTestId('finding-card-502')).toHaveClass('border-l-success')
+  })
+
+  it('shows an actionable empty state for audits without findings', async () => {
+    mockListFindings.mockResolvedValueOnce({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 41,
+            reference_number: 'AUD-00041',
+            template_id: 21,
+            template_version: 3,
+            title: 'Site inspection',
+            status: 'scheduled',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Findings' }))
+
+    expect(await screen.findByText('No findings recorded yet')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Complete an audit or inspection to record findings and positive practices.',
+      ),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open audit workspace' }))
+    expect(mockNavigate).toHaveBeenCalledWith('/audits/41/execute')
+
+    fireEvent.click(screen.getByRole('button', { name: 'View audits' }))
+    expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('shows a clear message when a finding deep-link does not resolve', async () => {
+    mockSearchParams = new URLSearchParams('view=findings&findingId=999')
+
+    render(<Audits />)
+
+    expect(await screen.findByText('Finding not found')).toBeInTheDocument()
+    expect(
+      screen.getByText('Finding 999 is unavailable or outside the loaded results.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Missing PPE at gate')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'View all findings' }))
+    expect(mockNavigate).toHaveBeenCalledWith('/audits?view=findings')
   })
 })
