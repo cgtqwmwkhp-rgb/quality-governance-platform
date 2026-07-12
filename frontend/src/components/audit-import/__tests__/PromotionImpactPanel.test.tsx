@@ -19,4 +19,30 @@ describe('PromotionImpactPanel', () => {
     expect(screen.getByText(/aligned/i)).toBeInTheDocument()
     expect(screen.getByText('UVDB mapped')).toBeInTheDocument()
   })
+
+  it('shows ≤2-click attest next-step when accepted findings are ready', () => {
+    render(
+      <PromotionImpactPanel
+        approvedCount={3}
+        acceptedClauseCount={1}
+        acceptedActionCandidates={1}
+        acceptedRiskCandidates={0}
+      />,
+    )
+    expect(screen.getByTestId('import-review-impact-attest-next')).toHaveTextContent(
+      /Promote Now, then Confirm — two clicks to attest/i,
+    )
+  })
+
+  it('hides attest next-step when no accepted findings', () => {
+    render(
+      <PromotionImpactPanel
+        approvedCount={0}
+        acceptedClauseCount={0}
+        acceptedActionCandidates={0}
+        acceptedRiskCandidates={0}
+      />,
+    )
+    expect(screen.queryByTestId('import-review-impact-attest-next')).not.toBeInTheDocument()
+  })
 })

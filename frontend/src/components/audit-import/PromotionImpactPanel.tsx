@@ -24,6 +24,15 @@ export function PromotionImpactPanel({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
+        {approvedCount > 0 ? (
+          <p
+            className="text-xs text-muted-foreground"
+            data-testid="import-review-impact-attest-next"
+            role="status"
+          >
+            Next: Promote Now, then Confirm — two clicks to attest accepted drafts.
+          </p>
+        ) : null}
         <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded-lg border border-border p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
