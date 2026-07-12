@@ -13,6 +13,8 @@ from src.infrastructure.security.login_lockout import (
     RedisLoginLockoutStore,
     get_login_lockout_store,
     reset_login_lockout_store_for_tests,
+    resolve_lockout_duration_seconds,
+    resolve_max_failed_attempts,
 )
 
 
@@ -39,6 +41,38 @@ async def test_in_memory_lockout_after_max_failures() -> None:
 
     await store.clear(email)
     assert await store.check_lockout(email) is None
+
+
+@pytest.mark.asyncio
+async def test_in_memory_failure_count_and_env_thresholds(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LOGIN_LOCKOUT_MAX_ATTEMPTS", "3")
+    monkeypatch.setenv("LOGIN_LOCKOUT_DURATION_SECONDS", "120")
+    store = InMemoryLoginLockoutStore(
+        max_failed_attempts=resolve_max_failed_attempts(),
+        lockout_duration_seconds=resolve_lockout_duration_seconds(),
+    )
+    email = "tune@example.com"
+
+    assert resolve_max_failed_attempts() == 3
+    assert resolve_lockout_duration_seconds() == 120
+
+    await store.record_failure(email)
+    await store.record_failure(email)
+    assert await store.failure_count(email) == 2
+    assert await store.check_lockout(email) is None
+
+    await store.record_failure(email)
+    assert await store.failure_count(email) == 3
+    unlock_in = await store.check_lockout(email)
+    assert unlock_in is not None
+    assert 1 <= unlock_in <= 120
+
+
+def test_resolve_thresholds_reject_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LOGIN_LOCKOUT_MAX_ATTEMPTS", "not-a-number")
+    monkeypatch.setenv("LOGIN_LOCKOUT_DURATION_SECONDS", "0")
+    assert resolve_max_failed_attempts() == MAX_FAILED_ATTEMPTS
+    assert resolve_lockout_duration_seconds() == LOCKOUT_DURATION_SECONDS
 
 
 @pytest.mark.asyncio
@@ -76,7 +110,7 @@ async def test_redis_store_uses_sorted_set_pipeline() -> None:
     pipe.zremrangebyscore.assert_called()
     pipe.zcard.assert_called()
 
-    pipe.execute = AsyncMock(return_value=[0, 1])
+    pipe.execute = AsyncMock(return_value=[0, 1, None, MAX_FAILED_ATTEMPTS])
     await store.record_failure("locked@example.com")
     pipe.zadd.assert_called()
 
