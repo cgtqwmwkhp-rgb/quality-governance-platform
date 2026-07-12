@@ -34,6 +34,12 @@ SOFT_GATE_HARD_GATE_PROMOTE: dict[str, float | int] = {
     "p95_headroom_fraction": 0.8,  # all runs ≤ 0.8× staging p95 (margin vs flaky runners)
 }
 
+# Advisory soft-gate re-enable / demote readiness (Promote → Demote safety valve).
+# Never flips workflow YAML or branch protection; operators still act manually.
+SOFT_GATE_REENABLE: dict[str, float | int] = {
+    "breach_run_count": 2,  # ≥ N recent staging-bar breaches → consider re-enabling soft-gate
+}
+
 # Named profiles for Preferred S14 performance bar. Env overrides always win.
 LOCUST_PROFILES: dict[str, dict[str, float | int | str]] = {
     "default": {
@@ -335,6 +341,71 @@ def evaluate_hard_gate_promotion_readiness(trend_records: list[dict]) -> dict:
         "stable_under_staging_bar": stable,
         "within_p95_headroom": within_headroom,
         "ready_for_hard_gate_promotion": ready,
+        "actions": actions,
+    }
+
+
+def evaluate_soft_gate_reenable_readiness(trend_records: list[dict]) -> dict:
+    """Decide whether repeated staging-bar breaches warrant soft-gate re-enable.
+
+    Advisory only — never changes Locust exit codes, workflow YAML, branch
+    protection, or profiles. Ready when the last ``breach_run_count`` runs all
+    exceed the staging p95 **or** error-rate bar (false-positive / capacity
+    noise after a hard-gate promote). Operators may then re-set
+    ``LOCUST_SOFT_GATE=1`` and drop hard-gate branch protection.
+    """
+    required = int(SOFT_GATE_REENABLE["breach_run_count"])
+    staging_p95 = int(LOCUST_PROFILES["staging"]["p95_response_ms"])
+    staging_err = float(LOCUST_PROFILES["staging"]["error_rate_pct"])
+
+    window = list(trend_records[-required:]) if trend_records else []
+    enough = len(window) >= required
+    actions: list[str] = []
+
+    if not enough:
+        actions.append(
+            f"Collect ≥{required} soft-gate trend records before considering "
+            f"soft-gate re-enable / hard-gate demote (have {len(window)})."
+        )
+        return {
+            "schema": "locust-soft-gate-reenable/v1",
+            "window_size": len(window),
+            "required_runs": required,
+            "enough_runs": False,
+            "staging_p95_limit_ms": staging_p95,
+            "staging_error_rate_limit_pct": staging_err,
+            "sustained_staging_breaches": False,
+            "ready_for_soft_gate_reenable": False,
+            "actions": actions,
+        }
+
+    def _breaches_staging(record: dict) -> bool:
+        result = _trend_result(record)
+        return float(result.get("p95_ms") or 0) > staging_p95 or float(result.get("error_rate_pct") or 0) > staging_err
+
+    sustained = all(_breaches_staging(r) for r in window)
+    if sustained:
+        actions.append(
+            f"Staging bar breached across {required} recent runs — consider "
+            "re-enabling LOCUST_SOFT_GATE=1 and removing any hard-gate branch "
+            "protection requirement until trends stabilize again."
+        )
+    else:
+        actions.append(
+            "Not ready for soft-gate re-enable — keep the current gate posture "
+            f"until p95/error rate exceed the staging bar ({staging_p95} ms / "
+            f"{staging_err}%) across {required} recent runs."
+        )
+
+    return {
+        "schema": "locust-soft-gate-reenable/v1",
+        "window_size": len(window),
+        "required_runs": required,
+        "enough_runs": True,
+        "staging_p95_limit_ms": staging_p95,
+        "staging_error_rate_limit_pct": staging_err,
+        "sustained_staging_breaches": sustained,
+        "ready_for_soft_gate_reenable": sustained,
         "actions": actions,
     }
 

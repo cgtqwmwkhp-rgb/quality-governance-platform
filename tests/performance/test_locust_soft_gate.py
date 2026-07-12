@@ -6,9 +6,11 @@ from tests.performance.thresholds import (
     LOCUST_PROFILES,
     QUEUE_DEPTH_SCALE_HINTS,
     SOFT_GATE_HARD_GATE_PROMOTE,
+    SOFT_GATE_REENABLE,
     SOFT_GATE_TRIAL_TIGHTEN,
     build_trend_record,
     evaluate_hard_gate_promotion_readiness,
+    evaluate_soft_gate_reenable_readiness,
     evaluate_sustained_scale_hints,
     evaluate_trial_tighten_readiness,
     resolve_perf_thresholds,
@@ -229,3 +231,35 @@ def test_evaluate_hard_gate_promotion_readiness_rejects_thin_margin():
     assert out["within_p95_headroom"] is False
     assert out["ready_for_hard_gate_promotion"] is False
     assert any("80%" in a or "400" in a for a in out["actions"])
+
+
+def test_soft_gate_reenable_constants_match_docs():
+    assert SOFT_GATE_REENABLE["breach_run_count"] == 2
+    # Demote window is shorter than hard-gate promote (fail-fast back to soft-gate).
+    assert SOFT_GATE_REENABLE["breach_run_count"] < SOFT_GATE_HARD_GATE_PROMOTE["stable_run_count"]
+
+
+def test_evaluate_soft_gate_reenable_readiness_needs_window():
+    out = evaluate_soft_gate_reenable_readiness([_trend(900.0)])
+    assert out["schema"] == "locust-soft-gate-reenable/v1"
+    assert out["enough_runs"] is False
+    assert out["ready_for_soft_gate_reenable"] is False
+    assert "Collect ≥2" in out["actions"][0]
+
+
+def test_evaluate_soft_gate_reenable_readiness_sustained_breaches():
+    records = [_trend(600.0), _trend(550.0, 1.5)]
+    out = evaluate_soft_gate_reenable_readiness(records)
+    assert out["enough_runs"] is True
+    assert out["sustained_staging_breaches"] is True
+    assert out["ready_for_soft_gate_reenable"] is True
+    assert any("LOCUST_SOFT_GATE=1" in a for a in out["actions"])
+
+
+def test_evaluate_soft_gate_reenable_readiness_rejects_mixed_window():
+    # One run still under staging bar → do not demote.
+    records = [_trend(600.0), _trend(200.0)]
+    out = evaluate_soft_gate_reenable_readiness(records)
+    assert out["ready_for_soft_gate_reenable"] is False
+    assert out["sustained_staging_breaches"] is False
+    assert any("Not ready for soft-gate re-enable" in a for a in out["actions"])
