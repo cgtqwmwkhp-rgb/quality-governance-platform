@@ -69,6 +69,10 @@ p95 **< 200 ms**. Tightening is intentional and staged:
    `locust-soft-gate-hard-gate-ready/v1`): last **5** runs ≤ staging bar with
    p95 ≤ **80%** of the staging limit (400 ms). Still advisory — never flips
    workflow YAML or branch protection.
+4. **Demote (re-enable soft-gate)** — if staging-bar breaches return after a
+   hard-gate promote, use `evaluate_soft_gate_reenable_readiness()` (schema
+   `locust-soft-gate-reenable/v1`): last **2** runs all above staging p95 or
+   error bar → consider `LOCUST_SOFT_GATE=1` again. Still advisory.
 
 Do **not** tighten the blocking `ci` profile (`LOCUST_P95_MS=10000`) as a
 Preferred score-mover; that profile exists for runner-noise tolerance.
@@ -81,4 +85,5 @@ Preferred score-mover; that profile exists for runner-noise tolerance.
 - `tests/performance/thresholds.py` — `QUEUE_DEPTH_SCALE_HINTS`,
   `evaluate_sustained_scale_hints()`, `SOFT_GATE_TRIAL_TIGHTEN`,
   `evaluate_trial_tighten_readiness()`, `SOFT_GATE_HARD_GATE_PROMOTE`,
-  `evaluate_hard_gate_promotion_readiness()`
+  `evaluate_hard_gate_promotion_readiness()`, `SOFT_GATE_REENABLE`,
+  `evaluate_soft_gate_reenable_readiness()`

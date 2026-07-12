@@ -92,6 +92,15 @@ on successive trend records: ready when the last
 bar **and** p95 stays ≤ **80%** of the staging limit (400 ms). Advisory only —
 it never flips workflow YAML or branch protection.
 
+## Soft-gate re-enable (demote safety valve)
+
+If a hard gate was promoted and staging-bar breaches return, use
+`evaluate_soft_gate_reenable_readiness()` (schema `locust-soft-gate-reenable/v1`):
+ready when the last `SOFT_GATE_REENABLE["breach_run_count"]` (**2**) runs all
+exceed the staging p95 **or** error-rate bar. Advisory only — operators may then
+re-set `LOCUST_SOFT_GATE=1` and drop hard-gate branch protection; the helper
+never flips workflow YAML.
+
 ## Related
 
 - [`docs/performance/api-slos.md`](api-slos.md) — CI vs production latency tiers
@@ -99,4 +108,5 @@ it never flips workflow YAML or branch protection.
 - [`docs/slo/performance-slos.md`](../slo/performance-slos.md) — load-test pass/fail criteria
 - [`tests/performance/locustfile.py`](../../tests/performance/locustfile.py) — profiles + soft-gate listener
 - `tests/performance/thresholds.py` — `SOFT_GATE_HARD_GATE_PROMOTE`,
-  `evaluate_hard_gate_promotion_readiness()`
+  `evaluate_hard_gate_promotion_readiness()`, `SOFT_GATE_REENABLE`,
+  `evaluate_soft_gate_reenable_readiness()`
