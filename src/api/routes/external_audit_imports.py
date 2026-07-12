@@ -12,8 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.api.dependencies import DbSession, require_permission
 from src.domain.models.external_audit_import import ExternalAuditDraftStatus, ExternalAuditImportStatus
 from src.domain.models.user import User
-from src.domain.services.external_audit_import_service import ExternalAuditImportService
 from src.infrastructure.tasks.external_audit_import_tasks import process_external_audit_import_job
+from src.services.external_audit_import_service import ExternalAuditImportService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

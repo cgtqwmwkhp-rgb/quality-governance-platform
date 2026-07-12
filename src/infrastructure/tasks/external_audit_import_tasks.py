@@ -41,7 +41,7 @@ def process_external_audit_import_job(self, job_id: int, tenant_id: int | None, 
     """Process a queued external audit import job."""
 
     async def _run() -> dict:
-        from src.domain.services.external_audit_import_service import ExternalAuditImportService
+        from src.services.external_audit_import_service import ExternalAuditImportService
 
         async with async_session_maker() as session:
             service = ExternalAuditImportService(session)
