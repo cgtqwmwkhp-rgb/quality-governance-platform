@@ -2,7 +2,7 @@
 
 **Owner:** Platform Engineering  
 **Classification:** Internal (C2)  
-**Status:** Foundation + `/readyz` degraded aggregate + Import Review banner
+**Status:** Foundation + `/readyz` degraded aggregate + Import Review banner + Azure Blob call-site
 
 ---
 
@@ -85,11 +85,22 @@ The banner accepts controlled `openCircuits` / `halfOpenCircuits` props, or opti
 
 ---
 
+## Azure Blob call-site
+
+| Attribute | Detail |
+|-----------|--------|
+| **Module** | [`src/infrastructure/storage.py`](../../src/infrastructure/storage.py) (`AzureBlobStorageService`) |
+| **Ops wrapped** | `upload` / `download` / `delete` via `call_via_upstream_breaker("blob_storage", …)` |
+| **Local FS** | `LocalFileStorageService` unchanged (dev path; no Preferred breaker) |
+| **Readyz** | [`storage_status.py`](../../src/infrastructure/upstream/storage_status.py) surfaces `circuits.blob_storage` + skipped ping (no Azure dial) |
+
+---
+
 ## Adoption notes
 
 1. Prefer `get_upstream_breaker` / `call_via_upstream_breaker` for **new** upstream call sites.
 2. Existing services that already construct `CircuitBreaker("mistral_analysis" | …)` remain compatible: `get_upstream_breaker` reuses the shared registry entry.
-3. Call-site migration onto the catalog facade remains incremental; do not invent secrets or live-ping providers from readiness.
+3. Call-site migration onto the catalog facade remains incremental (OCR/Gemini still ad-hoc constructors; blob Azure I/O now uses the facade); do not invent secrets or live-ping providers from readiness.
 
 ---
 
@@ -97,5 +108,6 @@ The banner accepts controlled `openCircuits` / `halfOpenCircuits` props, or opti
 
 - [`docs/architecture/resilience-patterns.md`](resilience-patterns.md) — general circuit breaker catalog (D05)
 - [`src/infrastructure/upstream/ai_status.py`](../../src/infrastructure/upstream/ai_status.py) — OCR/AI readiness honesty + circuit metadata
+- [`src/infrastructure/upstream/storage_status.py`](../../src/infrastructure/upstream/storage_status.py) — Blob readiness honesty + Preferred circuit metadata
 - [`src/infrastructure/upstream/degraded_status.py`](../../src/infrastructure/upstream/degraded_status.py) — Preferred degraded aggregate for `/readyz`
 - [`docs/api/error-catalog.md`](../api/error-catalog.md) — `CIRCUIT_BREAKER_OPEN` mapping guidance

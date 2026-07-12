@@ -3,6 +3,9 @@
 Blob storage is optional until operators set AZURE_STORAGE_CONNECTION_STRING.
 Readiness reports configuration without secrets; missing credentials stay
 ``not_configured`` and do not fail the probe.
+
+Circuit metadata for Preferred ``blob_storage`` is informational only — /readyz
+never dials Azure Blob or invents connection strings.
 """
 
 from __future__ import annotations
@@ -10,9 +13,34 @@ from __future__ import annotations
 import os
 from typing import Any
 
+_BLOB_CIRCUIT_NAME = "blob_storage"
+
 
 def _present(raw: str | None) -> bool:
     return bool((raw or "").strip())
+
+
+def _blob_circuit_metadata() -> dict[str, Any]:
+    """Return Preferred blob circuit health without inventing breaker state."""
+    try:
+        from src.infrastructure.resilience.circuit_breaker import get_all_circuits
+
+        registered = {cb.name: cb.get_health() for cb in get_all_circuits()}
+    except Exception:
+        registered = {}
+
+    if _BLOB_CIRCUIT_NAME in registered:
+        return {_BLOB_CIRCUIT_NAME: registered[_BLOB_CIRCUIT_NAME]}
+    return {
+        _BLOB_CIRCUIT_NAME: {
+            "name": _BLOB_CIRCUIT_NAME,
+            "state": "unregistered",
+            "note": (
+                "Circuit registers on first Azure Blob upload/download/delete "
+                "via the Preferred catalog facade in this process."
+            ),
+        }
+    }
 
 
 def get_upstream_storage_readiness() -> dict[str, Any]:
@@ -58,6 +86,16 @@ def get_upstream_storage_readiness() -> dict[str, Any]:
         "container_name": container_name if container_present else None,
         "role": "blob",
         "library": library,
+        "circuits": _blob_circuit_metadata(),
+        "ping": {
+            "status": "skipped",
+            "connectivity": "unprobed",
+            "note": (
+                "Azure Blob ping is not executed on /readyz. "
+                "Configuration and Preferred circuit metadata are reported instead; "
+                "live blob I/O happens only on evidence/attachment paths."
+            ),
+        },
     }
 
     if status == "not_configured":
