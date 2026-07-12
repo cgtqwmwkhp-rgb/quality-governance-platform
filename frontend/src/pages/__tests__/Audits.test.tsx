@@ -458,3 +458,69 @@ describe('Audits external import flow', () => {
     expect(screen.getByText('Imported Achilles Intake')).toBeInTheDocument()
   })
 })
+
+describe('Audits findings CUJ deep-links', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockListRuns.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+    mockListFindings.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 501,
+            reference_number: 'AF-00501',
+            run_id: 41,
+            title: 'Missing PPE at gate',
+            description: 'Operator without gloves',
+            severity: 'high',
+            finding_type: 'nonconformity',
+            status: 'open',
+            corrective_action_required: true,
+            risk_ids: [88],
+            created_at: '2026-07-12T10:00:00Z',
+          },
+          {
+            id: 502,
+            reference_number: 'AF-00502',
+            run_id: 41,
+            title: 'Good housekeeping',
+            description: 'Positive practice observed',
+            severity: 'observation',
+            finding_type: 'positive',
+            status: 'open',
+            corrective_action_required: false,
+            risk_ids: [],
+            created_at: '2026-07-12T10:01:00Z',
+          },
+        ],
+        total: 2,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+  })
+
+  it('navigates to Actions and Risk Register from finding cards', async () => {
+    render(<Audits />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Findings' }))
+
+    expect(await screen.findByText('Missing PPE at gate')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('finding-open-capa-501'))
+    expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=audit_finding&sourceId=501')
+
+    fireEvent.click(screen.getByTestId('finding-open-risk-501'))
+    expect(mockNavigate).toHaveBeenCalledWith('/risk-register?auditOnly=1&auditRef=AF-00501')
+
+    expect(screen.queryByTestId('finding-open-capa-502')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('finding-open-risk-502'))
+    expect(mockNavigate).toHaveBeenCalledWith('/risk-register?auditOnly=1&auditRef=AF-00502')
+  })
+})

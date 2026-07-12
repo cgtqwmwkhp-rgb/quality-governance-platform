@@ -1121,6 +1121,41 @@ export default function Audits() {
                         </span>
                       </div>
                     )}
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      {finding.corrective_action_required && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          data-testid={`finding-open-capa-${finding.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            navigate(
+                              `/actions?sourceType=audit_finding&sourceId=${finding.id}`,
+                            )
+                          }}
+                        >
+                          Open CAPA
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        data-testid={`finding-open-risk-${finding.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const ref = encodeURIComponent(finding.reference_number || '')
+                          navigate(
+                            `/risk-register?auditOnly=1&auditRef=${ref}`,
+                          )
+                        }}
+                      >
+                        {finding.risk_ids && finding.risk_ids.length > 0
+                          ? 'Open risk register'
+                          : 'View risk register'}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </Card>
