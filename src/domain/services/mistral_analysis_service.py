@@ -278,9 +278,7 @@ class MistralAnalysisService:
                     resp.raise_for_status()
                     return resp
 
-            response = await call_via_upstream_breaker(
-                _MISTRAL_UPSTREAM_BREAKER, _do_call
-            )
+            response = await call_via_upstream_breaker(_MISTRAL_UPSTREAM_BREAKER, _do_call)
 
             data = response.json()
             content = data["choices"][0]["message"]["content"]
