@@ -61,6 +61,7 @@ import {
   SelectValue,
 } from '../components/ui'
 import { cn } from '../helpers/utils'
+import { getImportReviewPath } from '../components/audit-import/importReviewHelpers'
 
 /**
  * Maps entity_type values (as stored in ComplianceEvidenceLink) to valid SPA routes.
@@ -1072,14 +1073,23 @@ export default function ComplianceEvidence() {
                           {(record.observations ?? 0) > 0 && (
                             <span>{record.observations} observations</span>
                           )}
-                          {record.import_job_id && (
-                            <Link
-                              to={`/audits/0/import-review?jobId=${record.import_job_id}`}
-                              className="text-primary hover:underline flex items-center gap-1 ml-auto"
-                            >
-                              View Import <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
-                            </Link>
-                          )}
+                          {record.import_job_id &&
+                            (() => {
+                              const path = getImportReviewPath(
+                                record.audit_run_id,
+                                record.import_job_id,
+                              )
+                              if (!path) return null
+                              return (
+                                <Link
+                                  to={path}
+                                  className="text-primary hover:underline flex items-center gap-1 ml-auto"
+                                >
+                                  View Import{' '}
+                                  <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+                                </Link>
+                              )
+                            })()}
                         </div>
                       </div>
                     ))}
