@@ -77,6 +77,32 @@ def _dpia_disclosure() -> dict[str, Any]:
     }
 
 
+def _technical_organisational_measures() -> dict[str, Any]:
+    """Art. 30(1)(g) general TOM / security-measures disclosure (unsigned stub).
+
+    Points at documentary sources only — does **not** claim EA-02 pen-test
+    close-out or invent DPO acceptance of residual risk.
+    """
+    return {
+        "summary_doc": "docs/security/security-baseline.md",
+        "dpia_section": "docs/compliance/dpia-quality-governance-platform.md",
+        "dpia_section_ref": "§5 Technical and organisational measures",
+        "controls": [
+            "encryption_at_rest_and_in_transit",
+            "rbac_and_tenant_isolation",
+            "soft_delete_and_retention_jobs",
+            "key_vault_secrets",
+            "structured_audit_logging",
+            "optional_ai_keys_off_by_default",
+        ],
+        "note": (
+            "General Art. 30(1)(g) description for auditor readability only. "
+            "Not a substitute for EA-02 external penetration testing; "
+            "DPO §9 / EA-03 remain unsigned."
+        ),
+    }
+
+
 def _subprocessors() -> list[dict[str, Any]]:
     """Public sub-processor list (Art. 28 disclosure stub).
 
@@ -297,14 +323,16 @@ async def data_processing_register() -> dict[str, Any]:
             "attestation_pack": "docs/compliance/s15-dpia-art30-attestation-pack.md",
         },
         "ropa_checklist": "docs/compliance/article-30-ropa-checklist.md",
+        "technical_organisational_measures": _technical_organisational_measures(),
         "subprocessors": _subprocessors(),
         "activities": _processing_activities(),
         "contact": "/api/v1/privacy/contact",
         "as_of": _as_of(),
         "note": (
             "Stub disclosure for auditors and operators — register_kind remains "
-            "article_30_stub. Activity rows include purpose + data_subject_categories "
-            "for Art. 30(1)(b)/(c) readability; link signed DPAs and complete DPO §9 "
-            "before treating as full Art. 30 ROPA."
+            "article_30_stub. Includes purpose / data_subject_categories and a "
+            "general technical_organisational_measures block for Art. 30(1)(g) "
+            "readability; link signed DPAs and complete DPO §9 before treating "
+            "as full Art. 30 ROPA. EA-02 is not claimed closed."
         ),
     }
