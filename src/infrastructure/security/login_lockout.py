@@ -71,9 +71,7 @@ class InMemoryLoginLockoutStore:
             max_failed_attempts if max_failed_attempts is not None else resolve_max_failed_attempts()
         )
         self._lockout_duration_seconds = (
-            lockout_duration_seconds
-            if lockout_duration_seconds is not None
-            else resolve_lockout_duration_seconds()
+            lockout_duration_seconds if lockout_duration_seconds is not None else resolve_lockout_duration_seconds()
         )
 
     def _prune(self, email: str, now: float) -> list[float]:
@@ -128,9 +126,7 @@ class RedisLoginLockoutStore:
             max_failed_attempts if max_failed_attempts is not None else resolve_max_failed_attempts()
         )
         self._lockout_duration_seconds = (
-            lockout_duration_seconds
-            if lockout_duration_seconds is not None
-            else resolve_lockout_duration_seconds()
+            lockout_duration_seconds if lockout_duration_seconds is not None else resolve_lockout_duration_seconds()
         )
         self._fallback = InMemoryLoginLockoutStore(
             max_failed_attempts=self._max_failed_attempts,
