@@ -445,5 +445,7 @@ export function createAuditsApi(api: AxiosInstance) {
     api.post<AuditFinding>(`/api/v1/audits/runs/${runId}/findings`, data),
   updateFinding: (findingId: number, data: AuditFindingUpdate) =>
     api.patch<AuditFinding>(`/api/v1/audits/findings/${findingId}`, data),
+  flagFindingToRisk: (findingId: number, data: { severity?: 'critical' | 'high' | 'medium' | 'low' } = {}) =>
+    api.post<AuditFinding>(`/api/v1/audits/findings/${findingId}/flag-risk`, data),
 }
 }

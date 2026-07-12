@@ -1155,6 +1155,41 @@ export default function Audits() {
                           ? 'Open risk register'
                           : 'View risk register'}
                       </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        data-testid={`finding-flag-risk-${finding.id}`}
+                        disabled={Boolean(finding.risk_ids && finding.risk_ids.length > 0)}
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          try {
+                            const res = await auditsApi.flagFindingToRisk(finding.id, {
+                              severity:
+                                finding.severity === 'critical' ||
+                                finding.severity === 'high' ||
+                                finding.severity === 'medium' ||
+                                finding.severity === 'low'
+                                  ? finding.severity
+                                  : 'high',
+                            })
+                            setFindings((prev) =>
+                              prev.map((f) => (f.id === finding.id ? { ...f, ...res.data } : f)),
+                            )
+                            navigate(
+                              `/risk-register?auditOnly=1&auditRef=${encodeURIComponent(
+                                finding.reference_number || '',
+                              )}`,
+                            )
+                          } catch (err) {
+                            console.error('Failed to flag finding to risk register', err)
+                          }
+                        }}
+                      >
+                        {finding.risk_ids && finding.risk_ids.length > 0
+                          ? 'Already on risk register'
+                          : 'Flag to risk register'}
+                      </Button>
                     </div>
                   </div>
                 </div>
