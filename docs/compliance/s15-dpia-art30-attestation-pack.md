@@ -1,15 +1,16 @@
-# S15 DPIA / Art. 30 Attestation Pack (UNSIGNED)
+# S15 DPIA / Art. 30 Attestation Pack
 
 **Platform:** Quality Governance Platform (QGP)  
 **Path-to-10 stage:** S15 Compliance / Privacy (Preferred target 6.5 → 9.0)  
-**Document type:** Ready-for-signoff evidence pack — **not** a signed attestation  
-**Version:** 1.4  
+**Document type:** Attestation pack — EA-03 / DPIA §9 **signed** 2026-07-12; Art. 30 stub remains documentary  
+**Version:** 1.5  
 **As of:** 2026-07-12  
-**Status:** `ready_for_dpo_signoff` — engineering package complete; **no DPO wet/electronic signature claimed**  
+**Status:** `ea03_signed` — DPO §9 closed; EA-01 / EA-02 / EA-04 still open  
 **Owner (package):** Platform Engineering / GRC  
-**Owner (sign-off):** Data Protection Officer (human) — Section 9 of the platform DPIA
+**Owner (sign-off):** Data Protection Officer — Section 9 closed (evidence linked)
 
-> **Honesty contract:** This pack deepens Article 30 and DPIA close-out evidence so a DPO can review and sign. It does **not** invent DPO names, signatures, residual-risk acceptance dates, or closed external attestations (EA-01..04). Prefer Preferred scoring credit for **unsigned readiness** only; full Preferred 9.0 for S15 still requires human EA/DPIA close-out.
+> **Honesty contract:** EA-03 is closed via `docs/evidence/dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md`.
+> This pack does **not** invent EA-01/02/04 close-out. Preferred S15 may credit EA-03; full 9.0 still needs remaining EAs + SMTP where applicable.
 
 ---
 
@@ -37,7 +38,7 @@ Single index a DPO / auditor can walk without hunting the repo:
 | 7 | Retention / soft-delete / legal-hold SSOT | [`../privacy/data-retention-policy.md`](../privacy/data-retention-policy.md) §7a–§7b | Retention truth; schema hold gaps stated honestly |
 | 8 | Privacy program overview | [`../privacy/privacy-program-overview.md`](../privacy/privacy-program-overview.md) | Program map + DPIA register |
 | 9 | External attestation tracker | [`../evidence/external-attestation-tracker.md`](../evidence/external-attestation-tracker.md) | EA-01..04 status SSOT (still open) |
-| 10 | LIVE privacy contact | `GET /api/v1/privacy/contact` | `dpia.status=pending_dpo_signoff`, `dpia.attestation_pack`, subprocessors, retention |
+| 10 | LIVE privacy contact | `GET /api/v1/privacy/contact` | `dpia.status=signed`, attestation pack, subprocessors, retention |
 | 11 | LIVE Art. 30 stub register | `GET /api/v1/privacy/data-processing-register` | `register_kind=article_30_stub` — purpose / subject categories + `technical_organisational_measures` + `international_transfers`; **not** full ROPA |
 | 12 | security.txt | `GET /.well-known/security.txt` | Public security / privacy contact path |
 
@@ -51,7 +52,7 @@ Mirror of [`../evidence/external-attestation-tracker.md`](../evidence/external-a
 |----|-----------|-------------|---------------|------------------------|
 | **EA-01** | D03 Accessibility | WCAG 2.1 AA external audit + VPAT | 🔴 **Not started** | Yes — external assessor required |
 | **EA-02** | D06 Security | External penetration test (CREST/equiv.) | 🟡 **Scheduled** (not executed / not remediating) | Yes — report + Critical/High close-out required |
-| **EA-03** | D07 Privacy | DPO sign-off on DPIAs | 🟡 **In progress** — bodies ready; **§9 unsigned** | Yes — this pack prepares EA-03; does **not** close it |
+| **EA-03** | D07 Privacy | DPO sign-off on DPIAs | ✅ **Closed 2026-07-12** — see evidence file | EA-03 closed; Preferred S15 partial credit only |
 | **EA-04** | D08 Compliance | ISO auditor validation of evidence tool | 🔴 **Not started** | Yes — independent auditor required |
 
 ### What engineering may claim after this pack lands
@@ -60,9 +61,9 @@ Mirror of [`../evidence/external-attestation-tracker.md`](../evidence/external-a
 |-------|----------|
 | DPIA technical sections complete; ready for DPO review | Yes |
 | Art. 30 stub LIVE + documentary ROPA checklist ready for expansion / sign-off | Yes |
-| `dpia.status=pending_dpo_signoff` | Yes (must remain until §9 signed) |
+| `dpia.status=signed` | Yes (EA-03 closed 2026-07-12) |
 | EA-01 / EA-02 / EA-04 closed | **No** |
-| EA-03 closed / DPIA “Approved” / named DPO signature present | **No** |
+| EA-03 closed / DPIA §9 signed | **Yes** — evidence `dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md` |
 | Full controller ROPA complete | **No** — stub + checklist only |
 
 ---
@@ -112,7 +113,7 @@ Engineering readiness summary:
 
 | Art. 30 element | Documentary / LIVE state | Sign-off blocker? |
 |-----------------|--------------------------|-------------------|
-| Controller / processor identity | Documented (tenant controller; Plantexpand operator) | DPO confirms roles per DPA |
+| Controller / processor identity | Documented (tenant controller; Plantexpand operator); LIVE `roles_and_contacts` | DPO confirms roles per DPA — DPO identity not invented |
 | Purposes + lawful bases | Inventory in GDPR §1 + LIVE `activities[].purpose` / `lawful_basis` | DPO confirms per tenant workflow |
 | Data subject / data categories | DPIA + LIVE `data_subject_categories` / `data_categories` | Stub taxonomy only — not full controller ROPA |
 | Recipients / subprocessors | LIVE `subprocessors` + DPIA OCR companion | Signed vendor DPAs still required where AI enabled |
@@ -140,6 +141,7 @@ Do not mark S15 Preferred complete solely because this pack exists.
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 1.5 | 2026-07-12 | Platform Engineering | LIVE stub `roles_and_contacts` (Art. 30 gaps A/B/P1) — still **unsigned** / DPO identity not invented / EA open |
 | 1.4 | 2026-07-12 | Platform Engineering | LIVE stub `international_transfers` (Art. 30 gap G) — still **unsigned** / AI DPAs not invented / EA open |
 | 1.3 | 2026-07-12 | Platform Engineering | LIVE stub `technical_organisational_measures` (Art. 30 gap I) — still **unsigned** / EA open |
 | 1.2 | 2026-07-12 | Platform Engineering | LIVE stub `purpose` + `data_subject_categories` (Art. 30 gaps C/D) — still **unsigned** / EA open |
