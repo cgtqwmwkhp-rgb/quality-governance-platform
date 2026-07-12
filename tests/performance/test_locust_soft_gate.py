@@ -5,8 +5,10 @@ import json
 from tests.performance.thresholds import (
     LOCUST_PROFILES,
     QUEUE_DEPTH_SCALE_HINTS,
+    SOFT_GATE_TRIAL_TIGHTEN,
     build_trend_record,
     evaluate_sustained_scale_hints,
+    evaluate_trial_tighten_readiness,
     resolve_perf_thresholds,
     write_soft_gate_summary,
 )
@@ -153,3 +155,37 @@ def test_evaluate_sustained_scale_hints_no_trigger_when_mixed():
     assert out["p95_scale_hint"] is False
     assert out["error_rate_scale_hint"] is False
     assert out["actions"] == ["No sustained scale hint — keep observing under soft-gate."]
+
+
+def test_soft_gate_trial_tighten_constants_match_docs():
+    assert SOFT_GATE_TRIAL_TIGHTEN["p95_response_ms"] == 350
+    assert SOFT_GATE_TRIAL_TIGHTEN["error_rate_pct"] == 1.0
+    assert SOFT_GATE_TRIAL_TIGHTEN["stable_run_count"] == 3
+    # Trial is stricter than staging bar but still soft-gate only.
+    assert SOFT_GATE_TRIAL_TIGHTEN["p95_response_ms"] < LOCUST_PROFILES["staging"]["p95_response_ms"]
+
+
+def test_evaluate_trial_tighten_readiness_needs_window():
+    out = evaluate_trial_tighten_readiness([_trend(100.0), _trend(120.0)])
+    assert out["schema"] == "locust-soft-gate-trial-tighten/v1"
+    assert out["enough_runs"] is False
+    assert out["ready_for_trial_tighten"] is False
+    assert out["trial_p95_ms"] == 350
+    assert "Collect ≥3" in out["actions"][0]
+
+
+def test_evaluate_trial_tighten_readiness_stable_window():
+    records = [_trend(200.0), _trend(180.0, 0.2), _trend(220.0, 0.5)]
+    out = evaluate_trial_tighten_readiness(records)
+    assert out["enough_runs"] is True
+    assert out["stable_under_staging_bar"] is True
+    assert out["ready_for_trial_tighten"] is True
+    assert any("LOCUST_P95_MS=350" in a for a in out["actions"])
+
+
+def test_evaluate_trial_tighten_readiness_rejects_breach():
+    records = [_trend(200.0), _trend(600.0), _trend(180.0)]
+    out = evaluate_trial_tighten_readiness(records)
+    assert out["ready_for_trial_tighten"] is False
+    assert out["stable_under_staging_bar"] is False
+    assert any("Not ready for trial tighten" in a for a in out["actions"])

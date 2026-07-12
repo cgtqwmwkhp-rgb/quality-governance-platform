@@ -19,6 +19,14 @@ QUEUE_DEPTH_SCALE_HINTS: dict[str, float | int] = {
     "staging_users": 20,  # soft-gate load shape (capacity-plan alignment)
 }
 
+# Candidate non-blocking soft-gate tighten (docs Observe → Document → Promote).
+# Applied only via env overrides (e.g. LOCUST_P95_MS=350); never mutates profiles.
+SOFT_GATE_TRIAL_TIGHTEN: dict[str, float | int] = {
+    "p95_response_ms": 350,  # trial LOCUST_P95_MS while LOCUST_SOFT_GATE=1
+    "error_rate_pct": 1.0,  # keep staging error bar; tighten latency first
+    "stable_run_count": 3,  # ≥ N recent runs under current staging bar before trial
+}
+
 # Named profiles for Preferred S14 performance bar. Env overrides always win.
 LOCUST_PROFILES: dict[str, dict[str, float | int | str]] = {
     "default": {
@@ -169,6 +177,76 @@ def evaluate_sustained_scale_hints(trend_records: list[dict]) -> dict:
         "error_rate_hint_limit_pct": err_hint_limit,
         "p95_scale_hint": p95_scale,
         "error_rate_scale_hint": err_scale,
+        "actions": actions,
+    }
+
+
+def evaluate_trial_tighten_readiness(trend_records: list[dict]) -> dict:
+    """Decide whether soft-gate trends are stable enough to trial a tighter p95.
+
+    Advisory only — never changes Locust exit codes, workflow YAML, or profiles.
+    Ready when the last ``stable_run_count`` runs are all under the current
+    staging p95 / error-rate bars (so operators may trial ``LOCUST_P95_MS=350``
+    with ``LOCUST_SOFT_GATE=1`` still on).
+    """
+    required = int(SOFT_GATE_TRIAL_TIGHTEN["stable_run_count"])
+    trial_p95 = int(SOFT_GATE_TRIAL_TIGHTEN["p95_response_ms"])
+    trial_err = float(SOFT_GATE_TRIAL_TIGHTEN["error_rate_pct"])
+    staging_p95 = int(LOCUST_PROFILES["staging"]["p95_response_ms"])
+    staging_err = float(LOCUST_PROFILES["staging"]["error_rate_pct"])
+
+    window = list(trend_records[-required:]) if trend_records else []
+    enough = len(window) >= required
+    actions: list[str] = []
+
+    if not enough:
+        actions.append(
+            f"Collect ≥{required} soft-gate trend records under the staging bar "
+            f"before trialling LOCUST_P95_MS={trial_p95} (have {len(window)})."
+        )
+        return {
+            "schema": "locust-soft-gate-trial-tighten/v1",
+            "window_size": len(window),
+            "required_runs": required,
+            "enough_runs": False,
+            "staging_p95_limit_ms": staging_p95,
+            "staging_error_rate_limit_pct": staging_err,
+            "trial_p95_ms": trial_p95,
+            "trial_error_rate_pct": trial_err,
+            "stable_under_staging_bar": False,
+            "ready_for_trial_tighten": False,
+            "actions": actions,
+        }
+
+    stable = all(
+        float(_trend_result(r).get("p95_ms") or 0) <= staging_p95
+        and float(_trend_result(r).get("error_rate_pct") or 0) <= staging_err
+        for r in window
+    )
+    if stable:
+        actions.append(
+            f"Staging bar stable across {required} runs — trial "
+            f"LOCUST_P95_MS={trial_p95} with LOCUST_SOFT_GATE=1 still on "
+            "(do not tighten the blocking ci profile)."
+        )
+    else:
+        actions.append(
+            "Not ready for trial tighten — keep observing until p95/error rate "
+            f"stay ≤ staging bar ({staging_p95} ms / {staging_err}%) across "
+            f"{required} recent runs."
+        )
+
+    return {
+        "schema": "locust-soft-gate-trial-tighten/v1",
+        "window_size": len(window),
+        "required_runs": required,
+        "enough_runs": True,
+        "staging_p95_limit_ms": staging_p95,
+        "staging_error_rate_limit_pct": staging_err,
+        "trial_p95_ms": trial_p95,
+        "trial_error_rate_pct": trial_err,
+        "stable_under_staging_bar": stable,
+        "ready_for_trial_tighten": stable,
         "actions": actions,
     }
 
