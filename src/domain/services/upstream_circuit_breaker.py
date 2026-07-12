@@ -75,6 +75,12 @@ UPSTREAM_BREAKER_SPECS: Mapping[str, UpstreamBreakerSpec] = {
         failure_threshold=5,
         recovery_timeout=60.0,
     ),
+    "document_ai": UpstreamBreakerSpec(
+        name="document_ai",
+        role="document_ai",
+        failure_threshold=5,
+        recovery_timeout=60.0,
+    ),
 }
 
 UPSTREAM_BREAKER_NAMES: tuple[str, ...] = tuple(UPSTREAM_BREAKER_SPECS.keys())

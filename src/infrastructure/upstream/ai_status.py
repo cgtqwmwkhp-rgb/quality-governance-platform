@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-_AI_CIRCUIT_NAMES = ("mistral_analysis", "gemini_ai", "gemini_review")
+_AI_CIRCUIT_NAMES = ("mistral_analysis", "gemini_ai", "gemini_review", "document_ai")
 
 
 def _present(raw: str | None) -> bool:

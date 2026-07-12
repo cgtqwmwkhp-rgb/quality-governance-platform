@@ -17,8 +17,12 @@ from typing import Optional
 import httpx
 
 from src.core.config import settings
+from src.domain.services.upstream_circuit_breaker import call_via_upstream_breaker
 
 logger = logging.getLogger(__name__)
+
+# Preferred S10 catalog name for Anthropic document-analysis dials.
+_DOCUMENT_AI_UPSTREAM_BREAKER = "document_ai"
 
 
 @dataclass
@@ -77,7 +81,10 @@ Always respond with valid JSON matching the requested schema."""
         self.base_url = "https://api.anthropic.com/v1"
 
     async def analyze_document(self, content: str, file_name: str, file_type: str) -> DocumentAnalysis:
-        """Analyze document content and extract metadata."""
+        """Analyze document content and extract metadata.
+
+        Outbound Anthropic dials go through Preferred ``document_ai`` breaker.
+        """
 
         if not self.api_key:
             logger.warning("No Anthropic API key configured, using fallback analysis")
@@ -116,46 +123,50 @@ Respond with JSON matching this schema:
 }}"""
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self.base_url}/messages",
-                    headers={
-                        "x-api-key": self.api_key,
-                        "anthropic-version": "2023-06-01",
-                        "content-type": "application/json",
-                    },
-                    json={
-                        "model": self.model,
-                        "max_tokens": 2000,
-                        "system": self.SYSTEM_PROMPT,
-                        "messages": [{"role": "user", "content": prompt}],
-                    },
-                    timeout=60.0,
-                )
-                response.raise_for_status()
 
-                data = response.json()
-                ai_response = data["content"][0]["text"]
-
-                # Parse JSON from response
-                json_match = re.search(r"\{[\s\S]*\}", ai_response)
-                if json_match:
-                    result = json.loads(json_match.group())
-                    return DocumentAnalysis(
-                        summary=result.get("summary", ""),
-                        document_type=result.get("document_type", "other"),
-                        category=result.get("category", ""),
-                        tags=result.get("tags", []),
-                        keywords=result.get("keywords", []),
-                        topics=result.get("topics", []),
-                        entities=result.get("entities", {}),
-                        sensitivity=result.get("sensitivity", "internal"),
-                        confidence=result.get("confidence", 0.0),
-                        has_tables=result.get("has_tables", False),
-                        has_images=result.get("has_images", False),
-                        effective_date=result.get("effective_date"),
-                        review_date=result.get("review_date"),
+            async def _do_call():
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f"{self.base_url}/messages",
+                        headers={
+                            "x-api-key": self.api_key,
+                            "anthropic-version": "2023-06-01",
+                            "content-type": "application/json",
+                        },
+                        json={
+                            "model": self.model,
+                            "max_tokens": 2000,
+                            "system": self.SYSTEM_PROMPT,
+                            "messages": [{"role": "user", "content": prompt}],
+                        },
+                        timeout=60.0,
                     )
+                    response.raise_for_status()
+                    return response
+
+            response = await call_via_upstream_breaker(_DOCUMENT_AI_UPSTREAM_BREAKER, _do_call)
+            data = response.json()
+            ai_response = data["content"][0]["text"]
+
+            # Parse JSON from response
+            json_match = re.search(r"\{[\s\S]*\}", ai_response)
+            if json_match:
+                result = json.loads(json_match.group())
+                return DocumentAnalysis(
+                    summary=result.get("summary", ""),
+                    document_type=result.get("document_type", "other"),
+                    category=result.get("category", ""),
+                    tags=result.get("tags", []),
+                    keywords=result.get("keywords", []),
+                    topics=result.get("topics", []),
+                    entities=result.get("entities", {}),
+                    sensitivity=result.get("sensitivity", "internal"),
+                    confidence=result.get("confidence", 0.0),
+                    has_tables=result.get("has_tables", False),
+                    has_images=result.get("has_images", False),
+                    effective_date=result.get("effective_date"),
+                    review_date=result.get("review_date"),
+                )
 
         except Exception as e:
             logger.error(f"AI analysis failed: {e}")
@@ -198,37 +209,42 @@ Document text:
 Return ONLY the JSON array, no markdown fences, no preamble."""
 
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
-                resp = await client.post(
-                    f"{self.base_url}/messages",
-                    headers={
-                        "x-api-key": self.api_key,
-                        "anthropic-version": "2023-06-01",
-                        "content-type": "application/json",
-                    },
-                    json={
-                        "model": self.model,
-                        "max_tokens": 4096,
-                        "messages": [{"role": "user", "content": prompt}],
-                    },
-                )
-                resp.raise_for_status()
-                ai_text = resp.json()["content"][0]["text"]
-                clean = re.sub(r"^```(?:json)?\s*|\s*```$", "", ai_text.strip(), flags=re.MULTILINE).strip()
-                raw_rows = json.loads(clean)
-                # Validate and clamp fields
-                for row in raw_rows:
-                    row["confidence"] = max(0.0, min(1.0, float(row.get("confidence", 1.0))))
-                    row.setdefault("action_title", "Imported Action")
-                    row.setdefault("description", "")
-                    row.setdefault("measurable", "")
-                    row.setdefault("owner", "")
-                    row.setdefault("deadline", None)
-                    row.setdefault("category", "operational")
-                    row.setdefault("expected_reduction_pct", 0.0)
-                    row.setdefault("needs_review", row["confidence"] < 0.7)
-                rows = raw_rows
-                extraction_method = "ai_claude"
+
+            async def _do_call():
+                async with httpx.AsyncClient(timeout=60) as client:
+                    resp = await client.post(
+                        f"{self.base_url}/messages",
+                        headers={
+                            "x-api-key": self.api_key,
+                            "anthropic-version": "2023-06-01",
+                            "content-type": "application/json",
+                        },
+                        json={
+                            "model": self.model,
+                            "max_tokens": 4096,
+                            "messages": [{"role": "user", "content": prompt}],
+                        },
+                    )
+                    resp.raise_for_status()
+                    return resp
+
+            resp = await call_via_upstream_breaker(_DOCUMENT_AI_UPSTREAM_BREAKER, _do_call)
+            ai_text = resp.json()["content"][0]["text"]
+            clean = re.sub(r"^```(?:json)?\s*|\s*```$", "", ai_text.strip(), flags=re.MULTILINE).strip()
+            raw_rows = json.loads(clean)
+            # Validate and clamp fields
+            for row in raw_rows:
+                row["confidence"] = max(0.0, min(1.0, float(row.get("confidence", 1.0))))
+                row.setdefault("action_title", "Imported Action")
+                row.setdefault("description", "")
+                row.setdefault("measurable", "")
+                row.setdefault("owner", "")
+                row.setdefault("deadline", None)
+                row.setdefault("category", "operational")
+                row.setdefault("expected_reduction_pct", 0.0)
+                row.setdefault("needs_review", row["confidence"] < 0.7)
+            rows = raw_rows
+            extraction_method = "ai_claude"
         except Exception as exc:
             warnings.append(f"AI extraction failed, using rule-based fallback: {exc}")
             rows, extraction_method, fallback_warnings = self._rule_based_action_extraction(content, [])
