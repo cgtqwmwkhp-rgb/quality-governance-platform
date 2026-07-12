@@ -124,12 +124,18 @@ def _subprocessors() -> list[dict[str, Any]]:
 
 
 def _processing_activities() -> list[dict[str, Any]]:
-    """Stub Article 30 register rows (high-level; not a full ROPA)."""
+    """Stub Article 30 register rows (high-level; not a full ROPA).
+
+    Additive ``purpose`` / ``data_subject_categories`` fields close Art. 30
+    checklist gaps C/D for auditor readability — still ``article_30_stub``.
+    """
     return [
         {
             "activity_id": "user-accounts",
             "name": "User account administration",
+            "purpose": "Authenticate and authorise platform users; manage roles and tenant membership",
             "lawful_basis": "legitimate_interest",
+            "data_subject_categories": ["employees", "contractors", "platform_administrators"],
             "data_categories": ["email", "name", "role"],
             "retention_days": DEFAULT_RETENTION_POLICIES["users_deleted"].retention_days,
             "retention_note": "Account lifetime + users_deleted horizon post-deactivation",
@@ -138,15 +144,19 @@ def _processing_activities() -> list[dict[str, Any]]:
         {
             "activity_id": "incidents",
             "name": "Incident / H&S reporting",
+            "purpose": "Record, investigate, and report workplace health and safety incidents",
             "lawful_basis": "legal_obligation",
-            "data_categories": ["description", "location", "severity", "injury_details"],
+            "data_subject_categories": ["employees", "contractors", "visitors", "injured_persons"],
+            "data_categories": ["description", "location", "personnel", "injury_details"],
             "retention_days": DEFAULT_RETENTION_POLICIES["incidents"].retention_days,
             "storage": "postgresql",
         },
         {
             "activity_id": "audit-findings",
             "name": "Audit findings and evidence",
+            "purpose": "Capture audit findings, evidence references, and related quality records",
             "lawful_basis": "legitimate_interest",
+            "data_subject_categories": ["employees", "auditors", "auditees"],
             "data_categories": ["finding_text", "evidence_references"],
             "retention_days": DEFAULT_RETENTION_POLICIES["audit_runs"].retention_days,
             "storage": "postgresql_and_azure_blob",
@@ -154,7 +164,9 @@ def _processing_activities() -> list[dict[str, Any]]:
         {
             "activity_id": "ocr-ai-import",
             "name": "External audit OCR / AI import",
+            "purpose": "Extract structured findings from external audit documents via optional OCR/AI",
             "lawful_basis": "legitimate_interest",
+            "data_subject_categories": ["employees", "auditees", "document_authors"],
             "data_categories": ["document_content", "extracted_findings"],
             "retention_days": None,
             "retention_note": "Per parent import job + evidence retention policy",
@@ -165,7 +177,9 @@ def _processing_activities() -> list[dict[str, Any]]:
         {
             "activity_id": "auth-and-request-logs",
             "name": "Authentication and API request logs",
+            "purpose": "Security monitoring, abuse detection, and operational troubleshooting",
             "lawful_basis": "legitimate_interest",
+            "data_subject_categories": ["authenticated_users", "api_clients"],
             "data_categories": ["login_times", "ip_addresses", "tenant_id", "user_id"],
             "retention_days": DEFAULT_RETENTION_POLICIES["session_logs"].retention_days,
             "storage": "structured_logs_and_log_analytics",
@@ -173,7 +187,9 @@ def _processing_activities() -> list[dict[str, Any]]:
         {
             "activity_id": "complaints",
             "name": "Complaints / grievance handling",
+            "purpose": "Receive, investigate, and resolve complaints and grievances",
             "lawful_basis": "legitimate_interest",
+            "data_subject_categories": ["complainants", "employees", "third_parties"],
             "data_categories": ["complaint_text", "complainant_contact", "outcome"],
             "retention_days": DEFAULT_RETENTION_POLICIES["complaints"].retention_days,
             "storage": "postgresql",
@@ -181,7 +197,9 @@ def _processing_activities() -> list[dict[str, Any]]:
         {
             "activity_id": "near-misses",
             "name": "Near-miss / hazard reporting",
+            "purpose": "Record near-miss and hazard reports to prevent future incidents",
             "lawful_basis": "legitimate_interest",
+            "data_subject_categories": ["employees", "contractors", "reporters"],
             "data_categories": ["description", "location", "reporter"],
             "retention_days": DEFAULT_RETENTION_POLICIES["near_misses"].retention_days,
             "storage": "postgresql",
@@ -189,7 +207,9 @@ def _processing_activities() -> list[dict[str, Any]]:
         {
             "activity_id": "capa",
             "name": "Corrective and preventive actions (CAPA)",
+            "purpose": "Track corrective and preventive actions arising from audits and incidents",
             "lawful_basis": "legitimate_interest",
+            "data_subject_categories": ["employees", "action_owners"],
             "data_categories": ["action_text", "owner", "linked_finding_refs"],
             "retention_days": DEFAULT_RETENTION_POLICIES["audit_runs"].retention_days,
             "retention_note": "Aligned to audit_runs horizon pending discrete CAPA retention key",
@@ -198,7 +218,9 @@ def _processing_activities() -> list[dict[str, Any]]:
         {
             "activity_id": "risk-register",
             "name": "Enterprise / operational risk register",
+            "purpose": "Maintain operational and enterprise risk records and control owners",
             "lawful_basis": "legitimate_interest",
+            "data_subject_categories": ["employees", "risk_owners"],
             "data_categories": ["risk_description", "owner", "controls"],
             "retention_days": DEFAULT_RETENTION_POLICIES["audit_runs"].retention_days,
             "retention_note": "Aligned to audit_runs horizon pending discrete risk retention key",
@@ -207,7 +229,9 @@ def _processing_activities() -> list[dict[str, Any]]:
         {
             "activity_id": "rta",
             "name": "Road traffic accident (RTA) records",
+            "purpose": "Record and investigate road traffic accidents involving the organisation",
             "lawful_basis": "legitimate_interest",
+            "data_subject_categories": ["drivers", "passengers", "third_parties", "injured_persons"],
             "data_categories": ["incident_details", "vehicle", "parties"],
             "retention_days": DEFAULT_RETENTION_POLICIES["incidents"].retention_days,
             "retention_note": "Aligned to incidents horizon; may include special-category / injury data",
@@ -279,7 +303,8 @@ async def data_processing_register() -> dict[str, Any]:
         "as_of": _as_of(),
         "note": (
             "Stub disclosure for auditors and operators — register_kind remains "
-            "article_30_stub. Activity rows expanded for Preferred S15 readability; "
-            "link signed DPAs and complete DPO §9 before treating as full Art. 30 ROPA."
+            "article_30_stub. Activity rows include purpose + data_subject_categories "
+            "for Art. 30(1)(b)/(c) readability; link signed DPAs and complete DPO §9 "
+            "before treating as full Art. 30 ROPA."
         ),
     }

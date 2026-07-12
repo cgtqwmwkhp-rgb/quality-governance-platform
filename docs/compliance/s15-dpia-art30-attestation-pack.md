@@ -3,7 +3,7 @@
 **Platform:** Quality Governance Platform (QGP)  
 **Path-to-10 stage:** S15 Compliance / Privacy (Preferred target 6.5 → 9.0)  
 **Document type:** Ready-for-signoff evidence pack — **not** a signed attestation  
-**Version:** 1.1  
+**Version:** 1.2  
 **As of:** 2026-07-12  
 **Status:** `ready_for_dpo_signoff` — engineering package complete; **no DPO wet/electronic signature claimed**  
 **Owner (package):** Platform Engineering / GRC  
@@ -113,8 +113,8 @@ Engineering readiness summary:
 | Art. 30 element | Documentary / LIVE state | Sign-off blocker? |
 |-----------------|--------------------------|-------------------|
 | Controller / processor identity | Documented (tenant controller; Plantexpand operator) | DPO confirms roles per DPA |
-| Purposes + lawful bases | Inventory in GDPR §1 + LIVE activities | DPO confirms per tenant workflow |
-| Data subject / data categories | DPIA + LIVE activities | Expand stub rows before “full ROPA” claim |
+| Purposes + lawful bases | Inventory in GDPR §1 + LIVE `activities[].purpose` / `lawful_basis` | DPO confirms per tenant workflow |
+| Data subject / data categories | DPIA + LIVE `data_subject_categories` / `data_categories` | Stub taxonomy only — not full controller ROPA |
 | Recipients / subprocessors | LIVE `subprocessors` + DPIA OCR companion | Signed vendor DPAs still required where AI enabled |
 | International transfers | UK South primary; AI vendors vendor-managed | Confirm SCC/UK IDTA before production AI keys |
 | Retention | Retention policy §7 + LIVE `retention` block | Legal-hold schema gap acknowledged |
@@ -140,5 +140,6 @@ Do not mark S15 Preferred complete solely because this pack exists.
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 1.2 | 2026-07-12 | Platform Engineering | LIVE stub `purpose` + `data_subject_categories` (Art. 30 gaps C/D) — still **unsigned** / EA open |
 | 1.1 | 2026-07-12 | Platform Engineering | LIVE stub activity expand + machine-readable attestation_pack pointers — still **unsigned** / EA open |
 | 1.0 | 2026-07-11 | Platform Engineering | Initial unsigned DPIA / Art. 30 attestation pack for Preferred S15 |
