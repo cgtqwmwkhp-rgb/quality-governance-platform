@@ -73,6 +73,35 @@ describe('isCompleteReconciliation', () => {
 })
 
 describe('DownstreamWorkflowProof', () => {
+  it('renders lightweight proof and deep-links for a live audit run', () => {
+    const onNavigate = vi.fn()
+    render(
+      <DownstreamWorkflowProof
+        findingsCount={4}
+        actionsCount={2}
+        risksCount={1}
+        links={{
+          actions: '/actions?sourceType=audit_finding',
+          riskRegister: '/risk-register',
+        }}
+        onNavigate={onNavigate}
+      />,
+    )
+
+    expect(
+      screen.getByText('This completed inspection is live in the findings, actions, and risk workflows.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('4')).toBeInTheDocument()
+    expect(screen.getByText('2')).toBeInTheDocument()
+    expect(screen.getByText('1')).toBeInTheDocument()
+    expect(screen.queryByText('UVDB Sync')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'View Audit Actions' }))
+    expect(onNavigate).toHaveBeenCalledWith('/actions?sourceType=audit_finding')
+    fireEvent.click(screen.getByRole('button', { name: 'View Audit Risks' }))
+    expect(onNavigate).toHaveBeenCalledWith('/risk-register')
+  })
+
   it('CUJ: renders findings/CAPA/risks counts and proof matrix statuses when complete', () => {
     render(
       <DownstreamWorkflowProof

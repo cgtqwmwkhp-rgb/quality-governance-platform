@@ -23,6 +23,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { auditsApi, getApiErrorMessage } from '../api/client'
+import { DownstreamWorkflowProof } from '../components/audit-import/DownstreamWorkflowProof'
 import {
   registerDraftSnapshot,
   getAuditDraft,
@@ -82,6 +83,12 @@ interface AuditData {
   scheduledDate: string
   auditor: string
   sections: AuditSection[]
+}
+
+interface CompletionSummary {
+  findings: number
+  actions: number
+  risks: number
 }
 
 const SECTION_COLORS = [
@@ -426,6 +433,7 @@ export default function AuditExecution() {
   const [showGuidance, setShowGuidance] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [runCompleted, setRunCompleted] = useState(false)
+  const [completionSummary, setCompletionSummary] = useState<CompletionSummary | null>(null)
   const [autoAdvancePending, setAutoAdvancePending] = useState(false)
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -469,6 +477,16 @@ export default function AuditExecution() {
   useEffect(() => {
     savingRef.current = saving
   }, [saving])
+
+  useEffect(() => {
+    if (!completionSummary) return
+
+    const redirectTimer = setTimeout(() => {
+      navigate('/actions?sourceType=audit_finding')
+    }, 1500)
+
+    return () => clearTimeout(redirectTimer)
+  }, [completionSummary, navigate])
 
   // Timer
   useEffect(() => {
@@ -829,16 +847,29 @@ export default function AuditExecution() {
 
     try {
       setSaving(true)
+      let completionData: Record<string, unknown> = {}
       if (!runCompleted) {
-        await auditsApi.completeRun(runIdNum)
+        const completionResponse = await auditsApi.completeRun(runIdNum)
+        completionData = completionResponse.data as unknown as Record<string, unknown>
         setRunCompleted(true)
       }
 
       const refreshedRun = await auditsApi.getRunDetail(runIdNum)
-      const hasFollowUp = (refreshedRun.data.findings || []).some(
-        (finding) => finding.corrective_action_required,
+      const findings = refreshedRun.data.findings || []
+      const responseCount = (primary: string, secondary: string): number | undefined => {
+        const value = completionData[primary] ?? completionData[secondary]
+        return typeof value === 'number' ? value : undefined
+      }
+      const linkedRiskIds = new Set(
+        findings.flatMap((finding) => (Array.isArray(finding.risk_ids) ? finding.risk_ids : [])),
       )
-      navigate(hasFollowUp ? '/actions' : '/audits')
+      setCompletionSummary({
+        findings: responseCount('findings_count', 'findings_created') ?? findings.length,
+        actions:
+          responseCount('actions_count', 'actions_created') ??
+          findings.filter((finding) => finding.corrective_action_required).length,
+        risks: responseCount('risks_count', 'risks_created') ?? linkedRiskIds.size,
+      })
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -874,6 +905,38 @@ export default function AuditExecution() {
           >
             Go to Audits
           </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (completionSummary) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-2xl w-full space-y-4 animate-fade-in" role="status" aria-live="polite">
+          <div className="rounded-2xl border border-success/30 bg-success/10 p-6 text-center">
+            <CheckCircle2 className="mx-auto h-12 w-12 text-success" />
+            <h2 className="mt-3 text-2xl font-bold text-foreground">Inspection completed</h2>
+            <p className="mt-2 text-muted-foreground">
+              {completionSummary.findings} finding
+              {completionSummary.findings === 1 ? '' : 's'} / {completionSummary.actions} action
+              {completionSummary.actions === 1 ? '' : 's'} created
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Opening audit-sourced actions…
+            </p>
+          </div>
+
+          <DownstreamWorkflowProof
+            findingsCount={completionSummary.findings}
+            actionsCount={completionSummary.actions}
+            risksCount={completionSummary.risks}
+            links={{
+              actions: '/actions?sourceType=audit_finding',
+              riskRegister: '/risk-register',
+            }}
+            onNavigate={navigate}
+          />
         </div>
       </div>
     )
