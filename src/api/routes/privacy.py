@@ -103,6 +103,43 @@ def _technical_organisational_measures() -> dict[str, Any]:
     }
 
 
+def _international_transfers() -> dict[str, Any]:
+    """Art. 30(1)(e) international transfers / safeguards summary (unsigned stub).
+
+    Mirrors GDPR §7 + subprocessor ``transfer_mechanism`` fields. Does **not**
+    invent signed vendor DPAs or claim production AI transfers are approved.
+    """
+    return {
+        "primary_hosting_region": "UK South",
+        "primary_hosting_mechanism": "uk_eea_hosting",
+        "policy_doc": "docs/compliance/gdpr-compliance.md",
+        "policy_section_ref": "§7 International Transfers",
+        "dpia_refs": [
+            "docs/compliance/dpia-quality-governance-platform.md",
+            "docs/compliance/dpia-ocr-ai-import.md",
+        ],
+        "default_posture": (
+            "Primary platform processing is hosted in Azure UK South (UK/EEA). "
+            "Optional AI subprocessors may involve vendor-managed regions and "
+            "require SCC or UK IDTA via vendor DPA before production keys."
+        ),
+        "optional_ai_transfer_status": "pending_vendor_dpa_before_production_keys",
+        "subprocessor_transfer_mechanisms": [
+            {
+                "name": sp["name"],
+                "transfer_mechanism": sp["transfer_mechanism"],
+                "optional": sp["optional"],
+            }
+            for sp in _subprocessors()
+        ],
+        "note": (
+            "Art. 30(1)(e) readability only — unsigned stub. Does not invent "
+            "signed vendor DPAs; does not flip dpia.status; does not close EA-03. "
+            "Confirm SCC / UK IDTA for Mistral / Gemini before production AI keys."
+        ),
+    }
+
+
 def _subprocessors() -> list[dict[str, Any]]:
     """Public sub-processor list (Art. 28 disclosure stub).
 
@@ -324,15 +361,17 @@ async def data_processing_register() -> dict[str, Any]:
         },
         "ropa_checklist": "docs/compliance/article-30-ropa-checklist.md",
         "technical_organisational_measures": _technical_organisational_measures(),
+        "international_transfers": _international_transfers(),
         "subprocessors": _subprocessors(),
         "activities": _processing_activities(),
         "contact": "/api/v1/privacy/contact",
         "as_of": _as_of(),
         "note": (
             "Stub disclosure for auditors and operators — register_kind remains "
-            "article_30_stub. Includes purpose / data_subject_categories and a "
-            "general technical_organisational_measures block for Art. 30(1)(g) "
-            "readability; link signed DPAs and complete DPO §9 before treating "
-            "as full Art. 30 ROPA. EA-02 is not claimed closed."
+            "article_30_stub. Includes purpose / data_subject_categories, a "
+            "general technical_organisational_measures block for Art. 30(1)(g), "
+            "and international_transfers for Art. 30(1)(e) readability; link "
+            "signed DPAs and complete DPO §9 before treating as full Art. 30 "
+            "ROPA. EA-02 is not claimed closed; AI vendor DPAs remain pending."
         ),
     }

@@ -2,7 +2,7 @@
 
 **Platform:** Quality Governance Platform (QGP)  
 **Document type:** UK GDPR / EU GDPR Art. 30 documentary checklist (unsigned)  
-**Version:** 1.3  
+**Version:** 1.4  
 **As of:** 2026-07-12  
 **Status:** Ready for privacy-lead / DPO review — **not** a completed controller ROPA  
 **Related pack:** [`s15-dpia-art30-attestation-pack.md`](s15-dpia-art30-attestation-pack.md)  
@@ -34,7 +34,7 @@ Boxes below are for the **operator documentary pack** and the LIVE stub. Tenant 
 | D | Categories of data subjects | Platform DPIA §2; LIVE `activities[].data_subject_categories` | Ready for review | LIVE subject-category field added (unsigned stub) — expand if controllers require finer taxonomy |
 | E | Categories of personal data | LIVE `activities[].data_categories`; PII inventory script evidence | Ready for review | Re-run `scripts/governance/audit_pii_fields.py` on model changes |
 | F | Categories of recipients | LIVE `subprocessors`; GDPR §8 | Ready for review | Link **signed** vendor DPAs (paths only after legal files exist) |
-| G | Transfers to third country / international org + safeguards | Platform DPIA §7; OCR DPIA §3.1 / §5; subprocessors `transfer_mechanism` | Partial | Confirm SCC / UK IDTA for Mistral / Gemini **before** production AI keys |
+| G | Transfers to third country / international org + safeguards | Platform DPIA §7; OCR DPIA §3.1 / §5; LIVE `international_transfers` + subprocessors `transfer_mechanism` | Ready for review | LIVE transfers summary added (unsigned stub) — Confirm SCC / UK IDTA for Mistral / Gemini **before** production AI keys; **do not invent** signed vendor DPAs |
 | H | Retention periods (or criteria) | [`../privacy/data-retention-policy.md`](../privacy/data-retention-policy.md); LIVE `retention` + `activities[].retention_days` | Ready for review | Matter-level legal-hold **schema** still Planned (§7a honesty) |
 | I | General description of technical / organisational security measures | Platform DPIA §5; `docs/security/security-baseline.md`; LIVE `technical_organisational_measures` | Ready for review | LIVE TOM summary added (unsigned stub) — **not** a substitute for EA-02 external pen-test |
 
@@ -46,7 +46,7 @@ Boxes below are for the **operator documentary pack** and the LIVE stub. Tenant 
 |---|------------------|------------------|--------------|
 | P1 | Name and contact of processor | Plantexpand / QGP operator (LIVE `processor_operator`) | Documented at stub level |
 | P2 | Categories of processing on behalf of each controller | LIVE `activities` + tenant isolation model | High-level stub — expand per product module as ROPA matures |
-| P3 | Transfers + safeguards (where processor transfers) | Subprocessor table; OCR DPIA | Partial until AI vendor DPAs filed |
+| P3 | Transfers + safeguards (where processor transfers) | LIVE `international_transfers`; subprocessor table; OCR DPIA | Ready for review (AI DPAs still pending) |
 | P4 | General security measures description | DPIA §5; LIVE `technical_organisational_measures` | Ready for review |
 
 ---
@@ -104,6 +104,7 @@ Aligned with `src/api/routes/privacy.py` → `_processing_activities()` after Pr
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 1.4 | 2026-07-12 | Platform Engineering | Gap G surfaced on LIVE stub via `international_transfers` — still **unsigned** / AI vendor DPAs not invented |
 | 1.3 | 2026-07-12 | Platform Engineering | Gap I surfaced on LIVE stub via `technical_organisational_measures` — still **unsigned** / EA-02 not claimed |
 | 1.2 | 2026-07-12 | Platform Engineering | Gaps C/D closed on LIVE stub via `purpose` + `data_subject_categories` — still **unsigned** / not full ROPA |
 | 1.1 | 2026-07-12 | Platform Engineering | Crosswalk updated for expanded LIVE stub activities (complaints, near-misses, CAPA, risk, RTA) — still unsigned |
