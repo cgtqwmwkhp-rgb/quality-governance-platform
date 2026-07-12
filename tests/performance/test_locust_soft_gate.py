@@ -6,6 +6,7 @@ from tests.performance.thresholds import (
     LOCUST_PROFILES,
     QUEUE_DEPTH_SCALE_HINTS,
     build_trend_record,
+    evaluate_sustained_scale_hints,
     resolve_perf_thresholds,
     write_soft_gate_summary,
 )
@@ -109,3 +110,46 @@ def test_write_soft_gate_summary_emits_trend_artifact(tmp_path, monkeypatch):
     assert trend["result"]["overall"] == "BREACH"
     assert (tmp_path / "locust-soft-gate-summary.md").is_file()
     assert (tmp_path / "locust-soft-gate-summary.json").is_file()
+
+
+def _trend(p95_ms: float, error_rate_pct: float = 0.0) -> dict:
+    return {
+        "schema": "locust-soft-gate-trend/v1",
+        "result": {"p95_ms": p95_ms, "error_rate_pct": error_rate_pct},
+    }
+
+
+def test_evaluate_sustained_scale_hints_needs_window():
+    out = evaluate_sustained_scale_hints([_trend(900.0), _trend(950.0)])
+    assert out["schema"] == "locust-soft-gate-scale-hint/v1"
+    assert out["enough_runs"] is False
+    assert out["p95_scale_hint"] is False
+    assert out["required_runs"] == QUEUE_DEPTH_SCALE_HINTS["sustained_run_count"]
+    assert "Collect ≥3" in out["actions"][0]
+
+
+def test_evaluate_sustained_scale_hints_p95_triggers():
+    records = [_trend(800.0), _trend(900.0), _trend(1000.0)]
+    out = evaluate_sustained_scale_hints(records)
+    assert out["enough_runs"] is True
+    assert out["p95_hint_limit_ms"] == 750.0
+    assert out["p95_scale_hint"] is True
+    assert out["error_rate_scale_hint"] is False
+    assert any("Sustained p95" in a for a in out["actions"])
+
+
+def test_evaluate_sustained_scale_hints_error_rate_triggers():
+    records = [_trend(100.0, 2.5), _trend(120.0, 3.0), _trend(110.0, 2.1)]
+    out = evaluate_sustained_scale_hints(records)
+    assert out["error_rate_scale_hint"] is True
+    assert out["p95_scale_hint"] is False
+    assert any("Sustained error rate" in a for a in out["actions"])
+
+
+def test_evaluate_sustained_scale_hints_no_trigger_when_mixed():
+    # One run under the hint limit → no sustained p95 hint
+    records = [_trend(800.0), _trend(600.0), _trend(900.0)]
+    out = evaluate_sustained_scale_hints(records)
+    assert out["p95_scale_hint"] is False
+    assert out["error_rate_scale_hint"] is False
+    assert out["actions"] == ["No sustained scale hint — keep observing under soft-gate."]
