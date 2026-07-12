@@ -11,6 +11,20 @@ function mockApi() {
 }
 
 describe('createNotificationsApi', () => {
+  it('reads the email delivery subset from readyz, including degraded responses', () => {
+    const api = mockApi()
+    createNotificationsApi(api as never).getDeliveryStatus()
+
+    expect(api.get).toHaveBeenCalledWith(
+      '/readyz',
+      expect.objectContaining({ validateStatus: expect.any(Function) }),
+    )
+    const config = api.get.mock.calls[0][1] as { validateStatus: (status: number) => boolean }
+    expect(config.validateStatus(200)).toBe(true)
+    expect(config.validateStatus(503)).toBe(true)
+    expect(config.validateStatus(500)).toBe(false)
+  })
+
   it('list builds unread_only and pagination query', () => {
     const api = mockApi()
     createNotificationsApi(api as never).list({ page: 2, page_size: 20, unread_only: true })

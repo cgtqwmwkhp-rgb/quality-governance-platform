@@ -5,10 +5,17 @@ import Actions from '../Actions'
 
 const mockList = vi.fn()
 const mockSummary = vi.fn()
+const mockGetDeliveryStatus = vi.fn()
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => (key === 'actions.view_finding' ? 'View finding' : key),
+    t: (key: string) =>
+      ({
+        'actions.view_finding': 'View finding',
+        'actions.email_unavailable.title': 'Email alerts unavailable',
+        'actions.email_unavailable.body':
+          'The assignee is saved, but email alerts are unavailable while outbound email is not configured.',
+      } as Record<string, string>)[key] || key,
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
@@ -18,6 +25,9 @@ vi.mock('../../api/client', () => ({
     list: (...args: unknown[]) => mockList(...args),
     summary: (...args: unknown[]) => mockSummary(...args),
     create: vi.fn(),
+  },
+  notificationsApi: {
+    getDeliveryStatus: (...args: unknown[]) => mockGetDeliveryStatus(...args),
   },
 }))
 
@@ -41,6 +51,7 @@ describe('Actions finding deep-link', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSummary.mockResolvedValue({ data: { total: 3, by_display_status: { open: 3 } } })
+    mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: true } })
   })
 
   it('links only audit-finding rows with a positive source id', async () => {
@@ -63,5 +74,23 @@ describe('Actions finding deep-link', () => {
     const links = await screen.findAllByRole('link', { name: 'View finding' })
     expect(links).toHaveLength(1)
     expect(links[0]).toHaveAttribute('href', '/audits?view=findings&findingId=42')
+  })
+
+  it('warns that CAPA assignment does not imply email delivery', async () => {
+    mockList.mockResolvedValue({ data: { items: [action({})] } })
+    mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: false } })
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Email alerts unavailable')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'The assignee is saved, but email alerts are unavailable while outbound email is not configured.',
+      ),
+    ).toBeInTheDocument()
   })
 })
