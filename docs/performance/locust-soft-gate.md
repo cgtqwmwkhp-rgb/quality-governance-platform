@@ -101,6 +101,14 @@ exceed the staging p95 **or** error-rate bar. Advisory only — operators may th
 re-set `LOCUST_SOFT_GATE=1` and drop hard-gate branch protection; the helper
 never flips workflow YAML.
 
+## Soft-gate posture (operator aggregate)
+
+Use `evaluate_soft_gate_posture()` (schema `locust-soft-gate-posture/v1`) to
+collapse scale / re-enable / promote / trial helpers into one
+`recommended_posture` (`scale_investigate` → `reenable_soft_gate` →
+`promote_hard_gate` → `trial_tighten` → `observe`). Advisory only — see
+[`queue-depth-scale-hint.md`](queue-depth-scale-hint.md).
+
 ## Related
 
 - [`docs/performance/api-slos.md`](api-slos.md) — CI vs production latency tiers
@@ -109,4 +117,4 @@ never flips workflow YAML.
 - [`tests/performance/locustfile.py`](../../tests/performance/locustfile.py) — profiles + soft-gate listener
 - `tests/performance/thresholds.py` — `SOFT_GATE_HARD_GATE_PROMOTE`,
   `evaluate_hard_gate_promotion_readiness()`, `SOFT_GATE_REENABLE`,
-  `evaluate_soft_gate_reenable_readiness()`
+  `evaluate_soft_gate_reenable_readiness()`, `evaluate_soft_gate_posture()`
