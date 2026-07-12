@@ -27,9 +27,7 @@ def apply_ai_metadata_to_job(job: object, ai_result: object | None) -> None:
     next_audit_date = getattr(ai_result, "next_audit_date", None)
     if next_audit_date:
         try:
-            job.next_audit_date = datetime.strptime(str(next_audit_date)[:10], "%Y-%m-%d").replace(
-                tzinfo=timezone.utc
-            )
+            job.next_audit_date = datetime.strptime(str(next_audit_date)[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
         except (ValueError, TypeError):
             pass
 
