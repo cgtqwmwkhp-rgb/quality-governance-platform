@@ -104,6 +104,13 @@ export function DownstreamWorkflowProof({
             <p className="text-sm font-medium text-amber-800">
               Accepted drafts still pending recovery
             </p>
+            <p
+              className="mt-1 text-xs text-amber-900"
+              data-testid="import-review-proof-recover-next"
+              role="status"
+            >
+              Next: Open failed draft, then Retry — two clicks to recover promotion.
+            </p>
             <div className="mt-2 space-y-1 text-xs text-amber-900">
               {reconciliation.failed_drafts.map((draft, index) => (
                 <p key={`failed-draft-${index}`}>
