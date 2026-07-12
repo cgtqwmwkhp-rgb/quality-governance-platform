@@ -6,8 +6,12 @@ from typing import Protocol
 
 
 class RiskCandidateFinding(Protocol):
-    finding_type: str | None
-    severity: str | None
+    # Properties keep Protocol matching covariant for ORM str fields and Optional duck types.
+    @property
+    def finding_type(self) -> str | None: ...
+
+    @property
+    def severity(self) -> str | None: ...
 
 
 RISK_CREATING_FINDING_TYPES = frozenset(
