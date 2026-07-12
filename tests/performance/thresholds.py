@@ -528,12 +528,17 @@ def write_soft_gate_summary(payload: dict) -> None:
     history = _load_soft_gate_trend_history()
     posture = evaluate_soft_gate_posture([*history, trend])
     (out_dir / "locust-soft-gate-posture.json").write_text(json.dumps(posture, indent=2) + "\n", encoding="utf-8")
+    signals = posture.get("signals") or {}
     lines.extend(
         [
             "### Soft-gate posture advisor",
             "",
             f"- **Recommended posture:** `{posture['recommended_posture']}`",
             f"- **History records considered:** {len(history)} prior + current run",
+            f"- **Signals:** scale=`{bool(signals.get('scale_investigate'))}` · "
+            f"reenable=`{bool(signals.get('reenable_soft_gate'))}` · "
+            f"promote=`{bool(signals.get('promote_hard_gate'))}` · "
+            f"trial=`{bool(signals.get('trial_tighten'))}`",
             "",
         ]
     )

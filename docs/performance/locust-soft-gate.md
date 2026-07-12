@@ -111,10 +111,13 @@ collapse scale / re-enable / promote / trial helpers into one
 
 Each soft-gate summary write also emits **`locust-soft-gate-posture.json`** next
 to the trend artifact and appends a **Soft-gate posture advisor** section to the
-markdown / job summary. Optional prior runs: set `LOCUST_TREND_HISTORY` to a JSON
-array or JSONL of `locust-soft-gate-trend/v1` records so the advisor aggregates
-history + the current run. Missing history → single-run posture (usually
-`observe`). Never invents runs; never flips exit codes / YAML.
+markdown / job summary (including a compact **Signals** line for
+scale / reenable / promote / trial). The workflow **Publish soft-gate trend to
+job summary** step also mirrors the posture JSON into `$GITHUB_STEP_SUMMARY`
+alongside the trend record. Optional prior runs: set `LOCUST_TREND_HISTORY` to a
+JSON array or JSONL of `locust-soft-gate-trend/v1` records so the advisor
+aggregates history + the current run. Missing history → single-run posture
+(usually `observe`). Never invents runs; never flips exit codes / YAML.
 
 ## Related
 
