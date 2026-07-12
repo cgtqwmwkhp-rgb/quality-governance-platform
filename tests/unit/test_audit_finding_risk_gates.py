@@ -6,13 +6,41 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
+from src.domain.models.audit import AuditFinding
 from src.domain.services.audit_risk_gate import should_create_risk
 from src.domain.services.audit_service import AuditService
 
 
 def _service() -> AuditService:
     return AuditService(MagicMock())
+
+
+def test_finding_risk_ids_prefer_loaded_junction_and_fall_back_to_json():
+    finding = AuditFinding(risk_ids_json=[42])
+
+    assert finding.risk_ids_json == [42]
+
+    finding.__dict__["risks"] = [SimpleNamespace(id=9), SimpleNamespace(id=7)]
+
+    assert finding.risk_ids_json == [7, 9]
+
+
+@pytest.mark.asyncio
+async def test_link_risk_dual_writes_junction_and_transition_json():
+    service = _service()
+    service.db.execute = AsyncMock()  # type: ignore[method-assign]
+    finding = SimpleNamespace(id=11, risk_ids_json=[5])
+    risk = SimpleNamespace(id=99)
+
+    await service._link_risk_to_finding(finding, risk)
+
+    statement = service.db.execute.await_args.args[0]
+    sql = str(statement.compile(dialect=postgresql.dialect()))
+    assert "INSERT INTO audit_finding_risks" in sql
+    assert "ON CONFLICT (audit_finding_id, risk_id) DO NOTHING" in sql
+    assert finding.risk_ids_json == [5, 99]
 
 
 @pytest.mark.parametrize(

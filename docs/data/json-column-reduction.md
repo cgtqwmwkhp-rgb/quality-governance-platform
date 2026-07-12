@@ -8,7 +8,7 @@ Tracking migration of JSON/JSONB columns to proper relational structures.
 |-------|--------|------|----------|-------------------|
 | `audit_findings` | `clause_ids_json_legacy` | JSON | Array of clause references | High |
 | `audit_findings` | `control_ids_json` | JSON | Array of control IDs | High |
-| `audit_findings` | `risk_ids_json` | JSON | Array of risk IDs | High |
+| `audit_findings` | `risk_ids_json` | JSON | Transitional mirror of `audit_finding_risks` | Removal after one compatibility release |
 | `risks_v2` | `linked_audits` | JSON | Array of audit references | Medium |
 | `risks_v2` | `linked_actions` | JSON | Array of action references | Medium |
 | `external_audit_import_jobs` | `score_breakdown_json` | JSONB | OCR score breakdown | Low (semi-structured) |
@@ -22,9 +22,22 @@ Replace `clause_ids_json_legacy`, `control_ids_json`, and `risk_ids_json` with p
 
 - `audit_finding_clauses` (finding_id, clause_id)
 - `audit_finding_controls` (finding_id, control_id)
-- `audit_finding_risks` (finding_id, risk_id)
+- `audit_finding_risks` (audit_finding_id, risk_id)
 
 **Benefits**: Referential integrity, indexed lookups, proper foreign keys.
+
+#### Audit finding risks status
+
+`audit_finding_risks` is implemented by revision `20260712_af_risks_jn` with
+`audit_finding_id` and `risk_id` foreign keys, a unique pair constraint, and
+indexes on both link columns. The migration backfills tenant-matched,
+existing enterprise-risk IDs from `audit_findings.risk_ids_json`.
+
+For one release, finding-risk writes update both the junction and
+`risk_ids_json`. Readers prefer junction-backed IDs when available and fall
+back to `risk_ids_json` for compatibility with rows or deployments that have
+not yet populated the junction. Remove the JSON mirror only after transition
+metrics confirm the two representations remain aligned.
 
 ### Phase 2: Risk Links
 

@@ -17,6 +17,7 @@ from typing import Any
 
 from sqlalchemy import and_, cast, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -30,6 +31,7 @@ from src.domain.models.audit import (
     AuditStatus,
     AuditTemplate,
     FindingStatus,
+    audit_finding_risks,
 )
 from src.domain.models.audit_log import AuditEvent
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
@@ -1274,6 +1276,29 @@ class AuditService:
 
     _should_create_risk = staticmethod(should_create_risk)
 
+    async def _link_risk_to_finding(self, finding: AuditFinding, risk: EnterpriseRisk) -> None:
+        """Dual-write a finding/risk link during the JSON transition release."""
+        await self.db.execute(
+            pg_insert(audit_finding_risks)
+            .values(audit_finding_id=finding.id, risk_id=risk.id)
+            .on_conflict_do_nothing(
+                index_elements=[
+                    audit_finding_risks.c.audit_finding_id,
+                    audit_finding_risks.c.risk_id,
+                ]
+            )
+        )
+
+        legacy_ids = getattr(finding, "_risk_ids_json", None)
+        if legacy_ids is None:
+            legacy_ids = finding.risk_ids_json
+        finding.risk_ids_json = sorted({*(legacy_ids or []), risk.id})
+
+        # Keep an already-loaded view-only relationship coherent for callers.
+        loaded_risks = finding.__dict__.get("risks")
+        if loaded_risks is not None and all(linked.id != risk.id for linked in loaded_risks):
+            loaded_risks.append(risk)
+
     async def _ensure_risk_for_finding(
         self,
         *,
@@ -1315,8 +1340,7 @@ class AuditService:
                 linked_actions = set(existing.linked_actions or [])
                 linked_actions.add(action.reference_number)
                 existing.linked_actions = sorted(linked_actions)
-            if existing.id not in (finding.risk_ids_json or []):
-                finding.risk_ids_json = sorted({*(finding.risk_ids_json or []), existing.id})
+            await self._link_risk_to_finding(finding, existing)
             return existing
 
         if normalized_severity == "critical":
@@ -1384,7 +1408,7 @@ class AuditService:
         )
         self.db.add(risk)
         await self.db.flush()
-        finding.risk_ids_json = sorted({*(finding.risk_ids_json or []), risk.id})
+        await self._link_risk_to_finding(finding, risk)
         return risk
 
     async def _auto_generate_findings_actions_and_risks(
