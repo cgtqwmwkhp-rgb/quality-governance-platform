@@ -34,6 +34,7 @@ from src.domain.models.audit import (
 from src.domain.models.audit_log import AuditEvent
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.risk_register import EnterpriseRisk
+from src.domain.services.audit_risk_gate import AUDIT_RISK_SEVERITIES, should_create_risk
 from src.domain.services.audit_scoring_service import AuditScoringService
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
@@ -1271,16 +1272,7 @@ class AuditService:
         await self.db.flush()
         return action
 
-    # Positive / observational types never auto-create org risks unless force_flag=True.
-    _NON_AUTO_RISK_FINDING_TYPES = frozenset(
-        {
-            "positive",
-            "positive_practice",
-            "observation",
-            "opportunity",
-            "opportunity_for_improvement",
-        }
-    )
+    _should_create_risk = staticmethod(should_create_risk)
 
     async def _ensure_risk_for_finding(
         self,
@@ -1293,10 +1285,10 @@ class AuditService:
         external_import_triage_pending: bool = False,
         force_flag: bool = False,
     ) -> EnterpriseRisk | None:
-        finding_type = (finding.finding_type or "").strip().lower()
-        if not force_flag and finding_type in self._NON_AUTO_RISK_FINDING_TYPES:
+        normalized_severity = (finding.severity or "").strip().lower()
+        if force_flag and normalized_severity not in AUDIT_RISK_SEVERITIES:
             return None
-        if finding.severity not in {"critical", "high", "medium", "low"}:
+        if not force_flag and not self._should_create_risk(finding):
             return None
 
         title = (suggested_title or f"Audit escalation: {run.reference_number} / {finding.reference_number}")[:255]
@@ -1327,11 +1319,11 @@ class AuditService:
                 finding.risk_ids_json = sorted({*(finding.risk_ids_json or []), existing.id})
             return existing
 
-        if finding.severity == "critical":
+        if normalized_severity == "critical":
             likelihood, impact = 4, 5
-        elif finding.severity == "high":
+        elif normalized_severity == "high":
             likelihood, impact = 3, 4
-        elif finding.severity == "medium":
+        elif normalized_severity == "medium":
             likelihood, impact = 2, 3
         else:
             likelihood, impact = 1, 2

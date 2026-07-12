@@ -25,6 +25,7 @@ from src.domain.models.planet_mark import ImprovementAction as PlanetMarkImprove
 from src.domain.models.planet_mark import Scope3CategoryData
 from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.uvdb_achilles import UVDBAudit
+from src.domain.services.audit_risk_gate import RISK_CREATING_FINDING_TYPES, should_create_risk
 from src.domain.services.audit_service import AuditService
 from src.domain.services.planet_mark_service import SCOPE3_CATEGORIES, PlanetMarkService
 from src.domain.services.reference_number import ReferenceNumberService
@@ -53,15 +54,7 @@ class ExternalAuditPromotionService:
     def db(self):
         return self.host.db
 
-    _ACTION_FINDING_TYPES = {
-        "nonconformity",
-        "major_nonconformity",
-        "minor_nonconformity",
-        "competence_gap",
-        "finding",
-        "flagged_item",
-        "question_answered_no",
-    }
+    _ACTION_FINDING_TYPES = RISK_CREATING_FINDING_TYPES
 
     @staticmethod
     def _scheme_home(scheme: str | None) -> tuple[str, str]:
@@ -698,12 +691,7 @@ class ExternalAuditPromotionService:
         action_candidates = sum(
             1 for finding in findings if getattr(finding, "finding_type", "") in self._ACTION_FINDING_TYPES
         )
-        risk_candidates = sum(
-            1
-            for finding in findings
-            if getattr(finding, "finding_type", "") in self._ACTION_FINDING_TYPES
-            and getattr(finding, "severity", "") in {"medium", "high", "critical"}
-        )
+        risk_candidates = sum(1 for finding in findings if should_create_risk(finding))
         evidence_link_candidates = len(
             {
                 str(mapping.get("clause_id"))
