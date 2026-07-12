@@ -28,8 +28,8 @@ Boxes below are for the **operator documentary pack** and the LIVE stub. Tenant 
 
 | # | Required element | QGP source today | Completeness | Gap / next action |
 |---|------------------|------------------|--------------|-------------------|
-| A | Name and contact details of controller | Tenant org (per DPA schedule); not hardcoded in stub | Partial | Controllers supply legal entity + contact in their ROPA |
-| B | DPO contact (where applicable) | Env / policy emails via `GET /api/v1/privacy/contact` (`privacy_contact`) | Partial | Confirm appointed DPO name/email — **do not invent in repo** |
+| A | Name and contact details of controller | Tenant org (per DPA schedule); LIVE `roles_and_contacts.controller` | Partial | Controllers supply legal entity + contact in their ROPA — stub points only |
+| B | DPO contact (where applicable) | Env / policy emails via `GET /api/v1/privacy/contact`; LIVE `roles_and_contacts.dpo` (`contact_email=null`) | Partial | Confirm appointed DPO name/email — **do not invent in repo** |
 | C | Purposes of processing | [`gdpr-compliance.md`](gdpr-compliance.md) §1; LIVE `activities[].purpose` (+ `name`) | Ready for review | LIVE purpose strings added (unsigned stub) — DPO still confirms per tenant workflow |
 | D | Categories of data subjects | Platform DPIA §2; LIVE `activities[].data_subject_categories` | Ready for review | LIVE subject-category field added (unsigned stub) — expand if controllers require finer taxonomy |
 | E | Categories of personal data | LIVE `activities[].data_categories`; PII inventory script evidence | Ready for review | Re-run `scripts/governance/audit_pii_fields.py` on model changes |
@@ -44,7 +44,7 @@ Boxes below are for the **operator documentary pack** and the LIVE stub. Tenant 
 
 | # | Required element | QGP source today | Completeness |
 |---|------------------|------------------|--------------|
-| P1 | Name and contact of processor | Plantexpand / QGP operator (LIVE `processor_operator`) | Documented at stub level |
+| P1 | Name and contact of processor | Plantexpand / QGP operator (LIVE `processor_operator` + `roles_and_contacts.processor`) | Documented at stub level |
 | P2 | Categories of processing on behalf of each controller | LIVE `activities` + tenant isolation model | High-level stub — expand per product module as ROPA matures |
 | P3 | Transfers + safeguards (where processor transfers) | LIVE `international_transfers`; subprocessor table; OCR DPIA | Ready for review (AI DPAs still pending) |
 | P4 | General security measures description | DPIA §5; LIVE `technical_organisational_measures` | Ready for review |
@@ -104,6 +104,7 @@ Aligned with `src/api/routes/privacy.py` → `_processing_activities()` after Pr
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 1.5 | 2026-07-12 | Platform Engineering | Gaps A/B/P1 surfaced on LIVE stub via `roles_and_contacts` — still **unsigned** / DPO identity not invented |
 | 1.4 | 2026-07-12 | Platform Engineering | Gap G surfaced on LIVE stub via `international_transfers` — still **unsigned** / AI vendor DPAs not invented |
 | 1.3 | 2026-07-12 | Platform Engineering | Gap I surfaced on LIVE stub via `technical_organisational_measures` — still **unsigned** / EA-02 not claimed |
 | 1.2 | 2026-07-12 | Platform Engineering | Gaps C/D closed on LIVE stub via `purpose` + `data_subject_categories` — still **unsigned** / not full ROPA |

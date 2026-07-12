@@ -105,21 +105,23 @@ The platform is hosted entirely within Azure UK South region. No personal data i
 | Endpoint | Surfaces |
 |----------|----------|
 | `GET /api/v1/privacy/contact` | Privacy/security contacts, `retention`, `subprocessors`, `dpia.status`, register pointer |
-| `GET /api/v1/privacy/data-processing-register` | Article 30-style **stub** register (activities + subprocessors + DPIA status + `technical_organisational_measures` + `international_transfers`) |
+| `GET /api/v1/privacy/data-processing-register` | Article 30-style **stub** register (activities + subprocessors + DPIA status + `roles_and_contacts` + `technical_organisational_measures` + `international_transfers`) |
 
-`dpia.status` is `pending_dpo_signoff` until Section 9 of
-[`dpia-quality-governance-platform.md`](dpia-quality-governance-platform.md) is signed by the DPO.
+`dpia.status` is `signed` as of 2026-07-12 (EA-03 / DPIA §9 closed —
+[`dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md`](../evidence/dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md)).
 The processing register is intentionally a stub (`register_kind=article_30_stub`) — activity rows
 include complaints, near-misses, CAPA, risk register, and RTA plus additive `purpose` /
 `data_subject_categories` fields for Art. 30(1)(b)/(c) readability, a register-level
+`roles_and_contacts` block for Art. 30 A/B/P1 pointers (**DPO identity not invented**;
+`dpo.contact_email` stays `null` until appointed), a
 `technical_organisational_measures` block for Art. 30(1)(g) (general TOMs; **not** EA-02),
 and `international_transfers` for Art. 30(1)(e) (UK South primary; optional AI vendor
 transfers pending SCC/UK IDTA — **no signed vendor DPAs invented**).
-Signed DPA links + DPO §9 are still required before treating it as a full controller ROPA.
-LIVE `dpia.attestation_pack` / `dpia.article_30_checklist` point at the unsigned documentary pack.
+Signed DPA links + EA-01/02/04 are still required before treating it as a full controller ROPA.
+LIVE `dpia.attestation_pack` / `dpia.article_30_checklist` point at the attestation pack.
 
-Documentary Art. 30 field map (unsigned): [`article-30-ropa-checklist.md`](article-30-ropa-checklist.md).  
-Unsigned DPIA + Art. 30 attestation pack: [`s15-dpia-art30-attestation-pack.md`](s15-dpia-art30-attestation-pack.md).
+Documentary Art. 30 field map: [`article-30-ropa-checklist.md`](article-30-ropa-checklist.md).  
+DPIA + Art. 30 attestation pack: [`s15-dpia-art30-attestation-pack.md`](s15-dpia-art30-attestation-pack.md).
 
 Sub-processors disclosed (also on `/privacy/contact`):
 
