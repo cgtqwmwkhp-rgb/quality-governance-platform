@@ -457,6 +457,41 @@ def evaluate_soft_gate_posture(trend_records: list[dict]) -> dict:
     }
 
 
+def _load_soft_gate_trend_history() -> list[dict]:
+    """Optional prior soft-gate trend records for posture aggregation.
+
+    ``LOCUST_TREND_HISTORY`` may be a path to a JSON array / JSONL file of
+    ``locust-soft-gate-trend/v1`` records. Missing / invalid → empty list.
+    Never invents runs; operators supply prior artifacts when comparing.
+    """
+    raw_path = (os.environ.get("LOCUST_TREND_HISTORY") or "").strip()
+    if not raw_path:
+        return []
+    path = Path(raw_path)
+    if not path.is_file():
+        logger.warning("LOCUST_TREND_HISTORY path missing: %s", path)
+        return []
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+        if not text:
+            return []
+        if text.startswith("["):
+            data = json.loads(text)
+            return [r for r in data if isinstance(r, dict)]
+        records: list[dict] = []
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            item = json.loads(line)
+            if isinstance(item, dict):
+                records.append(item)
+        return records
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("LOCUST_TREND_HISTORY unreadable (%s): %s", path, exc)
+        return []
+
+
 def write_soft_gate_summary(payload: dict) -> None:
     """Emit a human + machine readable soft-gate summary for CI artifacts."""
     lines = [
@@ -484,6 +519,32 @@ def write_soft_gate_summary(payload: dict) -> None:
         )
         lines.append("")
 
+    out_dir = Path(os.environ.get("LOCUST_SUMMARY_DIR", "."))
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    trend = build_trend_record(payload)
+    (out_dir / "locust-soft-gate-trend.json").write_text(json.dumps(trend, indent=2) + "\n", encoding="utf-8")
+
+    history = _load_soft_gate_trend_history()
+    posture = evaluate_soft_gate_posture([*history, trend])
+    (out_dir / "locust-soft-gate-posture.json").write_text(json.dumps(posture, indent=2) + "\n", encoding="utf-8")
+    lines.extend(
+        [
+            "### Soft-gate posture advisor",
+            "",
+            f"- **Recommended posture:** `{posture['recommended_posture']}`",
+            f"- **History records considered:** {len(history)} prior + current run",
+            "",
+        ]
+    )
+    if posture.get("actions"):
+        lines.append("**Advisor actions:**")
+        for action in posture["actions"]:
+            lines.append(f"- {action}")
+        lines.append("")
+    lines.append("_Posture is advisory only — never flips workflow YAML, branch " "protection, or Locust exit codes._")
+    lines.append("")
+
     text = "\n".join(lines)
     print(text)
 
@@ -492,10 +553,5 @@ def write_soft_gate_summary(payload: dict) -> None:
         with open(step_summary, "a", encoding="utf-8") as fh:
             fh.write(text)
 
-    out_dir = Path(os.environ.get("LOCUST_SUMMARY_DIR", "."))
-    out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "locust-soft-gate-summary.md").write_text(text, encoding="utf-8")
     (out_dir / "locust-soft-gate-summary.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-
-    trend = build_trend_record(payload)
-    (out_dir / "locust-soft-gate-trend.json").write_text(json.dumps(trend, indent=2) + "\n", encoding="utf-8")

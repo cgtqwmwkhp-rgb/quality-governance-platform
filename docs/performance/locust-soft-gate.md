@@ -37,7 +37,7 @@ Env controls (see `tests/performance/locustfile.py`):
 - **File:** [`.github/workflows/locust-soft-gate.yml`](../../.github/workflows/locust-soft-gate.yml)
 - **Triggers:** `pull_request`, `push` to `main`, `workflow_dispatch`
 - **Merge impact:** non-blocking (`continue-on-error: true` + soft exit)
-- **Artifacts:** `locust-soft-gate-staging` (CSV + markdown/JSON summary + trend snapshot)
+- **Artifacts:** `locust-soft-gate-staging` (CSV + markdown/JSON summary + trend + posture)
 - **Step summary:** Dedicated **Publish soft-gate trend to job summary** step mirrors the
   markdown report and embeds the trend JSON in the Actions UI
 
@@ -108,6 +108,13 @@ collapse scale / re-enable / promote / trial helpers into one
 `recommended_posture` (`scale_investigate` → `reenable_soft_gate` →
 `promote_hard_gate` → `trial_tighten` → `observe`). Advisory only — see
 [`queue-depth-scale-hint.md`](queue-depth-scale-hint.md).
+
+Each soft-gate summary write also emits **`locust-soft-gate-posture.json`** next
+to the trend artifact and appends a **Soft-gate posture advisor** section to the
+markdown / job summary. Optional prior runs: set `LOCUST_TREND_HISTORY` to a JSON
+array or JSONL of `locust-soft-gate-trend/v1` records so the advisor aggregates
+history + the current run. Missing history → single-run posture (usually
+`observe`). Never invents runs; never flips exit codes / YAML.
 
 ## Related
 
