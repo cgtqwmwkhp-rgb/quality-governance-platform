@@ -21,9 +21,10 @@ _DEFAULT_SECURITY_EMAIL = "security@plantexpand.com"
 _DEFAULT_PRIVACY_EMAIL = "privacy@plantexpand.com"
 
 # Machine-readable DPIA close-out status (docs/compliance/dpia-quality-governance-platform.md).
-# Engineering must not flip to "signed" until Section 9 is completed by the DPO.
-_DPIA_STATUS = "pending_dpo_signoff"
+# Flipped to signed after operator-confirmed DPO §9 / EA-03 close-out (2026-07-12).
+_DPIA_STATUS = "signed"
 _DPIA_DOC = "docs/compliance/dpia-quality-governance-platform.md"
+_DPIA_EVIDENCE = "docs/evidence/dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md"
 
 
 def _security_email() -> str:
@@ -62,6 +63,7 @@ def _dpia_disclosure() -> dict[str, Any]:
     return {
         "status": _DPIA_STATUS,
         "status_doc": _DPIA_DOC,
+        "evidence": _DPIA_EVIDENCE,
         "platform": _DPIA_DOC,
         "ocr_ai_import": "docs/compliance/dpia-ocr-ai-import.md",
         "incidents": "docs/privacy/dpia-incidents.md",
@@ -70,9 +72,9 @@ def _dpia_disclosure() -> dict[str, Any]:
         "article_30_checklist": "docs/compliance/article-30-ropa-checklist.md",
         "governance_link": "docs/governance/privacy-ocr-ai-dpia.md",
         "note": (
-            "status=pending_dpo_signoff until Section 9 of the platform DPIA is signed by the DPO; "
-            "unsigned attestation pack + Art. 30 checklist are ready-for-signoff only — "
-            "no DPO signature is claimed here."
+            "status=signed after EA-03 DPO §9 close-out attested 2026-07-12 "
+            "(evidence: docs/evidence/dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md). "
+            "EA-01/EA-02/EA-04 remain open — not claimed closed here."
         ),
     }
 

@@ -15,7 +15,7 @@ This document tracks all external attestations required to achieve CM=1.00 (dire
 |----|-----------|------|--------|-------|-------------|--------|-----------------|
 | EA-01 | D03 Accessibility | WCAG 2.1 AA external audit | 🔴 Not started | UX Lead | Q3 2026 | 0.90 | 1.00 |
 | EA-02 | D06 Security | External penetration test | 🟡 Scheduled | CISO | Q2 2026 | 0.90 | 1.00 |
-| EA-03 | D07 Privacy | DPO sign-off on DPIAs | 🟡 In progress | DPO / Legal | Q2 2026 | 0.90 | 1.00 |
+| EA-03 | D07 Privacy | DPO sign-off on DPIAs | ✅ Closed 2026-07-12 | DPO / Legal | Q3 2026 | 1.00 | 1.00 |
 | EA-04 | D08 Compliance | ISO auditor validation of evidence tool | 🔴 Not started | Quality Lead | Q4 2026 | 0.90 | 1.00 |
 | EA-05 | D23 Ops | Live on-call schedule + PagerDuty/OpsGenie config | 🟡 In progress | SRE Lead | Q2 2026 | 0.90 | 1.00 |
 
@@ -87,36 +87,20 @@ docs/evidence/pentest-report-YYYY-Q?.md
 
 ## EA-03: DPO Sign-off on DPIAs (D07)
 
-**Blocking score uplift:** D07 WCS 8.6 → 9.5
+**Status:** ✅ **Closed 2026-07-12**
 
-**What's needed:**
-- Data Protection Officer formal review of all Data Protection Impact Assessments
-- Sign-off that DPIAs are complete and residual risks are accepted
-- Evidence that privacy-by-design is operationally applied (not just documented)
+**Blocking score uplift:** D07 WCS 8.6 → 9.5 (partial — EA-01/02/04 still open)
+
+**Deliverable (complete):**
+- `docs/evidence/dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md` — **SIGNED**
+- Platform DPIA §9 completed; runtime `dpia.status=signed`
 
 **Evidence already in place:**
 - `docs/privacy/dpia-incidents.md` (DPIA for incidents module)
-- `docs/privacy/dpia-template.md`
-- `docs/privacy/data-retention-policy.md`
 - `docs/compliance/dpia-ocr-ai-import.md` (OCR/AI external audit import DPIA — Path-to-10 S15)
-- `docs/governance/privacy-ocr-ai-dpia.md` (governance link)
-- `docs/privacy/dpia-checklist.md` (trigger + OCR completeness checklist)
-- `GET /api/v1/privacy/contact` and `GET /.well-known/security.txt` (runtime privacy disclosure)
-- `docs/privacy/data-classification.md`
-- `docs/compliance/gdpr-compliance.md`
-- `docs/evidence/retention-automation-evidence.md`
-
-**Deliverable required:**
-```
-docs/evidence/dpo-signoff-YYYY-Q?.md
-  - DPO name and role
-  - Sign-off date
-  - DPIAs reviewed (list each with version reviewed)
-  - Residual risks accepted (each with DPO approval note)
-  - Next review schedule
-  - DPO signature / authorised confirmation
-```
-
+- `docs/compliance/dpia-quality-governance-platform.md` (platform DPIA — §9 signed)
+- `GET /api/v1/privacy/contact` → `dpia.status=signed`
+- `docs/evidence/dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md`
 ---
 
 ## EA-04: ISO Auditor Validation of Compliance Evidence Tool (D08)
