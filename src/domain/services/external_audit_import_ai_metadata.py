@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from src.domain.models.external_audit_import import ExternalAuditImportJob
 
-def apply_ai_metadata_to_job(job: object, ai_result: object | None) -> None:
+
+def apply_ai_metadata_to_job(job: ExternalAuditImportJob, ai_result: object | None) -> None:
     """Persist AI-extracted audit metadata onto the job and provenance.
 
     No-op when ``ai_result`` is missing or ``provider_status`` is not
