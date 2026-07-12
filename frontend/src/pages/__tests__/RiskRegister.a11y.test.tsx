@@ -33,6 +33,10 @@ vi.mock('../../api/client', () => ({
     getHeatmap: (...args: unknown[]) => mockGetHeatmap(...args),
     resolveSuggestionTriage: vi.fn(),
   },
+  auditsApi: {
+    listRuns: vi.fn().mockResolvedValue({ data: { items: [] } }),
+    listFindings: vi.fn().mockResolvedValue({ data: { items: [] } }),
+  },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Something went wrong',
 }))

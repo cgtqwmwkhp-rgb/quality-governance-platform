@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
   Plus,
@@ -28,7 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/Dialog'
-import { riskRegisterApi } from '../api/client'
+import { auditsApi, riskRegisterApi } from '../api/client'
 import { toast } from '../contexts/ToastContext'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
 
@@ -79,6 +79,15 @@ interface HeatMapData {
   impact_labels: Record<number, string>
 }
 
+interface LinkedAuditTarget {
+  kind: 'audit' | 'finding'
+  path: string
+}
+
+function normalizeLinkedReference(reference: string): string {
+  return reference.trim().toLowerCase()
+}
+
 const CATEGORIES = [
   { id: 'strategic', label: 'Strategic', color: 'bg-primary' },
   { id: 'operational', label: 'Operational', color: 'bg-info' },
@@ -121,6 +130,7 @@ export default function RiskRegister() {
   const [rejectTargetId, setRejectTargetId] = useState<number | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
   const [triageSubmitting, setTriageSubmitting] = useState(false)
+  const [linkedAuditTargets, setLinkedAuditTargets] = useState<Record<string, LinkedAuditTarget>>({})
 
   useEffect(() => {
     if (searchParams.get('triage') === 'import') {
@@ -154,6 +164,30 @@ export default function RiskRegister() {
         riskRegisterApi.getHeatmap(),
         riskRegisterApi.list({ limit: 1, suggestion_triage: 'pending' }),
       ])
+      const [runsResult, findingsResult] = await Promise.allSettled([
+        auditsApi.listRuns(1, 100),
+        auditsApi.listFindings(1, 100),
+      ])
+      const nextLinkedAuditTargets: Record<string, LinkedAuditTarget> = {}
+      if (runsResult.status === 'fulfilled') {
+        for (const run of runsResult.value.data?.items ?? []) {
+          const isExternalImport =
+            run.is_external_audit_import === true || run.is_external_import_intake === true
+          nextLinkedAuditTargets[normalizeLinkedReference(run.reference_number)] = {
+            kind: 'audit',
+            path: `/audits/${run.id}/${isExternalImport ? 'import-review' : 'execute'}`,
+          }
+        }
+      }
+      if (findingsResult.status === 'fulfilled') {
+        for (const finding of findingsResult.value.data?.items ?? []) {
+          nextLinkedAuditTargets[normalizeLinkedReference(finding.reference_number)] = {
+            kind: 'finding',
+            path: `/audits?view=findings&findingId=${encodeURIComponent(finding.id)}`,
+          }
+        }
+      }
+      setLinkedAuditTargets(nextLinkedAuditTargets)
       setPendingTriageCount(
         typeof pendingRes.data?.total === 'number' ? pendingRes.data.total : 0,
       )
@@ -672,11 +706,31 @@ export default function RiskRegister() {
                               Escalated
                             </Badge>
                           )}
-                          {(risk.linked_audits?.length ?? 0) > 0 && (
-                            <Badge variant="outline" className="text-[10px]">
-                              {risk.linked_audits?.length} audit links
-                            </Badge>
-                          )}
+                          {risk.linked_audits?.map((reference) => {
+                            const target = linkedAuditTargets[normalizeLinkedReference(reference)]
+                            if (!target) {
+                              return (
+                                <Badge
+                                  key={reference}
+                                  variant="outline"
+                                  className="font-mono text-[10px]"
+                                >
+                                  {reference}
+                                </Badge>
+                              )
+                            }
+                            return (
+                              <Link
+                                key={reference}
+                                to={target.path}
+                                aria-label={`Open ${target.kind} ${reference}`}
+                                className="inline-flex items-center rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-primary transition-colors hover:bg-muted hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {reference}
+                              </Link>
+                            )
+                          })}
                           {(risk.linked_actions?.length ?? 0) > 0 && (
                             <Badge variant="secondary" className="text-[10px]">
                               {risk.linked_actions?.length} action links
