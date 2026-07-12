@@ -626,7 +626,11 @@ class AuditFindingBase(BaseModel):
     severity: str = Field(default="medium", pattern="^(critical|high|medium|low|observation)$")
     finding_type: str = Field(
         default="nonconformity",
-        pattern="^(nonconformity|observation|opportunity|positive)$",
+        pattern=(
+            "^(nonconformity|major_nonconformity|minor_nonconformity|observation|"
+            "opportunity|opportunity_for_improvement|positive|positive_practice|"
+            "competence_gap|flagged_item|question_answered_no|finding)$"
+        ),
     )
 
     # Standard mapping
@@ -662,6 +666,16 @@ class AuditFindingUpdate(BaseModel):
     corrective_action_required: Optional[bool] = None
     corrective_action_due_date: Optional[datetime] = None
     status: Optional[str] = None
+
+
+class FlagFindingRiskRequest(BaseModel):
+    """Explicitly escalate a finding onto the enterprise risk register."""
+
+    severity: Optional[str] = Field(
+        default=None,
+        pattern="^(critical|high|medium|low)$",
+        description="Optional severity override when flagging to organisational risk",
+    )
 
 
 class AuditFindingResponse(BaseModel):
