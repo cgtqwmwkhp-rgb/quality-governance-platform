@@ -19,7 +19,7 @@ const NEXT_STEP_COPY: Record<StepId, string> = {
   upload: 'Next: Processing — OCR extracts draft findings from your upload.',
   processing: 'Next: Review — check draft findings when extraction finishes.',
   review: 'Next: Promote — accept drafts, then promote into governance outcomes.',
-  promote: 'Promote accepted drafts to finish this import.',
+  promote: 'Next: Promote Now, then Confirm — two clicks to attest accepted drafts.',
 }
 
 function resolveActiveStep({
@@ -42,11 +42,14 @@ function resolveActiveStep({
 
 function resolveNextStepCopy(
   active: StepId,
-  { jobStatus }: Pick<ImportReviewStepperProps, 'jobStatus'>,
+  { jobStatus, promoteableCount }: Pick<ImportReviewStepperProps, 'jobStatus' | 'promoteableCount'>,
 ): string | null {
   const status = (jobStatus || '').toLowerCase()
   if (active === 'promote' && (status === 'completed' || status === 'promoted')) {
     return 'Import complete — accepted drafts have been promoted.'
+  }
+  if (active === 'promote' && (promoteableCount ?? 0) > 0) {
+    return 'Next: Promote Now, then Confirm — two clicks to attest accepted drafts.'
   }
   return NEXT_STEP_COPY[active]
 }

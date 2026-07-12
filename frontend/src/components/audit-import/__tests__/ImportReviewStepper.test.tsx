@@ -51,4 +51,16 @@ describe('ImportReviewStepper', () => {
       'Import complete — accepted drafts have been promoted.',
     )
   })
+
+  it('shows ≤2-click attest next-step when promoteable drafts are ready', () => {
+    expect(
+      resolveNextStepCopy('promote', { jobStatus: 'review_required', promoteableCount: 3 }),
+    ).toBe('Next: Promote Now, then Confirm — two clicks to attest accepted drafts.')
+    render(
+      <ImportReviewStepper hasJob jobStatus="review_required" promoteableCount={3} />,
+    )
+    expect(screen.getByTestId('import-review-stepper-next')).toHaveTextContent(
+      'Next: Promote Now, then Confirm — two clicks to attest accepted drafts.',
+    )
+  })
 })
