@@ -114,11 +114,7 @@ async def _risks_for_finding(session: AsyncSession, finding_reference: str) -> l
             EnterpriseRisk.source == "audit_finding",
         )
     )
-    return [
-        risk
-        for risk in result.scalars().all()
-        if finding_reference in (risk.linked_audits or [])
-    ]
+    return [risk for risk in result.scalars().all() if finding_reference in (risk.linked_audits or [])]
 
 
 async def _junction_risk_ids(session: AsyncSession, finding_id: int) -> list[int]:
