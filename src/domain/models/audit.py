@@ -26,7 +26,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.domain.models.base import AuditTrailMixin, Base, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
 from src.domain.models.risk_register import EnterpriseRisk
 
-
 audit_finding_risks = Table(
     "audit_finding_risks",
     Base.metadata,
