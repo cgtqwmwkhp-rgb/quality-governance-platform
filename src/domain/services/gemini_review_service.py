@@ -19,11 +19,11 @@ from pathlib import Path
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.domain.services.mistral_analysis_service import AIAnalysisResult
-from src.infrastructure.resilience.circuit_breaker import CircuitBreaker
+from src.domain.services.upstream_circuit_breaker import call_via_upstream_breaker
 
 logger = logging.getLogger(__name__)
 
-_gemini_review_cb = CircuitBreaker("gemini_review", failure_threshold=5, recovery_timeout=300)
+_GEMINI_REVIEW_UPSTREAM_BREAKER = "gemini_review"
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-pro-preview")
 GEMINI_API_KEY_ENV = "GOOGLE_GEMINI_API_KEY"
@@ -313,7 +313,11 @@ class GeminiReviewService:
     async def _call_with_retry(self, run_fn):
         """Wrap the actual Gemini API call so tenacity can retry on transient errors."""
         return await asyncio.wait_for(
-            _gemini_review_cb.call(asyncio.to_thread, run_fn),
+            call_via_upstream_breaker(
+                _GEMINI_REVIEW_UPSTREAM_BREAKER,
+                asyncio.to_thread,
+                run_fn,
+            ),
             timeout=GEMINI_TIMEOUT_SECONDS,
         )
 
