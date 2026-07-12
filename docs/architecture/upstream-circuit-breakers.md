@@ -2,7 +2,7 @@
 
 **Owner:** Platform Engineering  
 **Classification:** Internal (C2)  
-**Status:** Foundation + `/readyz` degraded aggregate + Import Review banner + Azure Blob + Mistral OCR + Gemini review + Gemini AI templates call-sites
+**Status:** Foundation + `/readyz` degraded aggregate + Import Review banner + Azure Blob + Mistral OCR bytes + Mistral analysis + Gemini review + Gemini AI templates call-sites
 
 ---
 
@@ -96,13 +96,24 @@ The banner accepts controlled `openCircuits` / `halfOpenCircuits` props, or opti
 
 ---
 
-## Mistral OCR/analysis call-site
+## Mistral analysis call-site
 
 | Attribute | Detail |
 |-----------|--------|
 | **Module** | [`src/domain/services/mistral_analysis_service.py`](../../src/domain/services/mistral_analysis_service.py) |
 | **Ops wrapped** | `analyze_text` Chat completions via `call_via_upstream_breaker("mistral_analysis", …)` |
 | **Secrets** | Uses existing `settings.mistral_api_key` only; never invents keys; unconfigured stays `not_configured` |
+| **Readyz** | [`ai_status.py`](../../src/infrastructure/upstream/ai_status.py) still reports honest config + circuit metadata without dialing Mistral |
+
+---
+
+## Mistral OCR bytes call-site
+
+| Attribute | Detail |
+|-----------|--------|
+| **Module** | [`src/domain/services/mistral_ocr_service.py`](../../src/domain/services/mistral_ocr_service.py) |
+| **Ops wrapped** | `ocr_bytes` `/ocr` dial via `call_via_upstream_breaker("mistral_analysis", …)` (shared Preferred OCR identity) |
+| **Secrets** | Uses existing `settings.mistral_api_key` only; never invents keys; unconfigured stays `not_configured` without registering the breaker |
 | **Readyz** | [`ai_status.py`](../../src/infrastructure/upstream/ai_status.py) still reports honest config + circuit metadata without dialing Mistral |
 
 ---
@@ -133,7 +144,7 @@ The banner accepts controlled `openCircuits` / `halfOpenCircuits` props, or opti
 ## Adoption notes
 
 1. Prefer `get_upstream_breaker` / `call_via_upstream_breaker` for **new** upstream call sites.
-2. Catalog facade call sites now cover blob Azure I/O, Mistral analysis, Gemini review, and Gemini AI templates; `get_upstream_breaker` reuses the shared registry entry.
+2. Catalog facade call sites now cover blob Azure I/O, Mistral OCR bytes, Mistral analysis, Gemini review, and Gemini AI templates; `get_upstream_breaker` reuses the shared registry entry.
 3. Do not invent secrets or live-ping providers from readiness; keep `/readyz` honesty (`register_missing=False`).
 
 ---
