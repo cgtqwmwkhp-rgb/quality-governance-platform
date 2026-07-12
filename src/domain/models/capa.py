@@ -1,11 +1,10 @@
 """CAPA (Corrective and Preventive Action) domain model."""
 
-from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Any
 
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import CheckConstraint, Column, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from src.domain.models.base import Base
@@ -51,6 +50,12 @@ def _enum_values(enum_cls: type[PyEnum]) -> list[str]:
 
 class CAPAAction(Base):
     __tablename__ = "capa_actions"
+    __table_args__ = (
+        CheckConstraint(
+            "source_type <> 'audit_finding' OR source_id IS NOT NULL",
+            name="ck_capa_actions_audit_finding_source_id",
+        ),
+    )
 
     tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     id = Column(Integer, primary_key=True, autoincrement=True)
