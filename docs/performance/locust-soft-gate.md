@@ -85,9 +85,18 @@ When staging/CI p95 is stable under the staging profile:
    shows low false-positive rate on GHA runners.
 3. Keep the relaxed `ci` profile available for smoke-only runs if needed.
 
+Use `evaluate_hard_gate_promotion_readiness()` in
+`tests/performance/thresholds.py` (schema `locust-soft-gate-hard-gate-ready/v1`)
+on successive trend records: ready when the last
+`SOFT_GATE_HARD_GATE_PROMOTE["stable_run_count"]` (**5**) runs stay ≤ staging
+bar **and** p95 stays ≤ **80%** of the staging limit (400 ms). Advisory only —
+it never flips workflow YAML or branch protection.
+
 ## Related
 
 - [`docs/performance/api-slos.md`](api-slos.md) — CI vs production latency tiers
 - [`docs/performance/queue-depth-scale-hint.md`](queue-depth-scale-hint.md) — advisory scale-out + non-blocking p95 tighten
 - [`docs/slo/performance-slos.md`](../slo/performance-slos.md) — load-test pass/fail criteria
 - [`tests/performance/locustfile.py`](../../tests/performance/locustfile.py) — profiles + soft-gate listener
+- `tests/performance/thresholds.py` — `SOFT_GATE_HARD_GATE_PROMOTE`,
+  `evaluate_hard_gate_promotion_readiness()`

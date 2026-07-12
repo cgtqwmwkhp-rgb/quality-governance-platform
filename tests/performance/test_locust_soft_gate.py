@@ -5,8 +5,10 @@ import json
 from tests.performance.thresholds import (
     LOCUST_PROFILES,
     QUEUE_DEPTH_SCALE_HINTS,
+    SOFT_GATE_HARD_GATE_PROMOTE,
     SOFT_GATE_TRIAL_TIGHTEN,
     build_trend_record,
+    evaluate_hard_gate_promotion_readiness,
     evaluate_sustained_scale_hints,
     evaluate_trial_tighten_readiness,
     resolve_perf_thresholds,
@@ -189,3 +191,41 @@ def test_evaluate_trial_tighten_readiness_rejects_breach():
     assert out["ready_for_trial_tighten"] is False
     assert out["stable_under_staging_bar"] is False
     assert any("Not ready for trial tighten" in a for a in out["actions"])
+
+
+def test_soft_gate_hard_gate_promote_constants_match_docs():
+    assert SOFT_GATE_HARD_GATE_PROMOTE["stable_run_count"] == 5
+    assert SOFT_GATE_HARD_GATE_PROMOTE["p95_headroom_fraction"] == 0.8
+    # Stricter window than trial tighten; headroom is below staging bar.
+    assert SOFT_GATE_HARD_GATE_PROMOTE["stable_run_count"] > SOFT_GATE_TRIAL_TIGHTEN["stable_run_count"]
+    staging_p95 = int(LOCUST_PROFILES["staging"]["p95_response_ms"])
+    assert staging_p95 * SOFT_GATE_HARD_GATE_PROMOTE["p95_headroom_fraction"] == 400.0
+
+
+def test_evaluate_hard_gate_promotion_readiness_needs_window():
+    out = evaluate_hard_gate_promotion_readiness([_trend(100.0)] * 3)
+    assert out["schema"] == "locust-soft-gate-hard-gate-ready/v1"
+    assert out["enough_runs"] is False
+    assert out["ready_for_hard_gate_promotion"] is False
+    assert out["p95_headroom_limit_ms"] == 400.0
+    assert "Collect ≥5" in out["actions"][0]
+
+
+def test_evaluate_hard_gate_promotion_readiness_stable_with_headroom():
+    records = [_trend(200.0), _trend(180.0), _trend(220.0), _trend(190.0), _trend(210.0)]
+    out = evaluate_hard_gate_promotion_readiness(records)
+    assert out["enough_runs"] is True
+    assert out["stable_under_staging_bar"] is True
+    assert out["within_p95_headroom"] is True
+    assert out["ready_for_hard_gate_promotion"] is True
+    assert any("LOCUST_SOFT_GATE" in a for a in out["actions"])
+
+
+def test_evaluate_hard_gate_promotion_readiness_rejects_thin_margin():
+    # Under staging bar (500) but above 80% headroom (400) → not ready.
+    records = [_trend(200.0), _trend(180.0), _trend(450.0), _trend(190.0), _trend(210.0)]
+    out = evaluate_hard_gate_promotion_readiness(records)
+    assert out["stable_under_staging_bar"] is True
+    assert out["within_p95_headroom"] is False
+    assert out["ready_for_hard_gate_promotion"] is False
+    assert any("80%" in a or "400" in a for a in out["actions"])

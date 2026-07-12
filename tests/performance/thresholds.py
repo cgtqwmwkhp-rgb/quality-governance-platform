@@ -27,6 +27,13 @@ SOFT_GATE_TRIAL_TIGHTEN: dict[str, float | int] = {
     "stable_run_count": 3,  # ≥ N recent runs under current staging bar before trial
 }
 
+# Advisory hard-gate promotion readiness (docs Observe → Document → Promote).
+# Never flips workflow YAML or branch protection; operators still act manually.
+SOFT_GATE_HARD_GATE_PROMOTE: dict[str, float | int] = {
+    "stable_run_count": 5,  # ≥ N recent runs under staging bar before considering hard-gate
+    "p95_headroom_fraction": 0.8,  # all runs ≤ 0.8× staging p95 (margin vs flaky runners)
+}
+
 # Named profiles for Preferred S14 performance bar. Env overrides always win.
 LOCUST_PROFILES: dict[str, dict[str, float | int | str]] = {
     "default": {
@@ -247,6 +254,87 @@ def evaluate_trial_tighten_readiness(trend_records: list[dict]) -> dict:
         "trial_error_rate_pct": trial_err,
         "stable_under_staging_bar": stable,
         "ready_for_trial_tighten": stable,
+        "actions": actions,
+    }
+
+
+def evaluate_hard_gate_promotion_readiness(trend_records: list[dict]) -> dict:
+    """Decide whether soft-gate trends are stable enough to consider a hard gate.
+
+    Advisory only — never changes Locust exit codes, workflow YAML, branch
+    protection, or profiles. Ready when the last ``stable_run_count`` runs are
+    all under the staging bar **and** p95 stays within the documented headroom
+    fraction (low false-positive margin on GHA runners).
+    """
+    required = int(SOFT_GATE_HARD_GATE_PROMOTE["stable_run_count"])
+    headroom = float(SOFT_GATE_HARD_GATE_PROMOTE["p95_headroom_fraction"])
+    staging_p95 = int(LOCUST_PROFILES["staging"]["p95_response_ms"])
+    staging_err = float(LOCUST_PROFILES["staging"]["error_rate_pct"])
+    p95_headroom_limit = staging_p95 * headroom
+
+    window = list(trend_records[-required:]) if trend_records else []
+    enough = len(window) >= required
+    actions: list[str] = []
+
+    if not enough:
+        actions.append(
+            f"Collect ≥{required} soft-gate trend records under the staging bar "
+            f"before considering hard-gate promotion (have {len(window)})."
+        )
+        return {
+            "schema": "locust-soft-gate-hard-gate-ready/v1",
+            "window_size": len(window),
+            "required_runs": required,
+            "enough_runs": False,
+            "staging_p95_limit_ms": staging_p95,
+            "staging_error_rate_limit_pct": staging_err,
+            "p95_headroom_limit_ms": p95_headroom_limit,
+            "stable_under_staging_bar": False,
+            "within_p95_headroom": False,
+            "ready_for_hard_gate_promotion": False,
+            "actions": actions,
+        }
+
+    stable = all(
+        float(_trend_result(r).get("p95_ms") or 0) <= staging_p95
+        and float(_trend_result(r).get("error_rate_pct") or 0) <= staging_err
+        for r in window
+    )
+    within_headroom = all(float(_trend_result(r).get("p95_ms") or 0) <= p95_headroom_limit for r in window)
+    ready = stable and within_headroom
+
+    if ready:
+        actions.append(
+            f"Staging bar stable across {required} runs with p95 ≤ "
+            f"{p95_headroom_limit:.0f} ms headroom — consider dropping "
+            "LOCUST_SOFT_GATE / requiring the soft-gate check (keep the relaxed "
+            "ci profile for smoke-only runs)."
+        )
+    else:
+        if not stable:
+            actions.append(
+                "Not ready for hard-gate promotion — keep observing until "
+                f"p95/error rate stay ≤ staging bar ({staging_p95} ms / "
+                f"{staging_err}%) across {required} recent runs."
+            )
+        elif not within_headroom:
+            actions.append(
+                "Not ready for hard-gate promotion — p95 must stay ≤ "
+                f"{p95_headroom_limit:.0f} ms ({headroom:.0%} of staging bar) "
+                f"across {required} runs for a low false-positive margin."
+            )
+
+    return {
+        "schema": "locust-soft-gate-hard-gate-ready/v1",
+        "window_size": len(window),
+        "required_runs": required,
+        "enough_runs": True,
+        "staging_p95_limit_ms": staging_p95,
+        "staging_error_rate_limit_pct": staging_err,
+        "p95_headroom_limit_ms": p95_headroom_limit,
+        "stable_under_staging_bar": stable,
+        "within_p95_headroom": within_headroom,
+        "ready_for_hard_gate_promotion": ready,
         "actions": actions,
     }
 
