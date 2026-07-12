@@ -6,7 +6,7 @@ import pytest
 
 from src.domain.models.compliance_evidence import EvidenceLinkMethod
 from src.domain.models.external_audit_import import ExternalAuditImportStatus
-from src.domain.services.external_audit_import_service import PROCESSING_TTL_SECONDS, ExternalAuditImportService
+from src.services.external_audit_import_service import PROCESSING_TTL_SECONDS, ExternalAuditImportService
 
 
 @pytest.mark.asyncio

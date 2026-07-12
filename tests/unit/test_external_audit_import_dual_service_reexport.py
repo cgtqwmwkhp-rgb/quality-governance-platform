@@ -34,3 +34,15 @@ def test_external_audit_import_tasks_prefer_dual_service_path():
     body = (REPO_ROOT / "src/infrastructure/tasks/external_audit_import_tasks.py").read_text(encoding="utf-8")
     assert "from src.services.external_audit_import_service import ExternalAuditImportService" in body
     assert "from src.domain.services.external_audit_import_service import ExternalAuditImportService" not in body
+
+def test_external_audit_import_unit_tests_prefer_dual_service_path():
+    body = (REPO_ROOT / "tests/unit/test_external_audit_import_service.py").read_text(encoding="utf-8")
+    assert "from src.services.external_audit_import_service import PROCESSING_TTL_SECONDS, ExternalAuditImportService" in body
+    assert "from src.domain.services.external_audit_import_service import PROCESSING_TTL_SECONDS, ExternalAuditImportService" not in body
+
+
+def test_external_audit_import_integration_tests_prefer_dual_service_path():
+    body = (REPO_ROOT / "tests/integration/test_external_audit_imports_api.py").read_text(encoding="utf-8")
+    assert "from src.services.external_audit_import_service import ExternalAuditImportService" in body
+    assert "from src.domain.services.external_audit_import_service import ExternalAuditImportService" not in body
+
