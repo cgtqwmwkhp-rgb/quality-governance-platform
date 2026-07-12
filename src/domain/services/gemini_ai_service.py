@@ -21,11 +21,11 @@ from typing import Optional
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from src.infrastructure.resilience.circuit_breaker import CircuitBreaker
+from src.domain.services.upstream_circuit_breaker import call_via_upstream_breaker
 
 logger = logging.getLogger(__name__)
 
-_gemini_cb = CircuitBreaker("gemini_ai", failure_threshold=5, recovery_timeout=60)
+_GEMINI_AI_UPSTREAM_BREAKER = "gemini_ai"
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-pro-preview")
 GEMINI_API_KEY_ENV = "GOOGLE_GEMINI_API_KEY"
@@ -100,7 +100,7 @@ Rules:
             response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
             return response.text
 
-        text = await _gemini_cb.call(asyncio.to_thread, _run)
+        text = await call_via_upstream_breaker(_GEMINI_AI_UPSTREAM_BREAKER, asyncio.to_thread, _run)
         text = text.strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[1].rsplit("```", 1)[0]
@@ -162,7 +162,7 @@ Only return valid JSON, no markdown formatting."""
                 os.unlink(tmp_path)
 
         try:
-            text = await _gemini_cb.call(asyncio.to_thread, _run)
+            text = await call_via_upstream_breaker(_GEMINI_AI_UPSTREAM_BREAKER, asyncio.to_thread, _run)
             text = text.strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[1].rsplit("```", 1)[0]
@@ -231,7 +231,7 @@ Only return valid JSON."""
             return response.text
 
         try:
-            text = await _gemini_cb.call(asyncio.to_thread, _run)
+            text = await call_via_upstream_breaker(_GEMINI_AI_UPSTREAM_BREAKER, asyncio.to_thread, _run)
             text = text.strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[1].rsplit("```", 1)[0]
@@ -273,7 +273,7 @@ Only return valid JSON."""
             return response.text
 
         try:
-            text = await _gemini_cb.call(asyncio.to_thread, _run)
+            text = await call_via_upstream_breaker(_GEMINI_AI_UPSTREAM_BREAKER, asyncio.to_thread, _run)
             text = text.strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[1].rsplit("```", 1)[0]
@@ -321,7 +321,7 @@ Only return valid JSON."""
             return response.text
 
         try:
-            text = await _gemini_cb.call(asyncio.to_thread, _run)
+            text = await call_via_upstream_breaker(_GEMINI_AI_UPSTREAM_BREAKER, asyncio.to_thread, _run)
             text = text.strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[1].rsplit("```", 1)[0]
@@ -402,7 +402,7 @@ Only return valid JSON."""
             return response.text
 
         try:
-            text = await _gemini_cb.call(asyncio.to_thread, _run)
+            text = await call_via_upstream_breaker(_GEMINI_AI_UPSTREAM_BREAKER, asyncio.to_thread, _run)
             text = text.strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[1].rsplit("```", 1)[0]
