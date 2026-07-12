@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   Copy,
@@ -87,6 +88,7 @@ const SUPPORTED_EVIDENCE_MIME_TYPES = [
 ]
 
 export default function ActionDetail() {
+  const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const location = useLocation()
   const key = searchParams.get('key') || ''
@@ -414,6 +416,16 @@ export default function ActionDetail() {
           <Badge variant="outline">raw: {action.status}</Badge>
           {action.priority ? (
             <Badge variant="outline">priority: {action.priority}</Badge>
+          ) : null}
+          {action.source_type === 'audit_finding' &&
+          Number.isFinite(action.source_id) &&
+          action.source_id > 0 ? (
+            <Button variant="outline" size="sm" className="h-7" asChild>
+              <Link to={`/audits?view=findings&findingId=${action.source_id}`}>
+                {t('actions.view_finding')}
+                <ExternalLink className="w-3 h-3 ml-1" />
+              </Link>
+            </Button>
           ) : null}
         </div>
         <dl className="mt-3 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">

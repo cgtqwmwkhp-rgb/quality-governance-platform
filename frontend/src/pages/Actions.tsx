@@ -100,7 +100,7 @@ function classifyError(error: unknown): ApiError {
 }
 
 // Local UI type extending API type with computed fields
-interface Action extends Omit<ApiAction, 'source_id' | 'owner_email'> {
+interface Action extends Omit<ApiAction, 'owner_email'> {
   source_ref: string
   owner?: string
 }
@@ -672,6 +672,17 @@ export default function Actions() {
                           </span>
                           <ArrowUpRight className="w-3 h-3 text-muted-foreground" />
                         </div>
+
+                        {action.source_type === 'audit_finding' &&
+                        Number.isFinite(action.source_id) &&
+                        action.source_id > 0 ? (
+                          <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
+                            <Link to={`/audits?view=findings&findingId=${action.source_id}`}>
+                              {t('actions.view_finding')}
+                              <ExternalLink className="w-3 h-3 ml-1" />
+                            </Link>
+                          </Button>
+                        ) : null}
 
                         {action.due_date && (
                           <div
