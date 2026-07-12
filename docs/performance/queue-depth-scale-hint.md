@@ -57,9 +57,12 @@ p95 **< 200 ms**. Tightening is intentional and staged:
 
 1. **Observe** — collect soft-gate trend artifacts until p95 is stably under 500 ms
    on GHA runners (low false-positive rate).
-2. **Document** — note candidate tighter soft-gate override (e.g. trial
-   `LOCUST_P95_MS=350`) in a follow-up PR under this allowlist only; keep
-   `LOCUST_SOFT_GATE=1` so merges stay green.
+2. **Document** — candidate trial override is encoded as `SOFT_GATE_TRIAL_TIGHTEN`
+   in `tests/performance/thresholds.py` (`LOCUST_P95_MS=350`, error bar unchanged).
+   Use `evaluate_trial_tighten_readiness()` (schema
+   `locust-soft-gate-trial-tighten/v1`) on successive trend records: when the last
+   `stable_run_count` runs stay ≤ staging bar, operators may trial the override
+   while keeping `LOCUST_SOFT_GATE=1` so merges stay green.
 3. **Promote** — only after evidence, drop soft-gate / require the check (see
    hard-gate promotion in [`locust-soft-gate.md`](locust-soft-gate.md)).
 
@@ -71,4 +74,6 @@ Preferred score-mover; that profile exists for runner-noise tolerance.
 - [`locust-soft-gate.md`](locust-soft-gate.md) — soft-gate workflow + trend artifact
 - [`api-slos.md`](api-slos.md) — CI vs staging vs production latency tiers
 - [`docs/infra/capacity-plan.md`](../infra/capacity-plan.md) — autoscale triggers
-- `tests/performance/thresholds.py` — `QUEUE_DEPTH_SCALE_HINTS` + `evaluate_sustained_scale_hints()`
+- `tests/performance/thresholds.py` — `QUEUE_DEPTH_SCALE_HINTS`,
+  `evaluate_sustained_scale_hints()`, `SOFT_GATE_TRIAL_TIGHTEN`,
+  `evaluate_trial_tighten_readiness()`
