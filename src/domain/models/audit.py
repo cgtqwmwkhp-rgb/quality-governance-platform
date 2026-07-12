@@ -5,10 +5,43 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, Base, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.risk_register import EnterpriseRisk
+
+
+audit_finding_risks = Table(
+    "audit_finding_risks",
+    Base.metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("audit_finding_id", Integer, ForeignKey("audit_findings.id", ondelete="CASCADE"), nullable=False),
+    Column("risk_id", Integer, ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")),
+    UniqueConstraint(
+        "audit_finding_id",
+        "risk_id",
+        name="uq_audit_finding_risks_finding_risk",
+    ),
+    Index("ix_audit_finding_risks_audit_finding_id", "audit_finding_id"),
+    Index("ix_audit_finding_risks_risk_id", "risk_id"),
+)
 
 
 class AuditStatus(str, enum.Enum):
@@ -400,8 +433,9 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     clause_ids_json_legacy: Mapped[Optional[list]] = mapped_column("clause_ids_json_legacy", JSON, nullable=True)
     control_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
-    # Risk linkage (JSON array)
-    risk_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # Transitional risk linkage. The junction is authoritative when loaded;
+    # risk_ids_json remains mapped for one-release read/write compatibility.
+    _risk_ids_json: Mapped[Optional[list]] = mapped_column("risk_ids_json", JSON, nullable=True)
 
     # Corrective action
     corrective_action_required: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -416,6 +450,24 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     # Relationships
     run: Mapped["AuditRun"] = relationship("AuditRun", back_populates="findings")
+    risks: Mapped[List[EnterpriseRisk]] = relationship(
+        "EnterpriseRisk",
+        secondary=audit_finding_risks,
+        lazy="selectin",
+        viewonly=True,
+    )
+
+    @property
+    def risk_ids_json(self) -> Optional[list]:
+        """Prefer junction-backed IDs, falling back to the transition JSON."""
+        loaded_risks = self.__dict__.get("risks")
+        if loaded_risks:
+            return sorted({risk.id for risk in loaded_risks if risk.id is not None})
+        return self._risk_ids_json
+
+    @risk_ids_json.setter
+    def risk_ids_json(self, value: Optional[list]) -> None:
+        self._risk_ids_json = value
 
     def __repr__(self) -> str:
         return f"<AuditFinding(id={self.id}, ref='{self.reference_number}', severity='{self.severity}')>"
