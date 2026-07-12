@@ -2,10 +2,7 @@
 
 from types import SimpleNamespace
 
-from src.domain.services.external_audit_import_failure import (
-    classify_processing_failure,
-    is_hard_ai_failure,
-)
+from src.domain.services.external_audit_import_failure import classify_processing_failure, is_hard_ai_failure
 from src.domain.services.external_audit_import_service import ExternalAuditImportService
 
 
