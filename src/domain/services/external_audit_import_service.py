@@ -29,6 +29,10 @@ from src.domain.models.external_audit_import import (
 )
 from src.domain.services.ai_consensus_service import AIConsensusService
 from src.domain.services.external_audit_analysis_service import ExternalAuditAnalysisService
+from src.domain.services.external_audit_import_failure import (
+    classify_processing_failure,
+    is_hard_ai_failure,
+)
 from src.domain.services.external_audit_ocr_service import MAX_SOURCE_FILE_BYTES, ExternalAuditOcrService
 from src.domain.services.external_audit_promotion_service import ExternalAuditPromotionService, PromotionResult
 from src.domain.services.gemini_review_service import GeminiReviewService
@@ -729,42 +733,13 @@ class ExternalAuditImportService:
 
     @staticmethod
     def _is_hard_ai_failure(mistral_result: object, gemini_result: object) -> bool:
-        """True when a configured AI provider failed and none completed successfully.
-
-        ``not_configured`` / ``skipped`` are soft degradations so native-only
-        heuristic analysis can still produce reviewable drafts.
-        """
-        mistral_status = str(getattr(mistral_result, "provider_status", "") or "")
-        gemini_status = str(getattr(gemini_result, "provider_status", "") or "")
-        if mistral_status == "completed" or gemini_status == "completed":
-            return False
-        return mistral_status == "failed" or gemini_status == "failed"
+        """Thin facade — canonical logic lives in ``external_audit_import_failure``."""
+        return is_hard_ai_failure(mistral_result, gemini_result)
 
     @staticmethod
     def _classify_processing_failure(exc: BaseException) -> tuple[str, str]:
-        """Map processing exceptions to stable operator-facing reason codes."""
-        name = type(exc).__name__.lower()
-        message = str(exc).lower()
-        combined = f"{name} {message}"
-        if "ocr" in combined:
-            return (
-                "OCR_FAILED",
-                "OCR processing failed before review could begin. Review logs and retry the job.",
-            )
-        if any(token in combined for token in ("mistral", "gemini", "ai_analysis", "consensus", "openai")):
-            return (
-                "AI_ANALYSIS_FAILED",
-                "AI analysis failed before review could begin. Review logs and retry the job.",
-            )
-        if any(token in combined for token in ("queue", "celery", "broker", "kombu", "amqp")):
-            return (
-                "QUEUE_DISPATCH_FAILED",
-                "Background queue dispatch failed during processing. Retry queueing or process synchronously.",
-            )
-        return (
-            "IMPORT_PROCESSING_FAILED",
-            "Import analysis failed before review could begin. Review logs and retry the job.",
-        )
+        """Thin facade — canonical logic lives in ``external_audit_import_failure``."""
+        return classify_processing_failure(exc)
 
     async def review_draft(
         self,
