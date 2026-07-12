@@ -1271,6 +1271,17 @@ class AuditService:
         await self.db.flush()
         return action
 
+    # Positive / observational types never auto-create org risks unless force_flag=True.
+    _NON_AUTO_RISK_FINDING_TYPES = frozenset(
+        {
+            "positive",
+            "positive_practice",
+            "observation",
+            "opportunity",
+            "opportunity_for_improvement",
+        }
+    )
+
     async def _ensure_risk_for_finding(
         self,
         *,
@@ -1280,7 +1291,11 @@ class AuditService:
         actor_user_id: int,
         suggested_title: str | None = None,
         external_import_triage_pending: bool = False,
+        force_flag: bool = False,
     ) -> EnterpriseRisk | None:
+        finding_type = (finding.finding_type or "").strip().lower()
+        if not force_flag and finding_type in self._NON_AUTO_RISK_FINDING_TYPES:
+            return None
         if finding.severity not in {"critical", "high", "medium", "low"}:
             return None
 
@@ -1693,4 +1708,56 @@ class AuditService:
         await self.db.flush()
         await self.db.refresh(finding)
         await invalidate_tenant_cache(tenant_id, "audits")
+        return finding
+
+    async def flag_finding_to_organisational_risk(
+        self,
+        finding_id: int,
+        *,
+        tenant_id: int,
+        actor_user_id: int,
+        severity: str | None = None,
+    ) -> AuditFinding:
+        """Explicitly allocate a finding to the enterprise risk register.
+
+        Used when operators escalate a significant issue (including positive/observation
+        findings that would not auto-create risks). Idempotent when a linked risk already
+        exists for the finding reference.
+        """
+        finding: AuditFinding = await self._get_entity(
+            AuditFinding,
+            finding_id,
+            tenant_id=tenant_id,
+        )
+        run: AuditRun = await self._get_entity(AuditRun, finding.run_id, tenant_id=tenant_id)
+
+        if severity:
+            if severity not in {"critical", "high", "medium", "low"}:
+                raise ValidationError("severity must be critical|high|medium|low when flagging to risk")
+            finding.severity = severity
+        elif finding.severity not in {"critical", "high", "medium", "low"}:
+            # Observations / unset severity still need a registerable band when explicitly flagged.
+            finding.severity = "high"
+
+        action = await self._ensure_action_for_finding(
+            run=run,
+            finding=finding,
+            actor_user_id=actor_user_id,
+        )
+        risk = await self._ensure_risk_for_finding(
+            run=run,
+            finding=finding,
+            action=action,
+            actor_user_id=actor_user_id,
+            force_flag=True,
+        )
+        if risk is None:
+            raise ValidationError("Unable to create organisational risk for finding")
+
+        await self.db.flush()
+        await self.db.refresh(finding)
+        await invalidate_tenant_cache(tenant_id, "audits")
+        await invalidate_tenant_cache(tenant_id, "risk-register")
+        await invalidate_tenant_cache(tenant_id, "risks")
+        track_metric("audits.findings.flag_risk")
         return finding
