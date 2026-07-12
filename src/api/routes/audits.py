@@ -24,7 +24,6 @@ from src.api.schemas.audit import (
     AuditFindingListResponse,
     AuditFindingResponse,
     AuditFindingUpdate,
-    FlagFindingRiskRequest,
     AuditQuestionCreate,
     AuditQuestionResponse,
     AuditQuestionUpdate,
@@ -44,6 +43,7 @@ from src.api.schemas.audit import (
     AuditTemplateListResponse,
     AuditTemplateResponse,
     AuditTemplateUpdate,
+    FlagFindingRiskRequest,
     PurgeExpiredTemplatesResponse,
 )
 from src.api.schemas.error_codes import ErrorCode
