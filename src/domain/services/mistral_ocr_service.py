@@ -6,8 +6,12 @@ import logging
 from dataclasses import dataclass, field
 
 from src.core.config import settings
+from src.domain.services.upstream_circuit_breaker import call_via_upstream_breaker
 
 logger = logging.getLogger(__name__)
+
+# Preferred S10 catalog name for Mistral OCR (shared with analysis call-site).
+_MISTRAL_UPSTREAM_BREAKER = "mistral_analysis"
 
 
 @dataclass
@@ -39,6 +43,7 @@ class MistralOCRService:
 
         The provider integration is guarded so missing configuration or transient
         provider failures never create live findings or remediation side effects.
+        Outbound OCR dials go through Preferred ``mistral_analysis`` breaker.
         """
         if not self.is_configured:
             logger.info("Mistral OCR skipped for %s because provider is not configured", filename)
@@ -64,16 +69,21 @@ class MistralOCRService:
                 },
                 "include_image_base64": False,
             }
-            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                response = await client.post(
-                    f"{self.base_url}/ocr",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=payload,
-                )
-                response.raise_for_status()
+
+            async def _do_call():
+                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                    response = await client.post(
+                        f"{self.base_url}/ocr",
+                        headers={
+                            "Authorization": f"Bearer {self.api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                    )
+                    response.raise_for_status()
+                    return response
+
+            response = await call_via_upstream_breaker(_MISTRAL_UPSTREAM_BREAKER, _do_call)
             data = response.json()
             pages = [(page.get("markdown") or page.get("text") or "").strip() for page in data.get("pages", [])]
             text = "\n\n".join(part for part in pages if part).strip()
@@ -88,5 +98,5 @@ class MistralOCRService:
             return OCRResult(
                 text="",
                 provider_status="failed",
-                note="OCR provider failed for this file; manual review is required.",
+                note=(f"OCR provider failed for this file ({type(exc).__name__}); " "manual review is required."),
             )
