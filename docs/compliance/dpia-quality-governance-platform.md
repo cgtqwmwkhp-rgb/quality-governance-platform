@@ -7,14 +7,14 @@
 **Author**: Platform Engineering  
 **Owner**: Data Protection Officer (DPO)  
 **Review Cycle**: Annually and on any material change to data processing  
-**Status**: Complete — Pending DPO Sign-Off (unsigned close-out / attestation pack linked)  
+**Status**: Signed — EA-03 DPO §9 close-out 2026-07-12 (see evidence)  
 **Classification**: Confidential  
-**Attestation pack**: [`s15-dpia-art30-attestation-pack.md`](s15-dpia-art30-attestation-pack.md)
+**Attestation pack**: [`s15-dpia-art30-attestation-pack.md`](s15-dpia-art30-attestation-pack.md)  
+**EA-03 evidence**: [`../evidence/dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md`](../evidence/dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md)
 
-> **Note**: This DPIA satisfies the requirement under Article 35, UK GDPR. All technical sections
-> are complete and evidence-backed. DPO sign-off is the single remaining step (Section 9 below).
-> Preferred S15 scoring may credit the **unsigned** readiness pack; it must **not** treat this
-> document as signed or EA-03 closed.
+> **Note**: This DPIA satisfies the requirement under Article 35, UK GDPR. Technical sections
+> are complete and evidence-backed. Section 9 / EA-03 was closed 2026-07-12 per operator-attested
+> DPO sign-off. EA-01 / EA-02 / EA-04 remain open.
 
 ---
 
@@ -221,15 +221,14 @@ No personal data is transferred to countries without an adequacy decision or equ
 
 | Field | Value |
 |-------|-------|
-| DPO Name | _[To be completed by DPO]_ |
-| DPO Review Date | _[To be completed by DPO]_ |
-| DPO Decision | Approved / Approved with conditions / Rejected |
-| Conditions (if any) | _[To be completed by DPO]_ |
-| DPO Signature | _[Wet or electronic signature]_ |
+| DPO / Authorised confirmer | David Harris (david.harris@plantexpand.com) |
+| DPO Review Date | 2026-07-12 |
+| DPO Decision | Approved |
+| Conditions (if any) | EA-01 / EA-02 / EA-04 remain open; SMTP SUCCESS still pending |
+| DPO Signature | Electronic operator attestation — Cursor session 2026-07-12 (“DPO signed off / complete”) |
+| Evidence | `docs/evidence/dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md` |
 
-> **Note for DPO**: All technical sections are complete and evidence-backed as of 2026-04-08.
-> The single remaining step is your review and sign-off on Section 9. Please contact
-> Platform Engineering to schedule the review session or to request additional evidence.
+> Section 9 closed 2026-07-12. Runtime `dpia.status=signed`. EA-01/02/04 are **not** closed.
 
 ---
 
@@ -239,6 +238,7 @@ No personal data is transferred to countries without an adequacy decision or equ
 |---------|------|--------|---------|
 | 1.0 | 2026-04-08 | Platform Engineering | Initial complete DPIA |
 | 1.1 | 2026-07-11 | Platform Engineering | Close-out readiness pack (§11); Preferred S15 attestation index |
+| 1.2 | 2026-07-12 | Platform Engineering | EA-03 / §9 signed — `dpia.status=signed` |
 
 ---
 
