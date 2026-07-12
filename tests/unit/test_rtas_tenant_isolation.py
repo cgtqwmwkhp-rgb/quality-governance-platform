@@ -66,11 +66,7 @@ async def test_get_rta_scopes_sql_to_caller_tenant():
 
     assert "99" in str(exc.value)
     sql = _sql(statements[0])
-    assert (
-        "road_traffic_collisions.id = 99" in sql
-        or "roadtrafficcollision.id = 99" in sql
-        or "id = 99" in sql
-    )
+    assert "road_traffic_collisions.id = 99" in sql or "roadtrafficcollision.id = 99" in sql or "id = 99" in sql
     assert "tenant_id = 17" in sql
     assert "tenant_id is null" not in sql.replace(" is not null", "")
 
