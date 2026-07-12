@@ -29,10 +29,7 @@ def _inspector() -> sa.Inspector:
 
 
 def _has_constraint() -> bool:
-    return CONSTRAINT in {
-        constraint["name"]
-        for constraint in _inspector().get_check_constraints(TABLE)
-    }
+    return CONSTRAINT in {constraint["name"] for constraint in _inspector().get_check_constraints(TABLE)}
 
 
 def upgrade() -> None:
