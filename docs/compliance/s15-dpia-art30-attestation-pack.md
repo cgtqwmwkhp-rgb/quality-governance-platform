@@ -3,7 +3,7 @@
 **Platform:** Quality Governance Platform (QGP)  
 **Path-to-10 stage:** S15 Compliance / Privacy (Preferred target 6.5 → 9.0)  
 **Document type:** Ready-for-signoff evidence pack — **not** a signed attestation  
-**Version:** 1.3  
+**Version:** 1.4  
 **As of:** 2026-07-12  
 **Status:** `ready_for_dpo_signoff` — engineering package complete; **no DPO wet/electronic signature claimed**  
 **Owner (package):** Platform Engineering / GRC  
@@ -38,7 +38,7 @@ Single index a DPO / auditor can walk without hunting the repo:
 | 8 | Privacy program overview | [`../privacy/privacy-program-overview.md`](../privacy/privacy-program-overview.md) | Program map + DPIA register |
 | 9 | External attestation tracker | [`../evidence/external-attestation-tracker.md`](../evidence/external-attestation-tracker.md) | EA-01..04 status SSOT (still open) |
 | 10 | LIVE privacy contact | `GET /api/v1/privacy/contact` | `dpia.status=pending_dpo_signoff`, `dpia.attestation_pack`, subprocessors, retention |
-| 11 | LIVE Art. 30 stub register | `GET /api/v1/privacy/data-processing-register` | `register_kind=article_30_stub` — purpose / subject categories + `technical_organisational_measures`; **not** full ROPA |
+| 11 | LIVE Art. 30 stub register | `GET /api/v1/privacy/data-processing-register` | `register_kind=article_30_stub` — purpose / subject categories + `technical_organisational_measures` + `international_transfers`; **not** full ROPA |
 | 12 | security.txt | `GET /.well-known/security.txt` | Public security / privacy contact path |
 
 ---
@@ -116,7 +116,7 @@ Engineering readiness summary:
 | Purposes + lawful bases | Inventory in GDPR §1 + LIVE `activities[].purpose` / `lawful_basis` | DPO confirms per tenant workflow |
 | Data subject / data categories | DPIA + LIVE `data_subject_categories` / `data_categories` | Stub taxonomy only — not full controller ROPA |
 | Recipients / subprocessors | LIVE `subprocessors` + DPIA OCR companion | Signed vendor DPAs still required where AI enabled |
-| International transfers | UK South primary; AI vendors vendor-managed | Confirm SCC/UK IDTA before production AI keys |
+| International transfers | UK South primary; LIVE `international_transfers` + AI vendors vendor-managed | Confirm SCC/UK IDTA before production AI keys — **no signed DPAs invented** |
 | Retention | Retention policy §7 + LIVE `retention` block | Legal-hold schema gap acknowledged |
 | Security measures (general) | DPIA §5 + security baseline + LIVE `technical_organisational_measures` | Not a substitute for EA-02 pen-test |
 
@@ -140,6 +140,7 @@ Do not mark S15 Preferred complete solely because this pack exists.
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 1.4 | 2026-07-12 | Platform Engineering | LIVE stub `international_transfers` (Art. 30 gap G) — still **unsigned** / AI DPAs not invented / EA open |
 | 1.3 | 2026-07-12 | Platform Engineering | LIVE stub `technical_organisational_measures` (Art. 30 gap I) — still **unsigned** / EA open |
 | 1.2 | 2026-07-12 | Platform Engineering | LIVE stub `purpose` + `data_subject_categories` (Art. 30 gaps C/D) — still **unsigned** / EA open |
 | 1.1 | 2026-07-12 | Platform Engineering | LIVE stub activity expand + machine-readable attestation_pack pointers — still **unsigned** / EA open |

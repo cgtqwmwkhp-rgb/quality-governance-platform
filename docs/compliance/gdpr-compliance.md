@@ -105,14 +105,16 @@ The platform is hosted entirely within Azure UK South region. No personal data i
 | Endpoint | Surfaces |
 |----------|----------|
 | `GET /api/v1/privacy/contact` | Privacy/security contacts, `retention`, `subprocessors`, `dpia.status`, register pointer |
-| `GET /api/v1/privacy/data-processing-register` | Article 30-style **stub** register (activities + subprocessors + DPIA status + `technical_organisational_measures`) |
+| `GET /api/v1/privacy/data-processing-register` | Article 30-style **stub** register (activities + subprocessors + DPIA status + `technical_organisational_measures` + `international_transfers`) |
 
 `dpia.status` is `pending_dpo_signoff` until Section 9 of
 [`dpia-quality-governance-platform.md`](dpia-quality-governance-platform.md) is signed by the DPO.
 The processing register is intentionally a stub (`register_kind=article_30_stub`) — activity rows
 include complaints, near-misses, CAPA, risk register, and RTA plus additive `purpose` /
-`data_subject_categories` fields for Art. 30(1)(b)/(c) readability, and a register-level
-`technical_organisational_measures` block for Art. 30(1)(g) (general TOMs; **not** EA-02).
+`data_subject_categories` fields for Art. 30(1)(b)/(c) readability, a register-level
+`technical_organisational_measures` block for Art. 30(1)(g) (general TOMs; **not** EA-02),
+and `international_transfers` for Art. 30(1)(e) (UK South primary; optional AI vendor
+transfers pending SCC/UK IDTA — **no signed vendor DPAs invented**).
 Signed DPA links + DPO §9 are still required before treating it as a full controller ROPA.
 LIVE `dpia.attestation_pack` / `dpia.article_30_checklist` point at the unsigned documentary pack.
 
