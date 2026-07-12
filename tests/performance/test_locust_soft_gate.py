@@ -117,6 +117,14 @@ def test_write_soft_gate_summary_emits_trend_artifact(tmp_path, monkeypatch):
     assert trend["result"]["overall"] == "BREACH"
     assert (tmp_path / "locust-soft-gate-summary.md").is_file()
     assert (tmp_path / "locust-soft-gate-summary.json").is_file()
+    posture_path = tmp_path / "locust-soft-gate-posture.json"
+    assert posture_path.is_file()
+    posture = json.loads(posture_path.read_text(encoding="utf-8"))
+    assert posture["schema"] == "locust-soft-gate-posture/v1"
+    assert posture["recommended_posture"] == "observe"
+    summary_md = (tmp_path / "locust-soft-gate-summary.md").read_text(encoding="utf-8")
+    assert "Recommended posture" in summary_md
+    assert "`observe`" in summary_md
 
 
 def _trend(p95_ms: float, error_rate_pct: float = 0.0) -> dict:
@@ -299,3 +307,34 @@ def test_evaluate_soft_gate_posture_trial_when_stable_without_headroom():
     assert out["recommended_posture"] == "trial_tighten"
     assert out["signals"]["trial_tighten"] is True
     assert out["signals"]["promote_hard_gate"] is False
+
+
+def test_write_soft_gate_summary_uses_trend_history_for_posture(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCUST_SUMMARY_DIR", str(tmp_path))
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    history = [_trend(200.0), _trend(180.0), _trend(220.0), _trend(190.0)]
+    history_path = tmp_path / "prior-trends.json"
+    history_path.write_text(json.dumps(history), encoding="utf-8")
+    monkeypatch.setenv("LOCUST_TREND_HISTORY", str(history_path))
+
+    payload = {
+        "profile": "staging",
+        "soft_gate": True,
+        "overall": "PASS",
+        "p95_ms": 210.0,
+        "p95_limit_ms": 500,
+        "p95_status": "OK",
+        "error_rate_pct": 0.0,
+        "error_rate_limit_pct": 1.0,
+        "error_status": "OK",
+        "num_requests": 50,
+        "num_failures": 0,
+        "breaches": [],
+    }
+    write_soft_gate_summary(payload)
+
+    posture = json.loads((tmp_path / "locust-soft-gate-posture.json").read_text(encoding="utf-8"))
+    assert posture["recommended_posture"] == "promote_hard_gate"
+    summary_md = (tmp_path / "locust-soft-gate-summary.md").read_text(encoding="utf-8")
+    assert "`promote_hard_gate`" in summary_md
+    assert "4 prior + current run" in summary_md
