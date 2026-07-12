@@ -97,7 +97,18 @@ async def test_repeated_analyze_failures_open_document_ai_circuit() -> None:
 async def test_analyze_document_does_not_invent_api_key_when_unconfigured() -> None:
     svc = _service(api_key="")
     result = await svc.analyze_document("content", "doc.txt", "txt")
-    assert result.document_type in {"other", "policy", "procedure", "sop", "form", "manual", "guideline", "faq", "template", "record"}
+    assert result.document_type in {
+        "other",
+        "policy",
+        "procedure",
+        "sop",
+        "form",
+        "manual",
+        "guideline",
+        "faq",
+        "template",
+        "record",
+    }
     assert "document_ai" not in _circuit_registry
 
 
