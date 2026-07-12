@@ -160,4 +160,20 @@ describe('InvestigationDetail', () => {
     expect(screen.getByText(/SHA256: 1234567890ab/i)).toBeInTheDocument()
     expect(client.investigationsApi.getPacks).toHaveBeenCalledWith(7, { page: 1, page_size: 50 })
   })
+
+  it('links back to the source record and into the CAPA workspace', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'investigations.handoff.back_to_source' }),
+    )
+    expect(mockNavigate).toHaveBeenCalledWith('/rtas/42')
+
+    fireEvent.click(screen.getByRole('button', { name: 'investigations.handoff.create_action' }))
+    expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=investigation&sourceId=7')
+  })
 })
