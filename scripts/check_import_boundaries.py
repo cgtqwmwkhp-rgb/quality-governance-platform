@@ -3,7 +3,7 @@
 
 Rules:
   - src/domain/ must NOT import from src/api/
-  - src/domain/ must NOT import from src/infrastructure/ (except resilience)
+  - src/domain/ must NOT import from src/infrastructure/ (except allowlisted packages)
   - src/core/ must NOT import from src/api/
   - src/core/ must NOT import from src/infrastructure/
   - src/services/ must NOT import from src/api/
@@ -25,6 +25,7 @@ RULES: list[tuple[str, list[str], list[str]]] = [
             "src.infrastructure.resilience",
             "src.infrastructure.cache",
             "src.infrastructure.monitoring",
+            "src.infrastructure.security",
             "src.infrastructure.storage",
             "src.infrastructure.websocket",
             "src.infrastructure.tasks",
