@@ -23,6 +23,7 @@ import {
   GitBranch,
   AlertCircle,
   Save,
+  ExternalLink,
 } from 'lucide-react'
 import {
   investigationsApi,
@@ -60,6 +61,10 @@ import InvestigationComments from './investigation/InvestigationComments'
 import InvestigationActions from './investigation/InvestigationActions'
 import type { ActionFormData } from './investigation/InvestigationActions'
 import InvestigationEvidence from './investigation/InvestigationEvidence'
+import {
+  getCapaLink,
+  getInvestigationSourceLink,
+} from '../components/investigations/handoffLinks'
 
 const TABS = [
   { id: 'summary', label: 'Summary', icon: FileText },
@@ -416,6 +421,9 @@ export default function InvestigationDetail() {
     loadInvestigation()
   }, [loadInvestigation])
   useEffect(() => {
+    loadActions()
+  }, [loadActions])
+  useEffect(() => {
     initializeRcaData()
   }, [investigation, initializeRcaData])
 
@@ -499,6 +507,8 @@ export default function InvestigationDetail() {
 
   const EntityIcon = ENTITY_ICONS[investigation.assigned_entity_type] || AlertTriangle
   const statusDisplay = getStatusDisplay(investigation.status)
+  const sourceLink = getInvestigationSourceLink(investigation)
+  const capaHref = getCapaLink('investigation', investigation.id)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -507,6 +517,41 @@ export default function InvestigationDetail() {
         statusDisplay={statusDisplay}
         EntityIcon={EntityIcon}
       />
+
+      <Card className="p-5 border-primary/20 bg-primary/5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm font-medium text-primary">
+              {t('investigations.handoff.eyebrow')}
+            </p>
+            <h2 className="text-lg font-semibold text-foreground">
+              {t('investigations.handoff.title')}
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              {t('investigations.handoff.description')}
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            {sourceLink && (
+              <Button variant="outline" onClick={() => navigate(sourceLink.href)}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                {t('investigations.handoff.back_to_source', { source: sourceLink.label })}
+              </Button>
+            )}
+            <Button onClick={() => navigate(capaHref)} disabled={actionsLoading}>
+              <ExternalLink className="w-4 h-4 mr-2" />
+              {actions.length > 0
+                ? t('investigations.handoff.open_capa', { count: actions.length })
+                : t('investigations.handoff.create_action')}
+            </Button>
+          </div>
+        </div>
+        {!actionsLoading && actions.length === 0 && (
+          <p className="text-sm text-muted-foreground mt-4 pt-4 border-t border-primary/10">
+            {t('investigations.handoff.no_actions')}
+          </p>
+        )}
+      </Card>
 
       {/* Tabs */}
       <div className="border-b border-border">
