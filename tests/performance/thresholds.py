@@ -527,9 +527,7 @@ def write_soft_gate_summary(payload: dict) -> None:
 
     history = _load_soft_gate_trend_history()
     posture = evaluate_soft_gate_posture([*history, trend])
-    (out_dir / "locust-soft-gate-posture.json").write_text(
-        json.dumps(posture, indent=2) + "\n", encoding="utf-8"
-    )
+    (out_dir / "locust-soft-gate-posture.json").write_text(json.dumps(posture, indent=2) + "\n", encoding="utf-8")
     lines.extend(
         [
             "### Soft-gate posture advisor",
@@ -544,10 +542,7 @@ def write_soft_gate_summary(payload: dict) -> None:
         for action in posture["actions"]:
             lines.append(f"- {action}")
         lines.append("")
-    lines.append(
-        "_Posture is advisory only — never flips workflow YAML, branch "
-        "protection, or Locust exit codes._"
-    )
+    lines.append("_Posture is advisory only — never flips workflow YAML, branch " "protection, or Locust exit codes._")
     lines.append("")
 
     text = "\n".join(lines)
