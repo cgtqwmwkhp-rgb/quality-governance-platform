@@ -61,6 +61,8 @@ export interface AuditFinding {
   status: 'open' | 'in_progress' | 'pending_verification' | 'closed' | 'deferred'
   corrective_action_required: boolean
   corrective_action_due_date?: string
+  /** Linked enterprise risk ids (risks_v2) when escalated from this finding. */
+  risk_ids?: number[] | null
   created_at: string
 }
 
