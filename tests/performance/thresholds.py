@@ -410,6 +410,53 @@ def evaluate_soft_gate_reenable_readiness(trend_records: list[dict]) -> dict:
     }
 
 
+def evaluate_soft_gate_posture(trend_records: list[dict]) -> dict:
+    """Aggregate Preferred S14 advisory helpers into one operator posture.
+
+    Priority (first match wins; never flips workflow YAML or CI exit codes):
+    1. ``scale_investigate`` — sustained scale hints fire
+    2. ``reenable_soft_gate`` — demote safety valve ready
+    3. ``promote_hard_gate`` — hard-gate promotion ready
+    4. ``trial_tighten`` — trial p95 tighten ready
+    5. ``observe`` — keep collecting soft-gate trends
+    """
+    scale = evaluate_sustained_scale_hints(trend_records)
+    reenable = evaluate_soft_gate_reenable_readiness(trend_records)
+    promote = evaluate_hard_gate_promotion_readiness(trend_records)
+    trial = evaluate_trial_tighten_readiness(trend_records)
+
+    if scale.get("p95_scale_hint") or scale.get("error_rate_scale_hint"):
+        posture = "scale_investigate"
+        guidance = list(scale.get("actions") or [])
+    elif reenable.get("ready_for_soft_gate_reenable"):
+        posture = "reenable_soft_gate"
+        guidance = list(reenable.get("actions") or [])
+    elif promote.get("ready_for_hard_gate_promotion"):
+        posture = "promote_hard_gate"
+        guidance = list(promote.get("actions") or [])
+    elif trial.get("ready_for_trial_tighten"):
+        posture = "trial_tighten"
+        guidance = list(trial.get("actions") or [])
+    else:
+        posture = "observe"
+        guidance = [
+            "No escalate/demote signal yet — keep observing under soft-gate "
+            "and collecting locust-soft-gate-trend.json artifacts."
+        ]
+
+    return {
+        "schema": "locust-soft-gate-posture/v1",
+        "recommended_posture": posture,
+        "actions": guidance,
+        "signals": {
+            "scale_investigate": bool(scale.get("p95_scale_hint") or scale.get("error_rate_scale_hint")),
+            "reenable_soft_gate": bool(reenable.get("ready_for_soft_gate_reenable")),
+            "promote_hard_gate": bool(promote.get("ready_for_hard_gate_promotion")),
+            "trial_tighten": bool(trial.get("ready_for_trial_tighten")),
+        },
+    }
+
+
 def write_soft_gate_summary(payload: dict) -> None:
     """Emit a human + machine readable soft-gate summary for CI artifacts."""
     lines = [

@@ -10,6 +10,7 @@ from tests.performance.thresholds import (
     SOFT_GATE_TRIAL_TIGHTEN,
     build_trend_record,
     evaluate_hard_gate_promotion_readiness,
+    evaluate_soft_gate_posture,
     evaluate_soft_gate_reenable_readiness,
     evaluate_sustained_scale_hints,
     evaluate_trial_tighten_readiness,
@@ -263,3 +264,38 @@ def test_evaluate_soft_gate_reenable_readiness_rejects_mixed_window():
     assert out["ready_for_soft_gate_reenable"] is False
     assert out["sustained_staging_breaches"] is False
     assert any("Not ready for soft-gate re-enable" in a for a in out["actions"])
+
+
+def test_evaluate_soft_gate_posture_observe_when_insufficient():
+    out = evaluate_soft_gate_posture([_trend(200.0)])
+    assert out["schema"] == "locust-soft-gate-posture/v1"
+    assert out["recommended_posture"] == "observe"
+    assert out["signals"]["promote_hard_gate"] is False
+    assert out["signals"]["reenable_soft_gate"] is False
+    assert any("keep observing" in a for a in out["actions"])
+
+
+def test_evaluate_soft_gate_posture_prefers_scale_over_reenable():
+    # Sustained >1.5× staging p95 → scale_investigate beats demote.
+    records = [_trend(800.0), _trend(820.0), _trend(850.0)]
+    out = evaluate_soft_gate_posture(records)
+    assert out["recommended_posture"] == "scale_investigate"
+    assert out["signals"]["scale_investigate"] is True
+    assert out["signals"]["reenable_soft_gate"] is True
+
+
+def test_evaluate_soft_gate_posture_promote_when_stable_headroom():
+    records = [_trend(200.0), _trend(180.0), _trend(220.0), _trend(190.0), _trend(210.0)]
+    out = evaluate_soft_gate_posture(records)
+    assert out["recommended_posture"] == "promote_hard_gate"
+    assert out["signals"]["promote_hard_gate"] is True
+    assert out["signals"]["trial_tighten"] is True
+
+
+def test_evaluate_soft_gate_posture_trial_when_stable_without_headroom():
+    # Under staging bar but above 80% headroom → trial tighten, not promote.
+    records = [_trend(450.0), _trend(420.0), _trend(430.0)]
+    out = evaluate_soft_gate_posture(records)
+    assert out["recommended_posture"] == "trial_tighten"
+    assert out["signals"]["trial_tighten"] is True
+    assert out["signals"]["promote_hard_gate"] is False
