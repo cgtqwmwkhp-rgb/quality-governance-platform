@@ -61,7 +61,7 @@ def test_constraint_rejects_only_audit_finding_with_null_source_id():
 def test_migration_chains_from_head_and_preserves_partial_unique_index():
     migration = MIGRATION_PATH.read_text(encoding="utf-8")
     assert 'revision: str = "20260712_capa_src_check"' in migration
-    assert 'down_revision: Union[str, Sequence[str], None] = "20260711_ctl_docs_create"' in migration
+    assert 'down_revision: Union[str, Sequence[str], None] = "20260712_af_risks_jn"' in migration
     assert f'CONSTRAINT = "{CONSTRAINT_NAME}"' in migration
     assert f'CONSTRAINT_SQL = "{CONSTRAINT_SQL}"' in migration
 
