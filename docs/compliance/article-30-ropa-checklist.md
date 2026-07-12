@@ -2,8 +2,8 @@
 
 **Platform:** Quality Governance Platform (QGP)  
 **Document type:** UK GDPR / EU GDPR Art. 30 documentary checklist (unsigned)  
-**Version:** 1.0  
-**As of:** 2026-07-11  
+**Version:** 1.1  
+**As of:** 2026-07-12  
 **Status:** Ready for privacy-lead / DPO review — **not** a completed controller ROPA  
 **Related pack:** [`s15-dpia-art30-attestation-pack.md`](s15-dpia-art30-attestation-pack.md)  
 **LIVE stub:** `GET /api/v1/privacy/data-processing-register` (`register_kind=article_30_stub`)
@@ -53,7 +53,7 @@ Boxes below are for the **operator documentary pack** and the LIVE stub. Tenant 
 
 ## 4. LIVE stub activity crosswalk
 
-Aligned with `src/api/routes/privacy.py` → `_processing_activities()` as of tip `b564edf4` / successors.
+Aligned with `src/api/routes/privacy.py` → `_processing_activities()` after Preferred S15 stub expansion (post `#802`).
 
 | `activity_id` | Name | Lawful basis (stub) | Retention | Notes |
 |---------------|------|---------------------|-----------|-------|
@@ -62,11 +62,17 @@ Aligned with `src/api/routes/privacy.py` → `_processing_activities()` as of ti
 | `audit-findings` | Audit findings and evidence | legitimate_interest | audit_runs policy days | Blob + PostgreSQL |
 | `ocr-ai-import` | External audit OCR / AI import | legitimate_interest | Per import / evidence policy | Optional Mistral / Gemini; DPIA required |
 | `auth-and-request-logs` | Authentication and API request logs | legitimate_interest | session_logs policy days | Operational security |
+| `complaints` | Complaints / grievance handling | legitimate_interest | complaints policy days | Added in Preferred S15 stub expand |
+| `near-misses` | Near-miss / hazard reporting | legitimate_interest | near_misses policy days | Added in Preferred S15 stub expand |
+| `capa` | Corrective and preventive actions (CAPA) | legitimate_interest | audit_runs horizon (interim) | Discrete CAPA retention key still pending |
+| `risk-register` | Enterprise / operational risk register | legitimate_interest | audit_runs horizon (interim) | Discrete risk retention key still pending |
+| `rta` | Road traffic accident (RTA) records | legitimate_interest | incidents horizon (interim) | May include injury / special-category data |
 
-**Missing from stub (known — expand later, not forged here):** CAPA, complaints, RTA, risk register, near-miss as discrete rows (covered narratively in platform DPIA §2.1 and GDPR §1).
+**Still not discrete stub rows (known — expand later, not forged here):** workforce competency / UVDB supplier PII as separate activities (covered narratively in platform DPIA §2.1 and GDPR §1).
 
-- [ ] Privacy lead accepts known stub gaps **or** schedules a code PR to add activity rows
+- [ ] Privacy lead accepts known stub gaps **or** schedules a follow-up code PR for remaining modules
 - [ ] Controllers told stub ≠ their full Art. 30(1) record
+- [ ] DPO confirms interim retention alignments for CAPA / risk / RTA before “full ROPA” claim
 
 ---
 
@@ -98,4 +104,5 @@ Aligned with `src/api/routes/privacy.py` → `_processing_activities()` as of ti
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 1.1 | 2026-07-12 | Platform Engineering | Crosswalk updated for expanded LIVE stub activities (complaints, near-misses, CAPA, risk, RTA) — still unsigned |
 | 1.0 | 2026-07-11 | Platform Engineering | Initial Art. 30 ROPA checklist for Preferred S15 attestation pack |

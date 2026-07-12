@@ -3,8 +3,8 @@
 **Platform:** Quality Governance Platform (QGP)  
 **Path-to-10 stage:** S15 Compliance / Privacy (Preferred target 6.5 → 9.0)  
 **Document type:** Ready-for-signoff evidence pack — **not** a signed attestation  
-**Version:** 1.0  
-**As of:** 2026-07-11  
+**Version:** 1.1  
+**As of:** 2026-07-12  
 **Status:** `ready_for_dpo_signoff` — engineering package complete; **no DPO wet/electronic signature claimed**  
 **Owner (package):** Platform Engineering / GRC  
 **Owner (sign-off):** Data Protection Officer (human) — Section 9 of the platform DPIA
@@ -37,8 +37,8 @@ Single index a DPO / auditor can walk without hunting the repo:
 | 7 | Retention / soft-delete / legal-hold SSOT | [`../privacy/data-retention-policy.md`](../privacy/data-retention-policy.md) §7a–§7b | Retention truth; schema hold gaps stated honestly |
 | 8 | Privacy program overview | [`../privacy/privacy-program-overview.md`](../privacy/privacy-program-overview.md) | Program map + DPIA register |
 | 9 | External attestation tracker | [`../evidence/external-attestation-tracker.md`](../evidence/external-attestation-tracker.md) | EA-01..04 status SSOT (still open) |
-| 10 | LIVE privacy contact | `GET /api/v1/privacy/contact` | `dpia.status=pending_dpo_signoff`, subprocessors, retention |
-| 11 | LIVE Art. 30 stub register | `GET /api/v1/privacy/data-processing-register` | `register_kind=article_30_stub` — **not** full ROPA |
+| 10 | LIVE privacy contact | `GET /api/v1/privacy/contact` | `dpia.status=pending_dpo_signoff`, `dpia.attestation_pack`, subprocessors, retention |
+| 11 | LIVE Art. 30 stub register | `GET /api/v1/privacy/data-processing-register` | `register_kind=article_30_stub` — expanded activity rows; **not** full ROPA |
 | 12 | security.txt | `GET /.well-known/security.txt` | Public security / privacy contact path |
 
 ---
@@ -140,4 +140,5 @@ Do not mark S15 Preferred complete solely because this pack exists.
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 1.1 | 2026-07-12 | Platform Engineering | LIVE stub activity expand + machine-readable attestation_pack pointers — still **unsigned** / EA open |
 | 1.0 | 2026-07-11 | Platform Engineering | Initial unsigned DPIA / Art. 30 attestation pack for Preferred S15 |

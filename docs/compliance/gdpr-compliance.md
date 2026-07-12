@@ -109,8 +109,10 @@ The platform is hosted entirely within Azure UK South region. No personal data i
 
 `dpia.status` is `pending_dpo_signoff` until Section 9 of
 [`dpia-quality-governance-platform.md`](dpia-quality-governance-platform.md) is signed by the DPO.
-The processing register is intentionally a stub — expand activity rows and signed DPA links
-before treating it as a full controller ROPA.
+The processing register is intentionally a stub (`register_kind=article_30_stub`) — activity rows
+now include complaints, near-misses, CAPA, risk register, and RTA in addition to the original
+core set. Signed DPA links + DPO §9 are still required before treating it as a full controller ROPA.
+LIVE `dpia.attestation_pack` / `dpia.article_30_checklist` point at the unsigned documentary pack.
 
 Documentary Art. 30 field map (unsigned): [`article-30-ropa-checklist.md`](article-30-ropa-checklist.md).  
 Unsigned DPIA + Art. 30 attestation pack: [`s15-dpia-art30-attestation-pack.md`](s15-dpia-art30-attestation-pack.md).

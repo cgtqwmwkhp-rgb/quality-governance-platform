@@ -66,10 +66,13 @@ def _dpia_disclosure() -> dict[str, Any]:
         "ocr_ai_import": "docs/compliance/dpia-ocr-ai-import.md",
         "incidents": "docs/privacy/dpia-incidents.md",
         "checklist": "docs/privacy/dpia-checklist.md",
+        "attestation_pack": "docs/compliance/s15-dpia-art30-attestation-pack.md",
+        "article_30_checklist": "docs/compliance/article-30-ropa-checklist.md",
         "governance_link": "docs/governance/privacy-ocr-ai-dpia.md",
         "note": (
             "status=pending_dpo_signoff until Section 9 of the platform DPIA is signed by the DPO; "
-            "close-out readiness pack is in DPIA §10."
+            "unsigned attestation pack + Art. 30 checklist are ready-for-signoff only — "
+            "no DPO signature is claimed here."
         ),
     }
 
@@ -167,6 +170,49 @@ def _processing_activities() -> list[dict[str, Any]]:
             "retention_days": DEFAULT_RETENTION_POLICIES["session_logs"].retention_days,
             "storage": "structured_logs_and_log_analytics",
         },
+        {
+            "activity_id": "complaints",
+            "name": "Complaints / grievance handling",
+            "lawful_basis": "legitimate_interest",
+            "data_categories": ["complaint_text", "complainant_contact", "outcome"],
+            "retention_days": DEFAULT_RETENTION_POLICIES["complaints"].retention_days,
+            "storage": "postgresql",
+        },
+        {
+            "activity_id": "near-misses",
+            "name": "Near-miss / hazard reporting",
+            "lawful_basis": "legitimate_interest",
+            "data_categories": ["description", "location", "reporter"],
+            "retention_days": DEFAULT_RETENTION_POLICIES["near_misses"].retention_days,
+            "storage": "postgresql",
+        },
+        {
+            "activity_id": "capa",
+            "name": "Corrective and preventive actions (CAPA)",
+            "lawful_basis": "legitimate_interest",
+            "data_categories": ["action_text", "owner", "linked_finding_refs"],
+            "retention_days": DEFAULT_RETENTION_POLICIES["audit_runs"].retention_days,
+            "retention_note": "Aligned to audit_runs horizon pending discrete CAPA retention key",
+            "storage": "postgresql",
+        },
+        {
+            "activity_id": "risk-register",
+            "name": "Enterprise / operational risk register",
+            "lawful_basis": "legitimate_interest",
+            "data_categories": ["risk_description", "owner", "controls"],
+            "retention_days": DEFAULT_RETENTION_POLICIES["audit_runs"].retention_days,
+            "retention_note": "Aligned to audit_runs horizon pending discrete risk retention key",
+            "storage": "postgresql",
+        },
+        {
+            "activity_id": "rta",
+            "name": "Road traffic accident (RTA) records",
+            "lawful_basis": "legitimate_interest",
+            "data_categories": ["incident_details", "vehicle", "parties"],
+            "retention_days": DEFAULT_RETENTION_POLICIES["incidents"].retention_days,
+            "retention_note": "Aligned to incidents horizon; may include special-category / injury data",
+            "storage": "postgresql",
+        },
     ]
 
 
@@ -224,13 +270,16 @@ async def data_processing_register() -> dict[str, Any]:
         "dpia": {
             "status": _DPIA_STATUS,
             "status_doc": _DPIA_DOC,
+            "attestation_pack": "docs/compliance/s15-dpia-art30-attestation-pack.md",
         },
+        "ropa_checklist": "docs/compliance/article-30-ropa-checklist.md",
         "subprocessors": _subprocessors(),
         "activities": _processing_activities(),
         "contact": "/api/v1/privacy/contact",
         "as_of": _as_of(),
         "note": (
-            "Stub disclosure for auditors and operators; expand activity rows and "
-            "link to signed DPAs before treating as full Art. 30 ROPA."
+            "Stub disclosure for auditors and operators — register_kind remains "
+            "article_30_stub. Activity rows expanded for Preferred S15 readability; "
+            "link signed DPAs and complete DPO §9 before treating as full Art. 30 ROPA."
         ),
     }
