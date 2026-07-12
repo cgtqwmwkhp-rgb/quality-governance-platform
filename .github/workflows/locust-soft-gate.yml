@@ -117,7 +117,7 @@ jobs:
             echo "[WARN] Summary file missing — threshold listener may not have run"
           fi
 
-      # Explicit summary step: surface Preferred S14 soft-gate + trend record in the
+      # Explicit summary step: surface Preferred S14 soft-gate + trend + posture in the
       # Actions UI even if the Locust listener step log is collapsed.
       - name: Publish soft-gate trend to job summary
         if: always()
@@ -143,6 +143,19 @@ jobs:
             else
               echo ""
               echo "_Trend JSON missing — soft-gate helper did not emit locust-soft-gate-trend.json._"
+            fi
+            if [ -f locust-soft-gate-out/locust-soft-gate-posture.json ]; then
+              echo ""
+              echo "### Posture record (\`locust-soft-gate-posture.json\`)"
+              echo ""
+              echo "_Advisory aggregate only — never flips YAML / branch protection / exit codes._"
+              echo ""
+              echo '```json'
+              cat locust-soft-gate-out/locust-soft-gate-posture.json
+              echo '```'
+            else
+              echo ""
+              echo "_Posture JSON missing — soft-gate helper did not emit locust-soft-gate-posture.json._"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 

@@ -125,6 +125,9 @@ def test_write_soft_gate_summary_emits_trend_artifact(tmp_path, monkeypatch):
     summary_md = (tmp_path / "locust-soft-gate-summary.md").read_text(encoding="utf-8")
     assert "Recommended posture" in summary_md
     assert "`observe`" in summary_md
+    assert "**Signals:**" in summary_md
+    assert "scale=`False`" in summary_md
+    assert "promote=`False`" in summary_md
 
 
 def _trend(p95_ms: float, error_rate_pct: float = 0.0) -> dict:
