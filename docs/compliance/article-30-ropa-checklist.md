@@ -2,7 +2,7 @@
 
 **Platform:** Quality Governance Platform (QGP)  
 **Document type:** UK GDPR / EU GDPR Art. 30 documentary checklist (unsigned)  
-**Version:** 1.1  
+**Version:** 1.2  
 **As of:** 2026-07-12  
 **Status:** Ready for privacy-lead / DPO review — **not** a completed controller ROPA  
 **Related pack:** [`s15-dpia-art30-attestation-pack.md`](s15-dpia-art30-attestation-pack.md)  
@@ -30,8 +30,8 @@ Boxes below are for the **operator documentary pack** and the LIVE stub. Tenant 
 |---|------------------|------------------|--------------|-------------------|
 | A | Name and contact details of controller | Tenant org (per DPA schedule); not hardcoded in stub | Partial | Controllers supply legal entity + contact in their ROPA |
 | B | DPO contact (where applicable) | Env / policy emails via `GET /api/v1/privacy/contact` (`privacy_contact`) | Partial | Confirm appointed DPO name/email — **do not invent in repo** |
-| C | Purposes of processing | [`gdpr-compliance.md`](gdpr-compliance.md) §1; LIVE `activities[].name` / purpose via activity names | Ready for review | Expand stub with explicit purpose strings if auditors require verbatim Art. 30 wording |
-| D | Categories of data subjects | Platform DPIA §2; incidents / OCR DPIAs | Ready for review | Add subject-category field to LIVE stub in a later code PR if needed |
+| C | Purposes of processing | [`gdpr-compliance.md`](gdpr-compliance.md) §1; LIVE `activities[].purpose` (+ `name`) | Ready for review | LIVE purpose strings added (unsigned stub) — DPO still confirms per tenant workflow |
+| D | Categories of data subjects | Platform DPIA §2; LIVE `activities[].data_subject_categories` | Ready for review | LIVE subject-category field added (unsigned stub) — expand if controllers require finer taxonomy |
 | E | Categories of personal data | LIVE `activities[].data_categories`; PII inventory script evidence | Ready for review | Re-run `scripts/governance/audit_pii_fields.py` on model changes |
 | F | Categories of recipients | LIVE `subprocessors`; GDPR §8 | Ready for review | Link **signed** vendor DPAs (paths only after legal files exist) |
 | G | Transfers to third country / international org + safeguards | Platform DPIA §7; OCR DPIA §3.1 / §5; subprocessors `transfer_mechanism` | Partial | Confirm SCC / UK IDTA for Mistral / Gemini **before** production AI keys |
@@ -53,20 +53,20 @@ Boxes below are for the **operator documentary pack** and the LIVE stub. Tenant 
 
 ## 4. LIVE stub activity crosswalk
 
-Aligned with `src/api/routes/privacy.py` → `_processing_activities()` after Preferred S15 stub expansion (post `#802`).
+Aligned with `src/api/routes/privacy.py` → `_processing_activities()` after Preferred S15 stub purpose / subject-category fields (post `#812`).
 
-| `activity_id` | Name | Lawful basis (stub) | Retention | Notes |
-|---------------|------|---------------------|-----------|-------|
-| `user-accounts` | User account administration | legitimate_interest | `users_deleted` horizon post-deactivation | Controllers may also rely on contract |
-| `incidents` | Incident / H&S reporting | legal_obligation | incidents policy days | May include Art. 9 special category |
-| `audit-findings` | Audit findings and evidence | legitimate_interest | audit_runs policy days | Blob + PostgreSQL |
-| `ocr-ai-import` | External audit OCR / AI import | legitimate_interest | Per import / evidence policy | Optional Mistral / Gemini; DPIA required |
-| `auth-and-request-logs` | Authentication and API request logs | legitimate_interest | session_logs policy days | Operational security |
-| `complaints` | Complaints / grievance handling | legitimate_interest | complaints policy days | Added in Preferred S15 stub expand |
-| `near-misses` | Near-miss / hazard reporting | legitimate_interest | near_misses policy days | Added in Preferred S15 stub expand |
-| `capa` | Corrective and preventive actions (CAPA) | legitimate_interest | audit_runs horizon (interim) | Discrete CAPA retention key still pending |
-| `risk-register` | Enterprise / operational risk register | legitimate_interest | audit_runs horizon (interim) | Discrete risk retention key still pending |
-| `rta` | Road traffic accident (RTA) records | legitimate_interest | incidents horizon (interim) | May include injury / special-category data |
+| `activity_id` | Name | Lawful basis (stub) | LIVE fields | Retention | Notes |
+|---------------|------|---------------------|-------------|-----------|-------|
+| `user-accounts` | User account administration | legitimate_interest | `purpose`, `data_subject_categories` | `users_deleted` horizon post-deactivation | Controllers may also rely on contract |
+| `incidents` | Incident / H&S reporting | legal_obligation | `purpose`, `data_subject_categories` | incidents policy days | May include Art. 9 special category |
+| `audit-findings` | Audit findings and evidence | legitimate_interest | `purpose`, `data_subject_categories` | audit_runs policy days | Blob + PostgreSQL |
+| `ocr-ai-import` | External audit OCR / AI import | legitimate_interest | `purpose`, `data_subject_categories` | Per import / evidence policy | Optional Mistral / Gemini; DPIA required |
+| `auth-and-request-logs` | Authentication and API request logs | legitimate_interest | `purpose`, `data_subject_categories` | session_logs policy days | Operational security |
+| `complaints` | Complaints / grievance handling | legitimate_interest | `purpose`, `data_subject_categories` | complaints policy days | Added in Preferred S15 stub expand |
+| `near-misses` | Near-miss / hazard reporting | legitimate_interest | `purpose`, `data_subject_categories` | near_misses policy days | Added in Preferred S15 stub expand |
+| `capa` | Corrective and preventive actions (CAPA) | legitimate_interest | `purpose`, `data_subject_categories` | audit_runs horizon (interim) | Discrete CAPA retention key still pending |
+| `risk-register` | Enterprise / operational risk register | legitimate_interest | `purpose`, `data_subject_categories` | audit_runs horizon (interim) | Discrete risk retention key still pending |
+| `rta` | Road traffic accident (RTA) records | legitimate_interest | `purpose`, `data_subject_categories` | incidents horizon (interim) | May include injury / special-category data |
 
 **Still not discrete stub rows (known — expand later, not forged here):** workforce competency / UVDB supplier PII as separate activities (covered narratively in platform DPIA §2.1 and GDPR §1).
 
@@ -104,5 +104,6 @@ Aligned with `src/api/routes/privacy.py` → `_processing_activities()` after Pr
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 1.2 | 2026-07-12 | Platform Engineering | Gaps C/D closed on LIVE stub via `purpose` + `data_subject_categories` — still **unsigned** / not full ROPA |
 | 1.1 | 2026-07-12 | Platform Engineering | Crosswalk updated for expanded LIVE stub activities (complaints, near-misses, CAPA, risk, RTA) — still unsigned |
 | 1.0 | 2026-07-11 | Platform Engineering | Initial Art. 30 ROPA checklist for Preferred S15 attestation pack |
