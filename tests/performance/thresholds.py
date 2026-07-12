@@ -104,6 +104,75 @@ def build_trend_record(payload: dict) -> dict:
     }
 
 
+def _trend_result(record: dict) -> dict:
+    """Accept full trend records or flattened result dicts."""
+    if isinstance(record.get("result"), dict):
+        return record["result"]
+    return record
+
+
+def evaluate_sustained_scale_hints(trend_records: list[dict]) -> dict:
+    """Evaluate successive soft-gate trend records against QUEUE_DEPTH_SCALE_HINTS.
+
+    Advisory only — never changes Locust exit codes or CI merge gates.
+    Uses the most recent ``sustained_run_count`` records (newest last).
+    """
+    required = int(QUEUE_DEPTH_SCALE_HINTS["sustained_run_count"])
+    p95_mult = float(QUEUE_DEPTH_SCALE_HINTS["p95_breach_multiplier"])
+    err_mult = float(QUEUE_DEPTH_SCALE_HINTS["error_rate_breach_multiplier"])
+    staging_p95 = int(LOCUST_PROFILES["staging"]["p95_response_ms"])
+    staging_err = float(LOCUST_PROFILES["staging"]["error_rate_pct"])
+    p95_hint_limit = staging_p95 * p95_mult
+    err_hint_limit = staging_err * err_mult
+
+    window = list(trend_records[-required:]) if trend_records else []
+    enough = len(window) >= required
+    actions: list[str] = []
+
+    if not enough:
+        actions.append(
+            f"Collect ≥{required} trend records before applying sustained scale hints " f"(have {len(window)})."
+        )
+        return {
+            "schema": "locust-soft-gate-scale-hint/v1",
+            "window_size": len(window),
+            "required_runs": required,
+            "enough_runs": False,
+            "p95_hint_limit_ms": p95_hint_limit,
+            "error_rate_hint_limit_pct": err_hint_limit,
+            "p95_scale_hint": False,
+            "error_rate_scale_hint": False,
+            "actions": actions,
+        }
+
+    p95_scale = all(float(_trend_result(r).get("p95_ms") or 0) > p95_hint_limit for r in window)
+    err_scale = all(float(_trend_result(r).get("error_rate_pct") or 0) > err_hint_limit for r in window)
+    if p95_scale:
+        actions.append(
+            f"Sustained p95 > {p95_hint_limit:.0f} ms across {required} runs — "
+            "investigate hotspots / consider App Service scale-out."
+        )
+    if err_scale:
+        actions.append(
+            f"Sustained error rate > {err_hint_limit:.1f}% across {required} runs — "
+            "check dependency/DB pool saturation before raising instance count."
+        )
+    if not actions:
+        actions.append("No sustained scale hint — keep observing under soft-gate.")
+
+    return {
+        "schema": "locust-soft-gate-scale-hint/v1",
+        "window_size": len(window),
+        "required_runs": required,
+        "enough_runs": True,
+        "p95_hint_limit_ms": p95_hint_limit,
+        "error_rate_hint_limit_pct": err_hint_limit,
+        "p95_scale_hint": p95_scale,
+        "error_rate_scale_hint": err_scale,
+        "actions": actions,
+    }
+
+
 def write_soft_gate_summary(payload: dict) -> None:
     """Emit a human + machine readable soft-gate summary for CI artifacts."""
     lines = [

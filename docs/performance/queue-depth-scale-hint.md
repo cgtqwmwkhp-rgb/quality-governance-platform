@@ -3,7 +3,7 @@
 Advisory guidance for when soft-gate staging-bar breaches should trigger
 **capacity investigation / scale-out**, without blocking merges.
 
-This is documentation + constants only. It does **not** change Locust exit
+This is documentation + advisory helpers only. It does **not** change Locust exit
 codes, branch protection, or App Service autoscale settings.
 
 ## Why this exists
@@ -41,6 +41,15 @@ using these **advisory** ratios (also in
 These hints are **non-blocking**: they never fail CI. Record decisions in the
 usual ops/evidence trail when acting on them.
 
+### Sustained evaluation helper
+
+Operators can evaluate a sequence of downloaded `locust-soft-gate-trend.json`
+records with `evaluate_sustained_scale_hints()` in
+`tests/performance/thresholds.py` (schema `locust-soft-gate-scale-hint/v1`).
+Pass records **oldest → newest**; the helper uses the last
+`sustained_run_count` entries and returns advisory `p95_scale_hint` /
+`error_rate_scale_hint` flags plus operator `actions`. It never fails CI.
+
 ## Non-blocking p95 tighten (later)
 
 Staging soft-gate keeps p95 ≤ **500 ms** (Preferred bar). Production SLO remains
@@ -62,4 +71,4 @@ Preferred score-mover; that profile exists for runner-noise tolerance.
 - [`locust-soft-gate.md`](locust-soft-gate.md) — soft-gate workflow + trend artifact
 - [`api-slos.md`](api-slos.md) — CI vs staging vs production latency tiers
 - [`docs/infra/capacity-plan.md`](../infra/capacity-plan.md) — autoscale triggers
-- `tests/performance/thresholds.py` — `QUEUE_DEPTH_SCALE_HINTS` constants
+- `tests/performance/thresholds.py` — `QUEUE_DEPTH_SCALE_HINTS` + `evaluate_sustained_scale_hints()`
