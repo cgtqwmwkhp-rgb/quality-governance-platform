@@ -64,7 +64,11 @@ p95 **< 200 ms**. Tightening is intentional and staged:
    `stable_run_count` runs stay ≤ staging bar, operators may trial the override
    while keeping `LOCUST_SOFT_GATE=1` so merges stay green.
 3. **Promote** — only after evidence, drop soft-gate / require the check (see
-   hard-gate promotion in [`locust-soft-gate.md`](locust-soft-gate.md)).
+   hard-gate promotion in [`locust-soft-gate.md`](locust-soft-gate.md)). Use
+   `evaluate_hard_gate_promotion_readiness()` (schema
+   `locust-soft-gate-hard-gate-ready/v1`): last **5** runs ≤ staging bar with
+   p95 ≤ **80%** of the staging limit (400 ms). Still advisory — never flips
+   workflow YAML or branch protection.
 
 Do **not** tighten the blocking `ci` profile (`LOCUST_P95_MS=10000`) as a
 Preferred score-mover; that profile exists for runner-noise tolerance.
@@ -76,4 +80,5 @@ Preferred score-mover; that profile exists for runner-noise tolerance.
 - [`docs/infra/capacity-plan.md`](../infra/capacity-plan.md) — autoscale triggers
 - `tests/performance/thresholds.py` — `QUEUE_DEPTH_SCALE_HINTS`,
   `evaluate_sustained_scale_hints()`, `SOFT_GATE_TRIAL_TIGHTEN`,
-  `evaluate_trial_tighten_readiness()`
+  `evaluate_trial_tighten_readiness()`, `SOFT_GATE_HARD_GATE_PROMOTE`,
+  `evaluate_hard_gate_promotion_readiness()`
