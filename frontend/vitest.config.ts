@@ -16,7 +16,7 @@ export default defineConfig({
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/test/**', 'src/**/*.d.ts', 'src/**/*.stories.{ts,tsx}'],
       thresholds: {
-        statements: 38,
+        statements: 39,
       },
     },
   },
