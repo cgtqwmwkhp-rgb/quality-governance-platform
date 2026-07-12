@@ -98,8 +98,5 @@ class MistralOCRService:
             return OCRResult(
                 text="",
                 provider_status="failed",
-                note=(
-                    f"OCR provider failed for this file ({type(exc).__name__}); "
-                    "manual review is required."
-                ),
+                note=(f"OCR provider failed for this file ({type(exc).__name__}); " "manual review is required."),
             )
