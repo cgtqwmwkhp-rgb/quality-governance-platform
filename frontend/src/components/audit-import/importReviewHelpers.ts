@@ -10,7 +10,7 @@ import {
   type ExternalAuditImportJob,
 } from '../../api/client'
 
-export const ACTION_FINDING_TYPES = [
+export const ACTION_FINDING_TYPES: readonly string[] = [
   'nonconformity',
   'major_nonconformity',
   'minor_nonconformity',
@@ -18,7 +18,20 @@ export const ACTION_FINDING_TYPES = [
   'finding',
   'flagged_item',
   'question_answered_no',
-]
+] as const
+
+export const RISK_CREATING_SEVERITIES: readonly string[] = ['medium', 'high', 'critical']
+
+export function shouldCreateRisk(finding: {
+  finding_type?: string | null
+  severity?: string | null
+}): boolean {
+  const findingType = finding.finding_type?.trim().toLowerCase() ?? ''
+  const severity = finding.severity?.trim().toLowerCase() ?? ''
+  return (
+    ACTION_FINDING_TYPES.includes(findingType) && RISK_CREATING_SEVERITIES.includes(severity)
+  )
+}
 
 export function humanizeLabel(value: string | null | undefined) {
   if (!value) return ''

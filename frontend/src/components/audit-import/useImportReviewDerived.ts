@@ -11,6 +11,7 @@ import {
   deriveSpecialistHome,
   readProvenanceNumber,
   readProvenanceString,
+  shouldCreateRisk,
 } from './importReviewHelpers'
 
 export function useImportReviewDerived(
@@ -56,12 +57,7 @@ export function useImportReviewDerived(
     [acceptedDrafts],
   )
   const acceptedRiskCandidates = useMemo(
-    () =>
-      acceptedDrafts.filter(
-        (draft) =>
-          ACTION_FINDING_TYPES.includes(draft.finding_type) &&
-          ['medium', 'high', 'critical'].includes(draft.severity),
-      ).length,
+    () => acceptedDrafts.filter(shouldCreateRisk).length,
     [acceptedDrafts],
   )
   const promotionSummary = job?.promotion_summary_json ?? null
