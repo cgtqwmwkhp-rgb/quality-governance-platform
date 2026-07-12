@@ -12,11 +12,11 @@ import logging
 from dataclasses import dataclass, field
 
 from src.core.config import settings
-from src.infrastructure.resilience.circuit_breaker import CircuitBreaker
+from src.domain.services.upstream_circuit_breaker import call_via_upstream_breaker
 
 logger = logging.getLogger(__name__)
 
-_mistral_analysis_cb = CircuitBreaker("mistral_analysis", failure_threshold=5, recovery_timeout=300)
+_MISTRAL_UPSTREAM_BREAKER = "mistral_analysis"
 
 _VALID_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
 _VALID_FINDING_TYPES = frozenset(
@@ -278,7 +278,7 @@ class MistralAnalysisService:
                     resp.raise_for_status()
                     return resp
 
-            response = await _mistral_analysis_cb.call(_do_call)
+            response = await call_via_upstream_breaker(_MISTRAL_UPSTREAM_BREAKER, _do_call)
 
             data = response.json()
             content = data["choices"][0]["message"]["content"]

@@ -2,7 +2,7 @@
 
 **Owner:** Platform Engineering  
 **Classification:** Internal (C2)  
-**Status:** Foundation + `/readyz` degraded aggregate + Import Review banner + Azure Blob call-site
+**Status:** Foundation + `/readyz` degraded aggregate + Import Review banner + Azure Blob + Mistral OCR call-sites
 
 ---
 
@@ -96,11 +96,22 @@ The banner accepts controlled `openCircuits` / `halfOpenCircuits` props, or opti
 
 ---
 
+## Mistral OCR/analysis call-site
+
+| Attribute | Detail |
+|-----------|--------|
+| **Module** | [`src/domain/services/mistral_analysis_service.py`](../../src/domain/services/mistral_analysis_service.py) |
+| **Ops wrapped** | `analyze_text` Chat completions via `call_via_upstream_breaker("mistral_analysis", …)` |
+| **Secrets** | Uses existing `settings.mistral_api_key` only; never invents keys; unconfigured stays `not_configured` |
+| **Readyz** | [`ai_status.py`](../../src/infrastructure/upstream/ai_status.py) still reports honest config + circuit metadata without dialing Mistral |
+
+---
+
 ## Adoption notes
 
 1. Prefer `get_upstream_breaker` / `call_via_upstream_breaker` for **new** upstream call sites.
-2. Existing services that already construct `CircuitBreaker("mistral_analysis" | …)` remain compatible: `get_upstream_breaker` reuses the shared registry entry.
-3. Call-site migration onto the catalog facade remains incremental (OCR/Gemini still ad-hoc constructors; blob Azure I/O now uses the facade); do not invent secrets or live-ping providers from readiness.
+2. Existing services that already construct `CircuitBreaker("gemini_ai" | "gemini_review")` remain compatible: `get_upstream_breaker` reuses the shared registry entry.
+3. Call-site migration onto the catalog facade remains incremental (Gemini still ad-hoc constructors; blob Azure I/O + Mistral analysis now use the facade); do not invent secrets or live-ping providers from readiness.
 
 ---
 
