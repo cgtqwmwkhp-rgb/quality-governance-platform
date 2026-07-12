@@ -22,7 +22,7 @@ from src.domain.models.external_audit_import import (
     ExternalAuditDraftStatus,
     ExternalAuditImportStatus,
 )
-from src.domain.services.external_audit_import_service import ExternalAuditImportService
+from src.services.external_audit_import_service import ExternalAuditImportService
 from tests.conftest import generate_test_reference
 
 DEFAULT_TEST_USER_ID = 1
