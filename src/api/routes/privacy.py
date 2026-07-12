@@ -140,6 +140,55 @@ def _international_transfers() -> dict[str, Any]:
     }
 
 
+def _roles_and_contacts() -> dict[str, Any]:
+    """Art. 30 roles + contact pointers (unsigned stub).
+
+    Surfaces controller / processor / DPO / privacy / security contact shape for
+    auditor readability. Does **not** invent a named DPO or claim DPO appointment.
+    Tenant controllers supply their own legal-entity contact in their ROPA.
+    """
+    privacy = _privacy_email()
+    security = _security_email()
+    return {
+        "schema": "article-30-roles-and-contacts/v1",
+        "controller": {
+            "role": "controller",
+            "identity": "tenant_organisation",
+            "contact_source": "per_tenant_dpa_schedule",
+            "note": (
+                "Controller legal name + contact live in each tenant's DPA / ROPA — "
+                "not hardcoded in this platform stub."
+            ),
+        },
+        "processor": {
+            "role": "processor_platform_operator",
+            "identity": "Plantexpand (QGP platform operator)",
+            "privacy_contact": privacy,
+            "security_contact": security,
+            "security_txt": "/.well-known/security.txt",
+        },
+        "dpo": {
+            "status": "appointed_by_controller_or_operator_when_required",
+            "contact_email": None,
+            "note": (
+                "DPO name/email are not invented in-repo. When appointed, publish via "
+                "env/policy and confirm in the controller/operator ROPA — "
+                "do not forge DPO identity here."
+            ),
+        },
+        "privacy_contact": privacy,
+        "security_contact": security,
+        "live_endpoints": {
+            "contact": "/api/v1/privacy/contact",
+            "register": "/api/v1/privacy/data-processing-register",
+        },
+        "note": (
+            "Unsigned Art. 30 roles/contacts summary for auditor readability. "
+            "Does not invent DPO identity, signed DPIA, or full controller ROPA."
+        ),
+    }
+
+
 def _subprocessors() -> list[dict[str, Any]]:
     """Public sub-processor list (Art. 28 disclosure stub).
 
@@ -360,6 +409,7 @@ async def data_processing_register() -> dict[str, Any]:
             "attestation_pack": "docs/compliance/s15-dpia-art30-attestation-pack.md",
         },
         "ropa_checklist": "docs/compliance/article-30-ropa-checklist.md",
+        "roles_and_contacts": _roles_and_contacts(),
         "technical_organisational_measures": _technical_organisational_measures(),
         "international_transfers": _international_transfers(),
         "subprocessors": _subprocessors(),
@@ -368,10 +418,12 @@ async def data_processing_register() -> dict[str, Any]:
         "as_of": _as_of(),
         "note": (
             "Stub disclosure for auditors and operators — register_kind remains "
-            "article_30_stub. Includes purpose / data_subject_categories, a "
-            "general technical_organisational_measures block for Art. 30(1)(g), "
+            "article_30_stub. Includes roles_and_contacts (Art. 30 A/B/P1 pointers), "
+            "purpose / data_subject_categories, a general "
+            "technical_organisational_measures block for Art. 30(1)(g), "
             "and international_transfers for Art. 30(1)(e) readability; link "
             "signed DPAs and complete DPO §9 before treating as full Art. 30 "
-            "ROPA. EA-02 is not claimed closed; AI vendor DPAs remain pending."
+            "ROPA. EA-02 is not claimed closed; AI vendor DPAs remain pending; "
+            "DPO identity is not invented."
         ),
     }
