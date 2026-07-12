@@ -4,6 +4,7 @@ import json
 
 from tests.performance.thresholds import (
     LOCUST_PROFILES,
+    QUEUE_DEPTH_SCALE_HINTS,
     build_trend_record,
     resolve_perf_thresholds,
     write_soft_gate_summary,
@@ -18,6 +19,16 @@ def test_staging_profile_matches_preferred_bar():
     assert resolved["users"] == 20
     assert resolved["spawn_rate"] == 5
     assert resolved["run_time"] == "60s"
+
+
+def test_queue_depth_scale_hints_match_docs():
+    """Advisory constants stay aligned with docs/performance/queue-depth-scale-hint.md."""
+    assert QUEUE_DEPTH_SCALE_HINTS["p95_breach_multiplier"] == 1.5
+    assert QUEUE_DEPTH_SCALE_HINTS["error_rate_breach_multiplier"] == 2.0
+    assert QUEUE_DEPTH_SCALE_HINTS["sustained_run_count"] == 3
+    assert QUEUE_DEPTH_SCALE_HINTS["staging_users"] == LOCUST_PROFILES["staging"]["users"]
+    staging_p95 = int(LOCUST_PROFILES["staging"]["p95_response_ms"])
+    assert staging_p95 * QUEUE_DEPTH_SCALE_HINTS["p95_breach_multiplier"] == 750.0
 
 
 def test_ci_profile_is_relaxed_for_runner_noise():
