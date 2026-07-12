@@ -19,6 +19,7 @@ import {
   Info,
   ExternalLink,
   ArrowRight,
+  MailWarning,
 } from 'lucide-react'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -42,7 +43,13 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
-import { actionsApi, Action as ApiAction, ActionCreate, ActionsSummary } from '../api/client'
+import {
+  actionsApi,
+  Action as ApiAction,
+  ActionCreate,
+  ActionsSummary,
+  notificationsApi,
+} from '../api/client'
 import { decodeTokenPayload, getPlatformToken } from '../utils/auth'
 
 function startOfDay(d: Date): number {
@@ -157,6 +164,7 @@ export default function Actions() {
   const [sortMode, setSortMode] = useState<SortMode>('newest')
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const [summary, setSummary] = useState<ActionsSummary | null>(null)
+  const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
 
   const currentUserId = useMemo(() => {
     const token = getPlatformToken()
@@ -233,6 +241,21 @@ export default function Actions() {
     loadActions()
     loadSummary()
   }, [loadActions, loadSummary])
+
+  useEffect(() => {
+    let cancelled = false
+    notificationsApi
+      .getDeliveryStatus()
+      .then((response) => {
+        if (!cancelled) setEmailConfigured(response.data.email_configured)
+      })
+      .catch(() => {
+        // Optional honesty signal: omit the banner when readiness cannot be read.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -414,6 +437,22 @@ export default function Actions() {
           {t('actions.new')}
         </Button>
       </div>
+
+      {emailConfigured === false ? (
+        <div
+          className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+          role="status"
+          data-testid="actions-email-unavailable"
+        >
+          <div className="flex items-start gap-3">
+            <MailWarning className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="font-semibold">{t('actions.email_unavailable.title')}</p>
+              <p className="mt-1 text-sm">{t('actions.email_unavailable.body')}</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">

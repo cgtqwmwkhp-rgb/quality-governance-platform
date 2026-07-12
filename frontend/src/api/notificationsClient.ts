@@ -40,8 +40,18 @@ export interface NotificationPreferences {
   category_preferences?: Record<string, NotificationCategoryChannels>
 }
 
+/** Minimal public readiness subset used to avoid implying email delivery. */
+export interface NotificationDeliveryStatus {
+  email_configured: boolean
+}
+
 export function createNotificationsApi(api: AxiosInstance) {
   return {
+    getDeliveryStatus: () =>
+      api.get<NotificationDeliveryStatus>('/readyz', {
+        // SMTP status remains useful when an unrelated readiness dependency returns 503.
+        validateStatus: (status) => status === 200 || status === 503,
+      }),
     list: (params?: { page?: number; page_size?: number; unread_only?: boolean }) => {
       const sp = new URLSearchParams()
       if (params?.page) sp.set('page', String(params.page))

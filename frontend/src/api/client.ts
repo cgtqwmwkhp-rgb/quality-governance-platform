@@ -983,6 +983,7 @@ export const analyticsApi = {
 export type {
   NotificationEntry,
   NotificationCategoryChannels,
+  NotificationDeliveryStatus,
   NotificationPreferences,
 } from './notificationsClient'
 export const notificationsApi = createNotificationsApi(api)
