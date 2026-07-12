@@ -6,7 +6,6 @@ of HTTPException so that the service layer stays framework-agnostic.
 """
 
 import logging
-import time
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select
@@ -31,13 +30,13 @@ from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
 from src.domain.services.email_service import email_service
 from src.domain.services.token_service import TokenService
+from src.infrastructure.security.login_lockout import (
+    LOCKOUT_DURATION_SECONDS,
+    MAX_FAILED_ATTEMPTS,
+    get_login_lockout_store,
+)
 
 logger = logging.getLogger(__name__)
-
-MAX_FAILED_ATTEMPTS = 5
-LOCKOUT_DURATION_SECONDS = 15 * 60  # 15 minutes
-
-_failed_login_attempts: dict[str, list[float]] = {}
 
 
 def _access_token_for_user(user: User) -> str:
@@ -145,16 +144,10 @@ class AuthService:
             PermissionError: If the user account is inactive.
         """
         normalized_email = email.lower()
-        now = time.time()
-        cutoff = now - LOCKOUT_DURATION_SECONDS
+        lockout = get_login_lockout_store()
 
-        attempts = _failed_login_attempts.get(normalized_email, [])
-        recent_attempts = [t for t in attempts if t > cutoff]
-        _failed_login_attempts[normalized_email] = recent_attempts
-
-        if len(recent_attempts) >= MAX_FAILED_ATTEMPTS:
-            most_recent = max(recent_attempts)
-            unlock_in = int(most_recent + LOCKOUT_DURATION_SECONDS - now)
+        unlock_in = await lockout.check_lockout(normalized_email)
+        if unlock_in is not None:
             raise ValueError(
                 f"Account temporarily locked due to too many failed login attempts. "
                 f"Try again in {unlock_in} seconds."
@@ -163,7 +156,7 @@ class AuthService:
         user = await self._get_user_by_email(normalized_email)
 
         if user is None or not verify_password(password, user.hashed_password):
-            _failed_login_attempts.setdefault(normalized_email, []).append(now)
+            await lockout.record_failure(normalized_email)
             from src.infrastructure.monitoring.azure_monitor import record_auth_failure
 
             record_auth_failure()
@@ -172,7 +165,7 @@ class AuthService:
         if not user.is_active:
             raise PermissionError("User account is inactive")
 
-        _failed_login_attempts.pop(normalized_email, None)
+        await lockout.clear(normalized_email)
 
         await self._stamp_last_login(user)
 
