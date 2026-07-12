@@ -105,6 +105,8 @@ docs/evidence/pentest-report-YYYY-Q?.md
 - `docs/privacy/data-classification.md`
 - `docs/compliance/gdpr-compliance.md`
 - `docs/evidence/retention-automation-evidence.md`
+- `docs/compliance/dpia-quality-governance-platform.md` (platform DPIA — §9 unsigned)
+- **`docs/evidence/dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md`** — EA-03 artifact prepared 2026-07-12; **awaiting DPO signature** (do not invent)
 
 **Deliverable required:**
 ```
@@ -117,6 +119,7 @@ docs/evidence/dpo-signoff-YYYY-Q?.md
   - DPO signature / authorised confirmation
 ```
 
+**Current deliverable path:** fill and sign `docs/evidence/dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md`, then rename/status → SIGNED.
 ---
 
 ## EA-04: ISO Auditor Validation of Compliance Evidence Tool (D08)
