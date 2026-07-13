@@ -35,6 +35,7 @@ from src.domain.models.user import User
 from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
+from src.domain.services.document_version_service import document_version_service
 from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.infrastructure.storage import StorageError, storage_service
 
@@ -158,6 +159,43 @@ class DocumentSignedUrlResponse(BaseModel):
     expires_in_seconds: int
     filename: str
     content_type: Optional[str]
+
+
+class LibraryVersionCreate(BaseModel):
+    """Open a library document revision draft."""
+
+    change_notes: str
+    change_type: str = "revision"
+    is_major_version: bool = False
+
+
+class LibraryVersionResponse(BaseModel):
+    """Library document version row."""
+
+    id: int
+    version_number: str
+    change_notes: Optional[str] = None
+    change_type: str
+    status: str
+    is_immutable: bool
+    read_only: bool
+    file_name: str
+    file_size: int
+    created_by_id: Optional[int] = None
+    created_at: Optional[str] = None
+    published_at: Optional[str] = None
+    published_by_id: Optional[int] = None
+
+
+class LibraryVersionHistoryResponse(BaseModel):
+    """Version history for a library document."""
+
+    document_id: int
+    current_version: str
+    status: str
+    published_version: Optional[str] = None
+    working_version: Optional[str] = None
+    versions: list[LibraryVersionResponse]
 
 
 @dataclass
@@ -401,12 +439,22 @@ async def upload_document(
             else SensitivityLevel.INTERNAL
         ),
         status=DocumentStatus.PROCESSING,
+        version="1.0",
         created_by_id=current_user.id,
         tenant_id=current_user.tenant_id,
     )
 
     db.add(doc)
     await db.flush()
+
+    # Honest create: initial draft version row matches document.version tip
+    db.add(
+        document_version_service.build_initial_library_version(
+            doc,
+            created_by_id=current_user.id,
+            change_notes="Initial upload",
+        )
+    )
 
     try:
         await storage_service().upload(
@@ -563,6 +611,95 @@ async def get_document_signed_url(
         expires_in_seconds=expires_in,
         filename=filename,
         content_type=document.mime_type,
+    )
+
+
+# =============================================================================
+# VERSION CONTROL
+# =============================================================================
+
+
+@router.get("/{document_id}/versions", response_model=LibraryVersionHistoryResponse)
+async def list_document_versions(
+    document_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """List version history for a library document (immutable prior publishes)."""
+    document = await _get_document_or_404(db, document_id, current_user)
+    versions = await document_version_service.list_library_versions(
+        db,
+        document_id,
+        tenant_id=getattr(current_user, "tenant_id", None),
+        is_superuser=bool(getattr(current_user, "is_superuser", False)),
+    )
+    serialized = [document_version_service.serialize_library_version(v) for v in versions]
+    return LibraryVersionHistoryResponse(
+        document_id=document.id,
+        current_version=document.version,
+        status=document.status.value if hasattr(document.status, "value") else str(document.status),
+        published_version=next((v["version_number"] for v in serialized if v["status"] == "published"), None),
+        working_version=next((v["version_number"] for v in serialized if v["status"] == "draft"), None),
+        versions=[LibraryVersionResponse(**v) for v in serialized],
+    )
+
+
+@router.post(
+    "/{document_id}/versions",
+    response_model=LibraryVersionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_document_version(
+    document_id: int,
+    payload: LibraryVersionCreate,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """Open a revision draft. Prior published versions remain read-only."""
+    document = await _get_document_or_404(db, document_id, current_user)
+    version = await document_version_service.revise_library(
+        db,
+        document,
+        change_notes=payload.change_notes,
+        change_type=payload.change_type,
+        is_major_version=payload.is_major_version,
+        created_by_id=current_user.id,
+    )
+    await db.commit()
+    await db.refresh(version)
+    return LibraryVersionResponse(**document_version_service.serialize_library_version(version))
+
+
+@router.post("/{document_id}/publish", response_model=LibraryVersionHistoryResponse)
+async def publish_document_version(
+    document_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+    version_id: Optional[int] = Query(None),
+):
+    """Publish working draft; supersede prior published tip (immutable)."""
+    document = await _get_document_or_404(db, document_id, current_user)
+    await document_version_service.publish_library(
+        db,
+        document,
+        published_by_id=current_user.id,
+        version_id=version_id,
+    )
+    await db.commit()
+    versions = await document_version_service.list_library_versions(
+        db,
+        document_id,
+        tenant_id=getattr(current_user, "tenant_id", None),
+        is_superuser=bool(getattr(current_user, "is_superuser", False)),
+    )
+    serialized = [document_version_service.serialize_library_version(v) for v in versions]
+    return LibraryVersionHistoryResponse(
+        document_id=document.id,
+        current_version=document.version,
+        status=document.status.value if hasattr(document.status, "value") else str(document.status),
+        published_version=next((v["version_number"] for v in serialized if v["status"] == "published"), None),
+        working_version=next((v["version_number"] for v in serialized if v["status"] == "draft"), None),
+        versions=[LibraryVersionResponse(**v) for v in serialized],
     )
 
 

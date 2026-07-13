@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import { DocumentVersionControlBar } from '../components/DocumentVersionControlBar'
 import { cn } from '../helpers/utils'
 
 const reportFailure = (err: unknown): string => {
@@ -40,8 +41,10 @@ const statusVariant = (status: string) => {
   switch (status) {
     case 'approved':
     case 'effective':
+    case 'published':
       return 'success'
     case 'draft':
+    case 'under_revision':
       return 'secondary'
     case 'in_review':
       return 'in-progress'
@@ -62,6 +65,8 @@ export default function DocumentControl() {
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [revising, setRevising] = useState(false)
+  const [publishing, setPublishing] = useState(false)
 
   const [createForm, setCreateForm] = useState({
     title: '',
@@ -128,7 +133,9 @@ export default function DocumentControl() {
         category: createForm.category,
         description: createForm.description.trim() || undefined,
       })
-      toast.success(`Created ${response.data.document_number}`)
+      toast.success(
+        `Created ${response.data.document_number} at v${response.data.current_version ?? '1.0'} draft`,
+      )
       setShowCreate(false)
       setCreateForm({ title: '', document_type: 'procedure', category: 'general', description: '' })
       await loadDocuments()
@@ -152,6 +159,41 @@ export default function DocumentControl() {
       reportFailure(err)
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleRevise = async (changeSummary: string, isMajor: boolean) => {
+    if (!selectedId) return
+    setRevising(true)
+    try {
+      const response = await documentControlApi.createVersion(selectedId, {
+        change_summary: changeSummary,
+        is_major_version: isMajor,
+        change_type: 'revision',
+      })
+      toast.success(`Opened draft v${response.data.version_number}`)
+      await loadDetail(selectedId)
+      await loadDocuments()
+    } catch (err) {
+      reportFailure(err)
+      throw err
+    } finally {
+      setRevising(false)
+    }
+  }
+
+  const handlePublish = async () => {
+    if (!selectedId) return
+    setPublishing(true)
+    try {
+      const response = await documentControlApi.publish(selectedId)
+      toast.success(`Published v${response.data.current_version}`)
+      await loadDetail(selectedId)
+      await loadDocuments()
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setPublishing(false)
     }
   }
 
@@ -186,7 +228,7 @@ export default function DocumentControl() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Document Control</h1>
           <p className="text-muted-foreground mt-1">
-            Controlled document lifecycle — versions, approval, and distribution
+            Controlled document lifecycle — create, revise, publish, and retain immutable history
           </p>
         </div>
         <div className="flex gap-2">
@@ -327,27 +369,18 @@ export default function DocumentControl() {
                 )}
               </Card>
 
-              <Card className="p-4">
-                <h3 className="font-medium text-foreground mb-3">Versions</h3>
-                {detail.versions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No version history yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {detail.versions.map((v) => (
-                      <div
-                        key={v.id}
-                        className="rounded-lg border border-border p-3 text-sm"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium">v{v.version_number}</span>
-                          <Badge variant="outline">{v.status}</Badge>
-                        </div>
-                        <p className="text-muted-foreground mt-1">{v.change_summary}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
+              <DocumentVersionControlBar
+                documentLabel={detail.title}
+                currentVersion={detail.current_version}
+                status={detail.status}
+                publishedVersion={detail.published_version}
+                workingVersion={detail.working_version}
+                versions={detail.versions}
+                revising={revising}
+                publishing={publishing}
+                onRevise={handleRevise}
+                onPublish={handlePublish}
+              />
 
               <Card className="p-4 space-y-4">
                 <h3 className="font-medium text-foreground">Distribute</h3>

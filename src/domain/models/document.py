@@ -253,7 +253,7 @@ class DocumentAnnotation(Base, TimestampMixin):
 
 
 class DocumentVersion(Base, TimestampMixin):
-    """Document version history."""
+    """Document version history with publish immutability."""
 
     __tablename__ = "document_versions"
 
@@ -264,6 +264,13 @@ class DocumentVersion(Base, TimestampMixin):
     # Version info
     version_number: Mapped[str] = mapped_column(String(20), nullable=False)
     change_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    change_type: Mapped[str] = mapped_column(String(50), default="revision", nullable=False)
+
+    # Lifecycle — published/superseded rows are immutable (read-only)
+    status: Mapped[str] = mapped_column(String(50), default="draft", nullable=False, index=True)
+    is_immutable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    published_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # File info
     file_name: Mapped[str] = mapped_column(String(500), nullable=False)

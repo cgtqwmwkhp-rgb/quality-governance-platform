@@ -30,6 +30,7 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
+import { DocumentVersionControlBar } from '../components/DocumentVersionControlBar'
 import { cn } from '../helpers/utils'
 import {
   PROPOSED_EVIDENCE_ANCHOR_ID,
@@ -55,6 +56,31 @@ interface LibraryDocument {
   download_count: number
   created_at: string
   indexed_at?: string
+}
+
+interface LibraryVersionRow {
+  id: number
+  version_number: string
+  change_notes?: string | null
+  change_type: string
+  status: string
+  is_immutable: boolean
+  read_only: boolean
+  file_name: string
+  file_size: number
+  created_by_id?: number | null
+  created_at?: string | null
+  published_at?: string | null
+  published_by_id?: number | null
+}
+
+interface LibraryVersionHistory {
+  document_id: number
+  current_version: string
+  status: string
+  published_version?: string | null
+  working_version?: string | null
+  versions: LibraryVersionRow[]
 }
 
 const reportFailure = (err: unknown): string => {
@@ -118,6 +144,11 @@ export default function DocumentDetail() {
   const [postingMessage, setPostingMessage] = useState(false)
 
   const [impacts, setImpacts] = useState<RegulatoryImpact[]>([])
+  const [versionHistory, setVersionHistory] = useState<LibraryVersionHistory | null>(null)
+  const [versionsLoading, setVersionsLoading] = useState(false)
+  const [versionsError, setVersionsError] = useState<string | null>(null)
+  const [revising, setRevising] = useState(false)
+  const [publishing, setPublishing] = useState(false)
 
   const proposedLinks = useMemo(
     () => evidence.filter((l) => l.status === 'proposed' || l.status === 'needs_review'),
@@ -137,6 +168,23 @@ export default function DocumentDetail() {
       setDocument(null)
     } finally {
       setLoading(false)
+    }
+  }, [documentId])
+
+  const loadVersions = useCallback(async () => {
+    if (!documentId || Number.isNaN(documentId)) return
+    setVersionsLoading(true)
+    setVersionsError(null)
+    try {
+      const response = await api.get<LibraryVersionHistory>(
+        `/api/v1/documents/${documentId}/versions`,
+      )
+      setVersionHistory(response.data)
+    } catch (err) {
+      setVersionsError(reportFailure(err))
+      setVersionHistory(null)
+    } finally {
+      setVersionsLoading(false)
     }
   }, [documentId])
 
@@ -180,7 +228,43 @@ export default function DocumentDetail() {
     void loadEvidence()
     void loadThreads()
     void loadImpacts()
-  }, [loadDocument, loadEvidence, loadThreads, loadImpacts])
+    void loadVersions()
+  }, [loadDocument, loadEvidence, loadThreads, loadImpacts, loadVersions])
+
+  const handleReviseVersion = async (changeSummary: string, isMajor: boolean) => {
+    if (!documentId) return
+    setRevising(true)
+    try {
+      await api.post(`/api/v1/documents/${documentId}/versions`, {
+        change_notes: changeSummary,
+        change_type: 'revision',
+        is_major_version: isMajor,
+      })
+      toast.success('Revision draft opened')
+      await loadVersions()
+      await loadDocument()
+    } catch (err) {
+      reportFailure(err)
+      throw err
+    } finally {
+      setRevising(false)
+    }
+  }
+
+  const handlePublishVersion = async () => {
+    if (!documentId) return
+    setPublishing(true)
+    try {
+      await api.post(`/api/v1/documents/${documentId}/publish`)
+      toast.success('Version published')
+      await loadVersions()
+      await loadDocument()
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setPublishing(false)
+    }
+  }
 
   // /documents/:id?tab=evidence → Standards & Evidence, scroll to proposed links.
   useEffect(() => {
@@ -555,21 +639,35 @@ export default function DocumentDetail() {
         </TabsContent>
 
         <TabsContent value="versions" className="mt-4 space-y-4">
-          <Card className="p-4">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="font-medium text-foreground">Current version</p>
-                <p className="text-sm text-muted-foreground">v{document.version}</p>
-              </div>
-              <Button variant="outline" size="sm" asChild>
-                <Link to="/document-control">Controlled docs</Link>
-              </Button>
-            </div>
-            <p className="text-sm text-muted-foreground mt-3">
-              Promote this library document through document control for formal versioning,
-              approval, and distribution.
-            </p>
-          </Card>
+          <DocumentVersionControlBar
+            documentLabel={document.title}
+            currentVersion={versionHistory?.current_version ?? document.version}
+            status={versionHistory?.status ?? document.status}
+            publishedVersion={versionHistory?.published_version}
+            workingVersion={versionHistory?.working_version}
+            versions={(versionHistory?.versions ?? []).map((v) => ({
+              id: v.id,
+              version_number: v.version_number,
+              change_notes: v.change_notes,
+              change_type: v.change_type,
+              status: v.status,
+              is_immutable: v.is_immutable,
+              read_only: v.read_only,
+              created_at: v.created_at,
+              published_at: v.published_at,
+            }))}
+            loading={versionsLoading}
+            error={versionsError}
+            revising={revising}
+            publishing={publishing}
+            onRevise={handleReviseVersion}
+            onPublish={handlePublishVersion}
+          />
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/document-control">Open document control</Link>
+            </Button>
+          </div>
         </TabsContent>
 
         <TabsContent value="quiz" className="mt-4 space-y-4">

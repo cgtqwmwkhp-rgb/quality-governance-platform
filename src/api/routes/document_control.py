@@ -32,6 +32,10 @@ from src.domain.models.document_control import (
     ObsoleteDocumentRecord,
 )
 from src.domain.models.user import User
+from src.domain.services.document_version_service import (
+    assert_document_metadata_editable,
+    document_version_service,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -212,17 +216,12 @@ async def create_document(
     await db.commit()
     await db.refresh(document)
 
-    # Create initial version record
-    version = ControlledDocumentVersion(
+    # Honest create: tip + version row both 1.0 draft (not 1.0 tip / 0.1 row theatre)
+    version = document_version_service.build_initial_controlled_version(
         tenant_id=tenant_id,
         document_id=document.id,
-        version_number="0.1",
-        major_version=0,
-        minor_version=1,
-        change_summary="Initial document creation",
-        change_type="new",
-        status="draft",
-        created_by_name=document_data.author_name,
+        author_name=document_data.author_name,
+        created_by_id=getattr(current_user, "id", None),
     )
     db.add(version)
     await db.commit()
@@ -230,6 +229,9 @@ async def create_document(
     return {
         "id": document.id,
         "document_number": document_number,
+        "current_version": document.current_version,
+        "status": document.status,
+        "version": document_version_service.serialize_controlled_version(version),
         "message": "Document created successfully",
     }
 
@@ -315,20 +317,16 @@ async def get_document(
         "training_required": document.training_required,
         "view_count": document.view_count,
         "download_count": document.download_count,
-        "versions": [
-            {
-                "id": v.id,
-                "version_number": v.version_number,
-                "change_summary": v.change_summary,
-                "change_type": v.change_type,
-                "status": v.status,
-                "created_by_name": v.created_by_name,
-                "created_at": v.created_at.isoformat() if v.created_at else None,
-                "approved_by_name": v.approved_by_name,
-                "approved_date": (v.approved_date.isoformat() if v.approved_date else None),
-            }
-            for v in versions
-        ],
+        "published_version": next(
+            (
+                v.version_number
+                for v in versions
+                if v.status in ("published", "approved", "effective", "active")
+            ),
+            None,
+        ),
+        "working_version": next((v.version_number for v in versions if v.status == "draft"), None),
+        "versions": [document_version_service.serialize_controlled_version(v) for v in versions],
         "distributions": [
             {
                 "id": d.id,
@@ -351,7 +349,7 @@ async def update_document(
     current_user: Annotated[User, Depends(require_permission("document:update"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Update document metadata"""
+    """Update document metadata (blocked when published/obsolete — revise first)."""
     result = await db.execute(
         _tenant_stmt(
             select(ControlledDocument).where(ControlledDocument.id == document_id),
@@ -362,6 +360,8 @@ async def update_document(
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document not found")
+
+    assert_document_metadata_editable(document.status)
 
     update_data = document_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -384,7 +384,7 @@ async def create_new_version(
     current_user: Annotated[User, Depends(require_permission("document:update"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Create a new version of the document"""
+    """Open a revision draft. Prior published versions remain immutable."""
     tenant_id = _tenant_id(current_user)
     result = await db.execute(
         apply_tenant_filter(
@@ -397,38 +397,21 @@ async def create_new_version(
     if not document:
         raise NotFoundError("Document not found")
 
-    # Calculate new version number
-    if version_data.is_major_version:
-        new_major = document.major_version + 1
-        new_minor = 0
-    else:
-        new_major = document.major_version
-        new_minor = document.minor_version + 1
-
-    new_version_number = f"{new_major}.{new_minor}"
-
-    # Update document
-    document.current_version = new_version_number
-    document.major_version = new_major
-    document.minor_version = new_minor
-    document.status = "under_revision"
-    document.updated_at = datetime.now(timezone.utc)
-
-    # Create version record
-    version = ControlledDocumentVersion(
+    version = await document_version_service.revise_controlled(
+        db,
+        document,
         tenant_id=tenant_id,
-        document_id=document_id,
-        version_number=new_version_number,
-        major_version=new_major,
-        minor_version=new_minor,
         change_summary=version_data.change_summary,
         change_reason=version_data.change_reason,
         change_type=version_data.change_type,
-        status="draft",
+        is_major_version=version_data.is_major_version,
+        created_by_id=getattr(current_user, "id", None),
+        created_by_name=getattr(current_user, "full_name", None),
     )
-    db.add(version)
     await db.commit()
     await db.refresh(version)
+
+    new_version_number = version.version_number
 
     # AI-first version lifecycle: rematch evidence + stale quizzes (best-effort)
     try:
@@ -473,7 +456,6 @@ async def create_new_version(
                 tenant_id=tenant_id,
                 new_version=new_version_number,
             )
-            # AI-first: auto-draft a fresh quiz for the new version
             await governed_knowledge_service.generate_quiz_draft(
                 db,
                 document_id=library_doc.id,
@@ -494,7 +476,50 @@ async def create_new_version(
     return {
         "id": version.id,
         "version_number": new_version_number,
+        "status": version.status,
+        "is_immutable": False,
+        "read_only": False,
         "message": f"Version {new_version_number} created",
+    }
+
+
+@router.post("/{document_id}/publish", response_model=dict)
+async def publish_document(
+    document_id: int,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+    db: DbSession = None,
+    version_id: Optional[int] = Query(None),
+) -> dict[str, Any]:
+    """Publish the working draft; prior published tip becomes superseded (immutable)."""
+    tenant_id = _tenant_id(current_user)
+    result = await db.execute(
+        apply_tenant_filter(
+            select(ControlledDocument).where(ControlledDocument.id == document_id),
+            ControlledDocument,
+            tenant_id,
+        )
+    )
+    document = result.scalar_one_or_none()
+    if not document:
+        raise NotFoundError("Document not found")
+
+    version = await document_version_service.publish_controlled(
+        db,
+        document,
+        tenant_id=tenant_id,
+        published_by_id=getattr(current_user, "id", None),
+        published_by_name=getattr(current_user, "full_name", None),
+        version_id=version_id,
+    )
+    await db.commit()
+    await db.refresh(version)
+
+    return {
+        "id": document.id,
+        "current_version": document.current_version,
+        "status": document.status,
+        "version": document_version_service.serialize_controlled_version(version),
+        "message": f"Version {version.version_number} published",
     }
 
 
