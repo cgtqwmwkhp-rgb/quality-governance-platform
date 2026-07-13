@@ -4,14 +4,14 @@ import logging
 from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import require_tenant_id
 from src.domain.exceptions import BadRequestError, NotFoundError
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkStatus
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkStatus, EvidenceSignalType
 from src.domain.models.document import Document
 from src.domain.models.governed_knowledge import (
     DiscussionThreadStatus,
@@ -56,6 +56,10 @@ class MapEvidenceResponse(BaseModel):
     document_id: int
     links_created: int
     links: list[EvidenceLinkDetailResponse]
+
+
+class RejectEvidenceRequest(BaseModel):
+    rationale: str = Field(..., min_length=3, description="Required reject reason for auditability")
 
 
 class BulkConfirmRequest(BaseModel):
@@ -402,14 +406,24 @@ async def reject_evidence_link(
     link_id: int,
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("audit:create"))],
+    body: Annotated[Optional[RejectEvidenceRequest], Body()] = None,
 ):
-    """Reject a proposed evidence link."""
+    """Reject a proposed evidence link. Prefer a rationale body for auditability."""
     tenant_id = _tenant_id_for(current_user)
     link = await _get_evidence_link_or_404(db, link_id, tenant_id)
     link.status = EvidenceLinkStatus.REJECTED
     link.auto_applied = False
+    rationale = (body.rationale.strip() if body and body.rationale else "")
+    if rationale:
+        reject_note = f"Rejected: {rationale}"
+        link.notes = f"{link.notes}\n{reject_note}".strip() if link.notes else reject_note
+    else:
+        # Honest marker for legacy callers (e.g. DocumentDetail) that omit body.
+        legacy = "Rejected without rationale (legacy client)"
+        link.notes = f"{link.notes}\n{legacy}".strip() if link.notes else legacy
+        rationale = legacy
     await db.commit()
-    return {"status": "rejected", "link_id": link_id}
+    return {"status": "rejected", "link_id": link_id, "rationale": rationale}
 
 
 @router.post("/evidence/bulk-confirm")
@@ -441,6 +455,7 @@ async def list_exception_inbox(
     current_user: CurrentUser,
     status_filter: Optional[str] = Query(None, alias="status"),
     entity_type: Optional[str] = Query(None, description="Filter by source entity_type"),
+    signal_type: Optional[str] = Query(None, description="Filter by EvidenceSignalType value"),
 ):
     """Proposed + needs_review evidence inbox."""
     tenant_id = _tenant_id_for(current_user)
@@ -461,6 +476,13 @@ async def list_exception_inbox(
     ]
     if entity_type:
         filters.append(ComplianceEvidenceLink.entity_type == entity_type)
+    if signal_type:
+        normalized = signal_type.strip().lower()
+        try:
+            EvidenceSignalType(normalized)
+        except ValueError as exc:
+            raise BadRequestError(f"Invalid signal_type: {signal_type}") from exc
+        filters.append(ComplianceEvidenceLink.signal_type == normalized)
 
     result = await db.execute(
         select(ComplianceEvidenceLink).where(*filters).order_by(ComplianceEvidenceLink.created_at.desc()).limit(200)
