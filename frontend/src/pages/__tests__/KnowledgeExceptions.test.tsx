@@ -118,7 +118,7 @@ describe('KnowledgeExceptions closed loop', () => {
     )
 
     await waitFor(() => {
-      expect(mockList).toHaveBeenCalledWith({ entityType: 'incident', signalType: undefined })
+      expect(mockList).toHaveBeenCalledWith({ status: undefined, entityType: 'incident', signalType: undefined })
     })
     expect(screen.getByTestId('exceptions-return-to-case')).toBeInTheDocument()
     expect(screen.getByTestId('exceptions-return-to-case-link')).toHaveAttribute(
@@ -172,5 +172,19 @@ describe('KnowledgeExceptions server signal filter honesty', () => {
     await waitFor(() => {
       expect(mockList).toHaveBeenCalled()
     })
+  })
+})
+
+
+describe('exceptions inbox URL sync', () => {
+  it('encodes status + entity_type + signal_type', async () => {
+    const { buildExceptionsInboxSearch } = await import('../exceptionsInboxFilters')
+    expect(
+      buildExceptionsInboxSearch({
+        status: 'needs_review',
+        entityType: 'near_miss',
+        signalType: 'nonconformity',
+      }),
+    ).toBe('status=needs_review&entity_type=near_miss&signal_type=nonconformity')
   })
 })

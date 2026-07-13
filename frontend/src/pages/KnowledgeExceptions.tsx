@@ -20,11 +20,20 @@ import {
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
 import {
+  EXCEPTIONS_ENTITY_TYPE_OPTIONS,
+  EXCEPTIONS_SIGNAL_TYPE_OPTIONS,
+  EXCEPTIONS_STATUS_OPTIONS,
+  buildExceptionsInboxSearch,
   exceptionEntityHref,
+  exceptionsStatusQueryParam,
   isSafeReturnTo,
-  parseEntityTypeFilter,
+  parseExceptionsEntityTypeFilter,
+  parseExceptionsSignalTypeFilter,
+  parseExceptionsStatusFilter,
   type ExceptionsEntityTypeFilter,
-} from '../helpers/knowledgeExceptionsLinks'
+  type ExceptionsSignalTypeFilter,
+  type ExceptionsStatusFilter,
+} from './exceptionsInboxFilters'
 
 export {
   exceptionEntityHref,
@@ -55,28 +64,6 @@ const signalBadge = (signal?: string | null) => {
   return <Badge variant="outline">{signal}</Badge>
 }
 
-/** Known source entity types for the Assessor + document evidence inbox. */
-const ENTITY_TYPE_OPTIONS = [
-  { value: 'all', label: 'All entity types' },
-  { value: 'document', label: 'Document' },
-  { value: 'incident', label: 'Incident' },
-  { value: 'complaint', label: 'Complaint' },
-  { value: 'near_miss', label: 'Near miss' },
-  { value: 'rta', label: 'RTA' },
-  { value: 'audit_finding', label: 'Audit finding' },
-] as const
-
-/** Signal types — filtered server-side via GET /exceptions?signal_type=. */
-const SIGNAL_TYPE_OPTIONS = [
-  { value: 'all', label: 'All signal types' },
-  { value: 'evidence', label: 'Evidence' },
-  { value: 'nonconformity', label: 'Nonconformity' },
-  { value: 'gap', label: 'Gap' },
-  { value: 'opportunity', label: 'Opportunity' },
-] as const
-
-type SignalTypeFilter = (typeof SIGNAL_TYPE_OPTIONS)[number]['value']
-
 const ENTITY_LABELS: Record<string, string> = {
   document: 'Document',
   incident: 'Incident',
@@ -97,37 +84,54 @@ export default function KnowledgeExceptions() {
   const [error, setError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [acting, setActing] = useState(false)
-  const [entityTypeFilter, setEntityTypeFilter] = useState<ExceptionsEntityTypeFilter>(() =>
-    parseEntityTypeFilter(searchParams.get('entity_type')),
+
+  const [statusFilter, setStatusFilter] = useState<ExceptionsStatusFilter>(() =>
+    parseExceptionsStatusFilter(searchParams.get('status')),
   )
-  const [signalTypeFilter, setSignalTypeFilter] = useState<SignalTypeFilter>('all')
+  const [entityTypeFilter, setEntityTypeFilter] = useState<ExceptionsEntityTypeFilter>(() =>
+    parseExceptionsEntityTypeFilter(searchParams.get('entity_type')),
+  )
+  const [signalTypeFilter, setSignalTypeFilter] = useState<ExceptionsSignalTypeFilter>(() =>
+    parseExceptionsSignalTypeFilter(searchParams.get('signal_type')),
+  )
 
   const returnTo = useMemo(() => {
     const raw = searchParams.get('returnTo')
     return isSafeReturnTo(raw) ? raw : null
   }, [searchParams])
 
-  // Hydrate entity_type from deep link / shareable URL.
+  // Hydrate filters from shareable URL.
   useEffect(() => {
-    const fromUrl = parseEntityTypeFilter(searchParams.get('entity_type'))
-    setEntityTypeFilter((prev) => (prev === fromUrl ? prev : fromUrl))
+    const nextStatus = parseExceptionsStatusFilter(searchParams.get('status'))
+    const nextEntity = parseExceptionsEntityTypeFilter(searchParams.get('entity_type'))
+    const nextSignal = parseExceptionsSignalTypeFilter(searchParams.get('signal_type'))
+    setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus))
+    setEntityTypeFilter((prev) => (prev === nextEntity ? prev : nextEntity))
+    setSignalTypeFilter((prev) => (prev === nextSignal ? prev : nextSignal))
   }, [searchParams])
 
-  // Keep entity_type in the URL so refresh / share preserves the filter.
+  // Keep status + entity_type + signal_type in the URL (omit defaults); preserve returnTo.
   useEffect(() => {
+    const desired = buildExceptionsInboxSearch({
+      status: statusFilter,
+      entityType: entityTypeFilter,
+      signalType: signalTypeFilter,
+    })
     const next = new URLSearchParams(searchParams)
-    if (entityTypeFilter === 'all') next.delete('entity_type')
-    else next.set('entity_type', entityTypeFilter)
+    ;['status', 'entity_type', 'signal_type'].forEach((key) => next.delete(key))
+    const desiredParams = new URLSearchParams(desired)
+    desiredParams.forEach((value, key) => next.set(key, value))
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true })
     }
-  }, [entityTypeFilter, searchParams, setSearchParams])
+  }, [statusFilter, entityTypeFilter, signalTypeFilter, searchParams, setSearchParams])
 
   const loadExceptions = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const response = await knowledgeBankApi.listExceptions({
+        status: exceptionsStatusQueryParam(statusFilter),
         entityType: entityTypeFilter === 'all' ? undefined : entityTypeFilter,
         signalType: signalTypeFilter === 'all' ? undefined : signalTypeFilter,
         clauseId: clauseFilter || undefined,
@@ -142,13 +146,13 @@ export default function KnowledgeExceptions() {
     } finally {
       setLoading(false)
     }
-  }, [entityTypeFilter, signalTypeFilter, clauseFilter, standardFilter, operationalFromUrl])
+  }, [statusFilter, entityTypeFilter, signalTypeFilter, clauseFilter, standardFilter, operationalFromUrl])
 
   useEffect(() => {
     void loadExceptions()
   }, [loadExceptions])
 
-  /** Server already filters signal_type; inbox page still capped at 200. */
+  /** Server already filters status/entity/signal; inbox page still capped at 200. */
   const visibleItems = items
 
   const allSelected = useMemo(
@@ -330,7 +334,27 @@ export default function KnowledgeExceptions() {
         </Card>
       ) : null}
 
-      <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-end gap-3 flex-wrap">
+        <div className="space-y-1.5 min-w-[12rem]">
+          <label htmlFor="exceptions-status" className="text-xs font-medium text-muted-foreground">
+            Status
+          </label>
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value as ExceptionsStatusFilter)}
+          >
+            <SelectTrigger id="exceptions-status" aria-label="Filter by status">
+              <SelectValue placeholder="Inbox" />
+            </SelectTrigger>
+            <SelectContent>
+              {EXCEPTIONS_STATUS_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="space-y-1.5 min-w-[12rem]">
           <label htmlFor="exceptions-entity-type" className="text-xs font-medium text-muted-foreground">
             Entity type
@@ -343,7 +367,7 @@ export default function KnowledgeExceptions() {
               <SelectValue placeholder="All entity types" />
             </SelectTrigger>
             <SelectContent>
-              {ENTITY_TYPE_OPTIONS.map((opt) => (
+              {EXCEPTIONS_ENTITY_TYPE_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
                 </SelectItem>
@@ -358,7 +382,7 @@ export default function KnowledgeExceptions() {
           <Select
             value={signalTypeFilter}
             onValueChange={(value) => {
-              setSignalTypeFilter(value as SignalTypeFilter)
+              setSignalTypeFilter(value as ExceptionsSignalTypeFilter)
               setSelectedIds([])
             }}
           >
@@ -366,7 +390,7 @@ export default function KnowledgeExceptions() {
               <SelectValue placeholder="All signal types" />
             </SelectTrigger>
             <SelectContent>
-              {SIGNAL_TYPE_OPTIONS.map((opt) => (
+              {EXCEPTIONS_SIGNAL_TYPE_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
                 </SelectItem>
@@ -376,9 +400,10 @@ export default function KnowledgeExceptions() {
         </div>
         <p className="text-xs text-muted-foreground sm:pb-2" data-testid="exceptions-filter-honesty">
           Showing {visibleItems.length}
+          {statusFilter !== 'inbox' ? ` · status=${statusFilter}` : ''}
           {entityTypeFilter !== 'all' ? ` · entity=${entityTypeFilter}` : ''}
           {signalTypeFilter !== 'all' ? ` · signal=${signalTypeFilter}` : ''}
-          {' '}(server filters; inbox page ≤200 — not a global facet total)
+          {' '}(server filters sync to URL; inbox page ≤200 — not a global facet total)
         </p>
       </div>
 
@@ -392,12 +417,12 @@ export default function KnowledgeExceptions() {
         <EmptyState
           icon={<CheckCircle2 className="w-8 h-8 text-success" />}
           title={
-            entityTypeFilter !== 'all' || signalTypeFilter !== 'all'
+            statusFilter !== 'inbox' || entityTypeFilter !== 'all' || signalTypeFilter !== 'all'
               ? 'No matches for filters'
               : 'Inbox clear'
           }
           description={
-            entityTypeFilter !== 'all' || signalTypeFilter !== 'all'
+            statusFilter !== 'inbox' || entityTypeFilter !== 'all' || signalTypeFilter !== 'all'
               ? 'Server returned no exceptions for these filters on the current inbox page (≤200). This is not a global zero.'
               : 'No proposed or needs-review evidence links at this time.'
           }
