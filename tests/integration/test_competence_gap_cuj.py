@@ -6,11 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.domain.models.competence_gap import CompetenceGapSignalType, CompetenceGapStatus
-from src.domain.models.compliance_evidence import (
-    ComplianceEvidenceLink,
-    EvidenceLinkMethod,
-    EvidenceSignalType,
-)
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceSignalType
 from src.domain.services.competence_gap_service import competence_gap_service
 
 

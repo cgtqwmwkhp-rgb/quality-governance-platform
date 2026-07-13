@@ -6,17 +6,7 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import (
-    CheckConstraint,
-    DateTime,
-    Float,
-    ForeignKey,
-    Index,
-    Integer,
-    String,
-    Text,
-    UniqueConstraint,
-)
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import Base, CaseInsensitiveEnum, TimestampMixin
