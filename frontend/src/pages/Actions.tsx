@@ -51,6 +51,7 @@ import {
   notificationsApi,
 } from '../api/client'
 import { decodeTokenPayload, getPlatformToken } from '../utils/auth'
+import { toast } from '../contexts/ToastContext'
 
 function startOfDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
@@ -165,6 +166,7 @@ export default function Actions() {
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const [summary, setSummary] = useState<ActionsSummary | null>(null)
   const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
+  const [serverFilterError, setServerFilterError] = useState<string | null>(null)
 
   const currentUserId = useMemo(() => {
     const token = getPlatformToken()
@@ -192,10 +194,25 @@ export default function Actions() {
     owner: apiAction.owner_email || undefined,
   })
 
-  // Fetch actions from API with stable ordering (server returns created_at desc)
+  // Fetch actions from API with stable ordering (server returns created_at desc).
+  // My Work / Overdue are server-scoped via assigned_to=me and overdue=true.
   const loadActions = useCallback(async () => {
     setLoading(true)
     setError(null)
+    setServerFilterError(null)
+
+    if (viewMode === 'my' && currentUserId == null) {
+      const msg = t(
+        'actions.filter.identity_required',
+        'Cannot load My actions — signed-in user id is unavailable.',
+      )
+      setServerFilterError(msg)
+      toast.error(msg)
+      setActions([])
+      setLoading(false)
+      return
+    }
+
     try {
       const response = await actionsApi.list(
         1,
@@ -205,17 +222,33 @@ export default function Actions() {
         sourceTypeFilter !== 'all' && Number.isFinite(sourceIdFilter) && sourceIdFilter > 0
           ? sourceIdFilter
           : undefined,
+        {
+          assigned_to: viewMode === 'my' ? 'me' : undefined,
+          overdue: viewMode === 'overdue' ? true : undefined,
+        },
       )
       const transformedActions = (response.data.items ?? []).map(transformAction)
       setActions(transformedActions)
     } catch (err) {
       console.error('Failed to load actions:', err)
-      setError(classifyError(err))
+      const classified = classifyError(err)
       setActions([])
+      if (viewMode === 'my' || viewMode === 'overdue') {
+        const msg = t(
+          'actions.filter.server_failed',
+          'Server filter failed — results were not loaded. Try again or switch to All.',
+        )
+        setServerFilterError(msg)
+        toast.error(msg)
+        // Keep page chrome (view-mode toggles + alert) — do not collapse to a silent empty state.
+        setError(null)
+      } else {
+        setError(classified)
+      }
     } finally {
       setLoading(false)
     }
-  }, [sourceIdFilter, sourceTypeFilter])
+  }, [currentUserId, sourceIdFilter, sourceTypeFilter, viewMode])
 
   const loadSummary = useCallback(async () => {
     try {
@@ -351,6 +384,7 @@ export default function Actions() {
   }
 
   const deferredSearch = useDeferredValue(searchTerm)
+  // Search + status remain client-side; My/Overdue are applied server-side in loadActions.
   const filteredActions = actions.filter((action) => {
     if (
       deferredSearch &&
@@ -363,14 +397,6 @@ export default function Actions() {
     }
     if (filterStatus !== 'all' && action.display_status !== filterStatus) {
       return false
-    }
-    if (viewMode === 'overdue' && !isOverdue(action.due_date, action.display_status)) {
-      return false
-    }
-    if (viewMode === 'my' && currentUserId != null) {
-      if (action.owner_id !== currentUserId) {
-        return false
-      }
     }
     return true
   })
@@ -530,11 +556,12 @@ export default function Actions() {
           />
         </div>
 
-        <div className="flex bg-surface rounded-xl p-1 border border-border">
+        <div className="flex bg-surface rounded-xl p-1 border border-border" data-testid="actions-view-mode">
           {(['all', 'my', 'overdue'] as ViewMode[]).map((mode) => (
             <button
               key={mode}
               type="button"
+              data-testid={`actions-view-${mode}`}
               onClick={() => setViewMode(mode)}
               className={cn(
                 'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
@@ -600,6 +627,38 @@ export default function Actions() {
           </SelectContent>
         </Select>
       </div>
+
+      {viewMode === 'my' || viewMode === 'overdue' ? (
+        <div
+          className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+          data-testid="actions-server-filter-label"
+          role="status"
+        >
+          <Info className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            {viewMode === 'my'
+              ? t(
+                  'actions.filter.server_my',
+                  'Showing actions assigned to you (server filter: assigned_to=me).',
+                )
+              : t(
+                  'actions.filter.server_overdue',
+                  'Showing overdue open actions (server filter: overdue=true).',
+                )}
+          </span>
+        </div>
+      ) : null}
+
+      {serverFilterError ? (
+        <div
+          className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+          data-testid="actions-filter-error"
+          role="alert"
+        >
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{serverFilterError}</span>
+        </div>
+      ) : null}
 
       {sourceTypeFilter === 'audit_finding' ? (
         <Card className="border-info/30 bg-info/5">
