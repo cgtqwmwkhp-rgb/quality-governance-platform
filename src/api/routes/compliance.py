@@ -23,11 +23,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.domain.exceptions import BadRequestError, NotFoundError
-from src.domain.models.compliance_evidence import (
-    ComplianceEvidenceLink,
-    EvidenceLinkMethod,
-    EvidenceLinkStatus,
-)
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
 from src.domain.models.ims_unification import IMSRequirement
 from src.domain.models.standard import Clause, Standard
 from src.domain.models.user import User
