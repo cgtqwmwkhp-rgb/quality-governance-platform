@@ -1,15 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import ComplaintDetail from '../ComplaintDetail'
 
 const mockNavigate = vi.fn()
+const mockToastError = vi.fn()
+const mockToastSuccess = vi.fn()
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, fallbackOrOptions?: string | Record<string, unknown>) =>
-      typeof fallbackOrOptions === 'string' ? fallbackOrOptions : key,
+    t: (key: string, fallbackOrOptions?: string | Record<string, unknown>) => {
+      if (typeof fallbackOrOptions === 'string') return fallbackOrOptions
+      if (fallbackOrOptions && typeof fallbackOrOptions === 'object' && 'defaultValue' in fallbackOrOptions) {
+        return String(fallbackOrOptions.defaultValue)
+      }
+      return key
+    },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
@@ -22,6 +30,13 @@ vi.mock('react-router-dom', async () => {
     useParams: () => ({ id: '15' }),
   }
 })
+
+vi.mock('../../contexts/ToastContext', () => ({
+  toast: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+  },
+}))
 
 vi.mock('../../utils/errorTracker', () => ({
   trackError: vi.fn(),
@@ -102,6 +117,8 @@ describe('ComplaintDetail', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     mockNavigate.mockReset()
+    mockToastError.mockReset()
+    mockToastSuccess.mockReset()
     client = await import('../../api/client')
     client.complaintsApi.get.mockResolvedValue({ data: complaintRecord })
     client.complaintsApi.listInvestigations.mockResolvedValue({
@@ -126,5 +143,83 @@ describe('ComplaintDetail', () => {
     expect(screen.getAllByText('Block A').length).toBeGreaterThan(0)
     expect(screen.getAllByText('1 uploaded').length).toBeGreaterThan(0)
     expect(screen.getAllByText('INV-25').length).toBeGreaterThan(0)
+  })
+
+  it('shows toast when save edit fails', async () => {
+    client.complaintsApi.update.mockRejectedValue(new Error('Invalid status transition'))
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Late repairs response' })).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'edit' }))
+    await userEvent.click(screen.getByTestId('complaint-save-edit'))
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith('Invalid status transition')
+    })
+  })
+
+  it('investigation modal only collects title (API contract honest)', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('complaint-start-investigation')).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByTestId('complaint-start-investigation'))
+
+    expect(screen.getByTestId('complaint-investigation-modal')).toBeInTheDocument()
+    expect(screen.getByTestId('complaint-investigation-title')).toBeInTheDocument()
+    expect(screen.queryByText(/investigation type/i)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('user-email-search')).not.toBeInTheDocument()
+  })
+
+  it('stays on complaint detail after investigation create and reloads list', async () => {
+    client.investigationsApi.createFromRecord.mockResolvedValue({
+      data: { id: 26, reference_number: 'INV-26', title: 'New investigation' },
+    })
+    client.complaintsApi.listInvestigations
+      .mockResolvedValueOnce({ data: { items: [], total: 0 } })
+      .mockResolvedValueOnce({
+        data: { items: [{ id: 26, reference_number: 'INV-26', title: 'New investigation' }], total: 1 },
+      })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('complaint-start-investigation')).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByTestId('complaint-start-investigation'))
+    await userEvent.type(screen.getByTestId('complaint-investigation-title'), 'Root cause review')
+    await userEvent.click(screen.getByRole('button', { name: 'complaints.detail.create_investigation' }))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.createFromRecord).toHaveBeenCalledWith({
+        source_type: 'complaint',
+        source_id: 15,
+        title: 'Root cause review',
+      })
+    })
+
+    expect(mockNavigate).not.toHaveBeenCalledWith('/investigations')
+    expect(mockToastSuccess).toHaveBeenCalled()
+    await waitFor(() => {
+      expect(client.complaintsApi.listInvestigations).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('shows honest key dates card instead of activity timeline label', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('complaint-key-dates')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('Key dates')).toBeInTheDocument()
+    expect(screen.getByText(/Running Sheet tab/i)).toBeInTheDocument()
+    expect(screen.queryByText('complaints.detail.activity_timeline')).not.toBeInTheDocument()
   })
 })

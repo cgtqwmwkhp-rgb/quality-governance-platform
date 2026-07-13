@@ -19,6 +19,17 @@ describe('createActionsApi', () => {
     )
   })
 
+  it('list appends assigned_to and overdue scope params', () => {
+    const api = mockApi()
+    createActionsApi(api as never).list(1, 50, undefined, undefined, undefined, {
+      assigned_to: 'me',
+      overdue: true,
+    })
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/v1/actions/?page=1&page_size=50&assigned_to=me&overdue=true',
+    )
+  })
+
   it('summary and create hit collection paths', () => {
     const api = mockApi()
     const actions = createActionsApi(api as never)

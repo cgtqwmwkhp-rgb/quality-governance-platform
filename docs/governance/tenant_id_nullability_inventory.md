@@ -40,6 +40,7 @@ This phase lands:
 | `investigation_runs` | **Done (incremental)** | Fail-safe backfill from `investigation_templates` + conditional `NOT NULL` (`20260710_ir_tenant_nn`). ORM `nullable=False`. See `docs/data/investigation-runs-tenant-backfill.md`. |
 | `investigation_customer_packs` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_pack_nn`). ORM `nullable=False`. See `docs/data/investigation-customer-packs-tenant-backfill.md`. |
 | `road_traffic_collisions` | Done (fail-safe) | Parent core TEN2 — creator/reporter backfill; NOT NULL only when residual NULLs=0. |
+| `near_misses` | **Done (incremental)** | Fail-safe backfill from `users` via `created_by_id` + conditional `NOT NULL` (`20260713_nm_tenant_nn`). ORM `nullable=False`. See `docs/data/near-misses-tenant-backfill.md`. |
 | `risk_assessments` | Done (fail-safe) | Child of `risks` via `risk_id`; NOT NULL only when residual NULLs=0. |
 | `risks_v2` | Done (fail-safe) | Parent core TEN2 — creator/owner backfill; NOT NULL only when residual NULLs=0. |
 | `bow_tie_elements` | Done (fail-safe) | Child of `risks_v2` via `risk_id`; NOT NULL only when residual NULLs=0. |
@@ -82,6 +83,7 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `external_audit_import_jobs` | `ExternalAuditImportJob` |
 | `incident_actions` | `IncidentAction` |
 | `incidents` | `Incident` |
+| `near_misses` | `NearMiss` |
 | `investigation_comments` | `InvestigationComment` |
 | `investigation_customer_packs` | `InvestigationCustomerPack` |
 | `investigation_revision_events` | `InvestigationRevisionEvent` |
