@@ -248,7 +248,7 @@ export default function Actions() {
     } finally {
       setLoading(false)
     }
-  }, [currentUserId, sourceIdFilter, sourceTypeFilter, viewMode])
+  }, [currentUserId, sourceIdFilter, sourceTypeFilter, viewMode, t])
 
   const loadSummary = useCallback(async () => {
     try {
