@@ -62,6 +62,7 @@ import {
 } from '../components/ui'
 import { cn } from '../helpers/utils'
 import { getImportReviewPath } from '../components/audit-import/importReviewHelpers'
+import { toast } from '../contexts/ToastContext'
 
 /**
  * Maps entity_type values (as stored in ComplianceEvidenceLink) to valid SPA routes.
@@ -92,7 +93,30 @@ const getEntityRoute = (entityType: string, entityId?: string): string => {
     return `/audits?view=findings&findingId=${encodeURIComponent(entityId)}`
   }
   if (entityType === 'audit_finding') return '/audits?view=findings'
+  if (entityType === 'audit' && entityId) {
+    return `/audits?runId=${encodeURIComponent(entityId)}`
+  }
+  if (entityType === 'action' && entityId) {
+    return `/actions?sourceId=${encodeURIComponent(entityId)}`
+  }
+  if (entityType === 'incident' && entityId) {
+    return `/incidents?id=${encodeURIComponent(entityId)}`
+  }
+  if (entityType === 'risk' && entityId) {
+    return `/risk-register?id=${encodeURIComponent(entityId)}`
+  }
   return ENTITY_TYPE_ROUTE[entityType] ?? `/${entityType}s`
+}
+
+/** Surface operator-visible failures (banner + toast). Never silent. */
+const reportFailure = (
+  err: unknown,
+  setError: (message: string | null) => void,
+): string => {
+  const message = getApiErrorMessage(err)
+  setError(message)
+  toast.error(message)
+  return message
 }
 
 const evidenceTypeConfig: Record<
@@ -220,6 +244,8 @@ export default function ComplianceEvidence() {
   const [loadingMappings, setLoadingMappings] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [partialLoadWarning, setPartialLoadWarning] = useState<string | null>(null)
+  const [failedSources, setFailedSources] = useState<string[]>([])
+  const [mappingsUnavailable, setMappingsUnavailable] = useState(false)
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [deletingLinkId, setDeletingLinkId] = useState<number | null>(null)
   // Ref to avoid selectedClauseId as a loadData dependency (prevents double-fetch
@@ -270,6 +296,7 @@ export default function ComplianceEvidence() {
       setLoading(true)
       setError(null)
       setPartialLoadWarning(null)
+      setFailedSources([])
       try {
         const standardFilter = selectedStandard === 'all' ? undefined : selectedStandard
         const labels = ['standards', 'clauses', 'coverage', 'report', 'evidence links'] as const
@@ -284,9 +311,10 @@ export default function ComplianceEvidence() {
         if (cancelled) return
 
         const failed = labels.filter((_, i) => settled[i].status === 'rejected')
+        setFailedSources(failed)
         if (failed.length === labels.length) {
           const first = settled.find((s) => s.status === 'rejected') as PromiseRejectedResult
-          setError(getApiErrorMessage(first.reason))
+          reportFailure(first.reason, setError)
           setStandards([])
           setClauses([])
           setCoverage(null)
@@ -294,9 +322,9 @@ export default function ComplianceEvidence() {
           setEvidenceLinks([])
         } else {
           if (failed.length > 0) {
-            setPartialLoadWarning(
-              `Some data could not be loaded: ${failed.join(', ')}. Showing what is available.`,
-            )
+            const warning = `Some data could not be loaded: ${failed.join(', ')}. Showing what is available.`
+            setPartialLoadWarning(warning)
+            toast.warning(warning)
           }
           const [sr, cr, cov, rep, ev] = settled
           setStandards(sr.status === 'fulfilled' ? sr.value.data : [])
@@ -324,7 +352,8 @@ export default function ComplianceEvidence() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(getApiErrorMessage(err))
+          reportFailure(err, setError)
+          setFailedSources(['standards', 'clauses', 'coverage', 'report', 'evidence links'])
         }
       } finally {
         if (!cancelled) {
@@ -356,7 +385,11 @@ export default function ComplianceEvidence() {
           setImportedTotal(res.data.total)
         }
       } catch (err) {
-        if (!cancelled) setError(getApiErrorMessage(err))
+        if (!cancelled) {
+          setImportedRecords([])
+          setImportedTotal(0)
+          reportFailure(err, setError)
+        }
       } finally {
         if (!cancelled) setLoadingImported(false)
       }
@@ -376,10 +409,12 @@ export default function ComplianceEvidence() {
     const loadMappings = async () => {
       if (!selectedClause) {
         setMappings([])
+        setMappingsUnavailable(false)
         return
       }
 
       setLoadingMappings(true)
+      setMappingsUnavailable(false)
       try {
         const response = await crossStandardMappingsApi.list({
           clause: selectedClause.clause_number,
@@ -388,10 +423,15 @@ export default function ComplianceEvidence() {
         })
         if (!cancelled) {
           setMappings(response.data)
+          setMappingsUnavailable(false)
         }
-      } catch {
+      } catch (err) {
         if (!cancelled) {
           setMappings([])
+          setMappingsUnavailable(true)
+          toast.error(
+            `Cross-standard mappings unavailable: ${getApiErrorMessage(err)}`,
+          )
         }
       } finally {
         if (!cancelled) {
@@ -481,7 +521,7 @@ export default function ComplianceEvidence() {
       setAutoTagResults(clauses.filter((clause) => taggedClauseIds.includes(clause.id)))
     } catch (err) {
       setAutoTagResults([])
-      setError(getApiErrorMessage(err))
+      reportFailure(err, setError)
     } finally {
       setAutoTagging(false)
     }
@@ -501,7 +541,7 @@ export default function ComplianceEvidence() {
     } catch (err) {
       setAutoTagResults([])
       setDeepAnalysisResult(null)
-      setError(getApiErrorMessage(err))
+      reportFailure(err, setError)
     } finally {
       setDeepAnalyzing(false)
     }
@@ -514,7 +554,7 @@ export default function ComplianceEvidence() {
       setSoaData(response.data)
       setShowSoA(true)
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      reportFailure(err, setError)
     } finally {
       setLoadingSoA(false)
     }
@@ -540,8 +580,9 @@ export default function ComplianceEvidence() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      toast.success('Audit pack downloaded')
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      reportFailure(err, setError)
     }
   }
 
@@ -550,8 +591,9 @@ export default function ComplianceEvidence() {
     try {
       await complianceApi.deleteEvidenceLink(linkId)
       setEvidenceLinks((prev) => prev.filter((e) => e.id !== linkId))
+      toast.success('Evidence link removed')
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      reportFailure(err, setError)
     } finally {
       setDeletingLinkId(null)
     }
@@ -574,14 +616,19 @@ export default function ComplianceEvidence() {
       setLinkingClause(null)
       setLinkEntityId('')
       setLinkTitle('')
+      toast.success('Evidence linked to clause')
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      reportFailure(err, setError)
     } finally {
       setPersistingLink(false)
     }
   }
 
-  const getCoverageStatus = (clauseId: string): 'full' | 'partial' | 'none' => {
+  const coverageUnavailable = failedSources.includes('coverage')
+  const reportUnavailable = failedSources.includes('report')
+
+  const getCoverageStatus = (clauseId: string): 'full' | 'partial' | 'none' | 'unavailable' => {
+    if (reportUnavailable || !report) return 'unavailable'
     const clauseDetail = clauseDetailsById.get(clauseId)
     if (clauseDetail?.status === 'full') return 'full'
     if (clauseDetail?.status === 'partial') return 'partial'
@@ -654,7 +701,9 @@ export default function ComplianceEvidence() {
                       ? 'bg-success'
                       : coverageStatus === 'partial'
                         ? 'bg-warning'
-                        : 'bg-destructive',
+                        : coverageStatus === 'unavailable'
+                          ? 'bg-muted-foreground'
+                          : 'bg-destructive',
                   )}
                 />
 
@@ -693,6 +742,32 @@ export default function ComplianceEvidence() {
           <p className="text-muted-foreground mt-1">
             Live repository for compliance evidence, clause coverage, and cross-standard mappings
           </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="compliance-evidence-hub-links">
+            {!loading && failedSources.length === 0 && !error && (
+              <Badge variant="secondary" data-testid="compliance-live-badge">
+                Live data
+              </Badge>
+            )}
+            {!loading && failedSources.length > 0 && (
+              <Badge variant="outline" data-testid="compliance-partial-badge">
+                Partial data — some sources unavailable
+              </Badge>
+            )}
+            <Link
+              to="/ims"
+              className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+              data-testid="compliance-link-ims"
+            >
+              Open IMS Overview <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+            </Link>
+            <Link
+              to="/audits?view=findings"
+              className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+              data-testid="compliance-link-audits"
+            >
+              Open Audit Findings <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+            </Link>
+          </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <Button onClick={() => setShowAutoTagger(true)}>
@@ -749,8 +824,18 @@ export default function ComplianceEvidence() {
             <Card key={i}><CardContent className="p-6"><TableSkeleton rows={3} columns={1} /></CardContent></Card>
           ))}
         </div>
+      ) : standards.length === 0 ? (
+        <EmptyState
+          icon={<Target className="w-8 h-8 text-muted-foreground" />}
+          title="No standards available"
+          description={
+            error
+              ? 'Compliance standards could not be loaded. Retry after resolving the error above.'
+              : 'No compliance standards were returned for this tenant.'
+          }
+        />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="compliance-score-cards">
           {standards.map((standard) => {
             const stats = complianceStats[standard.id] ?? {
               total: standard.clause_count,
@@ -761,8 +846,8 @@ export default function ComplianceEvidence() {
             const percentage = Math.round(
               stats.total > 0 ? ((stats.covered + stats.partial * 0.5) / stats.total) * 100 : 0,
             )
-            // Use coverage_percentage from backend when this standard is selected for accuracy
             const Icon = standardIcons[standard.id]
+            const scoreUnavailable = coverageUnavailable
 
             return (
               <div
@@ -798,25 +883,51 @@ export default function ComplianceEvidence() {
                           : standard.has_canonical_standard
                             ? ' • live canonical'
                             : ' • fallback'}
+                        {scoreUnavailable ? ' • coverage unavailable' : ''}
                       </p>
                     </div>
                   </div>
-                  <div className={standardPercentageClass[standard.id] ?? 'text-2xl font-bold text-primary'} aria-label={`${percentage}% compliance`}>
-                    {percentage}%
+                  <div
+                    className={
+                      scoreUnavailable
+                        ? 'text-lg font-bold text-muted-foreground'
+                        : standardPercentageClass[standard.id] ?? 'text-2xl font-bold text-primary'
+                    }
+                    aria-label={
+                      scoreUnavailable
+                        ? 'Coverage unavailable'
+                        : `${percentage}% compliance`
+                    }
+                    data-testid={`compliance-score-${standard.id}`}
+                  >
+                    {scoreUnavailable ? '—' : `${percentage}%`}
                   </div>
                 </div>
 
-                <div className="w-full bg-surface rounded-full h-2 mb-3" role="progressbar" aria-valuenow={percentage} aria-valuemin={0} aria-valuemax={100}>
+                <div
+                  className="w-full bg-surface rounded-full h-2 mb-3"
+                  role="progressbar"
+                  aria-valuenow={scoreUnavailable ? 0 : percentage}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={scoreUnavailable ? 'Coverage unavailable' : undefined}
+                >
                   <div
                     className={standardProgressClass[standard.id] ?? 'h-2 rounded-full bg-primary'}
-                    style={{ width: `${percentage}%` }}
+                    style={{ width: scoreUnavailable ? '0%' : `${percentage}%` }}
                   />
                 </div>
 
                 <div className="flex justify-between text-xs">
-                  <span className="text-success">{stats.covered} Full</span>
-                  <span className="text-warning">{stats.partial} Partial</span>
-                  <span className="text-destructive">{stats.gaps} Gaps</span>
+                  {scoreUnavailable ? (
+                    <span className="text-muted-foreground">Coverage metrics unavailable</span>
+                  ) : (
+                    <>
+                      <span className="text-success">{stats.covered} Full</span>
+                      <span className="text-warning">{stats.partial} Partial</span>
+                      <span className="text-destructive">{stats.gaps} Gaps</span>
+                    </>
+                  )}
                 </div>
               </div>
             )
@@ -1106,7 +1217,13 @@ export default function ComplianceEvidence() {
                 </h2>
                 {loading ? (
                   <TableSkeleton rows={6} columns={1} />
-                ) : (coverage?.gap_clauses ?? []).filter(
+                ) : coverageUnavailable || coverage == null ? (
+                  <EmptyState
+                    icon={<AlertTriangle className="w-8 h-8 text-warning" />}
+                    title="Coverage unavailable"
+                    description="Gap analysis could not be loaded from the live coverage API. Retry or check connectivity — do not treat this as zero gaps."
+                  />
+                ) : (coverage.gap_clauses ?? []).filter(
                     (c) => selectedStandard === 'all' || c.standard === selectedStandard,
                   ).length === 0 ? (
                   <EmptyState
@@ -1116,7 +1233,7 @@ export default function ComplianceEvidence() {
                   />
                 ) : (
                   <div className="space-y-3">
-                    {(coverage?.gap_clauses ?? [])
+                    {(coverage.gap_clauses ?? [])
                       .filter((c) => selectedStandard === 'all' || c.standard === selectedStandard)
                       .map((clause) => {
                         const Icon = standardIcons[clause.standard]
@@ -1204,13 +1321,17 @@ export default function ComplianceEvidence() {
                   {/* Keywords */}
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">Keywords</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedClause.keywords.map((keyword, i) => (
-                        <Badge key={i} variant="outline">
-                          {keyword}
-                        </Badge>
-                      ))}
-                    </div>
+                    {selectedClause.keywords.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No keywords recorded for this clause.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {selectedClause.keywords.map((keyword, i) => (
+                          <Badge key={i} variant="outline">
+                            {keyword}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Coverage Status */}
@@ -1227,13 +1348,18 @@ export default function ComplianceEvidence() {
                               ? 'bg-success/10 border border-success/30'
                               : status === 'partial'
                                 ? 'bg-warning/10 border border-warning/30'
-                                : 'bg-destructive/10 border border-destructive/30',
+                                : status === 'unavailable'
+                                  ? 'bg-muted/40 border border-border'
+                                  : 'bg-destructive/10 border border-destructive/30',
                           )}
+                          data-testid="clause-coverage-status"
                         >
                           {status === 'full' ? (
                             <CheckCircle2 className="w-5 h-5 text-success" aria-hidden="true" />
                           ) : status === 'partial' ? (
                             <Clock className="w-5 h-5 text-warning" aria-hidden="true" />
+                          ) : status === 'unavailable' ? (
+                            <AlertTriangle className="w-5 h-5 text-warning" aria-hidden="true" />
                           ) : (
                             <XCircle className="w-5 h-5 text-destructive" aria-hidden="true" />
                           )}
@@ -1245,17 +1371,23 @@ export default function ComplianceEvidence() {
                                   ? 'text-success'
                                   : status === 'partial'
                                     ? 'text-warning'
-                                    : 'text-destructive',
+                                    : status === 'unavailable'
+                                      ? 'text-muted-foreground'
+                                      : 'text-destructive',
                               )}
                             >
                               {status === 'full'
                                 ? 'Fully Covered'
                                 : status === 'partial'
                                   ? 'Partially Covered'
-                                  : 'No Evidence'}
+                                  : status === 'unavailable'
+                                    ? 'Coverage unavailable'
+                                    : 'No Evidence'}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {evidence.length} evidence item(s) linked
+                              {status === 'unavailable'
+                                ? 'Live report could not be loaded — status unknown'
+                                : `${evidence.length} evidence item(s) linked`}
                             </p>
                           </div>
                         </div>
@@ -1272,15 +1404,49 @@ export default function ComplianceEvidence() {
                       <p className="text-xs text-muted-foreground">
                         {selectedClauseProvenance.riskLinks} risk link(s)
                       </p>
+                      <div className="mt-2 flex flex-col gap-1">
+                        <Link
+                          to={`/actions?clause=${encodeURIComponent(selectedClause.clause_number)}`}
+                          className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                          data-testid="clause-link-actions"
+                        >
+                          Open Actions <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+                        </Link>
+                        <Link
+                          to={`/risk-register?clause=${encodeURIComponent(selectedClause.clause_number)}`}
+                          className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                          data-testid="clause-link-risks"
+                        >
+                          Open Risk Register <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+                        </Link>
+                      </div>
                     </div>
                     <div className="rounded-lg bg-surface border border-border p-3">
                       <p className="text-xs text-muted-foreground">Framework Reach</p>
                       <p className="mt-1 text-sm text-foreground font-medium">
-                        {selectedClauseProvenance.mappedFrameworks} mapped framework link(s)
+                        {mappingsUnavailable
+                          ? 'Mappings unavailable'
+                          : `${selectedClauseProvenance.mappedFrameworks} mapped framework link(s)`}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {selectedClauseProvenance.auditLinks} audit evidence item(s)
                       </p>
+                      <div className="mt-2 flex flex-col gap-1">
+                        <Link
+                          to={`/audits?view=findings&clause=${encodeURIComponent(selectedClause.clause_number)}`}
+                          className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                          data-testid="clause-link-audits"
+                        >
+                          Open related Audits <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+                        </Link>
+                        <Link
+                          to={`/ims?standard=${encodeURIComponent(selectedClause.standard)}&clause=${encodeURIComponent(selectedClause.clause_number)}`}
+                          className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                          data-testid="clause-link-ims"
+                        >
+                          Open IMS Overview <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+                        </Link>
+                      </div>
                     </div>
                   </div>
 
@@ -1378,6 +1544,17 @@ export default function ComplianceEvidence() {
                             )}
                           </div>
                         ))}
+                      </div>
+                    ) : mappingsUnavailable ? (
+                      <div
+                        className="p-4 bg-warning/10 rounded-lg border border-warning/30 text-center"
+                        data-testid="mappings-unavailable"
+                        role="status"
+                      >
+                        <p className="text-sm text-warning font-medium">Mappings unavailable</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Cross-standard mappings could not be loaded. This is not the same as having zero mappings.
+                        </p>
                       </div>
                     ) : (
                       <div className="p-4 bg-surface/50 rounded-lg border border-border text-center">
