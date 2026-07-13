@@ -212,16 +212,16 @@ class RegulatoryWatchActionsService:
                 capa = await db.get(CAPAAction, impact.action_id)
                 if capa is not None and capa.tenant_id == tenant_id and capa.status != CAPAStatus.CLOSED:
                     capa.status = CAPAStatus.CLOSED
-                    capa.completed_at = now
-                    capa.verified_at = now
-                    capa.verified_by_id = resolved_by_id
+                    capa.completed_at = now  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE SQLAlchemy Column
+                    capa.verified_at = now  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE SQLAlchemy Column
+                    capa.verified_by_id = resolved_by_id  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE SQLAlchemy Column
                     if resolution_notes:
-                        capa.verification_result = resolution_notes
-                        capa.proposed_action = capa.proposed_action or resolution_notes
+                        capa.verification_result = resolution_notes  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE SQLAlchemy Column
+                        capa.proposed_action = capa.proposed_action or resolution_notes  # type: ignore[assignment]
 
-        impact.resolved_at = now
-        impact.resolved_by_id = resolved_by_id
-        impact.resolution_notes = resolution_notes
+        impact.resolved_at = now  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE SQLAlchemy Column
+        impact.resolved_by_id = resolved_by_id  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE SQLAlchemy Column
+        impact.resolution_notes = resolution_notes  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE SQLAlchemy Column
 
         db.add(
             AiDecisionLog(
