@@ -531,8 +531,7 @@ class GovernedKnowledgeService:
             if assessment_statement and signal != EvidenceSignalType.EVIDENCE:
                 # Re-frame auditor language for operational signals.
                 assessment_statement = (
-                    f"[{signal.value.upper()}] Assessment of {entity_type} {entity_id}: "
-                    f"{assessment_statement}"
+                    f"[{signal.value.upper()}] Assessment of {entity_type} {entity_id}: " f"{assessment_statement}"
                 )
         except Exception:
             logger.exception(

@@ -285,9 +285,7 @@ async def _load_operational_entity_text(
         from src.domain.models.audit import AuditFinding
 
         row = (
-            await db.execute(
-                select(AuditFinding).where(AuditFinding.id == eid, AuditFinding.tenant_id == tenant_id)
-            )
+            await db.execute(select(AuditFinding).where(AuditFinding.id == eid, AuditFinding.tenant_id == tenant_id))
         ).scalar_one_or_none()
         if not row:
             raise NotFoundError("Audit finding not found")
@@ -437,10 +435,7 @@ async def list_exception_inbox(
         filters.append(ComplianceEvidenceLink.entity_type == entity_type)
 
     result = await db.execute(
-        select(ComplianceEvidenceLink)
-        .where(*filters)
-        .order_by(ComplianceEvidenceLink.created_at.desc())
-        .limit(200)
+        select(ComplianceEvidenceLink).where(*filters).order_by(ComplianceEvidenceLink.created_at.desc()).limit(200)
     )
     links = [link for link in result.scalars().all() if link.effective_status in statuses]
     return [_serialize_evidence_link(link) for link in links]

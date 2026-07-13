@@ -21,7 +21,8 @@ import {
   Save,
   X,
   ExternalLink,
-} from 'lucide-react'import {
+} from 'lucide-react'
+import {
   incidentsApi,
   Incident,
   IncidentUpdate,

@@ -69,10 +69,7 @@ class TestClassifyOperationalSignal:
         from src.domain.services.governed_knowledge_service import classify_operational_signal
         from src.domain.models.compliance_evidence import EvidenceSignalType
 
-        assert (
-            classify_operational_signal("incident")
-            == EvidenceSignalType.NONCONFORMITY
-        )
+        assert classify_operational_signal("incident") == EvidenceSignalType.NONCONFORMITY
 
     def test_near_miss_defaults_to_gap(self) -> None:
         from src.domain.services.governed_knowledge_service import classify_operational_signal
@@ -85,8 +82,7 @@ class TestClassifyOperationalSignal:
         from src.domain.models.compliance_evidence import EvidenceSignalType
 
         assert (
-            classify_operational_signal("audit_finding", finding_type="opportunity")
-            == EvidenceSignalType.OPPORTUNITY
+            classify_operational_signal("audit_finding", finding_type="opportunity") == EvidenceSignalType.OPPORTUNITY
         )
 
 
@@ -116,11 +112,7 @@ class TestAssessOperationalEntity:
                 new_callable=AsyncMock,
                 return_value={
                     "clause_matches": [],
-                    "stages": {
-                        "stage_5_conformance": {
-                            "conformance_statement": "Control of work was not evidenced."
-                        }
-                    },
+                    "stages": {"stage_5_conformance": {"conformance_statement": "Control of work was not evidenced."}},
                 },
             ),
         ):
