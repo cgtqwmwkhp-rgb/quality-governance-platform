@@ -618,3 +618,57 @@ describe('Audits findings CUJ deep-links', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/audits?view=findings')
   })
 })
+
+describe('Audits customer assurance filter (IA-W3)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams('source=customer')
+    mockListRuns.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 10,
+            reference_number: 'AUD-00010',
+            template_id: 11,
+            template_version: 1,
+            title: 'Customer Site Audit',
+            status: 'pending_review',
+            source_origin: 'customer',
+            assurance_scheme: 'Customer Audit',
+            is_external_audit_import: true,
+            created_at: '2026-07-12T10:00:00Z',
+          },
+          {
+            id: 11,
+            reference_number: 'AUD-00011',
+            template_id: 21,
+            template_version: 3,
+            title: 'Internal Safety Audit',
+            status: 'scheduled',
+            source_origin: 'internal',
+            created_at: '2026-07-12T11:00:00Z',
+          },
+        ],
+        total: 2,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+    mockListFindings.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+  })
+
+  it('shows customer assurance chrome and filters audit runs', async () => {
+    render(<Audits />)
+
+    expect(await screen.findByText('Customer & External Audits')).toBeInTheDocument()
+    expect(screen.getByText('Customer Site Audit')).toBeInTheDocument()
+    expect(screen.queryByText('Internal Safety Audit')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'View all audits' })).toBeInTheDocument()
+  })
+})

@@ -43,6 +43,10 @@ import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ToastContainer, useToast } from '../components/ui/Toast'
 import { cn, decodeHtmlEntities } from '../helpers/utils'
+import {
+  ASSURANCE_SOURCE_CUSTOMER,
+  filterAuditsByAssuranceSource,
+} from '../components/assuranceHubHelpers'
 
 type ViewMode = 'kanban' | 'list' | 'findings'
 type AuditModalMode = 'schedule' | 'import'
@@ -248,6 +252,8 @@ export default function Audits() {
   // Deep-link: ?view=findings&findingId=N navigates to findings tab and highlights the card
   const urlView = searchParams.get('view') as ViewMode | null
   const urlFindingId = searchParams.get('findingId')
+  const urlAssuranceSource = searchParams.get('source')
+  const customerAssuranceView = urlAssuranceSource === ASSURANCE_SOURCE_CUSTOMER
   const [viewMode, setViewMode] = useState<ViewMode>(
     urlView === 'findings' || urlView === 'list' || urlView === 'kanban' ? urlView : 'kanban',
   )
@@ -267,6 +273,17 @@ export default function Audits() {
   const [reportFile, setReportFile] = useState<File | null>(null)
   const [isoSchemePreset, setIsoSchemePreset] = useState('')
   const { toasts, dismiss: dismissToast } = useToast()
+
+  const scopedAudits = useMemo(
+    () => filterAuditsByAssuranceSource(audits, urlAssuranceSource),
+    [audits, urlAssuranceSource],
+  )
+
+  const scopedFindings = useMemo(() => {
+    if (!customerAssuranceView) return findings
+    const scopedIds = new Set(scopedAudits.map((audit) => audit.id))
+    return findings.filter((finding) => scopedIds.has(finding.run_id))
+  }, [findings, scopedAudits, customerAssuranceView])
 
   const loadData = async () => {
     setLoadError(null)
@@ -303,7 +320,7 @@ export default function Audits() {
   useEffect(() => {
     if (!urlFindingId || loading) return
     setViewMode('findings')
-    const findingExists = findings.some((finding) => String(finding.id) === String(urlFindingId))
+    const findingExists = scopedFindings.some((finding) => String(finding.id) === String(urlFindingId))
     if (!findingExists) return
 
     // requestAnimationFrame defers scroll until the findings list has painted
@@ -314,7 +331,7 @@ export default function Audits() {
       }
     })
     return () => cancelAnimationFrame(handle)
-  }, [urlFindingId, loading, findings])
+  }, [urlFindingId, loading, scopedFindings])
 
   useEffect(() => {
     if (formData.external_audit_type !== 'iso') {
@@ -605,9 +622,9 @@ export default function Audits() {
   }
 
   const filteredAudits = useMemo(() => {
-    if (!searchTerm.trim()) return audits
+    if (!searchTerm.trim()) return scopedAudits
     const term = searchTerm.toLowerCase()
-    return audits.filter(
+    return scopedAudits.filter(
       (a) =>
         (a.title || '').toLowerCase().includes(term) ||
         (a.reference_number || '').toLowerCase().includes(term) ||
@@ -615,7 +632,7 @@ export default function Audits() {
         (a.assurance_scheme || '').toLowerCase().includes(term) ||
         (a.external_body_name || '').toLowerCase().includes(term),
     )
-  }, [audits, searchTerm])
+  }, [scopedAudits, searchTerm])
 
   const getAuditsByStatus = (status: string) => {
     return filteredAudits.filter((a) => a.status === status)
@@ -671,11 +688,11 @@ export default function Audits() {
         .filter((a) => a.score_percentage != null)
         .reduce((acc, a) => acc + (a.score_percentage ?? 0), 0) /
       (filteredAudits.filter((a) => a.score_percentage != null).length || 1),
-    openFindings: findings.filter((f) => f.status === 'open').length,
+    openFindings: scopedFindings.filter((f) => f.status === 'open').length,
   }
   const linkedFindingExists =
-    !urlFindingId || findings.some((finding) => String(finding.id) === String(urlFindingId))
-  const executableAudit = audits.find(
+    !urlFindingId || scopedFindings.some((finding) => String(finding.id) === String(urlFindingId))
+  const executableAudit = scopedAudits.find(
     (audit) => audit.status === 'in_progress' || audit.status === 'scheduled',
   )
   if (loading) {
@@ -699,12 +716,38 @@ export default function Audits() {
           </button>
         </div>
       )}
+      {customerAssuranceView && (
+        <div
+          className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+          role="status"
+          aria-live="polite"
+        >
+          <div>
+            <p className="text-sm font-medium text-foreground">Customer & external audits</p>
+            <p className="text-sm text-muted-foreground">
+              Filtered Assurance view — customer-raised and third-party imports on the shared Audits
+              workspace.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/audits')}
+            className="text-sm font-medium text-primary hover:underline whitespace-nowrap"
+          >
+            View all audits
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Audit Management</h1>
+          <h1 className="text-3xl font-bold text-foreground">
+            {customerAssuranceView ? 'Customer & External Audits' : 'Audit Management'}
+          </h1>
           <p className="text-muted-foreground mt-1">
-            Internal audits, imported external audits, inspections, and compliance checks
+            {customerAssuranceView
+              ? 'Customer-raised and imported external audit runs within the Assurance hub'
+              : 'Internal audits, imported external audits, inspections, and compliance checks'}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -1146,7 +1189,7 @@ export default function Audits() {
               </Button>
             </div>
           )}
-          {findings.length === 0 ? (
+          {scopedFindings.length === 0 ? (
             <Card>
               <EmptyState
                 icon={<ClipboardCheck className="h-8 w-8 text-primary" />}
@@ -1176,7 +1219,7 @@ export default function Audits() {
               />
             </Card>
           ) : (
-            findings.map((finding) => {
+            scopedFindings.map((finding) => {
               const isHighlighted = urlFindingId && String(finding.id) === String(urlFindingId)
               const findingType = getFindingTypePresentation(finding.finding_type)
               const FindingTypeIcon = findingType.icon

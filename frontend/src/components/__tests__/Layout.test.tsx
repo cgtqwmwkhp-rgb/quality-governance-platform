@@ -125,7 +125,7 @@ describe('Layout', () => {
       ],
       [
         'nav.assurance',
-        ['/audits', '/audit-templates', '/uvdb', '/planet-mark', '/customer-audits'],
+        ['/audits', '/audit-templates', '/uvdb', '/planet-mark', '/audits?source=customer'],
       ],
       [
         'nav.compliance_sustainability',

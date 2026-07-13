@@ -41,6 +41,7 @@ import { Button } from './ui/Button'
 import { cn } from '../helpers/utils'
 import { hasRole, isSuperuser } from '../utils/auth'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
+import { CUSTOMER_AUDITS_AUDITS_PATH, navItemIsActive } from './assuranceHubHelpers'
 
 /** Deferred until the shell opens Copilot — keeps authenticated first paint lean (S14). */
 const AICopilot = lazy(() => import('./copilot/AICopilot'))
@@ -116,7 +117,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/audit-templates', icon: Sparkles, label: t('nav.audit_builder') },
         { path: '/uvdb', icon: Award, label: t('nav.uvdb_achilles') },
         { path: '/planet-mark', icon: Leaf, label: t('nav.planet_mark') },
-        { path: '/customer-audits', icon: Users, label: t('nav.customer_audits') },
+        { path: CUSTOMER_AUDITS_AUDITS_PATH, icon: Users, label: t('nav.customer_audits') },
       ],
     },
     {
@@ -167,7 +168,7 @@ export default function Layout({ onLogout }: LayoutProps) {
 
   const location = useLocation()
   const pathIsActive = (path: string) =>
-    location.pathname === path || location.pathname.startsWith(`${path}/`)
+    navItemIsActive(path, location.pathname, location.search)
   const activeHubId = hubs.find((hub) => hub.items.some((item) => pathIsActive(item.path)))?.id
   const [expandedHubs, setExpandedHubs] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
@@ -397,6 +398,9 @@ export default function Layout({ onLogout }: LayoutProps) {
                             key={item.path}
                             to={item.path}
                             onClick={() => setSidebarOpen(false)}
+                            isActive={() =>
+                              navItemIsActive(item.path, location.pathname, location.search)
+                            }
                             className={({ isActive }) =>
                               cn(
                                 'flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-medium',
