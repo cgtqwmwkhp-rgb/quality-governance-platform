@@ -2,8 +2,14 @@ import { useEffect, useState, useDeferredValue } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
-import { Plus, MessageSquare, Search, Loader2 } from 'lucide-react'
-import { complaintsApi, Complaint, ComplaintCreate, getApiErrorMessage } from '../api/client'
+import { Plus, MessageSquare, Search, Loader2, MailWarning } from 'lucide-react'
+import {
+  complaintsApi,
+  Complaint,
+  ComplaintCreate,
+  getApiErrorMessage,
+  notificationsApi,
+} from '../api/client'
 import { queueForSync } from '../lib/syncService'
 import { toast } from '../contexts/ToastContext'
 import { Button } from '../components/ui/Button'
@@ -38,6 +44,8 @@ export default function Complaints() {
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [listUnavailable, setListUnavailable] = useState(false)
+  const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [formData, setFormData] = useState<ComplaintCreate>({
     title: '',
@@ -55,17 +63,40 @@ export default function Complaints() {
     const load = async () => {
       try {
         const response = await complaintsApi.list(1, 50)
-        if (!cancelled) setComplaints(response.data.items ?? [])
+        if (!cancelled) {
+          setComplaints(response.data.items ?? [])
+          setListUnavailable(false)
+          setLoadError(null)
+        }
       } catch (err) {
         if (!cancelled) {
           trackError(err, { component: 'Complaints', action: 'load' })
-          setLoadError(getApiErrorMessage(err))
+          const message = getApiErrorMessage(err)
+          // Do not clear to [] and imply "no complaints" — that is compliance theatre.
+          setListUnavailable(true)
+          setLoadError(message)
+          toast.error(`Complaints list unavailable: ${message}`)
         }
       } finally {
         if (!cancelled) setLoading(false)
       }
     }
     load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    notificationsApi
+      .getDeliveryStatus()
+      .then((response) => {
+        if (!cancelled) setEmailConfigured(response.data.email_configured)
+      })
+      .catch(() => {
+        // Optional honesty signal — omit banner when readiness cannot be read.
+      })
     return () => {
       cancelled = true
     }
@@ -99,18 +130,26 @@ export default function Complaints() {
       })
       if (response.data) {
         setComplaints((prev) => [response.data, ...prev])
+        setShowModal(false)
+        setFormData({
+          title: '',
+          description: '',
+          complaint_type: 'other',
+          priority: 'medium',
+          received_date: new Date().toISOString().slice(0, 16),
+          complainant_name: '',
+          complainant_email: '',
+          complainant_phone: '',
+        })
+        toast.success(
+          t('complaints.created', 'Complaint {{reference}} recorded', {
+            reference: response.data.reference_number,
+            defaultValue: `Complaint ${response.data.reference_number} recorded`,
+          }),
+        )
+        // Prove create → list → detail: land on the new record after it is in local list state.
+        navigate(`/complaints/${response.data.id}`)
       }
-      setShowModal(false)
-      setFormData({
-        title: '',
-        description: '',
-        complaint_type: 'other',
-        priority: 'medium',
-        received_date: new Date().toISOString().slice(0, 16),
-        complainant_name: '',
-        complainant_email: '',
-        complainant_phone: '',
-      })
     } catch (err) {
       trackError(err, { component: 'Complaints', action: 'create' })
       setFormError(getApiErrorMessage(err))
@@ -180,12 +219,17 @@ export default function Complaints() {
   }
 
   const deferredSearch = useDeferredValue(searchTerm)
-  const filteredComplaints = complaints.filter(
-    (c) =>
-      c.title.toLowerCase().includes(deferredSearch.toLowerCase()) ||
-      c.reference_number.toLowerCase().includes(deferredSearch.toLowerCase()) ||
-      c.complainant_name.toLowerCase().includes(deferredSearch.toLowerCase()),
-  )
+  const needle = deferredSearch.trim().toLowerCase()
+  // Null-safe client filter — never throw on missing complainant/title fields from API.
+  const filteredComplaints = complaints.filter((c) => {
+    if (!needle) return true
+    const haystack = [c.title, c.reference_number, c.complainant_name]
+      .filter((v): v is string => typeof v === 'string' && v.length > 0)
+      .join(' ')
+      .toLowerCase()
+    return haystack.includes(needle)
+  })
+  const isLive = !loading && !listUnavailable && !loadError
 
   if (loading) {
     return (
@@ -210,17 +254,56 @@ export default function Complaints() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{t('complaints.title')}</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl font-bold text-foreground">{t('complaints.title')}</h1>
+            {isLive && (
+              <Badge variant="resolved" data-testid="complaints-live-badge">
+                Live data
+              </Badge>
+            )}
+            {listUnavailable && (
+              <Badge variant="critical" data-testid="complaints-unavailable-badge">
+                Unavailable
+              </Badge>
+            )}
+          </div>
           <p className="text-muted-foreground mt-1">{t('complaints.subtitle')}</p>
         </div>
-        <Button onClick={() => setShowModal(true)}>
+        <Button onClick={() => setShowModal(true)} data-testid="complaints-new">
           <Plus size={20} />
           {t('complaints.new')}
         </Button>
       </div>
 
+      {emailConfigured === false ? (
+        <div
+          className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+          role="status"
+          data-testid="complaints-email-unavailable"
+        >
+          <div className="flex items-start gap-3">
+            <MailWarning className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="font-semibold">
+                {t('complaints.email_unavailable.title', 'Email alerts unavailable')}
+              </p>
+              <p className="mt-1 text-sm">
+                {t(
+                  'complaints.email_unavailable.body',
+                  'Complaints and follow-up actions are saved, but outbound email is not configured — do not expect complainant or assignee alerts to send.',
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {loadError && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 mb-4">
+        <div
+          className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 mb-4"
+          data-testid="complaints-load-error"
+          role="alert"
+        >
           <p className="text-sm text-destructive">{loadError}</p>
         </div>
       )}
@@ -235,6 +318,8 @@ export default function Complaints() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
+            data-testid="complaints-search"
+            disabled={listUnavailable}
           />
         </div>
       </div>
@@ -270,20 +355,53 @@ export default function Complaints() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filteredComplaints.length === 0 ? (
+                {listUnavailable ? (
+                  <tr>
+                    <td colSpan={7}>
+                      <div data-testid="complaints-list-unavailable">
+                        <EmptyState
+                          icon={<MessageSquare className="w-6 h-6 text-muted-foreground" />}
+                          title={t('complaints.unavailable.title', 'Complaints unavailable')}
+                          description={t(
+                            'complaints.unavailable.subtitle',
+                            'The complaints list could not be loaded. This is not an empty register — retry when the service recovers.',
+                          )}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredComplaints.length === 0 ? (
                   <tr>
                     <td colSpan={7}>
                       <EmptyState
                         icon={<MessageSquare className="w-6 h-6 text-muted-foreground" />}
-                        title={t('complaints.empty.title', 'No complaints found')}
-                        description={t(
-                          'complaints.empty.subtitle',
-                          'Create your first complaint to get started.',
-                        )}
+                        title={
+                          needle
+                            ? t('complaints.empty_search.title', 'No matching complaints')
+                            : t('complaints.empty.title', 'No complaints found')
+                        }
+                        description={
+                          needle
+                            ? t(
+                                'complaints.empty_search.subtitle',
+                                'Try a different search term. Tenant-scoped results only — other tenants are never shown.',
+                              )
+                            : t(
+                                'complaints.empty.subtitle',
+                                'Create your first complaint to get started.',
+                              )
+                        }
                         action={
-                          <Button variant="outline" size="sm" onClick={() => setShowModal(true)}>
-                            <Plus size={16} /> {t('complaints.new', 'New Complaint')}
-                          </Button>
+                          !needle ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowModal(true)}
+                              data-testid="complaints-empty-create"
+                            >
+                              <Plus size={16} /> {t('complaints.new', 'New Complaint')}
+                            </Button>
+                          ) : undefined
                         }
                       />
                     </td>
@@ -297,6 +415,7 @@ export default function Complaints() {
                       onClick={() => navigate(`/complaints/${complaint.id}`)}
                       role="button"
                       tabIndex={0}
+                      data-testid={`complaints-row-${complaint.id}`}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
@@ -321,7 +440,9 @@ export default function Complaints() {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="text-sm text-foreground">{complaint.complainant_name}</p>
+                        <p className="text-sm text-foreground">
+                          {complaint.complainant_name || '—'}
+                        </p>
                       </td>
                       <td className="px-6 py-4">
                         <Badge variant={getPriorityVariant(complaint.priority)}>

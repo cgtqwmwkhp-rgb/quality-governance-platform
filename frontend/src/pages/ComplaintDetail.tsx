@@ -24,6 +24,7 @@ import {
   Save,
   X,
   ExternalLink,
+  MailWarning,
 } from 'lucide-react'
 import {
   complaintsApi,
@@ -37,6 +38,7 @@ import {
   UserSearchResult,
   getApiErrorMessage,
   CreateFromRecordError,
+  notificationsApi,
 } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
@@ -95,6 +97,7 @@ export default function ComplaintDetail() {
   const [addingEntry, setAddingEntry] = useState(false)
 
   const [investigationTitle, setInvestigationTitle] = useState('')
+  const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
 
   // Action form
   const [actionForm, setActionForm] = useState({
@@ -111,6 +114,21 @@ export default function ComplaintDetail() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  useEffect(() => {
+    let cancelled = false
+    notificationsApi
+      .getDeliveryStatus()
+      .then((response) => {
+        if (!cancelled) setEmailConfigured(response.data.email_configured)
+      })
+      .catch(() => {
+        // Optional honesty signal — omit banner when readiness cannot be read.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -313,6 +331,16 @@ export default function ComplaintDetail() {
         assigned_to: '',
       })
       loadActions()
+      if (emailConfigured === false) {
+        toast.success(
+          t(
+            'complaints.detail.action_saved_email_unavailable',
+            'Action saved. Assignee recorded, but email alerts are unavailable while outbound email is not configured.',
+          ),
+        )
+      } else {
+        toast.success(t('complaints.detail.action_created', 'Action created'))
+      }
     } catch (err: unknown) {
       trackError(err, { component: 'ComplaintDetail', action: 'createAction' })
       toast.error(`Failed to create action: ${getApiErrorMessage(err)}`)
@@ -515,6 +543,30 @@ export default function ComplaintDetail() {
           </button>
         </div>
       )}
+
+      {emailConfigured === false ? (
+        <div
+          className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+          role="status"
+          data-testid="complaint-detail-email-unavailable"
+        >
+          <div className="flex items-start gap-3">
+            <MailWarning className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="font-semibold">
+                {t('complaints.email_unavailable.title', 'Email alerts unavailable')}
+              </p>
+              <p className="mt-1 text-sm">
+                {t(
+                  'complaints.email_unavailable.detail_body',
+                  'Actions and assignees are saved on this complaint, but outbound email is not configured — do not expect assignee alerts to send.',
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div className="flex items-start gap-4">
@@ -1267,6 +1319,23 @@ export default function ComplaintDetail() {
             <DialogDescription>{t('complaints.detail.action_description')}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">
+            {emailConfigured === false ? (
+              <div
+                className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+                role="status"
+                data-testid="complaint-action-email-unavailable"
+              >
+                <p className="text-sm font-semibold">
+                  {t('complaints.email_unavailable.title', 'Email alerts unavailable')}
+                </p>
+                <p className="mt-1 text-xs">
+                  {t(
+                    'complaints.email_unavailable.action_body',
+                    'The assignee will be saved on the action, but email alerts will not send while outbound email is not configured.',
+                  )}
+                </p>
+              </div>
+            ) : null}
             <div>
               <label
                 htmlFor="complaintdetail-field-11"
