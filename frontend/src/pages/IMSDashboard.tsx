@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   imsDashboardApi,
   crossStandardMappingsApi,
@@ -9,8 +10,6 @@ import {
 } from '../api/client'
 import {
   Shield,
-  Leaf,
-  HardHat,
   CheckCircle2,
   AlertTriangle,
   Clock,
@@ -24,6 +23,7 @@ import {
   RefreshCw,
   GitMerge,
   FileText,
+  BookOpen,
   ClipboardList,
   Lock,
   Server,
@@ -51,10 +51,55 @@ import {
 
 type ActiveTab = 'overview' | 'mapping' | 'audit' | 'review' | 'isms'
 
+type ComplianceHubDestination = {
+  id: string
+  title: string
+  description: string
+  icon: React.ElementType
+  colorBg: string
+  path?: string
+  tab?: ActiveTab
+}
+
+const complianceHubDestinations: ComplianceHubDestination[] = [
+  {
+    id: 'standards',
+    title: 'Standards & Controls',
+    description: 'Drill into control implementation by standard — canonical scores live here.',
+    icon: BookOpen,
+    colorBg: 'bg-blue-500',
+    path: '/standards',
+  },
+  {
+    id: 'evidence',
+    title: 'Evidence & Coverage',
+    description: 'Link evidence, view coverage gaps, and export compliance reports.',
+    icon: Shield,
+    colorBg: 'bg-emerald-500',
+    path: '/compliance',
+  },
+  {
+    id: 'monitoring',
+    title: 'Monitoring & Certificates',
+    description: 'Regulatory updates, certificate renewals, and scheduled compliance audits.',
+    icon: ShieldCheck,
+    colorBg: 'bg-orange-500',
+    path: '/compliance-automation',
+  },
+  {
+    id: 'isms',
+    title: 'ISO 27001 ISMS',
+    description: 'Annex A controls, information assets, and security incident posture.',
+    icon: Lock,
+    colorBg: 'bg-purple-500',
+    tab: 'isms',
+  },
+]
+
 export default function IMSDashboard() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview')
-  const [selectedStandard, setSelectedStandard] = useState<string | null>(null)
 
   // Live dashboard data
   const [dashData, setDashData] = useState<IMSDashboardResponse | null>(null)
@@ -103,19 +148,22 @@ export default function IMSDashboard() {
     }
   }, [activeTab, fetchMappings, mappings.length, mappingsLoading])
 
-  // Derive live standard cards from API data; fall back to static metadata when API is loading
-  const standardMeta: Record<string, { icon: React.ElementType; color: string; colorBg: string; label: string; version: string }> = {
-    iso9001: { icon: Shield, color: 'text-blue-400', colorBg: 'bg-blue-500', label: 'ISO 9001:2015', version: 'Quality Management' },
-    iso14001: { icon: Leaf, color: 'text-emerald-400', colorBg: 'bg-emerald-500', label: 'ISO 14001:2015', version: 'Environmental Management' },
-    iso45001: { icon: HardHat, color: 'text-orange-400', colorBg: 'bg-orange-500', label: 'ISO 45001:2018', version: 'OH&S Management' },
-    iso27001: { icon: Lock, color: 'text-purple-400', colorBg: 'bg-purple-500', label: 'ISO 27001:2022', version: 'Information Security' },
-  }
-
+  // ISMS domain metadata
   const liveStandards = dashData?.standards ?? []
   const overallCompliance = dashData?.overall_compliance ?? 0
   const ismsData = dashData?.isms ?? null
+  const trackedStandardCount = liveStandards.filter((standard) => !standard.setup_required).length
 
-  // ISMS domain metadata
+  const openComplianceHubDestination = (destination: ComplianceHubDestination) => {
+    if (destination.path) {
+      navigate(destination.path)
+      return
+    }
+    if (destination.tab) {
+      setActiveTab(destination.tab)
+    }
+  }
+
   const domainMeta: Record<string, { label: string; icon: React.ElementType; colorBg: string }> = {
     organizational: { label: 'Organizational', icon: Building2, colorBg: 'bg-blue-500' },
     people: { label: 'People', icon: UserCheck, colorBg: 'bg-green-500' },
@@ -148,9 +196,11 @@ export default function IMSDashboard() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <GitMerge className="w-6 h-6 text-primary" aria-hidden="true" />
-            Integrated Management System
+            {t('ims.title')}
           </h1>
-          <p className="text-muted-foreground">Unified ISO 9001, 14001, 45001 &amp; 27001 Dashboard</p>
+          <p className="text-muted-foreground">
+            Compliance hub orientation — jump to Standards, Evidence, or Monitoring for detail.
+          </p>
         </div>
         <div className="flex gap-3">
           <Button
@@ -159,11 +209,11 @@ export default function IMSDashboard() {
             disabled={dashLoading}
           >
             <RefreshCw className={cn('w-4 h-4 mr-2', dashLoading && 'animate-spin')} aria-hidden="true" />
-            Sync
+            {t('ims.sync')}
           </Button>
-          <Button>
+          <Button onClick={() => navigate('/compliance')}>
             <FileText className="w-4 h-4 mr-2" aria-hidden="true" />
-            Generate Report
+            {t('ims.generate_report')}
           </Button>
         </div>
       </div>
@@ -184,9 +234,9 @@ export default function IMSDashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold text-primary-foreground mb-1">
-              Overall IMS Compliance
+              {t('ims.overall_compliance')}
             </h2>
-            <p className="text-primary-foreground/80">Across all management system standards</p>
+            <p className="text-primary-foreground/80">{t('ims.across_standards')}</p>
           </div>
           <div className="text-right">
             {dashLoading ? (
@@ -204,92 +254,60 @@ export default function IMSDashboard() {
         </div>
       </div>
 
-      {/* Standard Cards */}
-      {dashLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i}><CardContent className="p-6"><TableSkeleton rows={4} columns={1} /></CardContent></Card>
-          ))}
+      {/* Compliance hub orientation — no per-standard score gallery (see Standards module) */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-foreground">Compliance hub</h2>
+          {!dashLoading && trackedStandardCount > 0 && (
+            <Badge variant="secondary" aria-label={`${trackedStandardCount} standards tracked`}>
+              {trackedStandardCount} standards tracked
+            </Badge>
+          )}
         </div>
-      ) : liveStandards.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {liveStandards.map((standard) => {
-            const key = standard.standard_code?.toLowerCase().replace(/[^a-z0-9]/g, '') ?? ''
-            const meta = standardMeta[key] ?? {
-              icon: Shield,
-              color: 'text-primary',
-              colorBg: 'bg-primary',
-              label: standard.standard_name ?? standard.standard_code,
-              version: standard.full_name ?? '',
-            }
-            const Icon = meta.icon
-            const compliance = Math.round(standard.compliance_percentage)
-
-            return (
-              <Card
-                key={standard.standard_id}
-                role="button"
-                tabIndex={0}
-                className={cn(
-                  'cursor-pointer transition-colors hover:border-border-strong',
-                  selectedStandard === standard.standard_code && 'ring-2 ring-primary',
-                )}
-                onClick={() => setSelectedStandard(standard.standard_code)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') setSelectedStandard(standard.standard_code)
-                }}
-                aria-pressed={selectedStandard === standard.standard_code}
-              >
+        {dashLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i}>
                 <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className={cn('p-3 rounded-xl', meta.colorBg)}>
-                      <Icon className="w-6 h-6 text-white" aria-hidden="true" />
-                    </div>
-                    <div className="text-right">
-                      {standard.setup_required ? (
-                        <Badge variant="outline" className="text-muted-foreground">Setup required</Badge>
-                      ) : (
-                        <>
-                          <div className="text-3xl font-bold text-foreground" aria-label={`${compliance}% compliance`}>{compliance}%</div>
-                          <div className="text-xs text-muted-foreground">Compliance</div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <h3 className="text-base font-bold text-foreground mb-1">{meta.label}</h3>
-                  <p className="text-sm text-muted-foreground mb-4">{meta.version}</p>
-
-                  <div
-                    className="w-full bg-surface rounded-full h-2 mb-4"
-                    role="progressbar"
-                    aria-valuenow={compliance}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                  >
-                    <div
-                      className={cn('h-2 rounded-full', meta.colorBg)}
-                      style={{ width: `${compliance}%` }}
-                    />
-                  </div>
-
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>{standard.implemented_count} implemented</span>
-                    <span>{standard.partial_count} partial</span>
-                    <span>{standard.not_implemented_count} gap</span>
-                  </div>
+                  <TableSkeleton rows={3} columns={1} />
                 </CardContent>
               </Card>
-            )
-          })}
-        </div>
-      ) : !dashError ? (
-        <EmptyState
-          icon={<Shield className="w-8 h-8 text-muted-foreground" />}
-          title="No standards configured"
-          description="Standards and controls need to be set up before compliance data appears here."
-        />
-      ) : null}
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {complianceHubDestinations.map((destination) => {
+              const Icon = destination.icon
+              return (
+                <Card
+                  key={destination.id}
+                  role="button"
+                  tabIndex={0}
+                  data-testid={`compliance-hub-${destination.id}`}
+                  className="cursor-pointer transition-colors hover:border-border-strong"
+                  onClick={() => openComplianceHubDestination(destination)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') openComplianceHubDestination(destination)
+                  }}
+                >
+                  <CardContent className="p-6">
+                    <div className="flex items-start gap-4">
+                      <div className={cn('p-3 rounded-xl flex-shrink-0', destination.colorBg)}>
+                        <Icon className="w-6 h-6 text-white" aria-hidden="true" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-base font-bold text-foreground mb-1">{destination.title}</h3>
+                        <p className="text-sm text-muted-foreground">{destination.description}</p>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-1" aria-hidden="true" />
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Tab Bar */}
       <div className="flex gap-2 border-b border-border pb-2 overflow-x-auto" role="tablist" aria-label="IMS sections">
@@ -479,9 +497,9 @@ export default function IMSDashboard() {
               <CardTitle>Unified Audit Schedule</CardTitle>
               <p className="text-sm text-muted-foreground">Integrated audit program covering all standards</p>
             </div>
-            <Button onClick={() => navigate('/audits/new')}>
+            <Button onClick={() => navigate('/audits')}>
               <Calendar className="w-4 h-4 mr-2" aria-hidden="true" />
-              Plan New Audit
+              {t('ims.plan_new_audit')}
             </Button>
           </CardHeader>
           <CardContent className={dashData?.audit_schedule?.length ? 'p-0' : undefined}>
@@ -524,7 +542,12 @@ export default function IMSDashboard() {
                         </Badge>
                       </td>
                       <td className="px-4 py-3">
-                        <Button variant="ghost" size="sm" onClick={() => navigate(`/audits/${audit.id}`)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Open audit ${audit.reference_number}`}
+                          onClick={() => navigate(`/audits/${audit.id}/execute`)}
+                        >
                           <ChevronRight className="w-4 h-4" aria-hidden="true" />
                         </Button>
                       </td>
@@ -767,17 +790,14 @@ export default function IMSDashboard() {
                         { key: 'physical', label: 'Physical', icon: Key },
                       ].map((cat) => {
                         const Icon = cat.icon
-                        // Asset counts come from a separate API call (iso27001Api.getAssets)
-                        // The dashboard endpoint does not include per-category counts.
-                        // Navigate to /ims for detail or use iso27001Api directly.
                         return (
                           <div
                             key={cat.key}
                             className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border hover:border-border-strong transition-colors cursor-pointer"
                             role="button"
                             tabIndex={0}
-                            onClick={() => navigate('/ims')}
-                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/ims') }}
+                            onClick={() => setActiveTab('isms')}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setActiveTab('isms') }}
                           >
                             <div className="flex items-center gap-3">
                               <div className="p-2 bg-muted rounded-lg">
@@ -802,7 +822,7 @@ export default function IMSDashboard() {
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => navigate('/incidents/new?source=isms')}
+                      onClick={() => navigate('/incidents')}
                     >
                       Report Incident
                     </Button>
