@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, ArrowLeft, Calendar, FileText, FlaskConical, Pencil, Save, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Calendar, ClipboardList, FileText, FlaskConical, Pencil, Save, X } from 'lucide-react'
 import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
 import { trackError } from '../utils/errorTracker'
 import {
+  Action,
+  actionsApi,
   CreateFromRecordError,
   getApiErrorMessage,
   Investigation,
@@ -17,6 +19,12 @@ import {
   NearMissUpdate,
   RunningSheetEntry,
 } from '../api/client'
+import {
+  formatCapaActionsCount,
+  getCapaHandoffLabelKey,
+  getCapaLink,
+  getInvestigationDetailHref,
+} from '../components/investigations/handoffLinks'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -34,6 +42,10 @@ export default function NearMissDetail() {
 
   const [nearMiss, setNearMiss] = useState<NearMiss | null>(null)
   const [investigations, setInvestigations] = useState<Investigation[]>([])
+  const [investigationsUnavailable, setInvestigationsUnavailable] = useState(false)
+  const [capaActions, setCapaActions] = useState<Action[]>([])
+  const [capaLoading, setCapaLoading] = useState(false)
+  const [capaUnavailable, setCapaUnavailable] = useState(false)
   const [runningSheet, setRunningSheet] = useState<RunningSheetEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -93,11 +105,40 @@ export default function NearMissDetail() {
   }
 
   const loadInvestigations = async (nearMissId: number) => {
+    setInvestigationsUnavailable(false)
     try {
       const response = await nearMissesApi.listInvestigations(nearMissId, 1, 10)
-      setInvestigations(response.data.items || [])
+      const items = response.data.items || []
+      setInvestigations(items)
+      const latest = items[0]
+      if (latest?.id) {
+        await loadCapaActions(latest.id)
+      } else {
+        setCapaActions([])
+        setCapaUnavailable(false)
+      }
     } catch (err) {
       trackError(err, { component: 'NearMissDetail', action: 'loadInvestigations' })
+      setInvestigations([])
+      setInvestigationsUnavailable(true)
+      setCapaActions([])
+      setCapaUnavailable(true)
+    }
+  }
+
+  const loadCapaActions = async (investigationId: number) => {
+    setCapaLoading(true)
+    setCapaUnavailable(false)
+    try {
+      const response = await actionsApi.list(1, 50, undefined, 'investigation', investigationId)
+      setCapaActions(response.data.items || [])
+    } catch (err) {
+      trackError(err, { component: 'NearMissDetail', action: 'loadCapaActions' })
+      setCapaActions([])
+      setCapaUnavailable(true)
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setCapaLoading(false)
     }
   }
 
@@ -174,15 +215,15 @@ export default function NearMissDetail() {
     setCreatingInvestigation(true)
     setInvestigationError('')
     try {
-      await investigationsApi.createFromRecord({
+      const response = await investigationsApi.createFromRecord({
         source_type: 'near_miss',
         source_id: nearMiss.id,
         title: investigationTitle || `Investigation - ${nearMiss.reference_number}`,
       })
       setShowInvestigationModal(false)
       setInvestigationTitle('')
-      loadInvestigations(nearMiss.id)
       toast.success(t('near_misses.feedback.investigation_created', 'Investigation created'))
+      navigate(getInvestigationDetailHref(response.data.id))
     } catch (err) {
       const apiErr = err as { response?: { data?: CreateFromRecordError } }
       setInvestigationError(apiErr.response?.data?.message || getApiErrorMessage(err))
@@ -289,7 +330,7 @@ export default function NearMissDetail() {
           },
           {
             label: t('near_misses.summary.investigations', 'Investigations'),
-            value: `${investigations.length}`,
+            value: investigationsUnavailable ? '—' : `${investigations.length}`,
             icon: <FlaskConical className="w-4 h-4" />,
           },
         ]}
@@ -430,19 +471,84 @@ export default function NearMissDetail() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {investigations.length === 0 ? (
+                  {investigationsUnavailable ? (
+                    <p className="text-sm text-destructive" data-testid="near-miss-investigations-unavailable">
+                      {t(
+                        'near_misses.detail.investigations_unavailable',
+                        'Investigations could not be loaded — not shown as zero.',
+                      )}
+                    </p>
+                  ) : investigations.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       {t('near_misses.detail.no_investigations', 'No investigations linked yet.')}
                     </p>
                   ) : (
                     <div className="space-y-3">
                       {investigations.map((investigation) => (
-                        <div key={investigation.id} className="rounded-lg border border-border p-3">
+                        <button
+                          key={investigation.id}
+                          type="button"
+                          className="w-full rounded-lg border border-border p-3 text-left hover:bg-muted/40"
+                          onClick={() => navigate(getInvestigationDetailHref(investigation.id))}
+                          data-testid={`near-miss-investigation-${investigation.id}`}
+                        >
                           <div className="font-medium text-foreground">{investigation.reference_number}</div>
                           <div className="text-sm text-muted-foreground">{investigation.title}</div>
-                        </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {t('common.status', 'Status')}: {investigation.status || '—'}
+                          </div>
+                        </button>
                       ))}
                     </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card data-testid="near-miss-capa-handoff">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ClipboardList className="w-5 h-5 text-primary" />
+                    {t('near_misses.detail.capa_handoff_title', 'CAPA / Actions')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      {t('near_misses.detail.capa_count', 'Linked CAPA actions')}
+                    </span>
+                    <span className="font-medium" data-testid="near-miss-capa-count">
+                      {formatCapaActionsCount({
+                        loading: capaLoading,
+                        unavailable: capaUnavailable || investigationsUnavailable,
+                        count: capaActions.length,
+                      })}
+                    </span>
+                  </div>
+                  {investigations[0] ? (
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      disabled={capaLoading}
+                      onClick={() => navigate(getCapaLink('investigation', investigations[0].id))}
+                      data-testid="near-miss-capa-handoff-cta"
+                    >
+                      <ClipboardList className="w-4 h-4 mr-2" />
+                      {t(
+                        capaUnavailable
+                          ? 'investigations.handoff.open_capa'
+                          : getCapaHandoffLabelKey('investigation', capaActions.length),
+                        {
+                          count: capaActions.length,
+                        },
+                      )}
+                    </Button>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      {t(
+                        'near_misses.detail.capa_needs_investigation',
+                        'Create an investigation first to open the CAPA workspace.',
+                      )}
+                    </p>
                   )}
                 </CardContent>
               </Card>
