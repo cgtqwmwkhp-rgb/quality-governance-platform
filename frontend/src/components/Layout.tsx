@@ -393,42 +393,41 @@ export default function Layout({ onLogout }: LayoutProps) {
 
                     {expanded && (
                       <div id={`nav-hub-${hub.id}`} className="mt-1 ml-4 space-y-1">
-                        {hub.items.map((item) => (
-                          <NavLink
-                            key={item.path}
-                            to={item.path}
-                            onClick={() => setSidebarOpen(false)}
-                            isActive={() =>
-                              navItemIsActive(item.path, location.pathname, location.search)
-                            }
-                            className={({ isActive }) =>
-                              cn(
+                        {hub.items.map((item) => {
+                          const itemActive = navItemIsActive(
+                            item.path,
+                            location.pathname,
+                            location.search,
+                          )
+                          return (
+                            <NavLink
+                              key={item.path}
+                              to={item.path}
+                              onClick={() => setSidebarOpen(false)}
+                              aria-current={itemActive ? 'page' : undefined}
+                              className={cn(
                                 'flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-medium',
                                 'transition-all duration-200 group',
-                                isActive
+                                itemActive
                                   ? 'bg-primary/10 text-primary border border-primary/20'
                                   : 'text-muted-foreground hover:text-foreground hover:bg-surface',
-                              )
-                            }
-                          >
-                            {({ isActive }) => (
-                              <>
-                                <item.icon
-                                  className={cn(
-                                    'w-4 h-4 transition-colors',
-                                    isActive
-                                      ? 'text-primary'
-                                      : 'text-muted-foreground group-hover:text-foreground',
-                                  )}
-                                />
-                                {item.label}
-                                {isActive && (
-                                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
+                              )}
+                            >
+                              <item.icon
+                                className={cn(
+                                  'w-4 h-4 transition-colors',
+                                  itemActive
+                                    ? 'text-primary'
+                                    : 'text-muted-foreground group-hover:text-foreground',
                                 )}
-                              </>
-                            )}
-                          </NavLink>
-                        ))}
+                              />
+                              {item.label}
+                              {itemActive && (
+                                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
+                              )}
+                            </NavLink>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
