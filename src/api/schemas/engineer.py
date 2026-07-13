@@ -53,7 +53,7 @@ class EngineerResponse(BaseModel):
     certifications_json: Optional[List[Any]] = None
     is_active: bool
     notes: Optional[str] = None
-    tenant_id: int
+    tenant_id: int | None = None
     created_at: datetime
     updated_at: datetime
 
