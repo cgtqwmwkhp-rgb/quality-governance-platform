@@ -51,6 +51,23 @@ class EvidenceLink:
     # counts toward positive compliance coverage %. Operational signals
     # (nonconformity / gap / opportunity) must not inflate coverage.
     signal_type: Optional[str] = None
+    # Full provenance for audit-pack export (optional; absent on legacy callers).
+    rationale: Optional[str] = None
+    scheme: Optional[str] = None
+    status: Optional[str] = None
+    confirmed_at: Optional[datetime] = None
+    confirmed_by: Optional[str] = None
+    auto_applied: Optional[bool] = None
+
+
+OPERATIONAL_SIGNAL_TYPES = frozenset({"nonconformity", "gap", "opportunity"})
+
+
+def _normalize_signal_type(signal_type: Optional[str]) -> Optional[str]:
+    if signal_type is None:
+        return None
+    normalized = str(signal_type).strip().lower()
+    return normalized or None
 
 
 def counts_toward_compliance_coverage(signal_type: Optional[str]) -> bool:
@@ -61,12 +78,63 @@ def counts_toward_compliance_coverage(signal_type: Optional[str]) -> bool:
     are not proof of conformance. Legacy rows with null/empty signal_type
     remain counted for backward compatibility.
     """
-    if signal_type is None:
-        return True
-    normalized = str(signal_type).strip().lower()
-    if not normalized:
+    normalized = _normalize_signal_type(signal_type)
+    if normalized is None:
         return True
     return normalized == "evidence"
+
+
+def audit_pack_signal_label(signal_type: Optional[str]) -> str:
+    """Honest auditor-facing label for a CEL signal_type."""
+    normalized = _normalize_signal_type(signal_type)
+    if normalized is None:
+        return "legacy_untyped_evidence"
+    if normalized == "evidence":
+        return "conformance_evidence"
+    if normalized in OPERATIONAL_SIGNAL_TYPES:
+        return f"operational_{normalized}"
+    return f"other_{normalized}"
+
+
+def _iso_dt(value: Optional[datetime]) -> Optional[str]:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc).isoformat()
+    return value.isoformat()
+
+
+def serialize_audit_pack_link(
+    link: EvidenceLink,
+    *,
+    scheme_or_standard: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Serialize one evidence link with full provenance for certification packs."""
+    signal = _normalize_signal_type(link.signal_type)
+    conformance_eligible = counts_toward_compliance_coverage(link.signal_type)
+    return {
+        "id": link.id,
+        "created_at": _iso_dt(link.created_at),
+        "created_by": link.created_by,
+        "actor": link.created_by,
+        "rationale": link.rationale or link.notes,
+        "confidence": link.confidence,
+        "signal_type": signal,
+        "signal_label": audit_pack_signal_label(link.signal_type),
+        "conformance_eligible": conformance_eligible,
+        "scheme": link.scheme or scheme_or_standard,
+        "standard": scheme_or_standard or link.scheme,
+        "clause_id": link.clause_id,
+        "entity_type": link.entity_type,
+        "entity_id": link.entity_id,
+        "status": link.status,
+        "confirmed_at": _iso_dt(link.confirmed_at),
+        "confirmed_by": link.confirmed_by,
+        "linked_by": link.linked_by,
+        "auto_applied": link.auto_applied,
+        "title": link.title,
+        "notes": link.notes,
+    }
 
 
 # =============================================================================
@@ -3029,6 +3097,7 @@ Write only the conformance statement. Use formal auditor language (past tense, s
         Generate a comprehensive audit-ready compliance report.
 
         Shows all clauses with their linked evidence for certification audits.
+        Coverage summary remains signal-honest (NC/gap/opportunity excluded).
         """
         coverage = self.calculate_compliance_coverage(evidence_links, standard)
         clauses = self.get_all_clauses(standard)
@@ -3047,7 +3116,8 @@ Write only the conformance statement. Use formal auditor language (past tense, s
                 continue
 
             evidence = clause_evidence.get(clause.id, [])
-            status = "full" if len(evidence) >= 2 else "partial" if len(evidence) == 1 else "gap"
+            conformance = [e for e in evidence if counts_toward_compliance_coverage(e.signal_type)]
+            status = "full" if len(conformance) >= 2 else "partial" if len(conformance) == 1 else "gap"
 
             detail: Dict[str, Any] = {
                 "clause_id": clause.id,
@@ -3056,18 +3126,13 @@ Write only the conformance statement. Use formal auditor language (past tense, s
                 "description": clause.description,
                 "standard": clause.standard.value,
                 "status": status,
-                "evidence_count": len(evidence),
+                "evidence_count": len(conformance),
+                "operational_signal_count": len(evidence) - len(conformance),
             }
 
             if include_evidence_details:
                 detail["evidence"] = [
-                    {
-                        "entity_type": e.entity_type,
-                        "entity_id": e.entity_id,
-                        "linked_by": e.linked_by,
-                        "confidence": e.confidence,
-                    }
-                    for e in evidence
+                    serialize_audit_pack_link(e, scheme_or_standard=clause.standard.value) for e in evidence
                 ]
 
             clause_details.append(detail)
@@ -3077,6 +3142,100 @@ Write only the conformance statement. Use formal auditor language (past tense, s
             "summary": coverage,
             "clauses": clause_details,
         }
+
+    def resolve_link_standard(self, link: EvidenceLink) -> Optional[str]:
+        """Best-effort scheme/standard for a link (explicit scheme, else clause catalogue)."""
+        if link.scheme:
+            return link.scheme
+        clause = self.get_clause(link.clause_id)
+        if clause is not None:
+            return clause.standard.value
+        return None
+
+    def build_audit_pack(
+        self,
+        evidence_links: List[EvidenceLink],
+        *,
+        standard: Optional[ISOStandard] = None,
+        include_nonconformity: bool = False,
+        include_soa: Optional[Dict[str, Any]] = None,
+        exported_by: Optional[str] = None,
+        organization_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Build a server-side certification audit pack with full CEL provenance.
+
+        Default behaviour excludes operational signals (nonconformity / gap /
+        opportunity) from the conformance evidence list so packs cannot claim
+        NC findings as proof of conformity. When ``include_nonconformity`` is
+        True, those rows are retained but labelled honestly via
+        ``signal_label`` / ``conformance_eligible``.
+        """
+        generated_at = datetime.now(timezone.utc).isoformat()
+        report = self.generate_audit_report(evidence_links, standard, include_evidence_details=True)
+
+        conformance_rows: List[Dict[str, Any]] = []
+        operational_rows: List[Dict[str, Any]] = []
+        for link in evidence_links:
+            scheme = self.resolve_link_standard(link)
+            row = serialize_audit_pack_link(link, scheme_or_standard=scheme)
+            if counts_toward_compliance_coverage(link.signal_type):
+                conformance_rows.append(row)
+            else:
+                operational_rows.append(row)
+
+        if include_nonconformity:
+            evidence_export = conformance_rows + operational_rows
+            exclusion_mode = "labelled_in_pack"
+        else:
+            evidence_export = list(conformance_rows)
+            exclusion_mode = "excluded_from_conformance_evidence"
+
+        pack: Dict[str, Any] = {
+            "pack_version": "gkb-wl1-1.0",
+            "generated_at": generated_at,
+            "exported_by": exported_by,
+            "organization_name": organization_name,
+            "standard_filter": standard.value if standard else None,
+            "provenance_policy": {
+                "signal_honesty": (
+                    "Only signal_type=evidence (and legacy null/empty) is conformance-eligible. "
+                    "nonconformity/gap/opportunity are operational assessor signals, not proof of conformity."
+                ),
+                "nonconformity_mode": exclusion_mode,
+                "include_nonconformity": include_nonconformity,
+                "confirmed_by_note": (
+                    "confirmed_at/confirmed_by are emitted when available on the CEL row; "
+                    "null means no dedicated confirm actor stamp was persisted."
+                ),
+                "fields": [
+                    "created_at",
+                    "created_by",
+                    "actor",
+                    "rationale",
+                    "confidence",
+                    "signal_type",
+                    "scheme",
+                    "standard",
+                    "clause_id",
+                    "entity_type",
+                    "entity_id",
+                    "status",
+                    "confirmed_at",
+                    "confirmed_by",
+                ],
+            },
+            "counts": {
+                "conformance_evidence_links": len(conformance_rows),
+                "operational_signal_links": len(operational_rows),
+                "exported_evidence_links": len(evidence_export),
+            },
+            "evidence_links": evidence_export,
+            "operational_signals": operational_rows,
+            "report": report,
+        }
+        if include_soa is not None:
+            pack["statement_of_applicability"] = include_soa
+        return pack
 
 
 # Singleton instance

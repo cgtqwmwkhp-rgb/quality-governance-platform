@@ -8,6 +8,7 @@ Provides endpoints for:
 - Gap analysis
 """
 
+import json
 import logging
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -15,13 +16,14 @@ from typing import Annotated, Any, List, Optional
 
 import sqlalchemy
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.domain.exceptions import BadRequestError, NotFoundError
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
 from src.domain.models.ims_unification import IMSRequirement
 from src.domain.models.standard import Clause, Standard
 from src.domain.models.user import User
@@ -183,7 +185,35 @@ def _match_ims_standard(value: Optional[str]) -> Optional[ISOStandard]:
     return None
 
 
+def _confirmed_provenance(
+    link: ComplianceEvidenceLink,
+) -> tuple[Optional[datetime], Optional[str]]:
+    """Best-effort confirmed_at/by without a dedicated confirm-actor column.
+
+    Returns (None, None) when the link is not confirmed. When confirmed,
+    uses updated_at (or created_at) as confirmed_at and created_by_email as
+    confirmed_by only when the link was auto-applied or manually created —
+    human Exceptions confirm currently leaves no actor stamp.
+    """
+    link_status = link.effective_status if hasattr(link, "effective_status") else getattr(link, "status", None)
+    status_value = None if link_status is None else getattr(link_status, "value", str(link_status))
+    if status_value != EvidenceLinkStatus.CONFIRMED.value:
+        return None, None
+
+    confirmed_at = link.updated_at or link.created_at
+    if getattr(link, "auto_applied", False):
+        return confirmed_at, link.created_by_email
+    linked_by = link.linked_by.value if hasattr(link.linked_by, "value") else str(link.linked_by)
+    if linked_by == EvidenceLinkMethod.MANUAL.value:
+        return confirmed_at, link.created_by_email
+    # AI/auto proposed then human-confirmed: timestamp present, actor not stamped.
+    return confirmed_at, None
+
+
 def _build_evidence_link_model(link: ComplianceEvidenceLink) -> EvidenceLink:
+    link_status = link.effective_status if hasattr(link, "effective_status") else getattr(link, "status", None)
+    status_value = None if link_status is None else getattr(link_status, "value", str(link_status))
+    confirmed_at, confirmed_by = _confirmed_provenance(link)
     return EvidenceLink(
         id=str(link.id),
         entity_type=link.entity_type,
@@ -196,6 +226,12 @@ def _build_evidence_link_model(link: ComplianceEvidenceLink) -> EvidenceLink:
         title=link.title,
         notes=link.notes,
         signal_type=getattr(link, "signal_type", None),
+        rationale=getattr(link, "rationale", None),
+        scheme=getattr(link, "scheme", None),
+        status=status_value,
+        confirmed_at=confirmed_at,
+        confirmed_by=confirmed_by,
+        auto_applied=getattr(link, "auto_applied", None),
     )
 
 
@@ -549,6 +585,74 @@ async def generate_compliance_report(
     )
     report["persisted_evidence_links"] = len(links)
     return report
+
+
+@router.get("/audit-pack")
+async def export_audit_pack(
+    db: DbSession,
+    current_user: CurrentUser,
+    standard: Optional[str] = Query(None, description="Filter by ISO standard"),
+    include_nonconformity: bool = Query(
+        False,
+        description=(
+            "When false (default), nonconformity/gap/opportunity links are excluded from "
+            "conformance evidence_links but still listed under operational_signals. "
+            "When true, they are included in evidence_links with honest signal_label."
+        ),
+    ),
+    include_soa: bool = Query(True, description="Include ISO 27001 SoA section"),
+    organization_name: str = Query(default="Organisation", description="Organisation name for SoA"),
+):
+    """
+    Server-side ISO audit evidence pack with full CEL provenance.
+
+    Exports attributable evidence links (created_at/by, rationale, confidence,
+    signal_type, scheme/standard, clause_id, entity_type/id, status,
+    confirmed_at/by when available). Operational nonconformity signals are
+    excluded from conformance evidence by default and labelled honestly.
+    """
+    std_enum = _parse_standard_filter(standard)
+    links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=std_enum)
+    evidence_models = [_build_evidence_link_model(link) for link in links]
+
+    soa_payload: Optional[dict[str, Any]] = None
+    if include_soa:
+        soa_links = links
+        if std_enum is not None and std_enum != ISOStandard.ISO_27001:
+            soa_links = await _load_evidence_links(
+                db,
+                tenant_id=current_user.tenant_id,
+                standard=ISOStandard.ISO_27001,
+            )
+        soa_payload = iso_compliance_service.generate_soa(
+            [_build_evidence_link_model(link) for link in soa_links],
+            organization_name=organization_name,
+            include_justification=True,
+        )
+        soa_payload["persisted_evidence_links"] = len(soa_links)
+
+    pack = iso_compliance_service.build_audit_pack(
+        evidence_models,
+        standard=std_enum,
+        include_nonconformity=include_nonconformity,
+        include_soa=soa_payload,
+        exported_by=getattr(current_user, "email", None),
+        organization_name=organization_name,
+    )
+    pack["persisted_evidence_links"] = len(links)
+
+    date_stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    filename = f"iso-audit-pack-{date_stamp}.json"
+    body = json.dumps(pack, indent=2, default=str).encode("utf-8")
+    return Response(
+        content=body,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Audit-Pack-Version": str(pack.get("pack_version", "gkb-wl1-1.0")),
+            "X-Audit-Pack-Nonconformity-Mode": pack["provenance_policy"]["nonconformity_mode"],
+        },
+    )
 
 
 @router.post("/analyze")

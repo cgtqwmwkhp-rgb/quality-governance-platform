@@ -13,6 +13,7 @@ const mockAutoTag = vi.fn()
 const mockAnalyzeEvidence = vi.fn()
 const mockGetSoA = vi.fn()
 const mockLinkEvidence = vi.fn()
+const mockDownloadAuditPack = vi.fn()
 const mockToastError = vi.fn()
 const mockToastWarning = vi.fn()
 const mockToastSuccess = vi.fn()
@@ -38,6 +39,7 @@ vi.mock('../../api/client', () => ({
     analyzeEvidence: (...args: unknown[]) => mockAnalyzeEvidence(...args),
     getSoA: (...args: unknown[]) => mockGetSoA(...args),
     linkEvidence: (...args: unknown[]) => mockLinkEvidence(...args),
+    downloadAuditPack: (...args: unknown[]) => mockDownloadAuditPack(...args),
   },
   crossStandardMappingsApi: {
     list: (...args: unknown[]) => mockListMappings(...args),
@@ -244,6 +246,18 @@ describe('ComplianceEvidence', () => {
     mockAnalyzeEvidence.mockResolvedValue(deepAnalysisResponse)
     mockGetSoA.mockResolvedValue(soaResponse)
     mockLinkEvidence.mockResolvedValue({ data: { status: 'ok', message: 'linked', links: [] } })
+    mockDownloadAuditPack.mockResolvedValue({
+      data: {
+        pack_version: 'gkb-wl1-1.0',
+        evidence_links: [],
+        operational_signals: [],
+        counts: {
+          conformance_evidence_links: 0,
+          operational_signal_links: 0,
+          exported_evidence_links: 0,
+        },
+      },
+    })
   })
 
   it('renders live compliance evidence and cross-standard mappings', async () => {
@@ -349,6 +363,41 @@ describe('ComplianceEvidence', () => {
     })
 
     expect(await screen.findByText('Annex A Evidence SoA — ISO 27001:2022')).toBeInTheDocument()
+  })
+
+  it('downloads audit pack via server export endpoint', async () => {
+    const createObjectURL = vi.fn(() => 'blob:audit-pack')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL,
+      revokeObjectURL,
+    })
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+
+    render(
+      <BrowserRouter>
+        <ComplianceEvidence />
+      </BrowserRouter>,
+    )
+
+    await screen.findByText('ISO Compliance Evidence Center')
+    fireEvent.click(screen.getByTitle('Download full ISO audit evidence pack'))
+
+    await waitFor(() => {
+      expect(mockDownloadAuditPack).toHaveBeenCalledWith({
+        includeNonconformity: false,
+        includeSoa: true,
+      })
+    })
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith('Audit pack downloaded')
+    })
+    expect(createObjectURL).toHaveBeenCalled()
+    clickSpy.mockRestore()
+    vi.unstubAllGlobals()
   })
 
   it('resets dialog state on close after deep analysis', async () => {
