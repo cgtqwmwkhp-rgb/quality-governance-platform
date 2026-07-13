@@ -305,5 +305,3 @@ async def test_root_readyz_includes_sms_and_channels(client: AsyncClient, monkey
     assert "pagerduty" not in data
     assert "dlq" in data
     assert "depth" in data["dlq"]
-
-    pd_client.reset_last_enqueue_status()
