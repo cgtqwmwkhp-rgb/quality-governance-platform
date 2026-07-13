@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 
 const mockGet = vi.fn()
 const mockPost = vi.fn()
@@ -78,7 +79,16 @@ describe('Documents', () => {
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
     const Documents = (await import('../Documents')).default
 
-    render(<Documents />)
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'nav.library' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /nav\.documents/i })).toHaveAttribute('aria-current', 'page')
 
     fireEvent.click(await screen.findByText('Safety Policy'))
     fireEvent.click(screen.getByRole('button', { name: 'Open' }))

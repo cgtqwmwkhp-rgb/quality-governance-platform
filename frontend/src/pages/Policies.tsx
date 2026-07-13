@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import { LibraryShell } from './LibraryShell'
 
 export default function Policies() {
   const { t } = useTranslation()
@@ -147,21 +148,18 @@ export default function Policies() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {loadError && (
-        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{loadError}</div>
-      )}
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{t('policies.title')}</h1>
-          <p className="text-muted-foreground mt-1">{t('policies.subtitle')}</p>
-        </div>
+    <LibraryShell
+      activeView="policies"
+      actions={
         <Button onClick={() => setShowModal(true)}>
           <Plus size={20} />
           {t('policies.new')}
         </Button>
-      </div>
+      }
+    >
+      {loadError && (
+        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{loadError}</div>
+      )}
 
       {/* Search */}
       <div className="flex gap-4">
@@ -385,6 +383,6 @@ export default function Policies() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </LibraryShell>
   )
 }
