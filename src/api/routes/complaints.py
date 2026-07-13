@@ -1,5 +1,6 @@
 """API routes for complaint management."""
 
+import logging
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -21,6 +22,33 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.services.complaint_service import ComplaintService
 
 router = APIRouter(tags=["Complaints"])
+logger = logging.getLogger(__name__)
+
+
+async def _trigger_operational_standards_assess(
+    db: DbSession,
+    complaint: Complaint,
+    current_user: User,
+) -> None:
+    """Fire-and-forget standards assessment; never breaks complaint save."""
+    try:
+        from src.domain.services.governed_knowledge_service import governed_knowledge_service
+
+        content = f"{complaint.title}\n\n{complaint.description}"
+        await governed_knowledge_service.assess_operational_entity(
+            db,
+            entity_type="complaint",
+            entity_id=str(complaint.id),
+            content=content,
+            tenant_id=complaint.tenant_id,
+            user=current_user,
+        )
+    except Exception:
+        logger.warning(
+            "Operational standards assess failed for complaint %s; save continues",
+            complaint.id,
+            exc_info=True,
+        )
 
 
 @router.post("/", response_model=ComplaintResponse, status_code=status.HTTP_201_CREATED)
@@ -45,6 +73,7 @@ async def create_complaint(
             request_id=request_id,
         )
         track_metric("complaints.created")
+        await _trigger_operational_standards_assess(db, complaint, current_user)
         return complaint
     except ValueError as e:
         msg = str(e)
@@ -214,7 +243,7 @@ async def update_complaint(
     """
     svc = ComplaintService(db)
     try:
-        return await svc.update_complaint(
+        complaint = await svc.update_complaint(
             complaint_id,
             complaint_in,
             user_id=current_user.id,
@@ -222,6 +251,8 @@ async def update_complaint(
             request_id=request_id,
             skip_tenant_check=current_user.is_superuser,
         )
+        await _trigger_operational_standards_assess(db, complaint, current_user)
+        return complaint
     except LookupError:
         raise NotFoundError(f"Complaint {complaint_id} not found")
 

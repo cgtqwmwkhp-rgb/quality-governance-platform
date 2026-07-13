@@ -42,6 +42,7 @@ import {
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ToastContainer, useToast } from '../components/ui/Toast'
+import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
 import { cn, decodeHtmlEntities } from '../helpers/utils'
 import {
   ASSURANCE_SOURCE_CUSTOMER,
@@ -1349,7 +1350,29 @@ export default function Audits() {
                             ? 'Already on risk register'
                             : 'Flag to risk register'}
                         </Button>
+                        {!isHighlighted && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            data-testid={`finding-open-standards-${finding.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              navigate(`/audits?view=findings&findingId=${finding.id}`)
+                            }}
+                          >
+                            Standards
+                          </Button>
+                        )}
                       </div>
+                      {isHighlighted && (
+                        <div className="mt-4" data-testid={`finding-standards-${finding.id}`}>
+                          <StandardsAssessmentPanel
+                            entityType="audit_finding"
+                            entityId={finding.id}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Card>

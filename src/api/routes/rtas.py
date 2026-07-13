@@ -33,6 +33,32 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Road Traffic Collisions"])
 
 
+async def _trigger_operational_standards_assess(
+    db: DbSession,
+    rta: RoadTrafficCollision,
+    current_user: User,
+) -> None:
+    """Fire-and-forget standards assessment; never breaks RTA save."""
+    try:
+        from src.domain.services.governed_knowledge_service import governed_knowledge_service
+
+        content = f"{rta.title}\n\n{rta.description}"
+        await governed_knowledge_service.assess_operational_entity(
+            db,
+            entity_type="rta",
+            entity_id=str(rta.id),
+            content=content,
+            tenant_id=rta.tenant_id,
+            user=current_user,
+        )
+    except Exception:
+        logger.warning(
+            "Operational standards assess failed for rta %s; save continues",
+            rta.id,
+            exc_info=True,
+        )
+
+
 async def _get_rta_or_404(db, rta_id: int, current_user) -> RoadTrafficCollision:
     """Load an RTA with tenant isolation enforced."""
     query = select(RoadTrafficCollision).where(RoadTrafficCollision.id == rta_id)
@@ -81,6 +107,7 @@ async def create_rta(
 
     await db.commit()
     await db.refresh(rta)
+    await _trigger_operational_standards_assess(db, rta, current_user)
     return rta
 
 
@@ -247,6 +274,7 @@ async def update_rta(
 
     await db.commit()
     await db.refresh(rta)
+    await _trigger_operational_standards_assess(db, rta, current_user)
     return rta
 
 
