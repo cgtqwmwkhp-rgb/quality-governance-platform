@@ -34,6 +34,7 @@ async def test_record_audit_event_persists_hash_chained_entry(test_session, test
 
     assert event.id is not None
 
+    await apply_tenant_guc(test_session, test_tenant.id)
     result = await test_session.execute(
         select(AuditLogEntry).where(
             AuditLogEntry.tenant_id == test_tenant.id,
@@ -53,8 +54,12 @@ async def test_record_audit_event_persists_hash_chained_entry(test_session, test
 
 
 @pytest.mark.asyncio
-async def test_incident_create_persists_audit_log_entry(client: AsyncClient, auth_headers, test_session, test_tenant):
-    """API create incident must leave an immutable audit row for Admin Audit Trail."""
+async def test_incident_create_persists_audit_log_entry(client: AsyncClient, auth_headers, test_session):
+    """API create incident must leave an immutable audit row for Admin Audit Trail.
+
+    ``auth_headers`` JWT is seeded user id=1 (tenant_id=1), not the optional
+    ``test_tenant`` fixture (which creates a second tenant).
+    """
     data = {
         "title": "IMMU-01 Incident",
         "description": "Domain mutation audit bridge",
@@ -69,11 +74,11 @@ async def test_incident_create_persists_audit_log_entry(client: AsyncClient, aut
     assert response.status_code == 201
     incident_id = str(response.json()["id"])
 
-    # FORCE RLS on audit_log_entries — bind tenant GUC for the test session read
-    await apply_tenant_guc(test_session, test_tenant.id)
+    # FORCE RLS — bind seeded auth tenant (user 1 → tenant 1)
+    await apply_tenant_guc(test_session, 1)
     result = await test_session.execute(
         select(AuditLogEntry).where(
-            AuditLogEntry.tenant_id == test_tenant.id,
+            AuditLogEntry.tenant_id == 1,
             AuditLogEntry.entity_type == "incident",
             AuditLogEntry.entity_id == incident_id,
             AuditLogEntry.action == "create",
@@ -86,7 +91,7 @@ async def test_incident_create_persists_audit_log_entry(client: AsyncClient, aut
 
 
 @pytest.mark.asyncio
-async def test_complaint_create_persists_audit_log_entry(client: AsyncClient, auth_headers, test_session, test_tenant):
+async def test_complaint_create_persists_audit_log_entry(client: AsyncClient, auth_headers, test_session):
     data = {
         "title": "IMMU-01 Complaint",
         "description": "Domain mutation audit bridge",
@@ -100,10 +105,10 @@ async def test_complaint_create_persists_audit_log_entry(client: AsyncClient, au
     assert response.status_code == 201
     complaint_id = str(response.json()["id"])
 
-    await apply_tenant_guc(test_session, test_tenant.id)
+    await apply_tenant_guc(test_session, 1)
     result = await test_session.execute(
         select(AuditLogEntry).where(
-            AuditLogEntry.tenant_id == test_tenant.id,
+            AuditLogEntry.tenant_id == 1,
             AuditLogEntry.entity_type == "complaint",
             AuditLogEntry.entity_id == complaint_id,
             AuditLogEntry.action == "create",
