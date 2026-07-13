@@ -131,6 +131,24 @@ async function installInspectionCujMocks(page: Page) {
       return;
     }
 
+    if (path.endsWith(`/audits/findings/${FINDING_ID}/flag-risk`) && method === "POST") {
+      await json(route, {
+        id: FINDING_ID,
+        reference_number: FINDING_REF,
+        run_id: 41,
+        title: "Missing PPE at gate",
+        description: "Operator without gloves during inspection",
+        severity: "high",
+        finding_type: "nonconformity",
+        status: "open",
+        corrective_action_required: true,
+        risk_ids: [88],
+        created_at: "2026-07-12T10:00:00Z",
+        updated_at: "2026-07-12T10:10:00Z",
+      });
+      return;
+    }
+
     await json(route, method === "GET" ? { items: [], total: 0, page: 1, page_size: 50, pages: 0 } : { ok: true });
   });
 }
@@ -330,6 +348,126 @@ test.describe("Inspection → CAPA → Risk CUJ", () => {
     });
   });
 
+  test("Flag-to-risk posts and opens scoped Risk Register", async ({ page }) => {
+    await page.addInitScript((token) => {
+      localStorage.setItem("access_token", token);
+    }, E2E_JWT);
+
+    let flagCalls = 0;
+    await page.route("**/api/v1/**", async (route) => {
+      const req = route.request();
+      const url = new URL(req.url());
+      const path = url.pathname;
+      const method = req.method();
+
+      if (path.endsWith("/audits/findings") && method === "GET") {
+        await json(route, {
+          items: [
+            {
+              id: FINDING_ID,
+              reference_number: FINDING_REF,
+              run_id: 41,
+              title: "Missing PPE at gate",
+              description: "Operator without gloves during inspection",
+              severity: "high",
+              finding_type: "nonconformity",
+              status: "open",
+              corrective_action_required: true,
+              risk_ids: [],
+              created_at: "2026-07-12T10:00:00Z",
+              updated_at: "2026-07-12T10:00:00Z",
+            },
+          ],
+          total: 1,
+          page: 1,
+          page_size: 100,
+          pages: 1,
+        });
+        return;
+      }
+
+      if (path.endsWith("/audits/runs") && method === "GET") {
+        await json(route, {
+          items: [
+            {
+              id: 41,
+              reference_number: "AUD-00041",
+              template_id: 11,
+              title: "Site inspection",
+              status: "completed",
+              created_at: "2026-07-12T09:00:00Z",
+            },
+          ],
+          total: 1,
+          page: 1,
+          page_size: 100,
+          pages: 1,
+        });
+        return;
+      }
+
+      if (path.includes("/audits/templates") && method === "GET") {
+        await json(route, { items: [], total: 0, page: 1, page_size: 100, pages: 0 });
+        return;
+      }
+
+      if (path.endsWith(`/audits/findings/${FINDING_ID}/flag-risk`) && method === "POST") {
+        flagCalls += 1;
+        await json(route, {
+          id: FINDING_ID,
+          reference_number: FINDING_REF,
+          run_id: 41,
+          title: "Missing PPE at gate",
+          description: "Operator without gloves during inspection",
+          severity: "high",
+          finding_type: "nonconformity",
+          status: "open",
+          corrective_action_required: true,
+          risk_ids: [88],
+          created_at: "2026-07-12T10:00:00Z",
+          updated_at: "2026-07-12T10:10:00Z",
+        });
+        return;
+      }
+
+      if (path.includes("/risk-register") && method === "GET") {
+        await json(route, {
+          items: [
+            {
+              id: 88,
+              reference: "RSK-00088",
+              title: `Audit escalation: AUD-00041 / ${FINDING_REF}`,
+              status: "open",
+              linked_audits: ["AUD-00041", FINDING_REF],
+              linked_actions: [],
+              inherent_score: 12,
+              category: "compliance",
+            },
+          ],
+          total: 1,
+          page: 1,
+          page_size: 50,
+          pages: 1,
+        });
+        return;
+      }
+
+      await json(
+        route,
+        method === "GET" ? { items: [], total: 0, page: 1, page_size: 50, pages: 0 } : { ok: true },
+      );
+    });
+
+    await page.goto("/audits?view=findings", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("Missing PPE at gate")).toBeVisible({ timeout: 20_000 });
+    await page.getByTestId(`finding-flag-risk-${FINDING_ID}`).click();
+    await expect.poll(() => flagCalls).toBe(1);
+    await expect(page).toHaveURL(new RegExp(`/risk-register\\?.*auditOnly=1.*auditRef=${FINDING_REF}`));
+    await expect(page.getByRole("link", { name: `Open finding ${FINDING_REF}` })).toBeVisible({
+      timeout: 20_000,
+    });
+  });
+
   test("live inspection completion hands generated work to CAPA Actions", async ({ page }) => {
     await page.addInitScript((token) => {
       localStorage.setItem("access_token", token);
@@ -348,6 +486,7 @@ test.describe("Inspection → CAPA → Risk CUJ", () => {
     await expect(page.getByText("Inspection completed")).toBeVisible();
     await expect(page.getByText("1 finding / 1 action created")).toBeVisible();
     await expect(page.getByText("This completed inspection is live in the findings, actions, and risk workflows.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "View Audit Risks" })).toBeVisible();
     await expect.poll(proof.responseCreated).toBe(true);
     await expect.poll(proof.completeRequests).toBe(1);
 
