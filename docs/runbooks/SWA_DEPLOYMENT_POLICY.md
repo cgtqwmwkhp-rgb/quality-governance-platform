@@ -1,8 +1,8 @@
 # Azure Static Web Apps Deployment Policy
 
 **Module**: CI/CD Governance  
-**Version**: 1.1  
-**Last Updated**: 2026-01-30  
+**Version**: 1.2  
+**Last Updated**: 2026-07-13  
 **ADR Reference**: ADR-0003 (SWA Gating Exception)
 
 ---
@@ -12,6 +12,13 @@
 Azure Static Web Apps (SWA) has a limit on staging/preview environments. This policy defines when SWA deployments are triggered and how to manage environment capacity.
 
 **GOVERNED EXCEPTION**: Build & Deploy Job may fail for PRs that do not modify frontend source code. This is non-blocking when all quality gates pass. See Section 5 for compensating controls.
+
+**tip==LIVE (env integrity)**: The user-facing SWA hostname
+`https://purple-water-03205fa03.6.azurestaticapps.net` is production UI.
+After a successful push-to-main SWA workflow, the default environment MUST bake
+`VITE_API_URL=https://app-qgp-prod.azurewebsites.net` (see
+`deploy_production_swa` in `.github/workflows/azure-static-web-apps-purple-water-03205fa03.yml`).
+PR validation and the temporary pre-gate bake continue to use the staging API.
 
 ---
 
@@ -47,7 +54,17 @@ This prevents unnecessary preview environment creation for backend-only changes.
 ```yaml
 SWA_APP_NAME: purple-water-03205fa03
 RESOURCE_GROUP: rg-qgp-prod
+PRODUCTION_API_URL: https://app-qgp-prod.azurewebsites.net
+STAGING_API_URL: https://qgp-staging-plantexpand.azurewebsites.net
 ```
+
+### Bake semantics (same hostname)
+
+| Phase | Trigger | `VITE_API_URL` | Deployed to purple-water? |
+|-------|---------|----------------|---------------------------|
+| PR validation | `pull_request` | Staging API | No (build-only) |
+| Staging verification | `push` to main | Staging API | Yes (temporary) |
+| Production tip==LIVE | After staging UI gate | Production API | Yes (steady state) |
 
 ---
 
@@ -100,6 +117,18 @@ Reason: This Static Web App already has the maximum number of staging environmen
 
 3. **Long-term**: Ensure PRs are closed/merged promptly
 
+### tip==LIVE mismatch (UI talks to staging API)
+
+**Symptoms**: Browser Network tab on purple-water shows calls to
+`qgp-staging-plantexpand.azurewebsites.net` instead of `app-qgp-prod.azurewebsites.net`.
+
+**Resolution**:
+1. Confirm the latest successful main run of `Azure Static Web Apps CI/CD` completed
+   `Deploy Production SWA (prod API bake)`.
+2. Hard-refresh / clear SW cache, then re-check the inlined `VITE_API_URL` in the
+   main JS bundle (must not bake staging outside the static `API_URLS.staging` map).
+3. Re-run the workflow on main if the production bake job was skipped (e.g. validation mode).
+
 ---
 
 ## 5. Compensating Controls
@@ -110,7 +139,7 @@ For PRs that skip SWA deployment:
 |---------|-------------|
 | Frontend changes | Detected by `dorny/paths-filter` |
 | Staging smoke test | Required before production deploy |
-| E2E tests | Run against staging in release workflow |
+| E2E tests | Run against staging bake in SWA workflow before prod API redeploy |
 
 ---
 

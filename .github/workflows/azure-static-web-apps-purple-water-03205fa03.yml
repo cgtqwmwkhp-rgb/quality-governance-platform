@@ -11,21 +11,28 @@ name: Azure Static Web Apps CI/CD
 #   - Actual deployment only happens on push to main
 #
 # Push to Main Behavior:
-#   1. deploy_to_staging: Build and deploy to SWA
+#   1. deploy_to_staging: Build with STAGING API and deploy to SWA (verification slot)
 #   2. staging_ui_verification: Run Playwright E2E tests (HARD GATE)
-#   3. production_promotion_gate: Only runs if staging verification passes
+#   3. deploy_production_swa: Rebuild with PRODUCTION API and redeploy to purple-water
+#
+# tip==LIVE (env integrity): purple-water is the user-facing production SWA.
+# After a successful main run, the default SWA environment MUST bake the
+# production API so tip (UI) talks to LIVE (prod API). Staging bake is only a
+# temporary verification artifact overwritten by deploy_production_swa.
 #
 # =============================================================================
 # VITE_API_URL RATIONALE (INTENTIONAL)
 # =============================================================================
-# The staging SWA build uses VITE_API_URL pointing to the STAGING backend.
-# This is INTENTIONAL because:
-#   1. Staging frontend must talk to the staging API (environment parity)
-#   2. PR validation and deploy_to_staging share the same VITE_API_URL
-#   3. E2E / staging UI verification exercises the staging stack end-to-end
-#   4. Production API URL is reserved for production frontend builds only
+# Two bakes, one hostname (purple-water default environment):
+#   1. PR validation + deploy_to_staging → STAGING API
+#      https://qgp-staging-plantexpand.azurewebsites.net
+#      Purpose: E2E / staging UI verification against the staging stack
+#   2. deploy_production_swa (post-gate, push to main only) → PRODUCTION API
+#      https://app-qgp-prod.azurewebsites.net
+#      Purpose: User-facing tip==LIVE integrity on purple-water
 #
-# Staging FE → Staging API: https://qgp-staging-plantexpand.azurewebsites.net
+# Preview / PR builds never deploy and never bake production API.
+# Validation mode (workflow_dispatch) NEVER runs deploy_production_swa.
 # =============================================================================
 # VALIDATION MODE (Manual Testing)
 # =============================================================================
@@ -33,7 +40,7 @@ name: Azure Static Web Apps CI/CD
 #   - simulate_no_tests: true  -> NO_TESTS classification
 #   - simulate_infra_failure: true -> INFRA_FAILURE classification
 #
-# CRITICAL: Validation mode NEVER runs production_promotion_gate.
+# CRITICAL: Validation mode NEVER runs deploy_production_swa.
 # =============================================================================
 on:
   push:
@@ -66,13 +73,18 @@ on:
         type: boolean
         default: false
       validation_mode:
-        description: 'Enable validation mode (blocks production promotion)'
+        description: 'Enable validation mode (blocks production SWA bake/redeploy)'
         required: false
         type: boolean
         default: false
 
 env:
+  # purple-water is the single user-facing SWA hostname (also used as staging
+  # verification target before the production API bake overwrites it).
   STAGING_SWA_URL: https://purple-water-03205fa03.6.azurestaticapps.net
+  PRODUCTION_SWA_URL: https://purple-water-03205fa03.6.azurestaticapps.net
+  STAGING_API_URL: https://qgp-staging-plantexpand.azurewebsites.net
+  PRODUCTION_API_URL: https://app-qgp-prod.azurewebsites.net
 
 jobs:
   # For PRs: build-only (no deployment) to satisfy branch protection
@@ -89,10 +101,10 @@ jobs:
       - name: Install Dependencies
         working-directory: frontend
         run: npm ci
-      - name: Build Frontend (PR validation only)
+      - name: Build Frontend (PR validation only — staging API bake)
         working-directory: frontend
         env:
-          VITE_API_URL: https://qgp-staging-plantexpand.azurewebsites.net
+          VITE_API_URL: ${{ env.STAGING_API_URL }}
           VITE_BUILD_SHA: ${{ github.sha }}
           VITE_BUILD_TIME: ${{ github.event.pull_request.updated_at }}
         run: npm run build
@@ -144,10 +156,10 @@ jobs:
           echo "VITE_BUILD_TIME=$BUILD_TIME" >> $GITHUB_ENV
           echo "build_time=$BUILD_TIME" >> $GITHUB_OUTPUT
       
-      - name: Build Frontend
+      - name: Build Frontend (staging API bake for verification)
         working-directory: frontend
         env:
-          VITE_API_URL: https://qgp-staging-plantexpand.azurewebsites.net
+          VITE_API_URL: ${{ env.STAGING_API_URL }}
           VITE_AZURE_CLIENT_ID: ${{ secrets.VITE_AZURE_CLIENT_ID }}
           VITE_AZURE_AUTHORITY: ${{ secrets.VITE_AZURE_AUTHORITY }}
           VITE_AZURE_REDIRECT_URI: ${{ secrets.VITE_AZURE_REDIRECT_URI }}
@@ -161,7 +173,7 @@ jobs:
         run: |
           node scripts/check-no-http-api.cjs
       
-      - name: Deploy to Staging SWA
+      - name: Deploy staging bake to SWA (temporary — overwritten by prod bake)
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
@@ -639,20 +651,20 @@ jobs:
           exit 1
 
   # ============================================================================
-  # PRODUCTION PROMOTION GATE
-  # This job only runs if BOTH deploy_to_staging AND staging_ui_verification succeed.
-  # CRITICAL: This enforces the staging-first release discipline.
+  # PRODUCTION SWA BAKE + DEPLOY (tip==LIVE)
+  # Rebuilds the frontend with the PRODUCTION API URL and redeploys to purple-water.
+  # Only runs if BOTH deploy_to_staging AND staging_ui_verification succeed.
   # SECURITY: workflow_dispatch (validation mode) NEVER runs this job.
   # ============================================================================
-  production_promotion_gate:
+  deploy_production_swa:
     if: github.event_name == 'push'
     needs: [deploy_to_staging, staging_ui_verification]
     runs-on: ubuntu-latest
-    name: Production Promotion Gate
+    name: Deploy Production SWA (prod API bake)
     steps:
       - name: Verify Staging UI Verification Passed
         run: |
-          echo "# [DEPLOY] Production Promotion Gate" >> $GITHUB_STEP_SUMMARY
+          echo "# [DEPLOY] Production SWA Bake (tip==LIVE)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Gate Dependencies" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -677,23 +689,129 @@ jobs:
           echo "| results.json | ${{ needs.staging_ui_verification.outputs.results_exist == 'true' && '[OK]' || '[WARN]' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| junit.xml | ${{ needs.staging_ui_verification.outputs.junit_exist == 'true' && '[OK]' || '[WARN]' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "## [OK] PRODUCTION PROMOTION APPROVED" >> $GITHUB_STEP_SUMMARY
+          echo "| **Production API** | \`${{ env.PRODUCTION_API_URL }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Production SWA** | \`${{ env.PRODUCTION_SWA_URL }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "All audit-grade preconditions met:" >> $GITHUB_STEP_SUMMARY
-          echo "- results.json exists: [OK]" >> $GITHUB_STEP_SUMMARY
-          echo "- junit.xml exists: [OK]" >> $GITHUB_STEP_SUMMARY
-          echo "- TOTAL > 0: [OK]" >> $GITHUB_STEP_SUMMARY
-          echo "- FAILED == 0: [OK]" >> $GITHUB_STEP_SUMMARY
-          echo "- EXIT_CODE == 0: [OK]" >> $GITHUB_STEP_SUMMARY
+
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+          lfs: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Clean Install Dependencies
+        working-directory: frontend
+        run: |
+          rm -rf node_modules
+          npm ci
+
+      - name: Update Service Worker Cache Version
+        working-directory: frontend
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          sed -i "s/CACHE_VERSION = 'qgp-v[^']*'/CACHE_VERSION = 'qgp-v2.0.0-${SHA}-${TIMESTAMP}'/" public/sw.js
+          echo "Updated SW cache version to: qgp-v2.0.0-${SHA}-${TIMESTAMP}"
+
+      - name: Set production build version metadata
+        id: set_version
+        run: |
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo "VITE_BUILD_SHA=${{ github.sha }}" >> $GITHUB_ENV
+          echo "VITE_BUILD_TIME=$BUILD_TIME" >> $GITHUB_ENV
+          echo "build_time=$BUILD_TIME" >> $GITHUB_OUTPUT
+
+      - name: Build Frontend (PRODUCTION API bake)
+        working-directory: frontend
+        env:
+          VITE_API_URL: ${{ env.PRODUCTION_API_URL }}
+          VITE_ENVIRONMENT: production
+          VITE_AZURE_CLIENT_ID: ${{ secrets.VITE_AZURE_CLIENT_ID }}
+          VITE_AZURE_AUTHORITY: ${{ secrets.VITE_AZURE_AUTHORITY }}
+          VITE_AZURE_REDIRECT_URI: ${{ secrets.VITE_AZURE_REDIRECT_URI }}
+          VITE_BUILD_SHA: ${{ env.VITE_BUILD_SHA }}
+          VITE_BUILD_TIME: ${{ env.VITE_BUILD_TIME }}
+        run: |
+          npm run build
+
+      - name: Verify No HTTP API URLs in Build
+        working-directory: frontend
+        run: |
+          node scripts/check-no-http-api.cjs
+
+      - name: Verify tip==LIVE production API bake
+        working-directory: frontend
+        env:
+          PRODUCTION_API_URL: ${{ env.PRODUCTION_API_URL }}
+          STAGING_API_URL: ${{ env.STAGING_API_URL }}
+        run: |
+          python3 <<'PY'
+          import os
+          import pathlib
+          import re
+          import sys
+
+          prod = os.environ["PRODUCTION_API_URL"]
+          staging = os.environ["STAGING_API_URL"]
+          dist = pathlib.Path("dist")
+          if not dist.exists():
+              print("FAIL: dist/ missing")
+              sys.exit(1)
+
+          # API_URLS map may still mention staging; VITE_API_URL must not be inlined as staging.
+          staging_map = re.compile(
+              r'staging\s*:\s*[\'"]' + re.escape(staging) + r'[\'"]'
+          )
+          found_prod = False
+          baked_staging = False
+          for path in dist.rglob("*.js"):
+              text = path.read_text(encoding="utf-8", errors="ignore")
+              if prod in text:
+                  found_prod = True
+              cleaned = staging_map.sub("", text)
+              if staging in cleaned:
+                  baked_staging = True
+                  print(f"FAIL: staging API appears outside API_URLS map in {path}")
+
+          if baked_staging:
+              sys.exit(1)
+          if not found_prod:
+              print(f"FAIL: production API URL not found in dist: {prod}")
+              sys.exit(1)
+          print(f"OK: production bake inlines {prod} and does not bake staging as VITE_API_URL")
+          PY
+
+      - name: Deploy production bake to purple-water SWA
+        id: proddeploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PURPLE_WATER_03205FA03 }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "frontend/dist"
+          skip_app_build: true
+
+      - name: Production SWA bake summary
+        if: always()
+        run: |
+          echo "## [OK] PRODUCTION SWA BAKE DEPLOYED" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "This SHA is approved for production deployment." >> $GITHUB_STEP_SUMMARY
+          echo "tip==LIVE: purple-water now bakes \`${{ env.PRODUCTION_API_URL }}\`." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| SWA | ${{ env.PRODUCTION_SWA_URL }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| VITE_API_URL | ${{ env.PRODUCTION_API_URL }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SHA | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build time | ${{ steps.set_version.outputs.build_time }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Production promotion gated on staging_ui_verification: YES**" >> $GITHUB_STEP_SUMMARY
+          echo "**Production SWA redeploy gated on staging_ui_verification: YES**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "_Gate passed at $(date -u +%Y-%m-%dT%H:%M:%SZ)_" >> $GITHUB_STEP_SUMMARY
+          echo "_Production bake completed at $(date -u +%Y-%m-%dT%H:%M:%SZ)_" >> $GITHUB_STEP_SUMMARY
 
   # NOTE: close_pull_request_job removed - no longer creating PR preview environments
   # Frontend PRs are validated by CI workflow (Build Check job) and only deployed on merge to main
