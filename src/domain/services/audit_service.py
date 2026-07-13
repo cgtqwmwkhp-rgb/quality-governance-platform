@@ -12,6 +12,7 @@ for backward compatibility with other modules that import it directly.
 from __future__ import annotations
 
 import dataclasses
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -36,11 +37,15 @@ from src.domain.models.audit import (
 from src.domain.models.audit_log import AuditEvent
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.risk_register import EnterpriseRisk
+from src.domain.services.audit_log_service import AuditLogService
 from src.domain.services.audit_risk_gate import AUDIT_RISK_SEVERITIES, should_create_risk
 from src.domain.services.audit_scoring_service import AuditScoringService
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.middleware.tenant_context import get_request_tenant_id
 from src.infrastructure.monitoring.azure_monitor import track_business_event, track_metric
+
+logger = logging.getLogger(__name__)
 
 try:
     from opentelemetry import trace
@@ -202,13 +207,20 @@ async def record_audit_event(
     request_id: str | None = None,
     resource_type: str | None = None,
     resource_id: str | None = None,
+    tenant_id: int | None = None,
 ) -> AuditEvent:
-    """Record a system-wide audit event with canonical schema.
+    """Record a system-wide audit event and persist an immutable AuditLogEntry.
 
-    Note: Currently logs the event for observability but does not persist
-    to the database. Full persistence requires schema migration.
+    Bridges the lightweight ``AuditEvent`` API used by domain services into
+    ``AuditLogService`` so Admin Audit Trail reflects CAPA / incident /
+    complaint (and other) mutations. Persistence is flush-only so the caller's
+    session/transaction (typically ``get_db``) owns the commit.
+
+    When no tenant can be resolved, the event remains observability-only and a
+    warning is logged — AuditLogEntry requires a non-null tenant_id.
     """
     final_actor_user_id = actor_user_id if actor_user_id is not None else user_id
+    resolved_tenant_id = tenant_id if tenant_id is not None else get_request_tenant_id()
 
     event = AuditEvent(
         event_type=event_type,
@@ -224,7 +236,60 @@ async def record_audit_event(
         user_id=final_actor_user_id,
     )
 
-    track_business_event("audit_completed", {"event_type": event_type, "entity_type": entity_type})
+    if resolved_tenant_id is None:
+        logger.warning(
+            "audit_bridge_skipped_no_tenant event_type=%s entity_type=%s entity_id=%s action=%s",
+            event_type,
+            entity_type,
+            entity_id,
+            action,
+        )
+        track_business_event(
+            "audit_completed",
+            {"event_type": event_type, "entity_type": entity_type, "persisted": False},
+        )
+        return event
+
+    action_lower = (action or "").lower()
+    old_values: dict[str, Any] | None = None
+    new_values: dict[str, Any] | None = None
+    if action_lower == "delete":
+        old_values = payload
+    elif action_lower == "create":
+        new_values = payload
+    else:
+        new_values = payload
+
+    entry = await AuditLogService(db).log(
+        tenant_id=resolved_tenant_id,
+        entity_type=entity_type,
+        entity_id=str(entity_id),
+        action=action,
+        user_id=final_actor_user_id,
+        old_values=old_values,
+        new_values=new_values,
+        request_id=request_id,
+        metadata={
+            "event_type": event_type,
+            "description": description,
+            "resource_type": resource_type or entity_type,
+            "resource_id": resource_id or str(entity_id),
+        },
+        entity_name=(description[:255] if description else None),
+        action_category="data",
+        commit=False,
+    )
+    event.id = entry.id
+
+    track_business_event(
+        "audit_completed",
+        {
+            "event_type": event_type,
+            "entity_type": entity_type,
+            "persisted": True,
+            "audit_log_entry_id": entry.id,
+        },
+    )
 
     return event
 

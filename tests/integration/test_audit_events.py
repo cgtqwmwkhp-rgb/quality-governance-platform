@@ -1,15 +1,15 @@
 """Integration tests for audit event recording.
 
-Note: AuditEvent is a lightweight logging class (not a SQLAlchemy model),
-so audit events are verified by checking API responses and HTTP status codes
-rather than querying the database directly.
+CUJ-IMMU-01: domain mutations bridge into AuditLogEntry via record_audit_event.
 """
 
 import uuid
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
+from src.domain.models.audit_log import AuditLogEntry
 from src.domain.models.incident import IncidentSeverity, IncidentStatus, IncidentType
 from tests.factories import IncidentFactory
 
@@ -34,8 +34,8 @@ async def test_incident(test_session, test_user):
     return incident
 
 
-async def test_incident_creation_records_audit_event(client: AsyncClient, auth_headers, test_session):
-    """Test that creating an incident succeeds (audit events are logged, not DB-persisted)."""
+async def test_incident_creation_records_audit_event(client: AsyncClient, auth_headers, test_session, test_tenant):
+    """Creating an incident persists an immutable AuditLogEntry for Admin Audit Trail."""
     data = {
         "title": "Audit Test Incident",
         "description": "Testing audit log",
@@ -50,3 +50,12 @@ async def test_incident_creation_records_audit_event(client: AsyncClient, auth_h
     res_data = response.json()
     assert res_data["id"] is not None
     assert res_data["title"] == "Audit Test Incident"
+
+    result = await test_session.execute(
+        select(AuditLogEntry).where(
+            AuditLogEntry.tenant_id == test_tenant.id,
+            AuditLogEntry.entity_type == "incident",
+            AuditLogEntry.entity_id == str(res_data["id"]),
+        )
+    )
+    assert result.scalar_one_or_none() is not None

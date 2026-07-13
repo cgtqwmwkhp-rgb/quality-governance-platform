@@ -55,12 +55,19 @@ class AuditLogService:
         entity_name: Optional[str] = None,
         action_category: str = "data",
         user_role: Optional[str] = None,
+        *,
+        commit: bool = True,
     ) -> AuditLogEntry:
         """
         Create an immutable audit log entry.
 
         Each entry is linked to the previous via cryptographic hash,
         creating a tamper-evident chain.
+
+        When ``commit=False``, the entry is flushed into the caller's session
+        so domain mutations and the audit row share one transaction (e.g. via
+        ``get_db`` request-end commit). Default ``commit=True`` preserves the
+        historical standalone behaviour for direct AuditLogService callers.
         """
         # Get the previous entry for hash chain
         result = await self.db.execute(
@@ -128,7 +135,10 @@ class AuditLogService:
         )
 
         self.db.add(entry)
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
         await self.db.refresh(entry)
 
         return entry
