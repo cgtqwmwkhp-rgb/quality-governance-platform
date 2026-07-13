@@ -151,6 +151,8 @@ export default function IMSDashboard() {
   // ISMS domain metadata
   const liveStandards = dashData?.standards ?? []
   const overallCompliance = dashData?.overall_compliance ?? 0
+  const evidenceCoveragePct = dashData?.compliance_coverage?.coverage_percentage
+  const showDualMetrics = evidenceCoveragePct != null && !dashData?.compliance_coverage_error
   const ismsData = dashData?.isms ?? null
   const trackedStandardCount = liveStandards.filter((standard) => !standard.setup_required).length
 
@@ -229,28 +231,58 @@ export default function IMSDashboard() {
         </div>
       )}
 
-      {/* Overall Compliance Banner */}
+      {/* Overall Compliance Banner — control % vs evidence % honesty when both are live */}
       <div className="bg-gradient-to-r from-primary to-primary-hover rounded-xl p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-2xl font-bold text-primary-foreground mb-1">
               {t('ims.overall_compliance')}
             </h2>
             <p className="text-primary-foreground/80">{t('ims.across_standards')}</p>
           </div>
-          <div className="text-right">
-            {dashLoading ? (
-              <div className="text-5xl font-bold text-primary-foreground/50 animate-pulse">—%</div>
-            ) : (
-              <div className="text-5xl font-bold text-primary-foreground" aria-label={`${overallCompliance}% overall IMS compliance`}>
+          {dashLoading ? (
+            <div className="text-5xl font-bold text-primary-foreground/50 animate-pulse">—%</div>
+          ) : showDualMetrics ? (
+            <div className="flex flex-col gap-4 sm:flex-row sm:gap-8">
+              <div className="text-right" data-testid="ims-metric-control-implementation">
+                <div
+                  className="text-4xl font-bold text-primary-foreground"
+                  aria-label={`${overallCompliance}% control implementation`}
+                >
+                  {Math.round(overallCompliance)}%
+                </div>
+                <div className="flex items-center justify-end gap-1 text-primary-foreground/80 mt-1 text-sm">
+                  <TrendingUp className="w-4 h-4" aria-hidden="true" />
+                  <span>Control implementation</span>
+                </div>
+              </div>
+              <div className="text-right" data-testid="ims-metric-evidence-coverage">
+                <div
+                  className="text-4xl font-bold text-primary-foreground"
+                  aria-label={`${evidenceCoveragePct}% evidence coverage`}
+                >
+                  {Math.round(evidenceCoveragePct)}%
+                </div>
+                <div className="flex items-center justify-end gap-1 text-primary-foreground/80 mt-1 text-sm">
+                  <Shield className="w-4 h-4" aria-hidden="true" />
+                  <span>Evidence coverage</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-right">
+              <div
+                className="text-5xl font-bold text-primary-foreground"
+                aria-label={`${overallCompliance}% control implementation`}
+              >
                 {Math.round(overallCompliance)}%
               </div>
-            )}
-            <div className="flex items-center gap-1 text-primary-foreground/80 mt-1">
-              <TrendingUp className="w-4 h-4" aria-hidden="true" />
-              <span>Live from management system controls</span>
+              <div className="flex items-center justify-end gap-1 text-primary-foreground/80 mt-1">
+                <TrendingUp className="w-4 h-4" aria-hidden="true" />
+                <span>Control implementation — live from management system controls</span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
