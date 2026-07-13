@@ -64,9 +64,7 @@ class TestRTALifecycle:
         """Can list actions scoped to an RTA source."""
         rta_id = "uat-rta-open"
 
-        response = await admin_client.get(
-            f"/api/v1/actions/?page=1&page_size=10&source_type=rta&source_id={rta_id}"
-        )
+        response = await admin_client.get(f"/api/v1/actions/?page=1&page_size=10&source_type=rta&source_id={rta_id}")
 
         assert response["status"] == "ok"
         assert "source_type=rta" in response["path"] or response["path"].startswith("/api/v1/actions/")
@@ -107,9 +105,7 @@ class TestRTALifecycle:
         """Can list investigations linked to an RTA."""
         rta_id = "uat-rta-open"
 
-        response = await admin_client.get(
-            f"/api/v1/rtas/{rta_id}/investigations?page=1&page_size=10"
-        )
+        response = await admin_client.get(f"/api/v1/rtas/{rta_id}/investigations?page=1&page_size=10")
 
         assert response["status"] == "ok"
         assert response["path"] == f"/api/v1/rtas/{rta_id}/investigations?page=1&page_size=10"
