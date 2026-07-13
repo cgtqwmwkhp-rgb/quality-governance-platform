@@ -16,6 +16,7 @@ from src.api.routes import (
     auth,
     capa,
     complaints,
+    competency_requirements,
     compliance,
     compliance_automation,
     copilot,
@@ -62,6 +63,7 @@ from src.api.routes import (
     telemetry,
     tenants,
     testing,
+    training_tickets,
     users,
     uvdb,
     vehicle_checklist_analytics,
@@ -183,6 +185,16 @@ router.include_router(ai_templates.router, prefix="/ai-templates", tags=["AI Tem
 router.include_router(assessments.router, prefix="/assessments", tags=["Assessments"])
 router.include_router(inductions.router, prefix="/inductions", tags=["Inductions"])
 router.include_router(engineers.router, prefix="/engineers", tags=["Engineers"])
+router.include_router(
+    training_tickets.router,
+    prefix="/training-tickets",
+    tags=["Training Tickets"],
+)
+router.include_router(
+    competency_requirements.router,
+    prefix="/competency-requirements",
+    tags=["Competency Requirements"],
+)
 router.include_router(wdp_analytics.router, prefix="/wdp-analytics", tags=["Workforce Analytics"])
 # Governance Framework (Workforce Development Platform)
 router.include_router(governance.router, prefix="/governance", tags=["Governance Framework"])
