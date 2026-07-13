@@ -157,6 +157,8 @@ export function deriveDeclaredProgramLabel(
   return 'External Audit'
 }
 
+import { CUSTOMER_AUDITS_AUDITS_PATH } from '../assuranceHubHelpers'
+
 export function deriveSpecialistHome(job: ExternalAuditImportJob | null): { path: string; label: string } {
   const path = job?.specialist_home_path?.trim()
   const label = job?.specialist_home_label?.trim()
@@ -190,7 +192,7 @@ export function deriveSpecialistHome(job: ExternalAuditImportJob | null): { path
     return { path: '/compliance', label: 'Open ISO Compliance' }
   }
   if (scheme === 'customer_other' || scheme === 'other') {
-    return { path: '/customer-audits', label: 'Open Customer Audits' }
+    return { path: CUSTOMER_AUDITS_AUDITS_PATH, label: 'Open Customer Audits' }
   }
-  return { path: '/customer-audits', label: 'Open Customer Audits' }
+  return { path: CUSTOMER_AUDITS_AUDITS_PATH, label: 'Open Customer Audits' }
 }

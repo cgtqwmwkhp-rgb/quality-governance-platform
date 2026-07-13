@@ -41,6 +41,7 @@ import { Button } from './ui/Button'
 import { cn } from '../helpers/utils'
 import { hasRole, isSuperuser } from '../utils/auth'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
+import { CUSTOMER_AUDITS_AUDITS_PATH, navItemIsActive } from './assuranceHubHelpers'
 
 /** Deferred until the shell opens Copilot — keeps authenticated first paint lean (S14). */
 const AICopilot = lazy(() => import('./copilot/AICopilot'))
@@ -116,7 +117,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/audit-templates', icon: Sparkles, label: t('nav.audit_builder') },
         { path: '/uvdb', icon: Award, label: t('nav.uvdb_achilles') },
         { path: '/planet-mark', icon: Leaf, label: t('nav.planet_mark') },
-        { path: '/customer-audits', icon: Users, label: t('nav.customer_audits') },
+        { path: CUSTOMER_AUDITS_AUDITS_PATH, icon: Users, label: t('nav.customer_audits') },
       ],
     },
     {
@@ -167,7 +168,7 @@ export default function Layout({ onLogout }: LayoutProps) {
 
   const location = useLocation()
   const pathIsActive = (path: string) =>
-    location.pathname === path || location.pathname.startsWith(`${path}/`)
+    navItemIsActive(path, location.pathname, location.search)
   const activeHubId = hubs.find((hub) => hub.items.some((item) => pathIsActive(item.path)))?.id
   const [expandedHubs, setExpandedHubs] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
@@ -392,39 +393,41 @@ export default function Layout({ onLogout }: LayoutProps) {
 
                     {expanded && (
                       <div id={`nav-hub-${hub.id}`} className="mt-1 ml-4 space-y-1">
-                        {hub.items.map((item) => (
-                          <NavLink
-                            key={item.path}
-                            to={item.path}
-                            onClick={() => setSidebarOpen(false)}
-                            className={({ isActive }) =>
-                              cn(
+                        {hub.items.map((item) => {
+                          const itemActive = navItemIsActive(
+                            item.path,
+                            location.pathname,
+                            location.search,
+                          )
+                          return (
+                            <NavLink
+                              key={item.path}
+                              to={item.path}
+                              onClick={() => setSidebarOpen(false)}
+                              aria-current={itemActive ? 'page' : undefined}
+                              className={cn(
                                 'flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-medium',
                                 'transition-all duration-200 group',
-                                isActive
+                                itemActive
                                   ? 'bg-primary/10 text-primary border border-primary/20'
                                   : 'text-muted-foreground hover:text-foreground hover:bg-surface',
-                              )
-                            }
-                          >
-                            {({ isActive }) => (
-                              <>
-                                <item.icon
-                                  className={cn(
-                                    'w-4 h-4 transition-colors',
-                                    isActive
-                                      ? 'text-primary'
-                                      : 'text-muted-foreground group-hover:text-foreground',
-                                  )}
-                                />
-                                {item.label}
-                                {isActive && (
-                                  <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
+                              )}
+                            >
+                              <item.icon
+                                className={cn(
+                                  'w-4 h-4 transition-colors',
+                                  itemActive
+                                    ? 'text-primary'
+                                    : 'text-muted-foreground group-hover:text-foreground',
                                 )}
-                              </>
-                            )}
-                          </NavLink>
-                        ))}
+                              />
+                              {item.label}
+                              {itemActive && (
+                                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
+                              )}
+                            </NavLink>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
