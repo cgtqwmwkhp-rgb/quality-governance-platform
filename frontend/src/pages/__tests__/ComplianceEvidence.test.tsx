@@ -366,6 +366,15 @@ describe('ComplianceEvidence', () => {
   })
 
   it('downloads audit pack via server export endpoint', async () => {
+    const createObjectURL = vi.fn(() => 'blob:audit-pack')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL,
+      revokeObjectURL,
+    })
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+
     const ComplianceEvidence = (await import('../ComplianceEvidence')).default
 
     render(
@@ -383,7 +392,12 @@ describe('ComplianceEvidence', () => {
         includeSoa: true,
       })
     })
-    expect(mockToastSuccess).toHaveBeenCalledWith('Audit pack downloaded')
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith('Audit pack downloaded')
+    })
+    expect(createObjectURL).toHaveBeenCalled()
+    clickSpy.mockRestore()
+    vi.unstubAllGlobals()
   })
 
   it('resets dialog state on close after deep analysis', async () => {
