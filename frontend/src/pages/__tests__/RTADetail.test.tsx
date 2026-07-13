@@ -1,15 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import RTADetail from '../RTADetail'
 
 const mockNavigate = vi.fn()
+const mockToastError = vi.fn()
+const mockToastSuccess = vi.fn()
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, fallbackOrOptions?: string | Record<string, unknown>) =>
-      typeof fallbackOrOptions === 'string' ? fallbackOrOptions : key,
+    t: (key: string, fallbackOrOptions?: string | Record<string, unknown>) => {
+      if (typeof fallbackOrOptions === 'string') return fallbackOrOptions
+      if (fallbackOrOptions && typeof fallbackOrOptions === 'object' && 'defaultValue' in fallbackOrOptions) {
+        return String(fallbackOrOptions.defaultValue)
+      }
+      return key
+    },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
@@ -25,8 +33,8 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('../../contexts/ToastContext', () => ({
   toast: {
-    success: vi.fn(),
-    error: vi.fn(),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+    error: (...args: unknown[]) => mockToastError(...args),
   },
 }))
 
@@ -36,6 +44,10 @@ vi.mock('../../utils/errorTracker', () => ({
 
 vi.mock('../../components/ui/Breadcrumbs', () => ({
   Breadcrumbs: () => <div data-testid="breadcrumbs" />,
+}))
+
+vi.mock('../../components/UserEmailSearch', () => ({
+  UserEmailSearch: () => <div data-testid="user-email-search" />,
 }))
 
 vi.mock('../../components/ui/Tabs', () => ({
@@ -75,8 +87,8 @@ const mockRta = {
   reference_number: 'RTA-42',
   title: 'Fleet collision',
   description: 'Minor road traffic incident',
-  severity: 'high',
-  status: 'open',
+  severity: 'damage_only',
+  status: 'reported',
   collision_date: '2026-03-01',
   reported_date: '2026-03-02',
   location: 'A1',
@@ -135,6 +147,8 @@ describe('RTADetail', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     mockNavigate.mockReset()
+    mockToastError.mockReset()
+    mockToastSuccess.mockReset()
     client = await import('../../api/client')
 
     client.rtasApi.get.mockResolvedValue({ data: mockRta })
@@ -142,7 +156,9 @@ describe('RTADetail', () => {
       data: { items: [{ id: 8, reference_number: 'INV-8', title: 'RTA investigation' }], total: 1 },
     })
     client.rtasApi.listRunningSheet.mockResolvedValue({ data: [] })
-    client.actionsApi.list.mockResolvedValue({ data: { items: [] } })
+    client.actionsApi.list.mockResolvedValue({
+      data: { items: [{ id: 3, title: 'Secure dashcam', status: 'open', display_status: 'open' }] },
+    })
     client.evidenceAssetsApi.list.mockResolvedValue({ data: { items: [] } })
   })
 
@@ -182,5 +198,101 @@ describe('RTADetail', () => {
     expect(screen.getAllByText('INV-8').length).toBeGreaterThan(0)
     expect(screen.getAllByText('3 uploaded').length).toBeGreaterThan(0)
     expect(screen.getAllByText('POL-123').length).toBeGreaterThan(0)
+  })
+
+  it('shows toast when save edit fails', async () => {
+    client.rtasApi.update.mockRejectedValue(new Error('Invalid status transition'))
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Fleet collision' })).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: /edit/i }))
+    await userEvent.click(screen.getByTestId('rta-save-edit'))
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith('Invalid status transition')
+    })
+  })
+
+  it('opens linked investigation and filtered CAPA workspace', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Fleet collision' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open investigation' })[0])
+    expect(mockNavigate).toHaveBeenCalledWith('/investigations/8')
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Open CAPA/i })[0])
+    expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=rta&sourceId=42')
+  })
+
+  it('investigation modal only collects title (API contract honest)', async () => {
+    client.rtasApi.listInvestigations.mockResolvedValue({ data: { items: [], total: 0 } })
+    client.actionsApi.list.mockResolvedValue({ data: { items: [] } })
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rta-start-investigation')).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByTestId('rta-start-investigation'))
+
+    expect(screen.getByTestId('rta-investigation-modal')).toBeInTheDocument()
+    expect(screen.getByTestId('rta-investigation-title')).toBeInTheDocument()
+    expect(screen.getByLabelText('rtas.detail.investigation_title')).toBeInTheDocument()
+    expect(screen.queryByText(/investigation type/i)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('user-email-search')).not.toBeInTheDocument()
+  })
+
+  it('stays on RTA detail after investigation create and reloads list', async () => {
+    client.rtasApi.listInvestigations
+      .mockResolvedValueOnce({ data: { items: [], total: 0 } })
+      .mockResolvedValueOnce({
+        data: { items: [{ id: 9, reference_number: 'INV-9', title: 'New investigation' }], total: 1 },
+      })
+    client.actionsApi.list.mockResolvedValue({ data: { items: [] } })
+    client.investigationsApi.createFromRecord.mockResolvedValue({
+      data: { id: 9, reference_number: 'INV-9', title: 'Root cause review' },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rta-start-investigation')).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByTestId('rta-start-investigation'))
+    await userEvent.type(screen.getByTestId('rta-investigation-title'), 'Root cause review')
+    await userEvent.click(screen.getByRole('button', { name: 'rtas.detail.create_investigation' }))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.createFromRecord).toHaveBeenCalledWith({
+        source_type: 'road_traffic_collision',
+        source_id: 42,
+        title: 'Root cause review',
+      })
+    })
+
+    expect(mockNavigate).not.toHaveBeenCalledWith('/investigations')
+    expect(mockToastSuccess).toHaveBeenCalled()
+    await waitFor(() => {
+      expect(client.rtasApi.listInvestigations).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('shows honest key dates card instead of activity timeline label', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rta-key-dates')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('Key dates')).toBeInTheDocument()
+    expect(screen.getByText(/Running Sheet tab/i)).toBeInTheDocument()
+    expect(screen.queryByText('rtas.detail.activity_timeline')).not.toBeInTheDocument()
   })
 })
