@@ -35,8 +35,11 @@ async def test_incident(test_session, test_user):
     return incident
 
 
-async def test_incident_creation_records_audit_event(client: AsyncClient, auth_headers, test_session, test_tenant):
-    """Creating an incident persists an immutable AuditLogEntry for Admin Audit Trail."""
+async def test_incident_creation_records_audit_event(client: AsyncClient, auth_headers, test_session):
+    """Creating an incident persists an immutable AuditLogEntry for Admin Audit Trail.
+
+    ``auth_headers`` maps to seeded user id=1 (tenant_id=1).
+    """
     data = {
         "title": "Audit Test Incident",
         "description": "Testing audit log",
@@ -52,11 +55,10 @@ async def test_incident_creation_records_audit_event(client: AsyncClient, auth_h
     assert res_data["id"] is not None
     assert res_data["title"] == "Audit Test Incident"
 
-    # FORCE RLS on audit_log_entries — bind tenant GUC for the test session read
-    await apply_tenant_guc(test_session, test_tenant.id)
+    await apply_tenant_guc(test_session, 1)
     result = await test_session.execute(
         select(AuditLogEntry).where(
-            AuditLogEntry.tenant_id == test_tenant.id,
+            AuditLogEntry.tenant_id == 1,
             AuditLogEntry.entity_type == "incident",
             AuditLogEntry.entity_id == str(res_data["id"]),
         )
