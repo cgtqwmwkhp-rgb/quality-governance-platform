@@ -132,6 +132,7 @@ type SourceTypeFilter =
   | 'ncr'
   | 'capa_incident'
   | 'capa_complaint'
+  | 'regulatory_watch'
 type SortMode = 'newest' | 'due_first'
 
 // Form state type for creating actions
@@ -633,6 +634,7 @@ export default function Actions() {
             <SelectItem value="ncr">NCR / defects (CAPA)</SelectItem>
             <SelectItem value="capa_incident">CAPA (incident-linked)</SelectItem>
             <SelectItem value="capa_complaint">CAPA (complaint-linked)</SelectItem>
+            <SelectItem value="regulatory_watch">Regulatory watch</SelectItem>
           </SelectContent>
         </Select>
 
