@@ -210,7 +210,7 @@ describe('Documents', () => {
     )
 
     await screen.findByTestId('documents-live-badge')
-    fireEvent.change(screen.getByPlaceholderText(/AI-powered semantic search/i), {
+    fireEvent.change(screen.getByTestId('documents-library-search'), {
       target: { value: 'safety policy' },
     })
 
@@ -218,9 +218,50 @@ describe('Documents', () => {
       /Semantic search unavailable/i,
     )
     expect(screen.getByText(/do not treat this as zero matches/i)).toBeInTheDocument()
+    expect(screen.getByTestId('documents-search-count-unavailable')).toHaveTextContent(
+      /not zero/i,
+    )
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith(expect.stringMatching(/Search offline/i))
     })
+  })
+
+  it('exposes Search library control, empty-state CTA, and / focus shortcut', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/documents/?')) {
+        return Promise.resolve({ data: { items: [] } })
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.resolve({
+          data: {
+            total_documents: 0,
+            indexed_documents: 0,
+            total_chunks: 0,
+            by_status: {},
+            by_type: {},
+          },
+        })
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
+
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    const search = await screen.findByTestId('documents-library-search')
+    expect(screen.getByLabelText('Search document library')).toBeInTheDocument()
+    expect(screen.getByTestId('documents-search-shortcut-hint')).toHaveTextContent('/')
+    expect(screen.getByTestId('documents-search-empty-cta')).toHaveTextContent(/Search library/i)
+
+    fireEvent.keyDown(window, { key: '/' })
+    expect(document.activeElement).toBe(search)
+
+    fireEvent.click(screen.getByTestId('documents-search-empty-cta'))
+    expect(document.activeElement).toBe(search)
   })
 
   it('navigates to document detail from the list view as well as the card grid', async () => {
