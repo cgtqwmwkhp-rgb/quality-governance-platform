@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
+import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
 import { trackError } from '../utils/errorTracker'
 import {
   ArrowLeft,
@@ -660,6 +661,7 @@ export default function RTADetail() {
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="overview"><FileText className="w-4 h-4 mr-1.5" />{t('rtas.tabs.overview', 'Overview')}</TabsTrigger>
+          <TabsTrigger value="standards"><Shield className="w-4 h-4 mr-1.5" />Standards</TabsTrigger>
           <TabsTrigger value="submission"><FileText className="w-4 h-4 mr-1.5" />Reporter Submission</TabsTrigger>
           <TabsTrigger value="vehicle1"><Car className="w-4 h-4 mr-1.5" />{t('rtas.tabs.vehicle1', 'Vehicle 1')}</TabsTrigger>
           <TabsTrigger value="vehicle2"><Car className="w-4 h-4 mr-1.5" />{t('rtas.tabs.vehicle2', 'Vehicle 2')}</TabsTrigger>
@@ -891,6 +893,10 @@ export default function RTADetail() {
               </Card>
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="standards">
+          <StandardsAssessmentPanel entityType="rta" entityId={rta.id} />
         </TabsContent>
 
         <TabsContent value="submission">

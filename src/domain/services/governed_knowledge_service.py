@@ -15,7 +15,12 @@ from typing import Any, Optional
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
+from src.domain.models.compliance_evidence import (
+    ComplianceEvidenceLink,
+    EvidenceLinkMethod,
+    EvidenceLinkStatus,
+    EvidenceSignalType,
+)
 from src.domain.models.document import Document
 from src.domain.models.governed_knowledge import AiDecisionLog, DocumentQuizDraft, QuizDraftStatus
 from src.domain.models.standard import Clause, Standard
@@ -27,6 +32,26 @@ logger = logging.getLogger(__name__)
 
 AUTO_CONFIRM_THRESHOLD = 0.85
 STRICT_DOC_TYPES = frozenset({"rams", "coshh", "msds", "sds", "ram", "method_statement"})
+
+# Operational cases must never auto-confirm as conformance evidence.
+OPERATIONAL_ENTITY_TYPES = frozenset(
+    {
+        "incident",
+        "complaint",
+        "near_miss",
+        "rta",
+        "audit_finding",
+    }
+)
+
+DEFAULT_SIGNAL_BY_ENTITY: dict[str, EvidenceSignalType] = {
+    "incident": EvidenceSignalType.NONCONFORMITY,
+    "complaint": EvidenceSignalType.NONCONFORMITY,
+    "near_miss": EvidenceSignalType.GAP,
+    "rta": EvidenceSignalType.NONCONFORMITY,
+    "audit_finding": EvidenceSignalType.NONCONFORMITY,
+    "document": EvidenceSignalType.EVIDENCE,
+}
 
 PLANET_MARK_THEMES: dict[str, list[str]] = {
     "pm:scope1": [
@@ -76,6 +101,24 @@ class SchemeMapping:
     title: Optional[str] = None
 
 
+@dataclass
+class RelatedDocumentHit:
+    document_id: int
+    score: float
+    title: Optional[str] = None
+
+
+@dataclass
+class OperationalAssessmentResult:
+    entity_type: str
+    entity_id: str
+    signal_type: str
+    links: list[ComplianceEvidenceLink]
+    related_documents: list[RelatedDocumentHit]
+    assessment_statement: Optional[str] = None
+    stages_summary: Optional[dict[str, Any]] = None
+
+
 def _normalize_confidence(confidence: Optional[float]) -> float:
     if confidence is None:
         return 0.0
@@ -87,13 +130,43 @@ def _normalize_confidence(confidence: Optional[float]) -> float:
 def resolve_link_status(
     confidence: Optional[float],
     doc_type: Optional[str],
+    *,
+    force_proposed: bool = False,
 ) -> tuple[EvidenceLinkStatus, bool]:
     """Return (status, auto_applied) using AI-first threshold rules."""
+    if force_proposed:
+        return EvidenceLinkStatus.PROPOSED, False
     norm = _normalize_confidence(confidence)
     doc_normalized = (doc_type or "").lower().replace("-", "_").replace(" ", "_")
     if doc_normalized in STRICT_DOC_TYPES or norm < AUTO_CONFIRM_THRESHOLD:
         return EvidenceLinkStatus.PROPOSED, False
     return EvidenceLinkStatus.CONFIRMED, True
+
+
+def classify_operational_signal(
+    entity_type: str,
+    *,
+    finding_type: Optional[str] = None,
+    content: Optional[str] = None,
+) -> EvidenceSignalType:
+    """Classify how an operational record should treat matched clauses."""
+    ft = (finding_type or "").lower().replace("-", "_").replace(" ", "_")
+    if ft in {"opportunity", "ofi", "observation_positive", "good_practice"}:
+        return EvidenceSignalType.OPPORTUNITY
+    if ft in {"observation", "obs"}:
+        return EvidenceSignalType.GAP
+    if ft in {"conformity", "conformance", "positive", "evidence"}:
+        return EvidenceSignalType.EVIDENCE
+    if ft in {"nonconformity", "nc", "major_nc", "minor_nc"}:
+        return EvidenceSignalType.NONCONFORMITY
+
+    text = (content or "").lower()
+    if any(token in text for token in ("opportunity for improvement", "ofi:", "best practice")):
+        return EvidenceSignalType.OPPORTUNITY
+    if any(token in text for token in ("gap in", "missing procedure", "no evidence of")):
+        return EvidenceSignalType.GAP
+
+    return DEFAULT_SIGNAL_BY_ENTITY.get(entity_type, EvidenceSignalType.NONCONFORMITY)
 
 
 class GovernedKnowledgeService:
@@ -132,19 +205,25 @@ class GovernedKnowledgeService:
         db: AsyncSession,
         *,
         tenant_id: int,
-        document_id: int,
+        entity_type: str,
+        entity_id: str,
         mapping: SchemeMapping,
         doc_type: Optional[str],
         user: Any,
+        force_proposed: bool = False,
+        signal_type: Optional[EvidenceSignalType] = None,
     ) -> ComplianceEvidenceLink:
-        status, auto_applied = resolve_link_status(mapping.confidence, doc_type)
-        entity_id = str(document_id)
+        status, auto_applied = resolve_link_status(
+            mapping.confidence,
+            doc_type,
+            force_proposed=force_proposed or entity_type in OPERATIONAL_ENTITY_TYPES,
+        )
 
         existing_result = await db.execute(
             select(ComplianceEvidenceLink).where(
                 ComplianceEvidenceLink.deleted_at.is_(None),
                 ComplianceEvidenceLink.tenant_id == tenant_id,
-                ComplianceEvidenceLink.entity_type == "document",
+                ComplianceEvidenceLink.entity_type == entity_type,
                 ComplianceEvidenceLink.entity_id == entity_id,
                 ComplianceEvidenceLink.clause_id == mapping.clause_id,
             )
@@ -153,7 +232,7 @@ class GovernedKnowledgeService:
         if link is None:
             link = ComplianceEvidenceLink(
                 tenant_id=tenant_id,
-                entity_type="document",
+                entity_type=entity_type,
                 entity_id=entity_id,
                 clause_id=mapping.clause_id,
                 created_by_id=getattr(user, "id", None),
@@ -168,13 +247,17 @@ class GovernedKnowledgeService:
         link.status = status
         link.auto_applied = auto_applied
         link.linked_by = EvidenceLinkMethod.AI
+        if signal_type is not None:
+            link.signal_type = signal_type.value
+        elif entity_type == "document" and not link.signal_type:
+            link.signal_type = EvidenceSignalType.EVIDENCE.value
 
         await self._log_ai_decision(
             db,
             tenant_id=tenant_id,
             action="evidence_map",
             entity_type="compliance_evidence_link",
-            entity_id=f"document:{document_id}:{mapping.clause_id}",
+            entity_id=f"{entity_type}:{entity_id}:{mapping.clause_id}",
             confidence=mapping.confidence,
             auto_applied=auto_applied,
             payload={
@@ -182,6 +265,8 @@ class GovernedKnowledgeService:
                 "status": status.value,
                 "rationale": mapping.rationale,
                 "doc_type": doc_type,
+                "signal_type": link.signal_type,
+                "source_entity_type": entity_type,
             },
         )
         return link
@@ -311,10 +396,12 @@ class GovernedKnowledgeService:
             link = await self._persist_mapping(
                 db,
                 tenant_id=tenant_id,
-                document_id=document_id,
+                entity_type="document",
+                entity_id=str(document_id),
                 mapping=mapping,
                 doc_type=doc_type,
                 user=user,
+                signal_type=EvidenceSignalType.EVIDENCE,
             )
             links.append(link)
 
@@ -382,14 +469,178 @@ class GovernedKnowledgeService:
                 link = await self._persist_mapping(
                     db,
                     tenant_id=tenant_id,
-                    document_id=doc_id,
+                    entity_type="document",
+                    entity_id=str(doc_id),
                     mapping=mapping,
                     doc_type=None,
                     user=user,
+                    signal_type=EvidenceSignalType.EVIDENCE,
                 )
                 links.append(link)
 
         return links
+
+    async def assess_operational_entity(
+        self,
+        db: AsyncSession,
+        *,
+        entity_type: str,
+        entity_id: str,
+        content: str,
+        tenant_id: int,
+        user: Any,
+        finding_type: Optional[str] = None,
+        include_related_documents: bool = True,
+    ) -> OperationalAssessmentResult:
+        """Assess an operational case against standards with signal typing.
+
+        Unlike document mapping, operational assessments:
+        - Never auto-confirm (always proposed → Exceptions inbox)
+        - Classify signal_type (nonconformity / gap / opportunity / evidence)
+        - Optionally attach related Knowledge Bank documents
+        - Capture a multi-stage assessment statement when AI is available
+        """
+        if entity_type not in OPERATIONAL_ENTITY_TYPES:
+            raise ValueError(f"Unsupported operational entity_type: {entity_type}")
+        if not content or not content.strip():
+            return OperationalAssessmentResult(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                signal_type=DEFAULT_SIGNAL_BY_ENTITY[entity_type].value,
+                links=[],
+                related_documents=[],
+            )
+
+        signal = classify_operational_signal(
+            entity_type,
+            finding_type=finding_type,
+            content=content,
+        )
+
+        assessment_statement: Optional[str] = None
+        stages_summary: Optional[dict[str, Any]] = None
+        try:
+            analysis = await iso_compliance_service.multi_stage_analyze(content)
+            stages = analysis.get("stages") or {}
+            stages_summary = {
+                "clause_count": len(analysis.get("clause_matches") or []),
+                "cross_standard": (stages.get("stage_3_cross_standard") or {}).get("cross_standard_matches", [])[:5],
+            }
+            stage5 = stages.get("stage_5_conformance") or {}
+            assessment_statement = stage5.get("conformance_statement")
+            if assessment_statement and signal != EvidenceSignalType.EVIDENCE:
+                # Re-frame auditor language for operational signals.
+                assessment_statement = (
+                    f"[{signal.value.upper()}] Assessment of {entity_type} {entity_id}: "
+                    f"{assessment_statement}"
+                )
+        except Exception:
+            logger.exception(
+                "multi_stage_analyze failed for %s:%s; continuing with tagging",
+                entity_type,
+                entity_id,
+            )
+
+        all_mappings: list[SchemeMapping] = []
+        all_mappings.extend(await self._map_iso_schemes(content))
+        # UVDB / Planet Mark are scheme-specific; keep ISO primary for ops cases.
+        if entity_type == "complaint":
+            all_mappings.extend(await self._map_uvdb_schemes(db, content, tenant_id))
+
+        links: list[ComplianceEvidenceLink] = []
+        seen_clauses: set[str] = set()
+        for mapping in all_mappings:
+            if mapping.clause_id in seen_clauses:
+                continue
+            seen_clauses.add(mapping.clause_id)
+            if assessment_statement and not mapping.rationale:
+                mapping.rationale = assessment_statement[:500]
+            link = await self._persist_mapping(
+                db,
+                tenant_id=tenant_id,
+                entity_type=entity_type,
+                entity_id=str(entity_id),
+                mapping=mapping,
+                doc_type=None,
+                user=user,
+                force_proposed=True,
+                signal_type=signal,
+            )
+            if assessment_statement:
+                link.notes = assessment_statement[:2000]
+            links.append(link)
+
+        related_documents: list[RelatedDocumentHit] = []
+        if include_related_documents:
+            doc_matches = await self._find_documents_for_query(db, content[:500], tenant_id)
+            doc_ids = [doc_id for doc_id, _ in doc_matches[:5]]
+            titles: dict[int, str] = {}
+            if doc_ids:
+                title_result = await db.execute(select(Document.id, Document.title).where(Document.id.in_(doc_ids)))
+                titles = {row[0]: row[1] for row in title_result.all()}
+            for doc_id, score in doc_matches[:5]:
+                related_documents.append(
+                    RelatedDocumentHit(
+                        document_id=doc_id,
+                        score=score,
+                        title=titles.get(doc_id),
+                    )
+                )
+
+        await self._log_ai_decision(
+            db,
+            tenant_id=tenant_id,
+            action="operational_standards_assess",
+            entity_type=entity_type,
+            entity_id=str(entity_id),
+            confidence=max((link.confidence or 0.0) for link in links) if links else None,
+            auto_applied=False,
+            payload={
+                "signal_type": signal.value,
+                "links": len(links),
+                "related_documents": [hit.document_id for hit in related_documents],
+                "has_assessment_statement": bool(assessment_statement),
+            },
+        )
+
+        logger.info(
+            "governed_kb.assess_operational entity=%s:%s tenant=%s signal=%s links=%s related=%s",
+            entity_type,
+            entity_id,
+            tenant_id,
+            signal.value,
+            len(links),
+            len(related_documents),
+        )
+        return OperationalAssessmentResult(
+            entity_type=entity_type,
+            entity_id=str(entity_id),
+            signal_type=signal.value,
+            links=links,
+            related_documents=related_documents,
+            assessment_statement=assessment_statement,
+            stages_summary=stages_summary,
+        )
+
+    async def list_entity_assessment_links(
+        self,
+        db: AsyncSession,
+        *,
+        entity_type: str,
+        entity_id: str,
+        tenant_id: int,
+    ) -> list[ComplianceEvidenceLink]:
+        result = await db.execute(
+            select(ComplianceEvidenceLink)
+            .where(
+                ComplianceEvidenceLink.deleted_at.is_(None),
+                ComplianceEvidenceLink.tenant_id == tenant_id,
+                ComplianceEvidenceLink.entity_type == entity_type,
+                ComplianceEvidenceLink.entity_id == str(entity_id),
+            )
+            .order_by(ComplianceEvidenceLink.created_at.desc())
+        )
+        return list(result.scalars().all())
 
     async def _find_documents_for_query(
         self,

@@ -47,6 +47,7 @@ class EvidenceLinkDetailResponse(BaseModel):
     rationale: Optional[str]
     title: Optional[str]
     notes: Optional[str]
+    signal_type: Optional[str] = None
     created_at: str
     created_by_email: Optional[str]
 
@@ -112,6 +113,32 @@ class ScanKbRequest(BaseModel):
     clause_texts: Optional[list[str]] = None
 
 
+class AssessEntityRequest(BaseModel):
+    content: Optional[str] = Field(
+        None,
+        description="Optional override text; when omitted the live entity record is loaded",
+    )
+    finding_type: Optional[str] = None
+    include_related_documents: bool = True
+
+
+class RelatedDocumentResponse(BaseModel):
+    document_id: int
+    score: float
+    title: Optional[str] = None
+
+
+class AssessEntityResponse(BaseModel):
+    entity_type: str
+    entity_id: str
+    signal_type: str
+    links_created: int
+    links: list[EvidenceLinkDetailResponse]
+    related_documents: list[RelatedDocumentResponse]
+    assessment_statement: Optional[str] = None
+    stages_summary: Optional[dict[str, Any]] = None
+
+
 class RegulatoryImpactResponse(BaseModel):
     id: int
     update_id: str
@@ -145,6 +172,7 @@ def _serialize_evidence_link(link: ComplianceEvidenceLink) -> EvidenceLinkDetail
         rationale=link.rationale,
         title=link.title,
         notes=link.notes,
+        signal_type=link.signal_type,
         created_at=((link.created_at or datetime.now(timezone.utc)).isoformat()),
         created_by_email=link.created_by_email,
     )
@@ -189,6 +217,83 @@ async def _document_text(db: DbSession, document: Document) -> str:
     if chunks:
         parts.append("\n".join(chunks))
     return "\n\n".join(p for p in parts if p)
+
+
+async def _load_operational_entity_text(
+    db: DbSession,
+    *,
+    entity_type: str,
+    entity_id: str,
+    tenant_id: int,
+) -> tuple[str, Optional[str]]:
+    """Return (content, finding_type) for supported operational entities."""
+    from src.domain.services.governed_knowledge_service import OPERATIONAL_ENTITY_TYPES
+
+    if entity_type not in OPERATIONAL_ENTITY_TYPES:
+        raise BadRequestError(f"Unsupported entity_type: {entity_type}")
+
+    try:
+        eid = int(entity_id)
+    except ValueError as exc:
+        raise BadRequestError("entity_id must be numeric") from exc
+
+    if entity_type == "incident":
+        from src.domain.models.incident import Incident
+
+        row = (
+            await db.execute(select(Incident).where(Incident.id == eid, Incident.tenant_id == tenant_id))
+        ).scalar_one_or_none()
+        if not row:
+            raise NotFoundError("Incident not found")
+        return f"{row.title}\n\n{row.description}", None
+
+    if entity_type == "complaint":
+        from src.domain.models.complaint import Complaint
+
+        row = (
+            await db.execute(select(Complaint).where(Complaint.id == eid, Complaint.tenant_id == tenant_id))
+        ).scalar_one_or_none()
+        if not row:
+            raise NotFoundError("Complaint not found")
+        return f"{row.title}\n\n{row.description}", None
+
+    if entity_type == "rta":
+        from src.domain.models.rta import RTA
+
+        row = (await db.execute(select(RTA).where(RTA.id == eid, RTA.tenant_id == tenant_id))).scalar_one_or_none()
+        if not row:
+            raise NotFoundError("RTA not found")
+        return f"{row.title}\n\n{row.description}", None
+
+    if entity_type == "near_miss":
+        from src.domain.models.near_miss import NearMiss
+
+        row = (
+            await db.execute(select(NearMiss).where(NearMiss.id == eid, NearMiss.tenant_id == tenant_id))
+        ).scalar_one_or_none()
+        if not row:
+            raise NotFoundError("Near miss not found")
+        parts = [
+            row.description,
+            row.potential_consequences or "",
+            row.preventive_action_suggested or "",
+            f"Location: {row.location}" if row.location else "",
+        ]
+        return "\n\n".join(p for p in parts if p), None
+
+    if entity_type == "audit_finding":
+        from src.domain.models.audit import AuditFinding
+
+        row = (
+            await db.execute(
+                select(AuditFinding).where(AuditFinding.id == eid, AuditFinding.tenant_id == tenant_id)
+            )
+        ).scalar_one_or_none()
+        if not row:
+            raise NotFoundError("Audit finding not found")
+        return f"{row.title}\n\n{row.description}", getattr(row, "finding_type", None)
+
+    raise BadRequestError(f"Unsupported entity_type: {entity_type}")
 
 
 # =============================================================================
@@ -309,6 +414,7 @@ async def list_exception_inbox(
     db: DbSession,
     current_user: CurrentUser,
     status_filter: Optional[str] = Query(None, alias="status"),
+    entity_type: Optional[str] = Query(None, description="Filter by source entity_type"),
 ):
     """Proposed + needs_review evidence inbox."""
     tenant_id = _tenant_id_for(current_user)
@@ -319,20 +425,108 @@ async def list_exception_inbox(
         except ValueError as exc:
             raise BadRequestError(f"Invalid status: {status_filter}") from exc
 
+    filters = [
+        ComplianceEvidenceLink.tenant_id == tenant_id,
+        ComplianceEvidenceLink.deleted_at.is_(None),
+        or_(
+            ComplianceEvidenceLink.status.in_(statuses),
+            ComplianceEvidenceLink.status.is_(None),
+        ),
+    ]
+    if entity_type:
+        filters.append(ComplianceEvidenceLink.entity_type == entity_type)
+
     result = await db.execute(
         select(ComplianceEvidenceLink)
-        .where(
-            ComplianceEvidenceLink.tenant_id == tenant_id,
-            ComplianceEvidenceLink.deleted_at.is_(None),
-            or_(
-                ComplianceEvidenceLink.status.in_(statuses),
-                ComplianceEvidenceLink.status.is_(None),
-            ),
-        )
+        .where(*filters)
         .order_by(ComplianceEvidenceLink.created_at.desc())
         .limit(200)
     )
     links = [link for link in result.scalars().all() if link.effective_status in statuses]
+    return [_serialize_evidence_link(link) for link in links]
+
+
+@router.post(
+    "/entities/{entity_type}/{entity_id}/assess",
+    response_model=AssessEntityResponse,
+)
+async def assess_operational_entity(
+    entity_type: str,
+    entity_id: str,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+    body: AssessEntityRequest = AssessEntityRequest(),
+):
+    """Run Operational Standards Assessor for a case entity."""
+    tenant_id = _tenant_id_for(current_user)
+    finding_type = body.finding_type
+    if body.content and body.content.strip():
+        content = body.content
+    else:
+        content, loaded_finding_type = await _load_operational_entity_text(
+            db,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            tenant_id=tenant_id,
+        )
+        finding_type = finding_type or loaded_finding_type
+
+    try:
+        result = await governed_knowledge_service.assess_operational_entity(
+            db,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            content=content,
+            tenant_id=tenant_id,
+            user=current_user,
+            finding_type=finding_type,
+            include_related_documents=body.include_related_documents,
+        )
+    except ValueError as exc:
+        raise BadRequestError(str(exc)) from exc
+    await db.commit()
+    return AssessEntityResponse(
+        entity_type=result.entity_type,
+        entity_id=result.entity_id,
+        signal_type=result.signal_type,
+        links_created=len(result.links),
+        links=[_serialize_evidence_link(link) for link in result.links],
+        related_documents=[
+            RelatedDocumentResponse(
+                document_id=hit.document_id,
+                score=hit.score,
+                title=hit.title,
+            )
+            for hit in result.related_documents
+        ],
+        assessment_statement=result.assessment_statement,
+        stages_summary=result.stages_summary,
+    )
+
+
+@router.get(
+    "/entities/{entity_type}/{entity_id}/assessment",
+    response_model=list[EvidenceLinkDetailResponse],
+)
+async def get_operational_entity_assessment(
+    entity_type: str,
+    entity_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """List persisted standards assessment links for a case entity."""
+    tenant_id = _tenant_id_for(current_user)
+    from src.domain.services.governed_knowledge_service import OPERATIONAL_ENTITY_TYPES
+
+    if entity_type not in OPERATIONAL_ENTITY_TYPES:
+        raise BadRequestError(f"Unsupported entity_type: {entity_type}")
+
+    links = await governed_knowledge_service.list_entity_assessment_links(
+        db,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        tenant_id=tenant_id,
+    )
     return [_serialize_evidence_link(link) for link in links]
 
 

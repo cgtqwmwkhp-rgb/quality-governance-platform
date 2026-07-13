@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
+import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
 import {
   ArrowLeft,
   AlertTriangle,
@@ -20,8 +21,7 @@ import {
   Save,
   X,
   ExternalLink,
-} from 'lucide-react'
-import {
+} from 'lucide-react'import {
   incidentsApi,
   Incident,
   IncidentUpdate,
@@ -605,6 +605,7 @@ export default function IncidentDetail() {
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="standards">Standards</TabsTrigger>
           <TabsTrigger value="submission">Reporter Submission</TabsTrigger>
           <TabsTrigger value="running-sheet">Running Sheet</TabsTrigger>
         </TabsList>
@@ -1058,6 +1059,10 @@ export default function IncidentDetail() {
         </div>
       </div>
 
+        </TabsContent>
+
+        <TabsContent value="standards" className="mt-6">
+          <StandardsAssessmentPanel entityType="incident" entityId={incident.id} />
         </TabsContent>
 
         <TabsContent value="submission" className="mt-6">

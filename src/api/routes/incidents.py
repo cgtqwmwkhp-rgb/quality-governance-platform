@@ -27,6 +27,32 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+async def _trigger_operational_standards_assess(
+    db: DbSession,
+    incident: Incident,
+    current_user: User,
+) -> None:
+    """Fire-and-forget standards assessment; never breaks incident save."""
+    try:
+        from src.domain.services.governed_knowledge_service import governed_knowledge_service
+
+        content = f"{incident.title}\n\n{incident.description}"
+        await governed_knowledge_service.assess_operational_entity(
+            db,
+            entity_type="incident",
+            entity_id=str(incident.id),
+            content=content,
+            tenant_id=incident.tenant_id,
+            user=current_user,
+        )
+    except Exception:
+        logger.warning(
+            "Operational standards assess failed for incident %s; save continues",
+            incident.id,
+            exc_info=True,
+        )
+
+
 @router.post(
     "",
     response_model=IncidentResponse,
@@ -61,6 +87,7 @@ async def create_incident(
             request_id=request_id,
         )
         track_metric("incidents.created")
+        await _trigger_operational_standards_assess(db, incident, current_user)
         return incident
     except PermissionError as e:
         raise AuthorizationError(str(e))
@@ -399,7 +426,7 @@ async def update_incident(
     """
     svc = IncidentService(db)
     try:
-        return await svc.update_incident(
+        incident = await svc.update_incident(
             incident_id,
             incident_data,
             user_id=current_user.id,
@@ -407,6 +434,8 @@ async def update_incident(
             request_id=request_id,
             skip_tenant_check=current_user.is_superuser,
         )
+        await _trigger_operational_standards_assess(db, incident, current_user)
+        return incident
     except LookupError:
         raise NotFoundError(f"Incident {incident_id} not found")
 

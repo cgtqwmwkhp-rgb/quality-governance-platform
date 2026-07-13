@@ -2502,6 +2502,8 @@ export type {
   DiscussionMessage,
   RegulatoryImpact,
   ScanStandardResponse,
+  AssessEntityResponse,
+  RelatedDocumentHit,
 } from './knowledgeBankClient'
 
 export const knowledgeBankApi = createKnowledgeBankApi(api)

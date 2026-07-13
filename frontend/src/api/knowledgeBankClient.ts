@@ -16,8 +16,26 @@ export interface KnowledgeEvidenceLink {
   rationale: string | null
   title: string | null
   notes: string | null
+  signal_type?: string | null
   created_at: string
   created_by_email: string | null
+}
+
+export interface RelatedDocumentHit {
+  document_id: number
+  score: number
+  title: string | null
+}
+
+export interface AssessEntityResponse {
+  entity_type: string
+  entity_id: string
+  signal_type: string
+  links_created: number
+  links: KnowledgeEvidenceLink[]
+  related_documents: RelatedDocumentHit[]
+  assessment_statement: string | null
+  stages_summary?: Record<string, unknown> | null
 }
 
 export interface MapEvidenceResponse {
@@ -100,12 +118,27 @@ export function createKnowledgeBankApi(api: AxiosInstance) {
         link_ids: ids,
       }),
 
-    listExceptions: (status?: string) => {
+    listExceptions: (status?: string, entityType?: string) => {
       const sp = new URLSearchParams()
       if (status) sp.set('status', status)
+      if (entityType) sp.set('entity_type', entityType)
       const qs = sp.toString()
       return api.get<KnowledgeEvidenceLink[]>(`${base}/exceptions${qs ? `?${qs}` : ''}`)
     },
+
+    assessEntity: (
+      entityType: string,
+      entityId: string | number,
+      body: {
+        content?: string
+        finding_type?: string
+        include_related_documents?: boolean
+      } = {},
+    ) =>
+      api.post<AssessEntityResponse>(`${base}/entities/${entityType}/${entityId}/assess`, body),
+
+    listEntityAssessment: (entityType: string, entityId: string | number) =>
+      api.get<KnowledgeEvidenceLink[]>(`${base}/entities/${entityType}/${entityId}/assessment`),
 
     scanStandard: (standardId: number, clauseTexts?: string[]) =>
       api.post<ScanStandardResponse>(`${base}/standards/${standardId}/scan-kb`, {

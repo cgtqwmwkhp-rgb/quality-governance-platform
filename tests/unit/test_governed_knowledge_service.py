@@ -58,8 +58,99 @@ class TestResolveLinkStatus:
         assert "rams" in STRICT_DOC_TYPES
         assert "method_statement" in STRICT_DOC_TYPES
 
+    def test_force_proposed_overrides_high_confidence(self) -> None:
+        status, auto_applied = resolve_link_status(99.0, "procedure", force_proposed=True)
+        assert status == EvidenceLinkStatus.PROPOSED
+        assert auto_applied is False
 
-class TestEffectiveStatusBackwardCompat:
+
+class TestClassifyOperationalSignal:
+    def test_incident_defaults_to_nonconformity(self) -> None:
+        from src.domain.services.governed_knowledge_service import classify_operational_signal
+        from src.domain.models.compliance_evidence import EvidenceSignalType
+
+        assert (
+            classify_operational_signal("incident")
+            == EvidenceSignalType.NONCONFORMITY
+        )
+
+    def test_near_miss_defaults_to_gap(self) -> None:
+        from src.domain.services.governed_knowledge_service import classify_operational_signal
+        from src.domain.models.compliance_evidence import EvidenceSignalType
+
+        assert classify_operational_signal("near_miss") == EvidenceSignalType.GAP
+
+    def test_finding_type_opportunity(self) -> None:
+        from src.domain.services.governed_knowledge_service import classify_operational_signal
+        from src.domain.models.compliance_evidence import EvidenceSignalType
+
+        assert (
+            classify_operational_signal("audit_finding", finding_type="opportunity")
+            == EvidenceSignalType.OPPORTUNITY
+        )
+
+
+class TestAssessOperationalEntity:
+    @pytest.mark.asyncio
+    async def test_never_auto_confirms_and_sets_signal(self) -> None:
+        svc = GovernedKnowledgeService()
+        user = MagicMock(id=5, email="ai@example.com")
+        added: list = []
+
+        async def fake_execute(stmt):
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = None
+            result.all.return_value = []
+            return result
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=fake_execute)
+        db.add = MagicMock(side_effect=lambda obj: added.append(obj))
+
+        with (
+            patch.object(svc, "_map_iso_schemes", new_callable=AsyncMock) as mock_iso,
+            patch.object(svc, "_map_uvdb_schemes", new_callable=AsyncMock, return_value=[]),
+            patch.object(svc, "_find_documents_for_query", new_callable=AsyncMock, return_value=[]),
+            patch(
+                "src.domain.services.governed_knowledge_service.iso_compliance_service.multi_stage_analyze",
+                new_callable=AsyncMock,
+                return_value={
+                    "clause_matches": [],
+                    "stages": {
+                        "stage_5_conformance": {
+                            "conformance_statement": "Control of work was not evidenced."
+                        }
+                    },
+                },
+            ),
+        ):
+            from src.domain.services.governed_knowledge_service import SchemeMapping
+
+            mock_iso.return_value = [
+                SchemeMapping(
+                    clause_id="45001-8.1",
+                    scheme="iso45001",
+                    confidence=95.0,
+                    rationale="operational control",
+                )
+            ]
+            result = await svc.assess_operational_entity(
+                db,
+                entity_type="incident",
+                entity_id="55",
+                content="Worker injured due to missing isolation procedure.",
+                tenant_id=7,
+                user=user,
+            )
+
+        assert result.signal_type == "nonconformity"
+        assert len(result.links) == 1
+        assert result.links[0].status == EvidenceLinkStatus.PROPOSED
+        assert result.links[0].auto_applied is False
+        assert result.links[0].signal_type == "nonconformity"
+        assert result.assessment_statement is not None
+        assert any(getattr(obj, "action", None) == "operational_standards_assess" for obj in added)
+
     def test_manual_without_status_is_confirmed(self) -> None:
         link = ComplianceEvidenceLink(
             tenant_id=1,
