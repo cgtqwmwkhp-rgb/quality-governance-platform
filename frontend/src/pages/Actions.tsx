@@ -48,6 +48,7 @@ import {
   Action as ApiAction,
   ActionCreate,
   ActionsSummary,
+  ActionsViewCounts,
   notificationsApi,
 } from '../api/client'
 import { decodeTokenPayload, getPlatformToken } from '../utils/auth'
@@ -185,6 +186,9 @@ export default function Actions() {
   const [sortMode, setSortMode] = useState<SortMode>('newest')
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const [summary, setSummary] = useState<ActionsSummary | null>(null)
+  const [summaryUnavailable, setSummaryUnavailable] = useState(false)
+  const [viewCounts, setViewCounts] = useState<ActionsViewCounts | null>(null)
+  const [viewCountsUnavailable, setViewCountsUnavailable] = useState(false)
   const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
   const [serverFilterError, setServerFilterError] = useState<string | null>(null)
   const createReturnTo = useMemo(() => {
@@ -300,8 +304,27 @@ export default function Actions() {
     try {
       const res = await actionsApi.summary()
       setSummary(res.data)
+      setSummaryUnavailable(false)
     } catch {
       setSummary(null)
+      setSummaryUnavailable(true)
+      toast.error(
+        t(
+          'actions.summary_unavailable',
+          'Action metrics unavailable — counts are not shown as zero.',
+        ),
+      )
+    }
+  }, [t])
+
+  const loadViewCounts = useCallback(async () => {
+    try {
+      const res = await actionsApi.viewCounts()
+      setViewCounts(res.data)
+      setViewCountsUnavailable(false)
+    } catch {
+      setViewCounts(null)
+      setViewCountsUnavailable(true)
     }
   }, [])
 
@@ -323,7 +346,8 @@ export default function Actions() {
   useEffect(() => {
     loadActions()
     loadSummary()
-  }, [loadActions, loadSummary])
+    loadViewCounts()
+  }, [loadActions, loadSummary, loadViewCounts])
 
   useEffect(() => {
     let cancelled = false
@@ -482,6 +506,20 @@ export default function Actions() {
     completed: byD.completed ?? actions.filter((a) => a.display_status === 'completed').length,
   }
 
+  const badgeFor = (mode: ViewMode): string | null => {
+    if (viewCountsUnavailable) return '—'
+    if (!viewCounts) return null
+    const n =
+      mode === 'all'
+        ? viewCounts.all
+        : mode === 'my'
+          ? viewCounts.my
+          : mode === 'overdue'
+            ? viewCounts.overdue
+            : viewCounts.my_overdue
+    return String(n)
+  }
+
   // First paint only — keep view-mode chrome mounted on subsequent filter reloads
   // so Mine/Overdue toggles remain clickable (and unit/e2e tests do not race a full-page skeleton).
   if (loading && !hasLoadedOnce) {
@@ -550,6 +588,23 @@ export default function Actions() {
       ) : null}
 
       {/* Stats */}
+      {summaryUnavailable ? (
+        <div
+          className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+          role="status"
+          data-testid="actions-summary-unavailable"
+        >
+          <p className="font-semibold">
+            {t('actions.summary_unavailable_title', 'Metrics unavailable')}
+          </p>
+          <p className="mt-1 text-sm">
+            {t(
+              'actions.summary_unavailable_body',
+              'Action totals could not be loaded. Counts are not shown as zero.',
+            )}
+          </p>
+        </div>
+      ) : (
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           {
@@ -611,6 +666,7 @@ export default function Actions() {
           </Card>
         ))}
       </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col lg:flex-row gap-4">
@@ -634,20 +690,35 @@ export default function Actions() {
               onClick={() => setViewMode(mode)}
               disabled={loading}
               className={cn(
-                'px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                'px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 inline-flex items-center gap-2',
                 viewMode === mode
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
                 loading && 'opacity-70',
               )}
             >
-              {mode === 'all'
-                ? t('actions.view_mode.all')
-                : mode === 'my'
-                  ? t('actions.view_mode.my')
-                  : mode === 'overdue'
-                    ? t('actions.view_mode.overdue')
-                    : t('actions.view_mode.my_overdue', 'My overdue')}
+              <span>
+                {mode === 'all'
+                  ? t('actions.view_mode.all')
+                  : mode === 'my'
+                    ? t('actions.view_mode.my')
+                    : mode === 'overdue'
+                      ? t('actions.view_mode.overdue')
+                      : t('actions.view_mode.my_overdue', 'My overdue')}
+              </span>
+              {badgeFor(mode) != null ? (
+                <span
+                  className={cn(
+                    'min-w-[1.25rem] rounded-full px-1.5 text-xs font-semibold tabular-nums',
+                    viewMode === mode
+                      ? 'bg-primary-foreground/20 text-primary-foreground'
+                      : 'bg-muted text-foreground',
+                  )}
+                  data-testid={`actions-view-badge-${mode}`}
+                >
+                  {badgeFor(mode)}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
