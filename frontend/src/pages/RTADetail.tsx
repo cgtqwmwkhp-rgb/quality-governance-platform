@@ -120,13 +120,8 @@ export default function RTADetail() {
   // Third parties (local edit state)
   const [editThirdParties, setEditThirdParties] = useState<ThirdParty[]>([])
 
-  // Investigation form
-  const [investigationForm, setInvestigationForm] = useState({
-    title: '',
-    description: '',
-    investigation_type: 'root_cause_analysis',
-    lead_investigator: '',
-  })
+  // Investigation modal — title only (from-record API contract)
+  const [investigationTitle, setInvestigationTitle] = useState('')
 
   // Action form
   const [actionForm, setActionForm] = useState({
@@ -296,6 +291,7 @@ export default function RTADetail() {
       loadRunningSheet(rta.id)
     } catch (err) {
       trackError(err, { component: 'RTADetail', action: 'deleteRunningSheetEntry' })
+      toast.error(getApiErrorMessage(err))
     }
   }
 
@@ -339,6 +335,7 @@ export default function RTADetail() {
       loadPhotos(rta.id)
     } catch (err) {
       trackError(err, { component: 'RTADetail', action: 'deletePhoto' })
+      toast.error(getApiErrorMessage(err))
     }
   }
 
@@ -356,19 +353,20 @@ export default function RTADetail() {
     setExistingInvestigation(null)
 
     try {
-      await investigationsApi.createFromRecord({
+      const response = await investigationsApi.createFromRecord({
         source_type: 'road_traffic_collision',
         source_id: rta.id,
-        title: investigationForm.title || `Investigation - ${rta.reference_number}`,
+        title: investigationTitle || `Investigation - ${rta.reference_number}`,
       })
       setShowInvestigationModal(false)
-      setInvestigationForm({
-        title: '',
-        description: '',
-        investigation_type: 'root_cause_analysis',
-        lead_investigator: '',
-      })
-      navigate('/investigations')
+      setInvestigationTitle('')
+      await loadInvestigations(rta.id)
+      toast.success(
+        t('rtas.detail.investigation_created', {
+          reference: response.data.reference_number || `INV-${response.data.id}`,
+          defaultValue: 'Investigation created',
+        }),
+      )
     } catch (err: any) {
       trackError(err, { component: 'RTADetail', action: 'createInvestigation' })
       if (err.response?.status === 409) {
@@ -388,6 +386,7 @@ export default function RTADetail() {
         }
       }
       setInvestigationError(getApiErrorMessage(err))
+      toast.error(getApiErrorMessage(err))
     } finally {
       setCreating(false)
     }
@@ -411,6 +410,7 @@ export default function RTADetail() {
       setShowActionModal(false)
       setActionForm({ title: '', description: '', priority: 'medium', due_date: '', assigned_to: '' })
       loadActions()
+      toast.success(t('rtas.detail.action_created', 'Action created'))
     } catch (err: unknown) {
       trackError(err, { component: 'RTADetail', action: 'createAction' })
       toast.error(`Failed to create action: ${getApiErrorMessage(err)}`)
@@ -421,10 +421,6 @@ export default function RTADetail() {
 
   const handleAssigneeChange = (email: string, _user?: UserSearchResult) => {
     setActionForm({ ...actionForm, assigned_to: email })
-  }
-
-  const handleInvestigatorChange = (email: string, _user?: UserSearchResult) => {
-    setInvestigationForm({ ...investigationForm, lead_investigator: email })
   }
 
   const ACTION_STATUS_OPTIONS = [
@@ -497,8 +493,9 @@ export default function RTADetail() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className="flex items-center justify-center h-64" role="status" aria-live="polite">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" aria-hidden="true" />
+        <span className="sr-only">{t('rtas.detail.loading', 'Loading collision details')}</span>
       </div>
     )
   }
@@ -548,6 +545,10 @@ export default function RTADetail() {
   const openActions = actions.filter(
     (action) => action.display_status !== 'completed' && action.display_status !== 'cancelled',
   )
+  const investigationHref = latestInvestigation
+    ? `/investigations/${latestInvestigation.id}`
+    : null
+  const capaHref = `/actions?sourceType=rta&sourceId=${rta.id}`
 
   // ──────────────────────── RENDER ────────────────────────
 
@@ -593,7 +594,7 @@ export default function RTADetail() {
               <Button variant="outline" onClick={handleCancelEdit} disabled={saving}>
                 <X className="w-4 h-4 mr-2" />{t('cancel')}
               </Button>
-              <Button onClick={handleSaveEdit} disabled={saving}>
+              <Button data-testid="rta-save-edit" onClick={handleSaveEdit} disabled={saving}>
                 {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                 {t('rtas.detail.save_changes')}
               </Button>
@@ -603,11 +604,35 @@ export default function RTADetail() {
               <Button variant="outline" onClick={() => setIsEditing(true)}>
                 <Pencil className="w-4 h-4 mr-2" />{t('edit')}
               </Button>
-              <Button variant="outline" onClick={() => setShowActionModal(true)}>
-                <Plus className="w-4 h-4 mr-2" />{t('rtas.detail.add_action')}
-              </Button>
-              <Button onClick={() => setShowInvestigationModal(true)}>
-                <FlaskConical className="w-4 h-4 mr-2" />{t('rtas.detail.start_investigation')}
+              {actions.length > 0 ? (
+                <Button
+                  variant="outline"
+                  data-testid="rta-open-capa"
+                  onClick={() => navigate(capaHref)}
+                >
+                  <ClipboardList className="w-4 h-4 mr-2" />
+                  {t('rtas.detail.open_capa', {
+                    count: actions.length,
+                    defaultValue: `Open CAPA (${actions.length})`,
+                  })}
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={() => setShowActionModal(true)}>
+                  <Plus className="w-4 h-4 mr-2" />{t('rtas.detail.add_action')}
+                </Button>
+              )}
+              <Button
+                data-testid="rta-start-investigation"
+                onClick={() =>
+                  investigationHref
+                    ? navigate(investigationHref)
+                    : setShowInvestigationModal(true)
+                }
+              >
+                <FlaskConical className="w-4 h-4 mr-2" />
+                {investigationHref
+                  ? t('rtas.detail.open_investigation', 'Open investigation')
+                  : t('rtas.detail.start_investigation')}
               </Button>
             </>
           )}
@@ -626,6 +651,10 @@ export default function RTADetail() {
           { label: 'Investigation', value: investigationSummary, icon: <FlaskConical className="w-4 h-4" /> },
         ]}
       />
+
+      <h2 className="sr-only">
+        {t('rtas.detail.case_sections', 'Collision case sections')}
+      </h2>
 
       {/* ═══════════════════ TABBED CONTENT ═══════════════════ */}
       <Tabs defaultValue="overview" className="w-full">
@@ -788,13 +817,47 @@ export default function RTADetail() {
                       {rta.dashcam_footage_available || rta.cctv_available ? 'Available' : 'Not flagged'}
                     </p>
                   </div>
+                  <div className="flex flex-col gap-2 pt-2 border-t border-border">
+                    <Button
+                      data-testid="rta-status-start-investigation"
+                      onClick={() =>
+                        investigationHref
+                          ? navigate(investigationHref)
+                          : setShowInvestigationModal(true)
+                      }
+                    >
+                      <FlaskConical className="w-4 h-4 mr-2" />
+                      {investigationHref
+                        ? t('rtas.detail.open_investigation', 'Open investigation')
+                        : t('rtas.detail.start_investigation')}
+                    </Button>
+                    {actions.length > 0 ? (
+                      <Button variant="outline" onClick={() => navigate(capaHref)}>
+                        <ClipboardList className="w-4 h-4 mr-2" />
+                        {t('rtas.detail.open_capa', {
+                          count: actions.length,
+                          defaultValue: `Open CAPA (${actions.length})`,
+                        })}
+                      </Button>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center">
+                        {t('rtas.detail.no_capa_handoff', 'No CAPA actions linked yet — use Add Action to create one.')}
+                      </p>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
-              <Card>
+              <Card data-testid="rta-key-dates">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base"><History className="w-4 h-4" />{t('rtas.detail.activity_timeline')}</CardTitle>
+                  <CardTitle className="flex items-center gap-2 text-base"><History className="w-4 h-4" />{t('rtas.detail.key_dates', 'Key dates')}</CardTitle>
                 </CardHeader>
                 <CardContent>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    {t(
+                      'rtas.detail.key_dates_hint',
+                      'Status changes and notes are captured in the Running Sheet tab.',
+                    )}
+                  </p>
                   <div className="space-y-4">
                     <div className="flex gap-3">
                       <div className="w-2 h-2 rounded-full bg-primary mt-2" />
@@ -810,6 +873,19 @@ export default function RTADetail() {
                         <p className="text-xs text-muted-foreground">{new Date(rta.created_at).toLocaleString()}</p>
                       </div>
                     </div>
+                    {latestInvestigation && (
+                      <div className="flex gap-3">
+                        <div className="w-2 h-2 rounded-full bg-info mt-2" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {t('rtas.detail.investigation_linked', 'Investigation linked')}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {latestInvestigation.reference_number || latestInvestigation.title}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -1252,35 +1328,30 @@ export default function RTADetail() {
 
       {/* Create Investigation Modal */}
       <Dialog open={showInvestigationModal} onOpenChange={(open) => { setShowInvestigationModal(open); if (!open) { setInvestigationError(''); setExistingInvestigation(null) } }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg" data-testid="rta-investigation-modal">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><FlaskConical className="w-5 h-5 text-primary" />{t('rtas.detail.start_investigation')}</DialogTitle>
-            <DialogDescription>{t('rtas.detail.investigation_description', { reference: rta.reference_number })}</DialogDescription>
+            <DialogDescription>
+              {t('rtas.detail.investigation_api_contract', {
+                reference: rta.reference_number,
+                defaultValue:
+                  'Creates an investigation linked to this collision. Only the title is sent to the API; configure type, lead, and notes on the investigation record after creation.',
+              })}
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateInvestigation} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">{t('rtas.detail.investigation_title')}</label>
-              <Input value={investigationForm.title} onChange={(e) => setInvestigationForm({ ...investigationForm, title: e.target.value })} placeholder={`Investigation - ${rta.reference_number}`} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">{t('rtas.detail.investigation_type')}</label>
-              <Select value={investigationForm.investigation_type} onValueChange={(v) => setInvestigationForm({ ...investigationForm, investigation_type: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="root_cause_analysis">Root Cause Analysis</SelectItem>
-                  <SelectItem value="5_whys">5 Whys</SelectItem>
-                  <SelectItem value="fishbone">Fishbone Analysis</SelectItem>
-                  <SelectItem value="incident_review">Incident Review</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <UserEmailSearch label={t('rtas.detail.lead_investigator')} value={investigationForm.lead_investigator} onChange={handleInvestigatorChange} placeholder={t('rtas.detail.search_by_email')} />
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">{t('rtas.detail.initial_notes')}</label>
-              <Textarea value={investigationForm.description} onChange={(e) => setInvestigationForm({ ...investigationForm, description: e.target.value })} placeholder={t('rtas.detail.initial_notes_placeholder')} rows={4} />
+              <label htmlFor="rta-investigation-title" className="block text-sm font-medium text-foreground mb-1">{t('rtas.detail.investigation_title')}</label>
+              <Input
+                id="rta-investigation-title"
+                data-testid="rta-investigation-title"
+                value={investigationTitle}
+                onChange={(e) => setInvestigationTitle(e.target.value)}
+                placeholder={`Investigation - ${rta.reference_number}`}
+              />
             </div>
             {investigationError && (
-              <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3">
+              <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3" role="alert">
                 <p className="text-sm text-destructive">{investigationError}</p>
                 {existingInvestigation && (
                   <Button type="button" variant="link" size="sm" onClick={() => { setShowInvestigationModal(false); navigate(`/investigations/${existingInvestigation.id}`) }} className="mt-2 p-0 h-auto text-primary">
@@ -1307,14 +1378,14 @@ export default function RTADetail() {
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">{t('rtas.detail.action_title_required')}</label>
-              <Input value={actionForm.title} onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })} placeholder={t('rtas.detail.action_title_placeholder')} required />
+              <label htmlFor="rta-action-title" className="block text-sm font-medium text-foreground mb-1">{t('rtas.detail.action_title_required')}</label>
+              <Input id="rta-action-title" value={actionForm.title} onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })} placeholder={t('rtas.detail.action_title_placeholder')} required />
             </div>
             <UserEmailSearch label={t('rtas.detail.assign_to')} value={actionForm.assigned_to} onChange={handleAssigneeChange} placeholder={t('rtas.detail.search_by_email')} required />
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">{t('common.priority')}</label>
+              <label htmlFor="rta-action-priority" className="block text-sm font-medium text-foreground mb-1">{t('common.priority')}</label>
               <Select value={actionForm.priority} onValueChange={(v) => setActionForm({ ...actionForm, priority: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger id="rta-action-priority"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="critical">Critical</SelectItem>
                   <SelectItem value="high">High</SelectItem>
@@ -1324,12 +1395,12 @@ export default function RTADetail() {
               </Select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">{t('rtas.detail.due_date')}</label>
-              <Input type="date" value={actionForm.due_date} onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value })} />
+              <label htmlFor="rta-action-due" className="block text-sm font-medium text-foreground mb-1">{t('rtas.detail.due_date')}</label>
+              <Input id="rta-action-due" type="date" value={actionForm.due_date} onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value })} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">{t('common.description')}</label>
-              <Textarea value={actionForm.description} onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })} placeholder={t('rtas.detail.action_description_placeholder')} rows={3} />
+              <label htmlFor="rta-action-description" className="block text-sm font-medium text-foreground mb-1">{t('common.description')}</label>
+              <Textarea id="rta-action-description" value={actionForm.description} onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })} placeholder={t('rtas.detail.action_description_placeholder')} rows={3} />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowActionModal(false)}>{t('cancel')}</Button>

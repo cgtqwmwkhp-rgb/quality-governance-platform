@@ -13,6 +13,18 @@ const mockAutoTag = vi.fn()
 const mockAnalyzeEvidence = vi.fn()
 const mockGetSoA = vi.fn()
 const mockLinkEvidence = vi.fn()
+const mockToastError = vi.fn()
+const mockToastWarning = vi.fn()
+const mockToastSuccess = vi.fn()
+
+vi.mock('../../contexts/ToastContext', () => ({
+  toast: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    warning: (...args: unknown[]) => mockToastWarning(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+    info: vi.fn(),
+  },
+}))
 
 vi.mock('../../api/client', () => ({
   complianceApi: {
@@ -174,7 +186,8 @@ describe('ComplianceEvidence', () => {
         evidence: [],
         justification: null,
       })),
-      summary: '0 controls fully implemented, 0 partially implemented, 93 not yet implemented (93 total Annex A controls assessed).',
+      summary:
+        '0 controls fully implemented, 0 partially implemented, 93 not yet implemented (93 total Annex A controls assessed).',
       persisted_evidence_links: 0,
     },
   }
@@ -260,6 +273,12 @@ describe('ComplianceEvidence', () => {
 
     expect(screen.getAllByText('Documented information').length).toBeGreaterThan(0)
     expect(screen.getByText('Shared documented information controls')).toBeInTheDocument()
+    expect(screen.getByTestId('compliance-live-badge')).toHaveTextContent('Live data')
+    expect(screen.getByTestId('compliance-link-ims')).toHaveAttribute('href', '/ims')
+    expect(screen.getByTestId('compliance-link-audits')).toHaveAttribute(
+      'href',
+      '/audits?view=findings',
+    )
   })
 
   it('uses the live auto-tag endpoint', async () => {
@@ -350,19 +369,15 @@ describe('ComplianceEvidence', () => {
 
     await waitFor(() => expect(mockAnalyzeEvidence).toHaveBeenCalled())
 
-    // Deep analysis results should appear
     expect(await screen.findByText('5-Stage Genspark Analysis')).toBeInTheDocument()
 
-    // Closing the dialog should clear results — next open should show clean state
     const closeButtons = screen.queryAllByRole('button', { name: /close/i })
     if (closeButtons.length > 0) {
       fireEvent.click(closeButtons[0])
     } else {
-      // Escape key closes the dialog
       fireEvent.keyDown(document, { key: 'Escape' })
     }
 
-    // Re-open dialog and verify deep analysis results are gone
     await waitFor(() => expect(screen.queryByText('AI Auto-Tagger')).toBeInTheDocument())
   })
 
@@ -389,5 +404,105 @@ describe('ComplianceEvidence', () => {
     expect(await screen.findByText('Compliance data is running in degraded mode')).toBeInTheDocument()
     expect(screen.getByText(/Canonical compliance enrichment is temporarily unavailable/)).toBeInTheDocument()
     expect(screen.getByText(/canonical enrichment degraded/)).toBeInTheDocument()
+  })
+
+  it('toasts and labels coverage unavailable instead of fake zero gaps', async () => {
+    mockGetCoverage.mockRejectedValue(new Error('Coverage API down'))
+
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+
+    render(
+      <BrowserRouter>
+        <ComplianceEvidence />
+      </BrowserRouter>,
+    )
+
+    await screen.findByText('ISO Compliance Evidence Center')
+
+    await waitFor(() => {
+      expect(mockToastWarning).toHaveBeenCalled()
+    })
+
+    expect(screen.getByTestId('compliance-partial-badge')).toHaveTextContent(/Partial data/)
+    expect(screen.getByTestId('compliance-score-iso9001')).toHaveAttribute(
+      'aria-label',
+      'Coverage unavailable',
+    )
+    expect(screen.getByText(/coverage unavailable/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: /Gap Analysis/i }))
+    expect(await screen.findByText('Coverage unavailable')).toBeInTheDocument()
+    expect(screen.getByText(/do not treat this as zero gaps/i)).toBeInTheDocument()
+  })
+
+  it('toasts on delete failure and does not silently succeed', async () => {
+    mockDeleteEvidenceLink.mockRejectedValue(new Error('Delete blocked'))
+
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+
+    render(
+      <BrowserRouter>
+        <ComplianceEvidence />
+      </BrowserRouter>,
+    )
+
+    await screen.findByText('Quality policy')
+
+    fireEvent.click(screen.getByRole('button', { name: /Unlink Document/i }))
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith('Delete blocked')
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent('Delete blocked')
+    expect(screen.getByText('Quality policy')).toBeInTheDocument()
+  })
+
+  it('distinguishes mappings unavailable from empty mappings', async () => {
+    mockListMappings.mockRejectedValue(new Error('Mappings service offline'))
+
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+
+    render(
+      <BrowserRouter>
+        <ComplianceEvidence />
+      </BrowserRouter>,
+    )
+
+    await screen.findByText('ISO Compliance Evidence Center')
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(
+        expect.stringContaining('Cross-standard mappings unavailable'),
+      )
+    })
+
+    expect(await screen.findByTestId('mappings-unavailable')).toBeInTheDocument()
+    expect(screen.getAllByText('Mappings unavailable').length).toBeGreaterThanOrEqual(1)
+    expect(screen.queryByText(/No cross-standard mappings found/i)).not.toBeInTheDocument()
+  })
+
+  it('exposes clause deep-links to IMS and Audits without editing those pages', async () => {
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+
+    render(
+      <BrowserRouter>
+        <ComplianceEvidence />
+      </BrowserRouter>,
+    )
+
+    await screen.findByText('Fully Covered')
+
+    expect(screen.getByTestId('clause-link-ims')).toHaveAttribute(
+      'href',
+      '/ims?standard=iso9001&clause=7.5',
+    )
+    expect(screen.getByTestId('clause-link-audits')).toHaveAttribute(
+      'href',
+      '/audits?view=findings&clause=7.5',
+    )
+    expect(screen.getByTestId('clause-link-actions')).toHaveAttribute(
+      'href',
+      '/actions?clause=7.5',
+    )
   })
 })

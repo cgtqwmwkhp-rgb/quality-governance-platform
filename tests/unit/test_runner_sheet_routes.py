@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from fastapi import HTTPException
 
-from src.api.routes.complaints import delete_complaint_running_sheet_entry
+from src.api.routes.complaints import add_complaint_running_sheet_entry, delete_complaint_running_sheet_entry
 from src.api.routes.incidents import add_incident_running_sheet_entry
 from src.api.routes.near_miss import add_near_miss_running_sheet_entry, delete_near_miss_running_sheet_entry
 from src.api.routes.rtas import delete_running_sheet_entry
@@ -53,6 +53,42 @@ async def test_add_incident_running_sheet_entry_records_audit_and_tenant() -> No
     assert entry.author_email == "owner@example.com"
     audit_mock.assert_awaited_once()
     assert audit_mock.await_args.kwargs["event_type"] == "incident.runner_sheet_entry.created"
+
+
+@pytest.mark.asyncio
+async def test_add_complaint_running_sheet_entry_records_audit_and_tenant() -> None:
+    complaint = SimpleNamespace(id=8, tenant_id=44, reference_number="COMP-8")
+    service = SimpleNamespace(get_complaint=AsyncMock(return_value=complaint))
+
+    async def refresh(entry):
+        entry.id = 14
+        entry.created_at = "2026-03-24T00:00:00Z"
+
+    db = SimpleNamespace(
+        add=Mock(),
+        flush=AsyncMock(),
+        commit=AsyncMock(),
+        refresh=AsyncMock(side_effect=refresh),
+    )
+    current_user = SimpleNamespace(id=5, email="owner@example.com", tenant_id=44, is_superuser=False)
+
+    with (
+        patch("src.api.routes.complaints.ComplaintService", return_value=service),
+        patch("src.api.routes.complaints.record_audit_event", AsyncMock()) as audit_mock,
+    ):
+        entry = await add_complaint_running_sheet_entry(
+            complaint_id=8,
+            payload=RunningSheetEntryCreate(content="Initial complaint note"),
+            db=db,
+            current_user=current_user,
+            request_id="req-1b",
+        )
+
+    assert entry.tenant_id == 44
+    assert entry.author_id == 5
+    assert entry.author_email == "owner@example.com"
+    audit_mock.assert_awaited_once()
+    assert audit_mock.await_args.kwargs["event_type"] == "complaint.runner_sheet_entry.created"
 
 
 @pytest.mark.asyncio
