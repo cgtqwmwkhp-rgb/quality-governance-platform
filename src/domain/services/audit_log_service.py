@@ -92,7 +92,10 @@ class AuditLogService:
                 k for k in set(old_values.keys()) | set(new_values.keys()) if old_values.get(k) != new_values.get(k)
             ]
 
+        # TIMESTAMP WITHOUT TIME ZONE — store naive UTC (asyncpg rejects aware values)
         timestamp = datetime.now(timezone.utc)
+        if timestamp.tzinfo is not None:
+            timestamp = timestamp.astimezone(timezone.utc).replace(tzinfo=None)
 
         # Compute entry hash
         entry_hash = AuditLogEntry.compute_hash(

@@ -42,7 +42,6 @@ from src.domain.services.audit_risk_gate import AUDIT_RISK_SEVERITIES, should_cr
 from src.domain.services.audit_scoring_service import AuditScoringService
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
-from src.infrastructure.middleware.tenant_context import get_request_tenant_id
 from src.infrastructure.monitoring.azure_monitor import track_business_event, track_metric
 
 logger = logging.getLogger(__name__)
@@ -220,7 +219,9 @@ async def record_audit_event(
     warning is logged — AuditLogEntry requires a non-null tenant_id.
     """
     final_actor_user_id = actor_user_id if actor_user_id is not None else user_id
-    resolved_tenant_id = tenant_id if tenant_id is not None else get_request_tenant_id()
+    # Domain layer must not import infrastructure tenant_context (D09).
+    # Callers pass tenant_id explicitly; without it we stay observability-only.
+    resolved_tenant_id = tenant_id
 
     event = AuditEvent(
         event_type=event_type,
@@ -246,7 +247,11 @@ async def record_audit_event(
         )
         track_business_event(
             "audit_completed",
-            {"event_type": event_type, "entity_type": entity_type, "persisted": False},
+            {
+                "event_type": event_type,
+                "entity_type": entity_type,
+                "persisted": "false",
+            },
         )
         return event
 
@@ -279,15 +284,15 @@ async def record_audit_event(
         action_category="data",
         commit=False,
     )
-    event.id = entry.id
+    event.id = int(entry.id)  # type: ignore[assignment]  # Optional[int] set after persist
 
     track_business_event(
         "audit_completed",
         {
             "event_type": event_type,
             "entity_type": entity_type,
-            "persisted": True,
-            "audit_log_entry_id": entry.id,
+            "persisted": "true",
+            "audit_log_entry_id": str(entry.id),
         },
     )
 
