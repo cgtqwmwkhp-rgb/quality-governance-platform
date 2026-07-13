@@ -54,3 +54,45 @@ export function getCapaHandoffLabelKey(
   }
   return 'investigations.handoff.create_action'
 }
+
+export type ActionSourceLink = {
+  href: string
+  labelKey: string
+  /** English fallback used when i18n key is missing in tests / partial locales. */
+  labelFallback: string
+}
+
+/**
+ * Honest reverse deep-link from a unified action (incl. capa_actions) back to its source.
+ * Returns null when source_id is missing/non-positive or the type has no known detail route.
+ */
+export function getActionSourceLink(
+  sourceType: string | null | undefined,
+  sourceId: number | null | undefined,
+): ActionSourceLink | null {
+  if (sourceId == null || !Number.isFinite(sourceId) || sourceId <= 0) return null
+  const kind = (sourceType || '').trim().toLowerCase()
+
+  if (kind === 'incident' || kind === 'capa_incident') {
+    return {
+      href: `/incidents/${sourceId}`,
+      labelKey: 'actions.view_incident',
+      labelFallback: 'View incident',
+    }
+  }
+  if (kind === 'investigation') {
+    return {
+      href: `/investigations/${sourceId}`,
+      labelKey: 'actions.view_investigation',
+      labelFallback: 'View investigation',
+    }
+  }
+  if (kind === 'audit_finding') {
+    return {
+      href: `/audits?view=findings&findingId=${sourceId}`,
+      labelKey: 'actions.view_finding',
+      labelFallback: 'View finding',
+    }
+  }
+  return null
+}
