@@ -25,6 +25,21 @@ def test_import_facade_wires_promotion_collaborator() -> None:
     )
 
 
+def test_promotion_summary_uses_materialization_risk_gate() -> None:
+    service = ExternalAuditPromotionService(SimpleNamespace())
+    findings = [
+        SimpleNamespace(finding_type="nonconformity", severity="medium", mapped_standards_json=[]),
+        SimpleNamespace(finding_type="nonconformity", severity="low", mapped_standards_json=[]),
+        SimpleNamespace(finding_type="positive_practice", severity="critical", mapped_standards_json=[]),
+        SimpleNamespace(finding_type="observation", severity="high", mapped_standards_json=[]),
+    ]
+
+    summary = service._build_promotion_summary(findings=findings)
+
+    assert summary["risk_candidates"] == 1
+    assert summary["action_candidates"] == 2
+
+
 @pytest.mark.asyncio
 async def test_import_facade_delegates_link_evidence() -> None:
     deleted_link = SimpleNamespace(

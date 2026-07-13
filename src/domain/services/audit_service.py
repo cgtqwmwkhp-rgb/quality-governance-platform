@@ -17,6 +17,7 @@ from typing import Any
 
 from sqlalchemy import and_, cast, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -30,10 +31,12 @@ from src.domain.models.audit import (
     AuditStatus,
     AuditTemplate,
     FindingStatus,
+    audit_finding_risks,
 )
 from src.domain.models.audit_log import AuditEvent
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.risk_register import EnterpriseRisk
+from src.domain.services.audit_risk_gate import AUDIT_RISK_SEVERITIES, should_create_risk
 from src.domain.services.audit_scoring_service import AuditScoringService
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
@@ -1271,6 +1274,31 @@ class AuditService:
         await self.db.flush()
         return action
 
+    _should_create_risk = staticmethod(should_create_risk)
+
+    async def _link_risk_to_finding(self, finding: AuditFinding, risk: EnterpriseRisk) -> None:
+        """Dual-write a finding/risk link during the JSON transition release."""
+        await self.db.execute(
+            pg_insert(audit_finding_risks)
+            .values(audit_finding_id=finding.id, risk_id=risk.id)
+            .on_conflict_do_nothing(
+                index_elements=[
+                    audit_finding_risks.c.audit_finding_id,
+                    audit_finding_risks.c.risk_id,
+                ]
+            )
+        )
+
+        legacy_ids = getattr(finding, "_risk_ids_json", None)
+        if legacy_ids is None:
+            legacy_ids = finding.risk_ids_json
+        finding.risk_ids_json = sorted({*(legacy_ids or []), risk.id})
+
+        # Keep an already-loaded view-only relationship coherent for callers.
+        loaded_risks = finding.__dict__.get("risks")
+        if loaded_risks is not None and all(linked.id != risk.id for linked in loaded_risks):
+            loaded_risks.append(risk)
+
     async def _ensure_risk_for_finding(
         self,
         *,
@@ -1280,8 +1308,12 @@ class AuditService:
         actor_user_id: int,
         suggested_title: str | None = None,
         external_import_triage_pending: bool = False,
+        force_flag: bool = False,
     ) -> EnterpriseRisk | None:
-        if finding.severity not in {"critical", "high", "medium", "low"}:
+        normalized_severity = (finding.severity or "").strip().lower()
+        if force_flag and normalized_severity not in AUDIT_RISK_SEVERITIES:
+            return None
+        if not force_flag and not self._should_create_risk(finding):
             return None
 
         title = (suggested_title or f"Audit escalation: {run.reference_number} / {finding.reference_number}")[:255]
@@ -1308,15 +1340,14 @@ class AuditService:
                 linked_actions = set(existing.linked_actions or [])
                 linked_actions.add(action.reference_number)
                 existing.linked_actions = sorted(linked_actions)
-            if existing.id not in (finding.risk_ids_json or []):
-                finding.risk_ids_json = sorted({*(finding.risk_ids_json or []), existing.id})
+            await self._link_risk_to_finding(finding, existing)
             return existing
 
-        if finding.severity == "critical":
+        if normalized_severity == "critical":
             likelihood, impact = 4, 5
-        elif finding.severity == "high":
+        elif normalized_severity == "high":
             likelihood, impact = 3, 4
-        elif finding.severity == "medium":
+        elif normalized_severity == "medium":
             likelihood, impact = 2, 3
         else:
             likelihood, impact = 1, 2
@@ -1377,7 +1408,7 @@ class AuditService:
         )
         self.db.add(risk)
         await self.db.flush()
-        finding.risk_ids_json = sorted({*(finding.risk_ids_json or []), risk.id})
+        await self._link_risk_to_finding(finding, risk)
         return risk
 
     async def _auto_generate_findings_actions_and_risks(
@@ -1693,4 +1724,56 @@ class AuditService:
         await self.db.flush()
         await self.db.refresh(finding)
         await invalidate_tenant_cache(tenant_id, "audits")
+        return finding
+
+    async def flag_finding_to_organisational_risk(
+        self,
+        finding_id: int,
+        *,
+        tenant_id: int,
+        actor_user_id: int,
+        severity: str | None = None,
+    ) -> AuditFinding:
+        """Explicitly allocate a finding to the enterprise risk register.
+
+        Used when operators escalate a significant issue (including positive/observation
+        findings that would not auto-create risks). Idempotent when a linked risk already
+        exists for the finding reference.
+        """
+        finding: AuditFinding = await self._get_entity(
+            AuditFinding,
+            finding_id,
+            tenant_id=tenant_id,
+        )
+        run: AuditRun = await self._get_entity(AuditRun, finding.run_id, tenant_id=tenant_id)
+
+        if severity:
+            if severity not in {"critical", "high", "medium", "low"}:
+                raise ValidationError("severity must be critical|high|medium|low when flagging to risk")
+            finding.severity = severity
+        elif finding.severity not in {"critical", "high", "medium", "low"}:
+            # Observations / unset severity still need a registerable band when explicitly flagged.
+            finding.severity = "high"
+
+        action = await self._ensure_action_for_finding(
+            run=run,
+            finding=finding,
+            actor_user_id=actor_user_id,
+        )
+        risk = await self._ensure_risk_for_finding(
+            run=run,
+            finding=finding,
+            action=action,
+            actor_user_id=actor_user_id,
+            force_flag=True,
+        )
+        if risk is None:
+            raise ValidationError("Unable to create organisational risk for finding")
+
+        await self.db.flush()
+        await self.db.refresh(finding)
+        await invalidate_tenant_cache(tenant_id, "audits")
+        await invalidate_tenant_cache(tenant_id, "risk-register")
+        await invalidate_tenant_cache(tenant_id, "risks")
+        track_metric("audits.findings.flag_risk")
         return finding

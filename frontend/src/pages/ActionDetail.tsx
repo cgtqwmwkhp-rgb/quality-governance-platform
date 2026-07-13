@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   Copy,
@@ -7,6 +8,7 @@ import {
   ExternalLink,
   Link2,
   Loader2,
+  MailWarning,
   MessageSquare,
   Paperclip,
   RefreshCw,
@@ -21,6 +23,7 @@ import {
   evidenceAssetsApi,
   EvidenceAsset,
   getApiErrorMessage,
+  notificationsApi,
 } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
@@ -87,6 +90,7 @@ const SUPPORTED_EVIDENCE_MIME_TYPES = [
 ]
 
 export default function ActionDetail() {
+  const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const location = useLocation()
   const key = searchParams.get('key') || ''
@@ -95,6 +99,7 @@ export default function ActionDetail() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [statusDraft, setStatusDraft] = useState<string>('')
+  const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
 
   const [notes, setNotes] = useState<ActionOwnerNote[]>([])
   const [notesLoading, setNotesLoading] = useState(false)
@@ -160,6 +165,21 @@ export default function ActionDetail() {
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    let cancelled = false
+    notificationsApi
+      .getDeliveryStatus()
+      .then((response) => {
+        if (!cancelled) setEmailConfigured(response.data.email_configured)
+      })
+      .catch(() => {
+        // Optional honesty signal: omit the banner when readiness cannot be read.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const sortedEvidence = useMemo(() => {
     const arr = [...evidence]
@@ -369,6 +389,7 @@ export default function ActionDetail() {
   }
 
   const statusDirty = statusDraft !== (action.display_status || action.status)
+  const isCapa = action.action_key.startsWith('capa:') || action.source_type === 'capa'
 
   return (
     <div className="space-y-6 p-4 max-w-3xl mx-auto animate-fade-in">
@@ -414,6 +435,16 @@ export default function ActionDetail() {
           <Badge variant="outline">raw: {action.status}</Badge>
           {action.priority ? (
             <Badge variant="outline">priority: {action.priority}</Badge>
+          ) : null}
+          {action.source_type === 'audit_finding' &&
+          Number.isFinite(action.source_id) &&
+          action.source_id > 0 ? (
+            <Button variant="outline" size="sm" className="h-7" asChild>
+              <Link to={`/audits?view=findings&findingId=${action.source_id}`}>
+                {t('actions.view_finding')}
+                <ExternalLink className="w-3 h-3 ml-1" />
+              </Link>
+            </Button>
           ) : null}
         </div>
         <dl className="mt-3 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
@@ -744,6 +775,21 @@ export default function ActionDetail() {
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Assignee email (optional)
             </p>
+            {isCapa && emailConfigured === false ? (
+              <div
+                className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+                role="status"
+                data-testid="action-detail-email-unavailable"
+              >
+                <div className="flex items-start gap-2">
+                  <MailWarning className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  <div>
+                    <p className="text-sm font-semibold">{t('actions.email_unavailable.title')}</p>
+                    <p className="mt-1 text-xs">{t('actions.email_unavailable.body')}</p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <form
               className="flex flex-col sm:flex-row gap-2 mt-2"
               onSubmit={async (e) => {
@@ -757,6 +803,13 @@ export default function ActionDetail() {
                     assigned_to_email: email,
                   })
                   setAction(res.data)
+                  setInlineMessage({
+                    tone: 'success',
+                    text:
+                      emailConfigured === false
+                        ? t('actions.email_unavailable.body')
+                        : t('actions.assignee_saved'),
+                  })
                 } catch (err: unknown) {
                   setInlineMessage({
                     tone: 'error',

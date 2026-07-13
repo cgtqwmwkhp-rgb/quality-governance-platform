@@ -61,6 +61,8 @@ export interface AuditFinding {
   status: 'open' | 'in_progress' | 'pending_verification' | 'closed' | 'deferred'
   corrective_action_required: boolean
   corrective_action_due_date?: string
+  /** Linked enterprise risk ids (risks_v2) when escalated from this finding. */
+  risk_ids?: number[] | null
   created_at: string
 }
 
@@ -443,5 +445,7 @@ export function createAuditsApi(api: AxiosInstance) {
     api.post<AuditFinding>(`/api/v1/audits/runs/${runId}/findings`, data),
   updateFinding: (findingId: number, data: AuditFindingUpdate) =>
     api.patch<AuditFinding>(`/api/v1/audits/findings/${findingId}`, data),
+  flagFindingToRisk: (findingId: number, data: { severity?: 'critical' | 'high' | 'medium' | 'low' } = {}) =>
+    api.post<AuditFinding>(`/api/v1/audits/findings/${findingId}/flag-risk`, data),
 }
 }

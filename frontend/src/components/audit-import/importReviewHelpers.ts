@@ -10,7 +10,7 @@ import {
   type ExternalAuditImportJob,
 } from '../../api/client'
 
-export const ACTION_FINDING_TYPES = [
+export const ACTION_FINDING_TYPES: readonly string[] = [
   'nonconformity',
   'major_nonconformity',
   'minor_nonconformity',
@@ -18,11 +18,40 @@ export const ACTION_FINDING_TYPES = [
   'finding',
   'flagged_item',
   'question_answered_no',
-]
+] as const
+
+export const RISK_CREATING_SEVERITIES: readonly string[] = ['medium', 'high', 'critical']
+
+export function shouldCreateRisk(finding: {
+  finding_type?: string | null
+  severity?: string | null
+}): boolean {
+  const findingType = finding.finding_type?.trim().toLowerCase() ?? ''
+  const severity = finding.severity?.trim().toLowerCase() ?? ''
+  return (
+    ACTION_FINDING_TYPES.includes(findingType) && RISK_CREATING_SEVERITIES.includes(severity)
+  )
+}
 
 export function humanizeLabel(value: string | null | undefined) {
   if (!value) return ''
   return value.replace(/_/g, ' ')
+}
+
+/**
+ * Build an import-review workspace path using the real audit run id.
+ * Returns null when the run id is missing so callers can hide/disable the link
+ * instead of navigating to the broken `/audits/0/...` placeholder.
+ */
+export function getImportReviewPath(
+  auditRunId: number | null | undefined,
+  importJobId?: number | null,
+): string | null {
+  if (auditRunId == null || !Number.isFinite(auditRunId) || auditRunId <= 0) {
+    return null
+  }
+  const params = importJobId != null && Number.isFinite(importJobId) ? `?jobId=${importJobId}` : ''
+  return `/audits/${auditRunId}/import-review${params}`
 }
 
 export function formatDate(value: string | null | undefined): string {
@@ -128,6 +157,8 @@ export function deriveDeclaredProgramLabel(
   return 'External Audit'
 }
 
+import { CUSTOMER_AUDITS_AUDITS_PATH } from '../assuranceHubHelpers'
+
 export function deriveSpecialistHome(job: ExternalAuditImportJob | null): { path: string; label: string } {
   const path = job?.specialist_home_path?.trim()
   const label = job?.specialist_home_label?.trim()
@@ -161,7 +192,7 @@ export function deriveSpecialistHome(job: ExternalAuditImportJob | null): { path
     return { path: '/compliance', label: 'Open ISO Compliance' }
   }
   if (scheme === 'customer_other' || scheme === 'other') {
-    return { path: '/customer-audits', label: 'Open Customer Audits' }
+    return { path: CUSTOMER_AUDITS_AUDITS_PATH, label: 'Open Customer Audits' }
   }
-  return { path: '/customer-audits', label: 'Open Customer Audits' }
+  return { path: CUSTOMER_AUDITS_AUDITS_PATH, label: 'Open Customer Audits' }
 }

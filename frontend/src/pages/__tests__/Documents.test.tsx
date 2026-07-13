@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 
 const mockGet = vi.fn()
 const mockPost = vi.fn()
 const mockTrackError = vi.fn()
+const mockToastError = vi.fn()
+const mockToastWarning = vi.fn()
+const mockToastSuccess = vi.fn()
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -16,6 +20,15 @@ vi.mock('../../utils/errorTracker', () => ({
   trackError: (...args: unknown[]) => mockTrackError(...args),
 }))
 
+vi.mock('../../contexts/ToastContext', () => ({
+  toast: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    warning: (...args: unknown[]) => mockToastWarning(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+    info: vi.fn(),
+  },
+}))
+
 vi.mock('../../api/client', () => ({
   __esModule: true,
   default: {
@@ -26,59 +39,69 @@ vi.mock('../../api/client', () => ({
   getApiErrorMessage: (error: unknown) => (error instanceof Error ? error.message : 'Request failed'),
 }))
 
+const sampleDoc = {
+  id: 11,
+  reference_number: 'DOC-11',
+  title: 'Safety Policy',
+  file_name: 'policy.pdf',
+  file_type: 'pdf',
+  file_size: 2048,
+  document_type: 'policy',
+  sensitivity: 'internal',
+  status: 'approved',
+  version: '1.0',
+  view_count: 0,
+  download_count: 0,
+  is_public: false,
+  created_at: '2026-03-22T10:00:00Z',
+}
+
+function mockHappyPath() {
+  mockGet.mockImplementation((url: string) => {
+    if (url.startsWith('/api/v1/documents/?')) {
+      return Promise.resolve({ data: { items: [sampleDoc] } })
+    }
+    if (url === '/api/v1/documents/stats/overview') {
+      return Promise.resolve({
+        data: {
+          total_documents: 1,
+          indexed_documents: 0,
+          total_chunks: 0,
+          by_status: { approved: 1 },
+          by_type: { policy: 1 },
+        },
+      })
+    }
+    if (url === '/api/v1/documents/11/signed-url') {
+      return Promise.resolve({
+        data: { signed_url: '/api/v1/evidence-assets/download?key=policy.pdf' },
+      })
+    }
+    return Promise.resolve({ data: { results: [] } })
+  })
+}
+
 describe('Documents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockGet.mockImplementation((url: string) => {
-      if (url.startsWith('/api/v1/documents/?')) {
-        return Promise.resolve({
-          data: {
-            items: [
-              {
-                id: 11,
-                reference_number: 'DOC-11',
-                title: 'Safety Policy',
-                file_name: 'policy.pdf',
-                file_type: 'pdf',
-                file_size: 2048,
-                document_type: 'policy',
-                sensitivity: 'internal',
-                status: 'approved',
-                version: '1.0',
-                view_count: 0,
-                download_count: 0,
-                is_public: false,
-                created_at: '2026-03-22T10:00:00Z',
-              },
-            ],
-          },
-        })
-      }
-      if (url === '/api/v1/documents/stats/overview') {
-        return Promise.resolve({
-          data: {
-            total_documents: 1,
-            indexed_documents: 0,
-            total_chunks: 0,
-            by_status: { approved: 1 },
-            by_type: { policy: 1 },
-          },
-        })
-      }
-      if (url === '/api/v1/documents/11/signed-url') {
-        return Promise.resolve({
-          data: { signed_url: '/api/v1/evidence-assets/download?key=policy.pdf' },
-        })
-      }
-      return Promise.resolve({ data: { results: [] } })
-    })
+    mockHappyPath()
   })
 
   it('loads documents and opens a signed document url from the detail modal', async () => {
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
     const Documents = (await import('../Documents')).default
 
-    render(<Documents />)
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'nav.library' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /nav\.documents/i })).toHaveAttribute('aria-current', 'page')
+    expect(await screen.findByTestId('documents-live-badge')).toHaveTextContent('Live data')
 
     fireEvent.click(await screen.findByText('Safety Policy'))
     fireEvent.click(screen.getByRole('button', { name: 'Open' }))
@@ -93,5 +116,149 @@ describe('Documents', () => {
         'noopener,noreferrer',
       )
     })
+  })
+
+  it('toasts and labels list unavailable instead of fake empty library', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/documents/?')) {
+        return Promise.reject(new Error('Documents offline'))
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.resolve({
+          data: {
+            total_documents: 0,
+            indexed_documents: 0,
+            total_chunks: 0,
+            by_status: {},
+            by_type: {},
+          },
+        })
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
+
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('documents-partial-badge')).toHaveTextContent(/Partial data/)
+    expect(screen.getByTestId('documents-list-unavailable')).toBeInTheDocument()
+    expect(screen.getByText('Documents unavailable')).toBeInTheDocument()
+    expect(screen.queryByTestId('documents-empty')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith('Documents offline')
+    })
+  })
+
+  it('warns when stats fail while list remains live', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/documents/?')) {
+        return Promise.resolve({ data: { items: [sampleDoc] } })
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.reject(new Error('Stats offline'))
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
+
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Safety Policy')).toBeInTheDocument()
+    expect(screen.getByTestId('documents-partial-badge')).toBeInTheDocument()
+    expect(screen.getByTestId('documents-partial-warning')).toHaveTextContent(/stats unavailable/i)
+    await waitFor(() => {
+      expect(mockToastWarning).toHaveBeenCalledWith(
+        expect.stringMatching(/stats unavailable/i),
+      )
+    })
+  })
+
+  it('toasts semantic search failure without pretending zero matches', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/documents/?')) {
+        return Promise.resolve({ data: { items: [sampleDoc] } })
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.resolve({
+          data: {
+            total_documents: 1,
+            indexed_documents: 0,
+            total_chunks: 0,
+            by_status: { approved: 1 },
+            by_type: { policy: 1 },
+          },
+        })
+      }
+      if (url.includes('/documents/search/semantic')) {
+        return Promise.reject(new Error('Search offline'))
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
+
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    await screen.findByTestId('documents-live-badge')
+    fireEvent.change(screen.getByPlaceholderText(/AI-powered semantic search/i), {
+      target: { value: 'safety policy' },
+    })
+
+    expect(await screen.findByTestId('documents-search-unavailable')).toHaveTextContent(
+      /Semantic search unavailable/i,
+    )
+    expect(screen.getByText(/do not treat this as zero matches/i)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(expect.stringMatching(/Search offline/i))
+    })
+  })
+
+  it('toasts when signed URL open fails', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/documents/?')) {
+        return Promise.resolve({ data: { items: [sampleDoc] } })
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.resolve({
+          data: {
+            total_documents: 1,
+            indexed_documents: 0,
+            total_chunks: 0,
+            by_status: { approved: 1 },
+            by_type: { policy: 1 },
+          },
+        })
+      }
+      if (url === '/api/v1/documents/11/signed-url') {
+        return Promise.reject(new Error('Signed URL denied'))
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
+
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(await screen.findByText('Safety Policy'))
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith('Signed URL denied')
+    })
+    expect(screen.getByTestId('documents-load-error')).toHaveTextContent('Signed URL denied')
   })
 })

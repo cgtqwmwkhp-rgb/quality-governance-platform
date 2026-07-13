@@ -24,6 +24,7 @@ import {
   Zap,
 } from 'lucide-react'
 import api, { getApiErrorMessage } from '../api/client'
+import { toast } from '../contexts/ToastContext'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
@@ -38,6 +39,18 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
+import { LibraryShell } from './LibraryShell'
+
+/** Surface operator-visible failures (banner + toast). Never silent. */
+const reportFailure = (
+  err: unknown,
+  setError: (message: string | null) => void,
+): string => {
+  const message = getApiErrorMessage(err)
+  setError(message)
+  toast.error(message)
+  return message
+}
 
 interface Document {
   id: number
@@ -137,8 +150,16 @@ export default function Documents() {
   const [filterStatus, setFilterStatus] = useState<string>(ALL_STATUS_VALUE)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [docsUnavailable, setDocsUnavailable] = useState(false)
+  const [statsUnavailable, setStatsUnavailable] = useState(false)
+  const [searchUnavailable, setSearchUnavailable] = useState(false)
+  const [partialLoadWarning, setPartialLoadWarning] = useState<string | null>(null)
 
   const loadData = useCallback(async (docType?: string, status?: string) => {
+    setLoadError(null)
+    setPartialLoadWarning(null)
+    setDocsUnavailable(false)
+    setStatsUnavailable(false)
     try {
       const params = new URLSearchParams({ page: '1', page_size: '50' })
       if (docType) params.set('document_type', docType)
@@ -147,13 +168,48 @@ export default function Documents() {
         api.get(`/api/v1/documents/?${params}`),
         api.get('/api/v1/documents/stats/overview'),
       ])
-      setDocuments(docsResult.status === 'fulfilled' ? docsResult.value.data.items || [] : [])
-      if (statsResult.status === 'fulfilled') setStats(statsResult.value.data)
+
+      const docsFailed = docsResult.status === 'rejected'
+      const statsFailed = statsResult.status === 'rejected'
+      setDocsUnavailable(docsFailed)
+      setStatsUnavailable(statsFailed)
+
+      if (docsFailed && statsFailed) {
+        const reason =
+          docsResult.status === 'rejected' ? docsResult.reason : (statsResult as PromiseRejectedResult).reason
+        trackError(reason, { component: 'Documents', action: 'load' })
+        setDocuments([])
+        setStats(null)
+        reportFailure(reason, setLoadError)
+        return
+      }
+
+      if (docsFailed) {
+        const reason = (docsResult as PromiseRejectedResult).reason
+        trackError(reason, { component: 'Documents', action: 'load' })
+        setDocuments([])
+        reportFailure(reason, setLoadError)
+      } else {
+        setDocuments(docsResult.value.data.items || [])
+      }
+
+      if (statsFailed) {
+        const reason = (statsResult as PromiseRejectedResult).reason
+        trackError(reason, { component: 'Documents', action: 'stats' })
+        setStats(null)
+        const warning = 'Document stats unavailable — library list may still be live.'
+        setPartialLoadWarning(warning)
+        toast.warning(warning)
+      } else {
+        setStats(statsResult.value.data)
+      }
     } catch (err) {
       trackError(err, { component: 'Documents', action: 'load' })
       setDocuments([])
       setStats(null)
-      setLoadError(getApiErrorMessage(err))
+      setDocsUnavailable(true)
+      setStatsUnavailable(true)
+      reportFailure(err, setLoadError)
     } finally {
       setLoading(false)
     }
@@ -173,10 +229,12 @@ export default function Documents() {
   const handleSemanticSearch = useCallback(async (query: string) => {
     if (query.length < 3) {
       setSearchResults(null)
+      setSearchUnavailable(false)
       return
     }
 
     setIsSearching(true)
+    setSearchUnavailable(false)
     try {
       const response = await api.get(
         `/api/v1/documents/search/semantic?q=${encodeURIComponent(query)}&top_k=10`,
@@ -184,7 +242,10 @@ export default function Documents() {
       setSearchResults(response.data.results)
     } catch (err) {
       trackError(err, { component: 'Documents', action: 'search' })
-      setSearchResults([])
+      // Do not set [] — empty results look like "no matches". Mark unavailable instead.
+      setSearchResults(null)
+      setSearchUnavailable(true)
+      toast.error(`Semantic search unavailable: ${getApiErrorMessage(err)}`)
     } finally {
       setIsSearching(false)
     }
@@ -244,6 +305,7 @@ export default function Documents() {
       })
 
       setUploadProgress(100)
+      toast.success('Document uploaded')
 
       await loadData(
         filterType === ALL_TYPES_VALUE ? undefined : filterType,
@@ -252,7 +314,7 @@ export default function Documents() {
       setShowUploadModal(false)
     } catch (err) {
       trackError(err, { component: 'Documents', action: 'upload' })
-      setUploadError(getApiErrorMessage(err))
+      reportFailure(err, setUploadError)
     } finally {
       if (progressInterval) clearInterval(progressInterval)
       setUploading(false)
@@ -283,11 +345,14 @@ export default function Documents() {
         window.open(signedUrl, '_blank', 'noopener,noreferrer')
       } catch (err) {
         trackError(err, { component: 'Documents', action: download ? 'download' : 'open' })
-        setLoadError(getApiErrorMessage(err))
+        reportFailure(err, setLoadError)
       }
     },
     [resolveSignedUrl],
   )
+
+  const isLive = !loading && !docsUnavailable && !statsUnavailable && !loadError
+  const isPartial = !loading && (docsUnavailable || statsUnavailable) && !(docsUnavailable && statsUnavailable)
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`
@@ -317,29 +382,43 @@ export default function Documents() {
 
   return (
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- drag-and-drop is mouse-only; upload button provides keyboard access
-    <div
-      className="space-y-6 animate-fade-in"
-      onDragEnter={handleDrag}
-      role="region"
-      aria-label="Document library"
-    >
+    <div onDragEnter={handleDrag} role="region" aria-label="Document library">
+      <LibraryShell
+        activeView="documents"
+        actions={
+          <Button onClick={() => setShowUploadModal(true)}>
+            <Upload size={20} />
+            {t('documents.upload')}
+          </Button>
+        }
+      >
+      <div className="flex flex-wrap items-center gap-2">
+        {isLive && (
+          <Badge variant="secondary" data-testid="documents-live-badge">
+            Live data
+          </Badge>
+        )}
+        {isPartial && (
+          <Badge variant="outline" data-testid="documents-partial-badge">
+            Partial data — some sources unavailable
+          </Badge>
+        )}
+      </div>
       {loadError && (
-        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{loadError}</div>
+        <div className="bg-destructive/10 text-destructive p-4 rounded-lg" role="alert" data-testid="documents-load-error">
+          {loadError}
+        </div>
+      )}
+      {partialLoadWarning && !loadError && (
+        <div className="bg-warning/10 text-warning p-4 rounded-lg" role="status" data-testid="documents-partial-warning">
+          {partialLoadWarning}
+        </div>
       )}
       {uploadError && (
-        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{uploadError}</div>
-      )}
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">{t('documents.title')}</h1>
-          <p className="text-muted-foreground mt-1">{t('documents.subtitle')}</p>
+        <div className="bg-destructive/10 text-destructive p-4 rounded-lg" role="alert">
+          {uploadError}
         </div>
-        <Button onClick={() => setShowUploadModal(true)}>
-          <Upload size={20} />
-          {t('documents.upload')}
-        </Button>
-      </div>
+      )}
 
       {/* Stats */}
       {stats && (
@@ -473,6 +552,15 @@ export default function Documents() {
       </div>
 
       {/* Search Results */}
+      {searchUnavailable && searchTerm.length >= 3 && (
+        <Card className="p-4 border-warning/30 bg-warning/5" data-testid="documents-search-unavailable">
+          <p className="text-sm text-warning font-medium">Semantic search unavailable</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Live search could not be loaded — do not treat this as zero matches. Title filter still
+            applies below.
+          </p>
+        </Card>
+      )}
       {searchResults && searchResults.length > 0 && (
         <Card className="p-4 border-primary/20 bg-primary/5">
           <div className="flex items-center gap-2 mb-3">
@@ -525,8 +613,16 @@ export default function Documents() {
       {/* Documents Grid/List */}
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredDocuments.length === 0 ? (
-            <div className="md:col-span-4">
+          {docsUnavailable ? (
+            <div className="md:col-span-4" data-testid="documents-list-unavailable">
+              <EmptyState
+                icon={<FileText className="w-8 h-8 text-warning" />}
+                title="Documents unavailable"
+                description="The library list could not be loaded — this is not an empty library. Retry or check connectivity."
+              />
+            </div>
+          ) : filteredDocuments.length === 0 ? (
+            <div className="md:col-span-4" data-testid="documents-empty">
               <EmptyState
                 icon={<FileText className="w-8 h-8 text-muted-foreground" />}
                 title={t('documents.empty.title')}
@@ -598,6 +694,14 @@ export default function Documents() {
             })
           )}
         </div>
+      ) : docsUnavailable ? (
+        <div data-testid="documents-list-unavailable">
+          <EmptyState
+            icon={<FileText className="w-8 h-8 text-warning" />}
+            title="Documents unavailable"
+            description="The library list could not be loaded — this is not an empty library. Retry or check connectivity."
+          />
+        </div>
       ) : (
         <Card className="overflow-hidden">
           <table className="w-full">
@@ -621,7 +725,18 @@ export default function Documents() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filteredDocuments.map((doc) => {
+              {filteredDocuments.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8" data-testid="documents-empty">
+                    <EmptyState
+                      icon={<FileText className="w-8 h-8 text-muted-foreground" />}
+                      title={t('documents.empty.title')}
+                      description={t('documents.empty.subtitle')}
+                    />
+                  </td>
+                </tr>
+              ) : (
+                filteredDocuments.map((doc) => {
                 const FileIcon = getFileIcon(doc.file_type)
                 return (
                   <tr
@@ -654,7 +769,8 @@ export default function Documents() {
                     <td className="px-6 py-4 text-sm text-muted-foreground">{doc.view_count}</td>
                   </tr>
                 )
-              })}
+              })
+              )}
             </tbody>
           </table>
         </Card>
@@ -871,6 +987,7 @@ export default function Documents() {
           </Card>
         </div>
       )}
+      </LibraryShell>
     </div>
   )
 }

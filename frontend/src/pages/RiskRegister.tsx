@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
   Plus,
@@ -28,9 +28,36 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/Dialog'
-import { riskRegisterApi } from '../api/client'
+import { auditsApi, getApiErrorMessage, riskRegisterApi } from '../api/client'
 import { toast } from '../contexts/ToastContext'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
+
+type MetricValue = number | null
+
+interface RegisterSummary {
+  total_risks: MetricValue
+  by_level: {
+    critical: MetricValue
+    high: MetricValue
+    medium: MetricValue
+    low: MetricValue
+  }
+  outside_appetite: MetricValue
+  overdue_review: MetricValue
+  escalated: MetricValue
+}
+
+const EMPTY_SUMMARY: RegisterSummary = {
+  total_risks: null,
+  by_level: { critical: null, high: null, medium: null, low: null },
+  outside_appetite: null,
+  overdue_review: null,
+  escalated: null,
+}
+
+function formatMetric(value: MetricValue): string {
+  return value == null ? '—' : String(value)
+}
 
 interface Risk {
   id: number
@@ -79,6 +106,15 @@ interface HeatMapData {
   impact_labels: Record<number, string>
 }
 
+interface LinkedAuditTarget {
+  kind: 'audit' | 'finding'
+  path: string
+}
+
+function normalizeLinkedReference(reference: string): string {
+  return reference.trim().toLowerCase()
+}
+
 const CATEGORIES = [
   { id: 'strategic', label: 'Strategic', color: 'bg-primary' },
   { id: 'operational', label: 'Operational', color: 'bg-info' },
@@ -105,22 +141,21 @@ export default function RiskRegister() {
   const [heatMapData, setHeatMapData] = useState<HeatMapData | null>(null)
   const [selectedRisk, setSelectedRisk] = useState<Risk | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [summaryUnavailable, setSummaryUnavailable] = useState(false)
+  const [heatmapUnavailable, setHeatmapUnavailable] = useState(false)
+  const [auditLinksUnavailable, setAuditLinksUnavailable] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [auditOnly, setAuditOnly] = useState(searchParams.get('auditOnly') === '1')
   const [auditRefFilter, setAuditRefFilter] = useState(searchParams.get('auditRef') || '')
-  const [summary, setSummary] = useState({
-    total_risks: 0,
-    by_level: { critical: 0, high: 0, medium: 0, low: 0 },
-    outside_appetite: 0,
-    overdue_review: 0,
-    escalated: 0,
-  })
+  const [summary, setSummary] = useState<RegisterSummary>(EMPTY_SUMMARY)
   const [registerMode, setRegisterMode] = useState<'active' | 'import_triage'>('active')
   const [pendingTriageCount, setPendingTriageCount] = useState(0)
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
   const [rejectTargetId, setRejectTargetId] = useState<number | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
   const [triageSubmitting, setTriageSubmitting] = useState(false)
+  const [linkedAuditTargets, setLinkedAuditTargets] = useState<Record<string, LinkedAuditTarget>>({})
 
   useEffect(() => {
     if (searchParams.get('triage') === 'import') {
@@ -143,21 +178,40 @@ export default function RiskRegister() {
 
   const loadRisks = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
+    setSummaryUnavailable(false)
+    setHeatmapUnavailable(false)
+    setAuditLinksUnavailable(false)
     try {
       const listParams =
         registerMode === 'import_triage'
           ? ({ limit: 100, suggestion_triage: 'pending' } as const)
           : ({ limit: 100 } as const)
-      const [risksResponse, summaryResponse, heatmapResponse, pendingRes] = await Promise.all([
+      const [risksResult, summaryResult, heatmapResult, pendingResult] = await Promise.allSettled([
         riskRegisterApi.list(listParams),
         riskRegisterApi.getSummary(),
         riskRegisterApi.getHeatmap(),
         riskRegisterApi.list({ limit: 1, suggestion_triage: 'pending' }),
       ])
-      setPendingTriageCount(
-        typeof pendingRes.data?.total === 'number' ? pendingRes.data.total : 0,
-      )
 
+      if (risksResult.status === 'rejected') {
+        const message = getApiErrorMessage(
+          risksResult.reason,
+          'Risk register unavailable — could not load risks.',
+        )
+        setLoadError(message)
+        setRisks([])
+        setSummary(EMPTY_SUMMARY)
+        setSummaryUnavailable(true)
+        setHeatMapData(null)
+        setHeatmapUnavailable(true)
+        setPendingTriageCount(0)
+        setLinkedAuditTargets({})
+        toast.error(message)
+        return
+      }
+
+      const risksResponse = risksResult.value
       const apiRisks = risksResponse.data?.items ?? []
       const mappedRisks: Risk[] = apiRisks.map((r) => {
         const residual = r.residual_score ?? r.risk_score ?? 0
@@ -199,91 +253,209 @@ export default function RiskRegister() {
       })
       setRisks(mappedRisks)
 
-      const s = summaryResponse.data
-      setSummary({
-        total_risks: s?.total_risks ?? mappedRisks.length,
-        by_level: {
-          critical: s?.critical ?? 0,
-          high: s?.high ?? 0,
-          medium: s?.medium ?? 0,
-          low: s?.low ?? 0,
-        },
-        outside_appetite:
-          mappedRisks.filter((risk) => risk.is_within_appetite === false).length,
-        overdue_review: 0,
-        escalated: mappedRisks.filter((risk) => risk.is_escalated).length,
-      })
-
-      const heatmap = heatmapResponse.data
-      const builtHeatMap: HeatMapData = {
-        matrix: [],
-        summary: {
-          total_risks: mappedRisks.length,
-          critical_risks: s?.critical ?? 0,
-          high_risks: s?.high ?? 0,
-          outside_appetite: 0,
-          average_inherent_score:
-            mappedRisks.length > 0
-              ? mappedRisks.reduce((a, r) => a + r.inherent_score, 0) / mappedRisks.length
-              : 0,
-          average_residual_score:
-            mappedRisks.length > 0
-              ? mappedRisks.reduce((a, r) => a + r.residual_score, 0) / mappedRisks.length
-              : 0,
-        },
-        likelihood_labels: {
-          1: 'Rare',
-          2: 'Unlikely',
-          3: 'Possible',
-          4: 'Likely',
-          5: 'Almost Certain',
-        },
-        impact_labels: {
-          1: 'Insignificant',
-          2: 'Minor',
-          3: 'Moderate',
-          4: 'Major',
-          5: 'Catastrophic',
-        },
+      if (pendingResult.status === 'fulfilled') {
+        const pendingTotal = pendingResult.value.data?.total
+        setPendingTriageCount(typeof pendingTotal === 'number' ? pendingTotal : 0)
+      } else {
+        setPendingTriageCount(0)
       }
 
-      const heatmapCells = heatmap?.cells ?? []
-      for (let likelihood = 5; likelihood >= 1; likelihood--) {
-        const row: MatrixCell[] = []
-        for (let impact = 1; impact <= 5; impact++) {
-          const score = likelihood * impact
-          let level = 'low'
-          let color = 'hsl(var(--success))'
-          if (score > 16) {
-            level = 'critical'
-            color = 'hsl(var(--destructive))'
-          } else if (score > 9) {
-            level = 'high'
-            color = 'hsl(var(--warning))'
-          } else if (score > 4) {
-            level = 'medium'
-            color = 'hsl(var(--info))'
-          }
+      if (summaryResult.status === 'fulfilled') {
+        const s = summaryResult.value.data as
+          | {
+              total_risks?: number
+              critical?: number
+              high?: number
+              medium?: number
+              low?: number
+              by_level?: { critical?: number; high?: number; medium?: number; low?: number }
+              outside_appetite?: number
+              overdue_review?: number
+              escalated?: number
+            }
+          | undefined
+        const byLevel = s?.by_level
+        setSummary({
+          total_risks: typeof s?.total_risks === 'number' ? s.total_risks : mappedRisks.length,
+          by_level: {
+            critical:
+              typeof byLevel?.critical === 'number'
+                ? byLevel.critical
+                : typeof s?.critical === 'number'
+                  ? s.critical
+                  : 0,
+            high:
+              typeof byLevel?.high === 'number'
+                ? byLevel.high
+                : typeof s?.high === 'number'
+                  ? s.high
+                  : 0,
+            medium:
+              typeof byLevel?.medium === 'number'
+                ? byLevel.medium
+                : typeof s?.medium === 'number'
+                  ? s.medium
+                  : 0,
+            low:
+              typeof byLevel?.low === 'number'
+                ? byLevel.low
+                : typeof s?.low === 'number'
+                  ? s.low
+                  : 0,
+          },
+          outside_appetite:
+            typeof s?.outside_appetite === 'number'
+              ? s.outside_appetite
+              : mappedRisks.filter((risk) => risk.is_within_appetite === false).length,
+          // Never invent overdue_review — API supplies it; null means unavailable.
+          overdue_review: typeof s?.overdue_review === 'number' ? s.overdue_review : null,
+          escalated:
+            typeof s?.escalated === 'number'
+              ? s.escalated
+              : mappedRisks.filter((risk) => risk.is_escalated).length,
+        })
+        setSummaryUnavailable(false)
+      } else {
+        setSummary(EMPTY_SUMMARY)
+        setSummaryUnavailable(true)
+        toast.warning('Risk summary metrics unavailable — counts are not shown as zero.')
+      }
 
-          const apiCell = heatmapCells.find(
-            (c: any) => c.likelihood === likelihood && c.impact === impact,
-          )
-          row.push({
-            likelihood,
-            impact,
-            score,
-            level,
-            color,
-            risk_count: apiCell?.count ?? 0,
-            risk_ids: apiCell?.risks?.map((r: any) => r.id) ?? [],
-            risk_titles: apiCell?.risks?.map((r: any) => (r.title ?? '').substring(0, 30)) ?? [],
-          })
+      if (heatmapResult.status === 'fulfilled') {
+        const heatmap = heatmapResult.value.data
+        const levelCritical =
+          summaryResult.status === 'fulfilled'
+            ? ((summaryResult.value.data as { by_level?: { critical?: number }; critical?: number })
+                ?.by_level?.critical ??
+                (summaryResult.value.data as { critical?: number })?.critical ??
+                0)
+            : 0
+        const levelHigh =
+          summaryResult.status === 'fulfilled'
+            ? ((summaryResult.value.data as { by_level?: { high?: number }; high?: number })?.by_level
+                ?.high ??
+                (summaryResult.value.data as { high?: number })?.high ??
+                0)
+            : 0
+        const builtHeatMap: HeatMapData = {
+          matrix: [],
+          summary: {
+            total_risks: mappedRisks.length,
+            critical_risks: levelCritical,
+            high_risks: levelHigh,
+            outside_appetite:
+              summaryResult.status === 'fulfilled' &&
+              typeof (summaryResult.value.data as { outside_appetite?: number })?.outside_appetite ===
+                'number'
+                ? (summaryResult.value.data as unknown as { outside_appetite: number })
+                    .outside_appetite
+                : mappedRisks.filter((risk) => risk.is_within_appetite === false).length,
+            average_inherent_score:
+              mappedRisks.length > 0
+                ? mappedRisks.reduce((a, r) => a + r.inherent_score, 0) / mappedRisks.length
+                : 0,
+            average_residual_score:
+              mappedRisks.length > 0
+                ? mappedRisks.reduce((a, r) => a + r.residual_score, 0) / mappedRisks.length
+                : 0,
+          },
+          likelihood_labels: {
+            1: 'Rare',
+            2: 'Unlikely',
+            3: 'Possible',
+            4: 'Likely',
+            5: 'Almost Certain',
+          },
+          impact_labels: {
+            1: 'Insignificant',
+            2: 'Minor',
+            3: 'Moderate',
+            4: 'Major',
+            5: 'Catastrophic',
+          },
         }
-        builtHeatMap.matrix.push(row)
+
+        const heatmapCells = heatmap?.cells ?? []
+        for (let likelihood = 5; likelihood >= 1; likelihood--) {
+          const row: MatrixCell[] = []
+          for (let impact = 1; impact <= 5; impact++) {
+            const score = likelihood * impact
+            let level = 'low'
+            let color = 'hsl(var(--success))'
+            if (score > 16) {
+              level = 'critical'
+              color = 'hsl(var(--destructive))'
+            } else if (score > 9) {
+              level = 'high'
+              color = 'hsl(var(--warning))'
+            } else if (score > 4) {
+              level = 'medium'
+              color = 'hsl(var(--info))'
+            }
+
+            const apiCell = heatmapCells.find(
+              (c: { likelihood?: number; impact?: number; count?: number; risks?: { id: number; title?: string }[] }) =>
+                c.likelihood === likelihood && c.impact === impact,
+            )
+            row.push({
+              likelihood,
+              impact,
+              score,
+              level,
+              color,
+              risk_count: apiCell?.count ?? 0,
+              risk_ids: apiCell?.risks?.map((r) => r.id) ?? [],
+              risk_titles: apiCell?.risks?.map((r) => (r.title ?? '').substring(0, 30)) ?? [],
+            })
+          }
+          builtHeatMap.matrix.push(row)
+        }
+        setHeatMapData(builtHeatMap)
+        setHeatmapUnavailable(false)
+      } else {
+        setHeatMapData(null)
+        setHeatmapUnavailable(true)
+        toast.warning('Risk heat map unavailable.')
       }
-      setHeatMapData(builtHeatMap)
+
+      const [runsResult, findingsResult] = await Promise.allSettled([
+        auditsApi.listRuns(1, 100),
+        auditsApi.listFindings(1, 100),
+      ])
+      const nextLinkedAuditTargets: Record<string, LinkedAuditTarget> = {}
+      if (runsResult.status === 'fulfilled') {
+        for (const run of runsResult.value.data?.items ?? []) {
+          const isExternalImport =
+            run.is_external_audit_import === true || run.is_external_import_intake === true
+          nextLinkedAuditTargets[normalizeLinkedReference(run.reference_number)] = {
+            kind: 'audit',
+            path: `/audits/${run.id}/${isExternalImport ? 'import-review' : 'execute'}`,
+          }
+        }
+      }
+      if (findingsResult.status === 'fulfilled') {
+        for (const finding of findingsResult.value.data?.items ?? []) {
+          nextLinkedAuditTargets[normalizeLinkedReference(finding.reference_number)] = {
+            kind: 'finding',
+            path: `/audits?view=findings&findingId=${encodeURIComponent(finding.id)}`,
+          }
+        }
+      }
+      setLinkedAuditTargets(nextLinkedAuditTargets)
+      if (runsResult.status === 'rejected' && findingsResult.status === 'rejected') {
+        setAuditLinksUnavailable(true)
+        toast.warning('Audit deep-links unavailable — linked references shown as plain text.')
+      }
     } catch (err) {
+      const message = getApiErrorMessage(err, 'Risk register unavailable.')
       console.error('Failed to load risk register data:', err)
+      setLoadError(message)
+      setRisks([])
+      setSummary(EMPTY_SUMMARY)
+      setSummaryUnavailable(true)
+      setHeatMapData(null)
+      setHeatmapUnavailable(true)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
@@ -398,6 +570,58 @@ export default function RiskRegister() {
         </p>
       </div>
 
+      {loadError ? (
+        <div
+          className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          role="alert"
+          data-testid="risk-register-load-error"
+        >
+          <p className="font-medium">Risk register unavailable</p>
+          <p className="mt-1">{loadError}</p>
+          <p className="mt-1 text-destructive/90">
+            Counts and the register table are not shown as empty zeros while the API is unavailable.
+          </p>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="mt-3"
+            onClick={() => void loadRisks()}
+            data-testid="risk-register-retry"
+          >
+            Retry
+          </Button>
+        </div>
+      ) : null}
+
+      {!loadError && (summaryUnavailable || heatmapUnavailable || auditLinksUnavailable) ? (
+        <div
+          className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning-foreground"
+          role="status"
+          data-testid="risk-register-partial-badge"
+        >
+          <p className="font-medium">Partial data — some sources unavailable</p>
+          <ul className="mt-1 list-disc pl-5 text-foreground/90">
+            {summaryUnavailable ? (
+              <li>Summary metrics unavailable (not shown as fake zeros)</li>
+            ) : null}
+            {heatmapUnavailable ? <li>Heat map unavailable</li> : null}
+            {auditLinksUnavailable ? (
+              <li>Audit deep-links unavailable — references remain as plain text</li>
+            ) : null}
+          </ul>
+        </div>
+      ) : null}
+
+      {!loadError && !summaryUnavailable ? (
+        <div
+          className="sr-only"
+          data-testid="risk-register-live-badge"
+          aria-live="polite"
+        >
+          Live data
+        </div>
+      ) : null}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -489,14 +713,22 @@ export default function RiskRegister() {
       ) : null}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4" data-testid="risk-summary-cards">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 bg-info/20 rounded-lg">
                 <Layers className="w-5 h-5 text-info" />
               </div>
-              <span className="text-2xl font-bold text-foreground">{summary.total_risks}</span>
+              <span
+                className="text-2xl font-bold text-foreground"
+                data-testid="risk-metric-total"
+                aria-label={
+                  summary.total_risks == null ? 'Total risks unavailable' : undefined
+                }
+              >
+                {formatMetric(summary.total_risks)}
+              </span>
             </div>
             <p className="text-sm text-muted-foreground">Total Risks</p>
           </CardContent>
@@ -508,8 +740,14 @@ export default function RiskRegister() {
               <div className="p-2 bg-destructive/20 rounded-lg">
                 <AlertTriangle className="w-5 h-5 text-destructive" />
               </div>
-              <span className="text-2xl font-bold text-destructive">
-                {summary.by_level.critical}
+              <span
+                className="text-2xl font-bold text-destructive"
+                data-testid="risk-metric-critical"
+                aria-label={
+                  summary.by_level.critical == null ? 'Critical count unavailable' : undefined
+                }
+              >
+                {formatMetric(summary.by_level.critical)}
               </span>
             </div>
             <p className="text-sm text-muted-foreground">Critical</p>
@@ -522,7 +760,13 @@ export default function RiskRegister() {
               <div className="p-2 bg-warning/20 rounded-lg">
                 <AlertCircle className="w-5 h-5 text-warning" />
               </div>
-              <span className="text-2xl font-bold text-warning">{summary.by_level.high}</span>
+              <span
+                className="text-2xl font-bold text-warning"
+                data-testid="risk-metric-high"
+                aria-label={summary.by_level.high == null ? 'High count unavailable' : undefined}
+              >
+                {formatMetric(summary.by_level.high)}
+              </span>
             </div>
             <p className="text-sm text-muted-foreground">High</p>
           </CardContent>
@@ -534,7 +778,15 @@ export default function RiskRegister() {
               <div className="p-2 bg-info/20 rounded-lg">
                 <Activity className="w-5 h-5 text-info" />
               </div>
-              <span className="text-2xl font-bold text-info">{summary.by_level.medium}</span>
+              <span
+                className="text-2xl font-bold text-info"
+                data-testid="risk-metric-medium"
+                aria-label={
+                  summary.by_level.medium == null ? 'Medium count unavailable' : undefined
+                }
+              >
+                {formatMetric(summary.by_level.medium)}
+              </span>
             </div>
             <p className="text-sm text-muted-foreground">Medium</p>
           </CardContent>
@@ -546,7 +798,17 @@ export default function RiskRegister() {
               <div className="p-2 bg-primary/20 rounded-lg">
                 <Target className="w-5 h-5 text-primary" />
               </div>
-              <span className="text-2xl font-bold text-primary">{summary.outside_appetite}</span>
+              <span
+                className="text-2xl font-bold text-primary"
+                data-testid="risk-metric-outside-appetite"
+                aria-label={
+                  summary.outside_appetite == null
+                    ? 'Outside appetite unavailable'
+                    : undefined
+                }
+              >
+                {formatMetric(summary.outside_appetite)}
+              </span>
             </div>
             <p className="text-sm text-muted-foreground">Outside Appetite</p>
           </CardContent>
@@ -558,9 +820,21 @@ export default function RiskRegister() {
               <div className="p-2 bg-muted rounded-lg">
                 <Clock className="w-5 h-5 text-muted-foreground" />
               </div>
-              <span className="text-2xl font-bold text-foreground">{summary.overdue_review}</span>
+              <span
+                className="text-2xl font-bold text-foreground"
+                data-testid="risk-metric-overdue-review"
+                aria-label={
+                  summary.overdue_review == null
+                    ? 'Overdue review unavailable'
+                    : undefined
+                }
+              >
+                {formatMetric(summary.overdue_review)}
+              </span>
             </div>
-            <p className="text-sm text-muted-foreground">Overdue Review</p>
+            <p className="text-sm text-muted-foreground">
+              {summary.overdue_review == null ? 'Overdue Review (unavailable)' : 'Overdue Review'}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -631,10 +905,20 @@ export default function RiskRegister() {
               <tbody className="divide-y divide-border">
                 {visibleRisks.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="text-center py-12 text-muted-foreground">
-                      {registerMode === 'import_triage'
-                        ? 'No import-sourced risks awaiting triage.'
-                        : 'No risks found in the register'}
+                    <td
+                      colSpan={9}
+                      className="text-center py-12 text-muted-foreground"
+                      data-testid={
+                        loadError ? 'risk-register-unavailable' : 'risk-register-empty'
+                      }
+                    >
+                      {loadError
+                        ? 'Risk register unavailable — not an empty register.'
+                        : registerMode === 'import_triage'
+                          ? 'No import-sourced risks awaiting triage.'
+                          : auditOnly || auditRefFilter
+                            ? 'No risks match the current audit filters.'
+                            : 'No risks found in the register'}
                     </td>
                   </tr>
                 )}
@@ -672,15 +956,53 @@ export default function RiskRegister() {
                               Escalated
                             </Badge>
                           )}
-                          {(risk.linked_audits?.length ?? 0) > 0 && (
-                            <Badge variant="outline" className="text-[10px]">
-                              {risk.linked_audits?.length} audit links
-                            </Badge>
-                          )}
+                          {risk.linked_audits?.map((reference) => {
+                            const target = linkedAuditTargets[normalizeLinkedReference(reference)]
+                            if (!target) {
+                              return (
+                                <Badge
+                                  key={reference}
+                                  variant="outline"
+                                  className="font-mono text-[10px]"
+                                >
+                                  {reference}
+                                </Badge>
+                              )
+                            }
+                            return (
+                              <Link
+                                key={reference}
+                                to={target.path}
+                                aria-label={`Open ${target.kind} ${reference}`}
+                                className="inline-flex items-center rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-primary transition-colors hover:bg-muted hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {reference}
+                              </Link>
+                            )
+                          })}
                           {(risk.linked_actions?.length ?? 0) > 0 && (
-                            <Badge variant="secondary" className="text-[10px]">
-                              {risk.linked_actions?.length} action links
-                            </Badge>
+                            <>
+                              {risk.linked_actions?.map((actionRef) => (
+                                <Badge
+                                  key={actionRef}
+                                  variant="outline"
+                                  className="font-mono text-[10px]"
+                                  data-testid={`risk-linked-action-${actionRef}`}
+                                >
+                                  {actionRef}
+                                </Badge>
+                              ))}
+                              <Link
+                                to={`/actions?sourceType=risk&sourceId=${risk.id}`}
+                                aria-label={`Open CAPA for ${risk.reference}`}
+                                data-testid={`risk-open-capa-${risk.id}`}
+                                className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-[10px] text-primary transition-colors hover:bg-muted hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                Open CAPA
+                              </Link>
+                            </>
                           )}
                         </div>
                       )}
@@ -753,7 +1075,22 @@ export default function RiskRegister() {
       )}
 
       {/* Heat Map View */}
-      {view === 'heatmap' && heatMapData && (
+      {view === 'heatmap' && heatmapUnavailable && (
+        <Card>
+          <CardContent className="p-6" data-testid="risk-heatmap-unavailable">
+            <h2 className="text-xl font-bold mb-2 text-foreground">Heat map unavailable</h2>
+            <p className="text-muted-foreground">
+              The residual risk heat map could not be loaded. This is not an empty matrix — retry
+              when the API is available.
+            </p>
+            <Button className="mt-4" variant="secondary" onClick={() => void loadRisks()}>
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {view === 'heatmap' && heatMapData && !heatmapUnavailable && (
         <Card>
           <CardContent className="p-6">
             <h2 className="text-xl font-bold mb-6 text-foreground">

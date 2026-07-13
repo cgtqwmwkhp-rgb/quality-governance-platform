@@ -43,6 +43,10 @@ import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ToastContainer, useToast } from '../components/ui/Toast'
 import { cn, decodeHtmlEntities } from '../helpers/utils'
+import {
+  ASSURANCE_SOURCE_CUSTOMER,
+  filterAuditsByAssuranceSource,
+} from '../components/assuranceHubHelpers'
 
 type ViewMode = 'kanban' | 'list' | 'findings'
 type AuditModalMode = 'schedule' | 'import'
@@ -177,6 +181,53 @@ function getAuditWorkspacePath(audit: AuditRun, importJobId?: number | null): st
   return `/audits/${audit.id}/import-review${params}`
 }
 
+function getFindingTypePresentation(findingType: string) {
+  const normalizedType = findingType
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+
+  if (normalizedType === 'positive' || normalizedType === 'positive_practice') {
+    return {
+      labelKey: 'audits.findings.type.positive',
+      badgeClass:
+        'bg-success/10 text-success border-success/30 dark:bg-success/15 dark:border-success/40',
+      cardClass: 'border-l-4 border-l-success bg-success/[0.02]',
+      iconClass: 'bg-success/10 text-success',
+      icon: CheckCircle2,
+    }
+  }
+
+  if (
+    normalizedType === 'nonconformity' ||
+    normalizedType === 'non_conformity' ||
+    normalizedType === 'major_nonconformity' ||
+    normalizedType === 'minor_nonconformity'
+  ) {
+    return {
+      labelKey: 'audits.findings.type.nonconformity',
+      badgeClass:
+        'bg-destructive/10 text-destructive border-destructive/30 dark:bg-destructive/15 dark:border-destructive/40',
+      cardClass: 'border-l-4 border-l-destructive bg-destructive/[0.02]',
+      iconClass: 'bg-destructive/10 text-destructive',
+      icon: AlertCircle,
+    }
+  }
+
+  return {
+    labelKey:
+      normalizedType === 'observation'
+        ? 'audits.findings.type.observation'
+        : normalizedType === 'opportunity' || normalizedType === 'opportunity_for_improvement'
+          ? 'audits.findings.type.opportunity'
+          : 'audits.findings.type.other',
+    badgeClass: 'bg-info/10 text-info border-info/30',
+    cardClass: 'border-l-4 border-l-info',
+    iconClass: 'bg-info/10 text-info',
+    icon: Target,
+  }
+}
+
 const INITIAL_FORM_STATE: CreateAuditForm = {
   template_id: null,
   title: '',
@@ -201,6 +252,8 @@ export default function Audits() {
   // Deep-link: ?view=findings&findingId=N navigates to findings tab and highlights the card
   const urlView = searchParams.get('view') as ViewMode | null
   const urlFindingId = searchParams.get('findingId')
+  const urlAssuranceSource = searchParams.get('source')
+  const customerAssuranceView = urlAssuranceSource === ASSURANCE_SOURCE_CUSTOMER
   const [viewMode, setViewMode] = useState<ViewMode>(
     urlView === 'findings' || urlView === 'list' || urlView === 'kanban' ? urlView : 'kanban',
   )
@@ -219,7 +272,18 @@ export default function Audits() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reportFile, setReportFile] = useState<File | null>(null)
   const [isoSchemePreset, setIsoSchemePreset] = useState('')
-  const { toasts, dismiss: dismissToast } = useToast()
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast()
+
+  const scopedAudits = useMemo(
+    () => filterAuditsByAssuranceSource(audits, urlAssuranceSource),
+    [audits, urlAssuranceSource],
+  )
+
+  const scopedFindings = useMemo(() => {
+    if (!customerAssuranceView) return findings
+    const scopedIds = new Set(scopedAudits.map((audit) => audit.id))
+    return findings.filter((finding) => scopedIds.has(finding.run_id))
+  }, [findings, scopedAudits, customerAssuranceView])
 
   const loadData = async () => {
     setLoadError(null)
@@ -251,11 +315,14 @@ export default function Audits() {
     loadData()
   }, [])
 
-  // After findings load, if a findingId deep-link is present, switch to findings
-  // view and scroll the target card into view with a highlight ring.
+  // After findings load, a findingId deep-link always opens Findings. If the
+  // target exists, scroll its highlighted card into view.
   useEffect(() => {
-    if (!urlFindingId || loading || findings.length === 0) return
+    if (!urlFindingId || loading) return
     setViewMode('findings')
+    const findingExists = scopedFindings.some((finding) => String(finding.id) === String(urlFindingId))
+    if (!findingExists) return
+
     // requestAnimationFrame defers scroll until the findings list has painted
     const handle = requestAnimationFrame(() => {
       if (highlightedFindingRef.current) {
@@ -264,7 +331,7 @@ export default function Audits() {
       }
     })
     return () => cancelAnimationFrame(handle)
-  }, [urlFindingId, loading, findings.length])
+  }, [urlFindingId, loading, scopedFindings])
 
   useEffect(() => {
     if (formData.external_audit_type !== 'iso') {
@@ -555,9 +622,9 @@ export default function Audits() {
   }
 
   const filteredAudits = useMemo(() => {
-    if (!searchTerm.trim()) return audits
+    if (!searchTerm.trim()) return scopedAudits
     const term = searchTerm.toLowerCase()
-    return audits.filter(
+    return scopedAudits.filter(
       (a) =>
         (a.title || '').toLowerCase().includes(term) ||
         (a.reference_number || '').toLowerCase().includes(term) ||
@@ -565,7 +632,7 @@ export default function Audits() {
         (a.assurance_scheme || '').toLowerCase().includes(term) ||
         (a.external_body_name || '').toLowerCase().includes(term),
     )
-  }, [audits, searchTerm])
+  }, [scopedAudits, searchTerm])
 
   const getAuditsByStatus = (status: string) => {
     return filteredAudits.filter((a) => a.status === status)
@@ -621,8 +688,13 @@ export default function Audits() {
         .filter((a) => a.score_percentage != null)
         .reduce((acc, a) => acc + (a.score_percentage ?? 0), 0) /
       (filteredAudits.filter((a) => a.score_percentage != null).length || 1),
-    openFindings: findings.filter((f) => f.status === 'open').length,
+    openFindings: scopedFindings.filter((f) => f.status === 'open').length,
   }
+  const linkedFindingExists =
+    !urlFindingId || scopedFindings.some((finding) => String(finding.id) === String(urlFindingId))
+  const executableAudit = scopedAudits.find(
+    (audit) => audit.status === 'in_progress' || audit.status === 'scheduled',
+  )
   if (loading) {
     return (
       <div className="p-6">
@@ -644,12 +716,38 @@ export default function Audits() {
           </button>
         </div>
       )}
+      {customerAssuranceView && (
+        <div
+          className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+          role="status"
+          aria-live="polite"
+        >
+          <div>
+            <p className="text-sm font-medium text-foreground">Customer & external audits</p>
+            <p className="text-sm text-muted-foreground">
+              Filtered Assurance view — customer-raised and third-party imports on the shared Audits
+              workspace.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/audits')}
+            className="text-sm font-medium text-primary hover:underline whitespace-nowrap"
+          >
+            View all audits
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Audit Management</h1>
+          <h1 className="text-3xl font-bold text-foreground">
+            {customerAssuranceView ? 'Customer & External Audits' : 'Audit Management'}
+          </h1>
           <p className="text-muted-foreground mt-1">
-            Internal audits, imported external audits, inspections, and compliance checks
+            {customerAssuranceView
+              ? 'Customer-raised and imported external audit runs within the Assurance hub'
+              : 'Internal audits, imported external audits, inspections, and compliance checks'}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -1065,65 +1163,196 @@ export default function Audits() {
       {/* Findings View */}
       {viewMode === 'findings' && (
         <div className="space-y-4">
-          {findings.length === 0 ? (
-            <Card className="p-12 text-center">
-              <AlertCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-              <p className="text-muted-foreground">{t('audits.no_findings')}</p>
+          {urlFindingId && !linkedFindingExists && (
+            <div
+              role="alert"
+              className="rounded-xl border border-warning/30 bg-warning/10 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+                <div>
+                  <p className="font-semibold text-foreground">
+                    {t('audits.findings.deep_link_miss.title')}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {t('audits.findings.deep_link_miss.description', { id: urlFindingId })}
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => navigate('/audits?view=findings')}
+              >
+                {t('audits.findings.deep_link_miss.action')}
+              </Button>
+            </div>
+          )}
+          {scopedFindings.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon={<ClipboardCheck className="h-8 w-8 text-primary" />}
+                title={t('audits.findings.empty.title')}
+                description={t('audits.findings.empty.description')}
+                action={
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button type="button" variant="outline" onClick={() => setViewMode('list')}>
+                      {t('audits.findings.actions.view_audits')}
+                    </Button>
+                    {executableAudit ? (
+                      <Button
+                        type="button"
+                        onClick={() => navigate(getAuditWorkspacePath(executableAudit))}
+                      >
+                        <Play className="h-4 w-4" />
+                        {t('audits.findings.actions.open_audit')}
+                      </Button>
+                    ) : (
+                      <Button type="button" onClick={() => handleOpenModal('schedule')}>
+                        <Plus className="h-4 w-4" />
+                        {t('audits.findings.actions.schedule_audit')}
+                      </Button>
+                    )}
+                  </div>
+                }
+              />
             </Card>
           ) : (
-            findings.map((finding) => {
+            scopedFindings.map((finding) => {
               const isHighlighted = urlFindingId && String(finding.id) === String(urlFindingId)
+              const findingType = getFindingTypePresentation(finding.finding_type)
+              const FindingTypeIcon = findingType.icon
               return (
-              <Card
-                key={finding.id}
-                hoverable
-                className={cn('p-5 transition-all', isHighlighted && 'ring-2 ring-primary ring-offset-2')}
-                ref={(el) => {
-                  if (isHighlighted) highlightedFindingRef.current = el
-                }}
-                tabIndex={isHighlighted ? -1 : undefined}
-              >
-                <div className="flex items-start gap-4">
-                  <div
-                    className={cn(
-                      'w-12 h-12 rounded-xl flex items-center justify-center',
-                      finding.severity === 'critical' && 'bg-destructive/10 text-destructive',
-                      finding.severity === 'high' && 'bg-warning/10 text-warning',
-                      finding.severity === 'medium' && 'bg-warning/10 text-warning',
-                      finding.severity === 'low' && 'bg-success/10 text-success',
-                      !['critical', 'high', 'medium', 'low'].includes(finding.severity) &&
-                        'bg-info/10 text-info',
-                    )}
-                  >
-                    <AlertCircle className="w-6 h-6" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="font-mono text-xs text-primary">
-                        {finding.reference_number}
-                      </span>
-                      <Badge variant={getSeverityVariant(finding.severity) as BadgeVariant}>
-                        {finding.severity}
-                      </Badge>
-                      <Badge variant={getStatusVariant(finding.status) as BadgeVariant}>
-                        {finding.status.replace('_', ' ')}
-                      </Badge>
+                <Card
+                  key={finding.id}
+                  hoverable
+                  className={cn(
+                    'p-5 transition-all',
+                    findingType.cardClass,
+                    isHighlighted && 'ring-2 ring-primary ring-offset-2',
+                  )}
+                  ref={(el) => {
+                    if (isHighlighted) highlightedFindingRef.current = el
+                  }}
+                  tabIndex={isHighlighted ? -1 : undefined}
+                  data-testid={`finding-card-${finding.id}`}
+                >
+                  <div className="flex items-start gap-4">
+                    <div
+                      className={cn(
+                        'w-12 h-12 rounded-xl flex items-center justify-center',
+                        findingType.iconClass,
+                      )}
+                    >
+                      <FindingTypeIcon className="w-6 h-6" />
                     </div>
-                    <h3 className="font-semibold text-foreground mb-1">{finding.title}</h3>
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {finding.description}
-                    </p>
-                    {finding.corrective_action_due_date && (
-                      <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                        <Calendar size={14} />
-                        <span>
-                          Due: {new Date(finding.corrective_action_due_date).toLocaleDateString()}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-3 mb-2">
+                        <span className="font-mono text-xs text-primary">
+                          {finding.reference_number}
                         </span>
+                        <Badge
+                          variant="outline"
+                          className={findingType.badgeClass}
+                          data-testid={`finding-type-${finding.id}`}
+                        >
+                          {t(findingType.labelKey)}
+                        </Badge>
+                        <Badge variant={getSeverityVariant(finding.severity) as BadgeVariant}>
+                          {finding.severity}
+                        </Badge>
+                        <Badge variant={getStatusVariant(finding.status) as BadgeVariant}>
+                          {finding.status.replace('_', ' ')}
+                        </Badge>
                       </div>
-                    )}
+                      <h3 className="font-semibold text-foreground mb-1">{finding.title}</h3>
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {finding.description}
+                      </p>
+                      {finding.corrective_action_due_date && (
+                        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                          <Calendar size={14} />
+                          <span>
+                            Due: {new Date(finding.corrective_action_due_date).toLocaleDateString()}
+                          </span>
+                        </div>
+                      )}
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        {finding.corrective_action_required && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            data-testid={`finding-open-capa-${finding.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              navigate(`/actions?sourceType=audit_finding&sourceId=${finding.id}`)
+                            }}
+                          >
+                            Open CAPA
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          data-testid={`finding-open-risk-${finding.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const ref = encodeURIComponent(finding.reference_number || '')
+                            navigate(`/risk-register?auditOnly=1&auditRef=${ref}`)
+                          }}
+                        >
+                          {finding.risk_ids && finding.risk_ids.length > 0
+                            ? 'Open risk register'
+                            : 'View risk register'}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          data-testid={`finding-flag-risk-${finding.id}`}
+                          disabled={Boolean(finding.risk_ids && finding.risk_ids.length > 0)}
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            try {
+                              const res = await auditsApi.flagFindingToRisk(finding.id, {
+                                severity:
+                                  finding.severity === 'critical' ||
+                                  finding.severity === 'high' ||
+                                  finding.severity === 'medium' ||
+                                  finding.severity === 'low'
+                                    ? finding.severity
+                                    : 'high',
+                              })
+                              setFindings((prev) =>
+                                prev.map((f) => (f.id === finding.id ? { ...f, ...res.data } : f)),
+                              )
+                              navigate(
+                                `/risk-register?auditOnly=1&auditRef=${encodeURIComponent(
+                                  finding.reference_number || '',
+                                )}`,
+                              )
+                            } catch (err) {
+                              console.error('Failed to flag finding to risk register', err)
+                              const detail = getStructuredErrorMessage(err)
+                              showToast(
+                                detail ||
+                                  'Could not flag this finding to the risk register. Try again or open the risk register manually.',
+                                'error',
+                              )
+                            }
+                          }}
+                        >
+                          {finding.risk_ids && finding.risk_ids.length > 0
+                            ? 'Already on risk register'
+                            : 'Flag to risk register'}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </Card>
+                </Card>
               )
             })
           )}
@@ -1390,8 +1619,8 @@ export default function Audits() {
                           ))}
                         </select>
                         <p className="text-xs text-muted-foreground">
-                          This pre-fills the scheme field so extraction and ISO cross-mapping use the
-                          correct standard family.
+                          This pre-fills the scheme field so extraction and ISO cross-mapping use
+                          the correct standard family.
                         </p>
                       </div>
                     )}

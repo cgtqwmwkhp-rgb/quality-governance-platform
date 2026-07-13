@@ -66,6 +66,7 @@ import {
 } from '../helpers/caseSubmission'
 import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
+import { getCapaHandoffLabelKey, getCapaLink } from '../components/investigations/handoffLinks'
 
 // Status options for action updates
 const ACTION_STATUS_OPTIONS = [
@@ -276,7 +277,7 @@ export default function IncidentDetail() {
 
     try {
       // Use from-record endpoint with proper JSON body
-      await investigationsApi.createFromRecord({
+      const response = await investigationsApi.createFromRecord({
         source_type: 'reporting_incident',
         source_id: incident.id,
         title: investigationForm.title || `Investigation - ${incident.reference_number}`,
@@ -288,7 +289,7 @@ export default function IncidentDetail() {
         investigation_type: 'root_cause_analysis',
         lead_investigator: '',
       })
-      navigate('/investigations')
+      navigate(`/investigations/${response.data.id}`)
     } catch (err: any) {
       trackError(err, { component: 'IncidentDetail', action: 'createInvestigation' })
 
@@ -469,6 +470,10 @@ export default function IncidentDetail() {
     ? `${latestInvestigation.reference_number || latestInvestigation.title || 'Linked investigation'}`
     : 'Not started'
   const openActions = actions.filter((action) => action.status !== 'completed' && action.status !== 'cancelled')
+  const investigationHref = latestInvestigation
+    ? `/investigations/${latestInvestigation.id}`
+    : null
+  const capaHref = getCapaLink('incident', incident.id)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -538,13 +543,26 @@ export default function IncidentDetail() {
                 <Pencil className="w-4 h-4 mr-2" />
                 {t('edit')}
               </Button>
-              <Button variant="outline" onClick={() => setShowActionModal(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                {t('incidents.detail.add_action')}
+              <Button
+                variant="outline"
+                onClick={() => navigate(capaHref)}
+              >
+                <ClipboardList className="w-4 h-4 mr-2" />
+                {t(getCapaHandoffLabelKey('incident', actions.length), {
+                  count: actions.length,
+                })}
               </Button>
-              <Button onClick={() => setShowInvestigationModal(true)}>
+              <Button
+                onClick={() =>
+                  investigationHref
+                    ? navigate(investigationHref)
+                    : setShowInvestigationModal(true)
+                }
+              >
                 <FlaskConical className="w-4 h-4 mr-2" />
-                {t('incidents.detail.start_investigation')}
+                {investigationHref
+                  ? t('incidents.detail.open_investigation')
+                  : t('incidents.detail.start_investigation')}
               </Button>
             </>
           )}
@@ -948,15 +966,19 @@ export default function IncidentDetail() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Investigation Status</CardTitle>
+              <CardTitle className="text-base">{t('incidents.detail.handoff_title')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <p className="text-sm text-muted-foreground">Linked investigation</p>
+                <p className="text-sm text-muted-foreground">
+                  {t('incidents.detail.linked_investigation')}
+                </p>
                 <p className="font-medium text-foreground">{investigationSummary}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Open actions</p>
+                <p className="text-sm text-muted-foreground">
+                  {t('incidents.detail.open_actions')}
+                </p>
                 <p className="font-medium text-foreground">{openActions.length}</p>
               </div>
               <div>
@@ -974,6 +996,30 @@ export default function IncidentDetail() {
                 <p className="font-medium text-foreground">
                   {incidentSubmission?.has_witnesses ? 'Witnesses captured' : 'No witnesses recorded'}
                 </p>
+              </div>
+              <div className="flex flex-col gap-2 pt-2 border-t border-border">
+                <Button
+                  onClick={() =>
+                    investigationHref
+                      ? navigate(investigationHref)
+                      : setShowInvestigationModal(true)
+                  }
+                >
+                  <FlaskConical className="w-4 h-4 mr-2" />
+                  {investigationHref
+                    ? t('incidents.detail.open_investigation')
+                    : t('incidents.detail.start_investigation')}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate(capaHref)}
+                  data-testid="incident-capa-handoff-cta"
+                >
+                  <ClipboardList className="w-4 h-4 mr-2" />
+                  {t(getCapaHandoffLabelKey('incident', actions.length), {
+                    count: actions.length,
+                  })}
+                </Button>
               </div>
             </CardContent>
           </Card>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import IncidentDetail from '../IncidentDetail'
@@ -130,5 +130,36 @@ describe('IncidentDetail', () => {
     expect(screen.getAllByText('INV-21').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Jane Witness').length).toBeGreaterThan(0)
     expect(screen.getAllByText('ambulance').length).toBeGreaterThan(0)
+  })
+
+  it('opens the linked investigation and filtered CAPA workspace', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Loader slip' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'incidents.detail.open_investigation' })[0])
+    expect(mockNavigate).toHaveBeenCalledWith('/investigations/21')
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'incidents.detail.open_capa' })[0])
+    expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=incident&sourceId=11')
+  })
+
+  it('offers Create CAPA in the handoff card when no actions are linked', async () => {
+    client.actionsApi.list.mockResolvedValue({ data: { items: [] } })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Loader slip' })).toBeInTheDocument()
+    })
+
+    const createCapa = screen.getByTestId('incident-capa-handoff-cta')
+    expect(createCapa).toHaveTextContent('investigations.handoff.create_action')
+    expect(screen.queryByText('incidents.detail.no_capa_handoff')).not.toBeInTheDocument()
+
+    fireEvent.click(createCapa)
+    expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=incident&sourceId=11')
   })
 })

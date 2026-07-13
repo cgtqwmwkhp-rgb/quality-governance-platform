@@ -31,6 +31,7 @@ import { createUsersApi } from './usersClient'
 import { createWorkflowsApi } from './workflowsClient'
 import { createAuditTrailApi } from './auditTrailClient'
 import { createSignaturesApi } from './signaturesClient'
+import { createLookupsApi } from './lookupsClient'
 import {
   beginGlobalLoading,
   endGlobalLoading,
@@ -982,6 +983,7 @@ export const analyticsApi = {
 export type {
   NotificationEntry,
   NotificationCategoryChannels,
+  NotificationDeliveryStatus,
   NotificationPreferences,
 } from './notificationsClient'
 export const notificationsApi = createNotificationsApi(api)
@@ -2072,15 +2074,7 @@ export interface Contract {
   display_order: number
 }
 
-export interface LookupOption {
-  id: number
-  category: string
-  code: string
-  label: string
-  description?: string
-  is_active: boolean
-  display_order: number
-}
+export type { LookupOption } from './lookupsClient'
 
 export interface SystemSetting {
   key: string
@@ -2141,26 +2135,8 @@ export const contractsApi = {
     api.delete<void>(`/api/v1/admin/config/contracts/${id}`).then((r) => r.data),
 }
 
-export const lookupsApi = {
-  list: (category: string, activeOnly = true) =>
-    api
-      .get<{
-        items: LookupOption[]
-        total: number
-      }>(`/api/v1/admin/config/lookup/${category}${activeOnly ? '?is_active=true' : ''}`)
-      .then((r) => r.data),
-
-  create: (category: string, data: Partial<LookupOption>) =>
-    api.post<LookupOption>(`/api/v1/admin/config/lookup/${category}`, data).then((r) => r.data),
-
-  update: (category: string, id: number, data: Partial<LookupOption>) =>
-    api
-      .patch<LookupOption>(`/api/v1/admin/config/lookup/${category}/${id}`, data)
-      .then((r) => r.data),
-
-  delete: (category: string, id: number) =>
-    api.delete<void>(`/api/v1/admin/config/lookup/${category}/${id}`).then((r) => r.data),
-}
+// ============ Lookups API (extracted: lookupsClient.ts) ============
+export const lookupsApi = createLookupsApi(api)
 
 export const settingsApi = {
   list: (category?: string) =>

@@ -137,8 +137,8 @@ async function installImportMocks(page: Page) {
         materialized: {
           audit_findings: draftStatus === "promoted" ? 1 : 0,
           capa_actions: draftStatus === "promoted" ? 1 : 0,
-          enterprise_risks: 0,
-          uvdb_audit_id: null,
+          enterprise_risks: draftStatus === "promoted" ? 1 : 0,
+          uvdb_audit_id: draftStatus === "promoted" ? 501 : null,
         },
         proof_matrix: [
           {
@@ -146,13 +146,23 @@ async function installImportMocks(page: Page) {
             status: draftStatus === "promoted" ? "ok" : "none",
             detail: "Mock proof step",
           },
+          {
+            step: "capa",
+            status: draftStatus === "promoted" ? "ok" : "none",
+            detail: "CAPA materialized",
+          },
+          {
+            step: "uvdb_sync",
+            status: draftStatus === "promoted" ? "ok" : "none",
+            detail: "UVDB row visible",
+          },
         ],
         draft_results: [],
         view_links: {
           actions: "/actions?sourceType=audit_finding",
           risk_register: "/risk-register?triage=import",
-          uvdb: "/uvdb",
-          specialist_home: "/uvdb",
+          uvdb: "/uvdb?auditRef=AUD-00041",
+          specialist_home: "/uvdb?auditRef=AUD-00041",
         },
       });
       return;
@@ -185,6 +195,37 @@ async function installImportMocks(page: Page) {
     }
 
     // Soft-default ALL remaining API traffic — never hit live staging (avoids 429s).
+    if (path.includes("/actions") && method === "GET") {
+      await json(route, {
+        items: [
+          {
+            id: 9001,
+            reference_number: "CAPA-09001",
+            title: "Address issue",
+            description: "Evidence snippet",
+            action_type: "corrective",
+            status: "open",
+            display_status: "open",
+            action_key: "capa:9001",
+            source_type: "audit_finding",
+            source_id: 9001,
+            priority: "high",
+            created_at: "2026-07-10T00:00:00Z",
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 50,
+        pages: 1,
+      });
+      return;
+    }
+
+    if (path.endsWith("/actions/summary") && method === "GET") {
+      await json(route, { total: 1, by_display_status: { open: 1 } });
+      return;
+    }
+
     await json(route, method === "GET" ? {} : { ok: true });
   });
 
@@ -232,5 +273,10 @@ test.describe("Import review Reset / Promote", () => {
 
     await expect.poll(() => counters.getPromoteCalls()).toBe(1);
     await expect(page.getByRole("alert")).toContainText(/Successfully promoted/i);
+    await expect(page.getByRole("button", { name: "View Audit Actions" })).toBeVisible({
+      timeout: 20_000,
+    });
+    await page.getByRole("button", { name: "View Audit Actions" }).click();
+    await expect(page).toHaveURL(/\/actions\?.*sourceType=audit_finding/);
   });
 });

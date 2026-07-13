@@ -329,9 +329,17 @@ async def _bootstrap_test_schema(request):
     supplied externally, we still bootstrap the schema into that database.
     """
     import src.domain.models  # noqa: F401
-    from src.domain.models.audit import AuditFinding, AuditQuestion, AuditRun, AuditSection, AuditTemplate
+    from src.domain.models.audit import (
+        AuditFinding,
+        AuditQuestion,
+        AuditRun,
+        AuditSection,
+        AuditTemplate,
+        audit_finding_risks,
+    )
     from src.domain.models.evidence_asset import EvidenceAsset
     from src.domain.models.external_audit_import import ExternalAuditDraft, ExternalAuditImportJob
+    from src.domain.models.risk_register import EnterpriseRisk
     from src.domain.models.tenant import Tenant
     from src.domain.models.token_blacklist import TokenBlacklist
     from src.domain.models.user import Role, User, user_roles
@@ -356,6 +364,8 @@ async def _bootstrap_test_schema(request):
             AuditQuestion.__table__,
             AuditRun.__table__,
             AuditFinding.__table__,
+            EnterpriseRisk.__table__,
+            audit_finding_risks,
             EvidenceAsset.__table__,
             ExternalAuditImportJob.__table__,
             ExternalAuditDraft.__table__,

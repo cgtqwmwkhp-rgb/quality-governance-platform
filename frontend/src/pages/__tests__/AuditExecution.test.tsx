@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AuditExecution from '../AuditExecution'
@@ -7,6 +7,7 @@ const mockNavigate = vi.fn()
 const mockGetRunDetail = vi.fn()
 const mockGetTemplate = vi.fn()
 const mockStartRun = vi.fn()
+const mockCompleteRun = vi.fn()
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
@@ -18,6 +19,9 @@ vi.mock('../../api/client', () => ({
     getRunDetail: (...args: unknown[]) => mockGetRunDetail(...args),
     getTemplate: (...args: unknown[]) => mockGetTemplate(...args),
     startRun: (...args: unknown[]) => mockStartRun(...args),
+    completeRun: (...args: unknown[]) => mockCompleteRun(...args),
+    createResponse: vi.fn(),
+    updateResponse: vi.fn(),
   },
   getApiErrorMessage: (error: unknown) => (error instanceof Error ? error.message : 'Request failed'),
 }))
@@ -85,5 +89,98 @@ describe('AuditExecution', () => {
     await waitFor(() => {
       expect(mockStartRun).not.toHaveBeenCalled()
     })
+  })
+
+  it('shows live downstream counts then redirects to audit-sourced actions', async () => {
+    const initialRun = {
+      id: 41,
+      reference_number: 'AUD-00041',
+      template_id: 11,
+      template_version: 1,
+      title: 'Warehouse inspection',
+      location: 'London',
+      status: 'in_progress',
+      responses: [],
+      findings: [],
+      completion_percentage: 0,
+      created_at: '2026-03-24T10:05:00Z',
+    }
+    mockGetRunDetail
+      .mockResolvedValueOnce({ data: initialRun })
+      .mockResolvedValueOnce({
+        data: {
+          ...initialRun,
+          status: 'completed',
+          findings: [
+            {
+              id: 1,
+              corrective_action_required: true,
+              risk_ids: [9],
+            },
+          ],
+        },
+      })
+    mockGetTemplate.mockResolvedValue({
+      data: {
+        id: 11,
+        name: 'Warehouse inspection',
+        audit_type: 'internal',
+        version: 1,
+        scoring_method: 'percentage',
+        allow_offline: false,
+        require_gps: false,
+        require_signature: false,
+        require_approval: false,
+        auto_create_findings: true,
+        is_active: true,
+        is_published: true,
+        sections: [
+          {
+            id: 5,
+            title: 'Safety',
+            is_active: true,
+            sort_order: 1,
+            questions: [
+              {
+                id: 8,
+                question_text: 'Inspection notes',
+                question_type: 'text',
+                is_required: false,
+                is_active: true,
+                sort_order: 1,
+                weight: 1,
+                failure_triggers_action: false,
+              },
+            ],
+          },
+        ],
+      },
+    })
+    mockCompleteRun.mockResolvedValue({
+      data: {
+        ...initialRun,
+        status: 'completed',
+        findings_count: 4,
+        actions_count: 2,
+        risks_count: 1,
+      },
+    })
+
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Finish' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Audit' }))
+
+    expect(await screen.findByText('Inspection completed')).toBeInTheDocument()
+    expect(screen.getByText('4 findings / 2 actions created')).toBeInTheDocument()
+    expect(screen.getByText('Downstream Workflow Proof')).toBeInTheDocument()
+    expect(mockCompleteRun).toHaveBeenCalledWith(41)
+
+    await waitFor(
+      () => {
+        expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=audit_finding')
+      },
+      { timeout: 2500 },
+    )
   })
 })

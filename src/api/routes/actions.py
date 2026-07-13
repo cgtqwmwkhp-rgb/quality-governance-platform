@@ -7,7 +7,7 @@ from typing import Annotated, Any, Optional, Union, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
@@ -361,6 +361,52 @@ async def _safe_scalar(db: "DbSession", query, source_label: str) -> int:
         return 0
 
 
+# Terminal statuses excluded from overdue (matches Actions UI display_status rules).
+_OPERATIONAL_DONE_STATUSES: tuple[str, ...] = ("completed", "cancelled", "verified")
+
+
+def _resolve_assigned_to_user_id(assigned_to: Optional[str], current_user: User) -> Optional[int]:
+    """Resolve assigned_to query param: 'me' → current user id, or numeric user id."""
+    if assigned_to is None:
+        return None
+    raw = assigned_to.strip()
+    if not raw:
+        return None
+    if raw.lower() == "me":
+        return int(current_user.id)
+    try:
+        uid = int(raw)
+    except ValueError as exc:
+        raise ValidationError("assigned_to must be 'me' or a numeric user id") from exc
+    if uid <= 0:
+        raise ValidationError("assigned_to must be a positive user id")
+    return uid
+
+
+def _apply_owner_and_overdue_filters(
+    query: Any,
+    *,
+    owner_col: Any,
+    due_col: Any,
+    status_col: Any,
+    assigned_to_id: Optional[int],
+    overdue: bool,
+    done_statuses: tuple[Any, ...],
+) -> Any:
+    """Apply My Work (owner) and Overdue (past due, not done) SQL filters."""
+    if assigned_to_id is not None:
+        query = query.where(owner_col == assigned_to_id)
+    if overdue:
+        query = query.where(
+            and_(
+                due_col.isnot(None),
+                due_col < func.now(),
+                status_col.notin_(list(done_statuses)),
+            )
+        )
+    return query
+
+
 async def _count_capa_slice(
     db: "DbSession",
     *,
@@ -369,6 +415,8 @@ async def _count_capa_slice(
     capa_source: Optional[CAPASource],
     source_id: Optional[int],
     source_reference: Optional[str],
+    assigned_to_id: Optional[int] = None,
+    overdue: bool = False,
 ) -> int:
     """Count CAPA rows for tenant with optional source slice."""
     q = select(func.count()).select_from(CAPAAction).where(CAPAAction.tenant_id == tenant_id)
@@ -384,6 +432,15 @@ async def _count_capa_slice(
             q = q.where(CAPAAction.source_id == source_id)
         elif capa_source not in (CAPASource.JOB_ASSESSMENT, CAPASource.INDUCTION) and source_id:
             q = q.where(CAPAAction.source_id == source_id)
+    q = _apply_owner_and_overdue_filters(
+        q,
+        owner_col=CAPAAction.assigned_to_id,
+        due_col=CAPAAction.due_date,
+        status_col=CAPAAction.status,
+        assigned_to_id=assigned_to_id,
+        overdue=overdue,
+        done_statuses=(CAPAStatus.CLOSED,),
+    )
     return await _safe_scalar(db, q, "capa")
 
 
@@ -399,6 +456,8 @@ async def _fetch_capa_rows_for_list(
     offset: int,
     page_size: int,
     cross_source_cap: int,
+    assigned_to_id: Optional[int] = None,
+    overdue: bool = False,
 ) -> list[CAPAAction]:
     q = select(CAPAAction).where(CAPAAction.tenant_id == tenant_id).order_by(CAPAAction.created_at.desc())
     if status_filter:
@@ -413,6 +472,15 @@ async def _fetch_capa_rows_for_list(
             q = q.where(CAPAAction.source_id == source_id)
         elif capa_source not in (CAPASource.JOB_ASSESSMENT, CAPASource.INDUCTION) and source_id:
             q = q.where(CAPAAction.source_id == source_id)
+    q = _apply_owner_and_overdue_filters(
+        q,
+        owner_col=CAPAAction.assigned_to_id,
+        due_col=CAPAAction.due_date,
+        status_col=CAPAAction.status,
+        assigned_to_id=assigned_to_id,
+        overdue=overdue,
+        done_statuses=(CAPAStatus.CLOSED,),
+    )
     if source_type_param:
         q = q.offset(offset).limit(page_size)
     else:
@@ -428,6 +496,8 @@ async def _count_for_source(
     source_id: Optional[int],
     source_reference: Optional[str],
     tenant_id: Optional[int] = None,
+    assigned_to_id: Optional[int] = None,
+    overdue: bool = False,
 ) -> int:
     """Compute total count across all applicable source tables using SQL COUNT."""
     total = 0
@@ -437,6 +507,15 @@ async def _count_for_source(
             q = q.where(IncidentAction.status == status_filter)
         if source_type == "incident" and source_id:
             q = q.where(IncidentAction.incident_id == source_id)
+        q = _apply_owner_and_overdue_filters(
+            q,
+            owner_col=IncidentAction.owner_id,
+            due_col=IncidentAction.due_date,
+            status_col=IncidentAction.status,
+            assigned_to_id=assigned_to_id,
+            overdue=overdue,
+            done_statuses=_OPERATIONAL_DONE_STATUSES,
+        )
         total += await _safe_scalar(db, q, "incident")
 
     if not source_type or source_type == "rta":
@@ -445,6 +524,15 @@ async def _count_for_source(
             q = q.where(RTAAction.status == status_filter)
         if source_type == "rta" and source_id:
             q = q.where(RTAAction.rta_id == source_id)
+        q = _apply_owner_and_overdue_filters(
+            q,
+            owner_col=RTAAction.owner_id,
+            due_col=RTAAction.due_date,
+            status_col=RTAAction.status,
+            assigned_to_id=assigned_to_id,
+            overdue=overdue,
+            done_statuses=_OPERATIONAL_DONE_STATUSES,
+        )
         total += await _safe_scalar(db, q, "rta")
 
     if not source_type or source_type == "complaint":
@@ -453,6 +541,15 @@ async def _count_for_source(
             q = q.where(ComplaintAction.status == status_filter)
         if source_type == "complaint" and source_id:
             q = q.where(ComplaintAction.complaint_id == source_id)
+        q = _apply_owner_and_overdue_filters(
+            q,
+            owner_col=ComplaintAction.owner_id,
+            due_col=ComplaintAction.due_date,
+            status_col=ComplaintAction.status,
+            assigned_to_id=assigned_to_id,
+            overdue=overdue,
+            done_statuses=_OPERATIONAL_DONE_STATUSES,
+        )
         total += await _safe_scalar(db, q, "complaint")
 
     if not source_type or source_type == "investigation":
@@ -461,6 +558,15 @@ async def _count_for_source(
             q = q.where(InvestigationAction.status == status_filter)
         if source_type == "investigation" and source_id:
             q = q.where(InvestigationAction.investigation_id == source_id)
+        q = _apply_owner_and_overdue_filters(
+            q,
+            owner_col=InvestigationAction.owner_id,
+            due_col=InvestigationAction.due_date,
+            status_col=InvestigationAction.status,
+            assigned_to_id=assigned_to_id,
+            overdue=overdue,
+            done_statuses=_OPERATIONAL_DONE_STATUSES,
+        )
         total += await _safe_scalar(db, q, "investigation")
 
     st = source_type.lower() if source_type else None
@@ -472,6 +578,8 @@ async def _count_for_source(
             capa_source=None,
             source_id=None,
             source_reference=None,
+            assigned_to_id=assigned_to_id,
+            overdue=overdue,
         )
     elif st in CAPA_ONLY_API_SOURCE_TYPES:
         ce = capa_enum_from_api_filter(st)
@@ -483,6 +591,8 @@ async def _count_for_source(
                 capa_source=ce,
                 source_id=source_id,
                 source_reference=source_reference,
+                assigned_to_id=assigned_to_id,
+                overdue=overdue,
             )
 
     return total
@@ -498,6 +608,11 @@ async def list_actions(
     source_type: Optional[str] = Query(None),
     source_id: Optional[int] = Query(None),
     source_reference: Optional[str] = Query(None, description="UUID ref for assessment_run_id or induction_run_id"),
+    assigned_to: Optional[str] = Query(
+        None,
+        description="Filter by assignee: 'me' (current user) or numeric user id",
+    ),
+    overdue: bool = Query(False, description="When true, only open actions with due_date in the past"),
 ) -> ActionListResponse:
     """List actions across all source types with SQL-level pagination.
 
@@ -505,8 +620,16 @@ async def list_actions(
     When listing across all source types, individual queries are capped and
     merged client-side to honour the requested page window.
     """
+    assigned_to_id = _resolve_assigned_to_user_id(assigned_to, current_user)
     total = await _count_for_source(
-        db, source_type, status_filter, source_id, source_reference, tenant_id=current_user.tenant_id
+        db,
+        source_type,
+        status_filter,
+        source_id,
+        source_reference,
+        tenant_id=current_user.tenant_id,
+        assigned_to_id=assigned_to_id,
+        overdue=overdue,
     )
 
     if total == 0:
@@ -530,6 +653,15 @@ async def list_actions(
                 q = q.where(IncidentAction.status == status_filter)
             if source_type == "incident" and source_id:
                 q = q.where(IncidentAction.incident_id == source_id)
+            q = _apply_owner_and_overdue_filters(
+                q,
+                owner_col=IncidentAction.owner_id,
+                due_col=IncidentAction.due_date,
+                status_col=IncidentAction.status,
+                assigned_to_id=assigned_to_id,
+                overdue=overdue,
+                done_statuses=_OPERATIONAL_DONE_STATUSES,
+            )
             if source_type:
                 q = q.offset(offset).limit(page_size)
             else:
@@ -553,6 +685,15 @@ async def list_actions(
                 q = q.where(RTAAction.status == status_filter)
             if source_type == "rta" and source_id:
                 q = q.where(RTAAction.rta_id == source_id)
+            q = _apply_owner_and_overdue_filters(
+                q,
+                owner_col=RTAAction.owner_id,
+                due_col=RTAAction.due_date,
+                status_col=RTAAction.status,
+                assigned_to_id=assigned_to_id,
+                overdue=overdue,
+                done_statuses=_OPERATIONAL_DONE_STATUSES,
+            )
             if source_type:
                 q = q.offset(offset).limit(page_size)
             else:
@@ -575,6 +716,15 @@ async def list_actions(
                 q = q.where(ComplaintAction.status == status_filter)
             if source_type == "complaint" and source_id:
                 q = q.where(ComplaintAction.complaint_id == source_id)
+            q = _apply_owner_and_overdue_filters(
+                q,
+                owner_col=ComplaintAction.owner_id,
+                due_col=ComplaintAction.due_date,
+                status_col=ComplaintAction.status,
+                assigned_to_id=assigned_to_id,
+                overdue=overdue,
+                done_statuses=_OPERATIONAL_DONE_STATUSES,
+            )
             if source_type:
                 q = q.offset(offset).limit(page_size)
             else:
@@ -597,6 +747,15 @@ async def list_actions(
                 q = q.where(InvestigationAction.status == status_filter)
             if source_type == "investigation" and source_id:
                 q = q.where(InvestigationAction.investigation_id == source_id)
+            q = _apply_owner_and_overdue_filters(
+                q,
+                owner_col=InvestigationAction.owner_id,
+                due_col=InvestigationAction.due_date,
+                status_col=InvestigationAction.status,
+                assigned_to_id=assigned_to_id,
+                overdue=overdue,
+                done_statuses=_OPERATIONAL_DONE_STATUSES,
+            )
             if source_type:
                 q = q.offset(offset).limit(page_size)
             else:
@@ -669,6 +828,8 @@ async def list_actions(
                 offset=offset,
                 page_size=page_size,
                 cross_source_cap=_cross_source_cap,
+                assigned_to_id=assigned_to_id,
+                overdue=overdue,
             )
         elif stl in CAPA_ONLY_API_SOURCE_TYPES:
             ce = capa_enum_from_api_filter(stl)
@@ -684,6 +845,8 @@ async def list_actions(
                     offset=offset,
                     page_size=page_size,
                     cross_source_cap=_cross_source_cap,
+                    assigned_to_id=assigned_to_id,
+                    overdue=overdue,
                 )
         for a in _pending_capa:
             actions_list.append(await _capa_to_response(db, a))

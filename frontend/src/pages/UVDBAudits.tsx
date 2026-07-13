@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Shield,
   Leaf,
@@ -33,12 +33,20 @@ import {
 import { useTranslation } from 'react-i18next'
 import {
   uvdbApi,
+  externalAuditImportsApi,
   ErrorClass,
   createApiError,
   isSetupRequired,
   SetupRequiredResponse,
+  type ExternalAuditPromotionReconciliation,
 } from '../api/client'
 import api from '../api/client'
+import { getImportReviewPath } from '../components/audit-import/importReviewHelpers'
+import {
+  ACHILLES_UVDB_AUDITS_PATH,
+  getUvdbCapaActionsPath,
+  getUvdbRiskRegisterPath,
+} from '../components/assuranceHubHelpers'
 import { SetupRequiredPanel } from '../components/ui/SetupRequiredPanel'
 
 interface UVDBSection {
@@ -58,6 +66,8 @@ interface UVDBAudit {
   status: string
   percentage_score: number | null
   lead_auditor: string | null
+  audit_run_id?: number | null
+  import_job_id?: number | null
 }
 
 interface ScoreBreakdownEntry {
@@ -90,6 +100,8 @@ interface UVDBAuditDetail {
   observations: number
   certifications: Record<string, boolean>
   audit_notes: string | null
+  audit_run_id?: number | null
+  import_job_id?: number | null
 }
 
 interface SectionScoreData {
@@ -134,13 +146,64 @@ function ScoreBar({ percentage }: { percentage: number }) {
   )
 }
 
+function DownstreamHandoffLinks({
+  auditRef,
+  findingId,
+  importReviewPath,
+  className = '',
+}: {
+  auditRef?: string | null
+  findingId?: number | null
+  importReviewPath?: string | null
+  className?: string
+}) {
+  const capaPath = getUvdbCapaActionsPath(findingId)
+  const riskPath = getUvdbRiskRegisterPath(auditRef)
+  return (
+    <div className={`flex flex-wrap gap-2 ${className}`.trim()} data-testid="uvdb-downstream-handoffs">
+      <Link
+        to={capaPath}
+        data-testid="uvdb-open-capa"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+      >
+        Open CAPA Actions
+      </Link>
+      <Link
+        to={riskPath}
+        data-testid="uvdb-open-risk"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+      >
+        Open Risk Register
+      </Link>
+      {importReviewPath ? (
+        <Link
+          to={importReviewPath}
+          data-testid="uvdb-open-import-review"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+        >
+          Open import review
+        </Link>
+      ) : null}
+      <Link
+        to={ACHILLES_UVDB_AUDITS_PATH}
+        data-testid="uvdb-open-assurance-audits"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+      >
+        Achilles / UVDB on Audits
+      </Link>
+    </div>
+  )
+}
+
 function AuditDetailPanel({
   detail,
   isLoading,
+  error,
   onViewPdf,
 }: {
   detail: UVDBAuditDetail | null
   isLoading: boolean
+  error: string | null
   onViewPdf: (assetId: number) => void
 }) {
   if (isLoading) {
@@ -152,9 +215,21 @@ function AuditDetailPanel({
     )
   }
 
+  if (error) {
+    return (
+      <div
+        className="border-t border-border bg-destructive/5 p-6 text-sm text-destructive"
+        role="alert"
+      >
+        {error}
+      </div>
+    )
+  }
+
   if (!detail) return null
 
   const breakdown = detail.score_breakdown || detail.section_scores?.sections || []
+  const importReviewPath = getImportReviewPath(detail.audit_run_id, detail.import_job_id)
 
   return (
     <div className="p-6 space-y-6 border-t border-border bg-surface/50 animate-fade-in">
@@ -272,6 +347,19 @@ function AuditDetailPanel({
             </div>
           )}
 
+          {importReviewPath ? (
+            <Link
+              to={importReviewPath}
+              data-testid="uvdb-detail-import-review"
+              className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open import review
+            </Link>
+          ) : null}
+
+          <DownstreamHandoffLinks auditRef={detail.audit_reference} />
+
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
               <p className="text-muted-foreground text-xs uppercase">Reference</p>
@@ -323,6 +411,9 @@ export default function UVDBAudits() {
   const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const auditRefFromQuery = searchParams.get('auditRef') || ''
+  const runIdFromQuery = Number(searchParams.get('runId') || '') || null
+  const jobIdFromQuery = Number(searchParams.get('jobId') || '') || null
+  const recoveryImportReviewPath = getImportReviewPath(runIdFromQuery, jobIdFromQuery)
   const [activeTab, setActiveTab] = useState<'dashboard' | 'protocol' | 'audits' | 'mapping'>(
     auditRefFromQuery ? 'audits' : 'dashboard',
   )
@@ -348,10 +439,19 @@ export default function UVDBAudits() {
   const [expandedAuditId, setExpandedAuditId] = useState<number | null>(null)
   const [auditDetail, setAuditDetail] = useState<UVDBAuditDetail | null>(null)
   const [isLoadingDetail, setIsLoadingDetail] = useState(false)
+  const [auditDetailError, setAuditDetailError] = useState<string | null>(null)
+  const [documentError, setDocumentError] = useState<string | null>(null)
   const [sectionScores, setSectionScores] = useState<Record<string, SectionScoreData>>({})
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
   const [sectionQuestions, setSectionQuestions] = useState<Record<string, unknown[]>>({})
   const [loadingSectionQuestions, setLoadingSectionQuestions] = useState<string | null>(null)
+  const [reconciliation, setReconciliation] = useState<ExternalAuditPromotionReconciliation | null>(
+    null,
+  )
+  const [reconciliationStatus, setReconciliationStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'unavailable' | 'partial'
+  >('idle')
+  const [reconciliationNotice, setReconciliationNotice] = useState<string | null>(null)
 
   const transformSection = (apiSection: {
     number: string
@@ -376,6 +476,8 @@ export default function UVDBAudits() {
     status: string
     percentage_score: number | null
     lead_auditor: string | null
+    audit_run_id?: number | null
+    import_job_id?: number | null
   }): UVDBAudit => ({
     id: apiAudit.id,
     audit_reference: apiAudit.audit_reference,
@@ -385,17 +487,25 @@ export default function UVDBAudits() {
     status: apiAudit.status,
     percentage_score: apiAudit.percentage_score,
     lead_auditor: apiAudit.lead_auditor,
+    audit_run_id: apiAudit.audit_run_id,
+    import_job_id: apiAudit.import_job_id,
   })
 
-  const loadData = useCallback(async (isRetry = false) => {
-    setLoadState('loading')
-    setErrorClass(null)
-    setSetupRequired(null)
-    setCreateAuditError(null)
+  const loadData = useCallback(
+    async (isRetry = false) => {
+      setLoadState('loading')
+      setErrorClass(null)
+      setSetupRequired(null)
+      setCreateAuditError(null)
 
-    try {
-      const [dashboardResponse, sectionsResponse, auditsResponse, mappingResponse, scoresResponse] =
-        await Promise.all([
+      try {
+        const [
+          dashboardResponse,
+          sectionsResponse,
+          auditsResponse,
+          mappingResponse,
+          scoresResponse,
+        ] = await Promise.all([
           uvdbApi.getDashboard(),
           uvdbApi.listSections(),
           uvdbApi.listAudits({
@@ -408,90 +518,145 @@ export default function UVDBAudits() {
           api.get('/api/v1/uvdb/sections/scores').catch(() => ({ data: { sections: {} } })),
         ])
 
-      if (isSetupRequired(dashboardResponse.data)) {
-        setSetupRequired(dashboardResponse.data)
-        setLoadState('setup_required')
-        return
-      }
-      if (isSetupRequired(auditsResponse.data)) {
-        setSetupRequired(auditsResponse.data)
-        setLoadState('setup_required')
-        return
-      }
-      if (isSetupRequired(sectionsResponse.data)) {
-        setSetupRequired(sectionsResponse.data)
-        setLoadState('setup_required')
-        return
-      }
-      if (isSetupRequired(mappingResponse.data)) {
-        setSetupRequired(mappingResponse.data)
-        setLoadState('setup_required')
-        return
-      }
+        if (isSetupRequired(dashboardResponse.data)) {
+          setSetupRequired(dashboardResponse.data)
+          setLoadState('setup_required')
+          return
+        }
+        if (isSetupRequired(auditsResponse.data)) {
+          setSetupRequired(auditsResponse.data)
+          setLoadState('setup_required')
+          return
+        }
+        if (isSetupRequired(sectionsResponse.data)) {
+          setSetupRequired(sectionsResponse.data)
+          setLoadState('setup_required')
+          return
+        }
+        if (isSetupRequired(mappingResponse.data)) {
+          setSetupRequired(mappingResponse.data)
+          setLoadState('setup_required')
+          return
+        }
 
-      setDashboard({
-        total_audits: dashboardResponse.data.summary.total_audits,
-        active_audits: dashboardResponse.data.summary.active_audits,
-        completed_audits: dashboardResponse.data.summary.completed_audits,
-        average_score: dashboardResponse.data.summary.average_score,
-        protocol_name: dashboardResponse.data.protocol.name,
-        protocol_version: dashboardResponse.data.protocol.version,
-      })
+        setDashboard({
+          total_audits: dashboardResponse.data.summary.total_audits,
+          active_audits: dashboardResponse.data.summary.active_audits,
+          completed_audits: dashboardResponse.data.summary.completed_audits,
+          average_score: dashboardResponse.data.summary.average_score,
+          protocol_name: dashboardResponse.data.protocol.name,
+          protocol_version: dashboardResponse.data.protocol.version,
+        })
 
-      const transformedSections = sectionsResponse.data.sections.map(transformSection)
-      transformedSections.sort((a, b) => parseInt(a.number) - parseInt(b.number))
-      const mappings = mappingResponse.data.mappings
-      const enrichedSections = transformedSections.map((section) => {
-        const sectionMappings = mappings.filter(
-          (mapping: UVDBIsoMappingRow) => mapping.uvdb_section === section.number,
-        )
-        if (sectionMappings.length === 0) return section
-        return {
-          ...section,
-          iso_mapping: {
-            ...(sectionMappings.some((mapping: UVDBIsoMappingRow) => mapping.iso_9001.length > 0)
-              ? { '9001': 'aligned' }
-              : {}),
-            ...(sectionMappings.some((mapping: UVDBIsoMappingRow) => mapping.iso_14001.length > 0)
-              ? { '14001': 'aligned' }
-              : {}),
-            ...(sectionMappings.some((mapping: UVDBIsoMappingRow) => mapping.iso_45001.length > 0)
-              ? { '45001': 'aligned' }
-              : {}),
-            ...(sectionMappings.some((mapping: UVDBIsoMappingRow) => mapping.iso_27001.length > 0)
-              ? { '27001': 'aligned' }
-              : {}),
-          },
+        const transformedSections = sectionsResponse.data.sections.map(transformSection)
+        transformedSections.sort((a, b) => parseInt(a.number) - parseInt(b.number))
+        const mappings = mappingResponse.data.mappings
+        const enrichedSections = transformedSections.map((section) => {
+          const sectionMappings = mappings.filter(
+            (mapping: UVDBIsoMappingRow) => mapping.uvdb_section === section.number,
+          )
+          if (sectionMappings.length === 0) return section
+          return {
+            ...section,
+            iso_mapping: {
+              ...(sectionMappings.some((mapping: UVDBIsoMappingRow) => mapping.iso_9001.length > 0)
+                ? { '9001': 'aligned' }
+                : {}),
+              ...(sectionMappings.some((mapping: UVDBIsoMappingRow) => mapping.iso_14001.length > 0)
+                ? { '14001': 'aligned' }
+                : {}),
+              ...(sectionMappings.some((mapping: UVDBIsoMappingRow) => mapping.iso_45001.length > 0)
+                ? { '45001': 'aligned' }
+                : {}),
+              ...(sectionMappings.some((mapping: UVDBIsoMappingRow) => mapping.iso_27001.length > 0)
+                ? { '27001': 'aligned' }
+                : {}),
+            },
+          }
+        })
+        setSections(enrichedSections)
+
+        const transformedAudits = auditsResponse.data.audits.map(transformAudit)
+        transformedAudits.sort((a, b) => b.id - a.id)
+        setAudits(transformedAudits)
+        setIsoMappings(mappings)
+
+        if (scoresResponse.data?.sections) {
+          setSectionScores(scoresResponse.data.sections as Record<string, SectionScoreData>)
+        }
+
+        setLoadState('success')
+      } catch (err) {
+        const apiError = createApiError(err)
+        setErrorClass(apiError.error_class)
+
+        if (
+          !isRetry &&
+          (apiError.error_class === ErrorClass.NETWORK_ERROR ||
+            apiError.error_class === ErrorClass.SERVER_ERROR)
+        ) {
+          await loadData(true)
+          return
+        }
+
+        setLoadState('error')
+      }
+    },
+    [auditSearch, auditStatusFilter],
+  )
+
+  useEffect(() => {
+    const match =
+      audits.find(
+        (audit) =>
+          auditRefFromQuery &&
+          audit.audit_reference === auditRefFromQuery &&
+          audit.import_job_id != null &&
+          audit.import_job_id > 0,
+      ) ||
+      audits.find((audit) => audit.import_job_id != null && audit.import_job_id > 0)
+
+    if (!match?.import_job_id) {
+      setReconciliation(null)
+      setReconciliationStatus('idle')
+      setReconciliationNotice(null)
+      return
+    }
+
+    let cancelled = false
+    setReconciliationStatus('loading')
+    setReconciliationNotice(null)
+
+    void externalAuditImportsApi
+      .getReconciliation(match.import_job_id)
+      .then((response) => {
+        if (cancelled) return
+        const payload = response.data
+        setReconciliation(payload)
+        const failed = Number(payload?.failed_total || 0)
+        const pending = Number(payload?.accepted_pending_total || 0)
+        if (failed > 0 || pending > 0) {
+          setReconciliationStatus('partial')
+          setReconciliationNotice(
+            'Downstream reconciliation is partial — some drafts still need attention before the closed loop is complete.',
+          )
+        } else {
+          setReconciliationStatus('ready')
         }
       })
-      setSections(enrichedSections)
+      .catch(() => {
+        if (cancelled) return
+        setReconciliation(null)
+        setReconciliationStatus('unavailable')
+        setReconciliationNotice(
+          'Reconciliation diagnostics are unavailable for this UVDB row (honesty: partial proof only).',
+        )
+      })
 
-      const transformedAudits = auditsResponse.data.audits.map(transformAudit)
-      transformedAudits.sort((a, b) => b.id - a.id)
-      setAudits(transformedAudits)
-      setIsoMappings(mappings)
-
-      if (scoresResponse.data?.sections) {
-        setSectionScores(scoresResponse.data.sections as Record<string, SectionScoreData>)
-      }
-
-      setLoadState('success')
-    } catch (err) {
-      const apiError = createApiError(err)
-      setErrorClass(apiError.error_class)
-
-      if (
-        !isRetry &&
-        (apiError.error_class === ErrorClass.NETWORK_ERROR ||
-          apiError.error_class === ErrorClass.SERVER_ERROR)
-      ) {
-        await loadData(true)
-        return
-      }
-
-      setLoadState('error')
+    return () => {
+      cancelled = true
     }
-  }, [auditSearch, auditStatusFilter])
+  }, [audits, auditRefFromQuery])
 
   const handleToggleAuditDetail = useCallback(
     async (auditId: number) => {
@@ -504,12 +669,14 @@ export default function UVDBAudits() {
       setExpandedAuditId(auditId)
       setIsLoadingDetail(true)
       setAuditDetail(null)
+      setAuditDetailError(null)
 
       try {
         const response = await uvdbApi.getAudit(auditId)
         setAuditDetail(response.data as unknown as UVDBAuditDetail)
       } catch {
         setAuditDetail(null)
+        setAuditDetailError('Audit details could not be loaded. Please try again.')
       } finally {
         setIsLoadingDetail(false)
       }
@@ -518,13 +685,14 @@ export default function UVDBAudits() {
   )
 
   const handleViewPdf = useCallback(async (assetId: number) => {
+    setDocumentError(null)
     try {
       const response = await api.get(`/api/v1/evidence-assets/${assetId}/signed-url`)
       const rawUrl = response.data.signed_url as string
       const fullUrl = new URL(rawUrl, api.defaults.baseURL || window.location.origin).toString()
       window.open(fullUrl, '_blank', 'noopener,noreferrer')
     } catch {
-      /* signed URL retrieval failed — silently ignore */
+      setDocumentError('The source document could not be opened. Please try again.')
     }
   }, [])
 
@@ -691,24 +859,98 @@ export default function UVDBAudits() {
           </h1>
           <p className="text-muted-foreground">{t('uvdb.subtitle')}</p>
         </div>
-        <div className="flex gap-3 mt-4 md:mt-0">
-          <button className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border hover:bg-surface rounded-lg transition-colors">
-            <Download className="w-4 h-4" />
-            {t('uvdb.export_protocol')}
-          </button>
-          <button
-            onClick={handleOpenCreateAuditForm}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            {t('uvdb.new_audit')}
-          </button>
+        <div className="flex flex-col gap-3 mt-4 md:mt-0 md:items-end">
+          <DownstreamHandoffLinks
+            auditRef={auditRefFromQuery || audits[0]?.audit_reference}
+            importReviewPath={
+              recoveryImportReviewPath ||
+              getImportReviewPath(audits[0]?.audit_run_id, audits[0]?.import_job_id)
+            }
+          />
+          <div className="flex gap-3">
+            <button
+              disabled
+              title="Protocol export is not available yet"
+              className="flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-secondary px-4 py-2 opacity-60"
+            >
+              <Download className="w-4 h-4" />
+              {t('uvdb.export_protocol')}
+            </button>
+            <button
+              onClick={handleOpenCreateAuditForm}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              {t('uvdb.new_audit')}
+            </button>
+          </div>
         </div>
       </div>
+
+      {reconciliationStatus !== 'idle' ? (
+        <div
+          className="mb-6 rounded-xl border border-border bg-card px-4 py-3"
+          data-testid="uvdb-reconciliation-panel"
+        >
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Downstream reconciliation</p>
+              <p className="text-xs text-muted-foreground">
+                {reconciliationStatus === 'loading' && 'Loading promotion proof…'}
+                {reconciliationStatus === 'ready' &&
+                  `Proof ready — ${reconciliation?.promoted_total ?? 0} finding(s) materialized.`}
+                {reconciliationStatus === 'partial' &&
+                  (reconciliationNotice || 'Partial closed-loop proof — review outstanding drafts.')}
+                {reconciliationStatus === 'unavailable' &&
+                  (reconciliationNotice ||
+                    'Reconciliation unavailable — specialist home shows UVDB rows only.')}
+              </p>
+              {reconciliation?.proof_matrix?.length ? (
+                <ul
+                  className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground"
+                  data-testid="uvdb-proof-matrix"
+                >
+                  {reconciliation.proof_matrix.map((step) => (
+                    <li
+                      key={step.step}
+                      className="rounded border border-border px-2 py-0.5"
+                      data-testid={`uvdb-proof-step-${step.step}`}
+                    >
+                      {step.step.replace(/_/g, ' ')}: {step.status}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+            <DownstreamHandoffLinks
+              auditRef={reconciliation?.audit_reference || auditRefFromQuery}
+              findingId={
+                typeof reconciliation?.draft_results?.[0]?.finding_id === 'number'
+                  ? (reconciliation.draft_results[0].finding_id as number)
+                  : null
+              }
+              importReviewPath={
+                reconciliation?.view_links?.import_review ||
+                getImportReviewPath(reconciliation?.audit_run_id, reconciliation?.job_id) ||
+                recoveryImportReviewPath
+              }
+            />
+          </div>
+        </div>
+      ) : null}
 
       {createAuditSuccess ? (
         <div className="mb-6 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
           {createAuditSuccess}
+        </div>
+      ) : null}
+
+      {documentError ? (
+        <div
+          className="mb-6 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          role="alert"
+        >
+          {documentError}
         </div>
       ) : null}
 
@@ -833,7 +1075,7 @@ export default function UVDBAudits() {
       {/* Tabs */}
       <div className="flex gap-2 mb-6 border-b border-border pb-2 overflow-x-auto">
         {[
-          { id: 'dashboard', labelKey: 'uvdb.tab.dashboard', icon: BarChart3 },
+          { id: 'dashboard', labelKey: 'uvdb.tab.scores', icon: BarChart3 },
           { id: 'protocol', labelKey: 'uvdb.tab.protocol', icon: ClipboardList },
           { id: 'audits', labelKey: 'uvdb.tab.audit_history', icon: Calendar },
           { id: 'mapping', labelKey: 'uvdb.tab.iso_mapping', icon: Link2 },
@@ -888,27 +1130,48 @@ export default function UVDBAudits() {
         </div>
       )}
 
-      {/* Empty State */}
-      {loadState === 'success' && sections.length === 0 && audits.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-12 bg-card rounded-xl border border-border">
-          <Award className="w-12 h-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">{t('uvdb.no_data')}</h3>
-          <p className="text-muted-foreground mb-4">{t('uvdb.no_data_description')}</p>
-          <button
-            onClick={handleOpenCreateAuditForm}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            {t('uvdb.new_audit')}
-          </button>
-        </div>
-      )}
-
-      {loadState === 'success' && (sections.length > 0 || audits.length > 0) && (
+      {loadState === 'success' && (
         <>
           {/* Dashboard Tab */}
           {activeTab === 'dashboard' && (
             <div className="space-y-6">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-primary">
+                  Qualification performance
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-foreground">Scores and audit health</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Current Achilles Verify B2 performance and recent qualification activity.
+                </p>
+              </div>
+              {/* KPI Summary */}
+              <div className="bg-card rounded-xl border border-border">
+                <div className="p-4 bg-surface border-b border-border">
+                  <h3 className="font-bold text-card-foreground">Score summary</h3>
+                </div>
+                <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    {
+                      label: 'Total audits',
+                      value: dashboard?.total_audits ?? audits.length,
+                    },
+                    { label: 'Active', value: dashboard?.active_audits ?? 0 },
+                    { label: 'Completed', value: dashboard?.completed_audits ?? 0 },
+                    {
+                      label: 'Average score',
+                      value: dashboard?.completed_audits
+                        ? `${dashboard.average_score}%`
+                        : 'Not scored',
+                    },
+                  ].map((kpi) => (
+                    <div key={kpi.label} className="bg-surface/50 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-card-foreground">{kpi.value}</div>
+                      <div className="text-xs text-muted-foreground">{kpi.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {/* ISO Alignment Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
@@ -943,10 +1206,7 @@ export default function UVDBAudits() {
                 ].map((iso) => {
                   const Icon = iso.icon
                   return (
-                    <div
-                      key={iso.standard}
-                      className="bg-card rounded-xl p-5 border border-border"
-                    >
+                    <div key={iso.standard} className="bg-card rounded-xl p-5 border border-border">
                       <div className="flex items-center gap-3 mb-3">
                         <div className={`p-2 ${iso.color} rounded-lg`}>
                           <Icon className="w-5 h-5 text-white" />
@@ -957,8 +1217,7 @@ export default function UVDBAudits() {
                         </div>
                       </div>
                       <div className="text-sm text-foreground-secondary">
-                        <span className="text-muted-foreground">UVDB Sections:</span>{' '}
-                        {iso.sections}
+                        <span className="text-muted-foreground">UVDB Sections:</span> {iso.sections}
                       </div>
                     </div>
                   )
@@ -970,9 +1229,7 @@ export default function UVDBAudits() {
                 <div className="p-4 bg-surface border-b border-border flex items-center justify-between">
                   <div>
                     <h3 className="font-bold text-card-foreground">{t('uvdb.audit_status')}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Plantexpand Limited (00019685)
-                    </p>
+                    <p className="text-sm text-muted-foreground">Plantexpand Limited (00019685)</p>
                   </div>
                   <Award className="w-8 h-8 text-warning" />
                 </div>
@@ -984,7 +1241,12 @@ export default function UVDBAudits() {
                       tabIndex={0}
                       className="flex items-center justify-between p-4 bg-surface/50 rounded-lg hover:bg-surface transition-colors cursor-pointer"
                       onClick={() => handleToggleAuditDetail(audit.id)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggleAuditDetail(audit.id) } }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleToggleAuditDetail(audit.id)
+                        }
+                      }}
                     >
                       <div className="flex items-center gap-4">
                         <div className="p-3 bg-warning/20 rounded-lg">
@@ -1024,39 +1286,25 @@ export default function UVDBAudits() {
                       </div>
                     </div>
                   ))}
-                  {expandedAuditId && audits.some((a) => a.id === expandedAuditId) && activeTab === 'dashboard' && (
-                    <AuditDetailPanel
-                      detail={auditDetail}
-                      isLoading={isLoadingDetail}
-                      onViewPdf={handleViewPdf}
-                    />
-                  )}
-                </div>
-              </div>
-
-              {/* KPI Summary */}
-              <div className="bg-card rounded-xl border border-border">
-                <div className="p-4 bg-surface border-b border-border">
-                  <h3 className="font-bold text-card-foreground">{t('uvdb.audit_status')}</h3>
-                </div>
-                <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[
-                    {
-                      label: 'Total audits',
-                      value: dashboard?.total_audits ?? audits.length,
-                    },
-                    { label: 'Active', value: dashboard?.active_audits ?? 0 },
-                    { label: 'Completed', value: dashboard?.completed_audits ?? 0 },
-                    {
-                      label: 'Average score',
-                      value: `${dashboard?.average_score ?? 0}%`,
-                    },
-                  ].map((kpi) => (
-                    <div key={kpi.label} className="bg-surface/50 rounded-lg p-4 text-center">
-                      <div className="text-2xl font-bold text-card-foreground">{kpi.value}</div>
-                      <div className="text-xs text-muted-foreground">{kpi.label}</div>
+                  {expandedAuditId &&
+                    audits.some((a) => a.id === expandedAuditId) &&
+                    activeTab === 'dashboard' && (
+                      <AuditDetailPanel
+                        detail={auditDetail}
+                        isLoading={isLoadingDetail}
+                        error={auditDetailError}
+                        onViewPdf={handleViewPdf}
+                      />
+                    )}
+                  {audits.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border px-6 py-10 text-center">
+                      <ClipboardList className="mx-auto h-8 w-8 text-muted-foreground" />
+                      <h4 className="mt-3 font-semibold text-foreground">No audit history yet</h4>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Create the first UVDB audit to begin tracking qualification scores.
+                      </p>
                     </div>
-                  ))}
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -1064,382 +1312,505 @@ export default function UVDBAudits() {
 
           {/* Protocol Sections Tab */}
           {activeTab === 'protocol' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sections.map((section) => {
-                const Icon = getSectionIcon(section.number)
-                const bgColor = getSectionColor(section.number)
-                const scoreData = sectionScores[section.number]
-                const isExpanded = expandedSection === section.number
-                const questions = sectionQuestions[section.number]
-                const isLoadingQuestions = loadingSectionQuestions === section.number
+            <div className="space-y-6">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-primary">
+                  Achilles protocol
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-foreground">Verify B2 sections</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Explore protocol questions, scoring weight and standards alignment by section.
+                </p>
+              </div>
+              {sections.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center">
+                  <ClipboardList className="mx-auto h-10 w-10 text-muted-foreground" />
+                  <h3 className="mt-3 text-lg font-semibold">Protocol sections unavailable</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    No protocol structure was returned. Retry the page or contact an administrator.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {sections.map((section) => {
+                    const Icon = getSectionIcon(section.number)
+                    const bgColor = getSectionColor(section.number)
+                    const scoreData = sectionScores[section.number]
+                    const isExpanded = expandedSection === section.number
+                    const questions = sectionQuestions[section.number]
+                    const isLoadingQuestions = loadingSectionQuestions === section.number
 
-                return (
-                  <div key={section.number} className="flex flex-col">
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      className="bg-card rounded-xl p-5 border border-border hover:border-border-strong transition-colors cursor-pointer"
-                      onClick={() => handleToggleSection(section.number)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggleSection(section.number) } }}
-                    >
-                      <div className="flex items-start justify-between mb-4">
-                        <div className={`p-3 ${bgColor} rounded-xl`}>
-                          <Icon className="w-6 h-6 text-white" />
+                    return (
+                      <div key={section.number} className="flex flex-col">
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          className="bg-card rounded-xl p-5 border border-border hover:border-border-strong transition-colors cursor-pointer"
+                          onClick={() => handleToggleSection(section.number)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              handleToggleSection(section.number)
+                            }
+                          }}
+                        >
+                          <div className="flex items-start justify-between mb-4">
+                            <div className={`p-3 ${bgColor} rounded-xl`}>
+                              <Icon className="w-6 h-6 text-white" />
+                            </div>
+                            <div className="text-right">
+                              {scoreData ? (
+                                <>
+                                  <div className="text-2xl font-bold text-success">
+                                    {scoreData.score}
+                                    <span className="text-base text-muted-foreground font-normal">
+                                      /{scoreData.max_score}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {scoreData.percentage.toFixed(0)}%
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="text-2xl font-bold text-card-foreground">
+                                    {section.max_score}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {t('uvdb.max_score')}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {scoreData && (
+                            <div className="mb-3">
+                              <ScoreBar percentage={scoreData.percentage} />
+                            </div>
+                          )}
+
+                          <div className="text-lg font-bold text-card-foreground mb-1">
+                            Section {section.number}
+                          </div>
+                          <div className="text-sm text-foreground-secondary mb-4">
+                            {section.title}
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              {section.question_count} Questions
+                            </span>
+                            <div className="flex gap-1 items-center">
+                              {Object.keys(section.iso_mapping).map((iso) => (
+                                <span
+                                  key={iso}
+                                  className={`px-2 py-0.5 rounded text-xs ${
+                                    iso === '9001'
+                                      ? 'bg-blue-500/20 text-blue-400'
+                                      : iso === '14001'
+                                        ? 'bg-emerald-500/20 text-emerald-400'
+                                        : iso === '45001'
+                                          ? 'bg-orange-500/20 text-orange-400'
+                                          : 'bg-purple-500/20 text-purple-400'
+                                  }`}
+                                >
+                                  {iso}
+                                </span>
+                              ))}
+                              {isExpanded ? (
+                                <ChevronUp className="w-4 h-4 text-muted-foreground ml-1" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-muted-foreground ml-1" />
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          {scoreData ? (
-                            <>
-                              <div className="text-2xl font-bold text-success">
-                                {scoreData.score}
-                                <span className="text-base text-muted-foreground font-normal">
-                                  /{scoreData.max_score}
+
+                        {isExpanded && (
+                          <div className="bg-surface rounded-b-xl border border-t-0 border-border p-4 -mt-1 animate-fade-in">
+                            {isLoadingQuestions ? (
+                              <div className="flex items-center justify-center gap-2 py-4">
+                                <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">
+                                  Loading questions...
                                 </span>
                               </div>
-                              <div className="text-xs text-muted-foreground">
-                                {scoreData.percentage.toFixed(0)}%
+                            ) : questions && questions.length > 0 ? (
+                              <div className="space-y-3">
+                                {questions.map((q: unknown, idx: number) => {
+                                  const question = q as {
+                                    number?: string
+                                    text?: string
+                                    sub_questions?: string[]
+                                  }
+                                  return (
+                                    <div key={idx} className="text-sm">
+                                      <p className="text-foreground font-medium">
+                                        Q{question.number}: {question.text}
+                                      </p>
+                                      {question.sub_questions &&
+                                        question.sub_questions.length > 0 && (
+                                          <ul className="mt-1 ml-4 space-y-1">
+                                            {question.sub_questions.map((sq, sqIdx) => (
+                                              <li
+                                                key={sqIdx}
+                                                className="text-muted-foreground text-xs list-disc"
+                                              >
+                                                {sq}
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        )}
+                                    </div>
+                                  )
+                                })}
                               </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="text-2xl font-bold text-card-foreground">
-                                {section.max_score}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {t('uvdb.max_score')}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      {scoreData && (
-                        <div className="mb-3">
-                          <ScoreBar percentage={scoreData.percentage} />
-                        </div>
-                      )}
-
-                      <div className="text-lg font-bold text-card-foreground mb-1">
-                        Section {section.number}
-                      </div>
-                      <div className="text-sm text-foreground-secondary mb-4">{section.title}</div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          {section.question_count} Questions
-                        </span>
-                        <div className="flex gap-1 items-center">
-                          {Object.keys(section.iso_mapping).map((iso) => (
-                            <span
-                              key={iso}
-                              className={`px-2 py-0.5 rounded text-xs ${
-                                iso === '9001'
-                                  ? 'bg-blue-500/20 text-blue-400'
-                                  : iso === '14001'
-                                    ? 'bg-emerald-500/20 text-emerald-400'
-                                    : iso === '45001'
-                                      ? 'bg-orange-500/20 text-orange-400'
-                                      : 'bg-purple-500/20 text-purple-400'
-                              }`}
-                            >
-                              {iso}
-                            </span>
-                          ))}
-                          {isExpanded ? (
-                            <ChevronUp className="w-4 h-4 text-muted-foreground ml-1" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4 text-muted-foreground ml-1" />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {isExpanded && (
-                      <div className="bg-surface rounded-b-xl border border-t-0 border-border p-4 -mt-1 animate-fade-in">
-                        {isLoadingQuestions ? (
-                          <div className="flex items-center justify-center gap-2 py-4">
-                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">
-                              Loading questions...
-                            </span>
+                            ) : (
+                              <p className="text-sm text-muted-foreground text-center py-2">
+                                No questions available for this section.
+                              </p>
+                            )}
                           </div>
-                        ) : questions && questions.length > 0 ? (
-                          <div className="space-y-3">
-                            {questions.map((q: unknown, idx: number) => {
-                              const question = q as {
-                                number?: string
-                                text?: string
-                                sub_questions?: string[]
-                              }
-                              return (
-                                <div key={idx} className="text-sm">
-                                  <p className="text-foreground font-medium">
-                                    Q{question.number}: {question.text}
-                                  </p>
-                                  {question.sub_questions && question.sub_questions.length > 0 && (
-                                    <ul className="mt-1 ml-4 space-y-1">
-                                      {question.sub_questions.map((sq, sqIdx) => (
-                                        <li
-                                          key={sqIdx}
-                                          className="text-muted-foreground text-xs list-disc"
-                                        >
-                                          {sq}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground text-center py-2">
-                            No questions available for this section.
-                          </p>
                         )}
                       </div>
-                    )}
-                  </div>
-                )
-              })}
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 
           {/* Audit History Tab */}
           {activeTab === 'audits' && (
-            <div className="bg-card rounded-xl border border-border">
-              <div className="p-4 bg-surface border-b border-border flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <input
-                      type="text"
-                      placeholder={t('uvdb.search_placeholder')}
-                      value={auditSearch}
-                      onChange={(e) => setAuditSearch(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') void loadData()
+            <div className="space-y-6">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-primary">
+                  Qualification evidence
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-foreground">Audit history</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Review Achilles audit outcomes, source evidence and linked import workspaces.
+                </p>
+              </div>
+              <div className="bg-card rounded-xl border border-border">
+                <div className="p-4 bg-surface border-b border-border flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <input
+                        type="text"
+                        placeholder={t('uvdb.search_placeholder')}
+                        value={auditSearch}
+                        onChange={(e) => setAuditSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') void loadData()
+                        }}
+                        className="pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-transparent"
+                      />
+                    </div>
+                    <select
+                      value={auditStatusFilter}
+                      onChange={(e) => {
+                        setAuditStatusFilter(e.target.value)
                       }}
-                      className="pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-transparent"
-                    />
+                      className="px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:ring-2 focus:ring-ring"
+                      aria-label="Filter by status"
+                    >
+                      <option value="">All Statuses</option>
+                      <option value="completed">Completed</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="scheduled">Scheduled</option>
+                    </select>
+                    <button
+                      className="flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg transition-colors"
+                      onClick={() => void loadData()}
+                    >
+                      <Filter className="w-4 h-4" />
+                      {t('uvdb.filter')}
+                    </button>
                   </div>
-                  <select
-                    value={auditStatusFilter}
-                    onChange={(e) => {
-                      setAuditStatusFilter(e.target.value)
-                    }}
-                    className="px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:ring-2 focus:ring-ring"
-                    aria-label="Filter by status"
-                  >
-                    <option value="">All Statuses</option>
-                    <option value="completed">Completed</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="scheduled">Scheduled</option>
-                  </select>
                   <button
-                    className="flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg transition-colors"
-                    onClick={() => void loadData()}
+                    onClick={handleOpenCreateAuditForm}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
                   >
-                    <Filter className="w-4 h-4" />
-                    {t('uvdb.filter')}
+                    <Plus className="w-4 h-4" />
+                    {t('uvdb.new_audit')}
                   </button>
                 </div>
-                <button
-                  onClick={handleOpenCreateAuditForm}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  {t('uvdb.new_audit')}
-                </button>
-              </div>
-              {auditRefFromQuery && audits.length === 0 ? (
-                <div className="mx-4 mt-4 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
-                  No synced UVDB audit row is visible yet for{' '}
-                  <strong>{auditRefFromQuery}</strong>. If this import was promoted successfully,
-                  use the External Audit Review diagnostics panel to verify whether the UVDB sync
-                  step completed or whether the audit was routed to a different specialist surface.
-                </div>
-              ) : null}
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-surface/50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                        {t('uvdb.reference')}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                        {t('uvdb.company')}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                        {t('uvdb.type')}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                        {t('uvdb.date')}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                        {t('uvdb.lead_auditor')}
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                        {t('uvdb.score')}
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                        {t('uvdb.status')}
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                        {t('uvdb.actions')}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {audits.map((audit) => (
-                      <React.Fragment key={`audit-group-${audit.id}`}>
-                        <tr
-                          className="hover:bg-surface/50 cursor-pointer"
-                          onClick={() => handleToggleAuditDetail(audit.id)}
+                {auditRefFromQuery && audits.length === 0 ? (
+                  <div
+                    className="mx-4 mt-4 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning"
+                    data-testid="uvdb-auditref-miss"
+                    role="status"
+                  >
+                    <p>
+                      No synced UVDB audit row is visible yet for{' '}
+                      <strong>{auditRefFromQuery}</strong>. If this import was promoted
+                      successfully, use the External Audit Review diagnostics panel to verify
+                      whether the UVDB sync step completed or whether the audit was routed to a
+                      different specialist surface.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {recoveryImportReviewPath ? (
+                        <Link
+                          to={recoveryImportReviewPath}
+                          data-testid="uvdb-auditref-miss-recovery-import-review"
+                          className="inline-flex items-center rounded-lg border border-warning/40 bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:border-primary/40 hover:text-primary"
                         >
-                          <td className="px-4 py-3 font-medium text-card-foreground">
-                            {audit.audit_reference}
-                          </td>
-                          <td className="px-4 py-3 text-foreground">{audit.company_name}</td>
-                          <td className="px-4 py-3">
-                            <span className="px-2 py-1 bg-warning/20 text-warning rounded text-xs font-medium">
-                              {audit.audit_type}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-foreground">
-                            {audit.audit_date || 'TBD'}
-                          </td>
-                          <td className="px-4 py-3 text-foreground">{audit.lead_auditor}</td>
-                          <td className="px-4 py-3 text-center">
-                            {audit.percentage_score != null ? (
-                              <span className="text-success font-bold">
-                                {audit.percentage_score}%
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(audit.status)}`}
-                            >
-                              {audit.status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <button
-                              aria-label={`View details for ${audit.audit_reference}`}
-                              className="p-2 hover:bg-secondary rounded-lg transition-colors"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleToggleAuditDetail(audit.id)
-                              }}
-                            >
-                              {expandedAuditId === audit.id ? (
-                                <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                              ) : (
-                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                              )}
-                            </button>
-                          </td>
+                          Open import review diagnostics
+                        </Link>
+                      ) : null}
+                      <Link
+                        to={ACHILLES_UVDB_AUDITS_PATH}
+                        data-testid="uvdb-auditref-miss-recovery-audits"
+                        className="inline-flex items-center rounded-lg border border-warning/40 bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:border-primary/40 hover:text-primary"
+                      >
+                        Browse Achilles / UVDB on Audits
+                      </Link>
+                      <Link
+                        to="/uvdb"
+                        data-testid="uvdb-auditref-miss-recovery-clear"
+                        className="inline-flex items-center rounded-lg border border-warning/40 bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:border-primary/40 hover:text-primary"
+                      >
+                        Clear auditRef and open UVDB home
+                      </Link>
+                      <Link
+                        to={getUvdbCapaActionsPath()}
+                        data-testid="uvdb-auditref-miss-recovery-capa"
+                        className="inline-flex items-center rounded-lg border border-warning/40 bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:border-primary/40 hover:text-primary"
+                      >
+                        Open CAPA Actions
+                      </Link>
+                    </div>
+                  </div>
+                ) : null}
+                {audits.length === 0 ? (
+                  <div className="px-6 py-12 text-center">
+                    <Calendar className="mx-auto h-10 w-10 text-muted-foreground" />
+                    <h3 className="mt-3 text-lg font-semibold text-foreground">
+                      {auditSearch || auditStatusFilter ? 'No matching audits' : 'No audits yet'}
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {auditSearch || auditStatusFilter
+                        ? 'Clear or change the filters to search the full audit history.'
+                        : 'Create an audit to start your Achilles qualification history.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-surface/50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                            {t('uvdb.reference')}
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                            {t('uvdb.company')}
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                            {t('uvdb.type')}
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                            {t('uvdb.date')}
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                            {t('uvdb.lead_auditor')}
+                          </th>
+                          <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
+                            {t('uvdb.score')}
+                          </th>
+                          <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
+                            {t('uvdb.status')}
+                          </th>
+                          <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
+                            {t('uvdb.actions')}
+                          </th>
                         </tr>
-                        {expandedAuditId === audit.id && (
-                          <tr>
-                            <td colSpan={8} className="p-0">
-                              <AuditDetailPanel
-                                detail={auditDetail}
-                                isLoading={isLoadingDetail}
-                                onViewPdf={handleViewPdf}
-                              />
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    ))}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {audits.map((audit) => (
+                          <React.Fragment key={`audit-group-${audit.id}`}>
+                            <tr
+                              className="hover:bg-surface/50 cursor-pointer"
+                              onClick={() => handleToggleAuditDetail(audit.id)}
+                            >
+                              <td className="px-4 py-3 font-medium text-card-foreground">
+                                {audit.audit_reference}
+                              </td>
+                              <td className="px-4 py-3 text-foreground">{audit.company_name}</td>
+                              <td className="px-4 py-3">
+                                <span className="px-2 py-1 bg-warning/20 text-warning rounded text-xs font-medium">
+                                  {audit.audit_type}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-foreground">
+                                {audit.audit_date || 'TBD'}
+                              </td>
+                              <td className="px-4 py-3 text-foreground">{audit.lead_auditor}</td>
+                              <td className="px-4 py-3 text-center">
+                                {audit.percentage_score != null ? (
+                                  <span className="text-success font-bold">
+                                    {audit.percentage_score}%
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span
+                                  className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(audit.status)}`}
+                                >
+                                  {audit.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  {getImportReviewPath(audit.audit_run_id, audit.import_job_id) ? (
+                                    <Link
+                                      to={
+                                        getImportReviewPath(
+                                          audit.audit_run_id,
+                                          audit.import_job_id,
+                                        )!
+                                      }
+                                      onClick={(event) => event.stopPropagation()}
+                                      data-testid={`uvdb-import-review-${audit.id}`}
+                                      className="rounded-lg px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+                                    >
+                                      Import review
+                                    </Link>
+                                  ) : null}
+                                  <button
+                                    aria-label={`View details for ${audit.audit_reference}`}
+                                    className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleToggleAuditDetail(audit.id)
+                                    }}
+                                  >
+                                    {expandedAuditId === audit.id ? (
+                                      <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                                    ) : (
+                                      <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                                    )}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                            {expandedAuditId === audit.id && (
+                              <tr>
+                                <td colSpan={8} className="p-0">
+                                  <AuditDetailPanel
+                                    detail={auditDetail}
+                                    isLoading={isLoadingDetail}
+                                    error={auditDetailError}
+                                    onViewPdf={handleViewPdf}
+                                  />
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
           {/* ISO Cross-Mapping Tab */}
           {activeTab === 'mapping' && (
-            <div className="bg-card rounded-xl border border-border">
-              <div className="p-4 bg-surface border-b border-border">
-                <h3 className="font-bold text-card-foreground">{t('uvdb.iso_cross_mapping')}</h3>
-                <p className="text-sm text-muted-foreground">{t('uvdb.iso_mapping_subtitle')}</p>
+            <div className="space-y-6">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-wide text-primary">
+                  Integrated assurance
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-foreground">ISO cross-mappings</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Trace Achilles requirements to quality, environmental, safety and information
+                  security controls.
+                </p>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-surface/50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                        {t('uvdb.uvdb_section')}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                        {t('uvdb.topic')}
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                        ISO 9001
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                        ISO 14001
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                        ISO 45001
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                        ISO 27001
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {isoMappings.map((row) => (
-                      <tr
-                        key={`${row.uvdb_section}-${row.uvdb_question}`}
-                        className="hover:bg-surface/50"
-                      >
-                        <td className="px-4 py-3 font-medium text-card-foreground">
-                          {row.uvdb_section}
-                        </td>
-                        <td className="px-4 py-3 text-foreground">{row.uvdb_text}</td>
-                        <td className="px-4 py-3 text-center">
-                          {row.iso_9001.length > 0 && (
-                            <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">
-                              {row.iso_9001.join(', ')}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {row.iso_14001.length > 0 && (
-                            <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs">
-                              {row.iso_14001.join(', ')}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {row.iso_45001.length > 0 && (
-                            <span className="px-2 py-1 bg-orange-500/20 text-orange-400 rounded text-xs">
-                              {row.iso_45001.join(', ')}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          {row.iso_27001.length > 0 && (
-                            <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-xs">
-                              {row.iso_27001.join(', ')}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                    {isoMappings.length === 0 && (
+              <div className="bg-card rounded-xl border border-border">
+                <div className="p-4 bg-surface border-b border-border">
+                  <h3 className="font-bold text-card-foreground">{t('uvdb.iso_cross_mapping')}</h3>
+                  <p className="text-sm text-muted-foreground">{t('uvdb.iso_mapping_subtitle')}</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-surface/50">
                       <tr>
-                        <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
-                          No ISO cross-mapping data is available yet.
-                        </td>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                          {t('uvdb.uvdb_section')}
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                          {t('uvdb.topic')}
+                        </th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
+                          ISO 9001
+                        </th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
+                          ISO 14001
+                        </th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
+                          ISO 45001
+                        </th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
+                          ISO 27001
+                        </th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {isoMappings.map((row) => (
+                        <tr
+                          key={`${row.uvdb_section}-${row.uvdb_question}`}
+                          className="hover:bg-surface/50"
+                        >
+                          <td className="px-4 py-3 font-medium text-card-foreground">
+                            {row.uvdb_section}
+                          </td>
+                          <td className="px-4 py-3 text-foreground">{row.uvdb_text}</td>
+                          <td className="px-4 py-3 text-center">
+                            {row.iso_9001.length > 0 && (
+                              <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">
+                                {row.iso_9001.join(', ')}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {row.iso_14001.length > 0 && (
+                              <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs">
+                                {row.iso_14001.join(', ')}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {row.iso_45001.length > 0 && (
+                              <span className="px-2 py-1 bg-orange-500/20 text-orange-400 rounded text-xs">
+                                {row.iso_45001.join(', ')}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {row.iso_27001.length > 0 && (
+                              <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-xs">
+                                {row.iso_27001.join(', ')}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {isoMappings.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
+                            No ISO cross-mapping data is available yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}

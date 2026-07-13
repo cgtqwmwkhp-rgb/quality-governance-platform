@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import InvestigationDetail from '../InvestigationDetail'
 
@@ -159,5 +159,50 @@ describe('InvestigationDetail', () => {
 
     expect(screen.getByText(/SHA256: 1234567890ab/i)).toBeInTheDocument()
     expect(client.investigationsApi.getPacks).toHaveBeenCalledWith(7, { page: 1, page_size: 50 })
+  })
+
+  it('links back to the source record and into the CAPA workspace', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'investigations.handoff.back_to_source' })[0],
+    )
+    expect(mockNavigate).toHaveBeenCalledWith('/rtas/42')
+
+    fireEvent.click(screen.getByTestId('investigation-capa-handoff-cta'))
+    expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=investigation&sourceId=7')
+  })
+
+  it('renders workflow proof counts and switches to Open CAPA when actions exist', async () => {
+    client.actionsApi.list.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 3,
+            title: 'Install barrier',
+            status: 'open',
+            source_type: 'investigation',
+            source_id: 7,
+          },
+        ],
+      },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-workflow-proof')).toBeInTheDocument()
+    })
+
+    const proof = screen.getByTestId('investigation-workflow-proof')
+    expect(within(proof).getByText('investigations.handoff.proof_actions')).toBeInTheDocument()
+    expect(within(proof).getAllByText('1')).toHaveLength(2)
+    expect(screen.getByTestId('investigation-capa-handoff-cta')).toHaveTextContent(
+      'investigations.handoff.open_capa',
+    )
   })
 })

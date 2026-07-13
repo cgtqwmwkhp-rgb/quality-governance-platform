@@ -18,8 +18,9 @@ async def test_privacy_contact_public(client: AsyncClient):
     assert data["data_lifecycle"]["soft_delete"] is True
     assert data["data_lifecycle"]["evidence_legal_hold"] is True
     assert "ocr_ai_import" in data["dpia"]
-    assert data["dpia"]["status"] == "pending_dpo_signoff"
+    assert data["dpia"]["status"] == "signed"
     assert data["dpia"]["status_doc"] == "docs/compliance/dpia-quality-governance-platform.md"
+    assert data["dpia"]["evidence"] == "docs/evidence/dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md"
     assert data["data_processing_register"] == "/api/v1/privacy/data-processing-register"
     names = {row["name"] for row in data["subprocessors"]}
     assert "Microsoft Azure" in names
@@ -41,7 +42,7 @@ async def test_data_processing_register_stub(client: AsyncClient):
     data = response.json()
     assert data["register_kind"] == "article_30_stub"
     assert data["status"] == "stub"
-    assert data["dpia"]["status"] == "pending_dpo_signoff"
+    assert data["dpia"]["status"] == "signed"
     assert data["policy_doc"] == "docs/compliance/gdpr-compliance.md"
     assert len(data["subprocessors"]) >= 3
     activity_ids = {row["activity_id"] for row in data["activities"]}

@@ -19,6 +19,7 @@ import {
   Info,
   ExternalLink,
   ArrowRight,
+  MailWarning,
 } from 'lucide-react'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -42,8 +43,15 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
-import { actionsApi, Action as ApiAction, ActionCreate, ActionsSummary } from '../api/client'
+import {
+  actionsApi,
+  Action as ApiAction,
+  ActionCreate,
+  ActionsSummary,
+  notificationsApi,
+} from '../api/client'
 import { decodeTokenPayload, getPlatformToken } from '../utils/auth'
+import { toast } from '../contexts/ToastContext'
 
 function startOfDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
@@ -100,7 +108,7 @@ function classifyError(error: unknown): ApiError {
 }
 
 // Local UI type extending API type with computed fields
-interface Action extends Omit<ApiAction, 'source_id' | 'owner_email'> {
+interface Action extends Omit<ApiAction, 'owner_email'> {
   source_ref: string
   owner?: string
 }
@@ -157,6 +165,8 @@ export default function Actions() {
   const [sortMode, setSortMode] = useState<SortMode>('newest')
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const [summary, setSummary] = useState<ActionsSummary | null>(null)
+  const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
+  const [serverFilterError, setServerFilterError] = useState<string | null>(null)
 
   const currentUserId = useMemo(() => {
     const token = getPlatformToken()
@@ -184,10 +194,25 @@ export default function Actions() {
     owner: apiAction.owner_email || undefined,
   })
 
-  // Fetch actions from API with stable ordering (server returns created_at desc)
+  // Fetch actions from API with stable ordering (server returns created_at desc).
+  // My Work / Overdue are server-scoped via assigned_to=me and overdue=true.
   const loadActions = useCallback(async () => {
     setLoading(true)
     setError(null)
+    setServerFilterError(null)
+
+    if (viewMode === 'my' && currentUserId == null) {
+      const msg = t(
+        'actions.filter.identity_required',
+        'Cannot load My actions — signed-in user id is unavailable.',
+      )
+      setServerFilterError(msg)
+      toast.error(msg)
+      setActions([])
+      setLoading(false)
+      return
+    }
+
     try {
       const response = await actionsApi.list(
         1,
@@ -197,17 +222,33 @@ export default function Actions() {
         sourceTypeFilter !== 'all' && Number.isFinite(sourceIdFilter) && sourceIdFilter > 0
           ? sourceIdFilter
           : undefined,
+        {
+          assigned_to: viewMode === 'my' ? 'me' : undefined,
+          overdue: viewMode === 'overdue' ? true : undefined,
+        },
       )
       const transformedActions = (response.data.items ?? []).map(transformAction)
       setActions(transformedActions)
     } catch (err) {
       console.error('Failed to load actions:', err)
-      setError(classifyError(err))
+      const classified = classifyError(err)
       setActions([])
+      if (viewMode === 'my' || viewMode === 'overdue') {
+        const msg = t(
+          'actions.filter.server_failed',
+          'Server filter failed — results were not loaded. Try again or switch to All.',
+        )
+        setServerFilterError(msg)
+        toast.error(msg)
+        // Keep page chrome (view-mode toggles + alert) — do not collapse to a silent empty state.
+        setError(null)
+      } else {
+        setError(classified)
+      }
     } finally {
       setLoading(false)
     }
-  }, [sourceIdFilter, sourceTypeFilter])
+  }, [currentUserId, sourceIdFilter, sourceTypeFilter, viewMode, t])
 
   const loadSummary = useCallback(async () => {
     try {
@@ -233,6 +274,21 @@ export default function Actions() {
     loadActions()
     loadSummary()
   }, [loadActions, loadSummary])
+
+  useEffect(() => {
+    let cancelled = false
+    notificationsApi
+      .getDeliveryStatus()
+      .then((response) => {
+        if (!cancelled) setEmailConfigured(response.data.email_configured)
+      })
+      .catch(() => {
+        // Optional honesty signal: omit the banner when readiness cannot be read.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -328,6 +384,7 @@ export default function Actions() {
   }
 
   const deferredSearch = useDeferredValue(searchTerm)
+  // Search + status remain client-side; My/Overdue are applied server-side in loadActions.
   const filteredActions = actions.filter((action) => {
     if (
       deferredSearch &&
@@ -340,14 +397,6 @@ export default function Actions() {
     }
     if (filterStatus !== 'all' && action.display_status !== filterStatus) {
       return false
-    }
-    if (viewMode === 'overdue' && !isOverdue(action.due_date, action.display_status)) {
-      return false
-    }
-    if (viewMode === 'my' && currentUserId != null) {
-      if (action.owner_id !== currentUserId) {
-        return false
-      }
     }
     return true
   })
@@ -414,6 +463,22 @@ export default function Actions() {
           {t('actions.new')}
         </Button>
       </div>
+
+      {emailConfigured === false ? (
+        <div
+          className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+          role="status"
+          data-testid="actions-email-unavailable"
+        >
+          <div className="flex items-start gap-3">
+            <MailWarning className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="font-semibold">{t('actions.email_unavailable.title')}</p>
+              <p className="mt-1 text-sm">{t('actions.email_unavailable.body')}</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
@@ -491,11 +556,12 @@ export default function Actions() {
           />
         </div>
 
-        <div className="flex bg-surface rounded-xl p-1 border border-border">
+        <div className="flex bg-surface rounded-xl p-1 border border-border" data-testid="actions-view-mode">
           {(['all', 'my', 'overdue'] as ViewMode[]).map((mode) => (
             <button
               key={mode}
               type="button"
+              data-testid={`actions-view-${mode}`}
               onClick={() => setViewMode(mode)}
               className={cn(
                 'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
@@ -562,6 +628,38 @@ export default function Actions() {
         </Select>
       </div>
 
+      {viewMode === 'my' || viewMode === 'overdue' ? (
+        <div
+          className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+          data-testid="actions-server-filter-label"
+          role="status"
+        >
+          <Info className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            {viewMode === 'my'
+              ? t(
+                  'actions.filter.server_my',
+                  'Showing actions assigned to you (server filter: assigned_to=me).',
+                )
+              : t(
+                  'actions.filter.server_overdue',
+                  'Showing overdue open actions (server filter: overdue=true).',
+                )}
+          </span>
+        </div>
+      ) : null}
+
+      {serverFilterError ? (
+        <div
+          className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+          data-testid="actions-filter-error"
+          role="alert"
+        >
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{serverFilterError}</span>
+        </div>
+      ) : null}
+
       {sourceTypeFilter === 'audit_finding' ? (
         <Card className="border-info/30 bg-info/5">
           <CardContent className="p-4 flex flex-col sm:flex-row sm:items-start gap-3">
@@ -575,6 +673,71 @@ export default function Actions() {
                 <Button variant="outline" size="sm" asChild>
                   <Link to="/risk-register?triage=import">
                     {t('actions.audit_playbook.risk_triage')}
+                    <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {sourceTypeFilter === 'incident' &&
+      Number.isFinite(sourceIdFilter) &&
+      sourceIdFilter > 0 ? (
+        <Card className="border-warning/30 bg-warning/5" data-testid="actions-incident-playbook">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-start gap-3">
+            <div className="p-2 rounded-lg bg-warning/15 text-warning shrink-0">
+              <Info className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="font-semibold text-foreground">
+                {t('actions.incident_playbook.title', 'Incident-sourced corrective actions')}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'actions.incident_playbook.body',
+                  'CAPA items here close the loop on the originating incident. Continue the linked investigation before marking the incident resolved.',
+                )}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={`/incidents/${sourceIdFilter}`}>
+                    {t('actions.incident_playbook.open_incident', 'Open incident record')}
+                    <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {sourceTypeFilter === 'investigation' &&
+      Number.isFinite(sourceIdFilter) &&
+      sourceIdFilter > 0 ? (
+        <Card className="border-primary/30 bg-primary/5" data-testid="actions-investigation-playbook">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-start gap-3">
+            <div className="p-2 rounded-lg bg-primary/15 text-primary shrink-0">
+              <Info className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="font-semibold text-foreground">
+                {t(
+                  'actions.investigation_playbook.title',
+                  'Investigation-sourced corrective actions',
+                )}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'actions.investigation_playbook.body',
+                  'Actions here turn investigation findings into tracked CAPA work. Return to the investigation for root-cause context.',
+                )}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={`/investigations/${sourceIdFilter}`}>
+                    {t('actions.investigation_playbook.open_investigation', 'Open investigation')}
                     <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
                   </Link>
                 </Button>
@@ -672,6 +835,39 @@ export default function Actions() {
                           </span>
                           <ArrowUpRight className="w-3 h-3 text-muted-foreground" />
                         </div>
+
+                        {action.source_type === 'audit_finding' &&
+                        Number.isFinite(action.source_id) &&
+                        action.source_id > 0 ? (
+                          <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
+                            <Link to={`/audits?view=findings&findingId=${action.source_id}`}>
+                              {t('actions.view_finding')}
+                              <ExternalLink className="w-3 h-3 ml-1" />
+                            </Link>
+                          </Button>
+                        ) : null}
+
+                        {action.source_type === 'incident' &&
+                        Number.isFinite(action.source_id) &&
+                        action.source_id > 0 ? (
+                          <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
+                            <Link to={`/incidents/${action.source_id}`}>
+                              {t('actions.view_incident', 'View incident')}
+                              <ExternalLink className="w-3 h-3 ml-1" />
+                            </Link>
+                          </Button>
+                        ) : null}
+
+                        {action.source_type === 'investigation' &&
+                        Number.isFinite(action.source_id) &&
+                        action.source_id > 0 ? (
+                          <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
+                            <Link to={`/investigations/${action.source_id}`}>
+                              {t('actions.view_investigation', 'View investigation')}
+                              <ExternalLink className="w-3 h-3 ml-1" />
+                            </Link>
+                          </Button>
+                        ) : null}
 
                         {action.due_date && (
                           <div

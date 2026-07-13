@@ -43,6 +43,7 @@ import { CertificationStatusPanel } from '../components/planet-mark/Certificatio
 import { ActionCard, type ActionItem } from '../components/planet-mark/ActionCard'
 import { ActionSummaryKPIs } from '../components/planet-mark/ActionSummaryKPIs'
 import { ActionImportModal } from '../components/planet-mark/ActionImportModal'
+import { getImportReviewPath } from '../components/audit-import/importReviewHelpers'
 
 interface ReportingYear {
   id: number
@@ -1672,14 +1673,22 @@ export default function PlanetMark() {
                                     )}
                                   </button>
                                 )}
-                                {record.import_job_id && (
-                                  <a
-                                    href={`/audits/0/import-review?jobId=${record.import_job_id}`}
-                                    className="text-primary hover:underline flex items-center gap-1"
-                                  >
-                                    View Import <ArrowUpRight className="w-3 h-3" />
-                                  </a>
-                                )}
+                                {record.import_job_id &&
+                                  (() => {
+                                    const path = getImportReviewPath(
+                                      record.audit_run_id,
+                                      record.import_job_id,
+                                    )
+                                    if (!path) return null
+                                    return (
+                                      <a
+                                        href={path}
+                                        className="text-primary hover:underline flex items-center gap-1"
+                                      >
+                                        View Import <ArrowUpRight className="w-3 h-3" />
+                                      </a>
+                                    )
+                                  })()}
                               </div>
                             </div>
                           </div>

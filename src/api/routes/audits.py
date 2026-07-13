@@ -43,6 +43,7 @@ from src.api.schemas.audit import (
     AuditTemplateListResponse,
     AuditTemplateResponse,
     AuditTemplateUpdate,
+    FlagFindingRiskRequest,
     PurgeExpiredTemplatesResponse,
 )
 from src.api.schemas.error_codes import ErrorCode
@@ -1435,5 +1436,26 @@ async def update_finding(
         finding_data.model_dump(exclude_unset=True),
         tenant_id=current_user.tenant_id,
         actor_user_id=current_user.id,
+    )
+    return AuditFindingResponse.model_validate(finding)
+
+
+@router.post(
+    "/findings/{finding_id}/flag-risk",
+    response_model=AuditFindingResponse,
+)
+async def flag_finding_to_risk(
+    finding_id: int,
+    body: FlagFindingRiskRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+) -> AuditFindingResponse:
+    """Explicitly allocate a finding to the organisational risk register."""
+    service = AuditService(db)
+    finding = await service.flag_finding_to_organisational_risk(
+        finding_id,
+        tenant_id=current_user.tenant_id,
+        actor_user_id=current_user.id,
+        severity=body.severity,
     )
     return AuditFindingResponse.model_validate(finding)
