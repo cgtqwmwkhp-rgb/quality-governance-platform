@@ -89,6 +89,9 @@ const ENTITY_LABELS: Record<string, string> = {
 export default function KnowledgeExceptions() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const clauseFilter = searchParams.get('clause')?.trim() || null
+  const standardFilter = searchParams.get('standard')?.trim() || null
+  const operationalFromUrl = searchParams.get('operational') === '1'
   const [items, setItems] = useState<KnowledgeEvidenceLink[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -127,6 +130,9 @@ export default function KnowledgeExceptions() {
       const response = await knowledgeBankApi.listExceptions({
         entityType: entityTypeFilter === 'all' ? undefined : entityTypeFilter,
         signalType: signalTypeFilter === 'all' ? undefined : signalTypeFilter,
+        clauseId: clauseFilter || undefined,
+        scheme: standardFilter || undefined,
+        operationalOnly: operationalFromUrl || undefined,
       })
       setItems(response.data)
       setSelectedIds([])
@@ -136,7 +142,7 @@ export default function KnowledgeExceptions() {
     } finally {
       setLoading(false)
     }
-  }, [entityTypeFilter, signalTypeFilter])
+  }, [entityTypeFilter, signalTypeFilter, clauseFilter, standardFilter, operationalFromUrl])
 
   useEffect(() => {
     void loadExceptions()
@@ -263,6 +269,17 @@ export default function KnowledgeExceptions() {
           <p className="text-muted-foreground mt-1">
             AI evidence and operational standards signals requiring operator review
           </p>
+          {clauseFilter || standardFilter || operationalFromUrl ? (
+            <p
+              className="text-sm text-primary mt-2"
+              data-testid="exceptions-clause-filter-label"
+            >
+              Filtered from Standards map
+              {clauseFilter ? ` · clause ${clauseFilter}` : ''}
+              {standardFilter ? ` · standard ${standardFilter}` : ''}
+              {operationalFromUrl ? ' · operational signals only' : ''}
+            </p>
+          ) : null}
         </div>
         <div className="flex gap-2">
           <Button
