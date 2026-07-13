@@ -34,3 +34,23 @@ export function getCapaLink(sourceType: 'incident' | 'investigation', sourceId: 
 
   return `/actions?${params.toString()}`
 }
+
+export type CapaHandoffMode = 'create' | 'open'
+
+/** Resolve whether the CAPA hand-off CTA should invite creation or navigation. */
+export function resolveCapaHandoffMode(actionsCount: number): CapaHandoffMode {
+  return actionsCount > 0 ? 'open' : 'create'
+}
+
+/** Shared i18n keys for incident/investigation CAPA hand-off buttons. */
+export function getCapaHandoffLabelKey(
+  sourceType: 'incident' | 'investigation',
+  actionsCount: number,
+): string {
+  if (resolveCapaHandoffMode(actionsCount) === 'open') {
+    return sourceType === 'incident'
+      ? 'incidents.detail.open_capa'
+      : 'investigations.handoff.open_capa'
+  }
+  return 'investigations.handoff.create_action'
+}

@@ -623,6 +623,71 @@ export default function Actions() {
         </Card>
       ) : null}
 
+      {sourceTypeFilter === 'incident' &&
+      Number.isFinite(sourceIdFilter) &&
+      sourceIdFilter > 0 ? (
+        <Card className="border-warning/30 bg-warning/5" data-testid="actions-incident-playbook">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-start gap-3">
+            <div className="p-2 rounded-lg bg-warning/15 text-warning shrink-0">
+              <Info className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="font-semibold text-foreground">
+                {t('actions.incident_playbook.title', 'Incident-sourced corrective actions')}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'actions.incident_playbook.body',
+                  'CAPA items here close the loop on the originating incident. Continue the linked investigation before marking the incident resolved.',
+                )}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={`/incidents/${sourceIdFilter}`}>
+                    {t('actions.incident_playbook.open_incident', 'Open incident record')}
+                    <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {sourceTypeFilter === 'investigation' &&
+      Number.isFinite(sourceIdFilter) &&
+      sourceIdFilter > 0 ? (
+        <Card className="border-primary/30 bg-primary/5" data-testid="actions-investigation-playbook">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-start gap-3">
+            <div className="p-2 rounded-lg bg-primary/15 text-primary shrink-0">
+              <Info className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="font-semibold text-foreground">
+                {t(
+                  'actions.investigation_playbook.title',
+                  'Investigation-sourced corrective actions',
+                )}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'actions.investigation_playbook.body',
+                  'Actions here turn investigation findings into tracked CAPA work. Return to the investigation for root-cause context.',
+                )}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={`/investigations/${sourceIdFilter}`}>
+                    {t('actions.investigation_playbook.open_investigation', 'Open investigation')}
+                    <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* Actions List */}
       <div className="space-y-4">
         {sortedActions.length === 0 ? (
@@ -718,6 +783,28 @@ export default function Actions() {
                           <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
                             <Link to={`/audits?view=findings&findingId=${action.source_id}`}>
                               {t('actions.view_finding')}
+                              <ExternalLink className="w-3 h-3 ml-1" />
+                            </Link>
+                          </Button>
+                        ) : null}
+
+                        {action.source_type === 'incident' &&
+                        Number.isFinite(action.source_id) &&
+                        action.source_id > 0 ? (
+                          <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
+                            <Link to={`/incidents/${action.source_id}`}>
+                              {t('actions.view_incident', 'View incident')}
+                              <ExternalLink className="w-3 h-3 ml-1" />
+                            </Link>
+                          </Button>
+                        ) : null}
+
+                        {action.source_type === 'investigation' &&
+                        Number.isFinite(action.source_id) &&
+                        action.source_id > 0 ? (
+                          <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
+                            <Link to={`/investigations/${action.source_id}`}>
+                              {t('actions.view_investigation', 'View investigation')}
                               <ExternalLink className="w-3 h-3 ml-1" />
                             </Link>
                           </Button>
