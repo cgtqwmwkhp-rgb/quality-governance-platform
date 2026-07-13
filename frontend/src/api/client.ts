@@ -25,6 +25,7 @@ import { createRisksApi } from './risksClient'
 import { createStandardsApi } from './standardsClient'
 import { createAuditsApi } from './auditsClient'
 import { createWorkforceApi } from './workforceClient'
+import { createEngineersApi } from './engineersClient'
 import { createPlanetMarkApi } from './planetMarkClient'
 import { createUvdbApi } from './uvdbClient'
 import { createUsersApi } from './usersClient'
@@ -777,6 +778,7 @@ export const auditsApi = createAuditsApi(api)
 
 // ============ Workforce API (extracted: workforceClient.ts) ============
 export const workforceApi = createWorkforceApi(api)
+export const engineersApi = createEngineersApi(api)
 
 // ============ Investigation Types (extracted: investigationsClient.ts) ============
 export type {

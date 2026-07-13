@@ -3,6 +3,7 @@
 REST endpoints for engineer profiles and competency tracking.
 """
 
+import logging
 from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
@@ -29,6 +30,7 @@ from src.domain.models.engineer import CompetencyRecord, Engineer
 from src.domain.models.user import User
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _is_workforce_manager(user: CurrentUser) -> bool:
@@ -167,6 +169,40 @@ async def create_engineer(
     db.add(engineer)
     await db.commit()
     await db.refresh(engineer)
+    return EngineerResponse.model_validate(engineer)
+
+
+@router.get("/by-user/me", response_model=EngineerResponse)
+async def get_engineer_by_user_me(
+    db: DbSession,
+    user: CurrentUser,
+):
+    """Resolve the authenticated user's linked engineer profile (portal self-inbox).
+
+    Returns 404 when no Engineer.user_id link exists — callers must show an honest
+    "profile not linked" empty state (no fabricated passport ticks).
+    """
+    tenant_id = _require_engineer_tenant_id(user)
+    query = (
+        select(Engineer)
+        .options(selectinload(Engineer.competency_records))
+        .where(Engineer.user_id == user.id)
+    )
+    query = apply_tenant_filter(query, Engineer, tenant_id)
+    result = await db.execute(query)
+    engineer = result.scalar_one_or_none()
+    if engineer is None:
+        logger.info(
+            "portal_work_inbox_viewed user_id=%s engineer_linked=false",
+            getattr(user, "id", None),
+        )
+        raise NotFoundError("Engineer profile not linked to this user")
+    _assert_engineer_access(user, engineer, allow_self_read=True)
+    logger.info(
+        "portal_work_inbox_viewed user_id=%s engineer_id=%s engineer_linked=true",
+        getattr(user, "id", None),
+        engineer.id,
+    )
     return EngineerResponse.model_validate(engineer)
 
 
