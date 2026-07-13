@@ -272,7 +272,7 @@ export default function Audits() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reportFile, setReportFile] = useState<File | null>(null)
   const [isoSchemePreset, setIsoSchemePreset] = useState('')
-  const { toasts, dismiss: dismissToast } = useToast()
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast()
 
   const scopedAudits = useMemo(
     () => filterAuditsByAssuranceSource(audits, urlAssuranceSource),
@@ -1336,6 +1336,12 @@ export default function Audits() {
                               )
                             } catch (err) {
                               console.error('Failed to flag finding to risk register', err)
+                              const detail = getStructuredErrorMessage(err)
+                              showToast(
+                                detail ||
+                                  'Could not flag this finding to the risk register. Try again or open the risk register manually.',
+                                'error',
+                              )
                             }
                           }}
                         >

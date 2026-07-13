@@ -82,6 +82,7 @@ interface AuditData {
   asset: string
   scheduledDate: string
   auditor: string
+  referenceNumber?: string
   sections: AuditSection[]
 }
 
@@ -434,6 +435,7 @@ export default function AuditExecution() {
   const [showSummary, setShowSummary] = useState(false)
   const [runCompleted, setRunCompleted] = useState(false)
   const [completionSummary, setCompletionSummary] = useState<CompletionSummary | null>(null)
+  const [stayOnCompletionProof, setStayOnCompletionProof] = useState(false)
   const [autoAdvancePending, setAutoAdvancePending] = useState(false)
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -479,14 +481,14 @@ export default function AuditExecution() {
   }, [saving])
 
   useEffect(() => {
-    if (!completionSummary) return
+    if (!completionSummary || stayOnCompletionProof) return
 
     const redirectTimer = setTimeout(() => {
       navigate('/actions?sourceType=audit_finding')
     }, 1500)
 
     return () => clearTimeout(redirectTimer)
-  }, [completionSummary, navigate])
+  }, [completionSummary, navigate, stayOnCompletionProof])
 
   // Timer
   useEffect(() => {
@@ -617,6 +619,7 @@ export default function AuditExecution() {
           asset: runData.title || '',
           scheduledDate: runData.scheduled_date || '',
           auditor: '',
+          referenceNumber: runData.reference_number || undefined,
           sections,
         })
         setResponses(existingResponses)
@@ -911,6 +914,8 @@ export default function AuditExecution() {
   }
 
   if (completionSummary) {
+    const auditRef = encodeURIComponent(audit.referenceNumber || String(runIdNum || ''))
+    const scopedRiskPath = `/risk-register?auditOnly=1&auditRef=${auditRef}`
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="max-w-2xl w-full space-y-4 animate-fade-in" role="status" aria-live="polite">
@@ -923,8 +928,20 @@ export default function AuditExecution() {
               {completionSummary.actions === 1 ? '' : 's'} created
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Opening audit-sourced actions…
+              {stayOnCompletionProof
+                ? 'Review the downstream proof below, then open Actions or Risks when ready.'
+                : 'Opening audit-sourced actions…'}
             </p>
+            {!stayOnCompletionProof ? (
+              <button
+                type="button"
+                className="mt-3 text-sm font-medium text-primary underline-offset-2 hover:underline"
+                data-testid="stay-on-completion-proof"
+                onClick={() => setStayOnCompletionProof(true)}
+              >
+                Stay on proof
+              </button>
+            ) : null}
           </div>
 
           <DownstreamWorkflowProof
@@ -933,7 +950,7 @@ export default function AuditExecution() {
             risksCount={completionSummary.risks}
             links={{
               actions: '/actions?sourceType=audit_finding',
-              riskRegister: '/risk-register',
+              riskRegister: scopedRiskPath,
             }}
             onNavigate={navigate}
           />
