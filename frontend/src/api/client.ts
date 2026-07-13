@@ -573,7 +573,15 @@ export function getApiErrorMessage(error: unknown, fallback?: string): string {
       return classified.classifiedMessage
     }
     const data = error.response?.data as Record<string, unknown> | undefined
-    if (data?.['message']) {
+    // Unified API envelope: {"error":{"code":"...","message":"..."}}
+    const nestedError = data?.['error']
+    if (nestedError && typeof nestedError === 'object' && nestedError !== null) {
+      const nestedMessage = (nestedError as Record<string, unknown>)['message']
+      if (typeof nestedMessage === 'string' && nestedMessage.trim()) {
+        return nestedMessage
+      }
+    }
+    if (typeof data?.['message'] === 'string' && data['message'].trim()) {
       return data['message'] as string
     }
     if (data?.['detail']) {
@@ -589,6 +597,20 @@ export function getApiErrorMessage(error: unknown, fallback?: string): string {
         return (data['detail'] as Record<string, string>).message
       }
       return JSON.stringify(data['detail'])
+    }
+    // Prefer status-aware copy over raw Axios "Request failed with status code NNN"
+    const status = error.response?.status
+    if (status === 404) {
+      return fallback ?? 'The requested record was not found.'
+    }
+    if (status === 401) {
+      return fallback ?? 'Please sign in again to continue.'
+    }
+    if (status === 403) {
+      return fallback ?? 'You do not have permission to perform this action.'
+    }
+    if (status && status >= 500) {
+      return fallback ?? 'A server error occurred. Please try again.'
     }
     // Last resort - use axios error message
     return error.message
