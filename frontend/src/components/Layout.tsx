@@ -7,6 +7,7 @@ import {
   Truck,
   MessageSquare,
   ClipboardCheck,
+  ClipboardList,
   GraduationCap,
   FlaskConical,
   BookOpen,
@@ -31,6 +32,7 @@ import {
   Bot,
   ChevronDown,
   FileText,
+  Building,
 } from 'lucide-react'
 import { useState, useEffect, useCallback, lazy, Suspense, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -163,7 +165,36 @@ export default function Layout({ onLogout }: LayoutProps) {
             id: 'admin',
             title: t('nav.admin'),
             icon: Settings,
-            items: [{ path: '/admin/users', icon: Users, label: t('nav.user_management') }],
+            items: [
+              {
+                path: '/admin',
+                icon: LayoutDashboard,
+                label: t('nav.admin_console', { defaultValue: 'Admin Console' }),
+              },
+              { path: '/admin/users', icon: Users, label: t('nav.user_management') },
+              { path: '/audit-trail', icon: ClipboardList, label: t('nav.audit_trail') },
+              {
+                path: '/admin/forms',
+                icon: FileText,
+                label: t('nav.forms', { defaultValue: 'Forms' }),
+              },
+              { path: '/admin/settings', icon: Settings, label: t('nav.settings') },
+              {
+                path: '/admin/notifications',
+                icon: Bell,
+                label: t('nav.notifications', { defaultValue: 'Notifications' }),
+              },
+              {
+                path: '/admin/lookups',
+                icon: ClipboardCheck,
+                label: t('nav.lookups', { defaultValue: 'Lookups' }),
+              },
+              {
+                path: '/admin/contracts',
+                icon: Building,
+                label: t('nav.contracts', { defaultValue: 'Contracts' }),
+              },
+            ],
           },
         ]
       : []),
@@ -266,8 +297,9 @@ export default function Layout({ onLogout }: LayoutProps) {
           </NavLink>
 
           <NavLink
-            to={canManageUsers && adminUserManagementEnabled ? '/admin/users' : '/dashboard'}
+            to={canManageUsers && adminUserManagementEnabled ? '/admin' : '/dashboard'}
             className="p-2 text-muted-foreground hover:text-foreground hover:bg-surface rounded-lg transition-colors"
+            aria-label={t('nav.settings')}
           >
             <Settings className="w-5 h-5" />
           </NavLink>

@@ -142,7 +142,19 @@ describe('Layout', () => {
         ],
       ],
       ['nav.risk_improvement', ['/risk-register']],
-      ['nav.admin', ['/admin/users']],
+      [
+        'nav.admin',
+        [
+          '/admin',
+          '/admin/users',
+          '/audit-trail',
+          '/admin/forms',
+          '/admin/settings',
+          '/admin/notifications',
+          '/admin/lookups',
+          '/admin/contracts',
+        ],
+      ],
     ] as const
 
     for (const [hub, paths] of hubs) {
@@ -211,10 +223,21 @@ describe('Layout', () => {
       '/exports',
       '/ai-intelligence',
       '/signatures',
-      '/audit-trail',
     ]) {
       expect(navLink(path)).not.toBeInTheDocument()
     }
+  })
+
+  it('points the header Settings gear to Admin Console for superusers', async () => {
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    expect(screen.getByRole('link', { name: 'nav.settings' })).toHaveAttribute('href', '/admin')
   })
 
   it('auto-expands the hub containing the active child route', async () => {
