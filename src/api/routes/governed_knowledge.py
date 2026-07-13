@@ -14,10 +14,10 @@ from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkStatus
 from src.domain.models.document import Document
 from src.domain.models.governed_knowledge import (
+    DiscussionThreadStatus,
     DocumentDiscussionMessage,
     DocumentDiscussionThread,
     DocumentQuizDraft,
-    DiscussionThreadStatus,
     QuizDraftStatus,
     RegulatoryImpactStatus,
     RegulatoryWatchImpact,
@@ -151,9 +151,7 @@ def _serialize_evidence_link(link: ComplianceEvidenceLink) -> EvidenceLinkDetail
 
 
 async def _get_document_or_404(db: DbSession, document_id: int, tenant_id: int) -> Document:
-    result = await db.execute(
-        select(Document).where(Document.id == document_id, Document.tenant_id == tenant_id)
-    )
+    result = await db.execute(select(Document).where(Document.id == document_id, Document.tenant_id == tenant_id))
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document not found")

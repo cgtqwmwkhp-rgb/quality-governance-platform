@@ -436,13 +436,15 @@ async def create_new_version(
         from src.domain.services.governed_knowledge_service import governed_knowledge_service
 
         lib = await db.execute(
-            select(LibraryDocument).where(
+            select(LibraryDocument)
+            .where(
                 LibraryDocument.tenant_id == tenant_id,
                 or_(
                     LibraryDocument.title == document.title,
                     LibraryDocument.reference_number == document.document_number,
                 ),
-            ).limit(1)
+            )
+            .limit(1)
         )
         library_doc = lib.scalar_one_or_none()
         if library_doc is not None:
@@ -487,9 +489,7 @@ async def create_new_version(
             )
             await db.commit()
     except Exception:
-        logger.exception(
-            "Governed KB rematch/quiz stale failed for controlled doc %s", document_id
-        )
+        logger.exception("Governed KB rematch/quiz stale failed for controlled doc %s", document_id)
 
     return {
         "id": version.id,

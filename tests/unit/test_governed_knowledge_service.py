@@ -6,11 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.domain.models.compliance_evidence import (
-    ComplianceEvidenceLink,
-    EvidenceLinkMethod,
-    EvidenceLinkStatus,
-)
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
 from src.domain.services.governed_knowledge_service import (
     AUTO_CONFIRM_THRESHOLD,
     STRICT_DOC_TYPES,

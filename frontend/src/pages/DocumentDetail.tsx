@@ -557,8 +557,11 @@ export default function DocumentDetail() {
             <h3 className="font-medium text-foreground">Generate comprehension quiz</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-muted-foreground">Question count</label>
+                <label htmlFor="gkb-question-count" className="text-sm text-muted-foreground">
+                  Question count
+                </label>
                 <Input
+                  id="gkb-question-count"
                   type="number"
                   min={1}
                   max={30}
@@ -567,8 +570,11 @@ export default function DocumentDetail() {
                 />
               </div>
               <div>
-                <label className="text-sm text-muted-foreground">Pass mark (%)</label>
+                <label htmlFor="gkb-pass-mark" className="text-sm text-muted-foreground">
+                  Pass mark (%)
+                </label>
                 <Input
+                  id="gkb-pass-mark"
                   type="number"
                   min={0}
                   max={100}

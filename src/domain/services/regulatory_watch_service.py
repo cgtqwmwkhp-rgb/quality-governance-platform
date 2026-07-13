@@ -12,19 +12,15 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
-from xml.etree import ElementTree
 
+import defusedxml.ElementTree as ElementTree
 import httpx
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.compliance_automation import RegulatoryUpdate
 from src.domain.models.document import Document
-from src.domain.models.governed_knowledge import (
-    AiDecisionLog,
-    RegulatoryImpactStatus,
-    RegulatoryWatchImpact,
-)
+from src.domain.models.governed_knowledge import AiDecisionLog, RegulatoryImpactStatus, RegulatoryWatchImpact
 from src.domain.services.governed_knowledge_service import AUTO_CONFIRM_THRESHOLD
 
 logger = logging.getLogger(__name__)
@@ -187,9 +183,7 @@ class RegulatoryWatchService:
                         headers={"User-Agent": "QGP-RegulatoryWatch/1.0"},
                     )
                     if response.status_code != 200:
-                        logger.warning(
-                            "Regulatory feed %s returned %s", feed["id"], response.status_code
-                        )
+                        logger.warning("Regulatory feed %s returned %s", feed["id"], response.status_code)
                         continue
                     items.extend(self._parse_atom_or_rss(response.text, feed))
                 except Exception as exc:
@@ -223,9 +217,7 @@ class RegulatoryWatchService:
             "dc": "http://purl.org/dc/elements/1.1/",
         }
         # Atom entries
-        for entry in root.findall("atom:entry", ns) or root.findall(
-            "{http://www.w3.org/2005/Atom}entry"
-        ):
+        for entry in root.findall("atom:entry", ns) or root.findall("{http://www.w3.org/2005/Atom}entry"):
             title = (entry.findtext("atom:title", default="", namespaces=ns) or "").strip()
             summary = (
                 entry.findtext("atom:summary", default="", namespaces=ns)
@@ -234,9 +226,7 @@ class RegulatoryWatchService:
             ).strip()
             link_el = entry.find("atom:link", ns)
             href = link_el.get("href") if link_el is not None else ""
-            entry_id = (
-                entry.findtext("atom:id", default="", namespaces=ns) or href or title
-            )[:120]
+            entry_id = (entry.findtext("atom:id", default="", namespaces=ns) or href or title)[:120]
             if title and self._looks_relevant(f"{title} {summary}"):
                 items.append(
                     FeedItem(
@@ -290,13 +280,15 @@ class RegulatoryWatchService:
             return []
 
         result = await db.execute(
-            select(Document).where(
+            select(Document)
+            .where(
                 Document.tenant_id == tenant_id,
                 or_(
                     Document.document_type.in_(list(IMPACT_DOC_TYPES)),
                     Document.category.in_(["policy", "safety", "environment", "quality"]),
                 ),
-            ).limit(200)
+            )
+            .limit(200)
         )
         docs = list(result.scalars().all())
         impacts: list[RegulatoryWatchImpact] = []

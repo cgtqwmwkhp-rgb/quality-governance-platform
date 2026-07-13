@@ -1,6 +1,6 @@
 """Unit tests for AI-first regulatory watch helpers."""
 
-from src.domain.services.regulatory_watch_service import RegulatoryWatchService, WATCH_KEYWORDS
+from src.domain.services.regulatory_watch_service import WATCH_KEYWORDS, RegulatoryWatchService
 
 
 def test_watch_keywords_cover_hseq_domains():

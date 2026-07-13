@@ -15,11 +15,7 @@ from typing import Any, Optional
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.compliance_evidence import (
-    ComplianceEvidenceLink,
-    EvidenceLinkMethod,
-    EvidenceLinkStatus,
-)
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
 from src.domain.models.document import Document
 from src.domain.models.governed_knowledge import AiDecisionLog, DocumentQuizDraft, QuizDraftStatus
 from src.domain.models.standard import Clause, Standard
@@ -420,14 +416,16 @@ class GovernedKnowledgeService:
 
         pattern = f"%{query_text[:80]}%"
         result = await db.execute(
-            select(Document.id).where(
+            select(Document.id)
+            .where(
                 Document.tenant_id == tenant_id,
                 or_(
                     Document.title.ilike(pattern),
                     Document.description.ilike(pattern),
                     Document.ai_summary.ilike(pattern),
                 ),
-            ).limit(5)
+            )
+            .limit(5)
         )
         for doc_id in result.scalars().all():
             matches.append((doc_id, 60.0))
@@ -454,9 +452,7 @@ class GovernedKnowledgeService:
         )
         existing_links = list(existing_result.scalars().all())
 
-        fresh_mappings = await self.map_document_to_schemes(
-            db, document_id, content, doc_type, tenant_id, user
-        )
+        fresh_mappings = await self.map_document_to_schemes(db, document_id, content, doc_type, tenant_id, user)
         fresh_by_clause = {link.clause_id: link for link in fresh_mappings}
 
         for old_link in existing_links:
@@ -482,9 +478,7 @@ class GovernedKnowledgeService:
             new_conf = _normalize_confidence(fresh.confidence)
             if new_conf < old_conf or new_conf < AUTO_CONFIRM_THRESHOLD:
                 old_link.status = EvidenceLinkStatus.NEEDS_REVIEW
-                old_link.rationale = (
-                    f"Confidence dropped from {old_conf:.2f} to {new_conf:.2f} on document re-version"
-                )
+                old_link.rationale = f"Confidence dropped from {old_conf:.2f} to {new_conf:.2f} on document re-version"
                 await self._log_ai_decision(
                     db,
                     tenant_id=tenant_id,
