@@ -1,8 +1,8 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { startAutoSync } from './lib/syncService'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { AnimatedOutlet } from './components/AnimatedOutlet'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import Login from './pages/Login'
@@ -143,23 +143,6 @@ function RouteErrorFallback() {
         </div>
       </div>
     </div>
-  )
-}
-
-function AnimatedOutlet() {
-  const location = useLocation()
-  return (
-    <AnimatePresence mode="wait">
-      <motion.div
-        key={location.pathname}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -8 }}
-        transition={{ duration: 0.15, ease: 'easeInOut' }}
-      >
-        <Outlet />
-      </motion.div>
-    </AnimatePresence>
   )
 }
 

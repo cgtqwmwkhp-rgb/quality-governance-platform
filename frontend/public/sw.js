@@ -6,7 +6,7 @@
  */
 
 // Cache version - CI replaces this with git SHA + timestamp at build time
-const CACHE_VERSION = 'qgp-v2.0.0-dev';
+const CACHE_VERSION = 'qgp-v2.0.1-nav-sync';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -248,8 +248,9 @@ async function networkFirstHtml(request) {
   try {
     const response = await fetch(request);
     if (response.ok) {
-      const cache = await caches.open(DYNAMIC_CACHE);
-      cache.put(request, response.clone());
+      // Do not cache per-URL HTML navigations (e.g. /audit-templates vs /documents).
+      // The SPA shell lives in STATIC_CACHE as /index.html; per-path HTML entries
+      // can contribute to stale shell confusion on hard navigations.
       return response;
     }
     // Server returned an error (e.g. 503 during deployment).  For SPA
