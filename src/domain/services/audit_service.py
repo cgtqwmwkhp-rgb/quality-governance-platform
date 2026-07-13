@@ -1777,3 +1777,398 @@ class AuditService:
         await invalidate_tenant_cache(tenant_id, "risks")
         track_metric("audits.findings.flag_risk")
         return finding
+
+    # ------------------------------------------------------------------
+    # CAPA → finding closure bridge (CUJ-AUDIT-CAPA-CLOSURE-BRIDGE)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _enum_value(value: Any) -> str | None:
+        if value is None:
+            return None
+        return value.value if hasattr(value, "value") else str(value)
+
+    @classmethod
+    def _capa_is_audit_finding_source(cls, capa: CAPAAction) -> bool:
+        return cls._enum_value(capa.source_type) == CAPASource.AUDIT_FINDING.value and capa.source_id is not None
+
+    @classmethod
+    def _target_finding_status_for_capa(cls, capa_status: Any) -> FindingStatus | None:
+        status_val = cls._enum_value(capa_status)
+        if status_val == CAPAStatus.VERIFICATION.value:
+            return FindingStatus.PENDING_VERIFICATION
+        if status_val == CAPAStatus.CLOSED.value:
+            return FindingStatus.CLOSED
+        return None
+
+    async def apply_capa_closure_bridge(
+        self,
+        capa: CAPAAction,
+        *,
+        actor_user_id: int,
+        tenant_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Advance linked AuditFinding when an audit-sourced CAPA hits verification/closed.
+
+        Idempotent: re-running with the same CAPA/finding state is a no-op.
+        Does not commit; callers own the transaction. Does not notify (use
+        ``notify_capa_closure_bridge`` after commit).
+        """
+        result: dict[str, Any] = {
+            "bridged": False,
+            "changed": False,
+            "skipped_reason": None,
+            "finding_id": None,
+            "from_status": None,
+            "to_status": None,
+            "notify_user_id": None,
+            "run_id": None,
+        }
+
+        if not self._capa_is_audit_finding_source(capa):
+            result["skipped_reason"] = "not_audit_finding_source"
+            return result
+
+        target = self._target_finding_status_for_capa(capa.status)
+        if target is None:
+            result["skipped_reason"] = "capa_status_not_bridgeable"
+            return result
+
+        effective_tenant = tenant_id if tenant_id is not None else capa.tenant_id
+        finding: AuditFinding = await self._get_entity(
+            AuditFinding,
+            int(capa.source_id),
+            tenant_id=effective_tenant,
+        )
+        result["finding_id"] = finding.id
+        result["run_id"] = finding.run_id
+
+        from_status = self._enum_value(finding.status) or FindingStatus.OPEN.value
+        result["from_status"] = from_status
+
+        # Fail closed when sibling CAPAs still block terminal closure.
+        siblings_result = await self.db.execute(
+            select(CAPAAction).where(
+                CAPAAction.tenant_id == finding.tenant_id,
+                CAPAAction.source_type == CAPASource.AUDIT_FINDING,
+                CAPAAction.source_id == finding.id,
+            )
+        )
+        siblings = list(siblings_result.scalars().all())
+        if target == FindingStatus.CLOSED:
+            blockers = [
+                s
+                for s in siblings
+                if s.id != capa.id and self._enum_value(s.status) != CAPAStatus.CLOSED.value
+            ]
+            if blockers:
+                result["skipped_reason"] = "sibling_capa_not_closed"
+                result["to_status"] = from_status
+                return result
+        elif target == FindingStatus.PENDING_VERIFICATION:
+            blockers = [
+                s
+                for s in siblings
+                if s.id != capa.id
+                and self._enum_value(s.status)
+                not in {
+                    CAPAStatus.VERIFICATION.value,
+                    CAPAStatus.CLOSED.value,
+                }
+            ]
+            if blockers:
+                result["skipped_reason"] = "sibling_capa_not_ready"
+                result["to_status"] = from_status
+                return result
+
+        # Never downgrade a closed finding back to pending_verification.
+        if (
+            target == FindingStatus.PENDING_VERIFICATION
+            and from_status == FindingStatus.CLOSED.value
+        ):
+            result["skipped_reason"] = "finding_already_closed"
+            result["to_status"] = from_status
+            return result
+
+        if from_status == target.value:
+            result["bridged"] = True
+            result["to_status"] = from_status
+            result["skipped_reason"] = "already_synced"
+            return result
+
+        finding.status = target
+        await self.db.flush()
+        await invalidate_tenant_cache(finding.tenant_id, "audits")
+        track_metric("audit.finding.bridge_closed" if target == FindingStatus.CLOSED else "audit.finding.bridge_pending")
+
+        run: AuditRun = await self._get_entity(AuditRun, finding.run_id, tenant_id=finding.tenant_id)
+        notify_user_id = run.assigned_to_id or run.created_by_id
+
+        result.update(
+            {
+                "bridged": True,
+                "changed": True,
+                "to_status": target.value,
+                "notify_user_id": notify_user_id,
+            }
+        )
+
+        await record_audit_event(
+            db=self.db,
+            event_type="audit.finding.capa_bridge",
+            entity_type="audit_finding",
+            entity_id=str(finding.id),
+            action="update",
+            description=(
+                f"Finding {finding.reference_number} status bridged "
+                f"{from_status} → {target.value} via CAPA {capa.reference_number}"
+            ),
+            payload={
+                "capa_id": capa.id,
+                "capa_status": self._enum_value(capa.status),
+                "from_status": from_status,
+                "to_status": target.value,
+            },
+            user_id=actor_user_id,
+        )
+        return result
+
+    async def notify_capa_closure_bridge(
+        self,
+        *,
+        bridge_result: dict[str, Any],
+        capa: CAPAAction,
+        actor_user_id: int,
+    ) -> None:
+        """In-app notify the audit run owner after a successful bridge status change."""
+        if not bridge_result.get("changed"):
+            return
+        notify_user_id = bridge_result.get("notify_user_id")
+        if not notify_user_id:
+            return
+
+        from src.domain.models.notification import NotificationType
+        from src.domain.services.notification_service import NotificationService
+
+        to_status = bridge_result.get("to_status") or ""
+        finding_id = bridge_result.get("finding_id")
+        run_id = bridge_result.get("run_id")
+        title = (
+            "Audit finding closed via CAPA"
+            if to_status == FindingStatus.CLOSED.value
+            else "Audit finding pending verification via CAPA"
+        )
+        message = (
+            f"CAPA {capa.reference_number} moved the linked audit finding "
+            f"to '{to_status}'."
+        )
+        notif_type = (
+            NotificationType.ACTION_COMPLETED
+            if to_status == FindingStatus.CLOSED.value
+            else NotificationType.AUDIT_FINDING
+        )
+        action_url = f"/audits?view=findings&findingId={finding_id}" if finding_id else "/audits?view=findings"
+        if run_id:
+            action_url = f"/audits/{run_id}?view=findings"
+
+        try:
+            notifier = NotificationService(self.db)
+            await notifier.create_status(
+                user_id=int(notify_user_id),
+                entity_type="audit_finding",
+                entity_id=str(finding_id),
+                from_status=bridge_result.get("from_status"),
+                to_status=str(to_status),
+                title=title,
+                message=message,
+                sender_id=actor_user_id,
+                action_url=action_url,
+                notification_type=notif_type,
+            )
+        except Exception:  # noqa: BLE001 — notification must not roll back closure
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "Failed to notify run owner for CAPA→finding bridge capa_id=%s finding_id=%s",
+                capa.id,
+                finding_id,
+            )
+
+    async def finding_golden_thread(
+        self,
+        finding_id: int,
+        *,
+        tenant_id: int,
+    ) -> dict[str, Any]:
+        """Honest finding → CAPA → risk chain status (no invented delivery events)."""
+        finding: AuditFinding = await self._get_entity(
+            AuditFinding,
+            finding_id,
+            tenant_id=tenant_id,
+        )
+        run: AuditRun = await self._get_entity(AuditRun, finding.run_id, tenant_id=tenant_id)
+
+        capa_result = await self.db.execute(
+            select(CAPAAction)
+            .where(
+                CAPAAction.tenant_id == tenant_id,
+                CAPAAction.source_type == CAPASource.AUDIT_FINDING,
+                CAPAAction.source_id == finding.id,
+            )
+            .order_by(CAPAAction.id.asc())
+        )
+        capas = list(capa_result.scalars().all())
+
+        risk_ids = list(finding.risk_ids_json or [])
+        junction = await self.db.execute(
+            select(audit_finding_risks.c.risk_id).where(
+                audit_finding_risks.c.audit_finding_id == finding.id,
+            )
+        )
+        for rid in junction.scalars().all():
+            if rid not in risk_ids:
+                risk_ids.append(rid)
+
+        risks: list[dict[str, Any]] = []
+        if risk_ids:
+            risk_rows = await self.db.execute(
+                select(EnterpriseRisk).where(
+                    EnterpriseRisk.tenant_id == tenant_id,
+                    EnterpriseRisk.id.in_(risk_ids),
+                )
+            )
+            for risk in risk_rows.scalars().all():
+                risks.append(
+                    {
+                        "id": risk.id,
+                        "reference_number": getattr(risk, "reference", None) or getattr(risk, "reference_number", None),
+                        "title": risk.title,
+                        "status": self._enum_value(getattr(risk, "status", None)),
+                    }
+                )
+
+        finding_status = self._enum_value(finding.status) or FindingStatus.OPEN.value
+        capa_payloads = [
+            {
+                "id": c.id,
+                "reference_number": c.reference_number,
+                "status": self._enum_value(c.status),
+                "completed_at": c.completed_at.isoformat() if c.completed_at else None,
+                "verified_at": c.verified_at.isoformat() if c.verified_at else None,
+                "assigned_to_id": c.assigned_to_id,
+            }
+            for c in capas
+        ]
+
+        chain_status = self._honest_chain_status(finding_status, capa_payloads)
+
+        events: list[dict[str, Any]] = [
+            {
+                "event": "audit_finding.created",
+                "at": finding.created_at.isoformat() if finding.created_at else None,
+                "actor_id": finding.created_by_id,
+                "payload": {
+                    "finding_id": finding.id,
+                    "reference_number": finding.reference_number,
+                    "run_id": finding.run_id,
+                    "status": finding_status,
+                },
+            }
+        ]
+        for capa in capas:
+            events.append(
+                {
+                    "event": "audit_finding.capa_linked",
+                    "at": capa.created_at.isoformat() if capa.created_at else None,
+                    "actor_id": capa.created_by_id,
+                    "payload": {
+                        "capa_id": capa.id,
+                        "reference_number": capa.reference_number,
+                        "status": self._enum_value(capa.status),
+                    },
+                }
+            )
+            if capa.completed_at:
+                events.append(
+                    {
+                        "event": "audit_finding.capa_verification",
+                        "at": capa.completed_at.isoformat(),
+                        "actor_id": capa.assigned_to_id,
+                        "payload": {"capa_id": capa.id, "status": CAPAStatus.VERIFICATION.value},
+                    }
+                )
+            if capa.verified_at:
+                events.append(
+                    {
+                        "event": "audit_finding.capa_closed",
+                        "at": capa.verified_at.isoformat(),
+                        "actor_id": capa.verified_by_id,
+                        "payload": {"capa_id": capa.id, "status": CAPAStatus.CLOSED.value},
+                    }
+                )
+        if finding_status in {
+            FindingStatus.PENDING_VERIFICATION.value,
+            FindingStatus.CLOSED.value,
+        }:
+            events.append(
+                {
+                    "event": "audit_finding.status",
+                    "at": finding.updated_at.isoformat() if finding.updated_at else None,
+                    "actor_id": None,
+                    "payload": {"status": finding_status, "chain_status": chain_status},
+                }
+            )
+
+        return {
+            "finding": {
+                "id": finding.id,
+                "reference_number": finding.reference_number,
+                "title": finding.title,
+                "status": finding_status,
+                "run_id": finding.run_id,
+                "run_reference": run.reference_number,
+            },
+            "capas": capa_payloads,
+            "risks": risks,
+            "chain_status": chain_status,
+            "events": events,
+        }
+
+    @classmethod
+    def _honest_chain_status(cls, finding_status: str, capas: list[dict[str, Any]]) -> str:
+        """Derive a truthful loop label — never claim closed when finding is open."""
+        if not capas:
+            if finding_status == FindingStatus.CLOSED.value:
+                return "closed_without_capa"
+            return "finding_open_no_capa"
+
+        capa_statuses = {c.get("status") for c in capas}
+        all_closed = capa_statuses == {CAPAStatus.CLOSED.value}
+        any_verification = CAPAStatus.VERIFICATION.value in capa_statuses
+        any_openish = bool(
+            capa_statuses
+            & {
+                CAPAStatus.OPEN.value,
+                CAPAStatus.IN_PROGRESS.value,
+                CAPAStatus.OVERDUE.value,
+            }
+        )
+
+        if all_closed and finding_status == FindingStatus.CLOSED.value:
+            return "closed"
+        if all_closed and finding_status != FindingStatus.CLOSED.value:
+            return "desynced_capa_closed_finding_open"
+        if finding_status == FindingStatus.CLOSED.value and not all_closed:
+            return "desynced_finding_closed_capa_open"
+        if (
+            finding_status == FindingStatus.PENDING_VERIFICATION.value
+            and (any_verification or all_closed)
+            and not any_openish
+        ):
+            return "pending_verification"
+        if any_openish or finding_status in {
+            FindingStatus.OPEN.value,
+            FindingStatus.IN_PROGRESS.value,
+        }:
+            return "open"
+        return "in_progress"
