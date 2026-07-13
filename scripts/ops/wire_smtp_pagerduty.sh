@@ -48,10 +48,11 @@ else
 fi
 
 echo "==> Writing SMTP secrets to Key Vault $VAULT"
-az keyvault secret set --vault-name "$VAULT" --name SMTP-USER --value "$SMTP_USER" >/dev/null
-az keyvault secret set --vault-name "$VAULT" --name SMTP-PASSWORD --value "$SMTP_PASSWORD" >/dev/null
-az keyvault secret set --vault-name "$VAULT" --name FROM-EMAIL --value "$FROM_EMAIL" >/dev/null
-az keyvault secret set --vault-name "$VAULT" --name FROM-NAME --value "$FROM_NAME" >/dev/null
+# Strip whitespace/newlines — trailing \\n from CLI paste causes Outlook 535 AUTH failures.
+az keyvault secret set --vault-name "$VAULT" --name SMTP-USER --value "${SMTP_USER//$'\r'/}" >/dev/null
+az keyvault secret set --vault-name "$VAULT" --name SMTP-PASSWORD --value "$(printf '%s' "$SMTP_PASSWORD" | tr -d '\r\n')" >/dev/null
+az keyvault secret set --vault-name "$VAULT" --name FROM-EMAIL --value "${FROM_EMAIL//$'\r'/}" >/dev/null
+az keyvault secret set --vault-name "$VAULT" --name FROM-NAME --value "${FROM_NAME//$'\r'/}" >/dev/null
 
 SMTP_USER_URI=$(az keyvault secret show --vault-name "$VAULT" --name SMTP-USER --query id -o tsv)
 SMTP_PASS_URI=$(az keyvault secret show --vault-name "$VAULT" --name SMTP-PASSWORD --query id -o tsv)
@@ -59,10 +60,11 @@ FROM_EMAIL_URI=$(az keyvault secret show --vault-name "$VAULT" --name FROM-EMAIL
 FROM_NAME_URI=$(az keyvault secret show --vault-name "$VAULT" --name FROM-NAME --query id -o tsv)
 
 kv_ref() {
-  # App Service Key Vault reference (versionless)
+  # App Service Key Vault reference — VERSIONLESS (drop /<version> suffix)
   local id="$1"
-  local base="${id%/}"
-  echo "@Microsoft.KeyVault(SecretUri=${base%/}/)"
+  local no_trailing="${id%/}"
+  local base="${no_trailing%/*}"   # .../secrets/NAME
+  echo "@Microsoft.KeyVault(SecretUri=${base}/)"
 }
 
 SETTINGS=(

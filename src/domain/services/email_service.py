@@ -35,12 +35,12 @@ class EmailService:
     """Enterprise email notification service with HTML templating."""
 
     def __init__(self):
-        self.smtp_host = os.getenv("SMTP_HOST", "smtp.office365.com")
-        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        self.smtp_user = os.getenv("SMTP_USER", "")
-        self.smtp_password = os.getenv("SMTP_PASSWORD", "")
-        self.from_email = os.getenv("FROM_EMAIL", "noreply@qgp.plantexpand.com")
-        self.from_name = os.getenv("FROM_NAME", "Quality Governance Platform")
+        self.smtp_host = (os.getenv("SMTP_HOST") or "smtp.office365.com").strip()
+        self.smtp_port = int((os.getenv("SMTP_PORT") or "587").strip())
+        self.smtp_user = (os.getenv("SMTP_USER") or "").strip()
+        self.smtp_password = (os.getenv("SMTP_PASSWORD") or "").strip()
+        self.from_email = (os.getenv("FROM_EMAIL") or "noreply@qgp.plantexpand.com").strip()
+        self.from_name = (os.getenv("FROM_NAME") or "Quality Governance Platform").strip()
         self.enabled = bool(self.smtp_user and self.smtp_password)
 
     @staticmethod

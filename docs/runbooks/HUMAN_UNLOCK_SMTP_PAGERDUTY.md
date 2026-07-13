@@ -1,6 +1,6 @@
 # Human unlock — SMTP + PagerDuty (operator runbook)
 
-**Status (2026-07-12):** Agent prepared wiring script. Key Vaults `kv-qgp-staging` / `kv-qgp-prod` still have **no** `SMTP-*` or `PAGERDUTY-*` secrets. App Settings on API+worker do not list `EMAIL_*` / `SMTP_*` / `PAGERDUTY_*`. `/readyz` remains `email_configured=false`, `pagerduty=not_configured` until you supply real secrets.
+**Status (2026-07-13):** SMTP wired on staging + prod (`SMTP_USER=qgp-notifications@…`, `FROM_EMAIL=HSEQ@plantexpand.com`). IT confirmed M365 SMTP AUTH + Send As works. App 535 was client-side: App Settings had been pinned to a **versioned** KV secret URI; refs are now **versionless** and apps restarted. `EmailService` + `wire_smtp_pagerduty.sh` strip credentials / use versionless refs. PagerDuty still `not_configured` (needs routing key).
 
 Do **not** invent credentials. Do **not** set `EMAIL_ENABLED=true` without `SMTP_USER` + `SMTP_PASSWORD` (reports `misconfigured`).
 
