@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
+import { resolveComplaintDetailTab } from './complaintStandardsTab'
 import { trackError } from '../utils/errorTracker'
 import {
   ArrowLeft,
@@ -76,6 +77,8 @@ export default function ComplaintDetail() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const defaultTab = resolveComplaintDetailTab(searchParams.get('tab'))
   const [complaint, setComplaint] = useState<Complaint | null>(null)
   const [actions, setActions] = useState<Action[]>([])
   const [investigations, setInvestigations] = useState<Investigation[]>([])
@@ -638,7 +641,7 @@ export default function ComplaintDetail() {
         ]}
       />
 
-      <Tabs defaultValue="overview" className="w-full">
+      <Tabs defaultValue={defaultTab} key={defaultTab} className="w-full">
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="standards">Standards</TabsTrigger>
@@ -1186,7 +1189,10 @@ export default function ComplaintDetail() {
         </TabsContent>
 
         <TabsContent value="standards" className="mt-6">
-          <StandardsAssessmentPanel entityType="complaint" entityId={complaint.id} />
+          {/* Same StandardsAssessmentPanel host pattern as NearMissDetail */}
+          <div data-testid="complaint-standards-panel" id="standards-assessment-panel">
+            <StandardsAssessmentPanel entityType="complaint" entityId={complaint.id} />
+          </div>
         </TabsContent>
 
         <TabsContent value="submission" className="mt-6">
