@@ -93,13 +93,7 @@ export default function ComplaintDetail() {
   const [newEntry, setNewEntry] = useState('')
   const [addingEntry, setAddingEntry] = useState(false)
 
-  // Investigation form
-  const [investigationForm, setInvestigationForm] = useState({
-    title: '',
-    description: '',
-    investigation_type: 'root_cause_analysis',
-    lead_investigator: '',
-  })
+  const [investigationTitle, setInvestigationTitle] = useState('')
 
   // Action form
   const [actionForm, setActionForm] = useState({
@@ -190,7 +184,8 @@ export default function ComplaintDetail() {
       setComplaint(response.data)
       setIsEditing(false)
     } catch (err) {
-      console.error('Failed to update complaint:', err)
+      trackError(err, { component: 'ComplaintDetail', action: 'updateComplaint' })
+      toast.error(getApiErrorMessage(err))
     } finally {
       setSaving(false)
     }
@@ -253,20 +248,20 @@ export default function ComplaintDetail() {
     setExistingInvestigation(null)
 
     try {
-      // Use from-record endpoint with proper JSON body
-      await investigationsApi.createFromRecord({
+      const response = await investigationsApi.createFromRecord({
         source_type: 'complaint',
         source_id: complaint.id,
-        title: investigationForm.title || `Investigation - ${complaint.reference_number}`,
+        title: investigationTitle || `Investigation - ${complaint.reference_number}`,
       })
       setShowInvestigationModal(false)
-      setInvestigationForm({
-        title: '',
-        description: '',
-        investigation_type: 'root_cause_analysis',
-        lead_investigator: '',
-      })
-      navigate('/investigations')
+      setInvestigationTitle('')
+      await loadInvestigations(complaint.id)
+      toast.success(
+        t('complaints.detail.investigation_created', {
+          reference: response.data.reference_number || `INV-${response.data.id}`,
+          defaultValue: 'Investigation created',
+        }),
+      )
     } catch (err: any) {
       trackError(err, { component: 'ComplaintDetail', action: 'createInvestigation' })
 
@@ -327,10 +322,6 @@ export default function ComplaintDetail() {
 
   const handleAssigneeChange = (email: string, _user?: UserSearchResult) => {
     setActionForm({ ...actionForm, assigned_to: email })
-  }
-
-  const handleInvestigatorChange = (email: string, _user?: UserSearchResult) => {
-    setInvestigationForm({ ...investigationForm, lead_investigator: email })
   }
 
   const ACTION_STATUS_OPTIONS = [
@@ -553,7 +544,7 @@ export default function ComplaintDetail() {
                 <X className="w-4 h-4 mr-2" />
                 {t('cancel')}
               </Button>
-              <Button onClick={handleSaveEdit} disabled={saving}>
+              <Button data-testid="complaint-save-edit" onClick={handleSaveEdit} disabled={saving}>
                 {saving ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
@@ -572,7 +563,10 @@ export default function ComplaintDetail() {
                 <Plus className="w-4 h-4 mr-2" />
                 {t('complaints.detail.add_action')}
               </Button>
-              <Button onClick={() => setShowInvestigationModal(true)}>
+              <Button
+                data-testid="complaint-start-investigation"
+                onClick={() => setShowInvestigationModal(true)}
+              >
                 <FlaskConical className="w-4 h-4 mr-2" />
                 {t('complaints.detail.start_investigation')}
               </Button>
@@ -1085,15 +1079,21 @@ export default function ComplaintDetail() {
             </CardContent>
           </Card>
 
-          {/* Timeline Card */}
-          <Card>
+          {/* Key dates — honest subset; full narrative lives in Running Sheet tab */}
+          <Card data-testid="complaint-key-dates">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <History className="w-4 h-4" />
-                {t('complaints.detail.activity_timeline')}
+                {t('complaints.detail.key_dates', 'Key dates')}
               </CardTitle>
             </CardHeader>
             <CardContent>
+              <p className="text-xs text-muted-foreground mb-4">
+                {t(
+                  'complaints.detail.key_dates_hint',
+                  'Status changes and notes are captured in the Running Sheet tab.',
+                )}
+              </p>
               <div className="space-y-4">
                 <div className="flex gap-3">
                   <div className="w-2 h-2 rounded-full bg-primary mt-2" />
@@ -1117,6 +1117,19 @@ export default function ComplaintDetail() {
                     </p>
                   </div>
                 </div>
+                {latestInvestigation && (
+                  <div className="flex gap-3">
+                    <div className="w-2 h-2 rounded-full bg-info mt-2" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        {t('complaints.detail.investigation_linked', 'Investigation linked')}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {latestInvestigation.reference_number || latestInvestigation.title}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1162,88 +1175,34 @@ export default function ComplaintDetail() {
           }
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg" data-testid="complaint-investigation-modal">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FlaskConical className="w-5 h-5 text-primary" />
               {t('complaints.detail.start_investigation')}
             </DialogTitle>
             <DialogDescription>
-              {t('complaints.detail.investigation_description', {
+              {t('complaints.detail.investigation_api_contract', {
                 reference: complaint.reference_number,
+                defaultValue:
+                  'Creates an investigation linked to this complaint. Only the title is sent to the API; configure type, lead, and notes on the investigation record after creation.',
               })}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateInvestigation} className="space-y-4">
             <div>
               <label
-                htmlFor="complaintdetail-field-8"
+                htmlFor="complaintdetail-investigation-title"
                 className="block text-sm font-medium text-foreground mb-1"
               >
                 {t('complaints.detail.investigation_title')}
               </label>
               <Input
-                id="complaintdetail-field-8"
-                value={investigationForm.title}
-                onChange={(e) =>
-                  setInvestigationForm({ ...investigationForm, title: e.target.value })
-                }
+                id="complaintdetail-investigation-title"
+                data-testid="complaint-investigation-title"
+                value={investigationTitle}
+                onChange={(e) => setInvestigationTitle(e.target.value)}
                 placeholder={`Investigation - ${complaint.reference_number}`}
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="complaintdetail-field-9"
-                className="block text-sm font-medium text-foreground mb-1"
-              >
-                {t('complaints.detail.investigation_type')}
-              </label>
-              <Select
-                value={investigationForm.investigation_type}
-                onValueChange={(value) =>
-                  setInvestigationForm({ ...investigationForm, investigation_type: value })
-                }
-              >
-                <SelectTrigger id="complaintdetail-field-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="root_cause_analysis">
-                    {t('complaints.investigation_type.root_cause_analysis')}
-                  </SelectItem>
-                  <SelectItem value="5_whys">
-                    {t('complaints.investigation_type.5_whys')}
-                  </SelectItem>
-                  <SelectItem value="fishbone">
-                    {t('complaints.investigation_type.fishbone')}
-                  </SelectItem>
-                  <SelectItem value="incident_review">
-                    {t('complaints.investigation_type.incident_review')}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <UserEmailSearch
-              label={t('complaints.detail.lead_investigator')}
-              value={investigationForm.lead_investigator}
-              onChange={handleInvestigatorChange}
-              placeholder={t('complaints.detail.search_by_email')}
-            />
-            <div>
-              <label
-                htmlFor="complaintdetail-field-10"
-                className="block text-sm font-medium text-foreground mb-1"
-              >
-                {t('complaints.detail.initial_notes')}
-              </label>
-              <Textarea
-                id="complaintdetail-field-10"
-                value={investigationForm.description}
-                onChange={(e) =>
-                  setInvestigationForm({ ...investigationForm, description: e.target.value })
-                }
-                placeholder={t('complaints.detail.initial_notes_placeholder')}
-                rows={4}
               />
             </div>
 
