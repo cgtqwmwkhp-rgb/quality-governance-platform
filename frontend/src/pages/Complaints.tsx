@@ -390,7 +390,7 @@ export default function Complaints() {
         </div>
       ) : null}
 
-      <div className="flex gap-2" role="tablist" aria-label={t('complaints.triage.tabs', 'Triage filters')}>
+      <div className="flex gap-2" role="group" aria-label={t('complaints.triage.tabs', 'Triage filters')}>
         <Button
           type="button"
           variant={ownerFilter === 'all' ? 'default' : 'outline'}

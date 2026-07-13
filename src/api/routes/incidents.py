@@ -504,6 +504,8 @@ async def update_incident(
                 assigned_by_user_id=current_user.id,
                 reference=incident.reference_number,
             )
+            # NotificationService.create_assignment commits; reattach for response serialization
+            await db.refresh(incident)
         return incident
     except LookupError:
         raise NotFoundError(f"Incident {incident_id} not found")

@@ -117,7 +117,7 @@ describe('Incidents', () => {
     expect(screen.getByText('Slip in warehouse')).toBeInTheDocument()
     expect(screen.getByText('INC-002')).toBeInTheDocument()
     expect(screen.getByText('Chemical spill in lab')).toBeInTheDocument()
-    expect(mockList).toHaveBeenCalledWith(1, 50)
+    expect(mockList).toHaveBeenCalledWith(1, 50, undefined)
   })
 
   it('shows create form when button is clicked', async () => {

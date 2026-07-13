@@ -322,6 +322,8 @@ async def update_complaint(
                 assigned_by_user_id=current_user.id,
                 reference=complaint.reference_number,
             )
+            # NotificationService.create_assignment commits; reattach for response serialization
+            await db.refresh(complaint)
         return complaint
     except LookupError:
         raise NotFoundError(f"Complaint {complaint_id} not found")
