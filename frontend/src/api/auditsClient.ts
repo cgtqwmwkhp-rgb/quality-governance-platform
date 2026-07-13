@@ -64,6 +64,17 @@ export interface AuditFinding {
   /** Linked enterprise risk ids (risks_v2) when escalated from this finding. */
   risk_ids?: number[] | null
   created_at: string
+  /**
+   * Optional loop enrichment from CAPA closure bridge / findings list when present.
+   * FE consumes these when available and falls back to Actions list otherwise.
+   */
+  linked_capa_display_status?: string | null
+  linked_capa_assignee_email?: string | null
+  linked_capa_action_id?: number | null
+  linked_capa_action_key?: string | null
+  linked_capa_reference?: string | null
+  /** Optional closure note accepted by tolerant writers; ignored if API omits the field. */
+  closure_note?: string | null
 }
 
 export interface AuditTemplate {
@@ -352,6 +363,10 @@ export interface AuditFindingUpdate {
   status?: 'open' | 'in_progress' | 'pending_verification' | 'closed' | 'deferred'
   corrective_action_required?: boolean
   corrective_action_due_date?: string
+  /** Tolerant optional fields — sibling CAPA bridge may persist; current API may ignore. */
+  closure_note?: string
+  closure_override?: boolean
+  closure_override_reason?: string
 }
 
 export function createAuditsApi(api: AxiosInstance) {

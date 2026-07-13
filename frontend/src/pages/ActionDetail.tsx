@@ -453,6 +453,30 @@ export default function ActionDetail() {
             </Button>
           ) : null}
         </div>
+        {action.source_type === 'audit_finding' &&
+        Number.isFinite(action.source_id) &&
+        action.source_id > 0 &&
+        ['completed', 'closed', 'verified'].includes(
+          String(action.display_status || action.status || '').toLowerCase(),
+        ) ? (
+          <div
+            className="mt-3 rounded-lg border border-emerald-300/60 bg-emerald-50/80 p-3 text-sm text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-100"
+            role="status"
+            data-testid="action-detail-finding-loop-cta"
+          >
+            <p className="font-medium">{t('actions.finding_loop_cta.title')}</p>
+            <p className="mt-1 text-xs opacity-90">{t('actions.finding_loop_cta.body')}</p>
+            <Button variant="secondary" size="sm" className="mt-2" asChild>
+              <Link
+                to={`/audits?view=findings&findingId=${action.source_id}`}
+                data-testid="action-detail-return-to-finding"
+              >
+                {t('actions.finding_loop_cta.action')}
+                <ExternalLink className="w-3 h-3 ml-1" />
+              </Link>
+            </Button>
+          </div>
+        ) : null}
         <dl className="mt-3 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
           {action.due_date ? (
             <div>

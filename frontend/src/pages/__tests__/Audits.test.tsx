@@ -53,7 +53,13 @@ vi.mock('../../api/client', () => ({
     listTemplates: (...args: unknown[]) => mockListTemplates(...args),
     createRun: (...args: unknown[]) => mockCreateRun(...args),
     updateRun: (...args: unknown[]) => mockUpdateRun(...args),
+    updateFinding: vi.fn().mockResolvedValue({ data: { id: 501, status: 'closed' } }),
     flagFindingToRisk: vi.fn().mockResolvedValue({ data: { id: 501, risk_ids: [88] } }),
+  },
+  actionsApi: {
+    list: vi.fn().mockResolvedValue({ data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 } }),
+    update: vi.fn(),
+    create: vi.fn(),
   },
   evidenceAssetsApi: {
     upload: (...args: unknown[]) => mockUpload(...args),

@@ -18,6 +18,10 @@ vi.mock('react-i18next', () => ({
         'actions.email_unavailable.title': 'Email alerts unavailable',
         'actions.email_unavailable.body':
           'The assignee is saved, but email alerts are unavailable while outbound email is not configured.',
+        'actions.finding_loop_cta.title': 'Close the finding loop',
+        'actions.finding_loop_cta.body':
+          'CAPA is complete. Close the linked finding on the Audits findings console to finish the inspection loop.',
+        'actions.finding_loop_cta.action': 'Return to finding loop',
       } as Record<string, string>)[key] || fallback || key,
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
@@ -163,5 +167,19 @@ describe('ActionDetail source deep-links', () => {
         'The assignee is saved, but email alerts are unavailable while outbound email is not configured.',
       ),
     ).toBeInTheDocument()
+  })
+
+  it('prompts return to finding loop when CAPA is completed', async () => {
+    mockGetByKey.mockResolvedValue({
+      data: { ...auditFindingAction, display_status: 'completed', status: 'closed' },
+    })
+
+    renderDetail()
+
+    expect(await screen.findByTestId('action-detail-finding-loop-cta')).toBeInTheDocument()
+    expect(screen.getByTestId('action-detail-return-to-finding')).toHaveAttribute(
+      'href',
+      '/audits?view=findings&findingId=42',
+    )
   })
 })

@@ -19,6 +19,7 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   auditsApi,
+  actionsApi,
   evidenceAssetsApi,
   externalAuditImportsApi,
   AuditRun,
@@ -26,6 +27,7 @@ import {
   AuditTemplate,
   AuditRunCreate,
   ExternalAuditType,
+  type Action,
 } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -43,6 +45,11 @@ import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ToastContainer, useToast } from '../components/ui/Toast'
 import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
+import {
+  FindingLoopStatusRibbon,
+  type CapaLoopLoadState,
+  type LoopCapaSnapshot,
+} from '../components/audit/FindingLoopStatusRibbon'
 import { cn, decodeHtmlEntities } from '../helpers/utils'
 import {
   ASSURANCE_SOURCE_CUSTOMER,
@@ -274,6 +281,10 @@ export default function Audits() {
   const [reportFile, setReportFile] = useState<File | null>(null)
   const [isoSchemePreset, setIsoSchemePreset] = useState('')
   const { toasts, show: showToast, dismiss: dismissToast } = useToast()
+  const [capaByFindingId, setCapaByFindingId] = useState<Record<number, Action>>({})
+  const [capaLoopLoadState, setCapaLoopLoadState] = useState<CapaLoopLoadState>('loading')
+  const [loopBusyFindingId, setLoopBusyFindingId] = useState<number | null>(null)
+  const [loopAssigningFindingId, setLoopAssigningFindingId] = useState<number | null>(null)
 
   const scopedAudits = useMemo(
     () => filterAuditsByAssuranceSource(audits, urlAssuranceSource),
@@ -333,6 +344,140 @@ export default function Audits() {
     })
     return () => cancelAnimationFrame(handle)
   }, [urlFindingId, loading, scopedFindings])
+
+  // Load linked CAPA rows for the findings loop ribbon (graceful if Actions API unavailable).
+  useEffect(() => {
+    if (viewMode !== 'findings') return
+    let cancelled = false
+    const loadCapaLoop = async () => {
+      setCapaLoopLoadState('loading')
+      try {
+        const res = await actionsApi.list(1, 100, undefined, 'audit_finding')
+        if (cancelled) return
+        const next: Record<number, Action> = {}
+        for (const action of res.data.items || []) {
+          if (typeof action.source_id === 'number' && action.source_id > 0) {
+            // Prefer the first (newest) CAPA per finding — list is created_at desc.
+            if (!next[action.source_id]) {
+              next[action.source_id] = action
+            }
+          }
+        }
+        setCapaByFindingId(next)
+        setCapaLoopLoadState('ready')
+      } catch (err) {
+        if (import.meta.env.DEV) console.error('Failed to load CAPA loop status', err)
+        if (!cancelled) {
+          setCapaByFindingId({})
+          setCapaLoopLoadState('unavailable')
+        }
+      }
+    }
+    void loadCapaLoop()
+    return () => {
+      cancelled = true
+    }
+  }, [viewMode, findings])
+
+  const resolveCapaSnapshot = (finding: AuditFinding): {
+    capa: LoopCapaSnapshot
+    loadState: CapaLoopLoadState
+  } => {
+    const fromList = capaByFindingId[finding.id]
+    if (fromList) {
+      return {
+        capa: {
+          id: fromList.id,
+          action_key: fromList.action_key,
+          display_status: fromList.display_status || fromList.status,
+          status: fromList.status,
+          assigned_to_email: fromList.assigned_to_email,
+          reference_number: fromList.reference_number,
+        },
+        loadState: 'ready',
+      }
+    }
+    // Consume optional enrichment from sibling CAPA bridge / findings API when present.
+    if (finding.linked_capa_action_id || finding.linked_capa_display_status) {
+      return {
+        capa: {
+          id: finding.linked_capa_action_id || 0,
+          action_key: finding.linked_capa_action_key || `capa:${finding.linked_capa_action_id || 0}`,
+          display_status: finding.linked_capa_display_status || 'open',
+          status: finding.linked_capa_display_status || 'open',
+          assigned_to_email: finding.linked_capa_assignee_email,
+          reference_number: finding.linked_capa_reference,
+        },
+        loadState: 'ready',
+      }
+    }
+    if (capaLoopLoadState === 'loading') {
+      return { capa: null, loadState: 'loading' }
+    }
+    if (capaLoopLoadState === 'unavailable') {
+      return { capa: null, loadState: 'unavailable' }
+    }
+    return { capa: null, loadState: 'missing' }
+  }
+
+  const handleAssignCapaFromFinding = async (finding: AuditFinding, email: string) => {
+    setLoopAssigningFindingId(finding.id)
+    try {
+      const existing = capaByFindingId[finding.id]
+      if (existing) {
+        const res = await actionsApi.update(existing.id, existing.source_type, {
+          assigned_to_email: email,
+        })
+        setCapaByFindingId((prev) => ({ ...prev, [finding.id]: res.data }))
+        showToast(t('audits.findings.loop.assign_success'), 'success')
+        return
+      }
+      const created = await actionsApi.create({
+        title: `CAPA: ${finding.title}`,
+        description: finding.description || finding.title,
+        source_type: 'audit_finding',
+        source_id: finding.id,
+        source_reference: finding.reference_number,
+        assigned_to_email: email,
+        priority: finding.severity === 'critical' || finding.severity === 'high' ? 'high' : 'medium',
+      })
+      setCapaByFindingId((prev) => ({ ...prev, [finding.id]: created.data }))
+      setCapaLoopLoadState('ready')
+      showToast(t('audits.findings.loop.assign_success'), 'success')
+    } catch (err) {
+      const detail = getStructuredErrorMessage(err)
+      showToast(detail || t('audits.findings.loop.assign_failed'), 'error')
+      throw err
+    } finally {
+      setLoopAssigningFindingId(null)
+    }
+  }
+
+  const handleCloseFinding = async (
+    finding: AuditFinding,
+    opts: { override: boolean; reason?: string; note?: string },
+  ) => {
+    setLoopBusyFindingId(finding.id)
+    try {
+      const payload: Parameters<typeof auditsApi.updateFinding>[1] = {
+        status: 'closed',
+      }
+      if (opts.note) payload.closure_note = opts.note
+      if (opts.override) {
+        payload.closure_override = true
+        if (opts.reason) payload.closure_override_reason = opts.reason
+      }
+      const res = await auditsApi.updateFinding(finding.id, payload)
+      setFindings((prev) => prev.map((f) => (f.id === finding.id ? { ...f, ...res.data } : f)))
+      showToast(t('audits.findings.loop.close_success'), 'success')
+    } catch (err) {
+      const detail = getStructuredErrorMessage(err)
+      showToast(detail || t('audits.findings.loop.close_failed'), 'error')
+      throw err
+    } finally {
+      setLoopBusyFindingId(null)
+    }
+  }
 
   useEffect(() => {
     if (formData.external_audit_type !== 'iso') {
@@ -1224,6 +1369,8 @@ export default function Audits() {
               const isHighlighted = urlFindingId && String(finding.id) === String(urlFindingId)
               const findingType = getFindingTypePresentation(finding.finding_type)
               const FindingTypeIcon = findingType.icon
+              const { capa: loopCapa, loadState: loopCapaState } = resolveCapaSnapshot(finding)
+              const riskIds = finding.risk_ids || []
               return (
                 <Card
                   key={finding.id}
@@ -1279,6 +1426,30 @@ export default function Audits() {
                           </span>
                         </div>
                       )}
+                      <FindingLoopStatusRibbon
+                        findingId={finding.id}
+                        findingStatus={finding.status}
+                        correctiveActionRequired={Boolean(finding.corrective_action_required)}
+                        capa={loopCapa}
+                        capaLoadState={loopCapaState}
+                        riskLinked={riskIds.length > 0}
+                        riskCount={riskIds.length}
+                        assigning={loopAssigningFindingId === finding.id}
+                        closing={loopBusyFindingId === finding.id}
+                        onAssignCapa={(email) => handleAssignCapaFromFinding(finding, email)}
+                        onOpenCapa={() => {
+                          if (loopCapa?.action_key) {
+                            navigate(`/actions/item?key=${encodeURIComponent(loopCapa.action_key)}`)
+                            return
+                          }
+                          navigate(`/actions?sourceType=audit_finding&sourceId=${finding.id}`)
+                        }}
+                        onOpenRisk={() => {
+                          const ref = encodeURIComponent(finding.reference_number || '')
+                          navigate(`/risk-register?auditOnly=1&auditRef=${ref}`)
+                        }}
+                        onCloseFinding={(opts) => handleCloseFinding(finding, opts)}
+                      />
                       <div className="mt-4 flex flex-wrap items-center gap-2">
                         {finding.corrective_action_required && (
                           <Button
