@@ -347,7 +347,8 @@ export default function RiskRegister() {
               summaryResult.status === 'fulfilled' &&
               typeof (summaryResult.value.data as { outside_appetite?: number })?.outside_appetite ===
                 'number'
-                ? (summaryResult.value.data as { outside_appetite: number }).outside_appetite
+                ? (summaryResult.value.data as unknown as { outside_appetite: number })
+                    .outside_appetite
                 : mappedRisks.filter((risk) => risk.is_within_appetite === false).length,
             average_inherent_score:
               mappedRisks.length > 0
