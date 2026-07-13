@@ -35,6 +35,7 @@ import { useState, useEffect, useCallback, lazy, Suspense, Fragment } from 'reac
 import { useTranslation } from 'react-i18next'
 import { notificationsApi } from '../api/client'
 import OfflineIndicator from './OfflineIndicator'
+import KeyboardShortcutHelp from './KeyboardShortcutHelp'
 import { ThemeToggle } from './ui/ThemeToggle'
 import { Button } from './ui/Button'
 import { cn } from '../helpers/utils'
@@ -498,6 +499,9 @@ export default function Layout({ onLogout }: LayoutProps) {
           />
         </Suspense>
       ) : null}
+
+      {/* Global keyboard shortcut help (Shift+?) */}
+      <KeyboardShortcutHelp />
 
       {/* Offline status indicator */}
       <OfflineIndicator />
