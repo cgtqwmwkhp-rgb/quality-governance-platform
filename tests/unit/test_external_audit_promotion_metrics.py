@@ -10,10 +10,10 @@ import pytest
 from src.domain.services import external_audit_promotion_service as promo_mod
 from src.domain.services.external_audit_promotion_service import (
     ExternalAuditPromotionService,
-    get_promotion_outcome_counters,
-    reset_promotion_outcome_counters,
     _record_promote_outcome,
     _record_uvdb_sync_outcome,
+    get_promotion_outcome_counters,
+    reset_promotion_outcome_counters,
 )
 
 
