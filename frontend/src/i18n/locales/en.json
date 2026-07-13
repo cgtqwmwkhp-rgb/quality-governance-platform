@@ -2321,5 +2321,16 @@
   "workforce.training.stage1": "Stage 1",
   "workforce.training.stage2": "Stage 2",
   "workforce.training.subtitle": "Training programs and records",
-  "workforce.training.title": "Training"
+  "workforce.training.title": "Training",
+  "complaints.detail.action_saved_email_unavailable": "Action saved. Email notification is unavailable.",
+  "complaints.detail.action_created": "Action created",
+  "complaints.email_unavailable.title": "Email unavailable",
+  "complaints.email_unavailable.detail_body": "This complaint was saved, but email notification could not be sent.",
+  "complaints.email_unavailable.action_body": "The action was saved, but email notification could not be sent.",
+  "complaints.email_unavailable.body": "Complaint created, but email notification is unavailable.",
+  "complaints.created": "Complaint created",
+  "complaints.unavailable.title": "Complaints unavailable",
+  "complaints.unavailable.subtitle": "We could not load complaints right now. Try again.",
+  "complaints.empty_search.title": "No matching complaints",
+  "complaints.empty_search.subtitle": "Try adjusting your search or filters."
 }

@@ -2246,5 +2246,16 @@
   "workforce.training.stage1": "Cam 1",
   "workforce.training.stage2": "Cam 2",
   "workforce.training.subtitle": "Rhaglenni hyfforddiant a chofnodion",
-  "workforce.training.title": "Hyfforddiant"
+  "workforce.training.title": "Hyfforddiant",
+  "complaints.detail.action_saved_email_unavailable": "Cadwyd y weithred. Nid yw hysbysiad e-bost ar gael.",
+  "complaints.detail.action_created": "Crëwyd gweithred",
+  "complaints.email_unavailable.title": "E-bost ddim ar gael",
+  "complaints.email_unavailable.detail_body": "Cadwyd y gŵyn, ond ni ellid anfon hysbysiad e-bost.",
+  "complaints.email_unavailable.action_body": "Cadwyd y weithred, ond ni ellid anfon hysbysiad e-bost.",
+  "complaints.email_unavailable.body": "Crëwyd y gŵyn, ond nid yw hysbysiad e-bost ar gael.",
+  "complaints.created": "Crëwyd cwyn",
+  "complaints.unavailable.title": "Cwynion ddim ar gael",
+  "complaints.unavailable.subtitle": "Methu llwytho cwynion ar hyn o bryd. Ceisiwch eto.",
+  "complaints.empty_search.title": "Dim cwynion cyfatebol",
+  "complaints.empty_search.subtitle": "Ceisiwch addasu eich chwilio neu hidlyddion."
 }
