@@ -196,7 +196,7 @@ def _confirmed_provenance(
     human Exceptions confirm currently leaves no actor stamp.
     """
     link_status = link.effective_status if hasattr(link, "effective_status") else getattr(link, "status", None)
-    status_value = link_status.value if hasattr(link_status, "value") else str(link_status) if link_status else None
+    status_value = None if link_status is None else getattr(link_status, "value", str(link_status))
     if status_value != EvidenceLinkStatus.CONFIRMED.value:
         return None, None
 
@@ -212,7 +212,7 @@ def _confirmed_provenance(
 
 def _build_evidence_link_model(link: ComplianceEvidenceLink) -> EvidenceLink:
     link_status = link.effective_status if hasattr(link, "effective_status") else getattr(link, "status", None)
-    status_value = link_status.value if hasattr(link_status, "value") else (str(link_status) if link_status else None)
+    status_value = None if link_status is None else getattr(link_status, "value", str(link_status))
     confirmed_at, confirmed_by = _confirmed_provenance(link)
     return EvidenceLink(
         id=str(link.id),
