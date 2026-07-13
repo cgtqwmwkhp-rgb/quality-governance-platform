@@ -32,6 +32,8 @@ import { createWorkflowsApi } from './workflowsClient'
 import { createAuditTrailApi } from './auditTrailClient'
 import { createSignaturesApi } from './signaturesClient'
 import { createLookupsApi } from './lookupsClient'
+import { createKnowledgeBankApi } from './knowledgeBankClient'
+import { createDocumentControlApi } from './documentControlClient'
 import {
   beginGlobalLoading,
   endGlobalLoading,
@@ -2487,6 +2489,69 @@ export const externalAuditRecordsApi = {
 
   dashboard: (params?: { scheme?: string }) =>
     api.get<ExternalAuditRecordDashboardResponse>('/api/v1/external-audit-records/dashboard', { params }),
+}
+
+// ============ Governed Knowledge Bank API ============
+
+export type {
+  KnowledgeEvidenceLink,
+  MapEvidenceResponse,
+  GenerateQuizOptions,
+  QuizDraft,
+  DiscussionThread,
+  DiscussionMessage,
+  RegulatoryImpact,
+  ScanStandardResponse,
+} from './knowledgeBankClient'
+
+export const knowledgeBankApi = createKnowledgeBankApi(api)
+
+// ============ Document Control API ============
+
+export type {
+  ControlledDocumentSummary,
+  ControlledDocumentListResponse,
+  ControlledDocumentDetail,
+  ControlledDocumentCreate,
+} from './documentControlClient'
+
+export const documentControlApi = createDocumentControlApi(api)
+
+// ============ Policy Acknowledgments API ============
+
+export interface PolicyAcknowledgment {
+  id: number
+  requirement_id: number
+  policy_id: number
+  user_id: number
+  policy_version: string | null
+  status: string
+  assigned_at: string
+  due_date: string
+  acknowledged_at: string | null
+  first_opened_at: string | null
+  time_spent_seconds: number | null
+  quiz_score: number | null
+  quiz_attempts: number
+  quiz_passed: boolean | null
+  reminders_sent: number
+}
+
+export interface PolicyAcknowledgmentListResponse {
+  items: PolicyAcknowledgment[]
+  total: number
+}
+
+export const policyAcknowledgmentsApi = {
+  listMyPending: () =>
+    api.get<PolicyAcknowledgmentListResponse>('/api/v1/policy-acknowledgments/my-pending'),
+  recordOpen: (acknowledgmentId: number) =>
+    api.post(`/api/v1/policy-acknowledgments/${acknowledgmentId}/open`),
+  acknowledge: (acknowledgmentId: number, data?: { acceptance_statement?: string }) =>
+    api.post<PolicyAcknowledgment>(
+      `/api/v1/policy-acknowledgments/${acknowledgmentId}/acknowledge`,
+      data ?? {},
+    ),
 }
 
 export default api

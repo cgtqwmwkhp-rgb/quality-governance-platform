@@ -104,7 +104,7 @@ describe('Layout', () => {
     )
 
     const hubs = [
-      ['nav.my_work', ['/actions', '/workflows']],
+      ['nav.my_work', ['/actions', '/my-reading', '/workflows']],
       [
         'nav.safety_cases',
         [
@@ -132,7 +132,14 @@ describe('Layout', () => {
       ],
       [
         'nav.compliance_sustainability',
-        ['/ims', '/standards', '/compliance', '/compliance-automation'],
+        [
+          '/ims',
+          '/standards',
+          '/compliance',
+          '/knowledge-exceptions',
+          '/document-control',
+          '/compliance-automation',
+        ],
       ],
       ['nav.risk_improvement', ['/risk-register']],
       ['nav.admin', ['/admin/users']],

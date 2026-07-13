@@ -30,6 +30,7 @@ import {
   Leaf,
   Bot,
   ChevronDown,
+  FileText,
 } from 'lucide-react'
 import { useState, useEffect, useCallback, lazy, Suspense, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -64,6 +65,7 @@ export default function Layout({ onLogout }: LayoutProps) {
       icon: ListTodo,
       items: [
         { path: '/actions', icon: ListTodo, label: t('nav.actions') },
+        { path: '/my-reading', icon: BookOpen, label: t('nav.my_reading', { defaultValue: 'My Reading' }) },
         { path: '/workflows', icon: GitBranch, label: t('nav.workflow_center') },
       ],
     },
@@ -128,6 +130,16 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/ims', icon: GitMerge, label: t('nav.overview') },
         { path: '/standards', icon: BookOpen, label: t('nav.standards') },
         { path: '/compliance', icon: Shield, label: t('nav.iso_compliance') },
+        {
+          path: '/knowledge-exceptions',
+          icon: Sparkles,
+          label: t('nav.knowledge_exceptions', { defaultValue: 'AI Exceptions' }),
+        },
+        {
+          path: '/document-control',
+          icon: FileText,
+          label: t('nav.document_control', { defaultValue: 'Document Control' }),
+        },
         ...(canAccessAdvancedNav
           ? [
               {

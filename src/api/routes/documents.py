@@ -240,6 +240,7 @@ async def _process_uploaded_document(
     file_name: str,
     file_ext: str,
     file_type: FileType,
+    current_user: Optional[User] = None,
 ) -> None:
     """Isolate upload processing behind a single async boundary."""
     ai_service = DocumentAIService()
@@ -302,6 +303,36 @@ async def _process_uploaded_document(
         doc.indexing_error = None
     else:
         doc.status = DocumentStatus.APPROVED
+
+    if current_user is not None and text_content:
+        await _trigger_governed_kb_mapping(db, doc, text_content, current_user)
+
+
+async def _trigger_governed_kb_mapping(
+    db: DbSession,
+    doc: Document,
+    text_content: str,
+    current_user: User,
+) -> None:
+    """Fire-and-forget governed knowledge evidence mapping; never breaks upload."""
+    try:
+        from src.domain.services.governed_knowledge_service import governed_knowledge_service
+
+        doc_type = doc.document_type.value if hasattr(doc.document_type, "value") else str(doc.document_type)
+        await governed_knowledge_service.map_document_to_schemes(
+            db,
+            doc.id,
+            text_content,
+            doc_type,
+            doc.tenant_id,
+            current_user,
+        )
+    except Exception:
+        logger.warning(
+            "Governed KB evidence mapping failed for document %s; upload continues",
+            doc.id,
+            exc_info=True,
+        )
 
 
 # =============================================================================
@@ -397,7 +428,7 @@ async def upload_document(
         ) from exc
 
     try:
-        await _process_uploaded_document(db, doc, content, file_name, file_ext, file_type)
+        await _process_uploaded_document(db, doc, content, file_name, file_ext, file_type, current_user)
         await db.commit()
     except Exception as e:
         doc.status = DocumentStatus.FAILED

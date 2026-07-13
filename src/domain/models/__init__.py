@@ -42,7 +42,21 @@ from src.domain.models.audit import (
 from src.domain.models.base import AuditTrailMixin, Base, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 from src.domain.models.capa import CAPAAction
 from src.domain.models.complaint import Complaint, ComplaintAction
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
+from src.domain.models.compliance_evidence import (
+    ComplianceEvidenceLink,
+    EvidenceLinkMethod,
+    EvidenceLinkStatus,
+)
+from src.domain.models.governed_knowledge import (
+    AiDecisionLog,
+    DocumentDiscussionMessage,
+    DocumentDiscussionThread,
+    DocumentQuizDraft,
+    DiscussionThreadStatus,
+    QuizDraftStatus,
+    RegulatoryImpactStatus,
+    RegulatoryWatchImpact,
+)
 
 # Digital Signatures (Tier 2)
 from src.domain.models.digital_signature import (
@@ -227,6 +241,15 @@ __all__ = [
     "AuditResponse",
     "ComplianceEvidenceLink",
     "EvidenceLinkMethod",
+    "EvidenceLinkStatus",
+    "AiDecisionLog",
+    "DocumentDiscussionMessage",
+    "DocumentDiscussionThread",
+    "DocumentQuizDraft",
+    "DiscussionThreadStatus",
+    "QuizDraftStatus",
+    "RegulatoryImpactStatus",
+    "RegulatoryWatchImpact",
     "AuditStatus",
     "AuditFinding",
     "FindingStatus",

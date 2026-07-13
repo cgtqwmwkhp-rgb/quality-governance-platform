@@ -35,6 +35,7 @@ from src.api.routes import (
     gdpr,
     global_search,
     governance,
+    governed_knowledge,
     health,
     ims_dashboard,
     incidents,
@@ -98,6 +99,11 @@ router.include_router(documents.router, prefix="/documents", tags=["Document Lib
 router.include_router(global_search.router, prefix="/search", tags=["Global Search"])
 router.include_router(employee_portal.router, prefix="/portal", tags=["Employee Portal"])
 router.include_router(compliance.router, prefix="/compliance", tags=["ISO Compliance & Evidence"])
+router.include_router(
+    governed_knowledge.router,
+    prefix="/knowledge-bank",
+    tags=["Governed Knowledge Bank"],
+)
 router.include_router(
     cross_standard_mappings.router,
     prefix="/cross-standard-mappings",

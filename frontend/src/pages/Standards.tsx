@@ -11,12 +11,15 @@ import {
   Shield,
   Award,
   Loader2,
+  Sparkles,
 } from 'lucide-react'
-import { standardsApi, Standard, Clause, ControlListItem, ComplianceScore } from '../api/client'
+import { standardsApi, knowledgeBankApi, Standard, Clause, ControlListItem, ComplianceScore } from '../api/client'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { toast } from '../contexts/ToastContext'
 import { cn } from '../helpers/utils'
 
 interface ExpandedState {
@@ -43,6 +46,7 @@ export default function Standards() {
   const [searchTerm, setSearchTerm] = useState('')
   const [expanded, setExpanded] = useState<ExpandedState>({})
   const [error, setError] = useState<string | null>(null)
+  const [scanningKb, setScanningKb] = useState(false)
 
   useEffect(() => {
     loadStandards()
@@ -109,6 +113,22 @@ export default function Standards() {
 
   const toggleExpanded = (id: number) => {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  const handleScanKnowledgeBank = async () => {
+    if (!selectedStandard) return
+    setScanningKb(true)
+    try {
+      const response = await knowledgeBankApi.scanStandard(selectedStandard.id)
+      toast.success(
+        `Knowledge bank scan complete — ${response.data.links_created} link(s) created`,
+      )
+    } catch (err) {
+      console.error('Knowledge bank scan failed:', err)
+      toast.error('Knowledge bank scan failed')
+    } finally {
+      setScanningKb(false)
+    }
   }
 
   // Helper to get clause status from controls
@@ -303,14 +323,28 @@ export default function Standards() {
             <Card className="overflow-hidden">
               {/* Header */}
               <div className="p-6 border-b border-border bg-primary/5">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-xl">
-                    {ISO_ICONS[selectedStandard.code] || '📋'}
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center text-xl">
+                      {ISO_ICONS[selectedStandard.code] || '📋'}
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-foreground">{selectedStandard.name}</h2>
+                      <p className="text-sm text-muted-foreground">{selectedStandard.full_name}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-foreground">{selectedStandard.name}</h2>
-                    <p className="text-sm text-muted-foreground">{selectedStandard.full_name}</p>
-                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => void handleScanKnowledgeBank()}
+                    disabled={scanningKb}
+                  >
+                    {scanningKb ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 mr-2" />
+                    )}
+                    Scan knowledge bank
+                  </Button>
                 </div>
               </div>
 
