@@ -285,9 +285,7 @@ async def _load_operational_entity_text(
         from src.domain.models.audit import AuditFinding
 
         finding = (
-            await db.execute(
-                select(AuditFinding).where(AuditFinding.id == eid, AuditFinding.tenant_id == tenant_id)
-            )
+            await db.execute(select(AuditFinding).where(AuditFinding.id == eid, AuditFinding.tenant_id == tenant_id))
         ).scalar_one_or_none()
         if not finding:
             raise NotFoundError("Audit finding not found")
