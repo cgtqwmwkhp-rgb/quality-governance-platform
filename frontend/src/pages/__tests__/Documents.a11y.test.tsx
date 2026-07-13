@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import Documents from '../Documents'
 import { expectNoA11yViolations } from '../../test/axe-helper'
 
@@ -35,7 +36,7 @@ vi.mock('../../api/client', () => ({
 }))
 
 function Wrapper({ children }: { children: ReactNode }) {
-  return <>{children}</>
+  return <MemoryRouter initialEntries={['/documents']}>{children}</MemoryRouter>
 }
 
 describe('Documents page accessibility (real page)', () => {
