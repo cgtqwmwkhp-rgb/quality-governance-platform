@@ -196,13 +196,24 @@ export function StandardsAssessmentPanel({
             <ul className="space-y-1">
               {related.map((doc) => (
                 <li key={doc.document_id} className="text-sm">
-                  <Link className="text-primary underline-offset-2 hover:underline" to={`/documents/${doc.document_id}`}>
+                  <Link
+                    className="text-primary underline-offset-2 hover:underline"
+                    to={`/documents/${doc.document_id}?tab=evidence`}
+                    title="Open Standards & Evidence tab"
+                  >
                     {doc.title || `Document ${doc.document_id}`}
                   </Link>
                   <span className="text-muted-foreground"> · score {Math.round(doc.score)}</span>
                 </li>
               ))}
             </ul>
+            <p className="text-xs text-muted-foreground">
+              Links open the document Standards &amp; Evidence tab. Proposed signals also appear in{' '}
+              <Link className="text-primary underline-offset-2 hover:underline" to="/knowledge-exceptions">
+                Knowledge Exceptions
+              </Link>
+              .
+            </p>
           </div>
         ) : null}
       </CardContent>

@@ -118,10 +118,15 @@ export function createKnowledgeBankApi(api: AxiosInstance) {
         link_ids: ids,
       }),
 
-    listExceptions: (status?: string, entityType?: string) => {
+    /**
+     * Exceptions inbox. API supports `status` + `entity_type` query params.
+     * `signal_type` is returned on each row but is not a server filter yet
+     * (client-side filter in KnowledgeExceptions until Follow-up A / #922).
+     */
+    listExceptions: (params?: { status?: string; entityType?: string }) => {
       const sp = new URLSearchParams()
-      if (status) sp.set('status', status)
-      if (entityType) sp.set('entity_type', entityType)
+      if (params?.status) sp.set('status', params.status)
+      if (params?.entityType) sp.set('entity_type', params.entityType)
       const qs = sp.toString()
       return api.get<KnowledgeEvidenceLink[]>(`${base}/exceptions${qs ? `?${qs}` : ''}`)
     },
