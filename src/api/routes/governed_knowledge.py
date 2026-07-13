@@ -240,57 +240,58 @@ async def _load_operational_entity_text(
     if entity_type == "incident":
         from src.domain.models.incident import Incident
 
-        row = (
+        incident = (
             await db.execute(select(Incident).where(Incident.id == eid, Incident.tenant_id == tenant_id))
         ).scalar_one_or_none()
-        if not row:
+        if not incident:
             raise NotFoundError("Incident not found")
-        return f"{row.title}\n\n{row.description}", None
+        return f"{incident.title}\n\n{incident.description}", None
 
     if entity_type == "complaint":
         from src.domain.models.complaint import Complaint
 
-        row = (
+        complaint = (
             await db.execute(select(Complaint).where(Complaint.id == eid, Complaint.tenant_id == tenant_id))
         ).scalar_one_or_none()
-        if not row:
+        if not complaint:
             raise NotFoundError("Complaint not found")
-        return f"{row.title}\n\n{row.description}", None
+        return f"{complaint.title}\n\n{complaint.description}", None
 
     if entity_type == "rta":
         from src.domain.models.rta import RTA
 
-        row = (await db.execute(select(RTA).where(RTA.id == eid, RTA.tenant_id == tenant_id))).scalar_one_or_none()
-        if not row:
+        rta = (await db.execute(select(RTA).where(RTA.id == eid, RTA.tenant_id == tenant_id))).scalar_one_or_none()
+        if not rta:
             raise NotFoundError("RTA not found")
-        return f"{row.title}\n\n{row.description}", None
+        return f"{rta.title}\n\n{rta.description}", None
 
     if entity_type == "near_miss":
         from src.domain.models.near_miss import NearMiss
 
-        row = (
+        near_miss = (
             await db.execute(select(NearMiss).where(NearMiss.id == eid, NearMiss.tenant_id == tenant_id))
         ).scalar_one_or_none()
-        if not row:
+        if not near_miss:
             raise NotFoundError("Near miss not found")
         parts = [
-            row.description,
-            row.potential_consequences or "",
-            row.preventive_action_suggested or "",
-            f"Location: {row.location}" if row.location else "",
+            near_miss.description,
+            near_miss.potential_consequences or "",
+            near_miss.preventive_action_suggested or "",
+            f"Location: {near_miss.location}" if near_miss.location else "",
         ]
         return "\n\n".join(p for p in parts if p), None
 
     if entity_type == "audit_finding":
         from src.domain.models.audit import AuditFinding
 
-        row = (
-            await db.execute(select(AuditFinding).where(AuditFinding.id == eid, AuditFinding.tenant_id == tenant_id))
+        finding = (
+            await db.execute(
+                select(AuditFinding).where(AuditFinding.id == eid, AuditFinding.tenant_id == tenant_id)
+            )
         ).scalar_one_or_none()
-        if not row:
+        if not finding:
             raise NotFoundError("Audit finding not found")
-        return f"{row.title}\n\n{row.description}", getattr(row, "finding_type", None)
-
+        return f"{finding.title}\n\n{finding.description}", getattr(finding, "finding_type", None)
     raise BadRequestError(f"Unsupported entity_type: {entity_type}")
 
 
@@ -450,7 +451,7 @@ async def assess_operational_entity(
     entity_id: str,
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("audit:create"))],
-    body: AssessEntityRequest = AssessEntityRequest(),
+    body: AssessEntityRequest = AssessEntityRequest(content=None),
 ):
     """Run Operational Standards Assessor for a case entity."""
     tenant_id = _tenant_id_for(current_user)
