@@ -123,5 +123,10 @@ export function navItemIsActive(itemPath: string, pathname: string, search = '')
     return source !== ASSURANCE_SOURCE_CUSTOMER && !isAchillesUvdbSource(source)
   }
 
+  // Admin console is exact-only; child routes (/admin/users, /admin/forms, …) have their own items.
+  if (targetPath === '/admin') {
+    return pathname === '/admin'
+  }
+
   return pathname === targetPath || pathname.startsWith(`${targetPath}/`)
 }

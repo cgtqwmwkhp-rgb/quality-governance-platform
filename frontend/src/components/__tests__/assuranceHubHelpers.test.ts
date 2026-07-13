@@ -105,4 +105,12 @@ describe('assuranceHubHelpers', () => {
     expect(navItemIsActive(ACHILLES_UVDB_AUDITS_PATH, '/uvdb', '')).toBe(true)
     expect(navItemIsActive('/audits', '/audits', '?source=achilles')).toBe(false)
   })
+
+  it('navItemIsActive keeps Admin Console exact-only vs admin children', () => {
+    expect(navItemIsActive('/admin', '/admin', '')).toBe(true)
+    expect(navItemIsActive('/admin', '/admin/users', '')).toBe(false)
+    expect(navItemIsActive('/admin', '/admin/forms', '')).toBe(false)
+    expect(navItemIsActive('/admin/users', '/admin/users', '')).toBe(true)
+    expect(navItemIsActive('/admin/forms', '/admin/forms/new', '')).toBe(true)
+  })
 })
