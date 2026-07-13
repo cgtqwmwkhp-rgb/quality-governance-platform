@@ -1,8 +1,7 @@
-import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   AlertTriangle,
-  FileText,
   Shield,
   Car,
   Truck,
@@ -32,7 +31,7 @@ import {
   Bot,
   ChevronDown,
 } from 'lucide-react'
-import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import { notificationsApi } from '../api/client'
 import OfflineIndicator from './OfflineIndicator'
@@ -145,15 +144,6 @@ export default function Layout({ onLogout }: LayoutProps) {
       icon: Target,
       items: [{ path: '/risk-register', icon: Target, label: t('nav.risk_register') }],
     },
-    {
-      id: 'library',
-      title: t('nav.library'),
-      icon: FolderOpen,
-      items: [
-        { path: '/documents', icon: FolderOpen, label: t('nav.documents') },
-        { path: '/policies', icon: FileText, label: t('nav.policies') },
-      ],
-    },
     ...(canManageUsers && adminUserManagementEnabled
       ? [
           {
@@ -169,6 +159,7 @@ export default function Layout({ onLogout }: LayoutProps) {
   const location = useLocation()
   const pathIsActive = (path: string) =>
     navItemIsActive(path, location.pathname, location.search)
+  const libraryNavActive = pathIsActive('/documents') || pathIsActive('/policies')
   const activeHubId = hubs.find((hub) => hub.items.some((item) => pathIsActive(item.path)))?.id
   const [expandedHubs, setExpandedHubs] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
@@ -355,7 +346,8 @@ export default function Layout({ onLogout }: LayoutProps) {
                 const active = hub.items.some((item) => pathIsActive(item.path))
 
                 return (
-                  <div key={hub.id}>
+                  <Fragment key={hub.id}>
+                    <div>
                     <button
                       type="button"
                       onClick={() =>
@@ -431,6 +423,34 @@ export default function Layout({ onLogout }: LayoutProps) {
                       </div>
                     )}
                   </div>
+                    {hub.id === 'risk-improvement' && (
+                      <Link
+                        to="/documents"
+                        onClick={() => setSidebarOpen(false)}
+                        aria-current={libraryNavActive ? 'page' : undefined}
+                        className={cn(
+                          'flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
+                          'transition-all duration-200 group',
+                          libraryNavActive
+                            ? 'bg-primary/10 text-primary border border-primary/20'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-surface',
+                        )}
+                      >
+                        <FolderOpen
+                          className={cn(
+                            'w-5 h-5 transition-colors',
+                            libraryNavActive
+                              ? 'text-primary'
+                              : 'text-muted-foreground group-hover:text-foreground',
+                          )}
+                        />
+                        {t('nav.library')}
+                        {libraryNavActive && (
+                          <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
+                        )}
+                      </Link>
+                    )}
+                  </Fragment>
                 )
               })}
             </div>

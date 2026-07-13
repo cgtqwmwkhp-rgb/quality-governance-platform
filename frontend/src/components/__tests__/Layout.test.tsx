@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { BrowserRouter } from 'react-router-dom'
+import { BrowserRouter, MemoryRouter } from 'react-router-dom'
 
 const hasRoleMock = vi.fn(() => true)
 const isSuperuserMock = vi.fn(() => true)
@@ -81,11 +81,14 @@ describe('Layout', () => {
       'nav.assurance',
       'nav.compliance_sustainability',
       'nav.risk_improvement',
-      'nav.library',
       'nav.admin',
     ]) {
       expect(screen.getByRole('button', { name: hub })).toHaveAttribute('aria-expanded', 'false')
     }
+
+    expect(navLink('/documents')).toHaveTextContent('nav.library')
+    expect(screen.queryByRole('button', { name: 'nav.library' })).not.toBeInTheDocument()
+    expect(navLink('/policies')).not.toBeInTheDocument()
 
     expect(screen.queryByRole('button', { name: /nav\.more|More/i })).not.toBeInTheDocument()
   })
@@ -132,7 +135,6 @@ describe('Layout', () => {
         ['/ims', '/standards', '/compliance', '/compliance-automation'],
       ],
       ['nav.risk_improvement', ['/risk-register']],
-      ['nav.library', ['/documents', '/policies']],
       ['nav.admin', ['/admin/users']],
     ] as const
 
@@ -144,6 +146,43 @@ describe('Layout', () => {
       for (const path of paths) {
         expect(navLink(path)).toBeInTheDocument()
       }
+    }
+  })
+
+  it('exposes a single Library sidebar entry landing on /documents', async () => {
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    const libraryLink = navLink('/documents')
+    expect(libraryLink).toBeInTheDocument()
+    expect(libraryLink).toHaveTextContent('nav.library')
+    expect(libraryLink).toHaveAttribute('href', '/documents')
+    expect(navLink('/policies')).not.toBeInTheDocument()
+    expect(screen.queryByText('nav.documents')).not.toBeInTheDocument()
+    expect(screen.queryByText('nav.policies')).not.toBeInTheDocument()
+  })
+
+  it('marks Library active on /documents and /policies routes', async () => {
+    const Layout = (await import('../Layout')).default
+
+    for (const path of ['/documents', '/policies', '/documents/42', '/policies/7']) {
+      cleanup()
+
+      render(
+        <MemoryRouter initialEntries={[path]}>
+          <Layout onLogout={onLogout} />
+        </MemoryRouter>,
+      )
+
+      expect(screen.getByRole('link', { name: 'nav.library' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      )
     }
   })
 
