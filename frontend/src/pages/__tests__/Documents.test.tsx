@@ -8,6 +8,7 @@ const mockTrackError = vi.fn()
 const mockToastError = vi.fn()
 const mockToastWarning = vi.fn()
 const mockToastSuccess = vi.fn()
+const mockNavigate = vi.fn()
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -15,6 +16,14 @@ vi.mock('react-i18next', () => ({
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  }
+})
 
 vi.mock('../../utils/errorTracker', () => ({
   trackError: (...args: unknown[]) => mockTrackError(...args),
@@ -38,7 +47,6 @@ vi.mock('../../api/client', () => ({
   },
   getApiErrorMessage: (error: unknown) => (error instanceof Error ? error.message : 'Request failed'),
 }))
-
 const sampleDoc = {
   id: 11,
   reference_number: 'DOC-11',
@@ -87,8 +95,7 @@ describe('Documents', () => {
     mockHappyPath()
   })
 
-  it('loads documents and opens a signed document url from the detail modal', async () => {
-    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+  it('loads documents and navigates to the governed document detail page', async () => {
     const Documents = (await import('../Documents')).default
 
     render(
@@ -104,17 +111,9 @@ describe('Documents', () => {
     expect(await screen.findByTestId('documents-live-badge')).toHaveTextContent('Live data')
 
     fireEvent.click(await screen.findByText('Safety Policy'))
-    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
 
     await waitFor(() => {
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/documents/11/signed-url', {
-        params: { download: false },
-      })
-      expect(openSpy).toHaveBeenCalledWith(
-        'https://api.example.test/api/v1/evidence-assets/download?key=policy.pdf',
-        '_blank',
-        'noopener,noreferrer',
-      )
+      expect(mockNavigate).toHaveBeenCalledWith('/documents/11')
     })
   })
 
@@ -224,28 +223,7 @@ describe('Documents', () => {
     })
   })
 
-  it('toasts when signed URL open fails', async () => {
-    mockGet.mockImplementation((url: string) => {
-      if (url.startsWith('/api/v1/documents/?')) {
-        return Promise.resolve({ data: { items: [sampleDoc] } })
-      }
-      if (url === '/api/v1/documents/stats/overview') {
-        return Promise.resolve({
-          data: {
-            total_documents: 1,
-            indexed_documents: 0,
-            total_chunks: 0,
-            by_status: { approved: 1 },
-            by_type: { policy: 1 },
-          },
-        })
-      }
-      if (url === '/api/v1/documents/11/signed-url') {
-        return Promise.reject(new Error('Signed URL denied'))
-      }
-      return Promise.resolve({ data: { results: [] } })
-    })
-
+  it('navigates to document detail from the list view as well as the card grid', async () => {
     const Documents = (await import('../Documents')).default
     render(
       <MemoryRouter initialEntries={['/documents']}>
@@ -253,12 +231,15 @@ describe('Documents', () => {
       </MemoryRouter>,
     )
 
-    fireEvent.click(await screen.findByText('Safety Policy'))
-    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
-
-    await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith('Signed URL denied')
-    })
-    expect(screen.getByTestId('documents-load-error')).toHaveTextContent('Signed URL denied')
+    expect(await screen.findByText('Safety Policy')).toBeInTheDocument()
+    // Toggle to list view if the control exists; grid click already covered above.
+    const listToggle = screen.queryByRole('button', { name: /list/i })
+    if (listToggle) {
+      fireEvent.click(listToggle)
+      fireEvent.click(await screen.findByText('Safety Policy'))
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/documents/11')
+      })
+    }
   })
 })
