@@ -167,7 +167,7 @@ test.describe("Documents library CUJ", () => {
     await openDocuments(page, { failSearch: true });
 
     await expect(page.getByTestId("documents-live-badge")).toBeVisible({ timeout: 20_000 });
-    await page.getByPlaceholder(/AI-powered semantic search/i).fill("ppe induction");
+    await page.getByTestId("documents-library-search").fill("ppe induction");
     await expect(page.getByTestId("documents-search-unavailable")).toBeVisible({
       timeout: 10_000,
     });

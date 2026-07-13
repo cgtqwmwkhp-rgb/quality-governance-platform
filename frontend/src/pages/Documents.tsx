@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
 import {
@@ -136,13 +136,18 @@ const getStatusVariant = (status: string) => {
 export default function Documents() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialQ = (searchParams.get('q') ?? '').trim()
   const [documents, setDocuments] = useState<Document[]>([])
   const [stats, setStats] = useState<DocumentStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchTerm, setSearchTerm] = useState(initialQ)
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null)
   const [isSearching, setIsSearching] = useState(false)
+  const [keywordMatchCount, setKeywordMatchCount] = useState<number | null>(null)
+  const [debouncedSearch, setDebouncedSearch] = useState(initialQ)
+  const lastUrlQ = useRef(initialQ)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -157,7 +162,7 @@ export default function Documents() {
   const [searchUnavailable, setSearchUnavailable] = useState(false)
   const [partialLoadWarning, setPartialLoadWarning] = useState<string | null>(null)
 
-  const loadData = useCallback(async (docType?: string, status?: string) => {
+  const loadData = useCallback(async (docType?: string, status?: string, search?: string) => {
     setLoadError(null)
     setPartialLoadWarning(null)
     setDocsUnavailable(false)
@@ -166,6 +171,8 @@ export default function Documents() {
       const params = new URLSearchParams({ page: '1', page_size: '50' })
       if (docType) params.set('document_type', docType)
       if (status) params.set('status', status)
+      const keyword = (search ?? '').trim()
+      if (keyword) params.set('search', keyword)
       const [docsResult, statsResult] = await Promise.allSettled([
         api.get(`/api/v1/documents/?${params}`),
         api.get('/api/v1/documents/stats/overview'),
@@ -190,9 +197,12 @@ export default function Documents() {
         const reason = (docsResult as PromiseRejectedResult).reason
         trackError(reason, { component: 'Documents', action: 'load' })
         setDocuments([])
+        setKeywordMatchCount(null)
         reportFailure(reason, setLoadError)
       } else {
-        setDocuments(docsResult.value.data.items || [])
+        const items = docsResult.value.data.items || []
+        setDocuments(items)
+        setKeywordMatchCount(keyword ? (docsResult.value.data.total ?? items.length) : null)
       }
 
       if (statsFailed) {
@@ -217,16 +227,41 @@ export default function Documents() {
     }
   }, [])
 
+  // Debounce keyword list search (semantic search has its own debounce below).
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
+  // Publish ?q= for shareable deep links without fighting browser back/forward.
+  useEffect(() => {
+    const q = searchTerm
+    if (q === lastUrlQ.current) return
+    lastUrlQ.current = q
+    const next = new URLSearchParams(searchParams)
+    if (q.trim()) next.set('q', q)
+    else next.delete('q')
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true })
+    }
+  }, [searchTerm, searchParams, setSearchParams])
+
+  // Hydrate from URL when the user navigates (back/forward / pasted link).
+  useEffect(() => {
+    const q = searchParams.get('q') ?? ''
+    if (q === lastUrlQ.current) return
+    lastUrlQ.current = q
+    setSearchTerm(q)
+    setDebouncedSearch(q)
+  }, [searchParams])
 
   useEffect(() => {
     loadData(
       filterType === ALL_TYPES_VALUE ? undefined : filterType,
       filterStatus === ALL_STATUS_VALUE ? undefined : filterStatus,
+      debouncedSearch.trim() || undefined,
     )
-  }, [filterType, filterStatus, loadData])
+  }, [filterType, filterStatus, debouncedSearch, loadData])
 
   const handleSemanticSearch = useCallback(async (query: string) => {
     if (query.length < 3) {
@@ -241,7 +276,8 @@ export default function Documents() {
       const response = await api.get(
         `/api/v1/documents/search/semantic?q=${encodeURIComponent(query)}&top_k=10`,
       )
-      setSearchResults(response.data.results)
+      // Empty array = honest zero matches; null reserved for unavailable.
+      setSearchResults(Array.isArray(response.data.results) ? response.data.results : [])
     } catch (err) {
       trackError(err, { component: 'Documents', action: 'search' })
       // Do not set [] — empty results look like "no matches". Mark unavailable instead.
@@ -312,6 +348,7 @@ export default function Documents() {
       await loadData(
         filterType === ALL_TYPES_VALUE ? undefined : filterType,
         filterStatus === ALL_STATUS_VALUE ? undefined : filterStatus,
+        searchTerm.trim() || undefined,
       )
       setShowUploadModal(false)
     } catch (err) {
@@ -364,15 +401,8 @@ export default function Documents() {
 
   const getFileIcon = (type: string) => FILE_ICONS[type] || File
 
-  const filteredDocuments = documents.filter((doc) => {
-    if (searchTerm && !searchResults) {
-      return (
-        doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        doc.reference_number.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    }
-    return true
-  })
+  // List API already applies ?search= — avoid a second client filter that hides server hits.
+  const filteredDocuments = documents
 
   if (loading) {
     return (
@@ -470,26 +500,54 @@ export default function Documents() {
         </div>
       )}
 
-      {/* Search & Filters */}
+      {/* Search & Filters — discoverable, deep-linkable via ?q= */}
       <div className="flex flex-col lg:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-          {isSearching && (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary animate-spin" />
-          )}
-          <Input
-            type="text"
-            placeholder="AI-powered semantic search... (min 3 characters)"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 pr-10"
-          />
-          {searchTerm.length >= 3 && (
-            <div className="absolute left-0 right-0 top-full mt-1 flex items-center gap-2 text-xs text-primary">
-              <Sparkles className="w-3 h-3" />
-              <span>Using AI semantic search</span>
-            </div>
-          )}
+        <div className="flex-1 space-y-1.5">
+          <label htmlFor="documents-library-search" className="text-sm font-medium text-foreground">
+            Search library
+          </label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" aria-hidden="true" />
+            {isSearching && (
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary animate-spin" aria-hidden="true" />
+            )}
+            <Input
+              id="documents-library-search"
+              data-testid="documents-library-search"
+              type="search"
+              role="searchbox"
+              aria-label="Search document library"
+              placeholder="Search by title, reference, or meaning… (AI from 3 characters)"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-10"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground" data-testid="documents-search-status">
+            {searchTerm.trim() ? (
+              <>
+                <span>
+                  Keyword matches:{' '}
+                  <strong className="text-foreground">
+                    {keywordMatchCount == null ? '…' : keywordMatchCount}
+                  </strong>
+                </span>
+                {searchTerm.length >= 3 && !searchUnavailable && searchResults && (
+                  <span>
+                    · Semantic:{' '}
+                    <strong className="text-foreground">{searchResults.length}</strong>
+                  </span>
+                )}
+                {searchTerm.length >= 3 && (
+                  <span className="inline-flex items-center gap-1 text-primary">
+                    <Sparkles className="w-3 h-3" /> AI semantic search active
+                  </span>
+                )}
+              </>
+            ) : (
+              <span>Type to filter the library. Shareable deep link uses ?q=</span>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-2">
@@ -558,13 +616,22 @@ export default function Documents() {
         <Card className="p-4 border-warning/30 bg-warning/5" data-testid="documents-search-unavailable">
           <p className="text-sm text-warning font-medium">Semantic search unavailable</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Live search could not be loaded — do not treat this as zero matches. Title filter still
-            applies below.
+            Live semantic search could not be loaded — do not treat this as zero matches. Keyword
+            results from the library list still apply below when available.
+          </p>
+        </Card>
+      )}
+      {!searchUnavailable && searchResults && searchResults.length === 0 && searchTerm.length >= 3 && (
+        <Card className="p-4 border-border bg-muted/20" data-testid="documents-search-zero">
+          <p className="text-sm font-medium text-foreground">No semantic matches</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            AI search returned zero hits for &ldquo;{searchTerm}&rdquo;. Keyword matches may still
+            appear in the library list below.
           </p>
         </Card>
       )}
       {searchResults && searchResults.length > 0 && (
-        <Card className="p-4 border-primary/20 bg-primary/5">
+        <Card className="p-4 border-primary/20 bg-primary/5" data-testid="documents-search-results">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles className="w-4 h-4 text-primary" />
             <span className="text-sm font-medium text-primary">AI Semantic Search Results</span>

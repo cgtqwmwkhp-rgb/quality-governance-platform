@@ -67,7 +67,7 @@ const sampleDoc = {
 function mockHappyPath() {
   mockGet.mockImplementation((url: string) => {
     if (url.startsWith('/api/v1/documents/?')) {
-      return Promise.resolve({ data: { items: [sampleDoc] } })
+      return Promise.resolve({ data: { items: [sampleDoc], total: 1, page: 1, page_size: 50 } })
     }
     if (url === '/api/v1/documents/stats/overview') {
       return Promise.resolve({
@@ -210,7 +210,7 @@ describe('Documents', () => {
     )
 
     await screen.findByTestId('documents-live-badge')
-    fireEvent.change(screen.getByPlaceholderText(/AI-powered semantic search/i), {
+    fireEvent.change(screen.getByTestId('documents-library-search'), {
       target: { value: 'safety policy' },
     })
 
@@ -242,4 +242,61 @@ describe('Documents', () => {
       })
     }
   })
+
+  it('deep-links ?q= into the visible search control and requests server search', async () => {
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents?q=safety']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    const input = await screen.findByTestId('documents-library-search')
+    expect(input).toHaveValue('safety')
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith(
+        expect.stringMatching(/\/api\/v1\/documents\/\?.*search=safety/),
+      )
+    })
+    expect(await screen.findByTestId('documents-search-status')).toHaveTextContent(/Keyword matches/i)
+  })
+
+  it('shows honest zero semantic matches (not unavailable)', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/documents/?')) {
+        return Promise.resolve({ data: { items: [sampleDoc], total: 1 } })
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.resolve({
+          data: {
+            total_documents: 1,
+            indexed_documents: 0,
+            total_chunks: 0,
+            by_status: { approved: 1 },
+            by_type: { policy: 1 },
+          },
+        })
+      }
+      if (url.includes('/documents/search/semantic')) {
+        return Promise.resolve({ data: { results: [] } })
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
+
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    await screen.findByTestId('documents-live-badge')
+    fireEvent.change(screen.getByTestId('documents-library-search'), {
+      target: { value: 'zzzz-no-hit' },
+    })
+
+    expect(await screen.findByTestId('documents-search-zero')).toHaveTextContent(/No semantic matches/i)
+    expect(screen.queryByTestId('documents-search-unavailable')).not.toBeInTheDocument()
+  })
+
 })
