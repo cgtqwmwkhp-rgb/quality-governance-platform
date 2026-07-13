@@ -183,11 +183,7 @@ async def get_engineer_by_user_me(
     "profile not linked" empty state (no fabricated passport ticks).
     """
     tenant_id = _require_engineer_tenant_id(user)
-    query = (
-        select(Engineer)
-        .options(selectinload(Engineer.competency_records))
-        .where(Engineer.user_id == user.id)
-    )
+    query = select(Engineer).options(selectinload(Engineer.competency_records)).where(Engineer.user_id == user.id)
     query = apply_tenant_filter(query, Engineer, tenant_id)
     result = await db.execute(query)
     engineer = result.scalar_one_or_none()
