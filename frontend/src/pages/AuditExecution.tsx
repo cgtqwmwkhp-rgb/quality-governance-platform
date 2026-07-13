@@ -82,6 +82,7 @@ interface AuditData {
   asset: string
   scheduledDate: string
   auditor: string
+  referenceNumber?: string
   sections: AuditSection[]
 }
 
@@ -618,6 +619,7 @@ export default function AuditExecution() {
           asset: runData.title || '',
           scheduledDate: runData.scheduled_date || '',
           auditor: '',
+          referenceNumber: runData.reference_number || undefined,
           sections,
         })
         setResponses(existingResponses)
@@ -912,7 +914,7 @@ export default function AuditExecution() {
   }
 
   if (completionSummary) {
-    const auditRef = encodeURIComponent(audit.reference_number || String(runIdNum || ''))
+    const auditRef = encodeURIComponent(audit.referenceNumber || String(runIdNum || ''))
     const scopedRiskPath = `/risk-register?auditOnly=1&auditRef=${auditRef}`
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
