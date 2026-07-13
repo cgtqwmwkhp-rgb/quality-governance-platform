@@ -89,6 +89,7 @@ CELERY_TASK_MODULES = (
     "src.infrastructure.tasks.report_tasks",
     "src.infrastructure.tasks.sms_tasks",
     "src.infrastructure.tasks.webhook_tasks",
+    "src.infrastructure.tasks.regulatory_watch_tasks",
 )
 
 celery_app = Celery(
@@ -163,6 +164,10 @@ celery_app.conf.beat_schedule = {
     "recover-stale-import-jobs": {
         "task": "src.infrastructure.tasks.external_audit_import_tasks.recover_stale_import_jobs",
         "schedule": crontab(minute="*/10"),
+    },
+    "run-regulatory-watch": {
+        "task": "src.infrastructure.tasks.regulatory_watch_tasks.run_regulatory_watch",
+        "schedule": crontab(hour=5, minute=30, day_of_week="1"),  # Weekly Monday 05:30 UTC
     },
 }
 

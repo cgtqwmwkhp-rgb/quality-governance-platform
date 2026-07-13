@@ -11,6 +11,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Bell,
   AlertTriangle,
@@ -35,9 +36,10 @@ import {
   Zap,
   BookOpen,
 } from 'lucide-react'
-import { complianceAutomationApi, getApiErrorMessage } from '../api/client'
+import { complianceAutomationApi, getApiErrorMessage, knowledgeBankApi, type RegulatoryImpact } from '../api/client'
 import { cn } from '../helpers/utils'
 import { Button } from '../components/ui/Button'
+import { toast } from '../contexts/ToastContext'
 
 interface RegulatoryUpdate {
   id: number
@@ -94,7 +96,7 @@ const statusColors: Record<string, string> = {
 
 export default function ComplianceAutomation() {
   const [activeTab, setActiveTab] = useState<
-    'regulatory' | 'certificates' | 'audits' | 'scoring' | 'riddor'
+    'regulatory' | 'certificates' | 'audits' | 'scoring' | 'riddor' | 'watch'
   >('regulatory')
   const [updates, setUpdates] = useState<RegulatoryUpdate[]>([])
   const [certificates, setCertificates] = useState<Certificate[]>([])
@@ -106,6 +108,8 @@ export default function ComplianceAutomation() {
     previous: 85.2,
     change: 2.3,
   })
+  const [watchImpacts, setWatchImpacts] = useState<RegulatoryImpact[]>([])
+  const [runningWatch, setRunningWatch] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -169,6 +173,35 @@ export default function ComplianceAutomation() {
     }
   }
 
+  const loadWatchImpacts = async () => {
+    try {
+      const response = await knowledgeBankApi.listImpacts()
+      setWatchImpacts(response.data)
+    } catch (err) {
+      toast.error(getApiErrorMessage(err))
+      setWatchImpacts([])
+    }
+  }
+
+  const handleRunWatch = async () => {
+    setRunningWatch(true)
+    try {
+      const response = await knowledgeBankApi.runRegulatoryWatch()
+      toast.success(response.data.message ?? 'Regulatory watch completed')
+      await loadWatchImpacts()
+    } catch (err) {
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setRunningWatch(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'watch') {
+      void loadWatchImpacts()
+    }
+  }, [activeTab])
+
   const tabs = [
     {
       id: 'regulatory',
@@ -190,6 +223,7 @@ export default function ComplianceAutomation() {
     },
     { id: 'scoring', label: 'Compliance Score', icon: BarChart3 },
     { id: 'riddor', label: 'RIDDOR', icon: FileText },
+    { id: 'watch', label: 'Watch', icon: Eye, count: watchImpacts.length },
   ]
 
   if (loading) {
@@ -587,6 +621,65 @@ export default function ComplianceAutomation() {
                 All reportable incidents have been submitted
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Regulatory Watch Tab */}
+      {activeTab === 'watch' && (
+        <div className="space-y-4">
+          <div className="bg-card/50 border border-border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h3 className="font-medium text-foreground">Regulatory Watch</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Poll regulatory updates and review AI-mapped document impacts
+              </p>
+            </div>
+            <Button onClick={() => void handleRunWatch()} disabled={runningWatch}>
+              {runningWatch ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4 mr-2" />
+              )}
+              Run watch
+            </Button>
+          </div>
+
+          <div className="bg-card/50 border border-border rounded-xl overflow-hidden">
+            <div className="p-4 border-b border-border">
+              <h3 className="font-medium text-foreground">Impacts ({watchImpacts.length})</h3>
+            </div>
+            {watchImpacts.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground text-sm">
+                No regulatory impacts recorded yet. Run watch to start a poll cycle.
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {watchImpacts.map((impact) => (
+                  <div key={impact.id} className="p-4 hover:bg-accent/50 transition-colors">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="font-medium text-foreground">Update {impact.update_id}</p>
+                        {impact.rationale && (
+                          <p className="text-sm text-muted-foreground mt-1">{impact.rationale}</p>
+                        )}
+                        {impact.document_id && (
+                          <Link
+                            to={`/documents/${impact.document_id}`}
+                            className="text-sm text-primary hover:underline mt-2 inline-block"
+                          >
+                            View document #{impact.document_id}
+                          </Link>
+                        )}
+                      </div>
+                      <span className="px-2 py-1 rounded text-xs font-medium bg-muted text-muted-foreground">
+                        {impact.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

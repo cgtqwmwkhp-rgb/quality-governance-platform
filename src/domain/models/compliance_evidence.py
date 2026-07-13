@@ -9,7 +9,7 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import Base, CaseInsensitiveEnum, TimestampMixin
@@ -19,6 +19,23 @@ class EvidenceLinkMethod(str, enum.Enum):
     MANUAL = "manual"
     AUTO = "auto"
     AI = "ai"
+
+
+class EvidenceLinkStatus(str, enum.Enum):
+    PROPOSED = "proposed"
+    CONFIRMED = "confirmed"
+    REJECTED = "rejected"
+    NEEDS_REVIEW = "needs_review"
+
+
+class EvidenceScheme(str, enum.Enum):
+    ISO9001 = "iso9001"
+    ISO14001 = "iso14001"
+    ISO45001 = "iso45001"
+    ISO27001 = "iso27001"
+    UVDB = "uvdb"
+    PLANET_MARK = "planet_mark"
+    CUSTOM = "custom"
 
 
 class ComplianceEvidenceLink(Base, TimestampMixin):
@@ -51,6 +68,15 @@ class ComplianceEvidenceLink(Base, TimestampMixin):
     )
     confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    status: Mapped[Optional[EvidenceLinkStatus]] = mapped_column(
+        CaseInsensitiveEnum(EvidenceLinkStatus),
+        nullable=True,
+        default=EvidenceLinkStatus.PROPOSED,
+    )
+    scheme: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    auto_applied: Mapped[bool] = mapped_column(default=False, server_default="false")
+    rationale: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     title: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -78,3 +104,12 @@ class ComplianceEvidenceLink(Base, TimestampMixin):
     @property
     def is_deleted(self) -> bool:
         return self.deleted_at is not None
+
+    @property
+    def effective_status(self) -> EvidenceLinkStatus:
+        """Backward-compat: legacy manual links without status are confirmed."""
+        if self.status is not None:
+            return self.status
+        if self.linked_by == EvidenceLinkMethod.MANUAL:
+            return EvidenceLinkStatus.CONFIRMED
+        return EvidenceLinkStatus.PROPOSED

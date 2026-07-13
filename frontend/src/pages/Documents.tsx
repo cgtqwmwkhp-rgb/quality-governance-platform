@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
 import {
@@ -134,6 +135,7 @@ const getStatusVariant = (status: string) => {
 
 export default function Documents() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [documents, setDocuments] = useState<Document[]>([])
   const [stats, setStats] = useState<DocumentStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -572,15 +574,11 @@ export default function Documents() {
             {searchResults.map((result) => (
               <div
                 key={result.document_id}
-                onClick={() => {
-                  const doc = documents.find((d) => d.id === result.document_id)
-                  if (doc) setSelectedDocument(doc)
-                }}
+                onClick={() => navigate(`/documents/${result.document_id}`)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
-                    const doc = documents.find((d) => d.id === result.document_id)
-                    if (doc) setSelectedDocument(doc)
+                    navigate(`/documents/${result.document_id}`)
                   }
                 }}
                 role="button"
@@ -636,7 +634,7 @@ export default function Documents() {
                 <Card
                   key={doc.id}
                   hoverable
-                  onClick={() => setSelectedDocument(doc)}
+                  onClick={() => navigate(`/documents/${doc.id}`)}
                   className="p-5 cursor-pointer"
                 >
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
@@ -741,7 +739,7 @@ export default function Documents() {
                 return (
                   <tr
                     key={doc.id}
-                    onClick={() => setSelectedDocument(doc)}
+                    onClick={() => navigate(`/documents/${doc.id}`)}
                     className="hover:bg-surface cursor-pointer"
                   >
                     <td className="px-6 py-4">

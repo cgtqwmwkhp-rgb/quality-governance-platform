@@ -9,13 +9,14 @@ Provides endpoints for:
 - Access tracking
 """
 
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
@@ -33,6 +34,7 @@ from src.domain.models.document_control import (
 from src.domain.models.user import User
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _tenant_id(current_user: CurrentUser) -> int:
@@ -427,6 +429,67 @@ async def create_new_version(
     db.add(version)
     await db.commit()
     await db.refresh(version)
+
+    # AI-first version lifecycle: rematch evidence + stale quizzes (best-effort)
+    try:
+        from src.domain.models.document import Document as LibraryDocument
+        from src.domain.services.governed_knowledge_service import governed_knowledge_service
+
+        lib = await db.execute(
+            select(LibraryDocument)
+            .where(
+                LibraryDocument.tenant_id == tenant_id,
+                or_(
+                    LibraryDocument.title == document.title,
+                    LibraryDocument.reference_number == document.document_number,
+                ),
+            )
+            .limit(1)
+        )
+        library_doc = lib.scalar_one_or_none()
+        if library_doc is not None:
+            content = " ".join(
+                filter(
+                    None,
+                    [
+                        library_doc.title or "",
+                        library_doc.description or "",
+                        library_doc.ai_summary or "",
+                        " ".join(library_doc.ai_tags or []) if library_doc.ai_tags else "",
+                    ],
+                )
+            )
+            await governed_knowledge_service.rematch_evidence_on_version(
+                db,
+                library_doc.id,
+                content,
+                library_doc.document_type,
+                tenant_id,
+                current_user,
+            )
+            await governed_knowledge_service.mark_quizzes_stale_for_document(
+                db,
+                document_id=library_doc.id,
+                tenant_id=tenant_id,
+                new_version=new_version_number,
+            )
+            # AI-first: auto-draft a fresh quiz for the new version
+            await governed_knowledge_service.generate_quiz_draft(
+                db,
+                document_id=library_doc.id,
+                content=content or library_doc.title or document.title,
+                version=new_version_number,
+                tenant_id=tenant_id,
+                user=current_user,
+                question_count=5,
+                include_open=True,
+                include_mcq=True,
+                pass_mark=70,
+                auto_approve_if_quality=True,
+            )
+            await db.commit()
+    except Exception:
+        logger.exception("Governed KB rematch/quiz stale failed for controlled doc %s", document_id)
 
     return {
         "id": version.id,
