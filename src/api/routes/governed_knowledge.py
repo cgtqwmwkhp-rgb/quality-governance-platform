@@ -824,7 +824,9 @@ async def list_regulatory_impacts(
     action_refs: dict[int, str] = {}
     action_ids = [i.action_id for i in impacts if i.action_id]
     if action_ids:
-        capa_result = await db.execute(select(CAPAAction.id, CAPAAction.reference_number).where(CAPAAction.id.in_(action_ids)))
+        capa_result = await db.execute(
+            select(CAPAAction.id, CAPAAction.reference_number).where(CAPAAction.id.in_(action_ids))
+        )
         action_refs = {row[0]: row[1] for row in capa_result.all()}
 
     return [

@@ -17,11 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.compliance_automation import RegulatoryUpdate
 from src.domain.models.document import Document
-from src.domain.models.governed_knowledge import (
-    AiDecisionLog,
-    RegulatoryImpactStatus,
-    RegulatoryWatchImpact,
-)
+from src.domain.models.governed_knowledge import AiDecisionLog, RegulatoryImpactStatus, RegulatoryWatchImpact
 from src.domain.models.user import User
 from src.domain.services.reference_number import ReferenceNumberService
 
