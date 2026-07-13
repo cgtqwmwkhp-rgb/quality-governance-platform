@@ -195,6 +195,7 @@ def _build_evidence_link_model(link: ComplianceEvidenceLink) -> EvidenceLink:
         created_by=link.created_by_email,
         title=link.title,
         notes=link.notes,
+        signal_type=getattr(link, "signal_type", None),
     )
 
 

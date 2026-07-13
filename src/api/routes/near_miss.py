@@ -1,5 +1,6 @@
 """Near Miss API routes."""
 
+import logging
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
@@ -23,6 +24,42 @@ from src.domain.services.near_miss_service import NearMissService
 from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter(tags=["Near Misses"])
+logger = logging.getLogger(__name__)
+
+
+def _near_miss_assess_content(near_miss: NearMiss) -> str:
+    parts = [
+        near_miss.description,
+        near_miss.potential_consequences or "",
+        near_miss.preventive_action_suggested or "",
+        f"Location: {near_miss.location}" if near_miss.location else "",
+    ]
+    return "\n\n".join(p for p in parts if p)
+
+
+async def _trigger_operational_standards_assess(
+    db: DbSession,
+    near_miss: NearMiss,
+    current_user: User,
+) -> None:
+    """Fire-and-forget standards assessment; never breaks near-miss save."""
+    try:
+        from src.domain.services.governed_knowledge_service import governed_knowledge_service
+
+        await governed_knowledge_service.assess_operational_entity(
+            db,
+            entity_type="near_miss",
+            entity_id=str(near_miss.id),
+            content=_near_miss_assess_content(near_miss),
+            tenant_id=near_miss.tenant_id,
+            user=current_user,
+        )
+    except Exception:
+        logger.warning(
+            "Operational standards assess failed for near_miss %s; save continues",
+            near_miss.id,
+            exc_info=True,
+        )
 
 
 async def _get_near_miss_or_404(db, near_miss_id: int, current_user: CurrentUser) -> NearMiss:
@@ -82,6 +119,7 @@ async def create_near_miss(
 
     await db.commit()
     await db.refresh(near_miss)
+    await _trigger_operational_standards_assess(db, near_miss, current_user)
     return near_miss
 
 
@@ -181,6 +219,7 @@ async def update_near_miss(
 
     await db.commit()
     await db.refresh(near_miss)
+    await _trigger_operational_standards_assess(db, near_miss, current_user)
     return near_miss
 
 

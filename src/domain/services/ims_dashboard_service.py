@@ -328,6 +328,7 @@ class IMSDashboardService:
                 clause_id=lnk.clause_id,
                 linked_by=lnk.linked_by or "manual",
                 confidence=lnk.confidence,
+                signal_type=getattr(lnk, "signal_type", None),
             )
             for lnk in links_raw
         ]

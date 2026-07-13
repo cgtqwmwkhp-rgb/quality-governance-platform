@@ -45,6 +45,10 @@ class EvidenceSignalType(str, enum.Enum):
     near misses, complaints, and audit findings are usually
     ``nonconformity`` / ``gap`` / ``opportunity`` signals — not proof of
     conformance. Mixing these up pollutes certification evidence packs.
+
+    Coverage honesty: only ``evidence`` (and legacy null signal_type) counts
+    toward IMS/compliance ``coverage_percentage``. NC / gap / opportunity
+    links are retained for assessor workflows but must not inflate coverage.
     """
 
     EVIDENCE = "evidence"

@@ -47,6 +47,26 @@ class EvidenceLink:
     created_by: Optional[str] = None
     title: Optional[str] = None
     notes: Optional[str] = None
+    # How the link relates to the clause. Only ``evidence`` (and legacy null)
+    # counts toward positive compliance coverage %. Operational signals
+    # (nonconformity / gap / opportunity) must not inflate coverage.
+    signal_type: Optional[str] = None
+
+
+def counts_toward_compliance_coverage(signal_type: Optional[str]) -> bool:
+    """Return True when a CEL row should increase coverage_percentage.
+
+    Document / evidence-only links count. Explicit operational signals
+    (nonconformity, gap, opportunity) are mapped for assessor workflows but
+    are not proof of conformance. Legacy rows with null/empty signal_type
+    remain counted for backward compatibility.
+    """
+    if signal_type is None:
+        return True
+    normalized = str(signal_type).strip().lower()
+    if not normalized:
+        return True
+    return normalized == "evidence"
 
 
 # =============================================================================
@@ -2913,13 +2933,19 @@ Write only the conformance statement. Use formal auditor language (past tense, s
         Calculate compliance coverage statistics.
 
         Returns coverage percentages and gap analysis.
+
+        Only links that :func:`counts_toward_compliance_coverage` accepts are
+        treated as positive evidence. Nonconformity / gap / opportunity signals
+        are ignored for coverage_percentage so assessor mappings cannot inflate
+        certification readiness.
         """
         clauses = self.get_all_clauses(standard)
         level_2_clauses = [c for c in clauses if c.level == 2]
+        coverage_links = [link for link in evidence_links if counts_toward_compliance_coverage(link.signal_type)]
 
         # Count evidence per clause
         clause_evidence_count: Dict[str, int] = {}
-        for link in evidence_links:
+        for link in coverage_links:
             clause_id = link.clause_id
             clause_evidence_count[clause_id] = clause_evidence_count.get(clause_id, 0) + 1
 
@@ -2957,10 +2983,10 @@ Write only the conformance statement. Use formal auditor language (past tense, s
                 for c in no_coverage
             ],
             "by_standard": {
-                "iso9001": self._standard_coverage(evidence_links, ISOStandard.ISO_9001),
-                "iso14001": self._standard_coverage(evidence_links, ISOStandard.ISO_14001),
-                "iso45001": self._standard_coverage(evidence_links, ISOStandard.ISO_45001),
-                "iso27001": self._standard_coverage(evidence_links, ISOStandard.ISO_27001),
+                "iso9001": self._standard_coverage(coverage_links, ISOStandard.ISO_9001),
+                "iso14001": self._standard_coverage(coverage_links, ISOStandard.ISO_14001),
+                "iso45001": self._standard_coverage(coverage_links, ISOStandard.ISO_45001),
+                "iso27001": self._standard_coverage(coverage_links, ISOStandard.ISO_27001),
             },
         }
 
@@ -2970,6 +2996,9 @@ Write only the conformance statement. Use formal auditor language (past tense, s
         Uses the same full (≥2 items) / partial (1 item) semantics as
         ``calculate_compliance_coverage`` so that by_standard figures are
         directly comparable to the top-level coverage_percentage.
+
+        Callers should pass links already filtered by
+        :func:`counts_toward_compliance_coverage`.
         """
         clauses = [c for c in ALL_CLAUSES if c.standard == standard and c.level == 2]
 

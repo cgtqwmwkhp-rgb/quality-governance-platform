@@ -76,6 +76,33 @@ logger = logging.getLogger(__name__)
 observability_logger = StructuredLogger("audit.observability")
 
 
+async def _trigger_operational_standards_assess(
+    db: DbSession,
+    finding: AuditFinding,
+    current_user: User,
+) -> None:
+    """Fire-and-forget standards assessment; never breaks finding save."""
+    try:
+        from src.domain.services.governed_knowledge_service import governed_knowledge_service
+
+        content = f"{finding.title}\n\n{finding.description}"
+        await governed_knowledge_service.assess_operational_entity(
+            db,
+            entity_type="audit_finding",
+            entity_id=str(finding.id),
+            content=content,
+            tenant_id=finding.tenant_id,
+            user=current_user,
+            finding_type=getattr(finding, "finding_type", None),
+        )
+    except Exception:
+        logger.warning(
+            "Operational standards assess failed for audit_finding %s; save continues",
+            finding.id,
+            exc_info=True,
+        )
+
+
 def _decode_html(value: Optional[str]) -> Optional[str]:
     """Decode HTML entities from text fields (e.g. '&amp;' -> '&')."""
     if value is None:
@@ -1412,6 +1439,7 @@ async def create_finding(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
     )
+    await _trigger_operational_standards_assess(db, finding, current_user)
 
     response = AuditFindingResponse.model_validate(finding)
     _record_audit_endpoint_event(
@@ -1437,6 +1465,7 @@ async def update_finding(
         tenant_id=current_user.tenant_id,
         actor_user_id=current_user.id,
     )
+    await _trigger_operational_standards_assess(db, finding, current_user)
     return AuditFindingResponse.model_validate(finding)
 
 
