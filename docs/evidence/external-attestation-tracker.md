@@ -2,10 +2,10 @@
 
 **Platform:** Quality Governance Platform (QGP)
 **Owner:** Platform Engineering / GRC Lead
-**Last Updated:** 2026-04-07
+**Last Updated:** 2026-07-13
 **Review Cycle:** Quarterly
 
-This document tracks all external attestations required to achieve CM=1.00 (direct + comprehensive evidence) across WCS dimensions that currently have CM=0.90 due to missing third-party validation.
+This document tracks all external attestations required to achieve CM=1.00 (direct + comprehensive evidence) across WCS dimensions that currently have CM=0.90 due to missing third-party validation. Historical mentions of PagerDuty as a required unlock are superseded by **EA-05 Cancelled**.
 
 ---
 
@@ -17,7 +17,7 @@ This document tracks all external attestations required to achieve CM=1.00 (dire
 | EA-02 | D06 Security | External penetration test | 🟡 Scheduled | CISO | Q2 2026 | 0.90 | 1.00 |
 | EA-03 | D07 Privacy | DPO sign-off on DPIAs | ✅ Closed 2026-07-12 | DPO / Legal | Q3 2026 | 1.00 | 1.00 |
 | EA-04 | D08 Compliance | ISO auditor validation of evidence tool | 🔴 Not started | Quality Lead | Q4 2026 | 0.90 | 1.00 |
-| EA-05 | D23 Ops | Live on-call schedule + PagerDuty/OpsGenie config | 🟡 In progress | SRE Lead | Q2 2026 | 0.90 | 1.00 |
+| EA-05 | D23 Ops | Live on-call schedule + PagerDuty/OpsGenie config | Cancelled — N/A | SRE Lead | — | — | Azure Monitor email |
 
 ---
 
@@ -143,32 +143,17 @@ docs/evidence/iso-auditor-validation-YYYY-Q?.md
 
 ## EA-05: Live On-call Schedule + Alerting Tool Configuration (D23)
 
-**Blocking score uplift:** D23 WCS 8.6 → 9.5
+**Status:** Cancelled / N/A (2026-07-13)
 
-**What's needed:**
-- Live PagerDuty or OpsGenie integration configured and verified
-- Named on-call rotation schedule documented and active
-- Escalation policy tested (alert → on-call → escalation path)
-- Integration with Azure Monitor alerting (alerts flow to PD/OpsGenie)
+PagerDuty / OpsGenie app-level Events API integration is **out of product scope**.
+Accepted D23 ops alerting path is **Azure Monitor → email action groups** (already documented
+and active). Historical scorecards and runbooks that mention PagerDuty as a required unlock are
+**superseded** by this cancellation.
 
-**Evidence already in place:**
-- `docs/ops/ON_CALL_TEMPLATE.md` (template exists)
-- `docs/runbooks/OBSERVABILITY_AND_ALERTING.md`
-- `docs/observability/alerting-rules.md`
-- `docs/evidence/otel-alert-proof-2026-04-07.md` (OTel alert round-trip proven)
-- `docs/runbooks/HUMAN_UNLOCK_SMTP_PAGERDUTY.md` (human unlock runbook)
-- `scripts/ops/wire_smtp_pagerduty.sh` (wire script — requires human credentials)
-
-**Deliverable required:**
-```
-docs/evidence/on-call-config-proof.md
-  - Tool: PagerDuty / OpsGenie / [other]
-  - Integration: Azure Monitor → tool (webhook/API key configured)
-  - On-call rotation: named schedule with at least 2 rotators
-  - Escalation policy: defined and tested
-  - Test alert evidence: screenshot/log of test alert triggered + resolved
-  - Last tested: date
-```
+**Accepted evidence path:**
+- `docs/runbooks/alerting-integration.md` — Azure Monitor alert rules + email action groups
+- `docs/ops/ON_CALL_TEMPLATE.md` — on-call template (email / Azure Monitor)
+- `docs/runbooks/HUMAN_UNLOCK_SMTP.md` — SMTP only (PagerDuty removed from wire script)
 
 ---
 

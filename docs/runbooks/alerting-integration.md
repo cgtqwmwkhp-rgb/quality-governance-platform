@@ -9,25 +9,9 @@ Setup and configuration for production alerting.
 | Cost alerts | Azure Cost Management | Active |
 | Health check monitoring | Azure App Service | Active |
 | Log-based alerts | Azure Log Analytics | Partial |
-| Incident paging | PagerDuty Events API v2 | Partial (env-driven enqueue + /readyz honesty) |
+| Incident paging (PagerDuty Events API) | — | **Removed** (EA-05 Cancelled) |
 | Team notifications | Slack/Teams | Planned |
-
-## PagerDuty Events API (app-level)
-
-Env vars (leave unset until Key Vault / App Settings provide real values — never invent secrets):
-
-| Variable | Purpose |
-|----------|---------|
-| `PAGERDUTY_ENABLED` | Explicit ops intent (`true`/`1`/`yes`/`on`) |
-| `PAGERDUTY_ROUTING_KEY` | Events API v2 routing key (integration key) |
-| `PAGERDUTY_EVENTS_API_URL` | Optional override; defaults to `https://events.pagerduty.com/v2/enqueue` |
-
-Behaviour:
-
-- **No routing key** → enqueue returns `not_configured`; `/readyz` reports `pagerduty.status=not_configured` (no 503).
-- **Routing key set + enqueue fails** → raise / Celery retry; `/readyz` reports `send_failed` and **fails closed (503)** until a successful enqueue clears state.
-- Celery task `trigger_pagerduty_alert` pages on DLQ depth CRITICAL (≥50).
-- `/readyz` also surfaces `dlq.depth` (informational metric).
+| Ops notify | Azure Monitor email action groups | Active |
 
 ## Azure Monitor Alert Rules
 
@@ -45,33 +29,10 @@ Behaviour:
 
 | Rule | Trigger | Target Action Group |
 |------|---------|---------------------|
-| API p95 > 200ms (15 min) | OpenTelemetry metrics | PagerDuty (high) |
-| API p99 > 500ms (15 min) | OpenTelemetry metrics | PagerDuty (critical) |
-| Error rate > 1% (5 min) | Application logs | PagerDuty (high) |
+| API p95 > 200ms (15 min) | OpenTelemetry metrics | Email: platform-team (high) |
+| API p99 > 500ms (15 min) | OpenTelemetry metrics | Email: platform-team + eng-lead (critical) |
+| Error rate > 1% (5 min) | Application logs | Email: platform-team (high) |
 | Failed deployments | GitHub Actions webhook | Slack notification |
-
-## PagerDuty Setup Plan
-
-### Prerequisites
-1. PagerDuty account provisioned
-2. Service created: "QGP Production"
-3. Escalation policy defined (see below)
-4. Azure Monitor integration configured
-
-### Escalation Policy
-
-| Level | Wait Time | Notify |
-|-------|-----------|--------|
-| L1 | Immediate | On-call engineer |
-| L2 | 15 minutes | Engineering lead |
-| L3 | 30 minutes | Platform manager |
-
-### Integration Steps
-
-1. Create PagerDuty service and obtain integration key
-2. Create Azure Monitor Action Group with PagerDuty webhook
-3. Associate Action Group with alert rules
-4. Test end-to-end: trigger test alert → verify PagerDuty incident
 
 ## Slack/Teams Notification Plan
 
@@ -88,3 +49,4 @@ Behaviour:
 - [`docs/observability/alerting-rules.md`](../observability/alerting-rules.md) — SLO alerting rules
 - [`docs/runbooks/on-call-guide.md`](on-call-guide.md) — on-call procedures
 - [`docs/observability/telemetry-enablement-plan.md`](../observability/telemetry-enablement-plan.md) — telemetry plan
+- [`docs/runbooks/HUMAN_UNLOCK_SMTP.md`](HUMAN_UNLOCK_SMTP.md) — SMTP human unlock (no PagerDuty)

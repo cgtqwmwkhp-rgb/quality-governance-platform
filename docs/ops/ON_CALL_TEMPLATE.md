@@ -72,7 +72,7 @@
 
 - Notify rotation at least **7 days** before leave
 - Swap with another engineer or use backup list
-- Update PagerDuty/OpsGenie schedule accordingly
+- Update on-call rotation / Azure Monitor notification list accordingly
 
 ---
 
@@ -91,7 +91,7 @@
 
 - [ ] Review open incidents and their status
 - [ ] Check recent deployments and release notes
-- [ ] Verify alerting channels (Slack, PagerDuty, etc.) are working
+- [ ] Verify alerting channels (Slack, Azure Monitor email, etc.) are working
 - [ ] Confirm access to runbooks and escalation contacts
 - [ ] Test on-call phone/device can receive pages
 - [ ] Acknowledge handoff in rotation tool
@@ -110,7 +110,7 @@
 
 | Tool | Purpose |
 |------|---------|
-| PagerDuty / OpsGenie | Alert routing, escalation |
+| Azure Monitor email | Alert routing to platform / eng-lead |
 | Slack #incidents | Real-time coordination |
 | Azure Portal | Infrastructure access |
 | Runbooks | docs/ops/INCIDENT_RESPONSE_RUNBOOK.md |

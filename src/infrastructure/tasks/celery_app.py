@@ -84,7 +84,6 @@ CELERY_TASK_MODULES = (
     "src.infrastructure.tasks.external_audit_import_tasks",
     "src.infrastructure.tasks.monitor_tasks",
     "src.infrastructure.tasks.notification_tasks",
-    "src.infrastructure.tasks.pagerduty_tasks",
     "src.infrastructure.tasks.pams_sync_tasks",
     "src.infrastructure.tasks.report_tasks",
     "src.infrastructure.tasks.sms_tasks",
