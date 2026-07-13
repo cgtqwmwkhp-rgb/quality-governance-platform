@@ -32,7 +32,7 @@ class NearMiss(Base):
     reference_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
 
     # Multi-tenancy
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # Reporter information
     reporter_name: Mapped[str] = mapped_column(String(200), nullable=False)
