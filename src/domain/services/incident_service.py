@@ -168,6 +168,7 @@ class IncidentService:
         tenant_id: int | None,
         params: PaginationInput,
         reporter_email: Optional[str] = None,
+        owner: Optional[str] = None,
         skip_tenant_check: bool = False,
     ):
         """List incidents with pagination and optional filters."""
@@ -180,6 +181,9 @@ class IncidentService:
 
         if reporter_email:
             query = query.where(Incident.reporter_email == reporter_email)
+
+        if owner == "unassigned":
+            query = query.where(Incident.owner_id.is_(None))
 
         query = query.order_by(Incident.reported_date.desc(), Incident.id.asc())
         return await paginate(self.db, query, params)

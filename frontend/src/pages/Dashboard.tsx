@@ -321,6 +321,11 @@ export default function Dashboard() {
     { id: number; title: string; date: string; type: string; days: number }[]
   >([])
   const [error, setError] = useState<string | null>(null)
+  const [unassignedIntakes, setUnassignedIntakes] = useState<{
+    total: number
+    incidents: number
+    complaints: number
+  } | null>(null)
 
   useEffect(() => {
     loadData()
@@ -339,6 +344,8 @@ export default function Dashboard() {
         auditsApi.listRuns(1, 100),
         notificationsApi.getUnreadCount(),
         complianceApi.getCoverage(), // index 7 — live per-standard coverage
+        incidentsApi.list(1, 1, { owner: 'unassigned' }),
+        complaintsApi.list(1, 1, { owner: 'unassigned' }),
       ])
 
       const getData = <T,>(r: PromiseSettledResult<{ data: T }>, def: T): T =>
@@ -526,6 +533,20 @@ export default function Dashboard() {
         })(),
         carbon: { totalEmissions: 0, perFTE: 0, trend: 0 },
       })
+
+      const unassignedIncidentTotal =
+        results[8].status === 'fulfilled' ? (results[8].value?.data?.total ?? 0) : 0
+      const unassignedComplaintTotal =
+        results[9].status === 'fulfilled' ? (results[9].value?.data?.total ?? 0) : 0
+      if (results[8].status === 'fulfilled' || results[9].status === 'fulfilled') {
+        setUnassignedIntakes({
+          incidents: unassignedIncidentTotal,
+          complaints: unassignedComplaintTotal,
+          total: unassignedIncidentTotal + unassignedComplaintTotal,
+        })
+      } else {
+        setUnassignedIntakes(null)
+      }
     } catch (err) {
       if (import.meta.env.DEV) console.error('Failed to load dashboard data:', err)
       setError('Failed to load data. Please try again.')
@@ -630,6 +651,26 @@ export default function Dashboard() {
           subtitle={`${stats.actions.dueSoon} due soon`}
         />
       </div>
+
+      {unassignedIntakes ? (
+        <div data-testid="dashboard-unassigned-intakes">
+          <StatCard
+            title="Unassigned intakes"
+            value={unassignedIntakes.total}
+            icon={AlertCircle}
+            variant="warning"
+            link="/incidents?owner=unassigned"
+            subtitle={`${unassignedIntakes.incidents} incidents · ${unassignedIntakes.complaints} complaints (server owner=unassigned)`}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Honest server totals via <code>owner=unassigned</code>. Also triage{' '}
+            <Link className="underline" to="/complaints?owner=unassigned">
+              unassigned complaints
+            </Link>
+            .
+          </p>
+        </div>
+      ) : null}
 
       {/* Secondary Row: Audits, Risks, Carbon */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
