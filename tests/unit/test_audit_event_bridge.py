@@ -77,10 +77,7 @@ async def test_record_audit_event_skips_persist_without_tenant():
     """Honest degradation: no tenant → observability only, no AuditLogService call."""
     db = AsyncMock()
 
-    with (
-        patch("src.domain.services.audit_service.get_request_tenant_id", return_value=None),
-        patch("src.domain.services.audit_service.AuditLogService") as mock_cls,
-    ):
+    with patch("src.domain.services.audit_service.AuditLogService") as mock_cls:
         event = await record_audit_event(
             db=db,
             event_type="complaint.created",
@@ -98,19 +95,12 @@ async def test_record_audit_event_skips_persist_without_tenant():
 
 
 @pytest.mark.asyncio
-async def test_record_audit_event_uses_request_tenant_context():
+async def test_record_audit_event_requires_explicit_tenant_id():
+    """Domain bridge does not import infrastructure tenant_context (D09)."""
     db = AsyncMock()
-    entry = MagicMock(id=11)
 
-    with (
-        patch("src.domain.services.audit_service.get_request_tenant_id", return_value=77),
-        patch("src.domain.services.audit_service.AuditLogService") as mock_cls,
-    ):
-        mock_svc = MagicMock()
-        mock_svc.log = AsyncMock(return_value=entry)
-        mock_cls.return_value = mock_svc
-
-        await record_audit_event(
+    with patch("src.domain.services.audit_service.AuditLogService") as mock_cls:
+        event = await record_audit_event(
             db=db,
             event_type="incident.updated",
             entity_type="incident",
@@ -118,6 +108,8 @@ async def test_record_audit_event_uses_request_tenant_context():
             action="update",
             payload={"title": "y"},
             user_id=3,
+            # tenant_id omitted on purpose
         )
 
-    assert mock_svc.log.await_args.kwargs["tenant_id"] == 77
+    mock_cls.assert_not_called()
+    assert event.id is None

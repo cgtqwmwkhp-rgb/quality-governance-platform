@@ -22,7 +22,6 @@ from src.domain.models.base import Base
 logger = logging.getLogger(__name__)
 
 
-
 class NaiveUTCDateTime(TypeDecorator):
     """Store UTC timestamps as TIMESTAMP WITHOUT TIME ZONE (naive)."""
 
