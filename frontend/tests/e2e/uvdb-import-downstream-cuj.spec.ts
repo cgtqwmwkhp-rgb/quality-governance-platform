@@ -138,7 +138,8 @@ async function installUvdbDownstreamMocks(page: Page, options?: { missAuditRef?:
         view_links: {
           actions: "/actions?sourceType=audit_finding",
           risk_register: `/risk-register?auditOnly=1&auditRef=${AUDIT_REF}`,
-          uvdb: `/uvdb?auditRef=${AUDIT_REF}`,
+          uvdb: `/uvdb?auditRef=${AUDIT_REF}&runId=${RUN_ID}&jobId=${JOB_ID}`,
+          import_review: `/audits/${RUN_ID}/import-review?jobId=${JOB_ID}`,
         },
       });
       return;
@@ -209,9 +210,13 @@ test.describe("UVDB import → home → CAPA/Risk CUJ", () => {
     await seedAuth(page);
     await installUvdbDownstreamMocks(page, { missAuditRef: true });
 
-    await page.goto("/uvdb?auditRef=MISSING-REF");
+    await page.goto(`/uvdb?auditRef=MISSING-REF&runId=${RUN_ID}&jobId=${JOB_ID}`);
 
     await expect(page.getByTestId("uvdb-auditref-miss")).toBeVisible();
+    await expect(page.getByTestId("uvdb-auditref-miss-recovery-import-review")).toHaveAttribute(
+      "href",
+      `/audits/${RUN_ID}/import-review?jobId=${JOB_ID}`,
+    );
     await expect(page.getByTestId("uvdb-auditref-miss-recovery-audits")).toHaveAttribute(
       "href",
       "/audits?source=achilles",
@@ -219,6 +224,22 @@ test.describe("UVDB import → home → CAPA/Risk CUJ", () => {
     await expect(page.getByTestId("uvdb-auditref-miss-recovery-clear")).toHaveAttribute(
       "href",
       "/uvdb",
+    );
+  });
+
+  test("reconciliation panel surfaces uvdb_sync proof and import-review handoff", async ({
+    page,
+  }) => {
+    await seedAuth(page);
+    await installUvdbDownstreamMocks(page);
+
+    await page.goto(`/uvdb?auditRef=${AUDIT_REF}&runId=${RUN_ID}&jobId=${JOB_ID}`);
+
+    await expect(page.getByTestId("uvdb-reconciliation-panel")).toBeVisible();
+    await expect(page.getByTestId("uvdb-proof-step-uvdb_sync")).toContainText("ok");
+    await expect(page.getByTestId("uvdb-open-import-review").first()).toHaveAttribute(
+      "href",
+      `/audits/${RUN_ID}/import-review?jobId=${JOB_ID}`,
     );
   });
 });

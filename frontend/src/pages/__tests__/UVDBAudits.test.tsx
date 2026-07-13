@@ -355,12 +355,16 @@ describe('UVDBAudits', () => {
 
     const UVDBAudits = (await import('../UVDBAudits')).default
     render(
-      <MemoryRouter initialEntries={['/uvdb?auditRef=MISSING-REF']}>
+      <MemoryRouter initialEntries={['/uvdb?auditRef=MISSING-REF&runId=41&jobId=72']}>
         <UVDBAudits />
       </MemoryRouter>,
     )
 
     expect(await screen.findByTestId('uvdb-auditref-miss')).toBeInTheDocument()
+    expect(screen.getByTestId('uvdb-auditref-miss-recovery-import-review')).toHaveAttribute(
+      'href',
+      '/audits/41/import-review?jobId=72',
+    )
     expect(screen.getByTestId('uvdb-auditref-miss-recovery-audits')).toHaveAttribute(
       'href',
       '/audits?source=achilles',
@@ -392,6 +396,37 @@ describe('UVDBAudits', () => {
         ],
       },
     })
+    mockGetReconciliation.mockResolvedValueOnce({
+      data: {
+        job_id: 72,
+        audit_run_id: 41,
+        audit_reference: 'UVDB-2026-0002',
+        job_status: 'completed',
+        canonical_read_model: 'specialist_sync_verification',
+        specialist_home: { path: '/uvdb', label: 'Achilles / UVDB' },
+        accepted_total: 1,
+        promoted_total: 1,
+        accepted_pending_total: 0,
+        failed_total: 0,
+        failed_drafts: [],
+        materialized: {
+          audit_findings: 1,
+          capa_actions: 1,
+          enterprise_risks: 1,
+          uvdb_audit_id: 6,
+        },
+        proof_matrix: [
+          { step: 'promotion', status: 'ok', detail: '1 finding(s)' },
+          { step: 'uvdb_sync', status: 'ok', detail: 'UVDB audit id 6' },
+        ],
+        draft_results: [{ finding_id: 501 }],
+        view_links: {
+          actions: '/actions?sourceType=audit_finding&sourceId=501',
+          risk_register: '/risk-register?auditOnly=1&auditRef=UVDB-2026-0002',
+          import_review: '/audits/41/import-review?jobId=72',
+        },
+      },
+    })
 
     const UVDBAudits = (await import('../UVDBAudits')).default
     renderPage(<UVDBAudits />)
@@ -401,6 +436,68 @@ describe('UVDBAudits', () => {
       expect(mockGetReconciliation).toHaveBeenCalledWith(72)
     })
     expect(await screen.findByText(/Proof ready/i)).toBeInTheDocument()
+    expect(screen.getByTestId('uvdb-proof-step-uvdb_sync')).toHaveTextContent('uvdb sync: ok')
+    const capaLinks = screen.getAllByTestId('uvdb-open-capa')
+    expect(
+      capaLinks.some((link) =>
+        link.getAttribute('href')?.includes('sourceId=501'),
+      ),
+    ).toBe(true)
+    expect(screen.getAllByTestId('uvdb-open-import-review')[0]).toHaveAttribute(
+      'href',
+      '/audits/41/import-review?jobId=72',
+    )
+  })
+
+  it('labels partial reconciliation honestly when drafts remain pending', async () => {
+    mockListAudits.mockResolvedValueOnce({
+      data: {
+        total: 1,
+        audits: [
+          {
+            id: 6,
+            audit_reference: 'UVDB-2026-0002',
+            company_name: 'Plantexpand Limited',
+            audit_type: 'B2',
+            audit_date: '2026-04-20',
+            status: 'completed',
+            percentage_score: 89,
+            lead_auditor: 'Alex Jones',
+            audit_run_id: 41,
+            import_job_id: 72,
+          },
+        ],
+      },
+    })
+    mockGetReconciliation.mockResolvedValueOnce({
+      data: {
+        job_id: 72,
+        audit_run_id: 41,
+        audit_reference: 'UVDB-2026-0002',
+        job_status: 'review_required',
+        canonical_read_model: 'specialist_sync_verification',
+        specialist_home: { path: '/uvdb', label: 'Achilles / UVDB' },
+        accepted_total: 2,
+        promoted_total: 1,
+        accepted_pending_total: 1,
+        failed_total: 0,
+        failed_drafts: [],
+        materialized: {
+          audit_findings: 1,
+          capa_actions: 0,
+          enterprise_risks: 0,
+          uvdb_audit_id: 6,
+        },
+        proof_matrix: [{ step: 'uvdb_sync', status: 'ok', detail: 'Synced' }],
+        draft_results: [],
+        view_links: {},
+      },
+    })
+
+    const UVDBAudits = (await import('../UVDBAudits')).default
+    renderPage(<UVDBAudits />)
+
+    expect(await screen.findByText(/partial/i)).toBeInTheDocument()
   })
 
   it('shows useful empty states for scores, protocol, audit history and ISO mappings', async () => {

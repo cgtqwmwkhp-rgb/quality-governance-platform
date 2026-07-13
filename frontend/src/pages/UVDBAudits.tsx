@@ -149,10 +149,12 @@ function ScoreBar({ percentage }: { percentage: number }) {
 function DownstreamHandoffLinks({
   auditRef,
   findingId,
+  importReviewPath,
   className = '',
 }: {
   auditRef?: string | null
   findingId?: number | null
+  importReviewPath?: string | null
   className?: string
 }) {
   const capaPath = getUvdbCapaActionsPath(findingId)
@@ -173,6 +175,15 @@ function DownstreamHandoffLinks({
       >
         Open Risk Register
       </Link>
+      {importReviewPath ? (
+        <Link
+          to={importReviewPath}
+          data-testid="uvdb-open-import-review"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+        >
+          Open import review
+        </Link>
+      ) : null}
       <Link
         to={ACHILLES_UVDB_AUDITS_PATH}
         data-testid="uvdb-open-assurance-audits"
@@ -400,6 +411,9 @@ export default function UVDBAudits() {
   const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const auditRefFromQuery = searchParams.get('auditRef') || ''
+  const runIdFromQuery = Number(searchParams.get('runId') || '') || null
+  const jobIdFromQuery = Number(searchParams.get('jobId') || '') || null
+  const recoveryImportReviewPath = getImportReviewPath(runIdFromQuery, jobIdFromQuery)
   const [activeTab, setActiveTab] = useState<'dashboard' | 'protocol' | 'audits' | 'mapping'>(
     auditRefFromQuery ? 'audits' : 'dashboard',
   )
@@ -846,7 +860,13 @@ export default function UVDBAudits() {
           <p className="text-muted-foreground">{t('uvdb.subtitle')}</p>
         </div>
         <div className="flex flex-col gap-3 mt-4 md:mt-0 md:items-end">
-          <DownstreamHandoffLinks auditRef={auditRefFromQuery || audits[0]?.audit_reference} />
+          <DownstreamHandoffLinks
+            auditRef={auditRefFromQuery || audits[0]?.audit_reference}
+            importReviewPath={
+              recoveryImportReviewPath ||
+              getImportReviewPath(audits[0]?.audit_run_id, audits[0]?.import_job_id)
+            }
+          />
           <div className="flex gap-3">
             <button
               disabled
@@ -885,10 +905,36 @@ export default function UVDBAudits() {
                   (reconciliationNotice ||
                     'Reconciliation unavailable — specialist home shows UVDB rows only.')}
               </p>
+              {reconciliation?.proof_matrix?.length ? (
+                <ul
+                  className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground"
+                  data-testid="uvdb-proof-matrix"
+                >
+                  {reconciliation.proof_matrix.map((step) => (
+                    <li
+                      key={step.step}
+                      className="rounded border border-border px-2 py-0.5"
+                      data-testid={`uvdb-proof-step-${step.step}`}
+                    >
+                      {step.step.replace(/_/g, ' ')}: {step.status}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
-            {reconciliation?.view_links?.actions || reconciliation?.audit_reference ? (
-              <DownstreamHandoffLinks auditRef={reconciliation?.audit_reference || auditRefFromQuery} />
-            ) : null}
+            <DownstreamHandoffLinks
+              auditRef={reconciliation?.audit_reference || auditRefFromQuery}
+              findingId={
+                typeof reconciliation?.draft_results?.[0]?.finding_id === 'number'
+                  ? (reconciliation.draft_results[0].finding_id as number)
+                  : null
+              }
+              importReviewPath={
+                reconciliation?.view_links?.import_review ||
+                getImportReviewPath(reconciliation?.audit_run_id, reconciliation?.job_id) ||
+                recoveryImportReviewPath
+              }
+            />
           </div>
         </div>
       ) : null}
@@ -1505,6 +1551,15 @@ export default function UVDBAudits() {
                       different specialist surface.
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
+                      {recoveryImportReviewPath ? (
+                        <Link
+                          to={recoveryImportReviewPath}
+                          data-testid="uvdb-auditref-miss-recovery-import-review"
+                          className="inline-flex items-center rounded-lg border border-warning/40 bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:border-primary/40 hover:text-primary"
+                        >
+                          Open import review diagnostics
+                        </Link>
+                      ) : null}
                       <Link
                         to={ACHILLES_UVDB_AUDITS_PATH}
                         data-testid="uvdb-auditref-miss-recovery-audits"

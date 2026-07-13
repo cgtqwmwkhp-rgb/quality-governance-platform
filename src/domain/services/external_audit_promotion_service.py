@@ -294,7 +294,10 @@ class ExternalAuditPromotionService:
                     "view_links": {
                         "actions": f"/actions?sourceType=audit_finding&sourceId={finding.id}",
                         "risk_register": f"/risk-register?auditOnly=1&auditRef={run.reference_number}",
-                        "uvdb": f"/uvdb?auditRef={run.reference_number}",
+                        "uvdb": (
+                            f"/uvdb?auditRef={run.reference_number}"
+                            f"&runId={run.id}&jobId={job.id}"
+                        ),
                     },
                 }
             )
@@ -337,8 +340,15 @@ class ExternalAuditPromotionService:
             "view_links": {
                 "actions": "/actions?sourceType=audit_finding",
                 "risk_register": f"/risk-register?auditOnly=1&auditRef={run.reference_number}",
-                "uvdb": f"/uvdb?auditRef={run.reference_number}",
-                "specialist_home": f"{home_route}?auditRef={run.reference_number}",
+                "uvdb": (
+                    f"/uvdb?auditRef={run.reference_number}"
+                    f"&runId={run.id}&jobId={job.id}"
+                ),
+                "specialist_home": (
+                    f"{home_route}?auditRef={run.reference_number}"
+                    f"&runId={run.id}&jobId={job.id}"
+                ),
+                "import_review": f"/audits/{run.id}/import-review?jobId={job.id}",
             },
         }
 

@@ -2,17 +2,18 @@
 
 ## change ledger
 - UVDB specialist home: CAPA + Risk deep-links (scoped query params)
-- auditRef miss: recovery CTAs (Audits Achilles filter, clear filter, CAPA)
+- auditRef miss: recovery CTAs including import-review when `runId`/`jobId` present
 - SPA `Link` navigation to import review (no full-page `window`/`<a href>` reload)
 - assuranceHubHelpers: Achilles / UVDB `source=` filter parity with customer audits
-- Optional reconciliation fetch on UVDB home with honesty labels when partial/unavailable
-- Planet Mark / UVDB e2e: un-skipped; working route harness in `tests/unit/test_planetmark_uvdb_route_harness.py` + `scripts/smoke/uvdb_downstream_e2e.py` (avoids broken e2e autouse DB seed)
-- Playwright CUJ: import → home handoff + CAPA/Risk + miss recovery
+- Reconciliation fetch on UVDB home with honesty labels + proof_matrix (uvdb_sync) chips
+- Promote view_links carry `runId`/`jobId`/`import_review` for closed-loop recovery
+- Planet Mark / UVDB e2e: un-skipped; working route harness in unit + smoke
+- Playwright CUJ: import → home handoff + CAPA/Risk + miss recovery + proof chips
 - Promote / uvdb_sync outcome metrics: in-process counters + OTel tags (not log-only)
 - Unit tests for hand-offs and promotion metrics
 
 ## summary
-Closes residual dual-lens gaps (~6.9 → aim ≥8.5 / ~9.5 honesty+closed-loop+proof) on the Achilles/UVDB specialist surface. Exclusive allowlist only — zero overlap with open PRs #907–#910. #853 human unlocks (SMTP/PagerDuty/secrets) remain parked; never invented.
+Closes residual dual-lens gaps (~6.9 → aim ≥8.5 / ~9.5 honesty+closed-loop+proof) on the Achilles/UVDB specialist surface. Exclusive allowlist only — zero overlap with open PRs #907–#911. #853 human unlocks (SMTP/PagerDuty/secrets) remain parked; never invented.
 
 ## impact map
 - **Frontend:** `UVDBAudits.tsx` hand-offs, miss recovery, reconciliation panel; `assuranceHubHelpers.ts` Achilles/UVDB source filter + deep-link builders
@@ -28,11 +29,12 @@ Closes residual dual-lens gaps (~6.9 → aim ≥8.5 / ~9.5 honesty+closed-loop+p
 
 ## acceptance criteria
 - [x] AC-01: UVDB home exposes CAPA (`/actions?sourceType=audit_finding`) and Risk (`/risk-register?auditOnly=1&auditRef=`) deep-links
-- [x] AC-02: auditRef miss is not a dead end — recovery CTAs present
-- [x] AC-03: Import review uses react-router `Link`; Playwright CUJ covers handoff + CAPA/Risk + miss
+- [x] AC-02: auditRef miss is not a dead end — recovery CTAs present (incl. import review when runId/jobId present)
+- [x] AC-03: Import review uses react-router `Link`; Playwright CUJ covers handoff + CAPA/Risk + miss + proof
 - [x] AC-04: Achilles/UVDB assurance source filter parity in `assuranceHubHelpers`
 - [x] AC-05: Promote / uvdb_sync outcomes increment observable counters (unit-tested)
 - [x] AC-06: Planet Mark / UVDB e2e module no longer globally skipped
+- [x] AC-07: Reconciliation panel shows proof_matrix (incl. uvdb_sync) and import-review handoff
 
 ## testing evidence
 - Frontend unit: `UVDBAudits.test.tsx`, `assuranceHubHelpers.test.ts`
@@ -64,7 +66,7 @@ Closes residual dual-lens gaps (~6.9 → aim ≥8.5 / ~9.5 honesty+closed-loop+p
 ## evidence pack
 - AC-01..06 covered by unit + Playwright + harness listed above
 - Gate ledger: this file (`scripts/governance/pr_body_cuj_wave_c_uvdb.md`)
-- Exclusive allowlist respected (no #907–#910 files; #853 parked)
+- Exclusive allowlist respected (no #907–#911 files; #853 parked)
 
 ## gate checklist
 - [x] Gate 0: Scope lock + Change Ledger complete
