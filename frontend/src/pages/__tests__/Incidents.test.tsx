@@ -234,7 +234,8 @@ describe('Incidents', () => {
     })
 
     const rows = screen.getAllByTestId('incident-row-link')
-    fireEvent.click(rows[0])
+    const clickableCell = rows[0].querySelector('td.cursor-pointer') ?? rows[0].querySelector('td')
+    fireEvent.click(clickableCell!)
 
     expect(mockNavigate).toHaveBeenCalledWith('/incidents/1')
   })
