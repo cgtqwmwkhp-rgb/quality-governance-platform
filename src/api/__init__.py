@@ -70,9 +70,9 @@ from src.api.routes import (
     vehicle_checklists,
     vehicles,
     wdp_analytics,
-    workforce_competence_gaps,
     workflow,
     workflows,
+    workforce_competence_gaps,
     xml_import,
 )
 from src.core.config import settings

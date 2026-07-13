@@ -224,7 +224,7 @@ export default function CompetenceGaps() {
 
       {items.length === 0 && !error ? (
         <EmptyState
-          icon={ShieldAlert}
+          icon={<ShieldAlert className="w-10 h-10 text-muted-foreground" />}
           title={t('competenceGaps.empty.title')}
           description={t('competenceGaps.empty.description')}
         />

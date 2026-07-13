@@ -121,10 +121,7 @@ class CompetenceGapService:
 
         signal = normalize_signal_type(signal_type)
         if signal is None:
-            raise ValueError(
-                "signal_type must be competence_gap or nonconformity "
-                f"(got {signal_type!r})"
-            )
+            raise ValueError("signal_type must be competence_gap or nonconformity " f"(got {signal_type!r})")
 
         gap = CompetenceGapAction(
             tenant_id=tenant_id,
@@ -349,8 +346,7 @@ class CompetenceGapService:
             due_date=parsed_due,
             tenant_id=tenant_id,
             proposed_action=(
-                "Link engineer to requirement or verified ticket; close only when "
-                "competency evidence is active."
+                "Link engineer to requirement or verified ticket; close only when " "competency evidence is active."
             ),
         )
         db.add(capa)
@@ -416,9 +412,7 @@ class CompetenceGapService:
         gap.resolved_by_id = resolved_by_id
         if resolution_notes:
             gap.rationale = (
-                f"{gap.rationale}\n\nResolution: {resolution_notes}".strip()
-                if gap.rationale
-                else resolution_notes
+                f"{gap.rationale}\n\nResolution: {resolution_notes}".strip() if gap.rationale else resolution_notes
             )
 
         await self._log(
@@ -495,9 +489,7 @@ class CompetenceGapService:
                         "reference_number": capa.reference_number if capa else None,
                         "owner_id": capa.assigned_to_id if capa else None,
                         "due_date": capa.due_date.isoformat() if capa and capa.due_date else None,
-                        "status": (
-                            capa.status.value if capa and hasattr(capa.status, "value") else None
-                        ),
+                        "status": (capa.status.value if capa and hasattr(capa.status, "value") else None),
                     },
                 }
             )
@@ -573,8 +565,7 @@ class CompetenceGapService:
             record = result.scalars().first()
             if record is None:
                 raise ValueError(
-                    "Cannot resolve: engineer has no active CompetencyRecord "
-                    f"for requirement {gap.requirement_id}"
+                    "Cannot resolve: engineer has no active CompetencyRecord " f"for requirement {gap.requirement_id}"
                 )
             return
 
@@ -598,18 +589,12 @@ class CompetenceGapService:
             ticket_result = await db.execute(ticket_q)
             ticket = ticket_result.scalars().first()
             if ticket is None:
-                raise ValueError(
-                    f"Cannot resolve: no verified TrainingTicket for scheme {gap.ticket_scheme}"
-                )
+                raise ValueError(f"Cannot resolve: no verified TrainingTicket for scheme {gap.ticket_scheme}")
             if ticket.expires_at is not None and ticket.expires_at <= now:
-                raise ValueError(
-                    f"Cannot resolve: TrainingTicket for scheme {gap.ticket_scheme} is expired"
-                )
+                raise ValueError(f"Cannot resolve: TrainingTicket for scheme {gap.ticket_scheme} is expired")
             return
 
-        raise ValueError(
-            "Cannot resolve: link a requirement_id (preferred) or ticket_scheme before resolve"
-        )
+        raise ValueError("Cannot resolve: link a requirement_id (preferred) or ticket_scheme before resolve")
 
     async def _log(
         self,
@@ -669,9 +654,7 @@ class CompetenceGapService:
             "tenant_id": gap.tenant_id,
             "source_type": gap.source_type,
             "source_id": gap.source_id,
-            "signal_type": (
-                gap.signal_type.value if hasattr(gap.signal_type, "value") else str(gap.signal_type)
-            ),
+            "signal_type": (gap.signal_type.value if hasattr(gap.signal_type, "value") else str(gap.signal_type)),
             "engineer_id": gap.engineer_id,
             "requirement_id": gap.requirement_id,
             "ticket_scheme": gap.ticket_scheme,

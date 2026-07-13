@@ -23,9 +23,7 @@ logger = logging.getLogger(__name__)
 class FromSignalRequest(BaseModel):
     source_type: str = Field(..., description="assessor_case | external_audit_finding | compliance_evidence_link")
     source_id: int
-    signal_type: Optional[str] = Field(
-        None, description="competence_gap | nonconformity (required when not inferred)"
-    )
+    signal_type: Optional[str] = Field(None, description="competence_gap | nonconformity (required when not inferred)")
     rationale: Optional[str] = None
     confidence: Optional[float] = None
 
