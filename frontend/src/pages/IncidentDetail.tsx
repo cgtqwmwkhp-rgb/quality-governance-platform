@@ -66,7 +66,7 @@ import {
 } from '../helpers/caseSubmission'
 import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
-import { getCapaLink } from '../components/investigations/handoffLinks'
+import { getCapaHandoffLabelKey, getCapaLink } from '../components/investigations/handoffLinks'
 
 // Status options for action updates
 const ACTION_STATUS_OPTIONS = [
@@ -543,12 +543,15 @@ export default function IncidentDetail() {
                 <Pencil className="w-4 h-4 mr-2" />
                 {t('edit')}
               </Button>
-              {actions.length > 0 && (
-                <Button variant="outline" onClick={() => navigate(capaHref)}>
-                  <ClipboardList className="w-4 h-4 mr-2" />
-                  {t('incidents.detail.open_capa', { count: actions.length })}
-                </Button>
-              )}
+              <Button
+                variant="outline"
+                onClick={() => navigate(capaHref)}
+              >
+                <ClipboardList className="w-4 h-4 mr-2" />
+                {t(getCapaHandoffLabelKey('incident', actions.length), {
+                  count: actions.length,
+                })}
+              </Button>
               <Button
                 onClick={() =>
                   investigationHref
@@ -1007,16 +1010,16 @@ export default function IncidentDetail() {
                     ? t('incidents.detail.open_investigation')
                     : t('incidents.detail.start_investigation')}
                 </Button>
-                {actions.length > 0 ? (
-                  <Button variant="outline" onClick={() => navigate(capaHref)}>
-                    <ClipboardList className="w-4 h-4 mr-2" />
-                    {t('incidents.detail.open_capa', { count: actions.length })}
-                  </Button>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center">
-                    {t('incidents.detail.no_capa_handoff')}
-                  </p>
-                )}
+                <Button
+                  variant="outline"
+                  onClick={() => navigate(capaHref)}
+                  data-testid="incident-capa-handoff-cta"
+                >
+                  <ClipboardList className="w-4 h-4 mr-2" />
+                  {t(getCapaHandoffLabelKey('incident', actions.length), {
+                    count: actions.length,
+                  })}
+                </Button>
               </div>
             </CardContent>
           </Card>
