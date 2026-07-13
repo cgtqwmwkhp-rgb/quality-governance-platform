@@ -32,8 +32,11 @@ const sampleAction = {
   created_at: '2026-07-01T10:00:00Z',
 }
 
-async function installActionsMocks(page: Page, options?: { failOverdue?: boolean }) {
-  const seen: { my?: boolean; overdue?: boolean } = {}
+async function installActionsMocks(
+  page: Page,
+  options?: { failOverdue?: boolean },
+) {
+  const seen: { my?: boolean; overdue?: boolean; myOverdue?: boolean } = {}
 
   await page.route('**/api/v1/**', async (route) => {
     const req = route.request()
@@ -54,10 +57,14 @@ async function installActionsMocks(page: Page, options?: { failOverdue?: boolean
     if (path.match(/\/actions\/?$/) && method === 'GET') {
       const assignedTo = url.searchParams.get('assigned_to')
       const overdue = url.searchParams.get('overdue')
-      if (assignedTo === 'me') seen.my = true
+      if (assignedTo === 'me' && overdue === 'true') {
+        seen.myOverdue = true
+      } else if (assignedTo === 'me') {
+        seen.my = true
+      }
       if (overdue === 'true') {
         seen.overdue = true
-        if (options?.failOverdue) {
+        if (options?.failOverdue && assignedTo !== 'me') {
           await json(route, { detail: 'filter failed' }, 500)
           return
         }
@@ -100,8 +107,19 @@ test.describe('Actions My Work / Overdue CUJ', () => {
     await page.goto('/actions')
     await page.getByTestId('actions-view-overdue').click()
     await expect.poll(() => seen.overdue === true).toBeTruthy()
-    await expect(page.getByTestId('actions-filter-error').or(page.getByText(/Server filter failed/i))).toBeVisible({
+    await expect(
+      page.getByTestId('actions-filter-error').or(page.getByText(/Server filter failed/i)),
+    ).toBeVisible({
       timeout: 10000,
     })
+  })
+
+  test('My overdue deep-link sends assigned_to=me and overdue=true', async ({ page }) => {
+    const seen = await installActionsMocks(page)
+    await page.goto('/actions?view=my_overdue')
+    await expect(page.getByTestId('actions-server-filter-label')).toContainText(
+      'assigned_to=me&overdue=true',
+    )
+    await expect.poll(() => seen.myOverdue === true).toBeTruthy()
   })
 })

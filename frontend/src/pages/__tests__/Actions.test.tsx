@@ -9,27 +9,35 @@ const mockSummary = vi.fn()
 const mockGetDeliveryStatus = vi.fn()
 const mockToastError = vi.fn()
 
+const { tMock } = vi.hoisted(() => {
+  const messages: Record<string, string> = {
+    'actions.view_finding': 'View finding',
+    'actions.view_mode.all': 'All',
+    'actions.view_mode.my': 'My actions',
+    'actions.view_mode.overdue': 'Overdue',
+    'actions.view_mode.my_overdue': 'My overdue',
+    'actions.email_unavailable.title': 'Email alerts unavailable',
+    'actions.email_unavailable.body':
+      'The assignee is saved, but email alerts are unavailable while outbound email is not configured.',
+    'actions.filter.identity_required':
+      'Cannot load My actions — signed-in user id is unavailable.',
+    'actions.filter.server_failed':
+      'Server filter failed — results were not loaded. Try again or switch to All.',
+    'actions.filter.server_my':
+      'Showing actions assigned to you (server filter: assigned_to=me).',
+    'actions.filter.server_overdue':
+      'Showing overdue open actions (server filter: overdue=true).',
+    'actions.filter.server_my_overdue':
+      'Showing your overdue open actions (server filter: assigned_to=me&overdue=true).',
+    'actions.filter.loading': 'Updating filtered actions…',
+  }
+  return {
+    tMock: (key: string, fallback?: string) => messages[key] || fallback || key,
+  }
+})
+
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, fallback?: string) =>
-      ({
-        'actions.view_finding': 'View finding',
-        'actions.view_mode.all': 'All',
-        'actions.view_mode.my': 'My actions',
-        'actions.view_mode.overdue': 'Overdue',
-        'actions.email_unavailable.title': 'Email alerts unavailable',
-        'actions.email_unavailable.body':
-          'The assignee is saved, but email alerts are unavailable while outbound email is not configured.',
-        'actions.filter.identity_required':
-          'Cannot load My actions — signed-in user id is unavailable.',
-        'actions.filter.server_failed':
-          'Server filter failed — results were not loaded. Try again or switch to All.',
-        'actions.filter.server_my':
-          'Showing actions assigned to you (server filter: assigned_to=me).',
-        'actions.filter.server_overdue':
-          'Showing overdue open actions (server filter: overdue=true).',
-      } as Record<string, string>)[key] || fallback || key,
-  }),
+  useTranslation: () => ({ t: tMock }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
 
@@ -124,9 +132,7 @@ describe('Actions finding deep-link', () => {
   })
 })
 
-describe.skip('Actions My Work / Overdue server filters', () => {
-  // Skipped: full-page TableSkeleton on reload races view-mode toggles (CI hang/flake).
-
+describe('Actions My Work / Overdue server filters', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSummary.mockResolvedValue({ data: { total: 1, by_display_status: { open: 1 } } })
@@ -134,7 +140,61 @@ describe.skip('Actions My Work / Overdue server filters', () => {
     mockList.mockResolvedValue({ data: { items: [action({})] } })
   })
 
-  it('requests assigned_to=me when My actions is selected', async () => {
+  it('deep-links view=my with assigned_to=me on first load', async () => {
+    render(
+      <MemoryRouter initialEntries={['/actions?view=my']}>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalledWith(1, 100, undefined, undefined, undefined, {
+        assigned_to: 'me',
+        overdue: undefined,
+      })
+    })
+    expect(await screen.findByTestId('actions-server-filter-label')).toHaveTextContent(
+      'assigned_to=me',
+    )
+  })
+
+  it('deep-links view=overdue with overdue=true on first load', async () => {
+    render(
+      <MemoryRouter initialEntries={['/actions?view=overdue']}>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalledWith(1, 100, undefined, undefined, undefined, {
+        assigned_to: undefined,
+        overdue: true,
+      })
+    })
+    expect(await screen.findByTestId('actions-server-filter-label')).toHaveTextContent(
+      'overdue=true',
+    )
+  })
+
+  it('deep-links view=my_overdue with both server params', async () => {
+    render(
+      <MemoryRouter initialEntries={['/actions?view=my_overdue']}>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalledWith(1, 100, undefined, undefined, undefined, {
+        assigned_to: 'me',
+        overdue: true,
+      })
+    })
+    expect(await screen.findByTestId('actions-server-filter-label')).toHaveTextContent(
+      'assigned_to=me&overdue=true',
+    )
+  })
+
+  it('requests assigned_to=me when My actions is selected after first paint', async () => {
     const user = userEvent.setup()
     render(
       <MemoryRouter>
@@ -146,43 +206,13 @@ describe.skip('Actions My Work / Overdue server filters', () => {
     await user.click(screen.getByTestId('actions-view-my'))
 
     await waitFor(() => {
-      expect(mockList).toHaveBeenCalledWith(
-        1,
-        100,
-        undefined,
-        undefined,
-        undefined,
-        { assigned_to: 'me', overdue: undefined },
-      )
+      expect(mockList).toHaveBeenCalledWith(1, 100, undefined, undefined, undefined, {
+        assigned_to: 'me',
+        overdue: undefined,
+      })
     })
     expect(await screen.findByTestId('actions-server-filter-label')).toHaveTextContent(
       'assigned_to=me',
-    )
-  })
-
-  it('requests overdue=true when Overdue is selected', async () => {
-    const user = userEvent.setup()
-    render(
-      <MemoryRouter>
-        <Actions />
-      </MemoryRouter>,
-    )
-
-    await screen.findByText('Correct audit finding')
-    await user.click(screen.getByTestId('actions-view-overdue'))
-
-    await waitFor(() => {
-      expect(mockList).toHaveBeenCalledWith(
-        1,
-        100,
-        undefined,
-        undefined,
-        undefined,
-        { assigned_to: undefined, overdue: true },
-      )
-    })
-    expect(await screen.findByTestId('actions-server-filter-label')).toHaveTextContent(
-      'overdue=true',
     )
   })
 

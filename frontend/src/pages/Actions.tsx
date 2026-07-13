@@ -52,6 +52,13 @@ import {
 } from '../api/client'
 import { decodeTokenPayload, getPlatformToken } from '../utils/auth'
 import { toast } from '../contexts/ToastContext'
+import {
+  actionsViewRequiresIdentity,
+  actionsViewUsesServerFilter,
+  buildActionsListScope,
+  parseActionsViewParam,
+  type ActionsViewMode,
+} from './actionsViewScope'
 
 function startOfDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
@@ -113,7 +120,7 @@ interface Action extends Omit<ApiAction, 'owner_email'> {
   owner?: string
 }
 
-type ViewMode = 'all' | 'my' | 'overdue'
+type ViewMode = ActionsViewMode
 type FilterStatus = 'all' | 'open' | 'in_progress' | 'pending_verification' | 'completed'
 type SourceTypeFilter =
   | 'all'
@@ -153,8 +160,11 @@ export default function Actions() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [actions, setActions] = useState<Action[]>([])
   const [loading, setLoading] = useState(true)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
-  const [viewMode, setViewMode] = useState<ViewMode>('all')
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    parseActionsViewParam(searchParams.get('view')),
+  )
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
   const [sourceTypeFilter, setSourceTypeFilter] = useState<SourceTypeFilter>(
     (searchParams.get('sourceType') as SourceTypeFilter) || 'all',
@@ -195,13 +205,13 @@ export default function Actions() {
   })
 
   // Fetch actions from API with stable ordering (server returns created_at desc).
-  // My Work / Overdue are server-scoped via assigned_to=me and overdue=true.
+  // My Work / Overdue / My overdue are server-scoped via assigned_to + overdue.
   const loadActions = useCallback(async () => {
     setLoading(true)
     setError(null)
     setServerFilterError(null)
 
-    if (viewMode === 'my' && currentUserId == null) {
+    if (actionsViewRequiresIdentity(viewMode) && currentUserId == null) {
       const msg = t(
         'actions.filter.identity_required',
         'Cannot load My actions — signed-in user id is unavailable.',
@@ -210,6 +220,7 @@ export default function Actions() {
       toast.error(msg)
       setActions([])
       setLoading(false)
+      setHasLoadedOnce(true)
       return
     }
 
@@ -222,10 +233,7 @@ export default function Actions() {
         sourceTypeFilter !== 'all' && Number.isFinite(sourceIdFilter) && sourceIdFilter > 0
           ? sourceIdFilter
           : undefined,
-        {
-          assigned_to: viewMode === 'my' ? 'me' : undefined,
-          overdue: viewMode === 'overdue' ? true : undefined,
-        },
+        buildActionsListScope(viewMode),
       )
       const transformedActions = (response.data.items ?? []).map(transformAction)
       setActions(transformedActions)
@@ -233,7 +241,7 @@ export default function Actions() {
       console.error('Failed to load actions:', err)
       const classified = classifyError(err)
       setActions([])
-      if (viewMode === 'my' || viewMode === 'overdue') {
+      if (actionsViewUsesServerFilter(viewMode)) {
         const msg = t(
           'actions.filter.server_failed',
           'Server filter failed — results were not loaded. Try again or switch to All.',
@@ -247,6 +255,7 @@ export default function Actions() {
       }
     } finally {
       setLoading(false)
+      setHasLoadedOnce(true)
     }
   }, [currentUserId, sourceIdFilter, sourceTypeFilter, viewMode, t])
 
@@ -263,12 +272,16 @@ export default function Actions() {
     const next = new URLSearchParams(searchParams)
     if (sourceTypeFilter === 'all') next.delete('sourceType')
     else next.set('sourceType', sourceTypeFilter)
-    if (sourceTypeFilter === 'all' || !Number.isFinite(sourceIdFilter) || sourceIdFilter <= 0) next.delete('sourceId')
+    if (sourceTypeFilter === 'all' || !Number.isFinite(sourceIdFilter) || sourceIdFilter <= 0) {
+      next.delete('sourceId')
+    }
+    if (viewMode === 'all') next.delete('view')
+    else next.set('view', viewMode)
     const nextQuery = next.toString()
     if (nextQuery !== searchParams.toString()) {
       setSearchParams(next, { replace: true })
     }
-  }, [searchParams, setSearchParams, sourceIdFilter, sourceTypeFilter])
+  }, [searchParams, setSearchParams, sourceIdFilter, sourceTypeFilter, viewMode])
 
   useEffect(() => {
     loadActions()
@@ -429,11 +442,13 @@ export default function Actions() {
     completed: byD.completed ?? actions.filter((a) => a.display_status === 'completed').length,
   }
 
-  if (loading) {
+  // First paint only — keep view-mode chrome mounted on subsequent filter reloads
+  // so Mine/Overdue toggles remain clickable (and unit/e2e tests do not race a full-page skeleton).
+  if (loading && !hasLoadedOnce) {
     return <TableSkeleton rows={8} columns={5} />
   }
 
-  if (error) {
+  if (error && !actionsViewUsesServerFilter(viewMode)) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
@@ -556,25 +571,29 @@ export default function Actions() {
           />
         </div>
 
-        <div className="flex bg-surface rounded-xl p-1 border border-border" data-testid="actions-view-mode">
-          {(['all', 'my', 'overdue'] as ViewMode[]).map((mode) => (
+        <div className="flex flex-wrap bg-surface rounded-xl p-1 border border-border" data-testid="actions-view-mode">
+          {(['all', 'my', 'overdue', 'my_overdue'] as ViewMode[]).map((mode) => (
             <button
               key={mode}
               type="button"
               data-testid={`actions-view-${mode}`}
               onClick={() => setViewMode(mode)}
+              disabled={loading}
               className={cn(
-                'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                'px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200',
                 viewMode === mode
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
+                loading && 'opacity-70',
               )}
             >
               {mode === 'all'
                 ? t('actions.view_mode.all')
                 : mode === 'my'
                   ? t('actions.view_mode.my')
-                  : t('actions.view_mode.overdue')}
+                  : mode === 'overdue'
+                    ? t('actions.view_mode.overdue')
+                    : t('actions.view_mode.my_overdue', 'My overdue')}
             </button>
           ))}
         </div>
@@ -628,7 +647,7 @@ export default function Actions() {
         </Select>
       </div>
 
-      {viewMode === 'my' || viewMode === 'overdue' ? (
+      {actionsViewUsesServerFilter(viewMode) ? (
         <div
           className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
           data-testid="actions-server-filter-label"
@@ -641,10 +660,15 @@ export default function Actions() {
                   'actions.filter.server_my',
                   'Showing actions assigned to you (server filter: assigned_to=me).',
                 )
-              : t(
-                  'actions.filter.server_overdue',
-                  'Showing overdue open actions (server filter: overdue=true).',
-                )}
+              : viewMode === 'overdue'
+                ? t(
+                    'actions.filter.server_overdue',
+                    'Showing overdue open actions (server filter: overdue=true).',
+                  )
+                : t(
+                    'actions.filter.server_my_overdue',
+                    'Showing your overdue open actions (server filter: assigned_to=me&overdue=true).',
+                  )}
           </span>
         </div>
       ) : null}
@@ -657,6 +681,17 @@ export default function Actions() {
         >
           <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
           <span>{serverFilterError}</span>
+        </div>
+      ) : null}
+
+      {loading && hasLoadedOnce ? (
+        <div
+          className="flex items-center gap-2 text-sm text-muted-foreground"
+          data-testid="actions-filter-loading"
+          role="status"
+        >
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span>{t('actions.filter.loading', 'Updating filtered actions…')}</span>
         </div>
       ) : null}
 
