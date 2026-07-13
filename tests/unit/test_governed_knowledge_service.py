@@ -66,20 +66,20 @@ class TestResolveLinkStatus:
 
 class TestClassifyOperationalSignal:
     def test_incident_defaults_to_nonconformity(self) -> None:
-        from src.domain.services.governed_knowledge_service import classify_operational_signal
         from src.domain.models.compliance_evidence import EvidenceSignalType
+        from src.domain.services.governed_knowledge_service import classify_operational_signal
 
         assert classify_operational_signal("incident") == EvidenceSignalType.NONCONFORMITY
 
     def test_near_miss_defaults_to_gap(self) -> None:
-        from src.domain.services.governed_knowledge_service import classify_operational_signal
         from src.domain.models.compliance_evidence import EvidenceSignalType
+        from src.domain.services.governed_knowledge_service import classify_operational_signal
 
         assert classify_operational_signal("near_miss") == EvidenceSignalType.GAP
 
     def test_finding_type_opportunity(self) -> None:
-        from src.domain.services.governed_knowledge_service import classify_operational_signal
         from src.domain.models.compliance_evidence import EvidenceSignalType
+        from src.domain.services.governed_knowledge_service import classify_operational_signal
 
         assert (
             classify_operational_signal("audit_finding", finding_type="opportunity") == EvidenceSignalType.OPPORTUNITY
