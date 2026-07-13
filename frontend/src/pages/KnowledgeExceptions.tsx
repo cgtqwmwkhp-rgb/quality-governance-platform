@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { AlertTriangle, ArrowLeft, CheckCircle2, Loader2, XCircle } from 'lucide-react'
 import {
   getApiErrorMessage,
   knowledgeBankApi,
@@ -19,6 +19,19 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
+import {
+  exceptionEntityHref,
+  isSafeReturnTo,
+  parseEntityTypeFilter,
+  type ExceptionsEntityTypeFilter,
+} from '../helpers/knowledgeExceptionsLinks'
+
+export {
+  exceptionEntityHref,
+  isSafeReturnTo,
+  knowledgeExceptionsClosedLoopHref,
+  parseEntityTypeFilter,
+} from '../helpers/knowledgeExceptionsLinks'
 
 const reportFailure = (err: unknown): string => {
   const message = getApiErrorMessage(err)
@@ -65,7 +78,6 @@ const SIGNAL_TYPE_OPTIONS = [
   { value: 'opportunity', label: 'Opportunity' },
 ] as const
 
-type EntityTypeFilter = (typeof ENTITY_TYPE_OPTIONS)[number]['value']
 type SignalTypeFilter = (typeof SIGNAL_TYPE_OPTIONS)[number]['value']
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -77,35 +89,39 @@ const ENTITY_LABELS: Record<string, string> = {
   audit_finding: 'Audit finding',
 }
 
-/** Deep-link helpers — prefer detail routes; documents open Standards & Evidence tab. */
-export function exceptionEntityHref(entityType: string, entityId: string): string | null {
-  if (!entityId) return null
-  switch (entityType) {
-    case 'document':
-      return `/documents/${entityId}?tab=evidence`
-    case 'incident':
-      return `/incidents/${entityId}`
-    case 'complaint':
-      return `/complaints/${entityId}`
-    case 'near_miss':
-      return `/near-misses/${entityId}`
-    case 'rta':
-      return `/rtas/${entityId}`
-    case 'audit_finding':
-      return `/audits?view=findings&findingId=${encodeURIComponent(entityId)}`
-    default:
-      return null
-  }
-}
-
 export default function KnowledgeExceptions() {
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [items, setItems] = useState<KnowledgeEvidenceLink[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [acting, setActing] = useState(false)
-  const [entityTypeFilter, setEntityTypeFilter] = useState<EntityTypeFilter>('all')
+  const [entityTypeFilter, setEntityTypeFilter] = useState<ExceptionsEntityTypeFilter>(() =>
+    parseEntityTypeFilter(searchParams.get('entity_type')),
+  )
   const [signalTypeFilter, setSignalTypeFilter] = useState<SignalTypeFilter>('all')
+
+  const returnTo = useMemo(() => {
+    const raw = searchParams.get('returnTo')
+    return isSafeReturnTo(raw) ? raw : null
+  }, [searchParams])
+
+  // Hydrate entity_type from deep link / shareable URL.
+  useEffect(() => {
+    const fromUrl = parseEntityTypeFilter(searchParams.get('entity_type'))
+    setEntityTypeFilter((prev) => (prev === fromUrl ? prev : fromUrl))
+  }, [searchParams])
+
+  // Keep entity_type in the URL so refresh / share preserves the filter.
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams)
+    if (entityTypeFilter === 'all') next.delete('entity_type')
+    else next.set('entity_type', entityTypeFilter)
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true })
+    }
+  }, [entityTypeFilter, searchParams, setSearchParams])
 
   const loadExceptions = useCallback(async () => {
     setLoading(true)
@@ -141,6 +157,12 @@ export default function KnowledgeExceptions() {
     [visibleItems, selectedIds.length],
   )
 
+  const returnToCase = useCallback(() => {
+    if (returnTo) {
+      navigate(returnTo)
+    }
+  }, [navigate, returnTo])
+
   const toggleAll = () => {
     setSelectedIds(allSelected ? [] : visibleItems.map((i) => i.id))
   }
@@ -151,6 +173,40 @@ export default function KnowledgeExceptions() {
     )
   }
 
+  const handleConfirmOne = async (id: number) => {
+    setActing(true)
+    try {
+      await knowledgeBankApi.confirmLink(id)
+      toast.success('Link confirmed')
+      if (returnTo) {
+        returnToCase()
+        return
+      }
+      await loadExceptions()
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setActing(false)
+    }
+  }
+
+  const handleRejectOne = async (id: number) => {
+    setActing(true)
+    try {
+      await knowledgeBankApi.rejectLink(id)
+      toast.success('Link rejected')
+      if (returnTo) {
+        returnToCase()
+        return
+      }
+      await loadExceptions()
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setActing(false)
+    }
+  }
+
   const handleBulkConfirm = async () => {
     if (selectedIds.length === 0) return
     setActing(true)
@@ -158,6 +214,10 @@ export default function KnowledgeExceptions() {
       const response = await knowledgeBankApi.bulkConfirm(selectedIds)
       toast.success(`Confirmed ${response.data.count} item(s)`)
       setSelectedIds([])
+      if (returnTo) {
+        returnToCase()
+        return
+      }
       await loadExceptions()
     } catch (err) {
       reportFailure(err)
@@ -173,6 +233,10 @@ export default function KnowledgeExceptions() {
       await Promise.all(selectedIds.map((id) => knowledgeBankApi.rejectLink(id)))
       toast.success(`Rejected ${selectedIds.length} item(s)`)
       setSelectedIds([])
+      if (returnTo) {
+        returnToCase()
+        return
+      }
       await loadExceptions()
     } catch (err) {
       reportFailure(err)
@@ -218,6 +282,26 @@ export default function KnowledgeExceptions() {
         </div>
       </div>
 
+      {returnTo ? (
+        <Card
+          className="p-4 border-primary/20 bg-primary/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+          data-testid="exceptions-return-to-case"
+        >
+          <div>
+            <p className="text-sm font-medium text-foreground">Reviewing from a case Standards tab</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Confirm or reject a signal to return to the case, or go back now.
+            </p>
+          </div>
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link to={returnTo} data-testid="exceptions-return-to-case-link">
+              <ArrowLeft className="w-4 h-4" />
+              Back to case
+            </Link>
+          </Button>
+        </Card>
+      ) : null}
+
       <div className="flex flex-col sm:flex-row sm:items-end gap-3">
         <div className="space-y-1.5 min-w-[12rem]">
           <label htmlFor="exceptions-entity-type" className="text-xs font-medium text-muted-foreground">
@@ -225,7 +309,7 @@ export default function KnowledgeExceptions() {
           </label>
           <Select
             value={entityTypeFilter}
-            onValueChange={(value) => setEntityTypeFilter(value as EntityTypeFilter)}
+            onValueChange={(value) => setEntityTypeFilter(value as ExceptionsEntityTypeFilter)}
           >
             <SelectTrigger id="exceptions-entity-type" aria-label="Filter by entity type">
               <SelectValue placeholder="All entity types" />
@@ -262,7 +346,7 @@ export default function KnowledgeExceptions() {
             </SelectContent>
           </Select>
         </div>
-        <p className="text-xs text-muted-foreground sm:pb-2">
+        <p className="text-xs text-muted-foreground sm:pb-2" data-testid="exceptions-filter-honesty">
           Showing {visibleItems.length}
           {signalTypeFilter !== 'all' ? ` of ${items.length} loaded` : ''}
           {entityTypeFilter !== 'all' ? ` · entity=${entityTypeFilter}` : ''}
@@ -304,6 +388,7 @@ export default function KnowledgeExceptions() {
               <Card
                 key={item.id}
                 className={cn('p-4', selectedIds.includes(item.id) && 'border-primary/50')}
+                data-testid={`exception-row-${item.id}`}
               >
                 <div className="flex items-start gap-3">
                   <input
@@ -327,7 +412,7 @@ export default function KnowledgeExceptions() {
                     {item.rationale && (
                       <p className="text-sm text-muted-foreground">{item.rationale}</p>
                     )}
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                       {href ? (
                         <Link to={href} className="text-primary hover:underline">
                           Open {entityLabel} #{item.entity_id}
@@ -343,6 +428,28 @@ export default function KnowledgeExceptions() {
                           {(item.confidence * 100).toFixed(0)}% confidence
                         </span>
                       )}
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={acting}
+                        data-testid={`exception-confirm-${item.id}`}
+                        onClick={() => void handleConfirmOne(item.id)}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Confirm
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={acting}
+                        data-testid={`exception-reject-${item.id}`}
+                        onClick={() => void handleRejectOne(item.id)}
+                      >
+                        <XCircle className="h-3.5 w-3.5" /> Reject
+                      </Button>
                     </div>
                   </div>
                 </div>
