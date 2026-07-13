@@ -28,6 +28,7 @@ class RegulatoryImpactStatus(str, enum.Enum):
     NEW = "new"
     TASK_CREATED = "task_created"
     DISMISSED = "dismissed"
+    RESOLVED = "resolved"
 
 
 class DocumentDiscussionThread(Base, TimestampMixin):
@@ -101,6 +102,15 @@ class RegulatoryWatchImpact(Base, TimestampMixin):
         nullable=False,
         default=RegulatoryImpactStatus.NEW,
     )
+    # Closed-loop Action link (CAPA) — owner / due / resolve
+    action_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("capa_actions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    owner_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    resolved_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    resolution_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class AiDecisionLog(Base, TimestampMixin):

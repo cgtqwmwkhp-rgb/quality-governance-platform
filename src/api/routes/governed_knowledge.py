@@ -147,6 +147,35 @@ class RegulatoryImpactResponse(BaseModel):
     rationale: Optional[str]
     status: str
     created_at: str
+    action_id: Optional[int] = None
+    action_key: Optional[str] = None
+    action_reference: Optional[str] = None
+    owner_id: Optional[int] = None
+    due_date: Optional[str] = None
+    resolved_at: Optional[str] = None
+    resolved_by_id: Optional[int] = None
+    resolution_notes: Optional[str] = None
+
+
+class CreateWatchActionRequest(BaseModel):
+    owner_email: Optional[str] = None
+    owner_id: Optional[int] = None
+    due_date: Optional[str] = None
+    priority: Optional[str] = None
+
+
+class ResolveWatchImpactRequest(BaseModel):
+    notes: Optional[str] = None
+    dismiss: bool = False
+    close_action: bool = True
+
+
+class WatchActionResponse(BaseModel):
+    impact_id: int
+    status: str
+    action: Optional[dict[str, Any]] = None
+    due_date: Optional[str] = None
+    owner_id: Optional[int] = None
 
 
 # =============================================================================
@@ -779,6 +808,8 @@ async def list_regulatory_impacts(
     current_user: CurrentUser,
     status_filter: Optional[str] = Query(None, alias="status"),
 ):
+    from src.domain.models.capa import CAPAAction
+
     tenant_id = _tenant_id_for(current_user)
     query = select(RegulatoryWatchImpact).where(RegulatoryWatchImpact.tenant_id == tenant_id)
     if status_filter:
@@ -788,7 +819,16 @@ async def list_regulatory_impacts(
             raise BadRequestError(f"Invalid status: {status_filter}") from exc
 
     result = await db.execute(query.order_by(RegulatoryWatchImpact.created_at.desc()).limit(100))
-    impacts = result.scalars().all()
+    impacts = list(result.scalars().all())
+
+    action_refs: dict[int, str] = {}
+    action_ids = [i.action_id for i in impacts if i.action_id]
+    if action_ids:
+        capa_result = await db.execute(
+            select(CAPAAction.id, CAPAAction.reference_number).where(CAPAAction.id.in_(action_ids))
+        )
+        action_refs = {row[0]: row[1] for row in capa_result.all()}
+
     return [
         RegulatoryImpactResponse(
             id=impact.id,
@@ -798,6 +838,122 @@ async def list_regulatory_impacts(
             rationale=impact.rationale,
             status=impact.status.value,
             created_at=impact.created_at.isoformat(),
+            action_id=impact.action_id,
+            action_key=f"capa:{impact.action_id}" if impact.action_id else None,
+            action_reference=action_refs.get(impact.action_id) if impact.action_id else None,
+            owner_id=impact.owner_id,
+            due_date=impact.due_date.isoformat() if impact.due_date else None,
+            resolved_at=impact.resolved_at.isoformat() if impact.resolved_at else None,
+            resolved_by_id=impact.resolved_by_id,
+            resolution_notes=impact.resolution_notes,
         )
         for impact in impacts
     ]
+
+
+@router.post(
+    "/regulatory-watch/impacts/{impact_id}/create-action",
+    response_model=WatchActionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_action_from_watch_impact(
+    impact_id: int,
+    body: CreateWatchActionRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("capa:create"))],
+):
+    """Create a real Action (CAPA) from a regulatory watch impact — owner + due."""
+    from src.domain.services.regulatory_watch_actions import regulatory_watch_actions_service
+
+    tenant_id = _tenant_id_for(current_user)
+    result = await db.execute(
+        select(RegulatoryWatchImpact).where(
+            RegulatoryWatchImpact.id == impact_id,
+            RegulatoryWatchImpact.tenant_id == tenant_id,
+        )
+    )
+    impact = result.scalar_one_or_none()
+    if impact is None:
+        raise NotFoundError("Regulatory impact not found")
+
+    try:
+        capa = await regulatory_watch_actions_service.create_action_for_impact(
+            db,
+            impact=impact,
+            created_by_id=current_user.id,
+            tenant_id=tenant_id,
+            owner_id=body.owner_id,
+            owner_email=body.owner_email,
+            due_date=body.due_date,
+            priority=body.priority,
+            auto_applied=False,
+            commit=True,
+        )
+    except LookupError as exc:
+        raise NotFoundError(str(exc)) from exc
+    except ValueError as exc:
+        raise BadRequestError(str(exc)) from exc
+
+    return WatchActionResponse(
+        impact_id=impact.id,
+        status=impact.status.value,
+        action=regulatory_watch_actions_service.serialize_action(capa),
+        due_date=impact.due_date.isoformat() if impact.due_date else None,
+        owner_id=impact.owner_id,
+    )
+
+
+@router.post(
+    "/regulatory-watch/impacts/{impact_id}/resolve",
+    response_model=WatchActionResponse,
+)
+async def resolve_watch_impact(
+    impact_id: int,
+    body: ResolveWatchImpactRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("capa:update"))],
+):
+    """Resolve or dismiss a watch impact; closes linked Action by default."""
+    from src.domain.services.regulatory_watch_actions import regulatory_watch_actions_service
+
+    tenant_id = _tenant_id_for(current_user)
+    result = await db.execute(
+        select(RegulatoryWatchImpact).where(
+            RegulatoryWatchImpact.id == impact_id,
+            RegulatoryWatchImpact.tenant_id == tenant_id,
+        )
+    )
+    impact = result.scalar_one_or_none()
+    if impact is None:
+        raise NotFoundError("Regulatory impact not found")
+
+    try:
+        impact = await regulatory_watch_actions_service.resolve_impact(
+            db,
+            impact=impact,
+            resolved_by_id=current_user.id,
+            tenant_id=tenant_id,
+            notes=body.notes,
+            dismiss=body.dismiss,
+            close_action=body.close_action,
+        )
+    except LookupError as exc:
+        raise NotFoundError(str(exc)) from exc
+    except ValueError as exc:
+        raise BadRequestError(str(exc)) from exc
+
+    action_payload = None
+    if impact.action_id:
+        from src.domain.models.capa import CAPAAction
+
+        capa = await db.get(CAPAAction, impact.action_id)
+        if capa is not None:
+            action_payload = regulatory_watch_actions_service.serialize_action(capa)
+
+    return WatchActionResponse(
+        impact_id=impact.id,
+        status=impact.status.value,
+        action=action_payload,
+        due_date=impact.due_date.isoformat() if impact.due_date else None,
+        owner_id=impact.owner_id,
+    )
