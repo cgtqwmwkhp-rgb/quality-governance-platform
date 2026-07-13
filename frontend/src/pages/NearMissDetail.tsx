@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowLeft, Calendar, FileText, FlaskConical, Pencil, Sav
 import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
+import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
 import { trackError } from '../utils/errorTracker'
 import {
   CreateFromRecordError,
@@ -297,6 +298,7 @@ export default function NearMissDetail() {
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="overview">{t('common.overview', 'Overview')}</TabsTrigger>
+          <TabsTrigger value="standards">Standards</TabsTrigger>
           <TabsTrigger value="running-sheet">{t('common.running_sheet', 'Running Sheet')}</TabsTrigger>
         </TabsList>
 
@@ -470,6 +472,10 @@ export default function NearMissDetail() {
               </Card>
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="standards" className="mt-6">
+          <StandardsAssessmentPanel entityType="near_miss" entityId={nearMiss.id} />
         </TabsContent>
 
         <TabsContent value="running-sheet" className="mt-6">

@@ -109,7 +109,7 @@ export default function KnowledgeExceptions() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Knowledge Exceptions</h1>
           <p className="text-muted-foreground mt-1">
-            Low-confidence AI evidence links requiring operator review
+            AI evidence and operational standards signals requiring operator review
           </p>
         </div>
         <div className="flex gap-2">
@@ -171,8 +171,16 @@ export default function KnowledgeExceptions() {
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     {statusBadge(item.status)}
+                    {item.signal_type && (
+                      <Badge variant={item.signal_type === 'evidence' ? 'success' : 'warning'}>
+                        {item.signal_type}
+                      </Badge>
+                    )}
                     {item.scheme && <Badge variant="outline">{item.scheme}</Badge>}
                     <span className="font-mono text-xs text-muted-foreground">{item.clause_id}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {item.entity_type}:{item.entity_id}
+                    </span>
                   </div>
                   {item.title && <p className="font-medium text-foreground">{item.title}</p>}
                   {item.rationale && (

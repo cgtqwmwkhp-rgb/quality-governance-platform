@@ -38,6 +38,21 @@ class EvidenceScheme(str, enum.Enum):
     CUSTOM = "custom"
 
 
+class EvidenceSignalType(str, enum.Enum):
+    """How an operational record relates to a standard clause.
+
+    Documents are usually ``evidence`` of conformance. Incidents, RTAs,
+    near misses, complaints, and audit findings are usually
+    ``nonconformity`` / ``gap`` / ``opportunity`` signals — not proof of
+    conformance. Mixing these up pollutes certification evidence packs.
+    """
+
+    EVIDENCE = "evidence"
+    NONCONFORMITY = "nonconformity"
+    GAP = "gap"
+    OPPORTUNITY = "opportunity"
+
+
 class ComplianceEvidenceLink(Base, TimestampMixin):
     """Maps a business entity to an ISO clause as evidence of compliance.
 
@@ -76,6 +91,7 @@ class ComplianceEvidenceLink(Base, TimestampMixin):
     scheme: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     auto_applied: Mapped[bool] = mapped_column(default=False, server_default="false")
     rationale: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    signal_type: Mapped[Optional[str]] = mapped_column(String(30), nullable=True, index=True)
 
     title: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
