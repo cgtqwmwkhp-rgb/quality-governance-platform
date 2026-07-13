@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from src.domain.models.audit_log import AuditLogEntry
 from src.domain.models.incident import IncidentSeverity, IncidentStatus, IncidentType
+from src.infrastructure.middleware.tenant_context import apply_tenant_guc
 from tests.factories import IncidentFactory
 
 
@@ -51,6 +52,8 @@ async def test_incident_creation_records_audit_event(client: AsyncClient, auth_h
     assert res_data["id"] is not None
     assert res_data["title"] == "Audit Test Incident"
 
+    # FORCE RLS on audit_log_entries — bind tenant GUC for the test session read
+    await apply_tenant_guc(test_session, test_tenant.id)
     result = await test_session.execute(
         select(AuditLogEntry).where(
             AuditLogEntry.tenant_id == test_tenant.id,

@@ -12,6 +12,7 @@ from sqlalchemy import select
 from src.domain.models.audit_log import AuditLogEntry
 from src.domain.services.audit_log_service import AuditLogService
 from src.domain.services.audit_service import record_audit_event
+from src.infrastructure.middleware.tenant_context import apply_tenant_guc
 
 
 @pytest.mark.asyncio
@@ -68,6 +69,8 @@ async def test_incident_create_persists_audit_log_entry(client: AsyncClient, aut
     assert response.status_code == 201
     incident_id = str(response.json()["id"])
 
+    # FORCE RLS on audit_log_entries — bind tenant GUC for the test session read
+    await apply_tenant_guc(test_session, test_tenant.id)
     result = await test_session.execute(
         select(AuditLogEntry).where(
             AuditLogEntry.tenant_id == test_tenant.id,
@@ -97,6 +100,7 @@ async def test_complaint_create_persists_audit_log_entry(client: AsyncClient, au
     assert response.status_code == 201
     complaint_id = str(response.json()["id"])
 
+    await apply_tenant_guc(test_session, test_tenant.id)
     result = await test_session.execute(
         select(AuditLogEntry).where(
             AuditLogEntry.tenant_id == test_tenant.id,
