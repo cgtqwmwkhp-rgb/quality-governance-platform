@@ -145,4 +145,21 @@ describe('IncidentDetail', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'incidents.detail.open_capa' })[0])
     expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=incident&sourceId=11')
   })
+
+  it('offers Create CAPA in the handoff card when no actions are linked', async () => {
+    client.actionsApi.list.mockResolvedValue({ data: { items: [] } })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Loader slip' })).toBeInTheDocument()
+    })
+
+    const createCapa = screen.getByTestId('incident-capa-handoff-cta')
+    expect(createCapa).toHaveTextContent('investigations.handoff.create_action')
+    expect(screen.queryByText('incidents.detail.no_capa_handoff')).not.toBeInTheDocument()
+
+    fireEvent.click(createCapa)
+    expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=incident&sourceId=11')
+  })
 })

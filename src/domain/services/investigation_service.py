@@ -1204,6 +1204,12 @@ class InvestigationService:
         await db.commit()
         await db.refresh(investigation)
 
+        track_metric(
+            "investigations.from_record",
+            1,
+            {"source_type": source_type, "tenant_id": str(tenant_id)},
+        )
+
         return investigation
 
     @classmethod

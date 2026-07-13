@@ -62,6 +62,7 @@ import InvestigationActions from './investigation/InvestigationActions'
 import type { ActionFormData } from './investigation/InvestigationActions'
 import InvestigationEvidence from './investigation/InvestigationEvidence'
 import {
+  getCapaHandoffLabelKey,
   getCapaLink,
   getInvestigationSourceLink,
 } from '../components/investigations/handoffLinks'
@@ -538,11 +539,63 @@ export default function InvestigationDetail() {
                 {t('investigations.handoff.back_to_source', { source: sourceLink.label })}
               </Button>
             )}
-            <Button onClick={() => navigate(capaHref)} disabled={actionsLoading}>
+            <Button
+              onClick={() => navigate(capaHref)}
+              disabled={actionsLoading}
+              data-testid="investigation-capa-handoff-cta"
+            >
               <ExternalLink className="w-4 h-4 mr-2" />
-              {actions.length > 0
-                ? t('investigations.handoff.open_capa', { count: actions.length })
-                : t('investigations.handoff.create_action')}
+              {t(getCapaHandoffLabelKey('investigation', actions.length), {
+                count: actions.length,
+              })}
+            </Button>
+          </div>
+        </div>
+        <div
+          className="mt-4 pt-4 border-t border-primary/10 space-y-3"
+          data-testid="investigation-workflow-proof"
+        >
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {t('investigations.handoff.proof_eyebrow', 'Workflow proof')}
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-primary/15 bg-background/60 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {t('investigations.handoff.proof_source', 'Source record')}
+              </p>
+              <p className="mt-1 text-lg font-semibold text-foreground">
+                {sourceLink ? '1' : '0'}
+              </p>
+            </div>
+            <div className="rounded-lg border border-primary/15 bg-background/60 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {t('investigations.handoff.proof_actions', 'CAPA actions')}
+              </p>
+              <p className="mt-1 text-lg font-semibold text-foreground">
+                {actionsLoading ? '…' : actions.length}
+              </p>
+            </div>
+            <div className="rounded-lg border border-primary/15 bg-background/60 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {t('investigations.handoff.proof_investigation', 'Investigation')}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-foreground font-mono">
+                {investigation.reference_number || `INV-${investigation.id}`}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {sourceLink ? (
+              <Button variant="outline" size="sm" onClick={() => navigate(sourceLink.href)}>
+                <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
+                {t('investigations.handoff.back_to_source', { source: sourceLink.label })}
+              </Button>
+            ) : null}
+            <Button variant="outline" size="sm" onClick={() => navigate(capaHref)}>
+              <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+              {t(getCapaHandoffLabelKey('investigation', actions.length), {
+                count: actions.length,
+              })}
             </Button>
           </div>
         </div>

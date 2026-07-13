@@ -195,7 +195,7 @@ async def test_ims_dashboard_coverage_counts_full_and_partial_links():
     ]
     db = types.SimpleNamespace(execute=AsyncMock(return_value=_FakeExecuteResult(links)))
 
-    summary = await IMSDashboardService(db).get_compliance_coverage()
+    summary = await IMSDashboardService(db).get_compliance_coverage(tenant_id=3)
 
     assert summary["full_coverage"] == 1
     assert summary["partial_coverage"] == 1
