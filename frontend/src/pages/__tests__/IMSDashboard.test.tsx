@@ -162,4 +162,58 @@ describe('IMSDashboard IA W2 compliance hub', () => {
     await user.click(within(auditRow!).getByRole('button', { name: /Open audit AUD-2026-042/i }))
     expect(mockNavigate).toHaveBeenCalledWith('/audits/42/execute')
   })
+
+  it('labels control implementation vs evidence coverage when both metrics are live', async () => {
+    mockGetDashboard.mockResolvedValue({
+      data: {
+        ...dashboardFixture,
+        compliance_coverage: {
+          total_clauses: 20,
+          covered_clauses: 15,
+          coverage_percentage: 67,
+          gaps: 5,
+          total_evidence_links: 22,
+        },
+      },
+    })
+
+    const { default: IMSDashboard } = await import('../IMSDashboard')
+
+    render(
+      <MemoryRouter initialEntries={['/ims']}>
+        <Routes>
+          <Route path="/ims" element={<IMSDashboard />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ims-metric-control-implementation')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('ims-metric-evidence-coverage')).toBeInTheDocument()
+    expect(screen.getByLabelText('82% control implementation')).toBeInTheDocument()
+    expect(screen.getByLabelText('67% evidence coverage')).toBeInTheDocument()
+    expect(screen.getByText('Control implementation')).toBeInTheDocument()
+    expect(screen.getByText('Evidence coverage')).toBeInTheDocument()
+  })
+
+  it('labels single banner as control implementation when evidence coverage is absent', async () => {
+    const { default: IMSDashboard } = await import('../IMSDashboard')
+
+    render(
+      <MemoryRouter initialEntries={['/ims']}>
+        <Routes>
+          <Route path="/ims" element={<IMSDashboard />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('82% control implementation')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByTestId('ims-metric-evidence-coverage')).not.toBeInTheDocument()
+    expect(screen.getByText(/Control implementation — live from management system controls/i)).toBeInTheDocument()
+  })
 })
