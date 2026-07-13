@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, ArrowLeft, Calendar, ClipboardList, FileText, FlaskConical, Pencil, Save, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Calendar, ClipboardList, FileText, FlaskConical, Pencil, Save, ShieldAlert, X } from 'lucide-react'
 import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
@@ -34,6 +34,7 @@ import { Textarea } from '../components/ui/Textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
 import { RunningSheetPanel, buildRunningSheetCreateActionHref } from '../components/case/RunningSheetPanel'
+import { parseLinkedRiskIds, riskRegisterHref } from './nearMissRiskLinks'
 
 export default function NearMissDetail() {
   const { id } = useParams<{ id: string }>()
@@ -58,6 +59,7 @@ export default function NearMissDetail() {
   const [editForm, setEditForm] = useState<NearMissUpdate>({})
   const [investigationTitle, setInvestigationTitle] = useState('')
   const [investigationError, setInvestigationError] = useState('')
+  const [raisingRisk, setRaisingRisk] = useState(false)
   const nearMissId = Number(id)
   const hasValidNearMissId = Number.isInteger(nearMissId) && nearMissId > 0
 
@@ -232,6 +234,29 @@ export default function NearMissDetail() {
     }
   }
 
+  const handleRaiseRisk = async () => {
+    if (!nearMiss) return
+    setRaisingRisk(true)
+    try {
+      const response = await nearMissesApi.raiseRisk(nearMiss.id)
+      setNearMiss({
+        ...nearMiss,
+        linked_risk_ids: response.data.linked_risk_ids,
+      })
+      toast.success(
+        t('near_misses.feedback.risk_raised', 'Risk {{ref}} raised and linked', {
+          ref: response.data.risk.reference_number,
+        }),
+      )
+      navigate(response.data.risk_register_href)
+    } catch (err) {
+      trackError(err, { component: 'NearMissDetail', action: 'raiseRisk' })
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setRaisingRisk(false)
+    }
+  }
+
   if (loading) {
     return <CardSkeleton />
   }
@@ -291,6 +316,17 @@ export default function NearMissDetail() {
             </>
           ) : (
             <>
+              <Button
+                variant="outline"
+                onClick={() => void handleRaiseRisk()}
+                disabled={raisingRisk}
+                data-testid="near-miss-raise-risk"
+              >
+                <ShieldAlert className="w-4 h-4 mr-2" />
+                {raisingRisk
+                  ? t('near_misses.raising_risk', 'Raising…')
+                  : t('near_misses.actions.raise_risk', 'Raise risk')}
+              </Button>
               <Button variant="outline" onClick={() => setShowInvestigationModal(true)}>
                 <FlaskConical className="w-4 h-4 mr-2" />
                 {t('near_misses.actions.create_investigation', 'Create Investigation')}
@@ -332,6 +368,11 @@ export default function NearMissDetail() {
             label: t('near_misses.summary.investigations', 'Investigations'),
             value: investigationsUnavailable ? '—' : `${investigations.length}`,
             icon: <FlaskConical className="w-4 h-4" />,
+          },
+          {
+            label: t('near_misses.summary.linked_risks', 'Linked risks'),
+            value: `${parseLinkedRiskIds(nearMiss.linked_risk_ids).length}`,
+            icon: <ShieldAlert className="w-4 h-4" />,
           },
         ]}
       />
@@ -549,6 +590,40 @@ export default function NearMissDetail() {
                         'Create an investigation first to open the CAPA workspace.',
                       )}
                     </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldAlert className="w-5 h-5 text-primary" />
+                    {t('near_misses.summary.linked_risks', 'Linked risks')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {parseLinkedRiskIds(nearMiss.linked_risk_ids).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      {t(
+                        'near_misses.detail.no_linked_risks',
+                        'No linked risks yet. Use Raise risk to create a register entry.',
+                      )}
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {parseLinkedRiskIds(nearMiss.linked_risk_ids).map((riskId) => (
+                        <button
+                          key={riskId}
+                          type="button"
+                          className="w-full rounded-lg border border-border p-3 text-left hover:bg-muted/40"
+                          onClick={() => navigate(riskRegisterHref(riskId))}
+                          data-testid={`near-miss-linked-risk-${riskId}`}
+                        >
+                          <div className="font-medium text-foreground">Risk #{riskId}</div>
+                          <div className="text-sm text-muted-foreground">Open in risk register</div>
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </CardContent>
               </Card>
