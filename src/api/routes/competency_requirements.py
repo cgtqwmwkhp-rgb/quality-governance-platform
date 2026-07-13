@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, List, Optional
+from typing import Annotated, Any, List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, or_, select
@@ -191,7 +191,7 @@ async def allocate_competency_requirement(
     if data.engineer_ids:
         eng_q = eng_q.where(Engineer.id.in_(data.engineer_ids))
     else:
-        filters = []
+        filters: list[Any] = []
         if data.match_site and requirement.site:
             filters.append(Engineer.site.ilike(requirement.site))
         role_key = data.match_role_key or requirement.role_key
