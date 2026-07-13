@@ -107,9 +107,7 @@ class TestComplaintLifecycle:
         """Can list investigations linked to a complaint."""
         complaint_id = "uat-complaint-open"
 
-        response = await admin_client.get(
-            f"/api/v1/complaints/{complaint_id}/investigations?page=1&page_size=10"
-        )
+        response = await admin_client.get(f"/api/v1/complaints/{complaint_id}/investigations?page=1&page_size=10")
 
         assert response["status"] == "ok"
         assert response["path"] == f"/api/v1/complaints/{complaint_id}/investigations?page=1&page_size=10"
