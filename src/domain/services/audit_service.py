@@ -1857,9 +1857,7 @@ class AuditService:
         siblings = list(siblings_result.scalars().all())
         if target == FindingStatus.CLOSED:
             blockers = [
-                s
-                for s in siblings
-                if s.id != capa.id and self._enum_value(s.status) != CAPAStatus.CLOSED.value
+                s for s in siblings if s.id != capa.id and self._enum_value(s.status) != CAPAStatus.CLOSED.value
             ]
             if blockers:
                 result["skipped_reason"] = "sibling_capa_not_closed"
@@ -1882,10 +1880,7 @@ class AuditService:
                 return result
 
         # Never downgrade a closed finding back to pending_verification.
-        if (
-            target == FindingStatus.PENDING_VERIFICATION
-            and from_status == FindingStatus.CLOSED.value
-        ):
+        if target == FindingStatus.PENDING_VERIFICATION and from_status == FindingStatus.CLOSED.value:
             result["skipped_reason"] = "finding_already_closed"
             result["to_status"] = from_status
             return result
@@ -1899,7 +1894,9 @@ class AuditService:
         finding.status = target
         await self.db.flush()
         await invalidate_tenant_cache(finding.tenant_id, "audits")
-        track_metric("audit.finding.bridge_closed" if target == FindingStatus.CLOSED else "audit.finding.bridge_pending")
+        track_metric(
+            "audit.finding.bridge_closed" if target == FindingStatus.CLOSED else "audit.finding.bridge_pending"
+        )
 
         run: AuditRun = await self._get_entity(AuditRun, finding.run_id, tenant_id=finding.tenant_id)
         notify_user_id = run.assigned_to_id or run.created_by_id
@@ -1958,10 +1955,7 @@ class AuditService:
             if to_status == FindingStatus.CLOSED.value
             else "Audit finding pending verification via CAPA"
         )
-        message = (
-            f"CAPA {capa.reference_number} moved the linked audit finding "
-            f"to '{to_status}'."
-        )
+        message = f"CAPA {capa.reference_number} moved the linked audit finding " f"to '{to_status}'."
         notif_type = (
             NotificationType.ACTION_COMPLETED
             if to_status == FindingStatus.CLOSED.value
