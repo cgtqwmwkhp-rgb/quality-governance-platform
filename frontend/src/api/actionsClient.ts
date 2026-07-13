@@ -106,10 +106,24 @@ export function createActionsApi(api: AxiosInstance) {
    * List all actions with pagination and optional filters.
    * Actions are returned sorted by created_at descending for stable ordering.
    */
-  list: (page = 1, pageSize = 10, status?: string, source_type?: string, source_id?: number) =>
-    api.get<PaginatedResponse<Action>>(
-      `/api/v1/actions/?page=${page}&page_size=${pageSize}${status ? `&status=${status}` : ''}${source_type ? `&source_type=${source_type}` : ''}${source_id ? `&source_id=${source_id}` : ''}`,
-    ),
+  list: (
+    page = 1,
+    pageSize = 10,
+    status?: string,
+    source_type?: string,
+    source_id?: number,
+    scope?: { assigned_to?: string; overdue?: boolean },
+  ) => {
+    const params = new URLSearchParams()
+    params.set('page', String(page))
+    params.set('page_size', String(pageSize))
+    if (status) params.set('status', status)
+    if (source_type) params.set('source_type', source_type)
+    if (source_id) params.set('source_id', String(source_id))
+    if (scope?.assigned_to) params.set('assigned_to', scope.assigned_to)
+    if (scope?.overdue) params.set('overdue', 'true')
+    return api.get<PaginatedResponse<Action>>(`/api/v1/actions/?${params.toString()}`)
+  },
   /** Tenant-wide totals by display_status (not limited to first page). */
   summary: () => api.get<ActionsSummary>('/api/v1/actions/summary'),
   /**
