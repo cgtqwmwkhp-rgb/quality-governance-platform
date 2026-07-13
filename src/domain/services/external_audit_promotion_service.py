@@ -294,10 +294,7 @@ class ExternalAuditPromotionService:
                     "view_links": {
                         "actions": f"/actions?sourceType=audit_finding&sourceId={finding.id}",
                         "risk_register": f"/risk-register?auditOnly=1&auditRef={run.reference_number}",
-                        "uvdb": (
-                            f"/uvdb?auditRef={run.reference_number}"
-                            f"&runId={run.id}&jobId={job.id}"
-                        ),
+                        "uvdb": (f"/uvdb?auditRef={run.reference_number}" f"&runId={run.id}&jobId={job.id}"),
                     },
                 }
             )
@@ -340,14 +337,8 @@ class ExternalAuditPromotionService:
             "view_links": {
                 "actions": "/actions?sourceType=audit_finding",
                 "risk_register": f"/risk-register?auditOnly=1&auditRef={run.reference_number}",
-                "uvdb": (
-                    f"/uvdb?auditRef={run.reference_number}"
-                    f"&runId={run.id}&jobId={job.id}"
-                ),
-                "specialist_home": (
-                    f"{home_route}?auditRef={run.reference_number}"
-                    f"&runId={run.id}&jobId={job.id}"
-                ),
+                "uvdb": (f"/uvdb?auditRef={run.reference_number}" f"&runId={run.id}&jobId={job.id}"),
+                "specialist_home": (f"{home_route}?auditRef={run.reference_number}" f"&runId={run.id}&jobId={job.id}"),
                 "import_review": f"/audits/{run.id}/import-review?jobId={job.id}",
             },
         }
@@ -451,9 +442,7 @@ class ExternalAuditPromotionService:
             "planet_mark_sync_status": pm_sync_status,
             "planet_mark_sync_detail": pm_sync if isinstance(pm_sync, dict) else {},
             "uvdb_sync_status": (
-                str((scheme_alignment or {}).get("status") or "unknown")
-                if self._is_uvdb_scheme(job, run)
-                else "n_a"
+                str((scheme_alignment or {}).get("status") or "unknown") if self._is_uvdb_scheme(job, run) else "n_a"
             ),
             "uvdb_audit_id": (scheme_alignment or {}).get("uvdb_audit_id"),
         }
