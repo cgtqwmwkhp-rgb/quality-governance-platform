@@ -495,11 +495,7 @@ async def update_incident(
         )
         await _trigger_operational_standards_assess(db, incident, current_user)
 
-        if (
-            "owner_id" in updates
-            and updates["owner_id"] is not None
-            and updates["owner_id"] != previous_owner_id
-        ):
+        if "owner_id" in updates and updates["owner_id"] is not None and updates["owner_id"] != previous_owner_id:
             await _notify_case_owner_assignment(
                 db,
                 entity_type="incident",

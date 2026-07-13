@@ -30,6 +30,7 @@ async def test_list_incidents_denies_foreign_reporter_email_with_structured_erro
                 current_user=current_user,
                 request_id="req-123",
                 reporter_email="other@example.com",
+                owner=None,
                 page=1,
                 page_size=50,
             )
@@ -60,6 +61,7 @@ async def test_list_incidents_masks_pending_migration_errors() -> None:
                 current_user=current_user,
                 request_id="req-456",
                 reporter_email=None,
+                owner=None,
                 page=1,
                 page_size=50,
             )
@@ -93,6 +95,7 @@ async def test_list_incidents_masks_unexpected_internal_errors() -> None:
                 current_user=current_user,
                 request_id="req-789",
                 reporter_email=None,
+                owner=None,
                 page=1,
                 page_size=50,
             )

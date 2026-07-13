@@ -27,6 +27,9 @@ vi.mock('../../api/client', () => ({
     list: (...args: unknown[]) => mockList(...args),
     create: (...args: unknown[]) => mockCreate(...args),
   },
+  notificationsApi: {
+    getDeliveryStatus: vi.fn().mockResolvedValue({ data: { email_configured: false } }),
+  },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Something went wrong',
 }))

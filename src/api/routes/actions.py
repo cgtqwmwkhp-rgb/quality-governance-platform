@@ -54,9 +54,7 @@ async def _resolve_assignee_id_or_raise(
     tenant_id: Optional[int],
 ) -> int:
     """Resolve assignee email to user id; fail loudly if missing (no silent unowned)."""
-    result = await db.execute(
-        select(User).where(User.email == assigned_to_email, User.tenant_id == tenant_id)
-    )
+    result = await db.execute(select(User).where(User.email == assigned_to_email, User.tenant_id == tenant_id))
     user = result.scalar_one_or_none()
     if not user:
         raise BadRequestError(
@@ -997,9 +995,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     # Find owner by email if provided (scoped to tenant) — fail loudly on unknown email
     owner_id: Optional[int] = None
     if action_data.assigned_to_email:
-        owner_id = await _resolve_assignee_id_or_raise(
-            db, action_data.assigned_to_email, current_user.tenant_id
-        )
+        owner_id = await _resolve_assignee_id_or_raise(db, action_data.assigned_to_email, current_user.tenant_id)
 
     # Generate reference number based on source type
     year = datetime.now().year
