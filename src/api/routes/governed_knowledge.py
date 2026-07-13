@@ -14,6 +14,7 @@ from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkStatus, EvidenceSignalType
 from src.domain.models.document import Document
 from src.domain.models.governed_knowledge import (
+    AiDecisionLog,
     DiscussionThreadStatus,
     DocumentDiscussionMessage,
     DocumentDiscussionThread,
@@ -395,8 +396,26 @@ async def confirm_evidence_link(
     """Manually confirm a proposed evidence link."""
     tenant_id = _tenant_id_for(current_user)
     link = await _get_evidence_link_or_404(db, link_id, tenant_id)
+    prior = link.status.value if hasattr(link.status, "value") else str(link.status)
     link.status = EvidenceLinkStatus.CONFIRMED
     link.auto_applied = False
+    db.add(
+        AiDecisionLog(
+            tenant_id=tenant_id,
+            action="evidence_confirm",
+            entity_type=link.entity_type,
+            entity_id=str(link.entity_id),
+            confidence=link.confidence,
+            auto_applied=False,
+            payload={
+                "link_id": link_id,
+                "clause_id": link.clause_id,
+                "prior_status": prior,
+                "actor_email": getattr(current_user, "email", None),
+                "actor_id": getattr(current_user, "id", None),
+            },
+        )
+    )
     await db.commit()
     return {"status": "confirmed", "link_id": link_id}
 
@@ -411,6 +430,7 @@ async def reject_evidence_link(
     """Reject a proposed evidence link. Prefer a rationale body for auditability."""
     tenant_id = _tenant_id_for(current_user)
     link = await _get_evidence_link_or_404(db, link_id, tenant_id)
+    prior = link.status.value if hasattr(link.status, "value") else str(link.status)
     link.status = EvidenceLinkStatus.REJECTED
     link.auto_applied = False
     rationale = body.rationale.strip() if body and body.rationale else ""
@@ -422,6 +442,24 @@ async def reject_evidence_link(
         legacy = "Rejected without rationale (legacy client)"
         link.notes = f"{link.notes}\n{legacy}".strip() if link.notes else legacy
         rationale = legacy
+    db.add(
+        AiDecisionLog(
+            tenant_id=tenant_id,
+            action="evidence_reject",
+            entity_type=link.entity_type,
+            entity_id=str(link.entity_id),
+            confidence=link.confidence,
+            auto_applied=False,
+            payload={
+                "link_id": link_id,
+                "clause_id": link.clause_id,
+                "prior_status": prior,
+                "rationale": rationale,
+                "actor_email": getattr(current_user, "email", None),
+                "actor_id": getattr(current_user, "id", None),
+            },
+        )
+    )
     await db.commit()
     return {"status": "rejected", "link_id": link_id, "rationale": rationale}
 
@@ -585,6 +623,54 @@ async def get_operational_entity_assessment(
         )
         return []
     return [_serialize_evidence_link(link) for link in links]
+
+
+@router.get("/entities/{entity_type}/{entity_id}/assessment-trail")
+async def get_operational_entity_assessment_trail(
+    entity_type: str,
+    entity_id: str,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Audit trail for standards assess / confirm / reject on a case entity."""
+    tenant_id = _tenant_id_for(current_user)
+    from src.domain.services.governed_knowledge_service import OPERATIONAL_ENTITY_TYPES
+
+    if entity_type not in OPERATIONAL_ENTITY_TYPES:
+        raise BadRequestError(f"Unsupported entity_type: {entity_type}")
+
+    trail_actions = (
+        "operational_standards_assess",
+        "evidence_confirm",
+        "evidence_reject",
+    )
+    result = await db.execute(
+        select(AiDecisionLog)
+        .where(
+            AiDecisionLog.tenant_id == tenant_id,
+            AiDecisionLog.entity_type == entity_type,
+            AiDecisionLog.entity_id == str(entity_id),
+            AiDecisionLog.action.in_(trail_actions),
+        )
+        .order_by(AiDecisionLog.created_at.desc())
+        .limit(100)
+    )
+    rows = list(result.scalars().all())
+    return {
+        "entity_type": entity_type,
+        "entity_id": str(entity_id),
+        "items": [
+            {
+                "id": row.id,
+                "action": row.action,
+                "confidence": row.confidence,
+                "auto_applied": row.auto_applied,
+                "payload": row.payload,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+            for row in rows
+        ],
+    }
 
 
 @router.post("/standards/{standard_id}/scan-kb")

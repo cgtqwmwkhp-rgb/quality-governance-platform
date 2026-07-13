@@ -27,15 +27,19 @@ export interface RelatedDocumentHit {
   title: string | null
 }
 
-export interface AssessEntityResponse {
+export interface AssessmentTrailItem {
+  id: number
+  action: string
+  confidence: number | null
+  auto_applied: boolean
+  payload: Record<string, unknown> | null
+  created_at: string | null
+}
+
+export interface AssessmentTrailResponse {
   entity_type: string
   entity_id: string
-  signal_type: string
-  links_created: number
-  links: KnowledgeEvidenceLink[]
-  related_documents: RelatedDocumentHit[]
-  assessment_statement: string | null
-  stages_summary?: Record<string, unknown> | null
+  items: AssessmentTrailItem[]
 }
 
 export interface MapEvidenceResponse {
@@ -185,6 +189,11 @@ export function createKnowledgeBankApi(api: AxiosInstance) {
 
     listEntityAssessment: (entityType: string, entityId: string | number) =>
       api.get<KnowledgeEvidenceLink[]>(`${base}/entities/${entityType}/${entityId}/assessment`),
+
+    listEntityAssessmentTrail: (entityType: string, entityId: string | number) =>
+      api.get<AssessmentTrailResponse>(
+        `${base}/entities/${entityType}/${entityId}/assessment-trail`,
+      ),
 
     scanStandard: (standardId: number, clauseTexts?: string[]) =>
       api.post<ScanStandardResponse>(`${base}/standards/${standardId}/scan-kb`, {
