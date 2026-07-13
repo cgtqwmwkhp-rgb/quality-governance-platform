@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
+import { LibraryShell } from './LibraryShell'
 
 interface Document {
   id: number
@@ -317,29 +318,22 @@ export default function Documents() {
 
   return (
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- drag-and-drop is mouse-only; upload button provides keyboard access
-    <div
-      className="space-y-6 animate-fade-in"
-      onDragEnter={handleDrag}
-      role="region"
-      aria-label="Document library"
-    >
+    <div onDragEnter={handleDrag} role="region" aria-label="Document library">
+      <LibraryShell
+        activeView="documents"
+        actions={
+          <Button onClick={() => setShowUploadModal(true)}>
+            <Upload size={20} />
+            {t('documents.upload')}
+          </Button>
+        }
+      >
       {loadError && (
         <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{loadError}</div>
       )}
       {uploadError && (
         <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{uploadError}</div>
       )}
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">{t('documents.title')}</h1>
-          <p className="text-muted-foreground mt-1">{t('documents.subtitle')}</p>
-        </div>
-        <Button onClick={() => setShowUploadModal(true)}>
-          <Upload size={20} />
-          {t('documents.upload')}
-        </Button>
-      </div>
 
       {/* Stats */}
       {stats && (
@@ -871,6 +865,7 @@ export default function Documents() {
           </Card>
         </div>
       )}
+      </LibraryShell>
     </div>
   )
 }
