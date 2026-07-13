@@ -247,8 +247,11 @@ async function openImportReview(page: Page) {
   await expect(page.getByRole("heading", { name: "External Audit Review" })).toBeVisible({
     timeout: 20_000,
   });
-  // Wait until mocked drafts hydrate (not the loading-only chrome).
-  await expect(page.getByText("Needs follow-up")).toBeVisible({ timeout: 20_000 });
+  // Wait until mocked drafts hydrate (accepted draft shows reset control).
+  await expect(page.getByRole("button", { name: /Reset finding to draft/i })).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(page.getByText("Needs follow-up", { exact: true })).toBeVisible();
   return counters;
 }
 
@@ -261,7 +264,8 @@ test.describe("Import review Reset / Promote", () => {
 
     await expect.poll(() => counters.getResetCalls()).toBe(1);
     await expect(page.getByRole("button", { name: /Reset finding to draft/i })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Accept" })).toBeVisible();
+    // Exact accessible name — avoid matching "Promote Accepted Drafts".
+    await expect(page.getByRole("button", { name: /^Accept finding:/i })).toBeVisible();
   });
 
   test("Promote accepted drafts confirms and completes", async ({ page }) => {
