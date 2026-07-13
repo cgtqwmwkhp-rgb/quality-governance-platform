@@ -51,29 +51,13 @@ async def _probe_dlq_depth() -> dict[str, Any]:
         }
 
 
-def _pagerduty_readyz_block(pagerduty: dict[str, Any]) -> dict[str, Any]:
-    block: dict[str, Any] = {
-        "status": pagerduty["status"],
-        "pagerduty_enabled": pagerduty["pagerduty_enabled"],
-        "pagerduty_configured": pagerduty["pagerduty_configured"],
-        "routing_key_present": pagerduty["routing_key_present"],
-        "events_api_url_set": pagerduty["events_api_url_set"],
-        "last_enqueue_status": pagerduty.get("last_enqueue_status"),
-        "fail_closed": pagerduty.get("fail_closed", False),
-    }
-    if pagerduty.get("last_enqueue_error"):
-        block["last_enqueue_error"] = pagerduty["last_enqueue_error"]
-    return block
-
-
-def _lane1_channel_snapshot() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Load push/email/SMS/PagerDuty readiness (Lane-1 honesty helpers)."""
-    from src.infrastructure.alerting.pagerduty_status import get_pagerduty_readiness
+def _lane1_channel_snapshot() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Load push/email/SMS readiness (Lane-1 honesty helpers)."""
     from src.infrastructure.email.email_status import get_email_readiness
     from src.infrastructure.push.vapid_status import get_vapid_readiness
     from src.infrastructure.sms.sms_status import get_sms_readiness
 
-    return get_vapid_readiness(), get_email_readiness(), get_sms_readiness(), get_pagerduty_readiness()
+    return get_vapid_readiness(), get_email_readiness(), get_sms_readiness()
 
 
 def _attach_channel_notes(
@@ -82,7 +66,6 @@ def _attach_channel_notes(
     vapid: dict[str, Any],
     email: dict[str, Any],
     sms: dict[str, Any],
-    pagerduty: dict[str, Any],
 ) -> None:
     if vapid.get("note"):
         target["push_note"] = vapid["note"]
@@ -90,8 +73,6 @@ def _attach_channel_notes(
         target["email_note"] = email["note"]
     if sms.get("note"):
         target["sms_note"] = sms["note"]
-    if pagerduty.get("note"):
-        target["pagerduty_note"] = pagerduty["note"]
 
 
 def _build_api_readyz_checks(
@@ -104,7 +85,6 @@ def _build_api_readyz_checks(
     vapid: dict[str, Any],
     email: dict[str, Any],
     sms: dict[str, Any],
-    pagerduty: dict[str, Any],
     dlq: dict[str, Any],
     circuit_breakers: dict[str, Any],
     redis_required: bool,
@@ -146,14 +126,11 @@ def _build_api_readyz_checks(
             "twilio_from_number_present": sms["twilio_from_number_present"],
             "library": sms["library"],
         },
-        "pagerduty_configured": pagerduty["pagerduty_configured"],
-        "pagerduty": _pagerduty_readyz_block(pagerduty),
         "dlq": dlq,
         "channels": {
             "email": email["status"],
             "sms": sms["status"],
             "push": vapid["status"],
-            "pagerduty": pagerduty["status"],
         },
         "memory_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
         "cpu_percent": psutil.cpu_percent(interval=0.1),
@@ -172,7 +149,7 @@ def _build_api_readyz_checks(
             },
         },
     }
-    _attach_channel_notes(checks, vapid=vapid, email=email, sms=sms, pagerduty=pagerduty)
+    _attach_channel_notes(checks, vapid=vapid, email=email, sms=sms)
     if upstream_ai and upstream_ai.get("note"):
         checks["upstream_ai_note"] = upstream_ai["note"]
     if upstream_storage and upstream_storage.get("note"):
@@ -266,8 +243,8 @@ async def readiness_check():
     except Exception:
         pass
 
-    # WCS-B06 / Lane-1 channels: push/SMTP/SMS informational; PagerDuty fail-closed only when key set + last send failed
-    vapid, email, sms, pagerduty = _lane1_channel_snapshot()
+    # WCS-B06 / Lane-1 channels: push/SMTP/SMS informational (PagerDuty removed — EA-05 Cancelled)
+    vapid, email, sms = _lane1_channel_snapshot()
     from src.infrastructure.upstream.ai_status import get_upstream_ai_readiness
     from src.infrastructure.upstream.celery_status import get_upstream_celery_readiness
     from src.infrastructure.upstream.degraded_status import get_upstream_degraded_readiness
@@ -279,10 +256,6 @@ async def readiness_check():
     # Informational only — never flips readiness HTTP status.
     upstream_degraded = get_upstream_degraded_readiness()
 
-    if pagerduty.get("fail_closed"):
-        overall_status = "not_ready"
-        status_code = 503
-
     dlq = await _probe_dlq_depth()
     checks = _build_api_readyz_checks(
         db_status=db_status,
@@ -293,7 +266,6 @@ async def readiness_check():
         vapid=vapid,
         email=email,
         sms=sms,
-        pagerduty=pagerduty,
         dlq=dlq,
         circuit_breakers=circuit_breakers,
         redis_required=settings.is_redis_required,

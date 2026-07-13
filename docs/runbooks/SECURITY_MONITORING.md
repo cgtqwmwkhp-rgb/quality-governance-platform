@@ -16,7 +16,7 @@ and rate limiting triggers.
         │                       │                       │
         ▼                       ▼                       ▼
   JSON Structured         KQL Queries            Teams/Slack/
-     Logging           (Alert Rules)           PagerDuty/Email
+     Logging           (Alert Rules)           Email (Azure Monitor)
 ```
 
 ## Alert Categories
@@ -198,8 +198,8 @@ Ensure Application Insights is configured to send logs to Log Analytics:
 | Group Name | Type | Recipients |
 |------------|------|------------|
 | security-team | Email/Teams | security@company.com, #security-alerts |
-| ops-team | Email/PagerDuty | ops@company.com, PagerDuty service |
-| on-call | PagerDuty | On-call rotation |
+| ops-team | Email | ops@company.com (Azure Monitor action group) |
+| on-call | Email | On-call rotation via Azure Monitor / documented schedule |
 
 ---
 

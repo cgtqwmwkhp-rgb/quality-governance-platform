@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Wire SMTP (+ optional PagerDuty) into QGP Key Vault + App Settings.
+# Wire SMTP into QGP Key Vault + App Settings.
 # NEVER invent secrets — export real values before running.
 #
 # Usage (staging):
@@ -7,15 +7,13 @@
 #   export SMTP_PASSWORD='...'          # app password / mailbox secret
 #   export FROM_EMAIL='noreply@plantexpand.com'
 #   export FROM_NAME='QGP Notifications'   # optional
-#   # optional PagerDuty:
-#   export PAGERDUTY_ROUTING_KEY='...'
-#   ./scripts/ops/wire_smtp_pagerduty.sh staging
+#   ./scripts/ops/wire_smtp.sh staging
 #
 # Usage (prod):
-#   ./scripts/ops/wire_smtp_pagerduty.sh prod
+#   ./scripts/ops/wire_smtp.sh prod
 #
 # Success checks (after restart settles):
-#   curl -sS "$BASE/readyz" | jq '{email_configured,email,pagerduty}'
+#   curl -sS "$BASE/readyz" | jq '{email_configured,email}'
 #   python scripts/smoke/check_email_config.py --from-readyz /tmp/readyz.json
 set -euo pipefail
 
@@ -77,14 +75,6 @@ SETTINGS=(
   "FROM_NAME=$(kv_ref "$FROM_NAME_URI")"
 )
 
-if [[ -n "${PAGERDUTY_ROUTING_KEY:-}" ]]; then
-  echo "==> Writing PagerDuty routing key to Key Vault $VAULT"
-  az keyvault secret set --vault-name "$VAULT" --name PAGERDUTY-ROUTING-KEY --value "$PAGERDUTY_ROUTING_KEY" >/dev/null
-  PD_URI=$(az keyvault secret show --vault-name "$VAULT" --name PAGERDUTY-ROUTING-KEY --query id -o tsv)
-  SETTINGS+=("PAGERDUTY_ENABLED=${PAGERDUTY_ENABLED:-true}")
-  SETTINGS+=("PAGERDUTY_ROUTING_KEY=$(kv_ref "$PD_URI")")
-fi
-
 for APP in "${APPS[@]}"; do
   echo "==> Applying App Settings on $APP ($RG)"
   az webapp config appsettings set --name "$APP" --resource-group "$RG" --settings "${SETTINGS[@]}" >/dev/null
@@ -104,10 +94,8 @@ if not raw:
     raise SystemExit(1)
 d = json.loads(raw)
 email = d.get("email") or {}
-pd = d.get("pagerduty") or {}
 print("email_configured=", d.get("email_configured"))
 print("email.status=", email.get("status"))
-print("pagerduty.status=", pd.get("status") if isinstance(pd, dict) else pd)
 print("overall.status=", d.get("status"))
 '
 

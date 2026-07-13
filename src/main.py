@@ -56,21 +56,6 @@ async def _probe_dlq_depth_root(async_session_maker, logger, request_id: str) ->
         }
 
 
-def _pagerduty_readyz_block(pagerduty: dict) -> dict:
-    block = {
-        "status": pagerduty["status"],
-        "pagerduty_enabled": pagerduty["pagerduty_enabled"],
-        "pagerduty_configured": pagerduty["pagerduty_configured"],
-        "routing_key_present": pagerduty["routing_key_present"],
-        "events_api_url_set": pagerduty["events_api_url_set"],
-        "last_enqueue_status": pagerduty.get("last_enqueue_status"),
-        "fail_closed": pagerduty.get("fail_closed", False),
-    }
-    if pagerduty.get("last_enqueue_error"):
-        block["last_enqueue_error"] = pagerduty["last_enqueue_error"]
-    return block
-
-
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to all responses."""
 
@@ -653,8 +638,7 @@ async def readiness_check(request: Request):
     if status_code == 200:
         logger.info("Readiness check passed", extra={"request_id": request_id})
 
-    # WCS-B06 / Lane-1 channels: VAPID/SMTP/Twilio informational; PagerDuty fail-closed when key set + last send failed
-    from src.infrastructure.alerting.pagerduty_status import get_pagerduty_readiness
+    # WCS-B06 / Lane-1 channels: VAPID/SMTP/Twilio informational (PagerDuty removed — EA-05 Cancelled)
     from src.infrastructure.email.email_status import get_email_readiness
     from src.infrastructure.push.vapid_status import get_vapid_readiness
     from src.infrastructure.sms.sms_status import get_sms_readiness
@@ -666,16 +650,11 @@ async def readiness_check(request: Request):
     vapid = get_vapid_readiness()
     email = get_email_readiness()
     sms = get_sms_readiness()
-    pagerduty = get_pagerduty_readiness()
     upstream_ai = get_upstream_ai_readiness()
     upstream_storage = get_upstream_storage_readiness()
     upstream_celery = await get_upstream_celery_readiness()
     # Informational only — never flips readiness HTTP status.
     upstream_degraded = get_upstream_degraded_readiness()
-
-    if pagerduty.get("fail_closed"):
-        status_code = 503
-        overall = "not_ready"
 
     dlq = await _probe_dlq_depth_root(async_session_maker, logger, request_id)
 
@@ -709,14 +688,11 @@ async def readiness_check(request: Request):
             "twilio_from_number_present": sms["twilio_from_number_present"],
             "library": sms["library"],
         },
-        "pagerduty_configured": pagerduty["pagerduty_configured"],
-        "pagerduty": _pagerduty_readyz_block(pagerduty),
         "dlq": dlq,
         "channels": {
             "email": email["status"],
             "sms": sms["status"],
             "push": vapid["status"],
-            "pagerduty": pagerduty["status"],
         },
         "upstream": {
             "ai": upstream_ai,
@@ -737,8 +713,6 @@ async def readiness_check(request: Request):
         payload["email_note"] = email["note"]
     if sms.get("note"):
         payload["sms_note"] = sms["note"]
-    if pagerduty.get("note"):
-        payload["pagerduty_note"] = pagerduty["note"]
     if upstream_ai.get("note"):
         payload["upstream_ai_note"] = upstream_ai["note"]
     if upstream_storage.get("note"):

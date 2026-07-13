@@ -66,7 +66,6 @@ def _persist_failed_task(
                     extra={"dlq_depth": count, "threshold": DLQ_CRITICAL_THRESHOLD},
                 )
                 track_metric("dlq.alert", 1, {"severity": "critical"})
-                _page_dlq_critical(count)
             elif count >= DLQ_WARN_THRESHOLD:
                 logger.warning(
                     "DLQ depth WARNING: %d failed tasks pending review",
@@ -76,21 +75,6 @@ def _persist_failed_task(
                 track_metric("dlq.alert", 1, {"severity": "warning"})
     except Exception:
         logger.exception("Failed to persist task to DLQ table")
-
-
-def _page_dlq_critical(depth: int) -> None:
-    """Best-effort PagerDuty page when DLQ depth is critical (S12 Ops)."""
-    try:
-        from src.infrastructure.tasks.pagerduty_tasks import trigger_pagerduty_alert
-
-        trigger_pagerduty_alert.delay(
-            summary=f"QGP DLQ depth CRITICAL: {depth} failed tasks pending review",
-            severity="critical",
-            dedup_key="qgp-dlq-depth-critical",
-            custom_details={"dlq_depth": depth, "component": "celery-dlq"},
-        )
-    except Exception:
-        logger.exception("Failed to enqueue PagerDuty alert for DLQ critical depth")
 
 
 @task_failure.connect

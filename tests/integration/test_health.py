@@ -301,60 +301,7 @@ async def test_root_readyz_includes_sms_and_channels(client: AsyncClient, monkey
     }
     assert data.get("channels", {}).get("sms") == "not_configured"
     assert data.get("channels", {}).get("push") in {"not_configured", "partial", "configured"}
-    assert data.get("channels", {}).get("pagerduty") in {
-        "not_configured",
-        "misconfigured",
-        "credentials_present",
-        "configured",
-        "send_failed",
-    }
+    assert "pagerduty" not in data.get("channels", {})
+    assert "pagerduty" not in data
     assert "dlq" in data
     assert "depth" in data["dlq"]
-
-
-@pytest.mark.asyncio
-async def test_root_readyz_includes_pagerduty_not_configured(client: AsyncClient, monkeypatch):
-    """S12: /readyz reports pagerduty not_configured without inventing secrets or failing closed."""
-    monkeypatch.delenv("PAGERDUTY_ENABLED", raising=False)
-    monkeypatch.delenv("PAGERDUTY_ROUTING_KEY", raising=False)
-
-    from src.infrastructure.alerting.pagerduty_client import reset_last_enqueue_status
-
-    reset_last_enqueue_status()
-
-    response = await client.get("/readyz")
-    assert response.status_code in [200, 503]
-    data = response.json()
-    assert data.get("pagerduty_configured") is False
-    assert data.get("pagerduty", {}).get("status") == "not_configured"
-    assert data.get("pagerduty", {}).get("fail_closed") is False
-    assert data.get("channels", {}).get("pagerduty") == "not_configured"
-    # Missing PagerDuty must not be the sole reason for 503
-    if response.status_code == 503:
-        assert data.get("database") in {"disconnected", "degraded", "ok", "connected"} or data.get("redis") in {
-            "degraded",
-            "not_configured",
-            "disconnected",
-        }
-
-
-@pytest.mark.asyncio
-async def test_api_health_readyz_pagerduty_send_failed_fail_closed(client: AsyncClient, monkeypatch):
-    """S12: when routing key is set and last enqueue failed, readiness fails closed (503)."""
-    monkeypatch.setenv("PAGERDUTY_ENABLED", "true")
-    monkeypatch.setenv("PAGERDUTY_ROUTING_KEY", "rk-test")
-
-    from src.infrastructure.alerting import pagerduty_client as pd_client
-
-    pd_client.reset_last_enqueue_status()
-    pd_client._record("failed", error="PagerDuty Events API HTTP 400: bad key", http_status=400)
-
-    response = await client.get("/api/v1/health/readyz")
-    assert response.status_code == 503
-    checks = response.json().get("checks", {})
-    assert checks.get("pagerduty", {}).get("status") == "send_failed"
-    assert checks.get("pagerduty", {}).get("fail_closed") is True
-    assert checks.get("channels", {}).get("pagerduty") == "send_failed"
-    assert "rk-test" not in str(checks)
-
-    pd_client.reset_last_enqueue_status()

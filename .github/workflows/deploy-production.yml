@@ -1853,4 +1853,4 @@ jobs:
           echo "Immediate investigation required."
           echo "Actor: ${{ github.actor }}"
           echo "Commit: $DISPLAY_SHA"
-          # Add PagerDuty/incident notification here if configured
+          # Notify via Azure Monitor / Teams if configured

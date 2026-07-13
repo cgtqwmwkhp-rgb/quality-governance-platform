@@ -33,7 +33,7 @@ Production telemetry is **enabled** as of 2026-04-03 (see [ADR-0008](../adr/ADR-
 
 | Severity | Channel | SLA |
 |----------|---------|-----|
-| Critical | Email + PagerDuty (future) | Acknowledge within 15 min |
+| Critical | Email (Azure Monitor action group) | Acknowledge within 15 min |
 | High | Email | Acknowledge within 1 hour |
 | Warning | Email | Review within 1 business day |
 

@@ -83,7 +83,7 @@ operational governance — enabling data-driven decisions and regulatory readine
 
 | # | Feature | Persona | Journey | Priority |
 |---|---------|---------|---------|----------|
-| R16 | SLO alerting integration (PagerDuty/Teams) | P4 | Operational resilience | High |
+| R16 | SLO alerting integration (Azure Monitor email / Teams) | P4 | Operational resilience | High |
 | R17 | DSAR self-service portal | P4 | GDPR maturity | Medium |
 | R18 | Accessibility audit (external WCAG 2.2 AA) | All | Inclusivity | Medium |
 | R19 | Federated identity (SAML/OIDC beyond Azure AD) | P4 | Enterprise scale | Low |
