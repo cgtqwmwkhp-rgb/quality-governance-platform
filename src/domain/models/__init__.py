@@ -41,6 +41,12 @@ from src.domain.models.audit import (
 )
 from src.domain.models.base import AuditTrailMixin, Base, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 from src.domain.models.capa import CAPAAction
+from src.domain.models.competence_gap import (
+    CompetenceGapAction,
+    CompetenceGapSignalType,
+    CompetenceGapSourceType,
+    CompetenceGapStatus,
+)
 from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
 
@@ -392,6 +398,10 @@ __all__ = [
     "CompetencyLifecycleState",
     "TrainingTicket",
     "TicketVerifyState",
+    "CompetenceGapAction",
+    "CompetenceGapSignalType",
+    "CompetenceGapSourceType",
+    "CompetenceGapStatus",
     "OnboardingChecklist",
     "OnboardingStatus",
     "LOLERExamination",

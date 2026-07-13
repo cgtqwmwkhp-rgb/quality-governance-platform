@@ -70,6 +70,7 @@ from src.api.routes import (
     vehicle_checklists,
     vehicles,
     wdp_analytics,
+    workforce_competence_gaps,
     workflow,
     workflows,
     xml_import,
@@ -194,6 +195,11 @@ router.include_router(
     competency_requirements.router,
     prefix="/competency-requirements",
     tags=["Competency Requirements"],
+)
+router.include_router(
+    workforce_competence_gaps.router,
+    prefix="/workforce/competence-gaps",
+    tags=["Workforce Competence Gaps"],
 )
 router.include_router(wdp_analytics.router, prefix="/wdp-analytics", tags=["Workforce Analytics"])
 # Governance Framework (Workforce Development Platform)
