@@ -37,6 +37,42 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# In-process outcome counters — observable without App Insights, asserted by unit tests.
+# Keys: promote completed|partial|all_failed|error and uvdb_sync ok|skipped|n_a|failed|already_synced|synced
+_PROMOTION_OUTCOME_COUNTERS: dict[str, int] = {}
+
+
+def get_promotion_outcome_counters() -> dict[str, int]:
+    """Return a copy of in-process promote / uvdb_sync outcome counters."""
+    return dict(_PROMOTION_OUTCOME_COUNTERS)
+
+
+def reset_promotion_outcome_counters() -> None:
+    """Reset in-process counters (tests only)."""
+    _PROMOTION_OUTCOME_COUNTERS.clear()
+
+
+def _bump_outcome_counter(kind: str, outcome: str) -> None:
+    key = f"{kind}:{outcome}"
+    _PROMOTION_OUTCOME_COUNTERS[key] = _PROMOTION_OUTCOME_COUNTERS.get(key, 0) + 1
+
+
+def _record_promote_outcome(outcome: str) -> None:
+    _bump_outcome_counter("promote", outcome)
+    try:
+        record_external_audit_promote_outcome(outcome)
+    except Exception:
+        logger.debug("Promote outcome metric skipped", exc_info=True)
+
+
+def _record_uvdb_sync_outcome(outcome: str) -> None:
+    """Record UVDB sync outcome as a distinct counter + OTel promote tag uvdb_sync:<outcome>."""
+    _bump_outcome_counter("uvdb_sync", outcome)
+    try:
+        record_external_audit_promote_outcome(f"uvdb_sync:{outcome}")
+    except Exception:
+        logger.debug("UVDB sync outcome metric skipped", exc_info=True)
+
 
 class PromotionResult(TypedDict):
     promoted_findings: list[int]
@@ -349,9 +385,14 @@ class ExternalAuditPromotionService:
                     tenant_id=resolved_tenant_id,
                     drafts=reconciled_drafts,
                 )
+            self._emit_uvdb_sync_metric(job=job, run=run, scheme_alignment=scheme_alignment)
         except Exception as sync_exc:
             logger.warning("Scheme record sync failed (non-fatal): %s", sync_exc, exc_info=True)
             scheme_alignment = {"status": "sync_failed", "error": str(sync_exc)[:200]}
+            if self._is_uvdb_scheme(job, run):
+                _record_uvdb_sync_outcome("failed")
+            else:
+                _record_uvdb_sync_outcome("n_a")
 
         # Surface Planet Mark sync outcome explicitly in promotion summary
         pm_sync = (scheme_alignment or {}).get("planet_mark_sync", {})
@@ -399,11 +440,17 @@ class ExternalAuditPromotionService:
             "reconciliation": reconciliation,
             "planet_mark_sync_status": pm_sync_status,
             "planet_mark_sync_detail": pm_sync if isinstance(pm_sync, dict) else {},
+            "uvdb_sync_status": (
+                str((scheme_alignment or {}).get("status") or "unknown")
+                if self._is_uvdb_scheme(job, run)
+                else "n_a"
+            ),
+            "uvdb_audit_id": (scheme_alignment or {}).get("uvdb_audit_id"),
         }
         await self.db.flush()
         await self.db.refresh(job)
         try:
-            record_external_audit_promote_outcome("partial" if failed_drafts else "completed")
+            _record_promote_outcome("partial" if failed_drafts else "completed")
         except Exception:
             logger.debug("Promote outcome metric skipped", exc_info=True)
         return job
@@ -475,7 +522,7 @@ class ExternalAuditPromotionService:
                 extra={"draft_count": len(exc.details.get("failed_drafts", [])) if exc.details else 0},
             )
             try:
-                record_external_audit_promote_outcome("all_failed")
+                _record_promote_outcome("all_failed")
             except Exception:
                 logger.debug("Promote outcome metric skipped", exc_info=True)
             try:
@@ -486,7 +533,7 @@ class ExternalAuditPromotionService:
         except Exception as exc:
             logger.error("Promotion failed for job %s: %s", job_id, exc, exc_info=True)
             try:
-                record_external_audit_promote_outcome("error")
+                _record_promote_outcome("error")
             except Exception:
                 logger.debug("Promote outcome metric skipped", exc_info=True)
             try:
@@ -973,6 +1020,31 @@ class ExternalAuditPromotionService:
             return True
 
         return False
+
+    def _emit_uvdb_sync_metric(
+        self,
+        *,
+        job: ExternalAuditImportJob,
+        run: AuditRun,
+        scheme_alignment: dict[str, object] | None,
+    ) -> None:
+        """Make UVDB sync outcomes observable (counter + OTel), not log-only."""
+        if not self._is_uvdb_scheme(job, run):
+            _record_uvdb_sync_outcome("n_a")
+            return
+        alignment = scheme_alignment or {}
+        status = str(alignment.get("status") or "")
+        uvdb_audit_id = alignment.get("uvdb_audit_id")
+        if status == "sync_failed":
+            _record_uvdb_sync_outcome("failed")
+        elif status == "already_synced":
+            _record_uvdb_sync_outcome("already_synced" if uvdb_audit_id else "missing")
+        elif status == "synced" and uvdb_audit_id:
+            _record_uvdb_sync_outcome("synced")
+        elif uvdb_audit_id:
+            _record_uvdb_sync_outcome("ok")
+        else:
+            _record_uvdb_sync_outcome("missing")
 
     async def _sync_uvdb_audit(
         self,

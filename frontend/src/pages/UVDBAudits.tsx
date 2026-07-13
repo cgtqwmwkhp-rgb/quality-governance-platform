@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Shield,
   Leaf,
@@ -33,13 +33,20 @@ import {
 import { useTranslation } from 'react-i18next'
 import {
   uvdbApi,
+  externalAuditImportsApi,
   ErrorClass,
   createApiError,
   isSetupRequired,
   SetupRequiredResponse,
+  type ExternalAuditPromotionReconciliation,
 } from '../api/client'
 import api from '../api/client'
 import { getImportReviewPath } from '../components/audit-import/importReviewHelpers'
+import {
+  ACHILLES_UVDB_AUDITS_PATH,
+  getUvdbCapaActionsPath,
+  getUvdbRiskRegisterPath,
+} from '../components/assuranceHubHelpers'
 import { SetupRequiredPanel } from '../components/ui/SetupRequiredPanel'
 
 interface UVDBSection {
@@ -135,6 +142,44 @@ function ScoreBar({ percentage }: { percentage: number }) {
         className={`h-full rounded-full transition-all ${color}`}
         style={{ width: `${Math.min(percentage, 100)}%` }}
       />
+    </div>
+  )
+}
+
+function DownstreamHandoffLinks({
+  auditRef,
+  findingId,
+  className = '',
+}: {
+  auditRef?: string | null
+  findingId?: number | null
+  className?: string
+}) {
+  const capaPath = getUvdbCapaActionsPath(findingId)
+  const riskPath = getUvdbRiskRegisterPath(auditRef)
+  return (
+    <div className={`flex flex-wrap gap-2 ${className}`.trim()} data-testid="uvdb-downstream-handoffs">
+      <Link
+        to={capaPath}
+        data-testid="uvdb-open-capa"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+      >
+        Open CAPA Actions
+      </Link>
+      <Link
+        to={riskPath}
+        data-testid="uvdb-open-risk"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+      >
+        Open Risk Register
+      </Link>
+      <Link
+        to={ACHILLES_UVDB_AUDITS_PATH}
+        data-testid="uvdb-open-assurance-audits"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+      >
+        Achilles / UVDB on Audits
+      </Link>
     </div>
   )
 }
@@ -292,14 +337,17 @@ function AuditDetailPanel({
           )}
 
           {importReviewPath ? (
-            <a
-              href={importReviewPath}
+            <Link
+              to={importReviewPath}
+              data-testid="uvdb-detail-import-review"
               className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
             >
               <ExternalLink className="h-4 w-4" />
               Open import review
-            </a>
+            </Link>
           ) : null}
+
+          <DownstreamHandoffLinks auditRef={detail.audit_reference} />
 
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
@@ -383,6 +431,13 @@ export default function UVDBAudits() {
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
   const [sectionQuestions, setSectionQuestions] = useState<Record<string, unknown[]>>({})
   const [loadingSectionQuestions, setLoadingSectionQuestions] = useState<string | null>(null)
+  const [reconciliation, setReconciliation] = useState<ExternalAuditPromotionReconciliation | null>(
+    null,
+  )
+  const [reconciliationStatus, setReconciliationStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'unavailable' | 'partial'
+  >('idle')
+  const [reconciliationNotice, setReconciliationNotice] = useState<string | null>(null)
 
   const transformSection = (apiSection: {
     number: string
@@ -535,6 +590,59 @@ export default function UVDBAudits() {
     },
     [auditSearch, auditStatusFilter],
   )
+
+  useEffect(() => {
+    const match =
+      audits.find(
+        (audit) =>
+          auditRefFromQuery &&
+          audit.audit_reference === auditRefFromQuery &&
+          audit.import_job_id != null &&
+          audit.import_job_id > 0,
+      ) ||
+      audits.find((audit) => audit.import_job_id != null && audit.import_job_id > 0)
+
+    if (!match?.import_job_id) {
+      setReconciliation(null)
+      setReconciliationStatus('idle')
+      setReconciliationNotice(null)
+      return
+    }
+
+    let cancelled = false
+    setReconciliationStatus('loading')
+    setReconciliationNotice(null)
+
+    void externalAuditImportsApi
+      .getReconciliation(match.import_job_id)
+      .then((response) => {
+        if (cancelled) return
+        const payload = response.data
+        setReconciliation(payload)
+        const failed = Number(payload?.failed_total || 0)
+        const pending = Number(payload?.accepted_pending_total || 0)
+        if (failed > 0 || pending > 0) {
+          setReconciliationStatus('partial')
+          setReconciliationNotice(
+            'Downstream reconciliation is partial — some drafts still need attention before the closed loop is complete.',
+          )
+        } else {
+          setReconciliationStatus('ready')
+        }
+      })
+      .catch(() => {
+        if (cancelled) return
+        setReconciliation(null)
+        setReconciliationStatus('unavailable')
+        setReconciliationNotice(
+          'Reconciliation diagnostics are unavailable for this UVDB row (honesty: partial proof only).',
+        )
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [audits, auditRefFromQuery])
 
   const handleToggleAuditDetail = useCallback(
     async (auditId: number) => {
@@ -737,24 +845,53 @@ export default function UVDBAudits() {
           </h1>
           <p className="text-muted-foreground">{t('uvdb.subtitle')}</p>
         </div>
-        <div className="flex gap-3 mt-4 md:mt-0">
-          <button
-            disabled
-            title="Protocol export is not available yet"
-            className="flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-secondary px-4 py-2 opacity-60"
-          >
-            <Download className="w-4 h-4" />
-            {t('uvdb.export_protocol')}
-          </button>
-          <button
-            onClick={handleOpenCreateAuditForm}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            {t('uvdb.new_audit')}
-          </button>
+        <div className="flex flex-col gap-3 mt-4 md:mt-0 md:items-end">
+          <DownstreamHandoffLinks auditRef={auditRefFromQuery || audits[0]?.audit_reference} />
+          <div className="flex gap-3">
+            <button
+              disabled
+              title="Protocol export is not available yet"
+              className="flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-secondary px-4 py-2 opacity-60"
+            >
+              <Download className="w-4 h-4" />
+              {t('uvdb.export_protocol')}
+            </button>
+            <button
+              onClick={handleOpenCreateAuditForm}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              {t('uvdb.new_audit')}
+            </button>
+          </div>
         </div>
       </div>
+
+      {reconciliationStatus !== 'idle' ? (
+        <div
+          className="mb-6 rounded-xl border border-border bg-card px-4 py-3"
+          data-testid="uvdb-reconciliation-panel"
+        >
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Downstream reconciliation</p>
+              <p className="text-xs text-muted-foreground">
+                {reconciliationStatus === 'loading' && 'Loading promotion proof…'}
+                {reconciliationStatus === 'ready' &&
+                  `Proof ready — ${reconciliation?.promoted_total ?? 0} finding(s) materialized.`}
+                {reconciliationStatus === 'partial' &&
+                  (reconciliationNotice || 'Partial closed-loop proof — review outstanding drafts.')}
+                {reconciliationStatus === 'unavailable' &&
+                  (reconciliationNotice ||
+                    'Reconciliation unavailable — specialist home shows UVDB rows only.')}
+              </p>
+            </div>
+            {reconciliation?.view_links?.actions || reconciliation?.audit_reference ? (
+              <DownstreamHandoffLinks auditRef={reconciliation?.audit_reference || auditRefFromQuery} />
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {createAuditSuccess ? (
         <div className="mb-6 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
@@ -1355,11 +1492,41 @@ export default function UVDBAudits() {
                   </button>
                 </div>
                 {auditRefFromQuery && audits.length === 0 ? (
-                  <div className="mx-4 mt-4 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
-                    No synced UVDB audit row is visible yet for <strong>{auditRefFromQuery}</strong>
-                    . If this import was promoted successfully, use the External Audit Review
-                    diagnostics panel to verify whether the UVDB sync step completed or whether the
-                    audit was routed to a different specialist surface.
+                  <div
+                    className="mx-4 mt-4 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning"
+                    data-testid="uvdb-auditref-miss"
+                    role="status"
+                  >
+                    <p>
+                      No synced UVDB audit row is visible yet for{' '}
+                      <strong>{auditRefFromQuery}</strong>. If this import was promoted
+                      successfully, use the External Audit Review diagnostics panel to verify
+                      whether the UVDB sync step completed or whether the audit was routed to a
+                      different specialist surface.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Link
+                        to={ACHILLES_UVDB_AUDITS_PATH}
+                        data-testid="uvdb-auditref-miss-recovery-audits"
+                        className="inline-flex items-center rounded-lg border border-warning/40 bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:border-primary/40 hover:text-primary"
+                      >
+                        Browse Achilles / UVDB on Audits
+                      </Link>
+                      <Link
+                        to="/uvdb"
+                        data-testid="uvdb-auditref-miss-recovery-clear"
+                        className="inline-flex items-center rounded-lg border border-warning/40 bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:border-primary/40 hover:text-primary"
+                      >
+                        Clear auditRef and open UVDB home
+                      </Link>
+                      <Link
+                        to={getUvdbCapaActionsPath()}
+                        data-testid="uvdb-auditref-miss-recovery-capa"
+                        className="inline-flex items-center rounded-lg border border-warning/40 bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:border-primary/40 hover:text-primary"
+                      >
+                        Open CAPA Actions
+                      </Link>
+                    </div>
                   </div>
                 ) : null}
                 {audits.length === 0 ? (
@@ -1444,18 +1611,19 @@ export default function UVDBAudits() {
                               <td className="px-4 py-3 text-center">
                                 <div className="flex items-center justify-center gap-1">
                                   {getImportReviewPath(audit.audit_run_id, audit.import_job_id) ? (
-                                    <a
-                                      href={
+                                    <Link
+                                      to={
                                         getImportReviewPath(
                                           audit.audit_run_id,
                                           audit.import_job_id,
                                         )!
                                       }
                                       onClick={(event) => event.stopPropagation()}
+                                      data-testid={`uvdb-import-review-${audit.id}`}
                                       className="rounded-lg px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
                                     >
                                       Import review
-                                    </a>
+                                    </Link>
                                   ) : null}
                                   <button
                                     aria-label={`View details for ${audit.audit_reference}`}
