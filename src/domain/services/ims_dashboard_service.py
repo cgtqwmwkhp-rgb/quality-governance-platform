@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -27,12 +27,17 @@ class IMSDashboardService:
     # Standards compliance
     # ------------------------------------------------------------------
 
-    async def get_standards_compliance(self) -> list[dict[str, Any]]:
-        """Return compliance scores for every active standard."""
+    async def get_standards_compliance(self, tenant_id: int | None = None) -> list[dict[str, Any]]:
+        """Return compliance scores for every active standard scoped to a tenant."""
         from src.domain.models.standard import Clause, Control, Standard
 
-        result = await self._db.execute(select(Standard).where(Standard.is_active == True).order_by(Standard.code))
+        std_tenant_filter = self._standard_tenant_filter(Standard, tenant_id)
+        result = await self._db.execute(
+            select(Standard).where(Standard.is_active == True, std_tenant_filter).order_by(Standard.code)
+        )
         standards = list(result.scalars().all())
+
+        control_tenant_filter = self._standard_tenant_filter(Control, tenant_id)
 
         scores: list[dict[str, Any]] = []
         for std in standards:
@@ -42,6 +47,7 @@ class IMSDashboardService:
                 .where(Clause.standard_id == std.id)
                 .where(Control.is_active == True)
                 .where(Control.is_applicable == True)
+                .where(control_tenant_filter)
             )
             control_result = await self._db.execute(control_query)
             controls = list(control_result.scalars().all())
@@ -303,12 +309,15 @@ class IMSDashboardService:
     # Compliance evidence coverage
     # ------------------------------------------------------------------
 
-    async def get_compliance_coverage(self) -> dict[str, Any]:
-        """Return compliance evidence coverage statistics."""
+    async def get_compliance_coverage(self, tenant_id: int | None = None) -> dict[str, Any]:
+        """Return compliance evidence coverage statistics scoped to a tenant."""
         from src.domain.models.compliance_evidence import ComplianceEvidenceLink
         from src.domain.services.iso_compliance_service import EvidenceLink, iso_compliance_service
 
-        result = await self._db.execute(select(ComplianceEvidenceLink))
+        link_query = select(ComplianceEvidenceLink)
+        if tenant_id is not None:
+            link_query = link_query.where(ComplianceEvidenceLink.tenant_id == tenant_id)
+        result = await self._db.execute(link_query)
         links_raw = list(result.scalars().all())
 
         links = [
@@ -339,13 +348,15 @@ class IMSDashboardService:
     # Audit schedule
     # ------------------------------------------------------------------
 
-    async def get_audit_schedule(self) -> list[dict[str, Any]]:
-        """Return upcoming/active audits."""
+    async def get_audit_schedule(self, tenant_id: int | None = None) -> list[dict[str, Any]]:
+        """Return upcoming/active audits scoped to a tenant."""
         from src.domain.models.audit import AuditRun
 
+        tenant_filter = self._audit_tenant_filter(AuditRun, tenant_id)
         result = await self._db.execute(
             select(AuditRun)
             .where(AuditRun.status.in_(["draft", "scheduled", "in_progress"]))
+            .where(tenant_filter)
             .order_by(AuditRun.scheduled_date.asc().nulls_last())
             .limit(10)
         )
@@ -379,7 +390,7 @@ class IMSDashboardService:
 
         # Standards compliance
         try:
-            response["standards"] = await self.get_standards_compliance()
+            response["standards"] = await self.get_standards_compliance(tenant_id=tenant_id)
         except SQLAlchemyError:
             logger.warning("IMS dashboard: standards query failed", exc_info=True)
             response["standards"] = []
@@ -432,7 +443,7 @@ class IMSDashboardService:
 
         # Compliance coverage
         try:
-            response["compliance_coverage"] = await self.get_compliance_coverage()
+            response["compliance_coverage"] = await self.get_compliance_coverage(tenant_id=tenant_id)
         except SQLAlchemyError:
             logger.warning("IMS dashboard: compliance coverage failed", exc_info=True)
             response["compliance_coverage"] = None
@@ -440,7 +451,7 @@ class IMSDashboardService:
 
         # Audit schedule
         try:
-            response["audit_schedule"] = await self.get_audit_schedule()
+            response["audit_schedule"] = await self.get_audit_schedule(tenant_id=tenant_id)
         except SQLAlchemyError:
             logger.warning("IMS dashboard: audit schedule failed", exc_info=True)
             response["audit_schedule"] = []
@@ -451,6 +462,20 @@ class IMSDashboardService:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _standard_tenant_filter(model: Any, tenant_id: int | None) -> Any:
+        """Match compliance route semantics: tenant-owned rows plus shared global catalog."""
+        if tenant_id is not None:
+            return or_(model.tenant_id == tenant_id, model.tenant_id.is_(None))
+        return model.tenant_id.is_(None)
+
+    @staticmethod
+    def _audit_tenant_filter(model: Any, tenant_id: int | None) -> Any:
+        """Include tenant-owned audit runs and legacy rows with no tenant assignment."""
+        if tenant_id is not None:
+            return or_(model.tenant_id == tenant_id, model.tenant_id.is_(None))
+        return True  # noqa: E712 — SQLAlchemy literal for unscoped admin fallback
 
     async def _count(self, sub_select: Any) -> int:
         """Execute ``SELECT count(*) FROM (<sub_select>)``."""
