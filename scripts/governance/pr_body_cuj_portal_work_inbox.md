@@ -45,9 +45,9 @@ Adds mobile portal **My Work** inbox at `/portal/work` so SSO field users can se
 - E2E: `frontend/tests/e2e/portal-work-inbox.spec.ts`
 
 ## Critical journeys
-- **CUJ-P10-01**: Portal → My Work → assigned action visible (`assigned_to=me`)
-- **CUJ-P10-02**: Unlinked user → honest passport empty state
-- **CUJ-P10-03**: Empty actions/reading → per-slice empty copy (not one generic “all caught up”)
+- **CUJ-01**: Portal → My Work → assigned action visible (`assigned_to=me`) (CUJ-P10-01)
+- **CUJ-02**: Unlinked user → honest passport empty state (CUJ-P10-02)
+- **CUJ-03**: Empty actions/reading → per-slice empty copy (not one generic “all caught up”) (CUJ-P10-03)
 
 ## Observability
 - BE log: `portal_work_inbox_viewed` with `engineer_linked` true/false
