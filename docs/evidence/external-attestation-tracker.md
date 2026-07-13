@@ -98,9 +98,15 @@ docs/evidence/pentest-report-YYYY-Q?.md
 **Evidence already in place:**
 - `docs/privacy/dpia-incidents.md` (DPIA for incidents module)
 - `docs/compliance/dpia-ocr-ai-import.md` (OCR/AI external audit import DPIA — Path-to-10 S15)
+- `docs/governance/privacy-ocr-ai-dpia.md` (governance link)
+- `docs/privacy/dpia-checklist.md` (trigger + OCR completeness checklist)
 - `docs/compliance/dpia-quality-governance-platform.md` (platform DPIA — §9 signed)
 - `GET /api/v1/privacy/contact` → `dpia.status=signed`
+- `docs/privacy/data-classification.md`
+- `docs/compliance/gdpr-compliance.md`
+- `docs/evidence/retention-automation-evidence.md`
 - `docs/evidence/dpo-signoff-2026-Q3-READY-FOR-SIGNATURE.md`
+
 ---
 
 ## EA-04: ISO Auditor Validation of Compliance Evidence Tool (D08)
@@ -150,6 +156,8 @@ docs/evidence/iso-auditor-validation-YYYY-Q?.md
 - `docs/runbooks/OBSERVABILITY_AND_ALERTING.md`
 - `docs/observability/alerting-rules.md`
 - `docs/evidence/otel-alert-proof-2026-04-07.md` (OTel alert round-trip proven)
+- `docs/runbooks/HUMAN_UNLOCK_SMTP_PAGERDUTY.md` (human unlock runbook)
+- `scripts/ops/wire_smtp_pagerduty.sh` (wire script — requires human credentials)
 
 **Deliverable required:**
 ```
