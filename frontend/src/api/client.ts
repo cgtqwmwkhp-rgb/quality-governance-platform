@@ -1197,6 +1197,24 @@ export const complianceApi = {
     api.get<ComplianceReportResponse>(
       `/api/v1/compliance/report${standard ? `?standard=${standard}` : ''}`,
     ),
+  /**
+   * Server-side ISO audit pack with full CEL provenance.
+   * Defaults to excluding nonconformity/gap/opportunity from conformance evidence.
+   */
+  downloadAuditPack: (params?: {
+    standard?: string
+    includeNonconformity?: boolean
+    includeSoa?: boolean
+    organizationName?: string
+  }) => {
+    const sp = new URLSearchParams()
+    if (params?.standard) sp.set('standard', params.standard)
+    if (params?.includeNonconformity) sp.set('include_nonconformity', 'true')
+    if (params?.includeSoa === false) sp.set('include_soa', 'false')
+    if (params?.organizationName) sp.set('organization_name', params.organizationName)
+    const qs = sp.toString()
+    return api.get<Record<string, unknown>>(`/api/v1/compliance/audit-pack${qs ? `?${qs}` : ''}`)
+  },
   listStandards: () => api.get<ComplianceStandardRecord[]>('/api/v1/compliance/standards'),
   /**
    * 5-stage Genspark-powered evidence analysis.

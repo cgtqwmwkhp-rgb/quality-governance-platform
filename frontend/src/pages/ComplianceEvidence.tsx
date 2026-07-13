@@ -562,15 +562,11 @@ export default function ComplianceEvidence() {
 
   const handleDownloadAuditPack = async () => {
     try {
-      const [reportRes, soaRes] = await Promise.all([
-        complianceApi.getReport(),
-        complianceApi.getSoA(),
-      ])
-      const pack = {
-        generated_at: new Date().toISOString(),
-        report: reportRes.data,
-        statement_of_applicability: soaRes.data,
-      }
+      const response = await complianceApi.downloadAuditPack({
+        includeNonconformity: false,
+        includeSoa: true,
+      })
+      const pack = response.data
       const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
