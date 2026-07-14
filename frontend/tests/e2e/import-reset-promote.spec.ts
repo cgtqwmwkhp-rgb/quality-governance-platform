@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Browser, type Page, type Route } from "@playwright/test";
 
 /**
  * External Audit Import Review — Reset + Promote critical journey.
@@ -72,11 +72,19 @@ async function json(route: Route, body: unknown, status = 200) {
   });
 }
 
+async function clearImportRoutes(page: Page) {
+  // Serial describe + retries can otherwise stack page.route handlers; the
+  // stale Reset mock (draftStatus already flipped) then starves Promote hydration.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+}
+
 async function installImportMocks(page: Page) {
   let draftStatus: DraftStatus = "accepted";
   let jobStatus = "review_required";
   let promoteCalls = 0;
   let resetCalls = 0;
+
+  await clearImportRoutes(page);
 
   // Never hit live staging from this suite — parallel gate workers otherwise
   // trip shared IP rate limits (429) and abandon import-review hydration.
@@ -268,35 +276,58 @@ async function openImportReview(page: Page) {
   return counters;
 }
 
+/**
+ * Fresh browser context per serial test so Reset's mutated mock closures and
+ * any SWA service-worker fetch hijack cannot pollute Promote (and vice versa).
+ */
+async function withFreshImportContext(browser: Browser, run: (page: Page) => Promise<void>) {
+  const context = await browser.newContext({
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:5173",
+    serviceWorkers: "block",
+  });
+  const page = await context.newPage();
+  try {
+    await run(page);
+  } finally {
+    await context.close();
+  }
+}
+
 test.describe("Import review Reset / Promote", () => {
   test.describe.configure({ mode: "serial" });
+  // Match other staging CUJs — SWA service workers otherwise bypass page.route mocks.
+  test.use({ serviceWorkers: "block" });
 
-  test("Reset accepted finding to draft via review PATCH", async ({ page }) => {
-    const counters = await openImportReview(page);
+  test("Reset accepted finding to draft via review PATCH", async ({ browser }) => {
+    await withFreshImportContext(browser, async (page) => {
+      const counters = await openImportReview(page);
 
-    await expect(page.getByRole("button", { name: /Reset finding to draft/i })).toBeVisible();
-    await page.getByRole("button", { name: /Reset finding to draft/i }).click();
+      await expect(page.getByRole("button", { name: /Reset finding to draft/i })).toBeVisible();
+      await page.getByRole("button", { name: /Reset finding to draft/i }).click();
 
-    await expect.poll(() => counters.getResetCalls()).toBe(1);
-    await expect(page.getByRole("button", { name: /Reset finding to draft/i })).toHaveCount(0);
-    // Exact accessible name — avoid matching "Promote Accepted Drafts".
-    await expect(page.getByRole("button", { name: /^Accept finding:/i })).toBeVisible();
+      await expect.poll(() => counters.getResetCalls()).toBe(1);
+      await expect(page.getByRole("button", { name: /Reset finding to draft/i })).toHaveCount(0);
+      // Exact accessible name — avoid matching "Promote Accepted Drafts".
+      await expect(page.getByRole("button", { name: /^Accept finding:/i })).toBeVisible();
+    });
   });
 
-  test("Promote accepted drafts confirms and completes", async ({ page }) => {
-    const counters = await openImportReview(page);
+  test("Promote accepted drafts confirms and completes", async ({ browser }) => {
+    await withFreshImportContext(browser, async (page) => {
+      const counters = await openImportReview(page);
 
-    await expect(page.getByRole("button", { name: "Promote Accepted Drafts" })).toBeEnabled();
-    await page.getByRole("button", { name: "Promote Accepted Drafts" }).click();
-    await page.getByRole("button", { name: "Confirm Promote" }).click();
+      await expect(page.getByRole("button", { name: "Promote Accepted Drafts" })).toBeEnabled();
+      await page.getByRole("button", { name: "Promote Accepted Drafts" }).click();
+      await page.getByRole("button", { name: "Confirm Promote" }).click();
 
-    await expect.poll(() => counters.getPromoteCalls()).toBe(1);
-    // LiveAnnouncer also exposes an empty role="alert"; target the success notice copy.
-    await expect(page.getByText(/Successfully promoted/i)).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole("button", { name: "View Audit Actions" })).toBeVisible({
-      timeout: 20_000,
+      await expect.poll(() => counters.getPromoteCalls()).toBe(1);
+      // LiveAnnouncer also exposes an empty role="alert"; target the success notice copy.
+      await expect(page.getByText(/Successfully promoted/i)).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByRole("button", { name: "View Audit Actions" })).toBeVisible({
+        timeout: 20_000,
+      });
+      await page.getByRole("button", { name: "View Audit Actions" }).click();
+      await expect(page).toHaveURL(/\/actions\?.*sourceType=audit_finding/);
     });
-    await page.getByRole("button", { name: "View Audit Actions" }).click();
-    await expect(page).toHaveURL(/\/actions\?.*sourceType=audit_finding/);
   });
 });
