@@ -1,21 +1,20 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Camera,
-  Loader2,
-  Package,
-  QrCode,
-} from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Award, Camera, Loader2, Package, QrCode } from 'lucide-react'
 import {
   safetyAssetsApi,
   type SafetyAsset,
   type SafetyAssetType,
   type SafetyLocation,
 } from '../api/safetyAssetsClient'
-import { evidenceAssetsApi, getApiErrorMessage } from '../api/client'
+import {
+  evidenceAssetsApi,
+  getApiErrorMessage,
+  workforceApi,
+  type CompetencyRequirement,
+  type WdpEngineerMatrix,
+} from '../api/client'
 import { toast } from '../contexts/ToastContext'
 import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import { Card, CardContent } from '../components/ui/Card'
@@ -51,6 +50,10 @@ function formatDate(value?: string | null): string {
 
 const STATUS_OPTIONS = ['active', 'vor', 'maintenance', 'decommissioned', 'quarantined'] as const
 
+function holderState(state: string | undefined): boolean {
+  return state === 'active' || state === 'competent'
+}
+
 export default function SafetyAssetDetail() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
@@ -65,6 +68,12 @@ export default function SafetyAssetDetail() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null)
   const [photoError, setPhotoError] = useState<string | null>(null)
+  const [competencyRequirements, setCompetencyRequirements] = useState<
+    CompetencyRequirement[] | null
+  >(null)
+  const [competencyRequirementsUnavailable, setCompetencyRequirementsUnavailable] = useState(false)
+  const [competencyMatrix, setCompetencyMatrix] = useState<WdpEngineerMatrix | null>(null)
+  const [competencyMatrixUnavailable, setCompetencyMatrixUnavailable] = useState(false)
 
   const load = useCallback(async () => {
     if (!Number.isFinite(assetId) || assetId <= 0) {
@@ -96,6 +105,28 @@ export default function SafetyAssetDetail() {
         setLocation(locRes.value.data)
       } else {
         setLocation(null)
+      }
+
+      const [requirementsRes, matrixRes] = await Promise.allSettled([
+        workforceApi.competencyRequirements.list({
+          asset_type_id: next.asset_type_id,
+          page_size: 500,
+        }),
+        workforceApi.analytics.getEngineerMatrix(),
+      ])
+      if (requirementsRes.status === 'fulfilled') {
+        setCompetencyRequirements(requirementsRes.value.data.items ?? [])
+        setCompetencyRequirementsUnavailable(false)
+      } else {
+        setCompetencyRequirements(null)
+        setCompetencyRequirementsUnavailable(true)
+      }
+      if (matrixRes.status === 'fulfilled') {
+        setCompetencyMatrix(matrixRes.value.data)
+        setCompetencyMatrixUnavailable(false)
+      } else {
+        setCompetencyMatrix(null)
+        setCompetencyMatrixUnavailable(true)
       }
 
       if (next.photo_evidence_id != null) {
@@ -138,7 +169,9 @@ export default function SafetyAssetDetail() {
       setAsset(res.data)
       toast.success(t('safetyAssets.detail.status_updated', 'Status updated.'))
     } catch (err) {
-      toast.error(getApiErrorMessage(err, t('safetyAssets.detail.status_failed', 'Status update failed.')))
+      toast.error(
+        getApiErrorMessage(err, t('safetyAssets.detail.status_failed', 'Status update failed.')),
+      )
     } finally {
       setSavingStatus(false)
     }
@@ -158,7 +191,9 @@ export default function SafetyAssetDetail() {
       })
       const evidenceId = uploadRes.data?.id
       if (evidenceId == null) {
-        throw new Error(t('safetyAssets.detail.photo_no_id', 'Upload succeeded but no evidence id returned.'))
+        throw new Error(
+          t('safetyAssets.detail.photo_no_id', 'Upload succeeded but no evidence id returned.'),
+        )
       }
       const updated = await safetyAssetsApi.updateAsset(asset.id, {
         photo_evidence_id: evidenceId,
@@ -232,6 +267,11 @@ export default function SafetyAssetDetail() {
           })
         : asset.site || t('safetyAssets.detail.assignment_none', 'Unassigned')
 
+  const competencyHolders =
+    competencyMatrix?.engineers.filter((engineer) =>
+      holderState(engineer.competencies[asset.asset_type_id]),
+    ) ?? []
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -261,22 +301,151 @@ export default function SafetyAssetDetail() {
               {t('safetyAssets.detail.identity', 'Identity')}
             </h2>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-              <dt className="text-muted-foreground">{t('safetyAssets.detail.field_number', 'Number')}</dt>
+              <dt className="text-muted-foreground">
+                {t('safetyAssets.detail.field_number', 'Number')}
+              </dt>
               <dd className="text-foreground">{asset.asset_number}</dd>
-              <dt className="text-muted-foreground">{t('safetyAssets.detail.field_type', 'Type')}</dt>
+              <dt className="text-muted-foreground">
+                {t('safetyAssets.detail.field_type', 'Type')}
+              </dt>
               <dd className="text-foreground">
                 {assetType?.name ?? `#${asset.asset_type_id}`}
                 {assetType?.category ? ` · ${assetType.category}` : ''}
               </dd>
-              <dt className="text-muted-foreground">{t('safetyAssets.detail.field_make', 'Make / model')}</dt>
+              <dt className="text-muted-foreground">
+                {t('safetyAssets.detail.field_make', 'Make / model')}
+              </dt>
               <dd className="text-foreground">
                 {[asset.make, asset.model].filter(Boolean).join(' ') || '—'}
               </dd>
-              <dt className="text-muted-foreground">{t('safetyAssets.detail.field_serial', 'Serial')}</dt>
+              <dt className="text-muted-foreground">
+                {t('safetyAssets.detail.field_serial', 'Serial')}
+              </dt>
               <dd className="text-foreground">{asset.serial_number || '—'}</dd>
-              <dt className="text-muted-foreground">{t('safetyAssets.detail.field_external', 'External ID')}</dt>
+              <dt className="text-muted-foreground">
+                {t('safetyAssets.detail.field_external', 'External ID')}
+              </dt>
               <dd className="font-mono text-xs text-foreground">{asset.external_id}</dd>
             </dl>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardContent className="space-y-4 p-5" data-testid="safety-asset-competency">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <Award className="h-4 w-4" />
+              {t('safetyAssets.detail.competency', 'Competency')}
+            </h2>
+            <div className="rounded-lg border border-border bg-secondary/30 p-3 text-sm">
+              <p className="font-medium text-foreground">
+                {t('safetyAssets.detail.competency_type_heading', 'Asset type requirements')}
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                {t(
+                  'safetyAssets.detail.competency_type_explainer',
+                  'Requirements are linked to the asset type, not to this physical asset instance.',
+                )}
+              </p>
+            </div>
+            {competencyRequirementsUnavailable ? (
+              <p
+                className="text-sm text-muted-foreground"
+                data-testid="safety-asset-competency-requirements-unavailable"
+              >
+                {t(
+                  'safetyAssets.detail.competency_requirements_unavailable',
+                  'Type competency requirements are currently unavailable.',
+                )}
+              </p>
+            ) : competencyRequirements?.length ? (
+              <ul className="space-y-2" data-testid="safety-asset-competency-requirements">
+                {competencyRequirements.map((requirement) => (
+                  <li
+                    key={requirement.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3 text-sm"
+                  >
+                    <div>
+                      <p className="font-medium text-foreground">{requirement.name}</p>
+                      {requirement.description ? (
+                        <p className="mt-1 text-muted-foreground">{requirement.description}</p>
+                      ) : null}
+                    </div>
+                    <Badge variant={requirement.is_mandatory ? 'warning' : 'secondary'}>
+                      {requirement.is_mandatory
+                        ? t('safetyAssets.detail.competency_mandatory', 'Mandatory')
+                        : t('safetyAssets.detail.competency_optional', 'Optional')}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            ) : competencyRequirements ? (
+              <p
+                className="text-sm text-muted-foreground"
+                data-testid="safety-asset-competency-requirements-empty"
+              >
+                {t(
+                  'safetyAssets.detail.competency_requirements_empty',
+                  'No competency requirements are configured for this asset type.',
+                )}
+              </p>
+            ) : null}
+
+            <div className="border-t border-border pt-4">
+              <p className="font-medium text-foreground">
+                {t(
+                  'safetyAssets.detail.competency_instance_heading',
+                  'This physical asset instance',
+                )}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {t(
+                  'safetyAssets.detail.competency_instance_explainer',
+                  'Competency records identify workforce capability for this asset type. They are not assigned to asset instance {{assetNumber}}.',
+                  { assetNumber: asset.asset_number },
+                )}
+              </p>
+              {competencyMatrixUnavailable ? (
+                <p
+                  className="mt-3 text-sm text-muted-foreground"
+                  data-testid="safety-asset-competency-holders-unavailable"
+                >
+                  {t(
+                    'safetyAssets.detail.competency_holders_unavailable',
+                    'Workforce competency status is currently unavailable.',
+                  )}
+                </p>
+              ) : competencyMatrix ? (
+                competencyHolders.length ? (
+                  <ul className="mt-3 space-y-2" data-testid="safety-asset-competency-holders">
+                    {competencyHolders.map((engineer) => (
+                      <li
+                        key={engineer.engineer_id}
+                        className="flex items-center justify-between rounded-md border border-border p-3 text-sm"
+                      >
+                        <span className="text-foreground">
+                          {t('safetyAssets.detail.competency_engineer', 'Engineer #{{id}}', {
+                            id: engineer.engineer_id,
+                          })}
+                        </span>
+                        <Badge variant="success">
+                          {engineer.competencies[asset.asset_type_id]}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p
+                    className="mt-3 text-sm text-muted-foreground"
+                    data-testid="safety-asset-competency-holders-empty"
+                  >
+                    {t(
+                      'safetyAssets.detail.competency_holders_empty',
+                      'No active competency holders are recorded for this asset type.',
+                    )}
+                  </p>
+                )
+              ) : null}
+            </div>
           </CardContent>
         </Card>
 
@@ -290,13 +459,19 @@ export default function SafetyAssetDetail() {
                 {t('safetyAssets.detail.field_assignment', 'Assignment')}
               </dt>
               <dd className="text-foreground">{assignmentLabel}</dd>
-              <dt className="text-muted-foreground">{t('safetyAssets.detail.field_owner', 'Owner')}</dt>
+              <dt className="text-muted-foreground">
+                {t('safetyAssets.detail.field_owner', 'Owner')}
+              </dt>
               <dd className="text-foreground">
                 {asset.owner_user_id != null ? `#${asset.owner_user_id}` : '—'}
               </dd>
-              <dt className="text-muted-foreground">{t('safetyAssets.detail.field_expiry', 'Expiry')}</dt>
+              <dt className="text-muted-foreground">
+                {t('safetyAssets.detail.field_expiry', 'Expiry')}
+              </dt>
               <dd className="text-foreground">{formatDate(asset.expiry_date)}</dd>
-              <dt className="text-muted-foreground">{t('safetyAssets.detail.field_site', 'Legacy site')}</dt>
+              <dt className="text-muted-foreground">
+                {t('safetyAssets.detail.field_site', 'Legacy site')}
+              </dt>
               <dd className="text-foreground">{asset.site || '—'}</dd>
             </dl>
           </CardContent>
