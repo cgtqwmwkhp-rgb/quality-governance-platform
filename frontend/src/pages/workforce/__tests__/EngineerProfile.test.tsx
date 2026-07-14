@@ -38,22 +38,6 @@ vi.mock('react-i18next', () => ({
 }))
 
 
-vi.mock('../../../api/workforceClient', () => ({
-  createWorkforceApi: () => ({
-    listAssetTypes,
-    getEngineer,
-    getCompetencies,
-    trainingTickets: {
-      list: (...args: unknown[]) => listTickets(...args),
-      create: (...args: unknown[]) => createTicket(...args),
-      update: (...args: unknown[]) => updateTicket(...args),
-    },
-    competencyRequirements: {
-      list: (...args: unknown[]) => listRequirements(...args),
-    },
-  }),
-}))
-
 vi.mock('../../../api/client', () => ({
   workforceApi: {
     listAssetTypes,
@@ -75,6 +59,8 @@ vi.mock('../../../api/client', () => ({
 vi.mock('../../../utils/errorTracker', () => ({
   trackError: vi.fn(),
 }))
+
+import EngineerProfile from '../EngineerProfile'
 
 const engineer = {
   id: 7,
@@ -199,8 +185,6 @@ describe('EngineerProfile', () => {
   })
 
   it('shows not found state for invalid engineer ids without loading forever', async () => {
-    const EngineerProfile = (await import('../EngineerProfile')).default
-
     render(
       <MemoryRouter initialEntries={['/workforce/engineers/abc']}>
         <Routes>
@@ -215,8 +199,6 @@ describe('EngineerProfile', () => {
   })
 
   it('renders training ticket list with scheme number expiry verify_state and evidence', async () => {
-    const EngineerProfile = (await import('../EngineerProfile')).default
-
     render(
       <MemoryRouter initialEntries={['/workforce/engineers/7']}>
         <Routes>
@@ -236,8 +218,6 @@ describe('EngineerProfile', () => {
   })
 
   it('shows requirements % match when mandatory requirements exist', async () => {
-    const EngineerProfile = (await import('../EngineerProfile')).default
-
     render(
       <MemoryRouter initialEntries={['/workforce/engineers/7']}>
         <Routes>
@@ -256,8 +236,6 @@ describe('EngineerProfile', () => {
     listRequirements.mockResolvedValue({
       data: { items: [], total: 0, page: 1, page_size: 200, pages: 0 },
     })
-    const EngineerProfile = (await import('../EngineerProfile')).default
-
     render(
       <MemoryRouter initialEntries={['/workforce/engineers/7']}>
         <Routes>
@@ -272,8 +250,6 @@ describe('EngineerProfile', () => {
 
   it('surfaces requirements load error instead of silent zero percent', async () => {
     listRequirements.mockRejectedValueOnce(new Error('requirements down'))
-    const EngineerProfile = (await import('../EngineerProfile')).default
-
     render(
       <MemoryRouter initialEntries={['/workforce/engineers/7']}>
         <Routes>
@@ -292,8 +268,6 @@ describe('EngineerProfile', () => {
 
   it('does not silently ignore asset type map failures', async () => {
     listAssetTypes.mockRejectedValue(new Error('asset types down'))
-    const EngineerProfile = (await import('../EngineerProfile')).default
-
     render(
       <MemoryRouter initialEntries={['/workforce/engineers/7']}>
         <Routes>
@@ -309,8 +283,6 @@ describe('EngineerProfile', () => {
   })
 
   it('links to competence gaps filtered by engineer', async () => {
-    const EngineerProfile = (await import('../EngineerProfile')).default
-
     render(
       <MemoryRouter initialEntries={['/workforce/engineers/7']}>
         <Routes>
