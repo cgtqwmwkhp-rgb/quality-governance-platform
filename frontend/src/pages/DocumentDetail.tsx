@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -31,6 +31,11 @@ import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { cn } from '../helpers/utils'
+import {
+  PROPOSED_EVIDENCE_ANCHOR_ID,
+  resolveDocumentDetailTab,
+  shouldScrollToProposedEvidence,
+} from './documentEvidenceTab'
 
 interface LibraryDocument {
   id: number
@@ -82,7 +87,8 @@ export default function DocumentDetail() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const documentId = Number(id)
-  const defaultTab = searchParams.get('tab') ?? 'overview'
+  const defaultTab = resolveDocumentDetailTab(searchParams.get('tab'))
+  const proposedSectionRef = useRef<HTMLDivElement | null>(null)
 
   const [document, setDocument] = useState<LibraryDocument | null>(null)
   const [loading, setLoading] = useState(true)
@@ -175,6 +181,15 @@ export default function DocumentDetail() {
     void loadThreads()
     void loadImpacts()
   }, [loadDocument, loadEvidence, loadThreads, loadImpacts])
+
+  // /documents/:id?tab=evidence → Standards & Evidence, scroll to proposed links.
+  useEffect(() => {
+    if (!shouldScrollToProposedEvidence(searchParams.get('tab'), window.location.hash)) return
+    if (evidenceLoading) return
+    const node = proposedSectionRef.current
+    if (!node) return
+    node.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [defaultTab, evidenceLoading, evidence.length, searchParams])
 
   const handleOpenPreview = async (download = false) => {
     if (!document) return
@@ -440,7 +455,12 @@ export default function DocumentDetail() {
         </TabsContent>
 
         <TabsContent value="evidence" className="mt-4 space-y-4">
-          <div className="flex flex-wrap gap-2">
+          <div
+            id={PROPOSED_EVIDENCE_ANCHOR_ID}
+            ref={proposedSectionRef}
+            data-testid="proposed-evidence-links"
+            className="flex flex-wrap gap-2 scroll-mt-24"
+          >
             <Button onClick={() => void handleMapEvidence()} disabled={mapping}>
               {mapping ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
