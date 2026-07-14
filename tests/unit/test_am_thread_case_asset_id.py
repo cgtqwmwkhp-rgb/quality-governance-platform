@@ -145,7 +145,7 @@ def test_am_thread_migration_targets_case_tables():
 
     migration = Path("alembic/versions/20260714_am_thread_case_asset_id.py").read_text()
     assert 'revision: str = "20260714_am_thread"' in migration
-    assert 'down_revision' in migration and "20260714_safety_am_model" in migration
+    assert "down_revision" in migration and "20260714_safety_am_model" in migration
     assert '"incidents"' in migration
     assert '"near_misses"' in migration
     assert '"road_traffic_collisions"' in migration
