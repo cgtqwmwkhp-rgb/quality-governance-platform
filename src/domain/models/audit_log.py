@@ -14,12 +14,29 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, String, Text, TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import Base
 
 logger = logging.getLogger(__name__)
+
+
+class NaiveUTCDateTime(TypeDecorator):
+    """Store UTC timestamps as TIMESTAMP WITHOUT TIME ZONE (naive)."""
+
+    impl = DateTime
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        if getattr(value, "tzinfo", None) is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
+    def process_result_value(self, value, dialect):
+        return value
 
 
 class AuditEvent:
@@ -63,7 +80,7 @@ class AuditEvent:
         self.resource_id = resource_id
         self.user_id = user_id
         self.timestamp = datetime.now(timezone.utc)
-        self.id = None  # Will be set if/when persisted
+        self.id: Optional[int] = None  # Will be set if/when persisted
 
         # Log the event for observability (no secrets in payload)
         logger.info(
@@ -144,7 +161,7 @@ class AuditLogEntry(Base):
 
     # Timestamp (UTC)
     timestamp: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True
+        NaiveUTCDateTime(), default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True
     )
 
     # Compliance flags
