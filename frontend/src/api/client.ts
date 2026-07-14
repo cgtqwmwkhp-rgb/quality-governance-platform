@@ -64,11 +64,6 @@ const UPLOAD_TIMEOUT_MS = 120000
 // PDF extraction + OCR + dual AI analysis (Mistral + Gemini) runs synchronously
 const PROCESSING_TIMEOUT_MS = 300000
 
-// Extended timeout for promotion (3 minutes)
-// Batch-creates findings, CAPA actions, enterprise risks, evidence links,
-// scheme records, and UVDB sync — 500+ DB round-trips for large audits
-const PROMOTE_TIMEOUT_MS = 180000
-
 // ============ Bounded Error Codes (LOGIN_UX_CONTRACT.md) ============
 // These are the ONLY allowed error codes for login
 export type LoginErrorCode =
@@ -2390,6 +2385,12 @@ export interface ExternalAuditImportJob {
   created_at: string
   processed_at?: string | null
   promoted_at?: string | null
+  promote_attempt?: number
+  promote_lease_expires_at?: string | null
+  promote_total?: number | null
+  promote_succeeded?: number | null
+  promote_failed?: number | null
+  promote_progress_json?: Record<string, unknown> | null
 }
 
 export interface ExternalAuditImportDraft {
@@ -2412,6 +2413,8 @@ export interface ExternalAuditImportDraft {
   suggested_risk_title?: string | null
   review_notes?: string | null
   promoted_finding_id?: number | null
+  promoted_at?: string | null
+  promotion_error_code?: string | null
   provenance_json?: Record<string, unknown> | null
   created_at: string
   updated_at: string
@@ -2487,9 +2490,7 @@ export const externalAuditImportsApi = {
   ) => api.post<ExternalAuditImportDraft[]>(`/api/v1/external-audit-imports/jobs/${jobId}/bulk-review`, data),
 
   promoteJob: (jobId: number) =>
-    api.post<ExternalAuditImportJob>(`/api/v1/external-audit-imports/jobs/${jobId}/promote`, null, {
-      timeout: PROMOTE_TIMEOUT_MS,
-    }),
+    api.post<ExternalAuditImportJob>(`/api/v1/external-audit-imports/jobs/${jobId}/promote`),
 }
 
 // ======================== External Audit Records (Cross-Scheme) ========================

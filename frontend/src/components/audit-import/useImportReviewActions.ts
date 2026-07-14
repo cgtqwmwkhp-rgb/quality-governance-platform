@@ -114,6 +114,13 @@ export function useImportReviewActions({
     setSuccessMessage(null)
     try {
       const promoteRes = await externalAuditImportsApi.promoteJob(job.id)
+      setJob(promoteRes.data)
+      setSuccessMessage(
+        'Promotion started. This workspace will refresh automatically while accepted drafts are materialized.',
+      )
+      if (promoteRes.data.status === 'promoting') {
+        return
+      }
       await load()
       let nextReconciliation: ExternalAuditPromotionReconciliation | null = null
       try {

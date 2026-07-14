@@ -84,11 +84,45 @@ def process_external_audit_import_job(self, job_id: int, tenant_id: int | None, 
 
 
 @celery_app.task(
+    name="src.infrastructure.tasks.external_audit_import_tasks.promote_external_audit_import_job",
+    bind=True,
+    queue="default",
+    max_retries=2,
+)
+def promote_external_audit_import_job(self, job_id: int, tenant_id: int | None, user_id: int) -> dict:
+    """Run a previously durable promotion claim in independently committed chunks."""
+
+    async def _run() -> dict:
+        from src.services.external_audit_import_service import ExternalAuditImportService
+
+        async with async_session_maker() as session:
+            service = ExternalAuditImportService(session)
+            job = await service.run_promote_chunks(job_id=job_id, tenant_id=tenant_id, user_id=user_id)
+            return {
+                "job_id": job.id,
+                "status": str(job.status),
+                "promote_succeeded": job.promote_succeeded,
+                "promote_failed": job.promote_failed,
+            }
+
+    try:
+        return asyncio.run(_run())
+    except Exception as exc:
+        logger.exception("External audit promotion job %s failed", job_id)
+        try:
+            raise self.retry(exc=exc, countdown=10)
+        except MaxRetriesExceededError:
+            # The service has already returned the job to review_required, preserving
+            # accepted drafts and per-draft error codes for an operator retry.
+            return {"job_id": job_id, "status": "review_required", "error_code": "PROMOTION_RETRIES_EXHAUSTED"}
+
+
+@celery_app.task(
     name="src.infrastructure.tasks.external_audit_import_tasks.recover_stale_import_jobs",
     queue="default",
 )
 def recover_stale_import_jobs() -> dict:
-    """Find QUEUED/PROCESSING/PROMOTING jobs older than 30 minutes and mark them FAILED.
+    """Recover stale imports; expired promotion leases return to review_required.
 
     QUEUED jobs get ``STALE_QUEUE_TIMEOUT`` so a missing worker/broker never
     leaves imports silently queued forever. In-flight processing uses
@@ -119,7 +153,6 @@ def recover_stale_import_jobs() -> dict:
                     ExternalAuditImportJob.status.in_(
                         [
                             ExternalAuditImportStatus.PROCESSING,
-                            ExternalAuditImportStatus.PROMOTING,
                         ]
                     ),
                     ExternalAuditImportJob.updated_at < cutoff,
@@ -132,14 +165,28 @@ def recover_stale_import_jobs() -> dict:
                     ),
                 )
             )
+            promoting = await session.execute(
+                update(ExternalAuditImportJob)
+                .where(
+                    ExternalAuditImportJob.status == ExternalAuditImportStatus.PROMOTING,
+                    ExternalAuditImportJob.promote_lease_expires_at < datetime.now(timezone.utc),
+                )
+                .values(
+                    status=ExternalAuditImportStatus.REVIEW_REQUIRED,
+                    promote_lease_expires_at=None,
+                    error_code="STALE_PROMOTION_LEASE",
+                    error_detail="Promotion lease expired; accepted drafts remain available for a safe retry.",
+                )
+            )
             await session.commit()
-            count = int(queued.rowcount or 0) + int(in_flight.rowcount or 0)
+            count = int(queued.rowcount or 0) + int(in_flight.rowcount or 0) + int(promoting.rowcount or 0)
             if count:
                 logger.warning("Recovered %d stale import jobs", count)
             return {
                 "recovered": count,
                 "queued_recovered": int(queued.rowcount or 0),
                 "processing_recovered": int(in_flight.rowcount or 0),
+                "promoting_recovered": int(promoting.rowcount or 0),
             }
 
     return asyncio.run(_run())

@@ -39,6 +39,15 @@ export function ImportReviewOverview({
   lastUpdatedAt,
   isDocumentHidden,
 }: ImportReviewOverviewProps) {
+  const reviewedCount = approvedCount + drafts.filter((draft) => draft.status === 'rejected').length
+  const rejectedCount = drafts.filter((draft) => draft.status === 'rejected').length
+  const promotionProgress =
+    job.status === 'promoting' && job.promote_total != null
+      ? `${job.promote_succeeded ?? 0} of ${job.promote_total} materialized${
+          job.promote_failed ? `; ${job.promote_failed} need review` : ''
+        }`
+      : null
+
   return (
     <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
       <Card>
@@ -52,9 +61,11 @@ export function ImportReviewOverview({
             {job.analysis_summary || 'Analysis summary pending.'}
             {['processing', 'promoting'].includes(job.status) || isProcessing ? (
               <span className="mt-1 block text-xs">
-                {isProcessing || job.status === 'processing' || job.status === 'promoting'
-                  ? 'Processing in progress — this workspace refreshes automatically.'
-                  : null}
+                {job.status === 'promoting'
+                  ? `Promotion in progress${promotionProgress ? ` — ${promotionProgress}` : ''}. This workspace refreshes automatically; an expired worker lease returns accepted drafts here for retry.`
+                  : isProcessing || job.status === 'processing'
+                    ? 'Processing in progress — this workspace refreshes automatically.'
+                    : null}
                 {lastUpdatedAt
                   ? ` Last updated ${new Intl.DateTimeFormat('en-GB', {
                       hour: '2-digit',
@@ -153,22 +164,20 @@ export function ImportReviewOverview({
           <div className="rounded-lg border border-border p-4">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Review progress</p>
             <p className="mt-1 font-medium text-foreground">
-              {approvedCount + drafts.filter((d) => d.status === 'rejected').length} /{' '}
-              {drafts.length} reviewed
+              {reviewedCount} / {drafts.length} reviewed
             </p>
             {drafts.length > 0 ? (
               <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
                 <div
                   className="h-full rounded-full bg-emerald-500 transition-all"
                   style={{
-                    width: `${Math.round(((approvedCount + drafts.filter((d) => d.status === 'rejected').length) / drafts.length) * 100)}%`,
+                    width: `${Math.round((reviewedCount / drafts.length) * 100)}%`,
                   }}
                 />
               </div>
             ) : null}
             <p className="mt-1 text-xs text-muted-foreground">
-              {approvedCount} accepted, {drafts.filter((d) => d.status === 'rejected').length}{' '}
-              rejected, {promoteableCount} awaiting promotion
+              {approvedCount} accepted, {rejectedCount} rejected, {promoteableCount} awaiting promotion
             </p>
           </div>
         </CardContent>
