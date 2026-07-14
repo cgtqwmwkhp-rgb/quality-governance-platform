@@ -2035,6 +2035,7 @@ class AuditService:
         if run_id:
             action_url = f"/audits/{run_id}?view=findings"
 
+        capa_id = capa.id
         try:
             notifier = NotificationService(self.db)
             await notifier.create_status(
@@ -2052,9 +2053,13 @@ class AuditService:
         except Exception:  # noqa: BLE001 — notification must not roll back closure
             import logging
 
+            try:
+                await self.db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
             logging.getLogger(__name__).exception(
                 "Failed to notify run owner for CAPA→finding bridge capa_id=%s finding_id=%s",
-                capa.id,
+                capa_id,
                 finding_id,
             )
 
