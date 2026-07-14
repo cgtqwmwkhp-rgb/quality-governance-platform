@@ -39,8 +39,8 @@ from src.domain.models.induction import InductionRun
 from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus, InvestigationRun
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.user import User
+from src.domain.services.action_assignment_service import notify_action_assignment, record_action_assigned_audit
 from src.domain.services.audit_service import record_audit_event
-from src.domain.services.notification_service import NotificationService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
@@ -62,32 +62,6 @@ async def _resolve_assignee_id_or_raise(
             "Action was not created unowned — fix the assignee email and retry."
         )
     return user.id
-
-
-async def _notify_action_assignment(
-    db: Any,
-    *,
-    action_id: int,
-    assigned_to_user_id: int,
-    assigned_by_user_id: int,
-    title: str,
-    priority: str = "medium",
-    due_date: Optional[datetime] = None,
-) -> None:
-    """Wire NotificationService.create_assignment after owner_id is set."""
-    try:
-        service = NotificationService(db)
-        await service.create_assignment(
-            entity_type="action",
-            entity_id=str(action_id),
-            assigned_to_user_id=assigned_to_user_id,
-            assigned_by_user_id=assigned_by_user_id,
-            due_date=due_date,
-            priority=priority if priority in ("low", "medium", "high", "critical") else "medium",
-            notes=f"You have been assigned action: {title}",
-        )
-    except Exception:
-        logger.exception("Failed to notify assignment for action %s", action_id)
 
 
 # ============== Schemas ==============
@@ -1186,7 +1160,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     track_metric("actions.created")
 
     if owner_id:
-        await _notify_action_assignment(
+        await notify_action_assignment(
             db,
             action_id=action.id,
             assigned_to_user_id=owner_id,
@@ -1218,6 +1192,10 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             owner_email=resolved_email,
         )
 
+    create_payload: dict[str, Any] = {"source_type": out.source_type, "numeric_id": out.id}
+    if owner_id:
+        create_payload["assigned_to_user_id"] = owner_id
+
     await record_audit_event(
         db=db,
         event_type="unified_action.created",
@@ -1225,10 +1203,21 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         entity_id=out.action_key,
         action="create",
         description=f"Created unified action {out.reference_number or out.action_key}",
-        payload={"source_type": out.source_type, "numeric_id": out.id},
+        payload=create_payload,
         user_id=current_user.id,
         request_id=request_id,
     )
+    if owner_id:
+        await record_action_assigned_audit(
+            db,
+            action_key=out.action_key,
+            assigned_to_user_id=owner_id,
+            previous_owner_id=None,
+            assigned_by_user_id=current_user.id,
+            request_id=request_id,
+            source_type=out.source_type,
+            reference_number=out.reference_number,
+        )
     return out
 
 
@@ -1818,7 +1807,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         )
 
     if new_owner_id is not None and new_owner_id != previous_owner_id:
-        await _notify_action_assignment(
+        await notify_action_assignment(
             db,
             action_id=action.id,
             assigned_to_user_id=new_owner_id,
@@ -1842,6 +1831,18 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         else:
             sk = STORAGE_INVESTIGATION_ACTION
         out = _action_to_response(action, src_type, source_id, sk, owner_email=email)
+
+    if new_owner_id is not None and new_owner_id != previous_owner_id:
+        await record_action_assigned_audit(
+            db,
+            action_key=out.action_key,
+            assigned_to_user_id=new_owner_id,
+            previous_owner_id=previous_owner_id,
+            assigned_by_user_id=current_user.id,
+            request_id=request_id,
+            source_type=out.source_type,
+            reference_number=out.reference_number,
+        )
 
     await record_audit_event(
         db=db,
