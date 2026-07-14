@@ -39,11 +39,11 @@ describe('knowledgeExceptionsLinks', () => {
     expect(exceptionEntityHref('document', '42')).toBe('/documents/42?tab=evidence')
   })
 
-  it('maps operational entity types to detail routes', () => {
-    expect(exceptionEntityHref('incident', '7')).toBe('/incidents/7')
-    expect(exceptionEntityHref('complaint', '3')).toBe('/complaints/3')
-    expect(exceptionEntityHref('near_miss', '9')).toBe('/near-misses/9')
-    expect(exceptionEntityHref('rta', '5')).toBe('/rtas/5')
+  it('maps operational entity types to Standards tab detail routes', () => {
+    expect(exceptionEntityHref('incident', '7')).toBe('/incidents/7?tab=standards')
+    expect(exceptionEntityHref('complaint', '3')).toBe('/complaints/3?tab=standards')
+    expect(exceptionEntityHref('near_miss', '9')).toBe('/near-misses/9?tab=standards')
+    expect(exceptionEntityHref('rta', '5')).toBe('/rtas/5?tab=standards')
     expect(exceptionEntityHref('audit_finding', '11')).toBe(
       '/audits?view=findings&findingId=11',
     )
@@ -58,7 +58,7 @@ describe('knowledgeExceptionsLinks', () => {
     const href = knowledgeExceptionsClosedLoopHref('incident', 7)
     expect(href).toContain('/knowledge-exceptions?')
     expect(href).toContain('entity_type=incident')
-    expect(href).toContain(encodeURIComponent('/incidents/7'))
+    expect(href).toContain(encodeURIComponent('/incidents/7?tab=standards'))
   })
 
   it('parses entity_type filter safely', () => {
@@ -108,7 +108,7 @@ describe('KnowledgeExceptions closed loop', () => {
     render(
       <MemoryRouter
         initialEntries={[
-          '/knowledge-exceptions?entity_type=incident&returnTo=%2Fincidents%2F7',
+          '/knowledge-exceptions?entity_type=incident&returnTo=%2Fincidents%2F7%3Ftab%3Dstandards',
         ]}
       >
         <Routes>
@@ -118,12 +118,12 @@ describe('KnowledgeExceptions closed loop', () => {
     )
 
     await waitFor(() => {
-      expect(mockList).toHaveBeenCalledWith({ entityType: 'incident', signalType: undefined })
+      expect(mockList).toHaveBeenCalledWith({ status: undefined, entityType: 'incident', signalType: undefined })
     })
     expect(screen.getByTestId('exceptions-return-to-case')).toBeInTheDocument()
     expect(screen.getByTestId('exceptions-return-to-case-link')).toHaveAttribute(
       'href',
-      '/incidents/7',
+      '/incidents/7?tab=standards',
     )
     expect(screen.getByTestId('exceptions-filter-honesty')).toHaveTextContent('entity=incident')
   })
@@ -133,7 +133,7 @@ describe('KnowledgeExceptions closed loop', () => {
     render(
       <MemoryRouter
         initialEntries={[
-          '/knowledge-exceptions?entity_type=incident&returnTo=%2Fincidents%2F7',
+          '/knowledge-exceptions?entity_type=incident&returnTo=%2Fincidents%2F7%3Ftab%3Dstandards',
         ]}
       >
         <Routes>
@@ -172,5 +172,19 @@ describe('KnowledgeExceptions server signal filter honesty', () => {
     await waitFor(() => {
       expect(mockList).toHaveBeenCalled()
     })
+  })
+})
+
+
+describe('exceptions inbox URL sync', () => {
+  it('encodes status + entity_type + signal_type', async () => {
+    const { buildExceptionsInboxSearch } = await import('../exceptionsInboxFilters')
+    expect(
+      buildExceptionsInboxSearch({
+        status: 'needs_review',
+        entityType: 'near_miss',
+        signalType: 'nonconformity',
+      }),
+    ).toBe('status=needs_review&entity_type=near_miss&signal_type=nonconformity')
   })
 })
