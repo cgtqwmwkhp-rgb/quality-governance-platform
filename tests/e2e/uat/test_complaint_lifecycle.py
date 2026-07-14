@@ -48,6 +48,32 @@ class TestComplaintLifecycle:
         assert response["data"]["complaint_type"] == "service"
 
     @pytest.mark.asyncio
+    async def test_create_list_get_complaint_journey(self, admin_client: UATApiClient) -> None:
+        """Prove create → tenant-scoped list → detail path contract."""
+        create = await admin_client.post(
+            "/api/v1/complaints/",
+            {
+                "title": "UAT create-list-detail",
+                "description": "Journey proof",
+                "complaint_type": "service",
+                "received_date": "2026-07-13T10:00:00Z",
+                "complainant_name": "Journey Tester",
+                "priority": "medium",
+            },
+        )
+        assert create["status"] in ("created", "ok")
+        assert create["path"] == "/api/v1/complaints/"
+        assert create["data"]["title"] == "UAT create-list-detail"
+
+        listed = await admin_client.get("/api/v1/complaints/?page=1&page_size=50")
+        assert listed["status"] == "ok"
+        assert listed["path"].startswith("/api/v1/complaints/")
+
+        detail = await admin_client.get("/api/v1/complaints/uat-complaint-open")
+        assert detail["status"] == "ok"
+        assert detail["path"] == "/api/v1/complaints/uat-complaint-open"
+
+    @pytest.mark.asyncio
     async def test_patch_complaint_status_acknowledged(self, admin_client: UATApiClient) -> None:
         """Admin can acknowledge a complaint."""
         complaint_id = "uat-complaint-open"

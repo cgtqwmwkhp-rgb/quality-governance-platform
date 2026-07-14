@@ -510,5 +510,40 @@ python scripts/uat/reset_uat.py --force
 
 ---
 
+## Test Suite: Complaints CUJ honesty checklist
+
+Manual operator checklist for admin Complaints (create → list → detail). Use staging only.
+
+### TC-CPL-001: Create → list → detail
+
+**Preconditions**: Logged in as `uat_admin`; SMTP may be unconfigured (honesty expected).
+
+**Steps**:
+1. Open Complaints
+2. Confirm either **Live data** badge or honest **Unavailable** state (never treat API failure as “No complaints found”)
+3. If email is down, confirm amber **Email alerts unavailable** banner
+4. Create a complaint with title `UAT CPL create-list-detail`
+5. Confirm navigation lands on `/complaints/:id` with reference visible
+6. Return to list and confirm the new row appears (tenant-scoped only)
+
+**Expected**:
+- Create persists and detail loads
+- List failure ≠ empty register
+- Banner copy does not claim email was sent
+
+### TC-CPL-002: Action assign honesty when SMTP down
+
+**Steps**:
+1. Open a complaint detail
+2. Add Action with an assignee email
+3. Confirm detail/action modal shows email-unavailable honesty
+4. Save action
+
+**Expected**:
+- Action is saved
+- Toast/banner states assignee saved but alerts unavailable (no delivery SUCCESS claim)
+
+---
+
 *Document Version: 1.0.0*
 *Last Updated: 2026-01-28*

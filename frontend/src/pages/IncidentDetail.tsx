@@ -59,7 +59,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
 import { SubmissionSections } from '../components/case/SubmissionSections'
-import { RunningSheetPanel } from '../components/case/RunningSheetPanel'
+import { RunningSheetPanel, buildRunningSheetCreateActionHref } from '../components/case/RunningSheetPanel'
 import {
   buildIncidentSubmissionSections,
   getSubmissionPhotoSummary,
@@ -100,6 +100,8 @@ export default function IncidentDetail() {
   const navigate = useNavigate()
   const [incident, setIncident] = useState<Incident | null>(null)
   const [actions, setActions] = useState<Action[]>([])
+  const [actionsLoading, setActionsLoading] = useState(false)
+  const [actionsLoadFailed, setActionsLoadFailed] = useState(false)
   const [investigations, setInvestigations] = useState<Investigation[]>([])
   const [loading, setLoading] = useState(true)
   const [showInvestigationModal, setShowInvestigationModal] = useState(false)
@@ -182,11 +184,23 @@ export default function IncidentDetail() {
 
   const loadActions = async () => {
     if (!id) return
+    setActionsLoading(true)
+    setActionsLoadFailed(false)
     try {
       const response = await actionsApi.list(1, 50, undefined, 'incident', parseInt(id))
       setActions(response.data.items || [])
     } catch (err) {
       trackError(err, { component: 'IncidentDetail', action: 'loadActions' })
+      setActions([])
+      setActionsLoadFailed(true)
+      toast.error(
+        t(
+          'incidents.detail.actions_unavailable',
+          'CAPA actions could not be loaded — counts may be incomplete.',
+        ),
+      )
+    } finally {
+      setActionsLoading(false)
     }
   }
 
@@ -475,6 +489,12 @@ export default function IncidentDetail() {
     ? `/investigations/${latestInvestigation.id}`
     : null
   const capaHref = getCapaLink('incident', incident.id)
+  const capaCountLabel = actionsLoading ? '…' : actionsLoadFailed ? '—' : String(actions.length)
+  const openActionsLabel = actionsLoading
+    ? '…'
+    : actionsLoadFailed
+      ? '—'
+      : `${openActions.length} open`
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -547,9 +567,10 @@ export default function IncidentDetail() {
               <Button
                 variant="outline"
                 onClick={() => navigate(capaHref)}
+                disabled={actionsLoading}
               >
                 <ClipboardList className="w-4 h-4 mr-2" />
-                {t(getCapaHandoffLabelKey('incident', actions.length), {
+                {t(getCapaHandoffLabelKey('incident', actionsLoadFailed ? 0 : actions.length), {
                   count: actions.length,
                 })}
               </Button>
@@ -592,7 +613,7 @@ export default function IncidentDetail() {
           },
           {
             label: 'Open actions',
-            value: `${openActions.length} open`,
+            value: openActionsLabel,
             icon: <ClipboardList className="w-4 h-4" />,
           },
           {
@@ -971,17 +992,50 @@ export default function IncidentDetail() {
               <CardTitle className="text-base">{t('incidents.detail.handoff_title')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {t('incidents.detail.linked_investigation')}
+              <div
+                className="space-y-3"
+                data-testid="incident-workflow-proof"
+              >
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {t('incidents.detail.proof_eyebrow', 'Workflow proof')}
                 </p>
-                <p className="font-medium text-foreground">{investigationSummary}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  {t('incidents.detail.open_actions')}
-                </p>
-                <p className="font-medium text-foreground">{openActions.length}</p>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border border-border bg-muted/20 p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {t('incidents.detail.linked_investigation')}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-foreground font-mono">
+                      {investigationHref
+                        ? latestInvestigation?.reference_number || `INV-${latestInvestigation?.id}`
+                        : '0'}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-muted/20 p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {t('incidents.detail.proof_actions', 'CAPA actions')}
+                    </p>
+                    <p
+                      className="mt-1 text-lg font-semibold text-foreground"
+                      data-testid="incident-capa-count"
+                    >
+                      {capaCountLabel}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-muted/20 p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {t('incidents.detail.open_actions')}
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-foreground">{openActionsLabel}</p>
+                  </div>
+                </div>
+                {actionsLoadFailed ? (
+                  <p className="text-sm text-amber-700 dark:text-amber-400" role="status">
+                    {t(
+                      'incidents.detail.actions_unavailable',
+                      'CAPA actions could not be loaded — counts may be incomplete.',
+                    )}
+                  </p>
+                ) : null}
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Evidence captured</p>
@@ -1015,10 +1069,11 @@ export default function IncidentDetail() {
                 <Button
                   variant="outline"
                   onClick={() => navigate(capaHref)}
+                  disabled={actionsLoading}
                   data-testid="incident-capa-handoff-cta"
                 >
                   <ClipboardList className="w-4 h-4 mr-2" />
-                  {t(getCapaHandoffLabelKey('incident', actions.length), {
+                  {t(getCapaHandoffLabelKey('incident', actionsLoadFailed ? 0 : actions.length), {
                     count: actions.length,
                   })}
                 </Button>
@@ -1088,6 +1143,12 @@ export default function IncidentDetail() {
             onNewEntryChange={setNewEntry}
             onAddEntry={handleAddEntry}
             onDeleteEntry={handleDeleteEntry}
+            createActionHref={buildRunningSheetCreateActionHref({
+              sourceType: 'incident',
+              sourceId: incident.id,
+              referenceNumber: incident.reference_number,
+              entrySnippet: runningSheet[0]?.content,
+            })}
           />
         </TabsContent>
       </Tabs>
