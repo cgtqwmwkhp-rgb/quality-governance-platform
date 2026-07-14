@@ -1,0 +1,8 @@
+asset_number,name,asset_type,make,model,serial,owner_user_id,location_name,vehicle_reg,expiry_date,status
+,Missing Number,Fire Extinguisher,,,,,,,2026-01-01,active
+DUP-1,First Dup,Fire Extinguisher,,,,,,,2026-01-01,active
+DUP-1,Second Dup,Fire Extinguisher,,,,,,,2026-01-01,active
+XOR-1,Both Assign,Fire Extinguisher,,,,Main Depot,AB12 CDE,2026-01-01,active
+BAD-TYPE,Unknown Type,Not A Real Type,,,,,,,2026-01-01,active
+BAD-STATUS,Bad Status,Fire Extinguisher,,,,,,,2026-01-01,not_a_status
+BAD-DATE,Bad Date,Fire Extinguisher,,,,,,,not-a-date,active
