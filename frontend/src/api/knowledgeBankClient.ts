@@ -137,8 +137,19 @@ export function createKnowledgeBankApi(api: AxiosInstance) {
     confirmLink: (linkId: number) =>
       api.post<{ status: string; link_id: number }>(`${base}/evidence/${linkId}/confirm`),
 
-    rejectLink: (linkId: number) =>
-      api.post<{ status: string; link_id: number }>(`${base}/evidence/${linkId}/reject`),
+    rejectLink: (linkId: number, rationale?: string) => {
+      const trimmed = rationale?.trim()
+      if (trimmed) {
+        return api.post<{ status: string; link_id: number; rationale?: string }>(
+          `${base}/evidence/${linkId}/reject`,
+          { rationale: trimmed },
+        )
+      }
+      // Legacy callers (DocumentDetail) — no body; server records honesty marker.
+      return api.post<{ status: string; link_id: number; rationale?: string }>(
+        `${base}/evidence/${linkId}/reject`,
+      )
+    },
 
     bulkConfirm: (ids: number[]) =>
       api.post<{ status: string; count: number }>(`${base}/evidence/bulk-confirm`, {
@@ -146,14 +157,17 @@ export function createKnowledgeBankApi(api: AxiosInstance) {
       }),
 
     /**
-     * Exceptions inbox. API supports `status` + `entity_type` query params.
-     * `signal_type` is returned on each row but is not a server filter yet
-     * (client-side filter in KnowledgeExceptions until Follow-up A / #922).
+     * Exceptions inbox. API supports `status`, `entity_type`, and `signal_type`.
      */
-    listExceptions: (params?: { status?: string; entityType?: string }) => {
+    listExceptions: (params?: {
+      status?: string
+      entityType?: string
+      signalType?: string
+    }) => {
       const sp = new URLSearchParams()
       if (params?.status) sp.set('status', params.status)
       if (params?.entityType) sp.set('entity_type', params.entityType)
+      if (params?.signalType) sp.set('signal_type', params.signalType)
       const qs = sp.toString()
       return api.get<KnowledgeEvidenceLink[]>(`${base}/exceptions${qs ? `?${qs}` : ''}`)
     },
