@@ -61,6 +61,10 @@ class AssessmentRunResponse(BaseModel):
     tenant_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
+    # Soft competency-gate warning fields (set on /start when mode=soft and not cleared)
+    competency_gate_cleared: Optional[bool] = None
+    competency_gate_reason: Optional[str] = None
+    competency_gate_mode: Optional[str] = None
 
 
 class AssessmentRunListResponse(BaseModel):

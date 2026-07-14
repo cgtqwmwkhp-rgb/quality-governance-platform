@@ -53,7 +53,7 @@ class EngineerResponse(BaseModel):
     certifications_json: Optional[List[Any]] = None
     is_active: bool
     notes: Optional[str] = None
-    tenant_id: Optional[int] = None
+    tenant_id: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -104,3 +104,139 @@ class SkillsMatrixResponse(BaseModel):
 
     engineer_id: int
     matrix: List[SkillsMatrixEntry]
+
+
+# ============== Competency Requirement Schemas ==============
+
+
+class CompetencyRequirementCreate(BaseModel):
+    """Create a competency requirement (frequency + allocation filters)."""
+
+    asset_type_id: int
+    template_id: int
+    name: str = Field(..., max_length=200)
+    description: Optional[str] = None
+    is_mandatory: bool = True
+    reassessment_interval_days: int = Field(365, ge=1, le=3650)
+    role_key: Optional[str] = Field(None, max_length=100)
+    site: Optional[str] = Field(None, max_length=200)
+
+
+class CompetencyRequirementUpdate(BaseModel):
+    """Partial update for a competency requirement."""
+
+    asset_type_id: Optional[int] = None
+    template_id: Optional[int] = None
+    name: Optional[str] = Field(None, max_length=200)
+    description: Optional[str] = None
+    is_mandatory: Optional[bool] = None
+    reassessment_interval_days: Optional[int] = Field(None, ge=1, le=3650)
+    role_key: Optional[str] = Field(None, max_length=100)
+    site: Optional[str] = Field(None, max_length=200)
+
+
+class CompetencyRequirementResponse(BaseModel):
+    """Competency requirement response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    asset_type_id: int
+    template_id: int
+    name: str
+    description: Optional[str] = None
+    is_mandatory: bool
+    reassessment_interval_days: int
+    role_key: Optional[str] = None
+    site: Optional[str] = None
+    tenant_id: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class CompetencyRequirementListResponse(BaseModel):
+    """Paginated competency requirements."""
+
+    items: List[CompetencyRequirementResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class CompetencyRequirementAllocateRequest(BaseModel):
+    """Allocate a requirement to engineers (explicit ids and/or site/role filters)."""
+
+    engineer_ids: Optional[List[int]] = None
+    match_site: bool = True
+    match_role_key: Optional[str] = Field(None, max_length=100)
+    due_days: Optional[int] = Field(None, ge=1, le=3650)
+
+
+class CompetencyRequirementAllocateResponse(BaseModel):
+    """Allocation result."""
+
+    requirement_id: int
+    created_checklist_ids: List[int]
+    skipped_engineer_ids: List[int]
+    matched_engineer_ids: List[int]
+
+
+# ============== Training Ticket Schemas ==============
+
+
+class TrainingTicketCreate(BaseModel):
+    """Create a first-class training ticket."""
+
+    engineer_id: int
+    scheme: str = Field(..., max_length=100)
+    ticket_number: str = Field(..., max_length=100)
+    issuer: Optional[str] = Field(None, max_length=200)
+    issued_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    verify_state: str = Field(default="unverified", pattern="^(unverified|pending|verified|rejected|expired)$")
+    evidence_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class TrainingTicketUpdate(BaseModel):
+    """Partial update for a training ticket."""
+
+    scheme: Optional[str] = Field(None, max_length=100)
+    ticket_number: Optional[str] = Field(None, max_length=100)
+    issuer: Optional[str] = Field(None, max_length=200)
+    issued_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    verify_state: Optional[str] = Field(None, pattern="^(unverified|pending|verified|rejected|expired)$")
+    evidence_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class TrainingTicketResponse(BaseModel):
+    """Training ticket response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    engineer_id: int
+    scheme: str
+    ticket_number: str
+    issuer: Optional[str] = None
+    issued_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    verify_state: str
+    evidence_id: Optional[int] = None
+    notes: Optional[str] = None
+    tenant_id: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class TrainingTicketListResponse(BaseModel):
+    """Paginated training tickets."""
+
+    items: List[TrainingTicketResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int

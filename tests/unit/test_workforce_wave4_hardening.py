@@ -98,6 +98,10 @@ async def test_complete_assessment_reuses_existing_competency_record(monkeypatch
         "src.api.routes.assessments.AssessmentRunResponse.model_validate",
         lambda run_obj: run_obj,
     )
+    monkeypatch.setattr(
+        "src.api.routes.assessments.resolve_reassessment_interval_days",
+        AsyncMock(return_value=365),
+    )
 
     result = await complete_assessment("asm-run-5", db, user)
 
