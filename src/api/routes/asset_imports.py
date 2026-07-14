@@ -11,10 +11,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, UploadFile, status
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.api.schemas.asset import (
-    AssetImportCommitResponse,
-    AssetImportValidationReportResponse,
-)
+from src.api.schemas.asset import AssetImportCommitResponse, AssetImportValidationReportResponse
 from src.domain.exceptions import BadRequestError
 from src.domain.models.user import User
 from src.domain.services.asset_import_service import AssetImportService
