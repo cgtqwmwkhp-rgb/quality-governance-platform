@@ -296,11 +296,7 @@ export default function IncidentDetail() {
         ...incident,
         linked_risk_ids: response.data.linked_risk_ids,
       })
-      toast.success(
-        t('incidents.feedback.risk_raised', 'Risk {{ref}} raised and linked', {
-          ref: response.data.risk.reference_number,
-        }),
-      )
+      toast.success(`Risk ${response.data.risk.reference_number} raised and linked`)
       navigate(response.data.risk_register_href)
     } catch (err) {
       trackError(err, { component: 'IncidentDetail', action: 'raiseRisk' })
@@ -602,9 +598,7 @@ export default function IncidentDetail() {
                   data-testid="incident-raise-risk"
                 >
                   <ShieldAlert className="w-4 h-4 mr-2" />
-                  {raisingRisk
-                    ? t('incidents.raising_risk', 'Raising…')
-                    : t('incidents.actions.raise_risk', 'Raise risk')}
+                  {raisingRisk ? 'Raising…' : 'Raise risk'}
                 </Button>
               )}
               <Button variant="outline" onClick={() => setIsEditing(true)}>
@@ -669,7 +663,7 @@ export default function IncidentDetail() {
             icon: <AlertTriangle className="w-4 h-4" />,
           },
           {
-            label: t('incidents.summary.linked_risks', 'Linked risks'),
+            label: 'Linked risks',
             value: `${parseLinkedRiskIds(incident.linked_risk_ids).length}`,
             icon: <ShieldAlert className="w-4 h-4" />,
           },
@@ -1137,21 +1131,15 @@ export default function IncidentDetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ShieldAlert className="w-5 h-5 text-primary" />
-                {t('incidents.summary.linked_risks', 'Linked risks')}
+                Linked risks
               </CardTitle>
             </CardHeader>
             <CardContent>
               {parseLinkedRiskIds(incident.linked_risk_ids).length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   {canRaiseRisk
-                    ? t(
-                        'incidents.detail.no_linked_risks',
-                        'No linked risks yet. Use Raise risk to create a register entry.',
-                      )
-                    : t(
-                        'incidents.detail.raise_risk_severity_gate',
-                        'Raise risk is available for high and critical severity incidents.',
-                      )}
+                    ? 'No linked risks yet. Use Raise risk to create a register entry.'
+                    : 'Raise risk is available for high and critical severity incidents.'}
                 </p>
               ) : (
                 <div className="space-y-2">
