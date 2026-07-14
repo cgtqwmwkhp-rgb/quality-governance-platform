@@ -34,6 +34,7 @@ import {
   FileText,
   Building,
   Download,
+  Package,
   ShieldAlert,
 } from 'lucide-react'
 import { useState, useEffect, useCallback, lazy, Suspense, Fragment } from 'react'
@@ -84,6 +85,11 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/complaints', icon: MessageSquare, label: t('nav.complaints') },
         { path: '/investigations', icon: FlaskConical, label: t('nav.investigations') },
         { path: '/vehicle-checklists', icon: Truck, label: t('nav.vehicle_checklists') },
+        {
+          path: '/safety-assets',
+          icon: Package,
+          label: t('nav.safety_asset_register', { defaultValue: 'Asset Register' }),
+        },
       ],
     },
     ...(canAccessWorkforce
