@@ -40,6 +40,7 @@ class CAPACreate(BaseModel):
     due_date: datetime | None = None
     iso_standard: str | None = None
     clause_reference: str | None = None
+    asset_id: int | None = None
 
     @field_validator(
         "title",
