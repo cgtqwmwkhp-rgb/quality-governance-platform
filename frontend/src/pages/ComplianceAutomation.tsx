@@ -12,6 +12,7 @@
 
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { buildActionDetailPath } from './actionLinks'
 import {
   Bell,
   AlertTriangle,
@@ -714,7 +715,7 @@ export default function ComplianceAutomation() {
                             {impact.owner_id && <span>Owner #{impact.owner_id}</span>}
                             {impact.action_key && (
                               <Link
-                                to={`/actions/item?key=${encodeURIComponent(impact.action_key)}`}
+                                to={buildActionDetailPath(impact.action_key)}
                                 className="text-primary hover:underline"
                               >
                                 {impact.action_reference ?? impact.action_key}
