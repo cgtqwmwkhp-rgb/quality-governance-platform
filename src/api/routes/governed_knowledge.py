@@ -493,7 +493,13 @@ async def list_exception_inbox(
     current_user: CurrentUser,
     status_filter: Optional[str] = Query(None, alias="status"),
     entity_type: Optional[str] = Query(None, description="Filter by source entity_type"),
+    clause_id: Optional[str] = Query(None, description="Filter by ISO clause_id (e.g. 7.5)"),
+    scheme: Optional[str] = Query(None, description="Filter by standard/scheme code"),
     signal_type: Optional[str] = Query(None, description="Filter by EvidenceSignalType value"),
+    operational_only: bool = Query(
+        False,
+        description="When true, only operational signals (nonconformity|gap|opportunity)",
+    ),
 ):
     """Proposed + needs_review evidence inbox."""
     tenant_id = _tenant_id_for(current_user)
@@ -514,6 +520,10 @@ async def list_exception_inbox(
     ]
     if entity_type:
         filters.append(ComplianceEvidenceLink.entity_type == entity_type)
+    if clause_id:
+        filters.append(ComplianceEvidenceLink.clause_id == clause_id.strip())
+    if scheme:
+        filters.append(ComplianceEvidenceLink.scheme == scheme.strip())
     if signal_type:
         normalized = signal_type.strip().lower()
         try:
@@ -526,7 +536,52 @@ async def list_exception_inbox(
         select(ComplianceEvidenceLink).where(*filters).order_by(ComplianceEvidenceLink.created_at.desc()).limit(200)
     )
     links = [link for link in result.scalars().all() if link.effective_status in statuses]
+    if operational_only:
+        from src.domain.services.iso_compliance_service import OPERATIONAL_SIGNAL_TYPES
+
+        links = [
+            link for link in links if (getattr(link, "signal_type", None) or "").lower() in OPERATIONAL_SIGNAL_TYPES
+        ]
     return [_serialize_evidence_link(link) for link in links]
+
+
+@router.get("/exceptions/operational-counts")
+async def operational_exception_counts_by_clause(
+    db: DbSession,
+    current_user: CurrentUser,
+    scheme: Optional[str] = Query(None, description="Optional standard/scheme filter"),
+):
+    """Count inbound operational signals per clause for Standards/IMS map."""
+    from src.domain.services.iso_compliance_service import OPERATIONAL_SIGNAL_TYPES
+
+    tenant_id = _tenant_id_for(current_user)
+    statuses = [EvidenceLinkStatus.PROPOSED, EvidenceLinkStatus.NEEDS_REVIEW]
+    filters = [
+        ComplianceEvidenceLink.tenant_id == tenant_id,
+        ComplianceEvidenceLink.deleted_at.is_(None),
+        or_(
+            ComplianceEvidenceLink.status.in_(statuses),
+            ComplianceEvidenceLink.status.is_(None),
+        ),
+    ]
+    if scheme:
+        filters.append(ComplianceEvidenceLink.scheme == scheme.strip())
+
+    result = await db.execute(select(ComplianceEvidenceLink).where(*filters).limit(2000))
+    counts: dict[str, int] = {}
+    total = 0
+    for link in result.scalars().all():
+        if link.effective_status not in statuses:
+            continue
+        sig = (getattr(link, "signal_type", None) or "").lower()
+        if sig not in OPERATIONAL_SIGNAL_TYPES:
+            continue
+        clause = link.clause_id or ""
+        if not clause:
+            continue
+        counts[clause] = counts.get(clause, 0) + 1
+        total += 1
+    return {"scheme": scheme, "total": total, "by_clause": counts}
 
 
 @router.post(
