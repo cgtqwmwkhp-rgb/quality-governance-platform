@@ -318,11 +318,7 @@ async def get_document(
         "view_count": document.view_count,
         "download_count": document.download_count,
         "published_version": next(
-            (
-                v.version_number
-                for v in versions
-                if v.status in ("published", "approved", "effective", "active")
-            ),
+            (v.version_number for v in versions if v.status in ("published", "approved", "effective", "active")),
             None,
         ),
         "working_version": next((v.version_number for v in versions if v.status == "draft"), None),

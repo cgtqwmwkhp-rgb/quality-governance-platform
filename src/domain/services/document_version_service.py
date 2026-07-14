@@ -70,17 +70,14 @@ def version_is_immutable(status: str | None, is_immutable: bool | None = None) -
 def assert_version_mutable(status: str | None, is_immutable: bool | None = None) -> None:
     if version_is_immutable(status, is_immutable):
         raise BadRequestError(
-            "Published and superseded versions are immutable (read-only). "
-            "Create a revision draft, then publish."
+            "Published and superseded versions are immutable (read-only). " "Create a revision draft, then publish."
         )
 
 
 def assert_document_metadata_editable(status: str | None) -> None:
     normalized = (status or "").lower()
     if normalized in {"published", "active", "effective", "obsolete", "retired", "archived"}:
-        raise BadRequestError(
-            f"Document status '{normalized}' is read-only. Revise to open a draft before editing."
-        )
+        raise BadRequestError(f"Document status '{normalized}' is read-only. Revise to open a draft before editing.")
 
 
 class DocumentVersionService:
@@ -144,9 +141,7 @@ class DocumentVersionService:
                 .where(
                     ControlledDocumentVersion.document_id == document.id,
                     ControlledDocumentVersion.tenant_id == tenant_id,
-                    ControlledDocumentVersion.status.in_(
-                        ("published", "approved", "effective", "active")
-                    ),
+                    ControlledDocumentVersion.status.in_(("published", "approved", "effective", "active")),
                 )
                 .limit(1)
             )
@@ -250,15 +245,19 @@ class DocumentVersionService:
         assert_version_mutable(version.status, getattr(version, "is_immutable", False))
 
         prior_published = (
-            await db.execute(
-                select(ControlledDocumentVersion).where(
-                    ControlledDocumentVersion.document_id == document.id,
-                    ControlledDocumentVersion.tenant_id == tenant_id,
-                    ControlledDocumentVersion.status.in_(("published", "approved", "effective", "active")),
-                    ControlledDocumentVersion.id != version.id,
+            (
+                await db.execute(
+                    select(ControlledDocumentVersion).where(
+                        ControlledDocumentVersion.document_id == document.id,
+                        ControlledDocumentVersion.tenant_id == tenant_id,
+                        ControlledDocumentVersion.status.in_(("published", "approved", "effective", "active")),
+                        ControlledDocumentVersion.id != version.id,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         for prior in prior_published:
@@ -456,15 +455,19 @@ class DocumentVersionService:
         assert_version_mutable(version.status, version.is_immutable)
 
         prior_published = (
-            await db.execute(
-                select(DocumentVersion).where(
-                    DocumentVersion.document_id == document.id,
-                    DocumentVersion.tenant_id == document.tenant_id,
-                    DocumentVersion.status == "published",
-                    DocumentVersion.id != version.id,
+            (
+                await db.execute(
+                    select(DocumentVersion).where(
+                        DocumentVersion.document_id == document.id,
+                        DocumentVersion.tenant_id == document.tenant_id,
+                        DocumentVersion.status == "published",
+                        DocumentVersion.id != version.id,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         now = datetime.now(timezone.utc)
         for prior in prior_published:
