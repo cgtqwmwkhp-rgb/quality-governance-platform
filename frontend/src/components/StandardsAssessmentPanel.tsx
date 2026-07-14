@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ExternalLink, Loader2, Sparkles, CheckCircle2, XCircle } from 'lucide-react'
+import { ExternalLink, Loader2, Sparkles, CheckCircle2, XCircle, History } from 'lucide-react'
 import {
   getApiErrorMessage,
   knowledgeBankApi,
   type KnowledgeEvidenceLink,
   type RelatedDocumentHit,
+  type AssessmentTrailItem,
 } from '../api/client'
 import { toast } from '../contexts/ToastContext'
 import { knowledgeExceptionsClosedLoopHref } from '../helpers/knowledgeExceptionsLinks'
@@ -30,6 +31,13 @@ const statusBadge = (link: KnowledgeEvidenceLink) => {
   return <Badge variant="secondary">{link.status}</Badge>
 }
 
+const trailActionLabel = (action: string) => {
+  if (action === 'operational_standards_assess') return 'Assessed'
+  if (action === 'evidence_confirm') return 'Confirmed'
+  if (action === 'evidence_reject') return 'Rejected'
+  return action
+}
+
 export interface StandardsAssessmentPanelProps {
   entityType: 'incident' | 'complaint' | 'near_miss' | 'rta' | 'audit_finding'
   entityId: number | string
@@ -47,11 +55,26 @@ export function StandardsAssessmentPanel({
   const [signalType, setSignalType] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [assessing, setAssessing] = useState(false)
+  const [trail, setTrail] = useState<AssessmentTrailItem[]>([])
+  const [trailOpen, setTrailOpen] = useState(false)
+  const [trailLoading, setTrailLoading] = useState(false)
 
   const exceptionsHref = useMemo(
     () => knowledgeExceptionsClosedLoopHref(entityType, entityId),
     [entityType, entityId],
   )
+
+  const loadTrail = useCallback(async () => {
+    setTrailLoading(true)
+    try {
+      const response = await knowledgeBankApi.listEntityAssessmentTrail(entityType, entityId)
+      setTrail(response.data.items ?? [])
+    } catch {
+      setTrail([])
+    } finally {
+      setTrailLoading(false)
+    }
+  }, [entityType, entityId])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -65,8 +88,6 @@ export function StandardsAssessmentPanel({
         setStatement(response.data[0].notes)
       }
     } catch (err) {
-      // Missing assessment is an empty state, not a user-facing failure.
-      // Axios 404 / route drift should not toast "Request failed with status code 404".
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 404) {
         setLinks([])
@@ -82,7 +103,8 @@ export function StandardsAssessmentPanel({
 
   useEffect(() => {
     void load()
-  }, [load])
+    void loadTrail()
+  }, [load, loadTrail])
 
   const runAssess = async () => {
     setAssessing(true)
@@ -95,6 +117,7 @@ export function StandardsAssessmentPanel({
       toast.success(
         `Assessed against standards — ${response.data.links_created} proposed link(s) sent to Exceptions`,
       )
+      await loadTrail()
     } catch (err) {
       toast.error(
         getApiErrorMessage(err, 'Could not assess against standards. Please try again.'),
@@ -109,6 +132,7 @@ export function StandardsAssessmentPanel({
       await knowledgeBankApi.confirmLink(linkId)
       toast.success('Link confirmed')
       await load()
+      await loadTrail()
     } catch (err) {
       toast.error(getApiErrorMessage(err))
     }
@@ -126,6 +150,7 @@ export function StandardsAssessmentPanel({
       await knowledgeBankApi.rejectLink(linkId, rationale.trim())
       toast.success('Link rejected with rationale')
       await load()
+      await loadTrail()
     } catch (err) {
       toast.error(getApiErrorMessage(err))
     }
@@ -145,6 +170,16 @@ export function StandardsAssessmentPanel({
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid="assessment-trail-toggle"
+            onClick={() => setTrailOpen((v) => !v)}
+          >
+            <History className="h-4 w-4" />
+            Audit trail{trail.length ? ` (${trail.length})` : ''}
+          </Button>
           <Button type="button" variant="outline" asChild>
             <Link
               to={exceptionsHref}
@@ -182,6 +217,39 @@ export function StandardsAssessmentPanel({
           (pre-filtered to this {entityType.replace('_', ' ')}). Confirm or reject there to return
           to this case.
         </p>
+
+        {trailOpen ? (
+          <div
+            className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-2"
+            data-testid="assessment-trail-panel"
+          >
+            <p className="text-sm font-medium">Assessment history</p>
+            {trailLoading ? (
+              <p className="text-xs text-muted-foreground flex items-center gap-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading trail…
+              </p>
+            ) : trail.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No assess/confirm/reject events recorded yet.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {trail.map((item) => (
+                  <li key={item.id} className="text-xs text-muted-foreground flex flex-wrap gap-2">
+                    <Badge variant="secondary">{trailActionLabel(item.action)}</Badge>
+                    <span>{item.created_at ? new Date(item.created_at).toLocaleString() : '—'}</span>
+                    {typeof item.payload?.actor_email === 'string' ? (
+                      <span>{item.payload.actor_email}</span>
+                    ) : null}
+                    {typeof item.payload?.clause_id === 'string' ? (
+                      <span className="font-mono">{item.payload.clause_id}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
 
         {(signalType || statement) && (
           <div className="rounded-md border border-border/60 bg-muted/30 p-3 space-y-2">
