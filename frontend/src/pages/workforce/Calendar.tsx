@@ -172,7 +172,7 @@ export default function Calendar() {
           }),
         )
       })
-  }, [])
+  }, [t])
 
   useEffect(() => {
     const load = async () => {
@@ -223,7 +223,7 @@ export default function Calendar() {
       }
     }
     load()
-  }, [])
+  }, [t])
 
   const { rangeStart, rangeEnd } = useMemo(() => {
     if (viewMode === 'week') {
