@@ -101,6 +101,12 @@ class ExternalAuditImportJob(Base, TimestampMixin, ReferenceNumberMixin, AuditTr
     improvement_summary_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     promotion_summary_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     processing_warnings_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    promote_attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    promote_lease_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    promote_total: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    promote_succeeded: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=0)
+    promote_failed: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=0)
+    promote_progress_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
 
 class ExternalAuditDraft(Base, TimestampMixin, AuditTrailMixin):
@@ -144,3 +150,5 @@ class ExternalAuditDraft(Base, TimestampMixin, AuditTrailMixin):
     promoted_finding_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("audit_findings.id"), nullable=True, index=True
     )
+    promoted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    promotion_error_code: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)

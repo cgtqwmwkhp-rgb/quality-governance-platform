@@ -60,4 +60,35 @@ describe('useImportReviewActions', () => {
     })
     expect(result.current.showPromoteConfirm).toBe(false)
   })
+
+  it('reports queued promotion honestly and relies on polling', async () => {
+    const promoteJob = vi.mocked((await import('../../../api/client')).externalAuditImportsApi.promoteJob)
+    promoteJob.mockResolvedValue({ data: { id: 1, status: 'promoting' } } as never)
+    const setJob = vi.fn()
+    const load = vi.fn()
+    const { result } = renderHook(() =>
+      useImportReviewActions({
+        job: { id: 1, status: 'review_required' } as any,
+        setJob,
+        setDrafts: vi.fn(),
+        setReconciliation: vi.fn(),
+        setError: vi.fn(),
+        setQueueNotice: vi.fn(),
+        setReconciliationNotice: vi.fn(),
+        setPromotionFailedDrafts: vi.fn(),
+        setIsProcessing: vi.fn(),
+        load,
+        promoteableCount: 2,
+        pendingDraftCount: 0,
+      }),
+    )
+
+    await act(async () => {
+      await result.current.handlePromoteConfirm()
+    })
+
+    expect(setJob).toHaveBeenCalledWith({ id: 1, status: 'promoting' })
+    expect(load).not.toHaveBeenCalled()
+    expect(result.current.successMessage).toMatch(/Promotion started/i)
+  })
 })

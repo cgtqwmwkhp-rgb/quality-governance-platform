@@ -7,7 +7,7 @@ single queryable table for dashboards, trend analysis, and filtering.
 
 from __future__ import annotations
 
-from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import Base
@@ -15,6 +15,15 @@ from src.domain.models.base import Base
 
 class ExternalAuditRecord(Base):
     __tablename__ = "external_audit_records"
+    __table_args__ = (
+        Index(
+            "uq_external_audit_records_import_job_id",
+            "import_job_id",
+            unique=True,
+            postgresql_where=text("import_job_id IS NOT NULL"),
+            sqlite_where=text("import_job_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)

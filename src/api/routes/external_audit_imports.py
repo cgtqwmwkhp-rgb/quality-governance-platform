@@ -12,7 +12,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.api.dependencies import DbSession, require_permission
 from src.domain.models.external_audit_import import ExternalAuditDraftStatus, ExternalAuditImportStatus
 from src.domain.models.user import User
-from src.infrastructure.tasks.external_audit_import_tasks import process_external_audit_import_job
+from src.infrastructure.tasks.external_audit_import_tasks import (
+    process_external_audit_import_job,
+    promote_external_audit_import_job,
+)
 from src.services.external_audit_import_service import ExternalAuditImportService
 
 router = APIRouter()
@@ -73,6 +76,12 @@ class ExternalAuditImportJobResponse(BaseModel):
     updated_at: Optional[datetime] = None
     processed_at: Optional[datetime] = None
     promoted_at: Optional[datetime] = None
+    promote_attempt: int = 0
+    promote_lease_expires_at: Optional[datetime] = None
+    promote_total: Optional[int] = None
+    promote_succeeded: Optional[int] = None
+    promote_failed: Optional[int] = None
+    promote_progress_json: Optional[dict] = None
 
 
 class ExternalAuditDraftResponse(BaseModel):
@@ -97,6 +106,8 @@ class ExternalAuditDraftResponse(BaseModel):
     suggested_risk_title: Optional[str] = None
     review_notes: Optional[str] = None
     promoted_finding_id: Optional[int] = None
+    promoted_at: Optional[datetime] = None
+    promotion_error_code: Optional[str] = None
     provenance_json: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
@@ -381,6 +392,7 @@ async def bulk_review_import_job_drafts(
 @router.post(
     "/jobs/{job_id}/promote",
     response_model=ExternalAuditImportJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
     responses={
         422: {
             "description": (
@@ -422,12 +434,17 @@ async def promote_import_job(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> ExternalAuditImportJobResponse:
-    """Promote approved drafts into live audit findings, scheme alignment, and reconciliation.
-
-    **422 responses:** When every accepted draft fails materialization, the API returns
-    ``VALIDATION_ERROR`` with ``error.details.failed_drafts`` (up to 20 rows) so operators
-    can fix data and retry without inferring from a generic 500.
-    """
+    """Durably queue promotion of approved drafts and return its live progress state."""
     service = ExternalAuditImportService(db)
-    job = await service.promote_job(job_id=job_id, tenant_id=current_user.tenant_id, user_id=current_user.id)
+    job = await service.enqueue_promote(job_id=job_id, tenant_id=current_user.tenant_id, user_id=current_user.id)
+    if job.status == ExternalAuditImportStatus.PROMOTING:
+        try:
+            promote_external_audit_import_job.delay(job.id, current_user.tenant_id, current_user.id)
+        except Exception:
+            logger.warning("Celery unavailable for promotion job %s; using synchronous fallback", job.id, exc_info=True)
+            job = await service.run_promote_chunks(
+                job_id=job.id,
+                tenant_id=current_user.tenant_id,
+                user_id=current_user.id,
+            )
     return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))

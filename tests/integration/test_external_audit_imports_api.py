@@ -1503,11 +1503,11 @@ async def test_external_audit_partial_promotion_stays_recoverable(
 
 
 @pytest.mark.asyncio
-async def test_external_audit_all_accepted_drafts_fail_promote_raises_validation_error(
+async def test_external_audit_all_accepted_drafts_fail_promote_preserves_acceptance(
     test_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """When every accepted draft fails materialization, surface 422-style ValidationError (not opaque 500)."""
+    """Failed drafts remain accepted and retryable with a machine-readable error code."""
     template = AuditTemplate(
         name="External Audit Intake",
         category="Compliance",
@@ -1593,16 +1593,14 @@ async def test_external_audit_all_accepted_drafts_fail_promote_raises_validation
     monkeypatch.setattr(service, "_link_evidence_for_finding", AsyncMock(return_value=None))
     monkeypatch.setattr(service, "_link_source_document_evidence", AsyncMock(return_value=None))
 
-    with pytest.raises(ValidationError) as excinfo:
-        await service.promote_job(
-            job_id=job.id,
-            tenant_id=DEFAULT_TEST_TENANT_ID,
-            user_id=DEFAULT_TEST_USER_ID,
-        )
+    promoted_job = await service.promote_job(
+        job_id=job.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
+    )
+    await test_session.refresh(only_bad)
 
-    err = excinfo.value
-    assert "accepted draft" in err.message.lower() or "materialize" in err.message.lower()
-    assert err.details.get("failed_total") == 1
-    assert isinstance(err.details.get("failed_drafts"), list)
-    assert len(err.details["failed_drafts"]) == 1
-    assert err.details["failed_drafts"][0].get("error_type") == "RuntimeError"
+    assert promoted_job.status == ExternalAuditImportStatus.REVIEW_REQUIRED
+    assert promoted_job.promote_failed == 1
+    assert only_bad.status == ExternalAuditDraftStatus.ACCEPTED
+    assert only_bad.promotion_error_code == "PROMOTION_FAILED"
