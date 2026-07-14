@@ -56,7 +56,7 @@ vi.mock('../investigation/InvestigationComments', () => ({
 }))
 
 vi.mock('../investigation/InvestigationActions', () => ({
-  default: () => <div>Actions</div>,
+  default: () => <div data-testid="investigation-actions-panel">Actions panel</div>,
 }))
 
 vi.mock('../investigation/InvestigationEvidence', () => ({
@@ -243,7 +243,7 @@ describe('InvestigationDetail', () => {
     expect(screen.getByTestId('investigation-closure-go-actions')).toBeInTheDocument()
 
     fireEvent.click(screen.getByTestId('investigation-closure-go-actions'))
-    expect(screen.getByText('Actions')).toBeInTheDocument()
+    expect(screen.getByTestId('investigation-actions-panel')).toBeInTheDocument()
   })
 
   it('shows unavailable CAPA counts instead of faux zero when actions fail', async () => {
