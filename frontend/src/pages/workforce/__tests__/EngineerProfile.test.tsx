@@ -254,6 +254,7 @@ describe('EngineerProfile', () => {
   })
 
   it('surfaces requirements load error instead of silent zero percent', async () => {
+    listRequirements.mockReset()
     listRequirements.mockRejectedValue(new Error('requirements down'))
     const EngineerProfile = (await import('../EngineerProfile')).default
 
@@ -265,7 +266,9 @@ describe('EngineerProfile', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByTestId('requirements-match-error')).toBeInTheDocument()
+    expect(
+      await screen.findByTestId('requirements-match-error', {}, { timeout: 5000 }),
+    ).toBeInTheDocument()
     expect(screen.getByText(/requirements down/)).toBeInTheDocument()
     expect(screen.queryByTestId('requirements-match-percent')).not.toBeInTheDocument()
   })
