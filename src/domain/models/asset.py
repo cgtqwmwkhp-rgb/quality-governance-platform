@@ -2,13 +2,16 @@
 
 import enum
 import uuid
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, Base, CaseInsensitiveEnum, TimestampMixin
+
+if TYPE_CHECKING:
+    from src.domain.models.location import Location
 
 
 class AssetCategory(str, enum.Enum):
@@ -25,6 +28,7 @@ class AssetStatus(str, enum.Enum):
     VOR = "vor"  # Vehicle Off Road
     MAINTENANCE = "maintenance"
     DECOMMISSIONED = "decommissioned"
+    QUARANTINED = "quarantined"
 
 
 class AssetType(Base, TimestampMixin, AuditTrailMixin):
@@ -88,9 +92,22 @@ class Asset(Base, TimestampMixin, AuditTrailMixin):
     last_loler_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     next_loler_due: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Location
+    # Location (legacy free-text — kept for back-compat)
     site: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Structured assignment (Safety AM spine)
+    location_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    vehicle_reg: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
+    owner_user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    expiry_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    photo_evidence_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("evidence_assets.id", ondelete="SET NULL"), nullable=True
+    )
 
     # QR code
     qr_code_data: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
@@ -101,9 +118,42 @@ class Asset(Base, TimestampMixin, AuditTrailMixin):
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     asset_type: Mapped["AssetType"] = relationship("AssetType", back_populates="assets")
+    location: Mapped[Optional["Location"]] = relationship("Location")
 
     def __repr__(self) -> str:
         return f"<Asset(id={self.id}, number='{self.asset_number}', name='{self.name}')>"
+
+
+class AssetAssignmentEvent(Base):
+    """Append-only audit of asset owner / location / vehicle assignment changes."""
+
+    __tablename__ = "asset_assignment_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    asset_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("assets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    actor_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+
+    from_location_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("locations.id"), nullable=True)
+    to_location_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("locations.id"), nullable=True)
+    from_vehicle_reg: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    to_vehicle_reg: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    from_owner_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    to_owner_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+        index=True,
+    )
+
+    def __repr__(self) -> str:
+        return f"<AssetAssignmentEvent(id={self.id}, asset_id={self.asset_id})>"
 
 
 class TemplateAssetType(Base, TimestampMixin):
