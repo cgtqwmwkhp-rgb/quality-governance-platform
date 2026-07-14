@@ -2546,6 +2546,8 @@ export type {
   ScanStandardResponse,
   AssessEntityResponse,
   RelatedDocumentHit,
+  AssessmentTrailItem,
+  AssessmentTrailResponse,
 } from './knowledgeBankClient'
 
 export const knowledgeBankApi = createKnowledgeBankApi(api)

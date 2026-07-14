@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 
 const mockList = vi.fn()
+const mockTrail = vi.fn()
 const mockAssess = vi.fn()
 const mockReject = vi.fn()
 const mockConfirm = vi.fn()
@@ -19,9 +21,11 @@ vi.mock('../../contexts/ToastContext', () => ({
 }))
 
 vi.mock('../../api/client', () => ({
-  getApiErrorMessage: (e: unknown) => (e instanceof Error ? e.message : 'fail'),
+  getApiErrorMessage: (e: unknown, fallback?: string) =>
+    e instanceof Error ? e.message : fallback || 'fail',
   knowledgeBankApi: {
     listEntityAssessment: (...a: unknown[]) => mockList(...a),
+    listEntityAssessmentTrail: (...a: unknown[]) => mockTrail(...a),
     assessEntity: (...a: unknown[]) => mockAssess(...a),
     rejectLink: (...a: unknown[]) => mockReject(...a),
     confirmLink: (...a: unknown[]) => mockConfirm(...a),
@@ -32,6 +36,7 @@ describe('StandardsAssessmentPanel closed-loop deeplink', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockList.mockResolvedValue({ data: [] })
+    mockTrail.mockResolvedValue({ data: { items: [] } })
   })
 
   it('links to Knowledge Exceptions with entity_type filter and returnTo', async () => {
@@ -60,6 +65,7 @@ describe('StandardsAssessmentPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockList.mockResolvedValue({ data: [] })
+    mockTrail.mockResolvedValue({ data: { items: [] } })
     mockAssess.mockResolvedValue({
       data: {
         links_created: 1,
@@ -123,5 +129,43 @@ describe('StandardsAssessmentPanel', () => {
     })
     expect(mockReject).not.toHaveBeenCalled()
     prompt.mockRestore()
+  })
+})
+
+describe('StandardsAssessmentPanel audit trail', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue({ data: [] })
+    mockTrail.mockResolvedValue({
+      data: {
+        entity_type: 'incident',
+        entity_id: '1',
+        items: [
+          {
+            id: 1,
+            action: 'evidence_confirm',
+            confidence: null,
+            auto_applied: false,
+            payload: { actor_email: 'a@b.co', clause_id: '7.5' },
+            created_at: '2026-07-13T10:00:00Z',
+          },
+        ],
+      },
+    })
+  })
+
+  it('toggles audit trail panel with persisted confirm entries', async () => {
+    const user = userEvent.setup()
+    const { StandardsAssessmentPanel } = await import('../StandardsAssessmentPanel')
+    render(
+      <MemoryRouter>
+        <StandardsAssessmentPanel entityType="incident" entityId={1} />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(mockTrail).toHaveBeenCalled())
+    await user.click(screen.getByTestId('assessment-trail-toggle'))
+    expect(await screen.findByTestId('assessment-trail-panel')).toHaveTextContent('Confirmed')
+    expect(screen.getByTestId('assessment-trail-panel')).toHaveTextContent('7.5')
   })
 })
