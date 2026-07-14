@@ -84,6 +84,7 @@ class CAPAAction(Base):
     assigned_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     verified_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    asset_id = Column(Integer, ForeignKey("assets.id", ondelete="SET NULL"), nullable=True, index=True)
 
     due_date = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)

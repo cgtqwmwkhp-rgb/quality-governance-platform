@@ -1,6 +1,7 @@
 """Asset Registry API Routes.
 
-REST endpoints for asset types, equipment assets, and template-asset-type linkages.
+REST endpoints for asset types, equipment assets, locations,
+and template-asset-type linkages.
 """
 
 from typing import Annotated, Optional
@@ -18,6 +19,10 @@ from src.api.schemas.asset import (
     AssetTypeUpdate,
     AssetUpdate,
     AuditTemplateSummaryResponse,
+    LocationCreate,
+    LocationListResponse,
+    LocationResponse,
+    LocationUpdate,
     TemplateListResponse,
 )
 from src.domain.models.asset import AssetType
@@ -31,6 +36,105 @@ def _tid(user: CurrentUser) -> int:
     tid = user.tenant_id
     assert tid is not None, "Tenant context required"
     return tid
+
+
+# ============== Location endpoints ==============
+# Declare /locations before /{id} to avoid path conflicts
+
+
+@router.get("/locations", response_model=LocationListResponse)
+async def list_locations(
+    db: DbSession,
+    user: CurrentUser,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=500),
+    kind: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    parent_id: Optional[int] = None,
+    search: Optional[str] = None,
+):
+    """List locations with filtering and pagination."""
+    service = AssetService(db)
+    result = await service.list_locations(
+        tenant_id=_tid(user),
+        page=page,
+        page_size=page_size,
+        kind=kind,
+        is_active=is_active,
+        parent_id=parent_id,
+        search=search,
+    )
+    return LocationListResponse(
+        items=[LocationResponse.model_validate(loc) for loc in result.items],
+        total=result.total,
+        page=result.page,
+        page_size=result.page_size,
+        pages=result.pages,
+    )
+
+
+@router.post(
+    "/locations",
+    response_model=LocationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_location(
+    data: LocationCreate,
+    db: DbSession,
+    user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("asset:create"))],
+):
+    """Create a site or workshop location."""
+    service = AssetService(db)
+    location = await service.create_location(
+        data=data.model_dump(exclude_unset=True),
+        user_id=user.id,
+        tenant_id=_tid(user),
+    )
+    return LocationResponse.model_validate(location)
+
+
+@router.get("/locations/{location_id}", response_model=LocationResponse)
+async def get_location(
+    location_id: int,
+    db: DbSession,
+    user: CurrentUser,
+):
+    """Get a specific location."""
+    service = AssetService(db)
+    location = await service.get_location(location_id, _tid(user))
+    return LocationResponse.model_validate(location)
+
+
+@router.patch("/locations/{location_id}", response_model=LocationResponse)
+async def update_location(
+    location_id: int,
+    updates: LocationUpdate,
+    db: DbSession,
+    user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("asset:update"))],
+):
+    """Update an existing location."""
+    service = AssetService(db)
+    location = await service.update_location(
+        location_id=location_id,
+        update_data=updates.model_dump(exclude_unset=True),
+        tenant_id=_tid(user),
+        actor_user_id=user.id,
+    )
+    return LocationResponse.model_validate(location)
+
+
+@router.delete("/locations/{location_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_location(
+    location_id: int,
+    db: DbSession,
+    user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("asset:delete"))],
+):
+    """Delete a location."""
+    service = AssetService(db)
+    await service.delete_location(location_id=location_id, tenant_id=_tid(user))
 
 
 # ============== Asset Type endpoints ==============
@@ -164,6 +268,13 @@ async def list_assets(
     asset_type_id: Optional[int] = None,
     status: Optional[str] = None,
     site: Optional[str] = None,
+    location_id: Optional[int] = None,
+    vehicle_reg: Optional[str] = None,
+    owner_user_id: Optional[int] = None,
+    expiry_band: Optional[str] = Query(
+        None,
+        description="Expiry filter band: overdue | due_30 | due_60 | due_90",
+    ),
 ):
     """List assets with filtering and pagination."""
     service = AssetService(db)
@@ -175,6 +286,10 @@ async def list_assets(
         asset_type_id=asset_type_id,
         status=status,
         site=site,
+        location_id=location_id,
+        vehicle_reg=vehicle_reg,
+        owner_user_id=owner_user_id,
+        expiry_band=expiry_band,
     )
     return AssetListResponse(
         items=[AssetResponse.model_validate(a) for a in result.items],

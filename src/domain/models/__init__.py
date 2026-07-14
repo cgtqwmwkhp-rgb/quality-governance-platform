@@ -24,7 +24,14 @@ from src.domain.models.assessment import (
     AssessmentStatus,
     CompetencyVerdict,
 )
-from src.domain.models.asset import Asset, AssetCategory, AssetStatus, AssetType, TemplateAssetType
+from src.domain.models.asset import (
+    Asset,
+    AssetAssignmentEvent,
+    AssetCategory,
+    AssetStatus,
+    AssetType,
+    TemplateAssetType,
+)
 from src.domain.models.audit import (
     AuditFinding,
     AuditQuestion,
@@ -167,6 +174,7 @@ from src.domain.models.iso27001 import (
     StatementOfApplicability,
     SupplierSecurityAssessment,
 )
+from src.domain.models.location import Location, LocationKind
 from src.domain.models.loler import LOLERDefect, LOLERDefectCategory, LOLERExamination, LOLERExaminationType
 
 # Planet Mark Carbon Management
@@ -234,10 +242,13 @@ __all__ = [
     "Control",
     # Audit models
     "Asset",
+    "AssetAssignmentEvent",
     "AssetCategory",
     "AssetStatus",
     "AssetType",
     "TemplateAssetType",
+    "Location",
+    "LocationKind",
     "AuditTemplate",
     "AuditQuestion",
     "AuditRun",
