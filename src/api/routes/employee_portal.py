@@ -70,6 +70,11 @@ class QuickReportResponse(BaseModel):
     message: str
     estimated_response: str
     qr_code_url: Optional[str] = None
+    # Golden-thread fields — only populated when submitter may open staff record
+    entity_id: Optional[int] = None
+    entity_type: Optional[str] = None
+    staff_href: Optional[str] = None
+    can_open_staff_record: bool = False
 
 
 class ReportStatusResponse(BaseModel):
@@ -148,6 +153,48 @@ def validate_tracking_code(reference_number: str, provided_code: Optional[str]) 
         return False
     expected_code = generate_tracking_code(reference_number)
     return hmac.compare_digest(expected_code, provided_code)
+
+
+_STAFF_HREF_BY_TYPE = {
+    "incident": "/incidents/{id}",
+    "near_miss": "/near-misses/{id}",
+    "complaint": "/complaints/{id}",
+    "rta": "/rtas/{id}",
+}
+
+
+def staff_golden_thread_fields(
+    current_user: Optional[Any],
+    *,
+    entity_type: str,
+    entity_id: int,
+) -> dict[str, Any]:
+    """Return staff deep-link fields when the submitter may open the staff record.
+
+    Anonymous / portal-only submitters get tracking_code only — no staff_href.
+    Authenticated platform users (OptionalCurrentUser present) get a staff deep-link.
+    """
+    if current_user is None:
+        return {
+            "entity_id": None,
+            "entity_type": None,
+            "staff_href": None,
+            "can_open_staff_record": False,
+        }
+    href_tmpl = _STAFF_HREF_BY_TYPE.get(entity_type)
+    if not href_tmpl:
+        return {
+            "entity_id": None,
+            "entity_type": None,
+            "staff_href": None,
+            "can_open_staff_record": False,
+        }
+    return {
+        "entity_id": entity_id,
+        "entity_type": entity_type,
+        "staff_href": href_tmpl.format(id=entity_id),
+        "can_open_staff_record": True,
+    }
 
 
 def map_severity(severity: str) -> tuple:
@@ -381,12 +428,14 @@ async def commit_portal_record(db: DbSession, record_label: str) -> None:
 async def submit_quick_report(
     report: QuickReportCreate,
     db: DbSession,
+    current_user: OptionalCurrentUser = None,
 ):
     """
     Submit a quick report (incident or complaint).
 
     This endpoint is public and doesn't require authentication.
     Anonymous reports can be tracked using the returned tracking_code.
+    Authenticated staff receive a golden-thread staff_href when role allows.
     """
     incident_severity, complaint_priority = map_severity(report.severity)
     reporter_submission = report.reporter_submission or {}
@@ -414,6 +463,7 @@ async def submit_quick_report(
             message="Your incident report has been submitted successfully.",
             estimated_response="You will receive an update within 24-48 hours.",
             qr_code_url=f"/api/v1/portal/qr/{ref_number}",
+            **staff_golden_thread_fields(current_user, entity_type="incident", entity_id=incident.id),
         )
 
     elif report.report_type.lower() == "complaint":
@@ -438,6 +488,7 @@ async def submit_quick_report(
             message="Your complaint has been submitted successfully.",
             estimated_response="A case manager will review your complaint within 24 hours.",
             qr_code_url=f"/api/v1/portal/qr/{ref_number}",
+            **staff_golden_thread_fields(current_user, entity_type="complaint", entity_id=complaint.id),
         )
 
     elif report.report_type.lower() == "rta":
@@ -471,6 +522,7 @@ async def submit_quick_report(
             message="Your RTA report has been submitted successfully.",
             estimated_response="A fleet manager will review your report within 24 hours.",
             qr_code_url=f"/api/v1/portal/qr/{ref_number}",
+            **staff_golden_thread_fields(current_user, entity_type="rta", entity_id=rta.id),
         )
 
     elif report.report_type.lower() == "near_miss":
@@ -513,6 +565,7 @@ async def submit_quick_report(
             message="Your near miss report has been submitted successfully.",
             estimated_response="A safety manager will review your report within 24 hours.",
             qr_code_url=f"/api/v1/portal/qr/{ref_number}",
+            **staff_golden_thread_fields(current_user, entity_type="near_miss", entity_id=near_miss.id),
         )
 
     else:

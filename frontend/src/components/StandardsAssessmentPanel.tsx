@@ -115,9 +115,16 @@ export function StandardsAssessmentPanel({
   }
 
   const rejectLink = async (linkId: number) => {
+    const rationale = window.prompt(
+      'Reject rationale (required — recorded for auditability):',
+    )
+    if (!rationale || rationale.trim().length < 3) {
+      toast.error('Reject requires a rationale (min 3 characters)')
+      return
+    }
     try {
-      await knowledgeBankApi.rejectLink(linkId)
-      toast.success('Link rejected')
+      await knowledgeBankApi.rejectLink(linkId, rationale.trim())
+      toast.success('Link rejected with rationale')
       await load()
     } catch (err) {
       toast.error(getApiErrorMessage(err))
@@ -133,8 +140,8 @@ export function StandardsAssessmentPanel({
             {title}
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            AI maps this record to ISO clauses as a governed signal — never silent auto-confirm for
-            operational cases.
+            Map this case to ISO / UVDB / Planet Mark clauses. Operational signals stay proposed for
+            human review — never silent auto-confirm as conformance evidence.
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 shrink-0">
@@ -148,13 +155,18 @@ export function StandardsAssessmentPanel({
               Review in Exceptions
             </Link>
           </Button>
-          <Button type="button" onClick={() => void runAssess()} disabled={assessing}>
+          <Button
+            type="button"
+            data-testid="standards-map-cta"
+            onClick={() => void runAssess()}
+            disabled={assessing}
+          >
             {assessing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Sparkles className="h-4 w-4" />
             )}
-            Assess against standards
+            Map to ISO / UVDB / Planet Mark
           </Button>
         </div>
       </CardHeader>
@@ -188,8 +200,8 @@ export function StandardsAssessmentPanel({
           </div>
         ) : links.length === 0 ? (
           <EmptyState
-            title="No standards assessment yet"
-            description="Run Assess against standards to propose clause links for human review."
+            title="No standards mapping yet"
+            description="Use Map to ISO / UVDB / Planet Mark to propose attributable clause links for review in Knowledge Exceptions."
           />
         ) : (
           <ul className="space-y-3">

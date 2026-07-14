@@ -26,11 +26,28 @@ describe('createKnowledgeBankApi listExceptions', () => {
     )
   })
 
-  it('does not invent a signal_type query param (API gap)', () => {
+  it('passes signal_type when provided (server filter)', () => {
     const api = mockApi()
-    createKnowledgeBankApi(api as never).listExceptions({ entityType: 'document' })
-    const url = String(api.get.mock.calls[0][0])
-    expect(url).toContain('entity_type=document')
-    expect(url).not.toContain('signal_type')
+    createKnowledgeBankApi(api as never).listExceptions({
+      entityType: 'document',
+      signalType: 'gap',
+    })
+    expect(api.get).toHaveBeenCalledWith(
+      '/api/v1/knowledge-bank/exceptions?entity_type=document&signal_type=gap',
+    )
+  })
+
+  it('posts reject rationale body', () => {
+    const api = mockApi()
+    createKnowledgeBankApi(api as never).rejectLink(9, 'Not applicable to this clause')
+    expect(api.post).toHaveBeenCalledWith('/api/v1/knowledge-bank/evidence/9/reject', {
+      rationale: 'Not applicable to this clause',
+    })
+  })
+
+  it('omits body for legacy reject callers', () => {
+    const api = mockApi()
+    createKnowledgeBankApi(api as never).rejectLink(9)
+    expect(api.post).toHaveBeenCalledWith('/api/v1/knowledge-bank/evidence/9/reject')
   })
 })
