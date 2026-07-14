@@ -31,6 +31,7 @@ class CAPAResponse(BaseModel):
     verified_by_id: Optional[int] = None
     created_by_id: int
     tenant_id: Optional[int] = None
+    asset_id: Optional[int] = None
     due_date: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     verified_at: Optional[datetime] = None
