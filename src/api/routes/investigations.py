@@ -10,7 +10,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.api.utils.tenant import require_tenant_id
 from src.api.schemas.investigation import (
     CreateFromRecordRequest,
     InvestigationClosureValidationResponse,
@@ -27,6 +26,7 @@ from src.api.schemas.investigation import (
     SourceRecordItem,
     SourceRecordsResponse,
 )
+from src.api.utils.tenant import require_tenant_id
 from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError
 from src.domain.models.investigation import (
     AssignedEntityType,
