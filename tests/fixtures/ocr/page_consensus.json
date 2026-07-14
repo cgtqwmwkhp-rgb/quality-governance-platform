@@ -1,0 +1,20 @@
+{
+  "reference_text": "The audit evidence is complete.",
+  "candidates": [
+    {
+      "provider": "azure_document_intelligence",
+      "page_number": 1,
+      "text": "The audit evidence is complete."
+    },
+    {
+      "provider": "secondary_ocr",
+      "page_number": 1,
+      "text": "The  audit evidence is complete."
+    },
+    {
+      "provider": "native_pdf",
+      "page_number": 1,
+      "text": "The audit evidence is complete."
+    }
+  ]
+}
