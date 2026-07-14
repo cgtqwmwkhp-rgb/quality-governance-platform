@@ -261,6 +261,27 @@ describe('Layout', () => {
     )
   })
 
+  it('keeps Compliance & Sustainability flush with other top-level hubs', async () => {
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    const assurance = screen.getByTestId('nav-hub-btn-assurance')
+    const compliance = screen.getByTestId('nav-hub-btn-compliance-sustainability')
+    const risk = screen.getByTestId('nav-hub-btn-risk-improvement')
+
+    expect(compliance.closest('[class*="ml-"]')).toBeNull()
+    expect(assurance.className).toBe(compliance.className)
+    expect(risk.className).toBe(compliance.className)
+    expect(compliance.className).toMatch(/w-full/)
+    expect(compliance.className).toMatch(/text-left/)
+    expect(compliance.className).not.toMatch(/\bml-4\b/)
+  })
+
   it('applies workforce and compliance automation role gates', async () => {
     const user = userEvent.setup()
     hasRoleMock.mockReturnValue(false)

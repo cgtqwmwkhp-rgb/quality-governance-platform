@@ -110,6 +110,7 @@ export default function ComplianceAutomation() {
   })
   const [watchImpacts, setWatchImpacts] = useState<RegulatoryImpact[]>([])
   const [runningWatch, setRunningWatch] = useState(false)
+  const [actionBusyId, setActionBusyId] = useState<number | null>(null)
 
   useEffect(() => {
     loadData()
@@ -193,6 +194,37 @@ export default function ComplianceAutomation() {
       toast.error(getApiErrorMessage(err))
     } finally {
       setRunningWatch(false)
+    }
+  }
+
+  const handleCreateWatchAction = async (impactId: number) => {
+    setActionBusyId(impactId)
+    try {
+      const response = await knowledgeBankApi.createImpactAction(impactId)
+      const ref = response.data.action?.reference_number
+      toast.success(ref ? `Action ${ref} created` : 'Action created from impact')
+      await loadWatchImpacts()
+    } catch (err) {
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setActionBusyId(null)
+    }
+  }
+
+  const handleResolveWatchImpact = async (impactId: number, dismiss = false) => {
+    setActionBusyId(impactId)
+    try {
+      await knowledgeBankApi.resolveImpact(impactId, {
+        dismiss,
+        notes: dismiss ? 'Dismissed from regulatory watch inbox' : 'Resolved from regulatory watch inbox',
+        close_action: !dismiss,
+      })
+      toast.success(dismiss ? 'Impact dismissed' : 'Impact resolved')
+      await loadWatchImpacts()
+    } catch (err) {
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setActionBusyId(null)
     }
   }
 
@@ -632,7 +664,7 @@ export default function ComplianceAutomation() {
             <div>
               <h3 className="font-medium text-foreground">Regulatory Watch</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                Poll regulatory updates and review AI-mapped document impacts
+                Poll regulatory updates, create Actions with owner and due date, and resolve closed-loop
               </p>
             </div>
             <Button onClick={() => void handleRunWatch()} disabled={runningWatch}>
@@ -655,29 +687,82 @@ export default function ComplianceAutomation() {
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {watchImpacts.map((impact) => (
-                  <div key={impact.id} className="p-4 hover:bg-accent/50 transition-colors">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="font-medium text-foreground">Update {impact.update_id}</p>
-                        {impact.rationale && (
-                          <p className="text-sm text-muted-foreground mt-1">{impact.rationale}</p>
-                        )}
-                        {impact.document_id && (
-                          <Link
-                            to={`/documents/${impact.document_id}`}
-                            className="text-sm text-primary hover:underline mt-2 inline-block"
-                          >
-                            View document #{impact.document_id}
-                          </Link>
-                        )}
+                {watchImpacts.map((impact) => {
+                  const busy = actionBusyId === impact.id
+                  const open =
+                    impact.status !== 'resolved' && impact.status !== 'dismissed'
+                  return (
+                    <div key={impact.id} className="p-4 hover:bg-accent/50 transition-colors">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-foreground">Update {impact.update_id}</p>
+                          {impact.rationale && (
+                            <p className="text-sm text-muted-foreground mt-1">{impact.rationale}</p>
+                          )}
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
+                            {impact.document_id && (
+                              <Link
+                                to={`/documents/${impact.document_id}`}
+                                className="text-primary hover:underline"
+                              >
+                                Document #{impact.document_id}
+                              </Link>
+                            )}
+                            {impact.due_date && (
+                              <span>Due {new Date(impact.due_date).toLocaleDateString()}</span>
+                            )}
+                            {impact.owner_id && <span>Owner #{impact.owner_id}</span>}
+                            {impact.action_key && (
+                              <Link
+                                to={`/actions/item?key=${encodeURIComponent(impact.action_key)}`}
+                                className="text-primary hover:underline"
+                              >
+                                {impact.action_reference ?? impact.action_key}
+                              </Link>
+                            )}
+                          </div>
+                          {open && (
+                            <div className="flex flex-wrap gap-2 mt-3">
+                              {!impact.action_id && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => void handleCreateWatchAction(impact.id)}
+                                  disabled={busy}
+                                >
+                                  {busy ? (
+                                    <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                  ) : (
+                                    <Zap className="w-3.5 h-3.5 mr-1.5" />
+                                  )}
+                                  Create Action
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void handleResolveWatchImpact(impact.id, false)}
+                                disabled={busy}
+                              >
+                                Resolve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => void handleResolveWatchImpact(impact.id, true)}
+                                disabled={busy}
+                              >
+                                Dismiss
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-muted text-muted-foreground whitespace-nowrap">
+                          {impact.status}
+                        </span>
                       </div>
-                      <span className="px-2 py-1 rounded text-xs font-medium bg-muted text-muted-foreground">
-                        {impact.status}
-                      </span>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>

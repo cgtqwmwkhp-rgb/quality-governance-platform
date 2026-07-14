@@ -89,6 +89,33 @@ export interface RegulatoryImpact {
   rationale: string | null
   status: string
   created_at: string
+  action_id?: number | null
+  action_key?: string | null
+  action_reference?: string | null
+  owner_id?: number | null
+  due_date?: string | null
+  resolved_at?: string | null
+  resolved_by_id?: number | null
+  resolution_notes?: string | null
+}
+
+export interface WatchActionResponse {
+  impact_id: number
+  status: string
+  action?: {
+    id: number
+    reference_number: string
+    title: string
+    status: string
+    priority: string
+    owner_id: number | null
+    due_date: string | null
+    source_type: string
+    source_id: number | null
+    action_key: string
+  } | null
+  due_date?: string | null
+  owner_id?: number | null
 }
 
 export interface ScanStandardResponse {
@@ -178,7 +205,7 @@ export function createKnowledgeBankApi(api: AxiosInstance) {
       api.post<DiscussionMessage>(`${base}/discussions/${threadId}/messages`, body),
 
     runRegulatoryWatch: () =>
-      api.post<{ status: string; message: string }>(`${base}/regulatory-watch/run`),
+      api.post<{ status: string; message: string; auto_tasks?: number }>(`${base}/regulatory-watch/run`),
 
     listImpacts: (status?: string) => {
       const sp = new URLSearchParams()
@@ -186,5 +213,16 @@ export function createKnowledgeBankApi(api: AxiosInstance) {
       const qs = sp.toString()
       return api.get<RegulatoryImpact[]>(`${base}/regulatory-watch/impacts${qs ? `?${qs}` : ''}`)
     },
+
+    createImpactAction: (
+      impactId: number,
+      body: { owner_email?: string; owner_id?: number; due_date?: string; priority?: string } = {},
+    ) =>
+      api.post<WatchActionResponse>(`${base}/regulatory-watch/impacts/${impactId}/create-action`, body),
+
+    resolveImpact: (
+      impactId: number,
+      body: { notes?: string; dismiss?: boolean; close_action?: boolean } = {},
+    ) => api.post<WatchActionResponse>(`${base}/regulatory-watch/impacts/${impactId}/resolve`, body),
   }
 }

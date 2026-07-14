@@ -392,89 +392,90 @@ export default function Layout({ onLogout }: LayoutProps) {
 
                 return (
                   <Fragment key={hub.id}>
-                    <div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setExpandedHubs((current) => ({
-                          ...current,
-                          [hub.id]: !expanded,
-                        }))
-                      }
-                      aria-expanded={expanded}
-                      aria-controls={`nav-hub-${hub.id}`}
-                      className={cn(
-                        'flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
-                        'transition-all duration-200 group',
-                        active
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-surface',
-                      )}
-                    >
-                      <hub.icon
+                    <div className="w-full" data-testid={`nav-hub-${hub.id}`}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedHubs((current) => ({
+                            ...current,
+                            [hub.id]: !expanded,
+                          }))
+                        }
+                        aria-expanded={expanded}
+                        aria-controls={`nav-hub-${hub.id}`}
+                        data-testid={`nav-hub-btn-${hub.id}`}
                         className={cn(
-                          'w-5 h-5 transition-colors',
+                          'flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-left',
+                          'transition-all duration-200 group',
                           active
-                            ? 'text-primary'
-                            : 'text-muted-foreground group-hover:text-foreground',
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-surface',
                         )}
-                      />
-                      <span>{hub.title}</span>
-                      <ChevronDown
-                        className={cn(
-                          'ml-auto w-4 h-4 transition-transform',
-                          expanded ? 'rotate-0' : '-rotate-90',
-                        )}
-                      />
-                    </button>
+                      >
+                        <hub.icon
+                          className={cn(
+                            'w-5 h-5 shrink-0 transition-colors',
+                            active
+                              ? 'text-primary'
+                              : 'text-muted-foreground group-hover:text-foreground',
+                          )}
+                        />
+                        <span className="min-w-0 flex-1 leading-snug">{hub.title}</span>
+                        <ChevronDown
+                          className={cn(
+                            'w-4 h-4 shrink-0 transition-transform',
+                            expanded ? 'rotate-0' : '-rotate-90',
+                          )}
+                        />
+                      </button>
 
-                    {expanded && (
-                      <div id={`nav-hub-${hub.id}`} className="mt-1 ml-4 space-y-1">
-                        {hub.items.map((item) => {
-                          const itemActive = navItemIsActive(
-                            item.path,
-                            location.pathname,
-                            location.search,
-                          )
-                          return (
-                            <NavLink
-                              key={item.path}
-                              to={item.path}
-                              onClick={() => setSidebarOpen(false)}
-                              aria-current={itemActive ? 'page' : undefined}
-                              className={cn(
-                                'flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-medium',
-                                'transition-all duration-200 group',
-                                itemActive
-                                  ? 'bg-primary/10 text-primary border border-primary/20'
-                                  : 'text-muted-foreground hover:text-foreground hover:bg-surface',
-                              )}
-                            >
-                              <item.icon
+                      {expanded && (
+                        <div id={`nav-hub-${hub.id}`} className="mt-1 space-y-1 pl-4">
+                          {hub.items.map((item) => {
+                            const itemActive = navItemIsActive(
+                              item.path,
+                              location.pathname,
+                              location.search,
+                            )
+                            return (
+                              <NavLink
+                                key={item.path}
+                                to={item.path}
+                                onClick={() => setSidebarOpen(false)}
+                                aria-current={itemActive ? 'page' : undefined}
                                 className={cn(
-                                  'w-4 h-4 transition-colors',
+                                  'flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-medium',
+                                  'transition-all duration-200 group',
                                   itemActive
-                                    ? 'text-primary'
-                                    : 'text-muted-foreground group-hover:text-foreground',
+                                    ? 'bg-primary/10 text-primary border border-primary/20'
+                                    : 'text-muted-foreground hover:text-foreground hover:bg-surface',
                                 )}
-                              />
-                              {item.label}
-                              {itemActive && (
-                                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
-                              )}
-                            </NavLink>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
+                              >
+                                <item.icon
+                                  className={cn(
+                                    'w-4 h-4 shrink-0 transition-colors',
+                                    itemActive
+                                      ? 'text-primary'
+                                      : 'text-muted-foreground group-hover:text-foreground',
+                                  )}
+                                />
+                                <span className="min-w-0 flex-1 leading-snug">{item.label}</span>
+                                {itemActive && (
+                                  <div className="ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary" />
+                                )}
+                              </NavLink>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
                     {hub.id === 'risk-improvement' && (
                       <Link
                         to="/documents"
                         onClick={() => setSidebarOpen(false)}
                         aria-current={libraryNavActive ? 'page' : undefined}
                         className={cn(
-                          'flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
+                          'flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
                           'transition-all duration-200 group',
                           libraryNavActive
                             ? 'bg-primary/10 text-primary border border-primary/20'
@@ -483,15 +484,15 @@ export default function Layout({ onLogout }: LayoutProps) {
                       >
                         <FolderOpen
                           className={cn(
-                            'w-5 h-5 transition-colors',
+                            'w-5 h-5 shrink-0 transition-colors',
                             libraryNavActive
                               ? 'text-primary'
                               : 'text-muted-foreground group-hover:text-foreground',
                           )}
                         />
-                        {t('nav.library')}
+                        <span className="min-w-0 flex-1 leading-snug">{t('nav.library')}</span>
                         {libraryNavActive && (
-                          <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
+                          <div className="ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary" />
                         )}
                       </Link>
                     )}
