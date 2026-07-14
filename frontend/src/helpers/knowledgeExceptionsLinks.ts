@@ -2,10 +2,10 @@
 
 const CASE_ENTITY_PATHS: Record<string, (id: string) => string> = {
   document: (id) => `/documents/${id}?tab=evidence`,
-  incident: (id) => `/incidents/${id}`,
-  complaint: (id) => `/complaints/${id}`,
-  near_miss: (id) => `/near-misses/${id}`,
-  rta: (id) => `/rtas/${id}`,
+  incident: (id) => `/incidents/${id}?tab=standards`,
+  complaint: (id) => `/complaints/${id}?tab=standards`,
+  near_miss: (id) => `/near-misses/${id}?tab=standards`,
+  rta: (id) => `/rtas/${id}?tab=standards`,
   audit_finding: (id) => `/audits?view=findings&findingId=${encodeURIComponent(id)}`,
 }
 
