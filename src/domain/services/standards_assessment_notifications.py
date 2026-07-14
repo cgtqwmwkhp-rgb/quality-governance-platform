@@ -33,6 +33,62 @@ def case_standards_deep_link(entity_type: str, entity_id: str) -> str:
     return exceptions_deep_link(entity_type)
 
 
+def _append_user_attrs(owner_ids: list[int], row: object, *attrs: str) -> None:
+    for attr in attrs:
+        value = getattr(row, attr, None)
+        if value is not None:
+            owner_ids.append(int(value))
+
+
+async def _load_notify_ids_for_entity(
+    db: AsyncSession,
+    *,
+    entity_type: str,
+    eid: int,
+    tenant_id: int,
+) -> list[int]:
+    owner_ids: list[int] = []
+    if entity_type == "incident":
+        from src.domain.models.incident import Incident
+
+        row = (
+            await db.execute(select(Incident).where(Incident.id == eid, Incident.tenant_id == tenant_id))
+        ).scalar_one_or_none()
+        if row:
+            _append_user_attrs(owner_ids, row, "owner_id", "created_by_id")
+    elif entity_type == "complaint":
+        from src.domain.models.complaint import Complaint
+
+        row = (
+            await db.execute(select(Complaint).where(Complaint.id == eid, Complaint.tenant_id == tenant_id))
+        ).scalar_one_or_none()
+        if row:
+            _append_user_attrs(owner_ids, row, "owner_id", "created_by_id")
+    elif entity_type == "near_miss":
+        from src.domain.models.near_miss import NearMiss
+
+        row = (
+            await db.execute(select(NearMiss).where(NearMiss.id == eid, NearMiss.tenant_id == tenant_id))
+        ).scalar_one_or_none()
+        if row:
+            _append_user_attrs(owner_ids, row, "assigned_to_id", "created_by_id")
+    elif entity_type == "rta":
+        from src.domain.models.rta import RTA
+
+        row = (await db.execute(select(RTA).where(RTA.id == eid, RTA.tenant_id == tenant_id))).scalar_one_or_none()
+        if row:
+            _append_user_attrs(owner_ids, row, "owner_id", "created_by_id")
+    elif entity_type == "audit_finding":
+        from src.domain.models.audit import AuditFinding
+
+        row = (
+            await db.execute(select(AuditFinding).where(AuditFinding.id == eid, AuditFinding.tenant_id == tenant_id))
+        ).scalar_one_or_none()
+        if row:
+            _append_user_attrs(owner_ids, row, "created_by_id")
+    return owner_ids
+
+
 async def resolve_case_notify_user_ids(
     db: AsyncSession,
     *,
@@ -46,60 +102,8 @@ async def resolve_case_notify_user_ids(
     except (TypeError, ValueError):
         return []
 
-    owner_ids: list[int] = []
+    owner_ids = await _load_notify_ids_for_entity(db, entity_type=entity_type, eid=eid, tenant_id=tenant_id)
 
-    if entity_type == "incident":
-        from src.domain.models.incident import Incident
-
-        row = (
-            await db.execute(select(Incident).where(Incident.id == eid, Incident.tenant_id == tenant_id))
-        ).scalar_one_or_none()
-        if row:
-            if getattr(row, "owner_id", None):
-                owner_ids.append(int(row.owner_id))
-            if getattr(row, "created_by_id", None):
-                owner_ids.append(int(row.created_by_id))
-    elif entity_type == "complaint":
-        from src.domain.models.complaint import Complaint
-
-        row = (
-            await db.execute(select(Complaint).where(Complaint.id == eid, Complaint.tenant_id == tenant_id))
-        ).scalar_one_or_none()
-        if row:
-            if getattr(row, "owner_id", None):
-                owner_ids.append(int(row.owner_id))
-            if getattr(row, "created_by_id", None):
-                owner_ids.append(int(row.created_by_id))
-    elif entity_type == "near_miss":
-        from src.domain.models.near_miss import NearMiss
-
-        row = (
-            await db.execute(select(NearMiss).where(NearMiss.id == eid, NearMiss.tenant_id == tenant_id))
-        ).scalar_one_or_none()
-        if row:
-            if getattr(row, "assigned_to_id", None):
-                owner_ids.append(int(row.assigned_to_id))
-            if getattr(row, "created_by_id", None):
-                owner_ids.append(int(row.created_by_id))
-    elif entity_type == "rta":
-        from src.domain.models.rta import RTA
-
-        row = (await db.execute(select(RTA).where(RTA.id == eid, RTA.tenant_id == tenant_id))).scalar_one_or_none()
-        if row:
-            if getattr(row, "owner_id", None):
-                owner_ids.append(int(row.owner_id))
-            if getattr(row, "created_by_id", None):
-                owner_ids.append(int(row.created_by_id))
-    elif entity_type == "audit_finding":
-        from src.domain.models.audit import AuditFinding
-
-        row = (
-            await db.execute(select(AuditFinding).where(AuditFinding.id == eid, AuditFinding.tenant_id == tenant_id))
-        ).scalar_one_or_none()
-        if row and getattr(row, "created_by_id", None):
-            owner_ids.append(int(row.created_by_id))
-
-    # Dedupe while preserving order
     seen: set[int] = set()
     unique: list[int] = []
     for uid in owner_ids:
