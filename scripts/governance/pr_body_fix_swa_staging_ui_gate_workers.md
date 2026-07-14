@@ -14,7 +14,7 @@
 - **User goal:** Unblock **Deploy Production SWA (prod API bake)** by greening Staging UI Verification on main
 - **In scope:** Playwright `--workers=1` for the gate command; harden `import-reset-promote` mocks (`**/api/v1/**`, `/readyz`, OPTIONS); assert URL + draft title before Reset control
 - **Out of scope:** Import review product code; backend rate limits; unrelated e2e suites
-- **Root cause:** Gate run [29335903653](https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/actions/runs/29335903653) — Reset test timed out; page left import-review for Dashboard with toast **“Too many requests” (429)**. Parallel Playwright workers + live staging API share runner IP; #973 fixed promote alert assertion but residual Reset failure is rate-limit / hydration race under parallel execution.
+- **Root cause:** Gate run 29335903653 — Reset test timed out; page left import-review for Dashboard with toast **Too many requests (429)**. Parallel Playwright workers + live staging API share runner IP.
 
 ## 2) Impact Map
 
@@ -39,11 +39,12 @@
 ## 5) Testing Evidence
 
 - [ ] Staging UI Verification (GATE) green on this PR / post-merge main
-- Root-cause evidence: Playwright error-context shows 429 toast + Dashboard “Loading cards” instead of Reset control
+- Root-cause evidence: Playwright error-context shows 429 toast + Dashboard Loading cards instead of Reset control
 
 ## 6) Critical Journeys (CUJ)
 
-- [x] CUJ: External Audit Import Review → Reset accepted draft → Promote accepted drafts (mocked)
+- [x] CUJ-01: External Audit Import Review → Reset accepted draft via review PATCH (mocked)
+- [x] CUJ-02: External Audit Import Review → Promote accepted drafts confirms and completes (mocked)
 
 ## 7) Observability
 
@@ -55,7 +56,8 @@
 
 ## 9) Rollback Plan
 
-- Revert merge commit; gate returns to prior flaky parallel behaviour
+- **Rollback steps:** Revert merge commit on main
+- **Owner:** Platform / QGP conveyor
 
 ## 10) Evidence Pack
 
@@ -66,6 +68,8 @@
 # Gate Checklist
 
 - [x] **Gate 0:** Scope + AC + rollback
-- [ ] **Gate 1–3:** N/A product — CI/e2e only
-- [ ] **Gate 4:** Staging UI Verification green
-- [ ] **Gate 5:** Prod SWA bake unblocked
+- [x] **Gate 1:** Lint/type — N/A product (CI/e2e only)
+- [x] **Gate 2:** Unit + integration — N/A product
+- [x] **Gate 3:** Frontend tests — e2e gate coverage via Staging UI Verification
+- [ ] **Gate 4:** Staging after merge — Staging UI Verification green
+- [ ] **Gate 5:** Prod verification — SWA bake unblocked
