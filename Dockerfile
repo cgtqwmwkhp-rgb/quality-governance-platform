@@ -15,7 +15,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Install Python dependencies (use lockfile for reproducible builds)
 COPY requirements.txt requirements.lock* ./
-RUN pip install --no-cache-dir --upgrade pip setuptools && \
+RUN pip install --no-cache-dir --upgrade pip 'setuptools>=83.0.0' && \
     if [ -f requirements.lock ]; then \
       pip install --no-cache-dir -r requirements.lock; \
     else \
@@ -34,8 +34,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade system setuptools and wheel to resolve vendored CVEs
-RUN pip install --no-cache-dir --upgrade setuptools wheel
+# Upgrade system setuptools and wheel to resolve vendored CVEs (PYSEC-2026-3447)
+RUN pip install --no-cache-dir --upgrade 'setuptools>=83.0.0' wheel
 
 # Create non-root user for security
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
