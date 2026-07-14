@@ -34,6 +34,8 @@ export interface AssessmentRun {
   engineer_id: number
   supervisor_id: number
   asset_type_id?: number
+  /** Optional asset instance linked to the run (OpenAPI AssessmentRunResponse). */
+  asset_id?: number
   title?: string
   location?: string
   status: string
@@ -42,6 +44,19 @@ export interface AssessmentRun {
   started_at?: string
   completed_at?: string
   created_at: string
+  /**
+   * Soft competency-gate fields from assessment `/start` (OpenAPI AssessmentRunResponse).
+   * Present when COMPETENCY_GATE_MODE=soft and competence is not cleared.
+   */
+  competency_gate_cleared?: boolean
+  competency_gate_reason?: string
+  competency_gate_mode?: string
+  /**
+   * Forward-compatible aliases if backend later exposes blocked/message shape
+   * (today use competency_gate_cleared / competency_gate_reason).
+   */
+  competency_gate_blocked?: boolean
+  competency_gate_message?: string
 }
 
 export interface InductionRun {
@@ -56,6 +71,19 @@ export interface InductionRun {
   status: string
   scheduled_date?: string
   created_at: string
+  /**
+   * Soft competency-gate fields from induction `/start` (OpenAPI InductionRunResponse).
+   * Present when COMPETENCY_GATE_MODE=soft and competence is not cleared.
+   */
+  competency_gate_cleared?: boolean
+  competency_gate_reason?: string
+  competency_gate_mode?: string
+  /**
+   * Forward-compatible aliases if backend later exposes blocked/message shape
+   * (today use competency_gate_cleared / competency_gate_reason).
+   */
+  competency_gate_blocked?: boolean
+  competency_gate_message?: string
 }
 
 export interface EngineerProfile {
@@ -131,7 +159,160 @@ export interface InductionResponseRecord {
   engineer_signature?: string
 }
 
+// ============ Training Tickets (P0 spine) ============
+
+export type TicketVerifyState =
+  | 'unverified'
+  | 'pending'
+  | 'verified'
+  | 'rejected'
+  | 'expired'
+
+export interface TrainingTicket {
+  id: number
+  engineer_id: number
+  scheme: string
+  ticket_number: string
+  issuer?: string
+  issued_at?: string
+  expires_at?: string
+  verify_state: TicketVerifyState | string
+  evidence_id?: number
+  notes?: string
+  tenant_id: number
+  created_at: string
+  updated_at: string
+}
+
+export interface TrainingTicketCreate {
+  engineer_id: number
+  scheme: string
+  ticket_number: string
+  issuer?: string
+  issued_at?: string
+  expires_at?: string
+  verify_state?: TicketVerifyState | string
+  evidence_id?: number
+  notes?: string
+}
+
+export interface TrainingTicketUpdate {
+  scheme?: string
+  ticket_number?: string
+  issuer?: string
+  issued_at?: string
+  expires_at?: string
+  verify_state?: TicketVerifyState | string
+  evidence_id?: number
+  notes?: string
+}
+
+/** Paginated list matching TrainingTicketListResponse. */
+export interface TrainingTicketListResponse {
+  items: TrainingTicket[]
+  total: number
+  page: number
+  page_size: number
+  pages: number
+}
+
+// ============ Competency Requirements (P0 spine) ============
+
+export interface CompetencyRequirement {
+  id: number
+  asset_type_id: number
+  template_id: number
+  name: string
+  description?: string
+  is_mandatory: boolean
+  reassessment_interval_days: number
+  role_key?: string
+  site?: string
+  tenant_id: number
+  created_at: string
+  updated_at: string
+}
+
+export interface CompetencyRequirementCreate {
+  asset_type_id: number
+  template_id: number
+  name: string
+  description?: string
+  is_mandatory?: boolean
+  reassessment_interval_days?: number
+  role_key?: string
+  site?: string
+}
+
+export interface CompetencyRequirementUpdate {
+  asset_type_id?: number
+  template_id?: number
+  name?: string
+  description?: string
+  is_mandatory?: boolean
+  reassessment_interval_days?: number
+  role_key?: string
+  site?: string
+}
+
+/** Paginated list matching CompetencyRequirementListResponse. */
+export interface CompetencyRequirementListResponse {
+  items: CompetencyRequirement[]
+  total: number
+  page: number
+  page_size: number
+  pages: number
+}
+
+export interface CompetencyRequirementAllocateRequest {
+  engineer_ids?: number[]
+  match_site?: boolean
+  match_role_key?: string
+  due_days?: number
+}
+
+export interface CompetencyRequirementAllocateResponse {
+  requirement_id: number
+  created_checklist_ids: number[]
+  skipped_engineer_ids: number[]
+  matched_engineer_ids: number[]
+}
+
+export type WdpSummary = {
+  engineers: { total: number }
+  competencies: Record<string, number>
+  assessments: { total: number; completed: number }
+  inductions: { total: number; completed: number }
+}
+
+export type WdpEngineerMatrix = {
+  asset_types: { id: number; name: string; category: string }[]
+  engineers: {
+    engineer_id: number
+    user_id: number
+    employee_number: string | null
+    competencies: Record<number, string>
+  }[]
+}
+
+export type WdpTrends = {
+  assessments_by_month: {
+    month: string | null
+    total: number
+    passed: number
+    failed: number
+  }[]
+  inductions_by_month: { month: string | null; total: number; completed: number }[]
+}
+
 export function createWorkforceApi(api: AxiosInstance) {
+  const getWdpSummary = () => api.get<WdpSummary>('/api/v1/wdp-analytics/summary')
+
+  const getWdpEngineerMatrix = () =>
+    api.get<WdpEngineerMatrix>('/api/v1/wdp-analytics/engineer-matrix')
+
+  const getWdpTrends = () => api.get<WdpTrends>('/api/v1/wdp-analytics/trends')
+
   return {
   // Assessments
   listAssessments: (params?: Record<string, unknown>) =>
@@ -191,35 +372,47 @@ export function createWorkforceApi(api: AxiosInstance) {
   listAssets: (params?: Record<string, unknown>) =>
     api.get<{ items: Asset[]; total: number }>('/api/v1/assets/', { params }),
 
-  // WDP Analytics
-  getWdpSummary: () =>
-    api.get<{
-      engineers: { total: number }
-      competencies: Record<string, number>
-      assessments: { total: number; completed: number }
-      inductions: { total: number; completed: number }
-    }>('/api/v1/wdp-analytics/summary'),
+  // WDP Analytics (back-compat flat methods)
+  getWdpSummary,
+  getWdpEngineerMatrix,
+  getWdpTrends,
 
-  getWdpEngineerMatrix: () =>
-    api.get<{
-      asset_types: { id: number; name: string; category: string }[]
-      engineers: {
-        engineer_id: number
-        user_id: number
-        employee_number: string | null
-        competencies: Record<number, string>
-      }[]
-    }>('/api/v1/wdp-analytics/engineer-matrix'),
+  /** Namespaced analytics — aliases of getWdpSummary / getWdpEngineerMatrix / getWdpTrends. */
+  analytics: {
+    getSummary: getWdpSummary,
+    getEngineerMatrix: getWdpEngineerMatrix,
+    getTrends: getWdpTrends,
+  },
 
-  getWdpTrends: () =>
-    api.get<{
-      assessments_by_month: {
-        month: string | null
-        total: number
-        passed: number
-        failed: number
-      }[]
-      inductions_by_month: { month: string | null; total: number; completed: number }[]
-    }>('/api/v1/wdp-analytics/trends'),
+  // Training tickets — /api/v1/training-tickets/
+  trainingTickets: {
+    list: (params?: Record<string, unknown>) =>
+      api.get<TrainingTicketListResponse>('/api/v1/training-tickets/', { params }),
+    get: (id: number) => api.get<TrainingTicket>(`/api/v1/training-tickets/${id}`),
+    create: (data: TrainingTicketCreate) =>
+      api.post<TrainingTicket>('/api/v1/training-tickets/', data),
+    update: (id: number, data: TrainingTicketUpdate) =>
+      api.patch<TrainingTicket>(`/api/v1/training-tickets/${id}`, data),
+    delete: (id: number) => api.delete(`/api/v1/training-tickets/${id}`),
+  },
+
+  // Competency requirements — /api/v1/competency-requirements/
+  competencyRequirements: {
+    list: (params?: Record<string, unknown>) =>
+      api.get<CompetencyRequirementListResponse>('/api/v1/competency-requirements/', {
+        params,
+      }),
+    get: (id: number) =>
+      api.get<CompetencyRequirement>(`/api/v1/competency-requirements/${id}`),
+    create: (data: CompetencyRequirementCreate) =>
+      api.post<CompetencyRequirement>('/api/v1/competency-requirements/', data),
+    update: (id: number, data: CompetencyRequirementUpdate) =>
+      api.patch<CompetencyRequirement>(`/api/v1/competency-requirements/${id}`, data),
+    allocate: (id: number, data: CompetencyRequirementAllocateRequest) =>
+      api.post<CompetencyRequirementAllocateResponse>(
+        `/api/v1/competency-requirements/${id}/allocate`,
+        data,
+      ),
+  },
 }
 }

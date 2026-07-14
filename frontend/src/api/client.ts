@@ -735,6 +735,20 @@ export type {
   InductionResponseUpdate,
   AssessmentResponseRecord,
   InductionResponseRecord,
+  TrainingTicket,
+  TrainingTicketCreate,
+  TrainingTicketUpdate,
+  TrainingTicketListResponse,
+  TicketVerifyState,
+  CompetencyRequirement,
+  CompetencyRequirementCreate,
+  CompetencyRequirementUpdate,
+  CompetencyRequirementListResponse,
+  CompetencyRequirementAllocateRequest,
+  CompetencyRequirementAllocateResponse,
+  WdpSummary,
+  WdpEngineerMatrix,
+  WdpTrends,
 } from './workforceClient'
 
 // ============ Standard Types ============
