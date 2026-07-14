@@ -195,6 +195,15 @@ class ActionsSummaryResponse(BaseModel):
     by_display_status: dict[str, int]
 
 
+class ActionsViewCountsResponse(BaseModel):
+    """Badge counts for Actions My Work view toggles (match list filters)."""
+
+    all: int
+    my: int
+    overdue: int
+    my_overdue: int
+
+
 class ActionOwnerNoteCreate(BaseModel):
     """Request body for appending owner commentary."""
 
@@ -1338,6 +1347,32 @@ async def _hydrate_action_owner_emails(db: "DbSession", items: list[ActionRespon
 async def get_actions_summary(db: DbSession, current_user: CurrentUser) -> ActionsSummaryResponse:
     """Tenant-wide action totals by normalized display_status."""
     return await _compute_actions_summary(db, current_user.tenant_id)
+
+
+@router.get("/view-counts", response_model=ActionsViewCountsResponse)
+async def get_actions_view_counts(db: DbSession, current_user: CurrentUser) -> ActionsViewCountsResponse:
+    """Return All / Mine / Overdue / My overdue totals using the same filters as list."""
+    tenant_id = current_user.tenant_id
+    me_id = int(current_user.id)
+
+    async def _count(*, assigned_to_id: Optional[int] = None, overdue: bool = False) -> int:
+        return await _count_for_source(
+            db,
+            None,
+            None,
+            None,
+            None,
+            tenant_id=tenant_id,
+            assigned_to_id=assigned_to_id,
+            overdue=overdue,
+        )
+
+    return ActionsViewCountsResponse(
+        all=await _count(),
+        my=await _count(assigned_to_id=me_id),
+        overdue=await _count(overdue=True),
+        my_overdue=await _count(assigned_to_id=me_id, overdue=True),
+    )
 
 
 async def load_action_response_by_key(
