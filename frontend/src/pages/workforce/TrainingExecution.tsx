@@ -14,6 +14,60 @@ import { cn } from '../../helpers/utils'
 import { useTranslation } from 'react-i18next'
 import { formatScheduledDate } from './dateUtils'
 
+/** Soft-gate warning surfaced from InductionRun `/start` response fields. */
+export type CompetencyGateWarning = {
+  cleared: false
+  reason: string
+  mode: string
+}
+
+export type CompetencyGateBlocked = {
+  reason: string
+  engineerId: number
+}
+
+/** Detect COMPETENCY_GATE_BLOCKED from the unified API error envelope. */
+export function isCompetencyGateBlockedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const response = (error as { response?: { data?: unknown } }).response
+  const data = response?.data
+  if (!data || typeof data !== 'object') return false
+  const envelope = data as {
+    error?: { code?: string }
+    detail?: { code?: string } | string
+  }
+  if (envelope.error?.code === 'COMPETENCY_GATE_BLOCKED') return true
+  if (typeof envelope.detail === 'object' && envelope.detail?.code === 'COMPETENCY_GATE_BLOCKED') {
+    return true
+  }
+  return false
+}
+
+export function readCompetencyGateWarning(
+  run: Pick<
+    InductionRun,
+    | 'competency_gate_cleared'
+    | 'competency_gate_reason'
+    | 'competency_gate_mode'
+    | 'competency_gate_blocked'
+    | 'competency_gate_message'
+  >,
+): CompetencyGateWarning | null {
+  const blockedAlias = run.competency_gate_blocked === true
+  const cleared = run.competency_gate_cleared
+  if (cleared === false || blockedAlias) {
+    return {
+      cleared: false,
+      reason:
+        run.competency_gate_reason ||
+        run.competency_gate_message ||
+        'Competency requirements are not cleared for this asset type.',
+      mode: run.competency_gate_mode || 'soft',
+    }
+  }
+  return null
+}
+
 type Verdict = 'competent' | 'not_yet_competent' | 'na'
 
 interface QuestionWithSection {
@@ -58,6 +112,8 @@ export default function TrainingExecution() {
   const [showSummary, setShowSummary] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [guidanceOpen, setGuidanceOpen] = useState(false)
+  const [gateWarning, setGateWarning] = useState<CompetencyGateWarning | null>(null)
+  const [gateBlocked, setGateBlocked] = useState<CompetencyGateBlocked | null>(null)
   const autoStartedRunIds = useRef<Set<string>>(new Set())
 
   const flattenQuestions = useCallback(
@@ -83,18 +139,46 @@ export default function TrainingExecution() {
     if (!id) return
     setLoading(true)
     setError(null)
+    setGateBlocked(null)
     try {
       const runRes = await workforceApi.getInduction(id)
       let run = runRes.data as InductionRunWithResponses
 
       if (run.status === 'draft' && !autoStartedRunIds.current.has(id)) {
-        const startedRunRes = await workforceApi.startInduction(id)
-        autoStartedRunIds.current.add(id)
-        run = {
-          ...run,
-          ...startedRunRes.data,
-          responses: run.responses,
+        try {
+          const startedRunRes = await workforceApi.startInduction(id)
+          autoStartedRunIds.current.add(id)
+          run = {
+            ...run,
+            ...startedRunRes.data,
+            responses: run.responses,
+          }
+          setGateWarning(readCompetencyGateWarning(startedRunRes.data))
+        } catch (startErr) {
+          autoStartedRunIds.current.add(id)
+          if (isCompetencyGateBlockedError(startErr)) {
+            setGateBlocked({
+              reason: getApiErrorMessage(
+                startErr,
+                'Competency gate blocked start. Remediate competence before continuing.',
+              ),
+              engineerId: run.engineer_id,
+            })
+            setInduction(run)
+            setTemplateName(run.title || 'Training')
+            try {
+              const eng = await workforceApi.getEngineer(run.engineer_id)
+              setEngineerName(eng.data.employee_number || `Engineer #${run.engineer_id}`)
+            } catch {
+              setEngineerName(`Engineer #${run.engineer_id}`)
+            }
+            return
+          }
+          autoStartedRunIds.current.delete(id)
+          throw startErr
         }
+      } else {
+        setGateWarning(readCompetencyGateWarning(run))
       }
       setInduction(run)
 
@@ -304,6 +388,49 @@ export default function TrainingExecution() {
     )
   }
 
+  if (gateBlocked && induction) {
+    return (
+      <div className="space-y-6">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/workforce/training')}>
+          <ArrowLeft className="w-4 h-4" />
+        </Button>
+        <Card className="border-destructive" data-testid="competency-gate-blocked">
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-destructive">Start blocked by competency gate</h2>
+            <p className="text-sm text-muted-foreground">
+              Mode: hard · {induction.reference_number} · {engineerName}
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-foreground">{gateBlocked.reason}</p>
+            <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
+              <p className="text-sm font-medium text-foreground">Remediation</p>
+              <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
+                <li>Review competency status on the competency dashboard</li>
+                <li>Check training tickets / passport on the engineer profile</li>
+                <li>Contact a workforce supervisor or admin if access is still required</li>
+              </ul>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => navigate('/workforce/dashboard')}>
+                View competencies
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/workforce/engineers/${gateBlocked.engineerId}`)}
+              >
+                View tickets / passport
+              </Button>
+              <Button variant="secondary" onClick={() => navigate('/workforce/training')}>
+                Back to training
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   if (showSummary) {
     return (
       <div className="space-y-6 pb-8">
@@ -418,6 +545,40 @@ export default function TrainingExecution() {
           </p>
         </div>
       </div>
+
+      {gateWarning && (
+        <div
+          className="rounded-lg border border-warning bg-warning/10 p-4 space-y-2"
+          data-testid="competency-gate-soft-warning"
+          role="status"
+        >
+          <p className="text-sm font-medium text-foreground">
+            Competency gate warning ({gateWarning.mode || 'soft'})
+          </p>
+          <p className="text-sm text-muted-foreground">{gateWarning.reason}</p>
+          <p className="text-xs text-muted-foreground">
+            Soft mode allows start to continue. Remediate competence when possible.
+          </p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/workforce/dashboard')}
+            >
+              View competencies
+            </Button>
+            {induction?.engineer_id != null && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/workforce/engineers/${induction.engineer_id}`)}
+              >
+                View tickets / passport
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
