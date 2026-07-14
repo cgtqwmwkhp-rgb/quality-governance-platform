@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Truck,
@@ -15,8 +16,10 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  Shield,
+  ExternalLink,
 } from 'lucide-react'
-import {
+import api, {
   vehicleChecklistsApi,
   getApiErrorMessage,
   type VehicleDefect,
@@ -48,6 +51,72 @@ import { TableSkeleton } from '../components/ui/SkeletonLoader'
 
 type TabKey = 'daily' | 'monthly' | 'defects'
 type ChecklistViewMode = 'records' | 'driver' | 'day' | 'completion'
+
+export type KitExpiryStatus = 'overdue' | 'due_30' | 'in_date' | 'unknown'
+export type KitExpirySource = 'asset' | 'registry' | 'none'
+
+export interface VehicleKitAsset {
+  id: number
+  asset_number: string
+  name: string
+  asset_type_id: number
+  asset_type_name?: string | null
+  category?: string | null
+  status: string
+  expiry_date?: string | null
+  expiry_status: KitExpiryStatus
+  is_kit_asset?: boolean
+}
+
+export interface VehicleSafetyAssetsResponse {
+  vehicle_reg: string
+  asset_id?: number | null
+  linked_asset_id?: number | null
+  linked_asset_status?: string | null
+  assets: VehicleKitAsset[]
+  fire_extinguisher_expiry?: string | null
+  fire_extinguisher_expiry_source: KitExpirySource
+  fire_extinguisher_expiry_status: KitExpiryStatus
+  tooling_calibration_expiry?: string | null
+  tooling_calibration_expiry_source: KitExpirySource
+  tooling_calibration_expiry_status: KitExpiryStatus
+  registry_fire_extinguisher_expiry?: string | null
+  registry_tooling_calibration_expiry?: string | null
+}
+
+const KIT_TYPE_HINTS = ['fire extinguisher', 'extinguisher', 'first aid', 'engineer tool', 'tooling']
+
+export function isKitAssetType(typeName?: string | null, category?: string | null): boolean {
+  const lowered = (typeName || '').toLowerCase()
+  if (KIT_TYPE_HINTS.some((hint) => lowered.includes(hint))) return true
+  return (category || '').toLowerCase() === 'safety'
+}
+
+export function kitExpiryBadgeVariant(status: KitExpiryStatus): BadgeVariant {
+  switch (status) {
+    case 'overdue':
+      return 'critical'
+    case 'due_30':
+      return 'high'
+    case 'in_date':
+      return 'resolved'
+    default:
+      return 'secondary'
+  }
+}
+
+export function formatKitExpiryLabel(status: KitExpiryStatus): string {
+  switch (status) {
+    case 'overdue':
+      return 'Overdue'
+    case 'due_30':
+      return 'Due ≤30d'
+    case 'in_date':
+      return 'In date'
+    default:
+      return 'No expiry'
+  }
+}
 
 const getPriorityVariant = (p: string): BadgeVariant => {
   switch (p) {
@@ -232,8 +301,47 @@ export default function VehicleChecklists() {
   const [dateTo, setDateTo] = useState('')
   const [selectedWeek, setSelectedWeek] = useState('')
 
+  // AM-VAN: vehicle kit / safety asset compliance panel
+  const [kitCompliance, setKitCompliance] = useState<VehicleSafetyAssetsResponse | null>(null)
+  const [kitLoading, setKitLoading] = useState(false)
+  const [kitError, setKitError] = useState('')
+
   // Keep client pagination aligned with backend validation (page_size <= 100).
   const pageSize = 100
+
+  const kitVehicleReg = vanFilter.trim()
+
+  useEffect(() => {
+    if (!kitVehicleReg) {
+      setKitCompliance(null)
+      setKitError('')
+      setKitLoading(false)
+      return
+    }
+
+    let cancelled = false
+    const loadKit = async () => {
+      setKitLoading(true)
+      setKitError('')
+      try {
+        const res = await api.get<VehicleSafetyAssetsResponse>(
+          `/api/v1/vehicles/${encodeURIComponent(kitVehicleReg)}/safety-assets`,
+        )
+        if (!cancelled) setKitCompliance(res.data)
+      } catch (err) {
+        if (!cancelled) {
+          setKitCompliance(null)
+          setKitError(getApiErrorMessage(err))
+        }
+      } finally {
+        if (!cancelled) setKitLoading(false)
+      }
+    }
+    void loadKit()
+    return () => {
+      cancelled = true
+    }
+  }, [kitVehicleReg])
 
   const loadChecklists = useCallback(
     async (tab: TabKey, page: number) => {
@@ -791,6 +899,138 @@ export default function VehicleChecklists() {
                     </button>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {kitVehicleReg && (
+            <Card data-testid="van-kit-compliance-panel">
+              <CardContent className="p-4 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-primary" />
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Van Kit Compliance — {kitVehicleReg}
+                    </h3>
+                  </div>
+                  {kitLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                </div>
+
+                {kitError && (
+                  <div
+                    className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+                    data-testid="van-kit-compliance-error"
+                  >
+                    Unable to load kit assets: {kitError}
+                  </div>
+                )}
+
+                {!kitLoading && !kitError && kitCompliance && (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div
+                        className="rounded-lg border border-border bg-secondary/40 p-3"
+                        data-testid="van-kit-fire-expiry"
+                      >
+                        <p className="text-xs text-muted-foreground">Fire extinguisher expiry</p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <p className="text-sm font-medium text-foreground">
+                            {kitCompliance.fire_extinguisher_expiry
+                              ? new Date(kitCompliance.fire_extinguisher_expiry).toLocaleDateString()
+                              : 'Not recorded'}
+                          </p>
+                          <Badge variant={kitExpiryBadgeVariant(kitCompliance.fire_extinguisher_expiry_status)}>
+                            {formatKitExpiryLabel(kitCompliance.fire_extinguisher_expiry_status)}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Source:{' '}
+                          {kitCompliance.fire_extinguisher_expiry_source === 'asset'
+                            ? 'Asset register (preferred)'
+                            : kitCompliance.fire_extinguisher_expiry_source === 'registry'
+                              ? 'Vehicle registry'
+                              : 'None'}
+                        </p>
+                      </div>
+                      <div
+                        className="rounded-lg border border-border bg-secondary/40 p-3"
+                        data-testid="van-kit-tooling-expiry"
+                      >
+                        <p className="text-xs text-muted-foreground">Tooling calibration expiry</p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <p className="text-sm font-medium text-foreground">
+                            {kitCompliance.tooling_calibration_expiry
+                              ? new Date(kitCompliance.tooling_calibration_expiry).toLocaleDateString()
+                              : 'Not recorded'}
+                          </p>
+                          <Badge variant={kitExpiryBadgeVariant(kitCompliance.tooling_calibration_expiry_status)}>
+                            {formatKitExpiryLabel(kitCompliance.tooling_calibration_expiry_status)}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Source:{' '}
+                          {kitCompliance.tooling_calibration_expiry_source === 'asset'
+                            ? 'Asset register (preferred)'
+                            : kitCompliance.tooling_calibration_expiry_source === 'registry'
+                              ? 'Vehicle registry'
+                              : 'None'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {kitCompliance.assets.filter(
+                      (asset) =>
+                        asset.is_kit_asset !== false &&
+                        isKitAssetType(asset.asset_type_name, asset.category),
+                    ).length === 0 ? (
+                      <p className="text-sm text-muted-foreground" data-testid="van-kit-empty">
+                        No extinguisher, first-aid, or tool assets assigned to this van yet.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2" data-testid="van-kit-asset-list">
+                        {kitCompliance.assets
+                          .filter(
+                            (asset) =>
+                              asset.is_kit_asset !== false &&
+                              isKitAssetType(asset.asset_type_name, asset.category),
+                          )
+                          .map((asset) => (
+                            <li
+                              key={asset.id}
+                              className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-lg border border-border px-3 py-2"
+                              data-testid={`van-kit-asset-${asset.id}`}
+                            >
+                              <div>
+                                <p className="text-sm font-medium text-foreground">
+                                  {asset.asset_type_name || asset.name}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {asset.asset_number}
+                                  {asset.expiry_date
+                                    ? ` · Expires ${new Date(asset.expiry_date).toLocaleDateString()}`
+                                    : ''}
+                                  {` · ${asset.status}`}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant={kitExpiryBadgeVariant(asset.expiry_status)}>
+                                  {formatKitExpiryLabel(asset.expiry_status)}
+                                </Badge>
+                                <Link
+                                  to={`/safety-assets/${asset.id}`}
+                                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                                  data-testid={`van-kit-asset-link-${asset.id}`}
+                                >
+                                  Open asset
+                                  <ExternalLink className="h-3 w-3" />
+                                </Link>
+                              </div>
+                            </li>
+                          ))}
+                      </ul>
+                    )}
+                  </>
+                )}
               </CardContent>
             </Card>
           )}
