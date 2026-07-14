@@ -35,6 +35,7 @@ import {
   Building,
   Download,
   Package,
+  ShieldAlert,
 } from 'lucide-react'
 import { useState, useEffect, useCallback, lazy, Suspense, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -115,6 +116,11 @@ export default function Layout({ onLogout }: LayoutProps) {
               },
               { path: '/workforce/engineers', icon: Users, label: t('nav.engineers') },
               { path: '/workforce/calendar', icon: Calendar, label: t('nav.calendar') },
+              {
+                path: '/workforce/competence-gaps',
+                icon: ShieldAlert,
+                label: t('nav.competence_gaps'),
+              },
             ],
           },
         ]
