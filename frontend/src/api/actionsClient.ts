@@ -60,6 +60,14 @@ export interface ActionsSummary {
   by_display_status: Record<string, number>
 }
 
+/** Badge counts for All / Mine / Overdue / My overdue — match list filters. */
+export interface ActionsViewCounts {
+  all: number
+  my: number
+  overdue: number
+  my_overdue: number
+}
+
 export interface ActionCreate {
   title: string
   description: string
@@ -126,6 +134,8 @@ export function createActionsApi(api: AxiosInstance) {
   },
   /** Tenant-wide totals by display_status (not limited to first page). */
   summary: () => api.get<ActionsSummary>('/api/v1/actions/summary'),
+  /** View-toggle badge totals (All / Mine / Overdue / My overdue). */
+  viewCounts: () => api.get<ActionsViewCounts>('/api/v1/actions/view-counts'),
   /**
    * Create a new action linked to a source entity.
    */
