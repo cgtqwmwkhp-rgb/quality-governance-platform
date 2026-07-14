@@ -121,6 +121,7 @@ async def list_rtas(
     severity: Optional[str] = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
     reporter_email: Optional[str] = Query(None, description="Filter by reporter email"),
+    asset_id: Optional[int] = Query(None, description="Filter by linked Asset registry id"),
 ):
     """List RTAs with deterministic ordering and pagination.
 
@@ -174,6 +175,8 @@ async def list_rtas(
             query = query.where(RoadTrafficCollision.status == status_filter)
         if reporter_email:
             query = query.where(RoadTrafficCollision.reporter_email == reporter_email)
+        if asset_id is not None:
+            query = query.where(RoadTrafficCollision.asset_id == asset_id)
 
         # Deterministic ordering: created_at DESC, id ASC
         query = query.order_by(RoadTrafficCollision.created_at.desc(), RoadTrafficCollision.id.asc())

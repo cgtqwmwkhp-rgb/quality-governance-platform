@@ -338,6 +338,7 @@ async def list_incidents(
         None,
         description="Filter by case owner: 'unassigned' for intakes with no owner_id",
     ),
+    asset_id: Optional[int] = Query(None, description="Filter by linked Asset registry id"),
 ) -> IncidentListResponse:
     """
     List all incidents with deterministic ordering.
@@ -384,6 +385,7 @@ async def list_incidents(
             params=PaginationParams(page=page, page_size=page_size),
             reporter_email=reporter_email,
             owner=owner,
+            asset_id=asset_id,
             skip_tenant_check=current_user.is_superuser,
         )
         return IncidentListResponse(

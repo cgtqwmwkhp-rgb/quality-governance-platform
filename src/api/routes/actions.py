@@ -443,6 +443,7 @@ async def _count_capa_slice(
     source_reference: Optional[str],
     assigned_to_id: Optional[int] = None,
     overdue: bool = False,
+    asset_id: Optional[int] = None,
 ) -> int:
     """Count CAPA rows for tenant with optional source slice."""
     q = select(func.count()).select_from(CAPAAction).where(CAPAAction.tenant_id == tenant_id)
@@ -458,6 +459,8 @@ async def _count_capa_slice(
             q = q.where(CAPAAction.source_id == source_id)
         elif capa_source not in (CAPASource.JOB_ASSESSMENT, CAPASource.INDUCTION) and source_id:
             q = q.where(CAPAAction.source_id == source_id)
+    if asset_id is not None:
+        q = q.where(CAPAAction.asset_id == asset_id)
     q = _apply_owner_and_overdue_filters(
         q,
         owner_col=CAPAAction.assigned_to_id,
@@ -484,6 +487,7 @@ async def _fetch_capa_rows_for_list(
     cross_source_cap: int,
     assigned_to_id: Optional[int] = None,
     overdue: bool = False,
+    asset_id: Optional[int] = None,
 ) -> list[CAPAAction]:
     q = select(CAPAAction).where(CAPAAction.tenant_id == tenant_id).order_by(CAPAAction.created_at.desc())
     if status_filter:
@@ -498,6 +502,8 @@ async def _fetch_capa_rows_for_list(
             q = q.where(CAPAAction.source_id == source_id)
         elif capa_source not in (CAPASource.JOB_ASSESSMENT, CAPASource.INDUCTION) and source_id:
             q = q.where(CAPAAction.source_id == source_id)
+    if asset_id is not None:
+        q = q.where(CAPAAction.asset_id == asset_id)
     q = _apply_owner_and_overdue_filters(
         q,
         owner_col=CAPAAction.assigned_to_id,
@@ -524,6 +530,7 @@ async def _count_for_source(
     tenant_id: Optional[int] = None,
     assigned_to_id: Optional[int] = None,
     overdue: bool = False,
+    asset_id: Optional[int] = None,
 ) -> int:
     """Compute total count across all applicable source tables using SQL COUNT."""
     total = 0
@@ -533,6 +540,8 @@ async def _count_for_source(
             q = q.where(IncidentAction.status == status_filter)
         if source_type == "incident" and source_id:
             q = q.where(IncidentAction.incident_id == source_id)
+        if asset_id is not None:
+            q = q.join(Incident, IncidentAction.incident_id == Incident.id).where(Incident.asset_id == asset_id)
         q = _apply_owner_and_overdue_filters(
             q,
             owner_col=IncidentAction.owner_id,
@@ -550,6 +559,10 @@ async def _count_for_source(
             q = q.where(RTAAction.status == status_filter)
         if source_type == "rta" and source_id:
             q = q.where(RTAAction.rta_id == source_id)
+        if asset_id is not None:
+            q = q.join(RoadTrafficCollision, RTAAction.rta_id == RoadTrafficCollision.id).where(
+                RoadTrafficCollision.asset_id == asset_id
+            )
         q = _apply_owner_and_overdue_filters(
             q,
             owner_col=RTAAction.owner_id,
@@ -561,7 +574,8 @@ async def _count_for_source(
         )
         total += await _safe_scalar(db, q, "rta")
 
-    if not source_type or source_type == "complaint":
+    # Complaint / investigation have no asset golden thread — omit when filtering by asset
+    if asset_id is None and (not source_type or source_type == "complaint"):
         q = select(func.count()).select_from(ComplaintAction).where(ComplaintAction.tenant_id == tenant_id)
         if status_filter:
             q = q.where(ComplaintAction.status == status_filter)
@@ -578,7 +592,7 @@ async def _count_for_source(
         )
         total += await _safe_scalar(db, q, "complaint")
 
-    if not source_type or source_type == "investigation":
+    if asset_id is None and (not source_type or source_type == "investigation"):
         q = select(func.count()).select_from(InvestigationAction).where(InvestigationAction.tenant_id == tenant_id)
         if status_filter:
             q = q.where(InvestigationAction.status == status_filter)
@@ -606,6 +620,7 @@ async def _count_for_source(
             source_reference=None,
             assigned_to_id=assigned_to_id,
             overdue=overdue,
+            asset_id=asset_id,
         )
     elif st in CAPA_ONLY_API_SOURCE_TYPES:
         ce = capa_enum_from_api_filter(st)
@@ -619,6 +634,7 @@ async def _count_for_source(
                 source_reference=source_reference,
                 assigned_to_id=assigned_to_id,
                 overdue=overdue,
+                asset_id=asset_id,
             )
 
     return total
@@ -639,6 +655,10 @@ async def list_actions(
         description="Filter by assignee: 'me' (current user) or numeric user id",
     ),
     overdue: bool = Query(False, description="When true, only open actions with due_date in the past"),
+    asset_id: Optional[int] = Query(
+        None,
+        description="Filter by linked Asset registry id (CAPA.asset_id or parent case asset_id)",
+    ),
 ) -> ActionListResponse:
     """List actions across all source types with SQL-level pagination.
 
@@ -656,6 +676,7 @@ async def list_actions(
         tenant_id=current_user.tenant_id,
         assigned_to_id=assigned_to_id,
         overdue=overdue,
+        asset_id=asset_id,
     )
 
     if total == 0:
@@ -679,6 +700,8 @@ async def list_actions(
                 q = q.where(IncidentAction.status == status_filter)
             if source_type == "incident" and source_id:
                 q = q.where(IncidentAction.incident_id == source_id)
+            if asset_id is not None:
+                q = q.join(Incident, IncidentAction.incident_id == Incident.id).where(Incident.asset_id == asset_id)
             q = _apply_owner_and_overdue_filters(
                 q,
                 owner_col=IncidentAction.owner_id,
@@ -711,6 +734,10 @@ async def list_actions(
                 q = q.where(RTAAction.status == status_filter)
             if source_type == "rta" and source_id:
                 q = q.where(RTAAction.rta_id == source_id)
+            if asset_id is not None:
+                q = q.join(RoadTrafficCollision, RTAAction.rta_id == RoadTrafficCollision.id).where(
+                    RoadTrafficCollision.asset_id == asset_id
+                )
             q = _apply_owner_and_overdue_filters(
                 q,
                 owner_col=RTAAction.owner_id,
@@ -730,7 +757,7 @@ async def list_actions(
             logger.warning("list_actions: rta query failed", exc_info=True)
 
     _pending_complaint: list = []
-    if not source_type or source_type == "complaint":
+    if asset_id is None and (not source_type or source_type == "complaint"):
         try:
             q = (
                 select(ComplaintAction)
@@ -761,7 +788,7 @@ async def list_actions(
             logger.warning("list_actions: complaint query failed", exc_info=True)
 
     _pending_investigation: list = []
-    if not source_type or source_type == "investigation":
+    if asset_id is None and (not source_type or source_type == "investigation"):
         try:
             q = (
                 select(InvestigationAction)
@@ -856,6 +883,7 @@ async def list_actions(
                 cross_source_cap=_cross_source_cap,
                 assigned_to_id=assigned_to_id,
                 overdue=overdue,
+                asset_id=asset_id,
             )
         elif stl in CAPA_ONLY_API_SOURCE_TYPES:
             ce = capa_enum_from_api_filter(stl)
@@ -873,6 +901,7 @@ async def list_actions(
                     cross_source_cap=_cross_source_cap,
                     assigned_to_id=assigned_to_id,
                     overdue=overdue,
+                    asset_id=asset_id,
                 )
         for a in _pending_capa:
             actions_list.append(await _capa_to_response(db, a))

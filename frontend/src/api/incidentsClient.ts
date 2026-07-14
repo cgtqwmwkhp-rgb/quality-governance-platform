@@ -47,6 +47,8 @@ export interface Incident {
   reporter_submission?: Record<string, unknown> | null
   closed_at?: string | null
   owner_id?: number | null
+  /** Linked Asset registry id (golden thread). */
+  asset_id?: number | null
   /** Comma-separated enterprise risk register IDs linked from this incident. */
   linked_risk_ids?: string
 }
@@ -62,6 +64,7 @@ export interface IncidentCreate {
   department?: string
   reporter_email?: string
   reporter_name?: string
+  asset_id?: number | null
 }
 
 export interface IncidentUpdate {
@@ -73,6 +76,7 @@ export interface IncidentUpdate {
   location?: string
   department?: string
   owner_id?: number | null
+  asset_id?: number | null
 }
 
 export interface RaiseRiskFromIncidentRequest {

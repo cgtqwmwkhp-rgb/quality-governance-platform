@@ -33,6 +33,7 @@ class NearMissBase(BaseModel):
 
     asset_number: Optional[str] = None
     asset_type: Optional[str] = None
+    asset_id: Optional[int] = Field(None, description="Linked Asset registry id (golden thread)")
 
     risk_category: Optional[str] = None
     potential_severity: Optional[str] = Field(None, pattern="^(low|medium|high|critical)$")
@@ -61,6 +62,9 @@ class NearMissUpdate(BaseModel):
 
     risk_category: Optional[str] = None
     potential_severity: Optional[str] = None
+    asset_id: Optional[int] = Field(None, description="Linked Asset registry id (null clears link)")
+    asset_number: Optional[str] = None
+    asset_type: Optional[str] = None
 
 
 class NearMissResponse(BaseModel):
@@ -94,6 +98,7 @@ class NearMissResponse(BaseModel):
     witness_names: Optional[str] = None
     asset_number: Optional[str] = None
     asset_type: Optional[str] = None
+    asset_id: Optional[int] = None
     risk_category: Optional[str] = None
     potential_severity: Optional[str] = None
     linked_risk_ids: Optional[str] = None
