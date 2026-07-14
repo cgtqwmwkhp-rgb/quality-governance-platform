@@ -9,6 +9,14 @@ export interface PortalSubmitSuccessFields {
   staff_href?: string | null
   entity_id?: number | null
   entity_type?: string | null
+  triage_assigned?: boolean
+}
+
+export function portalTriageRoutedHint(fields: PortalSubmitSuccessFields): string | null {
+  if (!fields.triage_assigned) {
+    return null
+  }
+  return 'Your report has been routed to a case owner for review.'
 }
 
 export function canOfferStaffDeepLink(fields: PortalSubmitSuccessFields): boolean {

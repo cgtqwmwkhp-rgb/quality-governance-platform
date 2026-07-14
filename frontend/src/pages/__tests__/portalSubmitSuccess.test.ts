@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canOfferStaffDeepLink, portalStaffRecordLabel } from '../portalSubmitSuccess'
+import { canOfferStaffDeepLink, portalStaffRecordLabel, portalTriageRoutedHint } from '../portalSubmitSuccess'
 
 describe('portalSubmitSuccess', () => {
   it('offers staff deep-link only when role allows and href present', () => {
@@ -29,5 +29,12 @@ describe('portalSubmitSuccess', () => {
   it('labels staff CTA by entity type', () => {
     expect(portalStaffRecordLabel('near_miss')).toBe('Open near-miss record')
     expect(portalStaffRecordLabel('incident')).toBe('Open incident record')
+  })
+
+  it('shows triage routed hint only when server assigned owner', () => {
+    expect(portalTriageRoutedHint({ reference_number: 'INC-1', triage_assigned: true })).toContain(
+      'routed to a case owner',
+    )
+    expect(portalTriageRoutedHint({ reference_number: 'INC-1', triage_assigned: false })).toBeNull()
   })
 })

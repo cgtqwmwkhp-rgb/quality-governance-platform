@@ -29,7 +29,7 @@ import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
 import BodyInjurySelector, { InjurySelection } from '../components/BodyInjurySelector'
 import DraftRecoveryDialog from '../components/DraftRecoveryDialog'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
-import { canOfferStaffDeepLink, portalStaffRecordLabel } from './portalSubmitSuccess'
+import { canOfferStaffDeepLink, portalStaffRecordLabel, portalTriageRoutedHint } from './portalSubmitSuccess'
 import { useGeolocation } from '../hooks/useGeolocation'
 import { useVoiceToText } from '../hooks/useVoiceToText'
 import { useFormAutosave } from '../hooks/useFormAutosave'
@@ -71,6 +71,7 @@ interface PortalReportResponse {
   entity_type?: string | null
   staff_href?: string | null
   can_open_staff_record?: boolean
+  triage_assigned?: boolean
 }
 
 async function submitPortalReport(
@@ -207,6 +208,7 @@ export default function PortalIncidentForm() {
   const [staffHref, setStaffHref] = useState<string | null>(null)
   const [canOpenStaff, setCanOpenStaff] = useState(false)
   const [submittedEntityType, setSubmittedEntityType] = useState<string | null>(null)
+  const [triageAssigned, setTriageAssigned] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -445,6 +447,7 @@ export default function PortalIncidentForm() {
       setCanOpenStaff(Boolean(response.can_open_staff_record && response.staff_href))
       setStaffHref(response.staff_href ?? null)
       setSubmittedEntityType(response.entity_type ?? null)
+      setTriageAssigned(Boolean(response.triage_assigned))
       // Store tracking code for anonymous access if needed
       if (response.tracking_code) {
         sessionStorage.setItem(`tracking_${response.reference_number}`, response.tracking_code)
@@ -492,6 +495,10 @@ export default function PortalIncidentForm() {
       can_open_staff_record: canOpenStaff,
       staff_href: staffHref,
     })
+    const triageHint = portalTriageRoutedHint({
+      reference_number: submittedRef,
+      triage_assigned: triageAssigned,
+    })
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center p-4">
         <Card className="p-8 max-w-md w-full text-center" data-testid="portal-incident-success">
@@ -507,6 +514,11 @@ export default function PortalIncidentForm() {
               {submittedRef}
             </span>
           </div>
+          {triageHint ? (
+            <p className="text-sm text-muted-foreground mb-4" data-testid="portal-triage-routed-hint">
+              {triageHint}
+            </p>
+          ) : null}
           {!offerStaff ? (
             <p className="text-xs text-muted-foreground mb-4" data-testid="portal-tracking-code-hint">
               Keep this tracking reference to check status. Staff deep-link is not available for this
