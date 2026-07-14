@@ -51,41 +51,41 @@ async def _load_notify_ids_for_entity(
     if entity_type == "incident":
         from src.domain.models.incident import Incident
 
-        row = (
+        incident = (
             await db.execute(select(Incident).where(Incident.id == eid, Incident.tenant_id == tenant_id))
         ).scalar_one_or_none()
-        if row:
-            _append_user_attrs(owner_ids, row, "owner_id", "created_by_id")
+        if incident:
+            _append_user_attrs(owner_ids, incident, "owner_id", "created_by_id")
     elif entity_type == "complaint":
         from src.domain.models.complaint import Complaint
 
-        row = (
+        complaint = (
             await db.execute(select(Complaint).where(Complaint.id == eid, Complaint.tenant_id == tenant_id))
         ).scalar_one_or_none()
-        if row:
-            _append_user_attrs(owner_ids, row, "owner_id", "created_by_id")
+        if complaint:
+            _append_user_attrs(owner_ids, complaint, "owner_id", "created_by_id")
     elif entity_type == "near_miss":
         from src.domain.models.near_miss import NearMiss
 
-        row = (
+        near_miss = (
             await db.execute(select(NearMiss).where(NearMiss.id == eid, NearMiss.tenant_id == tenant_id))
         ).scalar_one_or_none()
-        if row:
-            _append_user_attrs(owner_ids, row, "assigned_to_id", "created_by_id")
+        if near_miss:
+            _append_user_attrs(owner_ids, near_miss, "assigned_to_id", "created_by_id")
     elif entity_type == "rta":
         from src.domain.models.rta import RTA
 
-        row = (await db.execute(select(RTA).where(RTA.id == eid, RTA.tenant_id == tenant_id))).scalar_one_or_none()
-        if row:
-            _append_user_attrs(owner_ids, row, "owner_id", "created_by_id")
+        rta = (await db.execute(select(RTA).where(RTA.id == eid, RTA.tenant_id == tenant_id))).scalar_one_or_none()
+        if rta:
+            _append_user_attrs(owner_ids, rta, "owner_id", "created_by_id")
     elif entity_type == "audit_finding":
         from src.domain.models.audit import AuditFinding
 
-        row = (
+        finding = (
             await db.execute(select(AuditFinding).where(AuditFinding.id == eid, AuditFinding.tenant_id == tenant_id))
         ).scalar_one_or_none()
-        if row:
-            _append_user_attrs(owner_ids, row, "created_by_id")
+        if finding:
+            _append_user_attrs(owner_ids, finding, "created_by_id")
     return owner_ids
 
 
