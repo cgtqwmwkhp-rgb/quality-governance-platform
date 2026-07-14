@@ -40,24 +40,24 @@ def _service_with_lookups(
     fire = SimpleNamespace(id=10, name="Fire Extinguisher")
     toolkit = SimpleNamespace(id=11, name="Engineer Tool Kit")
     type_list = types if types is not None else [fire, toolkit]
-    service._load_asset_types = AsyncMock(  # type: ignore[method-assign]
+    setattr(service, "_load_asset_types", AsyncMock()
         return_value={t.name.lower(): t for t in type_list}
     )
     loc_list = locations if locations is not None else [SimpleNamespace(id=5, name="Main Depot")]
-    service._load_locations = AsyncMock(  # type: ignore[method-assign]
+    setattr(service, "_load_locations", AsyncMock()
         return_value={loc.name.lower(): loc for loc in loc_list}
     )
-    service._load_users_by_email = AsyncMock(  # type: ignore[method-assign]
+    setattr(service, "_load_users_by_email", AsyncMock()
         return_value=(
             users_by_email
             if users_by_email is not None
             else {"owner@example.com": SimpleNamespace(id=12, email="owner@example.com")}
         )
     )
-    service._load_users_by_id = AsyncMock(  # type: ignore[method-assign]
+    setattr(service, "_load_users_by_id", AsyncMock()
         return_value=users_by_id if users_by_id is not None else {}
     )
-    service._existing_asset_numbers = AsyncMock(  # type: ignore[method-assign]
+    setattr(service, "_existing_asset_numbers", AsyncMock()
         return_value=existing_numbers if existing_numbers is not None else set()
     )
     return service
