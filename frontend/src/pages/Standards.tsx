@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Search,
@@ -34,6 +35,15 @@ const ISO_ICONS: Record<string, string> = {
   ISO22000: '🍽️',
 }
 
+/** Build Knowledge Exceptions deep-link filtered by clause + standard. */
+export function exceptionsHrefForClause(clauseNumber: string, standardCode?: string | null): string {
+  const sp = new URLSearchParams()
+  sp.set('clause', clauseNumber)
+  if (standardCode) sp.set('standard', standardCode)
+  sp.set('operational', '1')
+  return `/knowledge-exceptions?${sp.toString()}`
+}
+
 export default function Standards() {
   const { t } = useTranslation()
   const [standards, setStandards] = useState<Standard[]>([])
@@ -47,6 +57,8 @@ export default function Standards() {
   const [expanded, setExpanded] = useState<ExpandedState>({})
   const [error, setError] = useState<string | null>(null)
   const [scanningKb, setScanningKb] = useState(false)
+  const [opsCounts, setOpsCounts] = useState<Record<string, number>>({})
+  const [opsCountsUnavailable, setOpsCountsUnavailable] = useState(false)
 
   useEffect(() => {
     loadStandards()
@@ -95,13 +107,21 @@ export default function Standards() {
   const loadClauses = async (standard: Standard) => {
     setLoadingClauses(true)
     setSelectedStandard(standard)
+    setOpsCounts({})
+    setOpsCountsUnavailable(false)
     try {
-      const [clauseResult, controlResult] = await Promise.allSettled([
+      const [clauseResult, controlResult, opsResult] = await Promise.allSettled([
         standardsApi.get(standard.id),
         standardsApi.getControls(standard.id),
+        knowledgeBankApi.operationalExceptionCounts(standard.code),
       ])
       setClauses(clauseResult.status === 'fulfilled' ? clauseResult.value.data.clauses || [] : [])
       setControls(controlResult.status === 'fulfilled' ? controlResult.value.data || [] : [])
+      if (opsResult.status === 'fulfilled') {
+        setOpsCounts(opsResult.value.data.by_clause || {})
+      } else {
+        setOpsCountsUnavailable(true)
+      }
     } catch (err) {
       console.error('Failed to load clauses/controls:', err)
       setClauses([])
@@ -427,6 +447,21 @@ export default function Standards() {
                                   {clause.title}
                                 </h4>
                               </div>
+                              {!opsCountsUnavailable && (opsCounts[clause.clause_number] ?? 0) > 0 ? (
+                                <Link
+                                  to={exceptionsHrefForClause(
+                                    clause.clause_number,
+                                    selectedStandard.code,
+                                  )}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex items-center gap-1 mt-1 text-xs text-primary underline-offset-2 hover:underline"
+                                  data-testid={`clause-ops-signals-${clause.clause_number}`}
+                                >
+                                  {t('standards.ops_signals', '{{count}} inbound operational signals', {
+                                    count: opsCounts[clause.clause_number],
+                                  })}
+                                </Link>
+                              ) : null}
                             </div>
 
                             <Badge

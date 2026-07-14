@@ -172,19 +172,36 @@ export function createKnowledgeBankApi(api: AxiosInstance) {
       }),
 
     /**
-     * Exceptions inbox. API supports `status`, `entity_type`, and `signal_type`.
+     * Exceptions inbox. Supports status, entity_type, clause_id, scheme, signal_type,
+     * and operational_only query params.
      */
     listExceptions: (params?: {
       status?: string
       entityType?: string
+      clauseId?: string
+      scheme?: string
       signalType?: string
+      operationalOnly?: boolean
     }) => {
       const sp = new URLSearchParams()
       if (params?.status) sp.set('status', params.status)
       if (params?.entityType) sp.set('entity_type', params.entityType)
+      if (params?.clauseId) sp.set('clause_id', params.clauseId)
+      if (params?.scheme) sp.set('scheme', params.scheme)
       if (params?.signalType) sp.set('signal_type', params.signalType)
+      if (params?.operationalOnly) sp.set('operational_only', 'true')
       const qs = sp.toString()
       return api.get<KnowledgeEvidenceLink[]>(`${base}/exceptions${qs ? `?${qs}` : ''}`)
+    },
+
+    /** Inbound operational signal counts keyed by clause_id for a standard/scheme. */
+    operationalExceptionCounts: (scheme?: string) => {
+      const sp = new URLSearchParams()
+      if (scheme) sp.set('scheme', scheme)
+      const qs = sp.toString()
+      return api.get<{ scheme: string | null; total: number; by_clause: Record<string, number> }>(
+        `${base}/exceptions/operational-counts${qs ? `?${qs}` : ''}`,
+      )
     },
 
     assessEntity: (
