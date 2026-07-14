@@ -148,6 +148,11 @@ async def test_create_document_stamps_parent_and_initial_version():
     assert added[0].tenant_id == 31
     assert added[1].tenant_id == 31
     assert added[1].document_id == 101
+    # API honesty: tip and initial version row both 1.0 draft (not 1.0 / 0.1 theatre)
+    assert added[0].current_version == "1.0"
+    assert added[1].version_number == "1.0"
+    assert added[1].status == "draft"
+    assert added[1].is_immutable is False
 
 
 @pytest.mark.asyncio

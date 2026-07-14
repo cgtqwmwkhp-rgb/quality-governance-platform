@@ -48,6 +48,8 @@ def test_migration_chains_from_pv_and_never_invents_tenant():
 
 
 def test_create_path_stamps_tenant_id():
-    body = (REPO_ROOT / "src/api/routes/document_control.py").read_text(encoding="utf-8")
-    assert "ControlledDocumentVersion(" in body
-    assert "tenant_id=tenant_id" in body
+    route = (REPO_ROOT / "src/api/routes/document_control.py").read_text(encoding="utf-8")
+    service = (REPO_ROOT / "src/domain/services/document_version_service.py").read_text(encoding="utf-8")
+    assert "build_initial_controlled_version(" in route
+    assert "ControlledDocumentVersion(" in service
+    assert "tenant_id=tenant_id" in service

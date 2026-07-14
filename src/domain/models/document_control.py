@@ -154,8 +154,9 @@ class ControlledDocumentVersion(Base):
     diff_from_previous: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sections_changed: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
-    # Status at time
+    # Status at time — published/superseded are immutable
     status: Mapped[str] = mapped_column(String(50), nullable=False)
+    is_immutable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Authors
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)

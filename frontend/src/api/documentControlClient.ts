@@ -29,10 +29,13 @@ export interface ControlledDocumentVersion {
   change_summary: string
   change_type: string
   status: string
+  is_immutable?: boolean
+  read_only?: boolean
   created_by_name: string | null
   created_at: string | null
   approved_by_name: string | null
   approved_date: string | null
+  effective_date?: string | null
 }
 
 export interface ControlledDocumentDistribution {
@@ -55,6 +58,8 @@ export interface ControlledDocumentDetail {
   subcategory: string | null
   current_version: string
   status: string
+  published_version?: string | null
+  working_version?: string | null
   department: string | null
   author_name: string | null
   owner_name: string | null
@@ -103,13 +108,46 @@ export function createDocumentControlApi(api: AxiosInstance) {
       api.get<ControlledDocumentDetail>(`${base}/${documentId}`),
 
     create: (data: ControlledDocumentCreate) =>
-      api.post<{ id: number; document_number: string; title: string; status: string }>(
-        `${base}/`,
-        data,
-      ),
+      api.post<{
+        id: number
+        document_number: string
+        title?: string
+        status: string
+        current_version: string
+        version?: ControlledDocumentVersion
+      }>(`${base}/`, data),
 
     submitForApproval: (documentId: number) =>
       api.post(`${base}/${documentId}/submit-for-approval`),
+
+    createVersion: (
+      documentId: number,
+      data: {
+        change_summary: string
+        change_reason?: string
+        change_type?: string
+        is_major_version?: boolean
+      },
+    ) =>
+      api.post<{
+        id: number
+        version_number: string
+        status: string
+        is_immutable: boolean
+        read_only: boolean
+        message: string
+      }>(`${base}/${documentId}/versions`, data),
+
+    publish: (documentId: number, versionId?: number) =>
+      api.post<{
+        id: number
+        current_version: string
+        status: string
+        version: ControlledDocumentVersion
+        message: string
+      }>(`${base}/${documentId}/publish`, null, {
+        params: versionId ? { version_id: versionId } : undefined,
+      }),
 
     distribute: (
       documentId: number,
