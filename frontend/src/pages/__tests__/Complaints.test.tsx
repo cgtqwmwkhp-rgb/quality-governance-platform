@@ -142,7 +142,7 @@ describe('Complaints', () => {
     expect(screen.getByText('CMP-002')).toBeInTheDocument()
     expect(screen.getByText('Billing overcharge')).toBeInTheDocument()
     expect(screen.getByTestId('complaints-live-badge')).toBeInTheDocument()
-    expect(mockList).toHaveBeenCalledWith(1, 50)
+    expect(mockList).toHaveBeenCalledWith(1, 50, undefined)
   })
 
   it('renders page header and search input', async () => {
@@ -315,7 +315,7 @@ describe('Complaints', () => {
     })
 
     const titleCell = screen.getByText('Late delivery issue')
-    fireEvent.click(titleCell.closest('tr')!)
+    fireEvent.click(titleCell)
 
     expect(mockNavigate).toHaveBeenCalledWith('/complaints/1')
   })

@@ -16,15 +16,55 @@ from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetE
 from src.api.utils.errors import api_error
 from src.api.utils.pagination import PaginationParams
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
-from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
+from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictError, NotFoundError
 from src.domain.models.incident import Incident, IncidentRunningSheetEntry
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.notification_service import NotificationService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.services.incident_service import IncidentService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+async def _validate_case_owner(db: DbSession, owner_id: int, tenant_id: int | None) -> User:
+    """Ensure owner_id refers to an active user in the tenant."""
+    result = await db.execute(select(User).where(User.id == owner_id))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise BadRequestError(f"No active user found with id {owner_id}")
+    if tenant_id is not None and user.tenant_id != tenant_id:
+        raise BadRequestError(f"User {owner_id} is not in this tenant")
+    return user
+
+
+async def _notify_case_owner_assignment(
+    db: DbSession,
+    *,
+    entity_type: str,
+    entity_id: int,
+    assigned_to_user_id: int,
+    assigned_by_user_id: int,
+    reference: str,
+) -> None:
+    """In-app assignment notify; never rewrite NotificationService — call site only."""
+    try:
+        service = NotificationService(db)
+        await service.create_assignment(
+            entity_type=entity_type,
+            entity_id=str(entity_id),
+            assigned_to_user_id=assigned_to_user_id,
+            assigned_by_user_id=assigned_by_user_id,
+            notes=f"You have been assigned as case owner for {reference}",
+            priority="high",
+        )
+    except Exception:
+        logger.exception(
+            "Failed to notify case owner assignment for %s %s",
+            entity_type,
+            entity_id,
+        )
 
 
 async def _trigger_operational_standards_assess(
@@ -126,6 +166,10 @@ async def list_incidents(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
     reporter_email: Optional[str] = Query(None, description="Filter by reporter email"),
+    owner: Optional[str] = Query(
+        None,
+        description="Filter by case owner: 'unassigned' for intakes with no owner_id",
+    ),
 ) -> IncidentListResponse:
     """
     List all incidents with deterministic ordering.
@@ -134,6 +178,9 @@ async def list_incidents(
     Requires authentication. Users can only filter by their own email
     unless they have admin permissions.
     """
+    if owner is not None and owner != "unassigned":
+        raise BadRequestError("Invalid owner filter. Supported value: unassigned")
+
     svc = IncidentService(db)
 
     if reporter_email:
@@ -168,6 +215,7 @@ async def list_incidents(
             tenant_id=current_user.tenant_id,
             params=PaginationParams(page=page, page_size=page_size),
             reporter_email=reporter_email,
+            owner=owner,
             skip_tenant_check=current_user.is_superuser,
         )
         return IncidentListResponse(
@@ -424,8 +472,19 @@ async def update_incident(
     Requires authentication. StateTransitionError is caught by the
     global domain error handler and returned as a structured JSON response.
     """
+    updates = incident_data.model_dump(exclude_unset=True)
+    if "owner_id" in updates and updates["owner_id"] is not None:
+        await _validate_case_owner(db, updates["owner_id"], current_user.tenant_id)
+
     svc = IncidentService(db)
     try:
+        existing = await svc.get_incident(
+            incident_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+        previous_owner_id = existing.owner_id
+
         incident = await svc.update_incident(
             incident_id,
             incident_data,
@@ -435,6 +494,18 @@ async def update_incident(
             skip_tenant_check=current_user.is_superuser,
         )
         await _trigger_operational_standards_assess(db, incident, current_user)
+
+        if "owner_id" in updates and updates["owner_id"] is not None and updates["owner_id"] != previous_owner_id:
+            await _notify_case_owner_assignment(
+                db,
+                entity_type="incident",
+                entity_id=incident.id,
+                assigned_to_user_id=updates["owner_id"],
+                assigned_by_user_id=current_user.id,
+                reference=incident.reference_number,
+            )
+            # NotificationService.create_assignment commits; reattach for response serialization
+            await db.refresh(incident)
         return incident
     except LookupError:
         raise NotFoundError(f"Incident {incident_id} not found")

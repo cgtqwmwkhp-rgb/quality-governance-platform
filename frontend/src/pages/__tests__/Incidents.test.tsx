@@ -27,6 +27,9 @@ vi.mock('../../api/client', () => ({
     list: (...args: unknown[]) => mockList(...args),
     create: (...args: unknown[]) => mockCreate(...args),
   },
+  notificationsApi: {
+    getDeliveryStatus: vi.fn().mockResolvedValue({ data: { email_configured: false } }),
+  },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Something went wrong',
 }))
@@ -114,7 +117,7 @@ describe('Incidents', () => {
     expect(screen.getByText('Slip in warehouse')).toBeInTheDocument()
     expect(screen.getByText('INC-002')).toBeInTheDocument()
     expect(screen.getByText('Chemical spill in lab')).toBeInTheDocument()
-    expect(mockList).toHaveBeenCalledWith(1, 50)
+    expect(mockList).toHaveBeenCalledWith(1, 50, undefined)
   })
 
   it('shows create form when button is clicked', async () => {
@@ -231,7 +234,8 @@ describe('Incidents', () => {
     })
 
     const rows = screen.getAllByTestId('incident-row-link')
-    fireEvent.click(rows[0])
+    const clickableCell = rows[0].querySelector('td.cursor-pointer') ?? rows[0].querySelector('td')
+    fireEvent.click(clickableCell!)
 
     expect(mockNavigate).toHaveBeenCalledWith('/incidents/1')
   })

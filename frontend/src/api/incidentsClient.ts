@@ -46,6 +46,7 @@ export interface Incident {
   life_altering_potential?: boolean | null
   reporter_submission?: Record<string, unknown> | null
   closed_at?: string | null
+  owner_id?: number | null
 }
 
 export interface IncidentCreate {
@@ -69,6 +70,7 @@ export interface IncidentUpdate {
   status?: string
   location?: string
   department?: string
+  owner_id?: number | null
 }
 
 /** Shared running-sheet entry used by incidents and sibling case modules. */
@@ -83,8 +85,14 @@ export interface RunningSheetEntry {
 
 export function createIncidentsApi(api: AxiosInstance) {
   return {
-    list: (page = 1, pageSize = 10) =>
-      api.get<PaginatedResponse<Incident>>(`/api/v1/incidents/?page=${page}&page_size=${pageSize}`),
+    list: (page = 1, pageSize = 10, options?: { owner?: 'unassigned' }) => {
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+      })
+      if (options?.owner) params.set('owner', options.owner)
+      return api.get<PaginatedResponse<Incident>>(`/api/v1/incidents/?${params.toString()}`)
+    },
     create: (data: IncidentCreate) => api.post<Incident>('/api/v1/incidents/', data),
     get: (id: number) => api.get<Incident>(`/api/v1/incidents/${id}`),
     update: (id: number, data: IncidentUpdate) =>

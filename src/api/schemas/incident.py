@@ -65,6 +65,7 @@ class IncidentUpdate(BaseModel):
     incident_date: Optional[datetime] = None
     location: Optional[str] = Field(None, max_length=300)
     department: Optional[str] = Field(None, max_length=100)
+    owner_id: Optional[int] = Field(None, description="Case owner user id (null clears assignment)")
 
     @field_validator("title", "description", "location", "department", mode="before")
     @classmethod
@@ -116,6 +117,7 @@ class IncidentResponse(BaseModel):
     life_altering_potential: Optional[bool] = None
     reporter_submission: Optional[dict[str, Any]] = None
     closed_at: Optional[datetime] = None
+    owner_id: Optional[int] = None
 
 
 class IncidentListResponse(BaseModel):

@@ -349,6 +349,7 @@ async def test_complaints_list_requires_tenant_for_non_superuser():
             page_size=20,
             status_filter=None,
             complainant_email=None,
+            owner=None,
         )
     assert exc.value.status_code == 403
 

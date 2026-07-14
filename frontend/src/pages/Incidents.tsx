@@ -1,8 +1,15 @@
 import { useEffect, useState, useDeferredValue } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Plus, AlertTriangle, Search, Loader2 } from 'lucide-react'
-import { incidentsApi, Incident, IncidentCreate, getApiErrorMessage } from '../api/client'
+import { Plus, AlertTriangle, Search, Loader2, MailWarning } from 'lucide-react'
+import {
+  incidentsApi,
+  Incident,
+  IncidentCreate,
+  getApiErrorMessage,
+  notificationsApi,
+  UserSearchResult,
+} from '../api/client'
 import { trackError } from '../utils/errorTracker'
 import { queueForSync } from '../lib/syncService'
 import { toast } from '../contexts/ToastContext'
@@ -13,6 +20,7 @@ import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+import { UserEmailSearch } from '../components/UserEmailSearch'
 import {
   Dialog,
   DialogContent,
@@ -29,8 +37,11 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 
+type OwnerFilter = 'all' | 'unassigned'
+
 export default function Incidents() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useTranslation()
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [loading, setLoading] = useState(true)
@@ -39,6 +50,14 @@ export default function Incidents() {
   const [createError, setCreateError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>(
+    searchParams.get('owner') === 'unassigned' ? 'unassigned' : 'all',
+  )
+  const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
+  const [assigningId, setAssigningId] = useState<number | null>(null)
+  const [assigneeById, setAssigneeById] = useState<
+    Record<number, { email: string; user?: UserSearchResult }>
+  >({})
   const [formData, setFormData] = useState<IncidentCreate>({
     title: '',
     description: '',
@@ -50,9 +69,30 @@ export default function Incidents() {
 
   useEffect(() => {
     let cancelled = false
+    notificationsApi
+      .getDeliveryStatus()
+      .then((response) => {
+        if (!cancelled) setEmailConfigured(response.data.email_configured)
+      })
+      .catch(() => {
+        // Optional honesty signal: omit the banner when readiness cannot be read.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
     const load = async () => {
+      setLoading(true)
+      setLoadError(null)
       try {
-        const response = await incidentsApi.list(1, 50)
+        const response = await incidentsApi.list(
+          1,
+          50,
+          ownerFilter === 'unassigned' ? { owner: 'unassigned' } : undefined,
+        )
         if (!cancelled) setIncidents(response.data.items ?? [])
       } catch (err) {
         if (!cancelled) {
@@ -67,7 +107,44 @@ export default function Incidents() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [ownerFilter])
+
+  const setFilter = (next: OwnerFilter) => {
+    setOwnerFilter(next)
+    if (next === 'unassigned') {
+      setSearchParams({ owner: 'unassigned' })
+    } else {
+      setSearchParams({})
+    }
+  }
+
+  const handleAssignOwner = async (incidentId: number) => {
+    const picked = assigneeById[incidentId]
+    if (!picked?.user?.id) {
+      toast.error(t('incidents.triage.select_owner', 'Select a case owner from search results'))
+      return
+    }
+    setAssigningId(incidentId)
+    try {
+      await incidentsApi.update(incidentId, { owner_id: picked.user.id })
+      toast.success(
+        emailConfigured === false
+          ? t('incidents.triage.assigned_in_app', 'Assigned in-app (email alerts unavailable)')
+          : t('incidents.triage.assigned', 'Case owner assigned'),
+      )
+      setIncidents((prev) => prev.filter((i) => i.id !== incidentId))
+      setAssigneeById((prev) => {
+        const next = { ...prev }
+        delete next[incidentId]
+        return next
+      })
+    } catch (err) {
+      trackError(err, { component: 'Incidents', action: 'assign_owner' })
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setAssigningId(null)
+    }
+  }
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -204,6 +281,56 @@ export default function Incidents() {
         </Button>
       </div>
 
+      {emailConfigured === false ? (
+        <div
+          className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+          role="status"
+          data-testid="incidents-email-unavailable"
+        >
+          <div className="flex items-start gap-3">
+            <MailWarning className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="font-semibold">{t('actions.email_unavailable.title')}</p>
+              <p className="mt-1 text-sm">
+                {t(
+                  'incidents.triage.email_unavailable_body',
+                  'Case owners are notified in-app. Email alerts are unavailable while outbound email is not configured.',
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex gap-2" role="group" aria-label={t('incidents.triage.tabs', 'Triage filters')}>
+        <Button
+          type="button"
+          variant={ownerFilter === 'all' ? 'default' : 'outline'}
+          size="sm"
+          data-testid="incidents-filter-all"
+          onClick={() => setFilter('all')}
+        >
+          {t('incidents.triage.all', 'All')}
+        </Button>
+        <Button
+          type="button"
+          variant={ownerFilter === 'unassigned' ? 'default' : 'outline'}
+          size="sm"
+          data-testid="incidents-filter-unassigned"
+          onClick={() => setFilter('unassigned')}
+        >
+          {t('incidents.triage.unassigned', 'Unassigned')}
+        </Button>
+      </div>
+      {ownerFilter === 'unassigned' ? (
+        <p className="text-sm text-muted-foreground" data-testid="incidents-server-filter-label">
+          {t(
+            'incidents.triage.server_filter_label',
+            'Server filter: owner=unassigned (portal intakes without a case owner)',
+          )}
+        </p>
+      ) : null}
+
       {/* Search & Filter */}
       <div className="flex gap-4">
         <div className="flex-1 relative">
@@ -243,12 +370,17 @@ export default function Incidents() {
                   <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     {t('incidents.table.date')}
                   </th>
+                  {ownerFilter === 'unassigned' ? (
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {t('incidents.triage.assign_owner', 'Assign owner')}
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {filteredIncidents.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={ownerFilter === 'unassigned' ? 7 : 6}>
                       <EmptyState
                         icon={<AlertTriangle className="w-6 h-6 text-muted-foreground" />}
                         title={t('incidents.empty.title', 'No incidents found')}
@@ -269,24 +401,21 @@ export default function Incidents() {
                     <tr
                       key={incident.id}
                       data-testid="incident-row-link"
-                      className="hover:bg-surface transition-colors cursor-pointer"
+                      className="hover:bg-surface transition-colors"
                       style={{ animationDelay: `${index * 30}ms` }}
-                      onClick={() => navigate(`/incidents/${incident.id}`)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          navigate(`/incidents/${incident.id}`)
-                        }
-                      }}
                     >
-                      <td className="px-6 py-4">
+                      <td
+                        className="px-6 py-4 cursor-pointer"
+                        onClick={() => navigate(`/incidents/${incident.id}`)}
+                      >
                         <span className="font-mono text-sm text-primary">
                           {incident.reference_number}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
+                      <td
+                        className="px-6 py-4 cursor-pointer"
+                        onClick={() => navigate(`/incidents/${incident.id}`)}
+                      >
                         <p className="text-sm font-medium text-foreground truncate max-w-xs">
                           {incident.title}
                         </p>
@@ -310,6 +439,38 @@ export default function Incidents() {
                       <td className="px-6 py-4 text-sm text-muted-foreground">
                         {new Date(incident.incident_date).toLocaleDateString()}
                       </td>
+                      {ownerFilter === 'unassigned' ? (
+                        <td
+                          className="px-6 py-4"
+                          onClick={(e) => e.stopPropagation()}
+                          data-testid={`incident-assign-${incident.id}`}
+                        >
+                          <div className="flex flex-col gap-2 min-w-[220px]">
+                            <UserEmailSearch
+                              value={assigneeById[incident.id]?.email || ''}
+                              onChange={(email, user) =>
+                                setAssigneeById((prev) => ({
+                                  ...prev,
+                                  [incident.id]: { email, user },
+                                }))
+                              }
+                              placeholder={t('incidents.triage.search_owner', 'Search case owner…')}
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={assigningId === incident.id}
+                              onClick={() => handleAssignOwner(incident.id)}
+                            >
+                              {assigningId === incident.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                t('incidents.triage.assign', 'Assign')
+                              )}
+                            </Button>
+                          </div>
+                        </td>
+                      ) : null}
                     </tr>
                   ))
                 )}
