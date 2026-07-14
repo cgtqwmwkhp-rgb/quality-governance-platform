@@ -81,6 +81,7 @@ describe('Layout', () => {
       'nav.assurance',
       'nav.compliance_sustainability',
       'nav.risk_improvement',
+      'nav.insights',
       'nav.admin',
     ]) {
       expect(screen.getByRole('button', { name: hub })).toHaveAttribute('aria-expanded', 'false')
@@ -142,6 +143,10 @@ describe('Layout', () => {
         ],
       ],
       ['nav.risk_improvement', ['/risk-register']],
+      [
+        'nav.insights',
+        ['/analytics', '/calendar', '/exports', '/ai-intelligence'],
+      ],
       [
         'nav.admin',
         [
@@ -205,7 +210,25 @@ describe('Layout', () => {
     }
   })
 
-  it('does not expose W0 dead and demo routes in the sidebar', async () => {
+  it('exposes Insights hub links for analytics, calendar, exports, and AI', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    const insightsHub = screen.getByRole('button', { name: 'nav.insights' })
+    await user.click(insightsHub)
+
+    for (const path of ['/analytics', '/calendar', '/exports', '/ai-intelligence']) {
+      expect(navLink(path)).toBeInTheDocument()
+    }
+  })
+
+  it('does not expose orphaned analytics subpaths or demo routes in the sidebar', async () => {
     const Layout = (await import('../Layout')).default
 
     render(
@@ -215,13 +238,9 @@ describe('Layout', () => {
     )
 
     for (const path of [
-      '/analytics',
       '/analytics/advanced',
       '/analytics/dashboards',
       '/analytics/reports',
-      '/calendar',
-      '/exports',
-      '/ai-intelligence',
       '/signatures',
     ]) {
       expect(navLink(path)).not.toBeInTheDocument()

@@ -33,6 +33,7 @@ import {
   ChevronDown,
   FileText,
   Building,
+  Download,
 } from 'lucide-react'
 import { useState, useEffect, useCallback, lazy, Suspense, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -158,6 +159,17 @@ export default function Layout({ onLogout }: LayoutProps) {
       title: t('nav.risk_improvement'),
       icon: Target,
       items: [{ path: '/risk-register', icon: Target, label: t('nav.risk_register') }],
+    },
+    {
+      id: 'insights',
+      title: t('nav.insights', { defaultValue: 'Insights' }),
+      icon: BarChart3,
+      items: [
+        { path: '/analytics', icon: BarChart3, label: t('nav.analytics') },
+        { path: '/calendar', icon: Calendar, label: t('nav.calendar') },
+        { path: '/exports', icon: Download, label: t('nav.export_center') },
+        { path: '/ai-intelligence', icon: Bot, label: t('nav.ai_intelligence') },
+      ],
     },
     ...(canManageUsers && adminUserManagementEnabled
       ? [
