@@ -169,10 +169,12 @@ class CAPAService:
             )
 
         action.status = new_status
+        # CAPA timestamp columns are TIMESTAMP WITHOUT TIME ZONE — store UTC-naive.
+        now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
         if new_status == CAPAStatus.VERIFICATION:
-            action.completed_at = datetime.now(timezone.utc)  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
+            action.completed_at = now_utc_naive  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
         elif new_status == CAPAStatus.CLOSED:
-            action.verified_at = datetime.now(timezone.utc)  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
+            action.verified_at = now_utc_naive  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
             action.verified_by_id = user_id  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
             track_metric("capa.closed")
 
@@ -192,8 +194,28 @@ class CAPAService:
             tenant_id=tenant_id,
         )
 
+        bridge_result: dict[str, Any] | None = None
+        if new_status in (CAPAStatus.VERIFICATION, CAPAStatus.CLOSED):
+            from src.domain.services.audit_service import AuditService
+
+            bridge_result = await AuditService(self.db).apply_capa_closure_bridge(
+                action,
+                actor_user_id=user_id,
+                tenant_id=tenant_id,
+            )
+
         await self.db.commit()
         await self.db.refresh(action)
+
+        if bridge_result is not None:
+            from src.domain.services.audit_service import AuditService
+
+            await AuditService(self.db).notify_capa_closure_bridge(
+                bridge_result=bridge_result,
+                capa=action,
+                actor_user_id=user_id,
+            )
+
         return action
 
     async def delete_capa_action(

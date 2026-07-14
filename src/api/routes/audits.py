@@ -1469,6 +1469,20 @@ async def update_finding(
     return AuditFindingResponse.model_validate(finding)
 
 
+@router.get("/findings/{finding_id}/golden-thread")
+async def get_finding_golden_thread(
+    finding_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict[str, Any]:
+    """Honest finding → CAPA → risk chain (closure bridge status)."""
+    service = AuditService(db)
+    return await service.finding_golden_thread(
+        finding_id,
+        tenant_id=require_tenant_id(getattr(current_user, "tenant_id", None)),
+    )
+
+
 @router.post(
     "/findings/{finding_id}/flag-risk",
     response_model=AuditFindingResponse,

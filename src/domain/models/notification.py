@@ -20,6 +20,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.domain.models.base import Base
 
 
+def _enum_values(enum_cls: type[Enum]) -> list[str]:
+    """Persist enum values so SQLAlchemy matches PostgreSQL lowercase labels."""
+    return [member.value for member in enum_cls]
+
+
 class NotificationType(str, Enum):
     """Types of notifications"""
 
@@ -96,9 +101,13 @@ class Notification(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
 
     # Notification content
-    type: Mapped[NotificationType] = mapped_column(SQLEnum(NotificationType), nullable=False, index=True)
+    type: Mapped[NotificationType] = mapped_column(
+        SQLEnum(NotificationType, values_callable=_enum_values),
+        nullable=False,
+        index=True,
+    )
     priority: Mapped[NotificationPriority] = mapped_column(
-        SQLEnum(NotificationPriority),
+        SQLEnum(NotificationPriority, values_callable=_enum_values),
         nullable=False,
         default=NotificationPriority.MEDIUM,
     )
