@@ -8,6 +8,7 @@ from src.api.routes import (
     ai_templates,
     analytics,
     assessments,
+    asset_health_analytics,
     asset_imports,
     assets,
     audit_templates,
@@ -182,6 +183,11 @@ router.include_router(rca_tools.router, tags=["RCA Tools"])  # prefix="/rca-tool
 router.include_router(capa.router, prefix="/capa", tags=["CAPA"])
 # Asset Registry (Workforce Development Platform)
 router.include_router(assets.router, prefix="/assets", tags=["Asset Registry"])
+router.include_router(
+    asset_health_analytics.router,
+    prefix="/asset-health",
+    tags=["Asset Health Analytics"],
+)
 router.include_router(
     asset_imports.router,
     prefix="/asset-imports",

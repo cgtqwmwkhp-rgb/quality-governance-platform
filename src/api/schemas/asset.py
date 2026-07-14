@@ -247,6 +247,16 @@ class AssetListResponse(BaseModel):
     pages: int
 
 
+class AssetHealthSummaryResponse(BaseModel):
+    """Read-only asset health KPI summary for the safety analytics hub."""
+
+    total: int
+    expiry_bands: Dict[str, int]
+    by_type: Dict[str, int]
+    by_status: Dict[str, int]
+    generated_at: datetime
+
+
 # ============== Template Link Schemas ==============
 
 

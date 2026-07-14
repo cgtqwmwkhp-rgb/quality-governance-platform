@@ -40,6 +40,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
+import { AssetHealthHubTile } from '../components/asset-health/AssetHealthHubTile'
 import { cn } from '../helpers/utils'
 
 // ============================================================================
@@ -620,7 +621,7 @@ export default function Dashboard() {
       </div>
 
       {/* Primary Stats Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <StatCard
           title="Open Incidents"
           value={stats.incidents.open}
@@ -656,6 +657,7 @@ export default function Dashboard() {
           link="/actions"
           subtitle={`${stats.actions.dueSoon} due soon`}
         />
+        <AssetHealthHubTile />
       </div>
 
       {unassignedIntakes ? (
