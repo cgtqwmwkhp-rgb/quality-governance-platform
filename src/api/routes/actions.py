@@ -1716,8 +1716,27 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
                 except ValueError:
                     continue
 
+    bridge_result = None
+    if isinstance(action, CAPAAction) and action_data.status is not None:
+        from src.domain.services.audit_service import AuditService
+
+        bridge_result = await AuditService(db).apply_capa_closure_bridge(
+            action,
+            actor_user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+        )
+
     await db.commit()
     await db.refresh(action)
+
+    if bridge_result is not None and isinstance(action, CAPAAction):
+        from src.domain.services.audit_service import AuditService
+
+        await AuditService(db).notify_capa_closure_bridge(
+            bridge_result=bridge_result,
+            capa=action,
+            actor_user_id=current_user.id,
+        )
 
     if isinstance(action, CAPAAction):
         out = await _capa_to_response(db, action)

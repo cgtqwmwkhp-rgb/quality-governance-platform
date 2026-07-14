@@ -408,6 +408,39 @@ class NotificationService:
 
         return assignment
 
+    async def create_status(
+        self,
+        *,
+        user_id: int,
+        entity_type: str,
+        entity_id: str,
+        to_status: str,
+        title: str,
+        message: str,
+        from_status: Optional[str] = None,
+        sender_id: Optional[int] = None,
+        action_url: Optional[str] = None,
+        notification_type: NotificationType = NotificationType.ACTION_COMPLETED,
+        priority: NotificationPriority = NotificationPriority.MEDIUM,
+    ) -> Notification:
+        """Notify a user that an entity status changed (in-app; SMTP optional elsewhere)."""
+        return await self.create_notification(
+            user_id=user_id,
+            notification_type=notification_type,
+            title=title,
+            message=message,
+            entity_type=entity_type,
+            entity_id=str(entity_id),
+            action_url=action_url,
+            sender_id=sender_id,
+            priority=priority,
+            metadata={
+                "from_status": from_status,
+                "to_status": to_status,
+            },
+            channels=[NotificationChannel.IN_APP],
+        )
+
     # ==================== Notification Management ====================
 
     async def mark_as_read(self, notification_id: int, user_id: int) -> bool:
