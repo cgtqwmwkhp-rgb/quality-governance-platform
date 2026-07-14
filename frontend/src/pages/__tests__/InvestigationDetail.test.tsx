@@ -213,6 +213,39 @@ describe('InvestigationDetail', () => {
     )
   })
 
+  it('shows closure blockers with unblock path when open actions remain', async () => {
+    client.investigationsApi.getClosureValidation.mockResolvedValue({
+      data: {
+        can_close: false,
+        reasons: ['STATUS_NOT_COMPLETE', 'OPEN_ACTIONS_REMAIN'],
+        open_work_count: 1,
+        open_work: [
+          {
+            kind: 'investigation_action',
+            id: 12,
+            reference_number: 'INV-ACT-2026-0012',
+            title: 'Replace guard',
+            status: 'open',
+            action_key: 'investigation_action:12',
+            unblock_hint: 'Complete or cancel this action on the Actions tab.',
+          },
+        ],
+      },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-closure-checklist')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('closure-blocker-12')).toHaveTextContent('INV-ACT-2026-0012')
+    expect(screen.getByTestId('investigation-closure-go-actions')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('investigation-closure-go-actions'))
+    expect(screen.getByText('Actions')).toBeInTheDocument()
+  })
+
   it('shows unavailable CAPA counts instead of faux zero when actions fail', async () => {
     const { toast } = await import('../../contexts/ToastContext')
     client.actionsApi.list.mockRejectedValue(new Error('actions down'))

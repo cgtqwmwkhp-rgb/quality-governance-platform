@@ -173,9 +173,21 @@ export interface GeneratedCustomerPack {
   checksum_sha256?: string
 }
 
+export interface ClosureBlockingItem {
+  kind: string
+  id: number
+  reference_number: string
+  title: string
+  status: string
+  action_key: string
+  unblock_hint: string
+}
+
 export interface ClosureValidation {
   can_close: boolean
   reasons: string[]
+  open_work?: ClosureBlockingItem[]
+  open_work_count?: number
 }
 
 export function createInvestigationsApi(api: AxiosInstance) {

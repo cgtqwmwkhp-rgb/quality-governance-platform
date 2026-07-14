@@ -756,7 +756,7 @@ export default function InvestigationDetail() {
                     <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                   </div>
                 ) : closureValidation ? (
-                  <div className="space-y-3">
+                  <div className="space-y-3" data-testid="investigation-closure-checklist">
                     <div
                       className={cn(
                         'flex items-center gap-2 p-3 rounded-lg',
@@ -781,9 +781,55 @@ export default function InvestigationDetail() {
                         <p className="text-xs font-medium text-muted-foreground">Issues:</p>
                         {closureValidation.reasons.map((reason: string, i: number) => (
                           <p key={i} className="text-xs text-destructive">
-                            • {reason.replace(/_/g, ' ')}
+                            •{' '}
+                            {reason === 'OPEN_ACTIONS_REMAIN'
+                              ? t(
+                                  'investigations.closure.open_actions_remain',
+                                  'Open CAPA/actions must be completed or cancelled before closure.',
+                                )
+                              : reason.replace(/_/g, ' ')}
                           </p>
                         ))}
+                      </div>
+                    )}
+                    {(closureValidation.open_work_count ?? 0) > 0 && (
+                      <div className="space-y-2 rounded-lg border border-warning/30 bg-warning/5 p-3">
+                        <p className="text-xs font-medium text-foreground">
+                          {t(
+                            'investigations.closure.blocking_list_title',
+                            'Blocking actions ({{count}})',
+                            { count: closureValidation.open_work_count },
+                          )}
+                        </p>
+                        <ul className="space-y-2">
+                          {(closureValidation.open_work ?? []).map((item) => (
+                            <li
+                              key={item.action_key}
+                              className="text-xs text-muted-foreground"
+                              data-testid={`closure-blocker-${item.id}`}
+                            >
+                              <span className="font-mono text-foreground">{item.reference_number}</span>
+                              {' — '}
+                              {item.title}
+                              <span className="ml-1 capitalize">({item.status.replace(/_/g, ' ')})</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="text-xs text-muted-foreground">
+                          {t(
+                            'investigations.closure.unblock_hint',
+                            'Complete or cancel each action on the Actions tab, then return here to close.',
+                          )}
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setActiveTab('actions')}
+                          data-testid="investigation-closure-go-actions"
+                        >
+                          <ListTodo className="w-3.5 h-3.5 mr-1.5" />
+                          {t('investigations.closure.go_actions', 'Go to Actions tab')}
+                        </Button>
                       </div>
                     )}
                   </div>
