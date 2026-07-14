@@ -41,6 +41,8 @@ export interface NearMiss {
   witness_names?: string
   asset_number?: string
   asset_type?: string
+  /** Linked Asset registry id (golden thread). Legacy asset_number/asset_type retained. */
+  asset_id?: number | null
   risk_category?: string
   potential_severity?: string
   /** Comma-separated risk register IDs linked from this near miss. */
@@ -76,6 +78,7 @@ export interface NearMissCreate {
   witness_names?: string
   asset_number?: string
   asset_type?: string
+  asset_id?: number | null
   risk_category?: string
   potential_severity?: string
 }
@@ -91,6 +94,9 @@ export interface NearMissUpdate {
   corrective_actions_taken?: string
   risk_category?: string
   potential_severity?: string
+  asset_id?: number | null
+  asset_number?: string
+  asset_type?: string
 }
 
 export interface RaiseRiskFromNearMissRequest {

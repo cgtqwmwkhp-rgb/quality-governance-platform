@@ -168,6 +168,11 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     # Case owner (supervisor triage assignment)
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
 
+    # Golden-thread link to Asset registry (AM-THREAD)
+    asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("assets.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     # SIF (Serious Injury or Fatality) Classification
     is_sif: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, nullable=True)
     is_psif: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, nullable=True)  # Potential SIF

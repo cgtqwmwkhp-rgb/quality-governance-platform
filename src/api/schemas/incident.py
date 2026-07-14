@@ -20,6 +20,7 @@ class IncidentBase(BaseModel):
     incident_date: datetime = Field(..., description="When the incident occurred")
     location: Optional[str] = Field(None, max_length=300, description="Where the incident occurred")
     department: Optional[str] = Field(None, max_length=100, description="Department involved")
+    asset_id: Optional[int] = Field(None, description="Linked Asset registry id (golden thread)")
 
 
 class IncidentCreate(IncidentBase):
@@ -66,6 +67,7 @@ class IncidentUpdate(BaseModel):
     location: Optional[str] = Field(None, max_length=300)
     department: Optional[str] = Field(None, max_length=100)
     owner_id: Optional[int] = Field(None, description="Case owner user id (null clears assignment)")
+    asset_id: Optional[int] = Field(None, description="Linked Asset registry id (null clears link)")
 
     @field_validator("title", "description", "location", "department", mode="before")
     @classmethod
@@ -118,6 +120,7 @@ class IncidentResponse(BaseModel):
     reporter_submission: Optional[dict[str, Any]] = None
     closed_at: Optional[datetime] = None
     owner_id: Optional[int] = None
+    asset_id: Optional[int] = None
 
 
 class IncidentListResponse(BaseModel):

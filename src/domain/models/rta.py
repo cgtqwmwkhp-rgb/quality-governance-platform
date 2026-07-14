@@ -73,6 +73,11 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
     company_vehicle_make_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     company_vehicle_damage: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Golden-thread link to Asset registry (AM-THREAD)
+    asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("assets.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     # Driver details
     driver_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     driver_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
