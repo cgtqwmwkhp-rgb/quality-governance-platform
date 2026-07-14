@@ -81,6 +81,8 @@ from src.domain.models.engineer import (
     Engineer,
     OnboardingChecklist,
     OnboardingStatus,
+    TicketVerifyState,
+    TrainingTicket,
 )
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
@@ -388,6 +390,8 @@ __all__ = [
     "CompetencyRecord",
     "CompetencyRequirement",
     "CompetencyLifecycleState",
+    "TrainingTicket",
+    "TicketVerifyState",
     "OnboardingChecklist",
     "OnboardingStatus",
     "LOLERExamination",

@@ -29,6 +29,16 @@ class CompetencyLifecycleState(str, enum.Enum):
     NOT_ASSESSED = "not_assessed"
 
 
+class TicketVerifyState(str, enum.Enum):
+    """Verification lifecycle for statutory / scheme training tickets."""
+
+    UNVERIFIED = "unverified"
+    PENDING = "pending"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+
+
 class Engineer(Base, TimestampMixin, AuditTrailMixin):
     """Field engineer profile with competency tracking."""
 
@@ -58,16 +68,19 @@ class Engineer(Base, TimestampMixin, AuditTrailMixin):
     # Specialisations (JSON array of asset type IDs or names)
     specialisations_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
-    # Certifications (JSON array: [{name, number, issuer, issued, expiry}])
+    # Legacy certifications blob — prefer TrainingTicket rows (P0 spine).
     certifications_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     competency_records: Mapped[List["CompetencyRecord"]] = relationship(
         "CompetencyRecord", back_populates="engineer", cascade="all, delete-orphan"
+    )
+    training_tickets: Mapped[List["TrainingTicket"]] = relationship(
+        "TrainingTicket", back_populates="engineer", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
@@ -102,7 +115,7 @@ class CompetencyRecord(Base, TimestampMixin):
 
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     engineer: Mapped["Engineer"] = relationship("Engineer", back_populates="competency_records")
 
@@ -125,11 +138,52 @@ class CompetencyRequirement(Base, TimestampMixin):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_mandatory: Mapped[bool] = mapped_column(Boolean, default=True)
     reassessment_interval_days: Mapped[int] = mapped_column(Integer, default=365)
+    # Optional allocation filters (role key / site) for bulk allocate
+    role_key: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    site: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, index=True)
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     def __repr__(self) -> str:
         return f"<CompetencyRequirement(id={self.id}, name='{self.name}')>"
+
+
+class TrainingTicket(Base, TimestampMixin, AuditTrailMixin):
+    """First-class statutory / scheme training ticket (Complo/ScopeKit/ONCREO spine).
+
+    Replaces unqueryable certifications_json blobs for expiry, verify, and gate truth.
+    """
+
+    __tablename__ = "training_tickets"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    engineer_id: Mapped[int] = mapped_column(ForeignKey("engineers.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    scheme: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    ticket_number: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    issuer: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    issued_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+
+    verify_state: Mapped[TicketVerifyState] = mapped_column(
+        CaseInsensitiveEnum(TicketVerifyState),
+        default=TicketVerifyState.UNVERIFIED,
+        nullable=False,
+        index=True,
+    )
+    evidence_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("evidence_assets.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+
+    engineer: Mapped["Engineer"] = relationship("Engineer", back_populates="training_tickets")
+
+    def __repr__(self) -> str:
+        return f"<TrainingTicket(id={self.id}, scheme='{self.scheme}', number='{self.ticket_number}')>"
 
 
 class OnboardingChecklist(Base, TimestampMixin):

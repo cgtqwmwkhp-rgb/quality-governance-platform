@@ -39,6 +39,7 @@ from src.domain.models.user import User
 from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.competency_scoring_service import CompetencyScoringService
 from src.domain.services.governance_service import GovernanceService, NotificationService
+from src.domain.services.workforce_spine import enforce_competency_gate_on_start, resolve_reassessment_interval_days
 
 logger = logging.getLogger(__name__)
 
@@ -299,7 +300,12 @@ async def start_assessment(
     db: DbSession,
     user: Annotated[User, Depends(require_permission("assessment:update"))],
 ):
-    """Start an assessment run."""
+    """Start an assessment run.
+
+    Competency gate is evaluated when ``asset_type_id`` is set:
+    - ``COMPETENCY_GATE_MODE=soft`` (default): start proceeds; warning fields returned
+    - ``COMPETENCY_GATE_MODE=hard``: start blocked with COMPETENCY_GATE_BLOCKED
+    """
     query = select(AssessmentRun).where(AssessmentRun.id == run_id)
     query = apply_tenant_filter(query, AssessmentRun, user.tenant_id)
     result = await db.execute(query)
@@ -312,11 +318,28 @@ async def start_assessment(
             status_code=400,
             detail=api_error(ErrorCode.INVALID_STATE_TRANSITION, "Assessment can only be started from draft status"),
         )
+
+    gate = await enforce_competency_gate_on_start(
+        db,
+        engineer_id=run.engineer_id,
+        asset_type_id=run.asset_type_id,
+        tenant_id=user.tenant_id,
+    )
+
     run.status = AssessmentStatus.IN_PROGRESS
     run.started_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(run)
-    return AssessmentRunResponse.model_validate(run)
+    response = AssessmentRunResponse.model_validate(run)
+    if gate is not None:
+        response = response.model_copy(
+            update={
+                "competency_gate_cleared": bool(gate.get("cleared")),
+                "competency_gate_reason": gate.get("reason"),
+                "competency_gate_mode": gate.get("mode"),
+            }
+        )
+    return response
 
 
 @router.post("/{run_id}/complete", response_model=AssessmentRunResponse)
@@ -392,15 +415,19 @@ async def complete_assessment(
     if run.asset_type_id and engineer:
         from datetime import timedelta
 
-        expiry = datetime.now(timezone.utc) + timedelta(days=365) if score_result.outcome == "pass" else None
+        interval_days = await resolve_reassessment_interval_days(
+            db,
+            asset_type_id=run.asset_type_id,
+            template_id=run.template_id,
+            tenant_id=run.tenant_id or engineer.tenant_id,
+        )
+        expiry = datetime.now(timezone.utc) + timedelta(days=interval_days) if score_result.outcome == "pass" else None
+        record_tenant_id = run.tenant_id if run.tenant_id is not None else engineer.tenant_id
         competency_query = select(CompetencyRecord).where(
             CompetencyRecord.source_type == "assessment",
             CompetencyRecord.source_run_id == run.id,
         )
-        if run.tenant_id is None:
-            competency_query = competency_query.where(CompetencyRecord.tenant_id.is_(None))
-        else:
-            competency_query = competency_query.where(CompetencyRecord.tenant_id == run.tenant_id)
+        competency_query = competency_query.where(CompetencyRecord.tenant_id == record_tenant_id)
         competency_result = await db.execute(competency_query)
         competency = competency_result.scalar_one_or_none()
         if competency is None:
@@ -410,7 +437,7 @@ async def complete_assessment(
                 template_id=run.template_id,
                 source_type="assessment",
                 source_run_id=run.id,
-                tenant_id=run.tenant_id,
+                tenant_id=record_tenant_id,
             )
             db.add(competency)
         competency.engineer_id = run.engineer_id
@@ -423,6 +450,7 @@ async def complete_assessment(
         competency.assessed_at = datetime.now(timezone.utc)
         competency.assessed_by_id = run.supervisor_id
         competency.expires_at = expiry
+        competency.tenant_id = record_tenant_id
 
     if score_result.outcome in ("fail", "conditional"):
         failed_questions = []
