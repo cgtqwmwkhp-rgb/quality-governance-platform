@@ -38,10 +38,8 @@ def _is_workforce_manager(user: CurrentUser) -> bool:
     return bool(getattr(user, "is_superuser", False) or "admin" in role_names or "supervisor" in role_names)
 
 
-def _require_engineer_tenant_id(user: CurrentUser) -> int | None:
-    """Superusers may omit tenant; all other callers must have membership."""
-    if getattr(user, "is_superuser", False):
-        return getattr(user, "tenant_id", None)
+def _require_engineer_tenant_id(user: CurrentUser) -> int:
+    """All engineer writes/reads require an explicit tenant membership (fail-closed)."""
     return require_tenant_id(getattr(user, "tenant_id", None))
 
 

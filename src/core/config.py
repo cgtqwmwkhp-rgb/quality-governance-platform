@@ -272,6 +272,10 @@ class Settings(BaseSettings):
     celery_broker_url: str = ""
     celery_result_backend: str = ""
 
+    # Workforce P0 competency gate on assessment/induction start:
+    # soft = warn and continue; hard = block start when gate not cleared.
+    competency_gate_mode: str = "soft"
+
     # External audit OCR / import
     external_audit_import_enabled: bool = True
     external_audit_import_feature_flag: str = "external_audit_import"
