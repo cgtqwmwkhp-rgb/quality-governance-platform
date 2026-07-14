@@ -61,6 +61,7 @@ vi.mock('../../components/case/CaseSummaryRail', () => ({
 
 vi.mock('../../components/case/RunningSheetPanel', () => ({
   RunningSheetPanel: () => null,
+  buildRunningSheetCreateActionHref: () => '/actions/new',
 }))
 
 vi.mock('../../components/ui/Tabs', () => ({

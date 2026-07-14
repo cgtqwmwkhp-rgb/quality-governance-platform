@@ -68,7 +68,6 @@ import {
   getCapaLink,
   getInvestigationSourceLink,
 } from '../components/investigations/handoffLinks'
-import { toast } from '../contexts/ToastContext'
 
 const TABS = [
   { id: 'summary', label: 'Summary', icon: FileText },
