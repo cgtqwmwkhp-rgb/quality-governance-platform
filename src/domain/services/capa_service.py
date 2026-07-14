@@ -169,10 +169,12 @@ class CAPAService:
             )
 
         action.status = new_status
+        # CAPA timestamp columns are TIMESTAMP WITHOUT TIME ZONE — store UTC-naive.
+        now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
         if new_status == CAPAStatus.VERIFICATION:
-            action.completed_at = datetime.now(timezone.utc)  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
+            action.completed_at = now_utc_naive  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
         elif new_status == CAPAStatus.CLOSED:
-            action.verified_at = datetime.now(timezone.utc)  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
+            action.verified_at = now_utc_naive  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
             action.verified_by_id = user_id  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
             track_metric("capa.closed")
 
