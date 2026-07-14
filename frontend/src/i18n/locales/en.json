@@ -2341,5 +2341,9 @@
   "workforce.training.stage1": "Stage 1",
   "workforce.training.stage2": "Stage 2",
   "workforce.training.subtitle": "Training programs and records",
-  "workforce.training.title": "Training"
+  "workforce.training.title": "Training",
+  "near_misses.detail.investigations_unavailable": "Investigations could not be loaded \u2014 not shown as zero.",
+  "near_misses.detail.capa_handoff_title": "CAPA / Actions",
+  "near_misses.detail.capa_count": "Linked CAPA actions",
+  "near_misses.detail.capa_needs_investigation": "Create an investigation before raising CAPA from this near miss."
 }

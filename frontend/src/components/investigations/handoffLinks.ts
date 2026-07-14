@@ -96,3 +96,22 @@ export function getActionSourceLink(
   }
   return null
 }
+
+/**
+ * Residual honesty for CAPA counts: never render "0" when the load failed.
+ * Loading → ellipsis; unavailable → em dash; else the live count.
+ */
+export function formatCapaActionsCount(options: {
+  loading?: boolean
+  unavailable?: boolean
+  count: number
+}): string {
+  if (options.loading) return '…'
+  if (options.unavailable) return '—'
+  return String(options.count)
+}
+
+/** Deep link to an investigation detail from a near-miss (or other) source list. */
+export function getInvestigationDetailHref(investigationId: number): string {
+  return `/investigations/${investigationId}`
+}
