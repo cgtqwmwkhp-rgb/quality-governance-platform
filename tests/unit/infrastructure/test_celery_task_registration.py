@@ -38,6 +38,7 @@ def test_send_email_and_monitor_tasks_are_registered(celery_app_module):
     assert "src.infrastructure.tasks.monitor_tasks.log_task_queue_depth" in registered
     assert "src.infrastructure.tasks.cleanup_tasks.cleanup_expired_tokens" in registered
     assert "src.infrastructure.tasks.webhook_tasks.deliver_webhook" in registered
+    assert "src.infrastructure.tasks.safety_asset_expiry_tasks.check_safety_asset_expiry" in registered
 
     app_tasks = [name for name in registered if name.startswith("src.infrastructure.tasks.")]
     assert len(app_tasks) >= 10
