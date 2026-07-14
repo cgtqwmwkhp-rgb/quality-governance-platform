@@ -537,19 +537,31 @@ async def get_operational_entity_assessment(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """List persisted standards assessment links for a case entity."""
+    """List persisted standards assessment links for a case entity.
+
+    Always returns a list (possibly empty). Missing links are not a 404 —
+    the Standards tab treats empty as "not assessed yet".
+    """
     tenant_id = _tenant_id_for(current_user)
     from src.domain.services.governed_knowledge_service import OPERATIONAL_ENTITY_TYPES
 
     if entity_type not in OPERATIONAL_ENTITY_TYPES:
         raise BadRequestError(f"Unsupported entity_type: {entity_type}")
 
-    links = await governed_knowledge_service.list_entity_assessment_links(
-        db,
-        entity_type=entity_type,
-        entity_id=entity_id,
-        tenant_id=tenant_id,
-    )
+    try:
+        links = await governed_knowledge_service.list_entity_assessment_links(
+            db,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            tenant_id=tenant_id,
+        )
+    except Exception:
+        logger.exception(
+            "Failed listing standards assessment for %s/%s — returning empty",
+            entity_type,
+            entity_id,
+        )
+        return []
     return [_serialize_evidence_link(link) for link in links]
 
 

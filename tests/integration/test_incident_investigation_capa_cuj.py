@@ -124,3 +124,46 @@ async def test_incident_investigation_capa_chain(
     assert incident_scoped.status_code == 200, incident_scoped.text
     incident_items = incident_scoped.json()["items"]
     assert any(item["id"] == incident_action["id"] for item in incident_items)
+
+    # capa_actions table path: CAPASource.INCIDENT surfaces as capa_incident on unified Actions
+    capa_resp = await client.post(
+        "/api/v1/capa",
+        json={
+            "title": "CUJ CAPA residual from incident",
+            "description": "Formal CAPA action linked to the originating incident",
+            "capa_type": "corrective",
+            "priority": "high",
+            "source_type": "incident",
+            "source_id": incident_id,
+            "proposed_action": "Install permanent anti-slip surface",
+        },
+        headers=auth_headers,
+    )
+    assert capa_resp.status_code == 201, capa_resp.text
+    capa = capa_resp.json()
+    assert capa["source_type"] == "incident"
+    assert capa["source_id"] == incident_id
+
+    capa_scoped = await client.get(
+        "/api/v1/actions/",
+        params={"source_type": "capa_incident", "source_id": incident_id},
+        headers=auth_headers,
+    )
+    assert capa_scoped.status_code == 200, capa_scoped.text
+    capa_items = capa_scoped.json()["items"]
+    assert any(
+        item.get("action_key") == f"capa:{capa['id']}"
+        and item.get("source_type") == "capa_incident"
+        and item.get("source_id") == incident_id
+        for item in capa_items
+    ), capa_items
+
+    by_key = await client.get(
+        "/api/v1/actions/by-key",
+        params={"key": f"capa:{capa['id']}"},
+        headers=auth_headers,
+    )
+    assert by_key.status_code == 200, by_key.text
+    keyed = by_key.json()
+    assert keyed["source_type"] == "capa_incident"
+    assert keyed["source_id"] == incident_id

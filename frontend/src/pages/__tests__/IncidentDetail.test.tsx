@@ -27,6 +27,13 @@ vi.mock('../../utils/errorTracker', () => ({
   trackError: vi.fn(),
 }))
 
+vi.mock('../../contexts/ToastContext', () => ({
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
+  },
+}))
+
 vi.mock('../../components/ui/Breadcrumbs', () => ({
   Breadcrumbs: () => <div data-testid="breadcrumbs" />,
 }))
@@ -161,5 +168,22 @@ describe('IncidentDetail', () => {
 
     fireEvent.click(createCapa)
     expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=incident&sourceId=11')
+  })
+
+  it('renders workflow proof counts without faux zeros when CAPA load fails', async () => {
+    const { toast } = await import('../../contexts/ToastContext')
+    client.actionsApi.list.mockRejectedValue(new Error('actions down'))
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('incident-workflow-proof')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('incident-capa-count')).toHaveTextContent('—')
+    expect(toast.error).toHaveBeenCalled()
+    expect(screen.getByTestId('incident-capa-handoff-cta')).toHaveTextContent(
+      'investigations.handoff.create_action',
+    )
   })
 })

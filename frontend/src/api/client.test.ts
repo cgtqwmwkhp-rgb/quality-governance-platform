@@ -121,6 +121,20 @@ describe('client pure helpers', () => {
     expect(getApiErrorMessage(axiosErr({ status: 400, data: { detail: { a: 1 } } }))).toBe(
       JSON.stringify({ a: 1 }),
     )
+    expect(
+      getApiErrorMessage(
+        axiosErr({
+          status: 404,
+          message: 'Request failed with status code 404',
+          data: { error: { code: 'ENTITY_NOT_FOUND', message: 'Near miss not found' } },
+        }),
+      ),
+    ).toBe('Near miss not found')
+    expect(
+      getApiErrorMessage(
+        axiosErr({ status: 404, message: 'Request failed with status code 404', data: {} }),
+      ),
+    ).toBe('The requested record was not found.')
     const bare = axiosErr({ message: 'axios-msg' })
     bare.response = undefined
     expect(getApiErrorMessage(bare)).toBe('axios-msg')
