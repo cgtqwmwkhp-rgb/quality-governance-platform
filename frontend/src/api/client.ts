@@ -760,6 +760,7 @@ export interface Control {
 export type {
   Action,
   ActionsSummary,
+  ActionsViewCounts,
   ActionCreate,
   ActionUpdate,
   ActionOwnerNote,

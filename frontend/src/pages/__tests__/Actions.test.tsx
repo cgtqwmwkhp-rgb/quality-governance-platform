@@ -6,6 +6,7 @@ import Actions from '../Actions'
 
 const mockList = vi.fn()
 const mockSummary = vi.fn()
+const mockViewCounts = vi.fn()
 const mockGetDeliveryStatus = vi.fn()
 const mockToastError = vi.fn()
 const mockCreate = vi.fn()
@@ -46,6 +47,7 @@ vi.mock('../../api/client', () => ({
   actionsApi: {
     list: (...args: unknown[]) => mockList(...args),
     summary: (...args: unknown[]) => mockSummary(...args),
+    viewCounts: (...args: unknown[]) => mockViewCounts(...args),
     create: (...args: unknown[]) => mockCreate(...args),
   },
   notificationsApi: {
@@ -86,6 +88,9 @@ describe('Actions finding deep-link', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSummary.mockResolvedValue({ data: { total: 3, by_display_status: { open: 3 } } })
+    mockViewCounts.mockResolvedValue({
+      data: { all: 10, my: 3, overdue: 2, my_overdue: 1 },
+    })
     mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: true } })
     mockList.mockResolvedValue({ data: { items: [action({})] } })
   })
@@ -252,6 +257,30 @@ describe('Actions My Work / Overdue server filters', () => {
     expect(await screen.findByTestId('actions-filter-error')).toHaveTextContent(
       'Server filter failed',
     )
+  })
+
+  it('shows Mine/Overdue badge counts that match view-counts API', async () => {
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('actions-view-badge-my')).toHaveTextContent('3')
+    expect(screen.getByTestId('actions-view-badge-overdue')).toHaveTextContent('2')
+    expect(screen.getByTestId('actions-view-badge-my_overdue')).toHaveTextContent('1')
+  })
+
+  it('does not show silent zero when summary fails', async () => {
+    mockSummary.mockRejectedValue(new Error('summary down'))
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('actions-summary-unavailable')).toBeInTheDocument()
+    expect(mockToastError).toHaveBeenCalled()
   })
 })
 
