@@ -32,6 +32,7 @@ const { tMock } = vi.hoisted(() => {
     'actions.filter.server_my_overdue':
       'Showing your overdue open actions (server filter: assigned_to=me&overdue=true).',
     'actions.filter.loading': 'Updating filtered actions…',
+    'actions.open_profile': 'Open profile',
   }
   return {
     tMock: (key: string, fallback?: string) => messages[key] || fallback || key,
@@ -115,6 +116,23 @@ describe('Actions finding deep-link', () => {
     const links = await screen.findAllByRole('link', { name: 'View finding' })
     expect(links).toHaveLength(1)
     expect(links[0]).toHaveAttribute('href', '/audits?view=findings&findingId=42')
+  })
+
+  it('links action profile rows to RESTful /actions/:id permalinks', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [action({ action_key: 'capa:99' })],
+      },
+    })
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    const link = await screen.findByRole('link', { name: 'Open profile' })
+    expect(link).toHaveAttribute('href', '/actions/capa%3A99')
   })
 
   it.skip('warns that CAPA assignment does not imply email delivery', async () => {

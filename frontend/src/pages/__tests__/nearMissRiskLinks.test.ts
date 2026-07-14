@@ -9,5 +9,8 @@ describe('nearMissRiskLinks', () => {
 
   it('builds risk register deep link', () => {
     expect(riskRegisterHref(9)).toBe('/risk-register?riskId=9')
+    expect(riskRegisterHref(9, { nearMissRef: 'NM-1' })).toBe(
+      '/risk-register?riskId=9&nearMissRef=NM-1',
+    )
   })
 })

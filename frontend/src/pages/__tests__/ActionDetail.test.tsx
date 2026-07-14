@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import ActionDetail from '../ActionDetail'
+import { buildActionDetailPath } from '../actionLinks'
 
 const mockGetByKey = vi.fn()
 const mockListOwnerNotes = vi.fn()
@@ -62,10 +63,12 @@ const auditFindingAction = {
   created_at: '2026-07-12T10:00:00Z',
 }
 
-const renderDetail = (key = 'capa%3A9') =>
+const renderDetail = (actionKey = 'capa:9') =>
   render(
-    <MemoryRouter initialEntries={[`/actions/item?key=${key}`]}>
-      <ActionDetail />
+    <MemoryRouter initialEntries={[buildActionDetailPath(actionKey)]}>
+      <Routes>
+        <Route path="/actions/:id" element={<ActionDetail />} />
+      </Routes>
     </MemoryRouter>,
   )
 
@@ -108,7 +111,7 @@ describe('ActionDetail source deep-links', () => {
       },
     })
 
-    renderDetail('incident_action%3A3')
+    renderDetail('incident_action:3')
 
     expect(await screen.findByRole('heading', { name: 'Cordon north gate' })).toBeInTheDocument()
     const link = screen.getByTestId('action-source-deeplink')
@@ -128,7 +131,7 @@ describe('ActionDetail source deep-links', () => {
       },
     })
 
-    renderDetail('capa%3A14')
+    renderDetail('capa:14')
 
     expect(await screen.findByRole('heading', { name: 'CAPA from incident' })).toBeInTheDocument()
     expect(screen.getByTestId('action-source-deeplink')).toHaveAttribute('href', '/incidents/11')
@@ -146,7 +149,7 @@ describe('ActionDetail source deep-links', () => {
       },
     })
 
-    renderDetail('investigation_action%3A5')
+    renderDetail('investigation_action:5')
 
     expect(
       await screen.findByRole('heading', { name: 'Install anti-slip matting' }),
