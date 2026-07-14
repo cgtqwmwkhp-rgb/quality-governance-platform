@@ -298,9 +298,7 @@ async def check_allocation(
     if road_tax is not None and road_tax < now:
         reasons.append("Road tax expired")
     elif road_tax is not None and (road_tax - now).days <= 30:
-        expiry_warnings.append(
-            f"Road tax expires in {(road_tax - now).days} days"
-        )
+        expiry_warnings.append(f"Road tax expires in {(road_tax - now).days} days")
 
     # AM-VAN: consult linked vehicle Asset + child kit assets
     child_assets = await load_vehicle_kit_assets(db, vehicle_reg, tenant_id)
