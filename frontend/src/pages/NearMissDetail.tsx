@@ -25,7 +25,7 @@ import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
-import { RunningSheetPanel } from '../components/case/RunningSheetPanel'
+import { RunningSheetPanel, buildRunningSheetCreateActionHref } from '../components/case/RunningSheetPanel'
 
 export default function NearMissDetail() {
   const { id } = useParams<{ id: string }>()
@@ -493,6 +493,12 @@ export default function NearMissDetail() {
             onNewEntryChange={setNewEntry}
             onAddEntry={handleAddEntry}
             onDeleteEntry={handleDeleteEntry}
+            createActionHref={buildRunningSheetCreateActionHref({
+              sourceType: 'near_miss',
+              sourceId: nearMiss.id,
+              referenceNumber: nearMiss.reference_number,
+              entrySnippet: runningSheet[0]?.content,
+            })}
           />
         </TabsContent>
       </Tabs>
