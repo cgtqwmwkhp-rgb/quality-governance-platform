@@ -133,7 +133,7 @@ class AssetAssignmentEvent(Base):
     asset_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("assets.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     actor_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 
     from_location_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("locations.id"), nullable=True)

@@ -141,6 +141,7 @@ class AssetService:
         self,
         *,
         asset: Asset,
+        tenant_id: int,
         actor_user_id: int,
         from_location_id: int | None,
         to_location_id: int | None,
@@ -159,7 +160,7 @@ class AssetService:
         self.db.add(
             AssetAssignmentEvent(
                 asset_id=asset.id,
-                tenant_id=asset.tenant_id,
+                tenant_id=tenant_id,
                 actor_user_id=actor_user_id,
                 from_location_id=from_location_id,
                 to_location_id=to_location_id,
@@ -186,12 +187,7 @@ class AssetService:
         parent_id: int | None = None,
         search: str | None = None,
     ) -> PaginatedResult:
-        query = select(Location).where(
-            or_(
-                Location.tenant_id == tenant_id,
-                Location.tenant_id.is_(None),
-            )
-        )
+        query = select(Location).where(Location.tenant_id == tenant_id)
         if kind is not None:
             try:
                 query = query.where(Location.kind == LocationKind(kind))
@@ -431,6 +427,7 @@ class AssetService:
         if asset.location_id is not None or asset.vehicle_reg is not None or asset.owner_user_id is not None:
             self._record_assignment_event(
                 asset=asset,
+                tenant_id=tenant_id,
                 actor_user_id=user_id,
                 from_location_id=None,
                 to_location_id=asset.location_id,
@@ -495,6 +492,7 @@ class AssetService:
 
         self._record_assignment_event(
             asset=asset,
+            tenant_id=tenant_id,
             actor_user_id=actor_user_id,
             from_location_id=from_location_id,
             to_location_id=asset.location_id,

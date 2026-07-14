@@ -20,7 +20,7 @@ class Location(Base, TimestampMixin, AuditTrailMixin):
     __tablename__ = "locations"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     kind: Mapped[LocationKind] = mapped_column(CaseInsensitiveEnum(LocationKind), nullable=False, index=True)
     parent_id: Mapped[Optional[int]] = mapped_column(

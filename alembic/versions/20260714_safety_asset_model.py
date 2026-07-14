@@ -44,7 +44,7 @@ def upgrade() -> None:
         op.create_table(
             "locations",
             sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-            sa.Column("tenant_id", sa.Integer(), nullable=True),
+            sa.Column("tenant_id", sa.Integer(), nullable=False),
             sa.Column("name", sa.String(length=200), nullable=False),
             sa.Column("kind", sa.String(length=50), nullable=False),
             sa.Column("parent_id", sa.Integer(), nullable=True),
@@ -107,7 +107,7 @@ def upgrade() -> None:
             "asset_assignment_events",
             sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
             sa.Column("asset_id", sa.Integer(), nullable=False),
-            sa.Column("tenant_id", sa.Integer(), nullable=True),
+            sa.Column("tenant_id", sa.Integer(), nullable=False),
             sa.Column("actor_user_id", sa.Integer(), nullable=True),
             sa.Column("from_location_id", sa.Integer(), nullable=True),
             sa.Column("to_location_id", sa.Integer(), nullable=True),
