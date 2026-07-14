@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
@@ -38,6 +38,7 @@ import {
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { getActionSourceLink } from '../components/investigations/handoffLinks'
+import { buildActionDetailPath, parseActionDetailId } from './actionLinks'
 
 const MAX_EVIDENCE_FILE_SIZE_BYTES = 50 * 1024 * 1024
 /** Matches `ActionOwnerNoteCreate.body` max_length on the API. */
@@ -92,9 +93,8 @@ const SUPPORTED_EVIDENCE_MIME_TYPES = [
 
 export default function ActionDetail() {
   const { t } = useTranslation()
-  const [searchParams] = useSearchParams()
-  const location = useLocation()
-  const key = searchParams.get('key') || ''
+  const { id } = useParams()
+  const key = parseActionDetailId(id)
   const [action, setAction] = useState<ApiAction | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -344,8 +344,8 @@ export default function ActionDetail() {
   }
 
   const pageUrl =
-    typeof window !== 'undefined'
-      ? `${window.location.origin}${location.pathname}${location.search}`
+    typeof window !== 'undefined' && key
+      ? `${window.location.origin}${buildActionDetailPath(key)}`
       : ''
 
   const copyToClipboard = async (text: string, flash: 'key' | 'link') => {
