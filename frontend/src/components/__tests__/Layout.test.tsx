@@ -125,6 +125,7 @@ describe('Layout', () => {
           '/workforce/training',
           '/workforce/engineers',
           '/workforce/calendar',
+          '/workforce/competence-gaps',
         ],
       ],
       [
