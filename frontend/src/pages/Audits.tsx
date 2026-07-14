@@ -17,6 +17,7 @@ import {
   Play,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { buildActionDetailPath } from './actionLinks'
 import {
   auditsApi,
   actionsApi,
@@ -1439,7 +1440,7 @@ export default function Audits() {
                         onAssignCapa={(email) => handleAssignCapaFromFinding(finding, email)}
                         onOpenCapa={() => {
                           if (loopCapa?.action_key) {
-                            navigate(`/actions/item?key=${encodeURIComponent(loopCapa.action_key)}`)
+                            navigate(buildActionDetailPath(loopCapa.action_key))
                             return
                           }
                           navigate(`/actions?sourceType=audit_finding&sourceId=${finding.id}`)
