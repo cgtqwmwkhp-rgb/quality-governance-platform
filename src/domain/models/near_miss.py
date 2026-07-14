@@ -61,9 +61,12 @@ class NearMiss(Base):
     witnesses_present: Mapped[bool] = mapped_column(Boolean, default=False)
     witness_names: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # Asset information
+    # Asset information (legacy free-text retained; FK is golden thread)
     asset_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     asset_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    asset_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("assets.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     # Risk assessment
     risk_category: Mapped[Optional[str]] = mapped_column(

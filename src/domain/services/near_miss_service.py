@@ -110,6 +110,7 @@ class NearMissService:
         status_filter: Optional[str] = None,
         priority: Optional[str] = None,
         contract: Optional[str] = None,
+        asset_id: Optional[int] = None,
     ):
         """List near misses with pagination and optional filters."""
         query = (
@@ -131,6 +132,8 @@ class NearMissService:
             query = query.where(NearMiss.priority == priority)
         if contract:
             query = query.where(NearMiss.contract == contract)
+        if asset_id is not None:
+            query = query.where(NearMiss.asset_id == asset_id)
 
         query = query.order_by(NearMiss.event_date.desc(), NearMiss.id.asc())
         return await paginate(self.db, query, params)

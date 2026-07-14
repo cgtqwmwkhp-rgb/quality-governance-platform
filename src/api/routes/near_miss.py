@@ -142,6 +142,7 @@ async def list_near_misses(
     priority: Optional[str] = Query(None),
     contract: Optional[str] = Query(None),
     reporter_email: Optional[str] = Query(None, description="Filter by reporter email"),
+    asset_id: Optional[int] = Query(None, description="Filter by linked Asset registry id"),
 ) -> NearMissListResponse:
     """
     List near misses with pagination and filtering.
@@ -170,6 +171,8 @@ async def list_near_misses(
         query = query.where(NearMiss.priority == priority)
     if contract:
         query = query.where(NearMiss.contract == contract)
+    if asset_id is not None:
+        query = query.where(NearMiss.asset_id == asset_id)
 
     # Count total
     count_query = select(sa_func.count()).select_from(query.subquery())

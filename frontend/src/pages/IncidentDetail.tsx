@@ -69,6 +69,7 @@ import {
 } from '../helpers/caseSubmission'
 import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
+import { AssetPicker } from '../components/AssetPicker'
 import { getCapaHandoffLabelKey, getCapaLink } from '../components/investigations/handoffLinks'
 import {
   parseLinkedRiskIds,
@@ -180,6 +181,7 @@ export default function IncidentDetail() {
         status: response.data.status,
         location: response.data.location,
         department: response.data.department,
+        asset_id: response.data.asset_id ?? null,
       })
       loadActions()
       loadInvestigations(incidentId)
@@ -256,6 +258,7 @@ export default function IncidentDetail() {
         status: incident.status,
         location: incident.location,
         department: incident.department,
+        asset_id: incident.asset_id ?? null,
       })
     }
     setIsEditing(false)
@@ -832,6 +835,12 @@ export default function IncidentDetail() {
                       />
                     </div>
                   </div>
+                  <div className="mt-4">
+                    <AssetPicker
+                      value={editForm.asset_id}
+                      onChange={(assetId) => setEditForm({ ...editForm, asset_id: assetId })}
+                    />
+                  </div>
                 </>
               ) : (
                 <>
@@ -843,6 +852,12 @@ export default function IncidentDetail() {
                       {incident.description || t('incidents.detail.no_description')}
                     </p>
                   </div>
+                  {incident.asset_id != null && (
+                    <div className="mt-3">
+                      <span className="text-sm font-medium text-muted-foreground">Linked asset</span>
+                      <p className="mt-1 text-foreground">Asset #{incident.asset_id}</p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <span className="text-sm font-medium text-muted-foreground">
