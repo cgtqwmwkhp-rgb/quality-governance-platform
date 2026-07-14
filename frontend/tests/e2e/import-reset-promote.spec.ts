@@ -256,6 +256,8 @@ async function openImportReview(page: Page) {
 }
 
 test.describe("Import review Reset / Promote", () => {
+  test.describe.configure({ mode: "serial" });
+
   test("Reset accepted finding to draft via review PATCH", async ({ page }) => {
     const counters = await openImportReview(page);
 
@@ -276,7 +278,8 @@ test.describe("Import review Reset / Promote", () => {
     await page.getByRole("button", { name: "Confirm Promote" }).click();
 
     await expect.poll(() => counters.getPromoteCalls()).toBe(1);
-    await expect(page.getByRole("alert")).toContainText(/Successfully promoted/i);
+    // LiveAnnouncer also exposes an empty role="alert"; target the success notice copy.
+    await expect(page.getByText(/Successfully promoted/i)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole("button", { name: "View Audit Actions" })).toBeVisible({
       timeout: 20_000,
     });
