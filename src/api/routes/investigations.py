@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.api.utils.tenant import require_tenant_id
 from src.api.schemas.investigation import (
     CreateFromRecordRequest,
     InvestigationClosureValidationResponse,
@@ -409,10 +410,11 @@ async def get_closure_validation(
     if investigation.status != InvestigationStatus.COMPLETED:
         reasons.append(ClosureReasonCode.STATUS_NOT_COMPLETE)
 
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     open_work = await fetch_open_work_for_investigation(
         db,
         investigation_id=investigation_id,
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
     )
     if open_work:
         reasons.append(CLOSURE_REASON_OPEN_ACTIONS_REMAIN)
@@ -538,10 +540,11 @@ async def update_investigation(
     if update_data.get("status") == "closed":
         from src.domain.services.investigation_closure_helpers import assert_investigation_can_close
 
+        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
         await assert_investigation_can_close(
             db,
             investigation_id=investigation_id,
-            tenant_id=current_user.tenant_id,
+            tenant_id=tenant_id,
         )
 
     # Update fields
