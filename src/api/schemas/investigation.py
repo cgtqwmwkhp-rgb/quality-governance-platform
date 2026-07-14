@@ -323,8 +323,22 @@ class InvestigationPackGeneratedResponse(BaseModel):
     checksum_sha256: Optional[str] = None
 
 
+class InvestigationClosureBlockingItem(BaseModel):
+    """Open CAPA/action blocking investigation closure."""
+
+    kind: str
+    id: int
+    reference_number: str
+    title: str
+    status: str
+    action_key: str
+    unblock_hint: str = "Complete or cancel this action on the Actions tab."
+
+
 class InvestigationClosureValidationResponse(BaseModel):
     """Closure-validation result for an investigation."""
 
     can_close: bool
     reasons: List[str]
+    open_work: List[InvestigationClosureBlockingItem] = Field(default_factory=list)
+    open_work_count: int = 0

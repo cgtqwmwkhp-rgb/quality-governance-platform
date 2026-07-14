@@ -26,6 +26,7 @@ from src.api.schemas.investigation import (
     SourceRecordItem,
     SourceRecordsResponse,
 )
+from src.api.utils.tenant import require_tenant_id
 from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError
 from src.domain.models.investigation import (
     AssignedEntityType,
@@ -50,6 +51,7 @@ class ClosureReasonCode:
     INVALID_ARRAY_EMPTY = "INVALID_ARRAY_EMPTY"
     LEVEL_NOT_SET = "LEVEL_NOT_SET"
     STATUS_NOT_COMPLETE = "STATUS_NOT_COMPLETE"
+    OPEN_ACTIONS_REMAIN = "OPEN_ACTIONS_REMAIN"
 
 
 def _user_can_access_investigation(user: Any, investigation: InvestigationRun) -> bool:
@@ -395,13 +397,34 @@ async def get_closure_validation(
     current_user: CurrentUser,
 ):
     """Return closure-validation state for a given investigation."""
+    from src.domain.services.investigation_closure_helpers import (
+        CLOSURE_REASON_OPEN_ACTIONS_REMAIN,
+        fetch_open_work_for_investigation,
+        open_work_to_payload,
+    )
+
     investigation = await _get_investigation_or_404(investigation_id, db, current_user)
     reasons: list[str] = []
     if not investigation.level:
         reasons.append(ClosureReasonCode.LEVEL_NOT_SET)
     if investigation.status != InvestigationStatus.COMPLETED:
         reasons.append(ClosureReasonCode.STATUS_NOT_COMPLETE)
-    return {"can_close": len(reasons) == 0, "reasons": reasons}
+
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    open_work = await fetch_open_work_for_investigation(
+        db,
+        investigation_id=investigation_id,
+        tenant_id=tenant_id,
+    )
+    if open_work:
+        reasons.append(CLOSURE_REASON_OPEN_ACTIONS_REMAIN)
+
+    return {
+        "can_close": len(reasons) == 0,
+        "reasons": reasons,
+        "open_work": open_work_to_payload(open_work),
+        "open_work_count": len(open_work),
+    }
 
 
 @router.get("", response_model=InvestigationRunListResponse, include_in_schema=False)
@@ -513,8 +536,18 @@ async def update_investigation(
     if not investigation:
         raise NotFoundError(f"Investigation with ID {investigation_id} not found")
 
-    # Update fields
     update_data = investigation_data.model_dump(exclude_unset=True)
+    if update_data.get("status") == "closed":
+        from src.domain.services.investigation_closure_helpers import assert_investigation_can_close
+
+        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+        await assert_investigation_can_close(
+            db,
+            investigation_id=investigation_id,
+            tenant_id=tenant_id,
+        )
+
+    # Update fields
     for field, value in update_data.items():
         if field == "status" and value is not None:
             setattr(investigation, field, InvestigationStatus(value))
