@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Search, Filter, ChevronRight } from 'lucide-react'
 import { TableSkeleton } from '../../components/ui/SkeletonLoader'
@@ -34,17 +34,12 @@ export default function Training() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [stageFilter, setStageFilter] = useState('')
+  const [engineerFilter, setEngineerFilter] = useState('')
   const [engineerMap, setEngineerMap] = useState<Record<number, string>>({})
   const [templateMap, setTemplateMap] = useState<Record<number, string>>({})
   const [assetTypes, setAssetTypes] = useState<AssetType[]>([])
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300)
-    return () => clearTimeout(timer)
-  }, [searchTerm])
 
   useEffect(() => {
     workforceApi
@@ -61,8 +56,8 @@ export default function Training() {
       .listTemplates(1, 500, { is_published: true })
       .then((res) => {
         const map: Record<number, string> = {}
-        for (const t of res.data?.items || []) {
-          map[t.id] = t.name
+        for (const tmpl of res.data?.items || []) {
+          map[tmpl.id] = tmpl.name
         }
         setTemplateMap(map)
       })
@@ -78,10 +73,10 @@ export default function Training() {
       setLoading(true)
       setError(null)
       try {
+        // List API supports status / engineer_id / asset_type_id only — never send `search` or `stage`.
         const params: Record<string, string> = { page: '1', page_size: '50' }
-        if (debouncedSearch) params.search = debouncedSearch
         if (statusFilter) params.status = statusFilter
-        if (stageFilter) params.stage = stageFilter
+        if (engineerFilter) params.engineer_id = engineerFilter
         const res = await workforceApi.listInductions(params)
         setInductions(res.data.items || [])
       } catch (err: unknown) {
@@ -92,7 +87,31 @@ export default function Training() {
       }
     }
     load()
-  }, [debouncedSearch, statusFilter, stageFilter])
+  }, [statusFilter, engineerFilter])
+
+  const filteredInductions = useMemo(() => {
+    let rows = inductions
+    if (stageFilter) {
+      rows = rows.filter((i) => i.stage === stageFilter)
+    }
+    const q = searchTerm.trim().toLowerCase()
+    if (!q) return rows
+    return rows.filter((i) => {
+      const ref = (i.reference_number || '').toLowerCase()
+      const eng = (engineerMap[i.engineer_id] ?? `#${i.engineer_id}`).toLowerCase()
+      const tmpl = (templateMap[i.template_id] ?? `#${i.template_id}`).toLowerCase()
+      const stage = (i.stage || '').toLowerCase()
+      return ref.includes(q) || eng.includes(q) || tmpl.includes(q) || stage.includes(q)
+    })
+  }, [inductions, stageFilter, searchTerm, engineerMap, templateMap])
+
+  const engineerOptions = useMemo(
+    () =>
+      Object.entries(engineerMap)
+        .map(([id, label]) => ({ id, label }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [engineerMap],
+  )
 
   return (
     <div className="space-y-6">
@@ -117,6 +136,7 @@ export default function Training() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9"
+                aria-label="Search training (client-side)"
               />
             </div>
             <div className="flex flex-wrap gap-2">
@@ -124,6 +144,7 @@ export default function Training() {
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
+                aria-label={t('common.status')}
               >
                 <option value="">{t('workforce.common.all_statuses')}</option>
                 <option value="draft">{t('common.draft')}</option>
@@ -132,15 +153,37 @@ export default function Training() {
                 <option value="cancelled">{t('common.cancelled')}</option>
               </select>
               <select
+                value={engineerFilter}
+                onChange={(e) => setEngineerFilter(e.target.value)}
+                className="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
+                aria-label={t('workforce.common.engineer')}
+              >
+                <option value="">All engineers</option>
+                {engineerOptions.map((eng) => (
+                  <option key={eng.id} value={eng.id}>
+                    {eng.label}
+                  </option>
+                ))}
+              </select>
+              <select
                 value={stageFilter}
                 onChange={(e) => setStageFilter(e.target.value)}
                 className="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
+                aria-label={t('workforce.common.stage')}
+                title="Stage is filtered client-side (list API has no stage param)"
               >
                 <option value="">{t('workforce.training.all_stages')}</option>
                 <option value="stage_1_onsite">{t('workforce.training.stage1')}</option>
                 <option value="stage_2_field">{t('workforce.training.stage2')}</option>
               </select>
-              <Button variant="outline" size="sm" className="gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                disabled
+                title="Additional filters are not available yet"
+                aria-disabled="true"
+              >
                 <Filter className="w-4 h-4" />
                 {t('workforce.common.filters')}
               </Button>
@@ -185,14 +228,14 @@ export default function Training() {
                   </tr>
                 </thead>
                 <tbody>
-                  {inductions.length === 0 ? (
+                  {filteredInductions.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="py-12 text-center text-muted-foreground">
                         {t('workforce.training.empty')}
                       </td>
                     </tr>
                   ) : (
-                    inductions.map((i) => (
+                    filteredInductions.map((i) => (
                       <tr
                         key={i.id}
                         className={cn(
