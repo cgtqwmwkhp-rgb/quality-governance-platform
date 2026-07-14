@@ -1,11 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  competenceGapsEngineerHref,
-  computeRequirementsMatch,
-} from '../EngineerProfile'
-import type { CompetencyRecord, CompetencyRequirement } from '../../../api/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   listAssetTypes,
@@ -15,28 +10,30 @@ const {
   createTicket,
   updateTicket,
   listRequirements,
-} = vi.hoisted(() => ({
-  listAssetTypes: vi.fn().mockResolvedValue({ data: { items: [] } }),
-  getEngineer: vi.fn(),
-  getCompetencies: vi.fn(),
-  listTickets: vi.fn(),
-  createTicket: vi.fn(),
-  updateTicket: vi.fn(),
-  listRequirements: vi.fn(),
-}))
+  t,
+} = vi.hoisted(() => {
+  const t = (key: string, opts?: Record<string, unknown>) => {
+    if (opts && typeof opts === 'object') {
+      return `${key}:${JSON.stringify(opts)}`
+    }
+    return key
+  }
+  return {
+    listAssetTypes: vi.fn(),
+    getEngineer: vi.fn(),
+    getCompetencies: vi.fn(),
+    listTickets: vi.fn(),
+    createTicket: vi.fn(),
+    updateTicket: vi.fn(),
+    listRequirements: vi.fn(),
+    t,
+  }
+})
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, opts?: Record<string, unknown>) => {
-      if (opts && typeof opts === 'object') {
-        return `${key}:${JSON.stringify(opts)}`
-      }
-      return key
-    },
-  }),
+  useTranslation: () => ({ t }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
-
 
 vi.mock('../../../api/client', () => ({
   workforceApi: {
@@ -60,7 +57,31 @@ vi.mock('../../../utils/errorTracker', () => ({
   trackError: vi.fn(),
 }))
 
-import EngineerProfile from '../EngineerProfile'
+import EngineerProfile, {
+  competenceGapsEngineerHref,
+  computeRequirementsMatch,
+} from '../EngineerProfile'
+
+type CompetencyRequirement = {
+  id: number
+  asset_type_id: number
+  template_id: number
+  name: string
+  is_mandatory: boolean
+  reassessment_interval_days: number
+  tenant_id: number
+  created_at: string
+  updated_at: string
+}
+
+type CompetencyRecord = {
+  id: number
+  engineer_id: number
+  asset_type_id: number
+  template_id: number
+  state: string
+  source_type: string
+}
 
 const engineer = {
   id: 7,
@@ -109,8 +130,14 @@ describe('computeRequirementsMatch', () => {
   })
 
   it('computes percent as mandatory met / mandatory total', () => {
-    const requirements = [req({ id: 1, asset_type_id: 10 }), req({ id: 2, asset_type_id: 20 })]
-    const competencies = [comp({ id: 1, asset_type_id: 10, state: 'active' })]
+    const requirements = [
+      req({ id: 1, asset_type_id: 10 }),
+      req({ id: 2, asset_type_id: 20 }),
+    ]
+    const competencies = [
+      comp({ id: 1, asset_type_id: 10, state: 'active' }),
+      comp({ id: 2, asset_type_id: 20, state: 'expired' }),
+    ]
     expect(computeRequirementsMatch(requirements, competencies)).toEqual({
       mandatoryTotal: 2,
       mandatoryMet: 1,
@@ -142,8 +169,19 @@ describe('competenceGapsEngineerHref', () => {
 })
 
 describe('EngineerProfile', () => {
+  afterEach(() => {
+    cleanup()
+  })
+
   beforeEach(() => {
-    vi.clearAllMocks()
+    listAssetTypes.mockReset()
+    getEngineer.mockReset()
+    getCompetencies.mockReset()
+    listTickets.mockReset()
+    createTicket.mockReset()
+    updateTicket.mockReset()
+    listRequirements.mockReset()
+
     listAssetTypes.mockResolvedValue({
       data: { items: [{ id: 10, name: 'MEWP', category: 'plant', is_active: true }] },
     })
@@ -226,6 +264,9 @@ describe('EngineerProfile', () => {
       </MemoryRouter>,
     )
 
+    await waitFor(() => {
+      expect(screen.getByTestId('engineer-identity')).toBeInTheDocument()
+    })
     expect(await screen.findByTestId('requirements-match-percent')).toHaveTextContent('100%')
     expect(
       screen.getByText('workforce.engineers.requirements.match_detail:{"met":1,"total":1}'),
@@ -249,7 +290,7 @@ describe('EngineerProfile', () => {
   })
 
   it('surfaces requirements load error instead of silent zero percent', async () => {
-    listRequirements.mockRejectedValueOnce(new Error('requirements down'))
+    listRequirements.mockRejectedValue(new Error('requirements down'))
     render(
       <MemoryRouter initialEntries={['/workforce/engineers/7']}>
         <Routes>
@@ -258,9 +299,6 @@ describe('EngineerProfile', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => {
-      expect(screen.queryByTestId('engineer-identity')).toBeInTheDocument()
-    })
     expect(await screen.findByTestId('requirements-match-error')).toBeInTheDocument()
     expect(screen.getByText(/requirements down/)).toBeInTheDocument()
     expect(screen.queryByTestId('requirements-match-percent')).not.toBeInTheDocument()
@@ -276,9 +314,7 @@ describe('EngineerProfile', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => {
-      expect(screen.getByTestId('asset-type-map-error')).toBeInTheDocument()
-    })
+    expect(await screen.findByTestId('asset-type-map-error')).toBeInTheDocument()
     expect(screen.getByText(/asset types down/)).toBeInTheDocument()
   })
 
