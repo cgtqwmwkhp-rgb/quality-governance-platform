@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { BrowserRouter } from 'react-router-dom'
+import { BrowserRouter, MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import Incidents from '../Incidents'
 
@@ -238,5 +238,23 @@ describe('Incidents', () => {
     fireEvent.click(clickableCell!)
 
     expect(mockNavigate).toHaveBeenCalledWith('/incidents/1')
+  })
+
+  it('hydrates q/status/severity filters from shareable URL', async () => {
+    render(
+      <MemoryRouter initialEntries={['/incidents?q=warehouse&status=reported&severity=high']}>
+        <Routes>
+          <Route path="/incidents" element={<Incidents />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('INC-001')).toBeInTheDocument()
+    })
+
+    expect(screen.getByPlaceholderText('incidents.search_placeholder')).toHaveValue('warehouse')
+    expect(screen.queryByText('Chemical spill in lab')).not.toBeInTheDocument()
+    expect(mockList).toHaveBeenCalledWith(1, 50, undefined)
   })
 })
