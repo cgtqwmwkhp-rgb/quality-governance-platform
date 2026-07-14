@@ -221,8 +221,7 @@ async def create_enterprise_risk_from_incident(
         is_within_appetite=score <= 12,
         treatment_strategy=map_treatment_strategy(treatment_strategy),
         treatment_plan=(
-            f"Raised from incident {incident.reference_number}. "
-            "Review in Risk Register and set treatment plan."
+            f"Raised from incident {incident.reference_number}. " "Review in Risk Register and set treatment plan."
         ),
         risk_owner_id=owner_id,
         status="open",
