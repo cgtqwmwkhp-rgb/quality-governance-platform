@@ -47,6 +47,8 @@ export interface Incident {
   reporter_submission?: Record<string, unknown> | null
   closed_at?: string | null
   owner_id?: number | null
+  /** Comma-separated enterprise risk register IDs linked from this incident. */
+  linked_risk_ids?: string
 }
 
 export interface IncidentCreate {
@@ -73,6 +75,28 @@ export interface IncidentUpdate {
   owner_id?: number | null
 }
 
+export interface RaiseRiskFromIncidentRequest {
+  title?: string
+  description?: string
+  likelihood?: number
+  impact?: number
+  category?: string
+  treatment_strategy?: string
+}
+
+export interface RaiseRiskFromIncidentResponse {
+  risk: {
+    id: number
+    reference_number: string
+    title: string
+    risk_source?: string | null
+  }
+  incident_id: number
+  linked_risk_ids: string
+  incident_href: string
+  risk_register_href: string
+}
+
 /** Shared running-sheet entry used by incidents and sibling case modules. */
 export interface RunningSheetEntry {
   id: number
@@ -95,6 +119,8 @@ export function createIncidentsApi(api: AxiosInstance) {
     },
     create: (data: IncidentCreate) => api.post<Incident>('/api/v1/incidents/', data),
     get: (id: number) => api.get<Incident>(`/api/v1/incidents/${id}`),
+    raiseRisk: (id: number, data?: RaiseRiskFromIncidentRequest) =>
+      api.post<RaiseRiskFromIncidentResponse>(`/api/v1/incidents/${id}/raise-risk`, data || {}),
     update: (id: number, data: IncidentUpdate) =>
       api.patch<Incident>(`/api/v1/incidents/${id}`, data),
     listInvestigations: (id: number, page = 1, pageSize = 10) =>

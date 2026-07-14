@@ -1,11 +1,13 @@
 """Incident API routes."""
 
 import logging
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
@@ -20,12 +22,27 @@ from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictE
 from src.domain.models.incident import Incident, IncidentRunningSheetEntry
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.incident_risk_links import (
+    append_linked_risk_id,
+    create_enterprise_risk_from_incident,
+    default_impact_for_incident,
+    incident_detail_href,
+    resolve_enterprise_category,
+    risk_register_href,
+    severity_allows_raise_risk,
+)
 from src.domain.services.notification_service import NotificationService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.services.incident_service import IncidentService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+class IncidentResponseWithLinks(IncidentResponse):
+    """Incident response including optional enterprise risk linkage."""
+
+    linked_risk_ids: Optional[str] = None
 
 
 async def _validate_case_owner(db: DbSession, owner_id: int, tenant_id: int | None) -> User:
@@ -135,7 +152,7 @@ async def create_incident(
         raise ConflictError(str(e))
 
 
-@router.get("/{incident_id}", response_model=IncidentResponse)
+@router.get("/{incident_id}", response_model=IncidentResponseWithLinks)
 async def get_incident(
     incident_id: int,
     db: DbSession,
@@ -155,6 +172,157 @@ async def get_incident(
         )
     except LookupError:
         raise NotFoundError(f"Incident {incident_id} not found")
+
+
+class RaiseRiskFromIncidentRequest(BaseModel):
+    """Optional overrides when raising an enterprise risk from an incident."""
+
+    title: Optional[str] = Field(None, min_length=1, max_length=300)
+    description: Optional[str] = Field(None, min_length=1)
+    likelihood: int = Field(4, ge=1, le=5)
+    impact: int = Field(3, ge=1, le=5)
+    category: Literal[
+        "strategic",
+        "operational",
+        "financial",
+        "compliance",
+        "reputational",
+        "safety",
+        "environmental",
+        "information_security",
+    ] = "safety"
+    treatment_strategy: Literal[
+        "accept",
+        "mitigate",
+        "transfer",
+        "avoid",
+        "exploit",
+        "treat",
+        "tolerate",
+        "terminate",
+    ] = "mitigate"
+
+
+class RaisedEnterpriseRiskSummary(BaseModel):
+    """Slim risk payload for FE toast/navigation (enterprise register)."""
+
+    id: int
+    reference_number: str
+    title: str
+    risk_source: Optional[str] = None
+
+
+class RaiseRiskFromIncidentResponse(BaseModel):
+    risk: RaisedEnterpriseRiskSummary
+    incident_id: int
+    linked_risk_ids: str
+    incident_href: str
+    risk_register_href: str
+
+
+@router.post(
+    "/{incident_id}/raise-risk",
+    response_model=RaiseRiskFromIncidentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def raise_risk_from_incident(
+    incident_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("risk:create"))],
+    request_id: str = Depends(get_request_id),
+    body: Optional[RaiseRiskFromIncidentRequest] = None,
+):
+    """Create an Enterprise Risk Register entry linked to this incident."""
+    if body is None:
+        body = RaiseRiskFromIncidentRequest.model_validate({})
+
+    svc = IncidentService(db)
+    try:
+        incident = await svc.get_incident(
+            incident_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise NotFoundError(f"Incident {incident_id} not found")
+
+    if not severity_allows_raise_risk(incident.severity):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Only high or critical severity incidents can raise an enterprise risk.",
+            ),
+        )
+
+    impact = default_impact_for_incident(incident, body.impact)
+    category = resolve_enterprise_category(body.category, incident)
+    title = body.title or f"Risk from incident {incident.reference_number}"
+    description = body.description or (
+        f"Raised from incident {incident.reference_number}.\n\n"
+        f"{incident.title}\n\n{incident.description}"
+        + (f"\n\nRoot cause: {incident.root_cause}" if incident.root_cause else "")
+    )
+
+    try:
+        risk = await create_enterprise_risk_from_incident(
+            db,
+            incident=incident,
+            actor_user_id=current_user.id,
+            title=title,
+            description=description,
+            likelihood=body.likelihood,
+            impact=impact,
+            category=category,
+            treatment_strategy=body.treatment_strategy,
+        )
+        incident.linked_risk_ids = append_linked_risk_id(incident.linked_risk_ids, risk.id)
+
+        await record_audit_event(
+            db=db,
+            event_type="incident.risk_raised",
+            entity_type="incident",
+            entity_id=str(incident.id),
+            action="create",
+            description=f"Risk {risk.reference} raised from incident {incident.reference_number}",
+            payload={"risk_id": risk.id, "risk_reference": risk.reference},
+            user_id=current_user.id,
+            request_id=request_id,
+            tenant_id=incident.tenant_id,
+        )
+
+        await db.commit()
+        await db.refresh(risk)
+    except IntegrityError as exc:
+        await db.rollback()
+        logger.exception("raise-risk IntegrityError for incident_id=%s", incident_id)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=api_error(
+                ErrorCode.DATABASE_ERROR,
+                "Could not raise risk due to a data conflict. Check assignee and try again.",
+            ),
+        ) from exc
+    except Exception as exc:
+        await db.rollback()
+        logger.exception("raise-risk failed for incident_id=%s", incident_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=api_error(ErrorCode.INTERNAL_ERROR, "Could not raise risk from incident."),
+        ) from exc
+
+    return RaiseRiskFromIncidentResponse(
+        risk=RaisedEnterpriseRiskSummary(
+            id=risk.id,
+            reference_number=risk.reference,
+            title=risk.title,
+            risk_source=risk.context,
+        ),
+        incident_id=incident.id,
+        linked_risk_ids=incident.linked_risk_ids or str(risk.id),
+        incident_href=incident_detail_href(incident.id),
+        risk_register_href=risk_register_href(risk.id, incident_ref=incident.reference_number),
+    )
 
 
 @router.get("", response_model=IncidentListResponse, include_in_schema=False)
