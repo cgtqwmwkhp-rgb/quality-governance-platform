@@ -335,6 +335,210 @@ class AssetImportService:
     # Validation
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _validate_required_fields(
+        *,
+        row_number: int,
+        asset_number: str,
+        name: str,
+        type_name: str,
+        type_map: dict[str, AssetType],
+        errors: list[RowError],
+    ) -> AssetType | None:
+        if not asset_number:
+            errors.append(
+                RowError(
+                    row=row_number,
+                    field="asset_number",
+                    code="REQUIRED",
+                    message="asset_number is required",
+                )
+            )
+        if not name:
+            errors.append(RowError(row=row_number, field="name", code="REQUIRED", message="name is required"))
+        if not type_name:
+            errors.append(
+                RowError(
+                    row=row_number,
+                    field="type",
+                    code="REQUIRED",
+                    message="type (asset type name) is required",
+                )
+            )
+
+        asset_type = type_map.get(type_name.lower()) if type_name else None
+        if type_name and asset_type is None:
+            errors.append(
+                RowError(
+                    row=row_number,
+                    field="type",
+                    code="UNKNOWN_TYPE",
+                    message=f"Unknown asset type '{type_name}'",
+                )
+            )
+        return asset_type
+
+    @staticmethod
+    def _validate_asset_number(
+        *,
+        row_number: int,
+        asset_number: str,
+        seen_in_file: dict[str, int],
+        existing_numbers: set[str],
+        errors: list[RowError],
+    ) -> None:
+        if not asset_number:
+            return
+        if asset_number in seen_in_file:
+            errors.append(
+                RowError(
+                    row=row_number,
+                    field="asset_number",
+                    code="DUPLICATE_IN_FILE",
+                    message=(f"Duplicate asset_number '{asset_number}' " f"(also on row {seen_in_file[asset_number]})"),
+                )
+            )
+        else:
+            seen_in_file[asset_number] = row_number
+        if asset_number in existing_numbers:
+            errors.append(
+                RowError(
+                    row=row_number,
+                    field="asset_number",
+                    code="DUPLICATE_EXISTING",
+                    message=f"asset_number '{asset_number}' already exists",
+                )
+            )
+
+    def _resolve_owner(
+        self,
+        *,
+        row_number: int,
+        owner_email: str,
+        owner_user_id_raw: str,
+        users_by_email: dict[str, User],
+        users_by_id: dict[int, User],
+        errors: list[RowError],
+    ) -> int | None:
+        if owner_email and owner_user_id_raw:
+            errors.append(
+                RowError(
+                    row=row_number,
+                    field="owner_email",
+                    code="OWNER_AMBIGUOUS",
+                    message="Provide owner_email or owner_user_id, not both",
+                )
+            )
+            return None
+        if owner_email:
+            user = users_by_email.get(owner_email.lower())
+            if user is None:
+                errors.append(
+                    RowError(
+                        row=row_number,
+                        field="owner_email",
+                        code="UNKNOWN_OWNER",
+                        message=f"No user with email '{owner_email}' in tenant",
+                    )
+                )
+                return None
+            return user.id
+        if owner_user_id_raw:
+            try:
+                parsed_id = self._parse_owner_user_id(owner_user_id_raw)
+            except ValueError as exc:
+                errors.append(
+                    RowError(
+                        row=row_number,
+                        field="owner_user_id",
+                        code="INVALID_OWNER_ID",
+                        message=str(exc),
+                    )
+                )
+                return None
+            if parsed_id not in users_by_id:
+                errors.append(
+                    RowError(
+                        row=row_number,
+                        field="owner_user_id",
+                        code="UNKNOWN_OWNER",
+                        message=f"No user with id {parsed_id} in tenant",
+                    )
+                )
+                return None
+            return parsed_id
+        return None
+
+    @staticmethod
+    def _resolve_assignment(
+        *,
+        row_number: int,
+        location_name: str,
+        vehicle_reg: str | None,
+        location_map: dict[str, Location],
+        errors: list[RowError],
+    ) -> int | None:
+        if location_name and vehicle_reg:
+            errors.append(
+                RowError(
+                    row=row_number,
+                    field="location_name",
+                    code="ASSIGNMENT_XOR",
+                    message="Set location_name or vehicle_reg, not both",
+                )
+            )
+            return None
+        if location_name:
+            location = location_map.get(location_name.lower())
+            if location is None:
+                errors.append(
+                    RowError(
+                        row=row_number,
+                        field="location_name",
+                        code="UNKNOWN_LOCATION",
+                        message=f"Unknown location '{location_name}'",
+                    )
+                )
+                return None
+            return location.id
+        return None
+
+    def _parse_status_and_expiry(
+        self,
+        *,
+        row_number: int,
+        status_raw: str,
+        expiry_raw: str,
+        errors: list[RowError],
+    ) -> tuple[str, datetime | None]:
+        try:
+            status = AssetStatus(status_raw.lower()).value
+        except ValueError:
+            errors.append(
+                RowError(
+                    row=row_number,
+                    field="status",
+                    code="INVALID_STATUS",
+                    message=f"Invalid status '{status_raw}'. Allowed: {', '.join(s.value for s in AssetStatus)}",
+                )
+            )
+            status = AssetStatus.ACTIVE.value
+
+        expiry_date: datetime | None = None
+        if expiry_raw:
+            try:
+                expiry_date = self._parse_expiry(expiry_raw)
+            except ValueError as exc:
+                errors.append(
+                    RowError(
+                        row=row_number,
+                        field="expiry_date",
+                        code="INVALID_DATE",
+                        message=str(exc),
+                    )
+                )
+        return status, expiry_date
+
     async def validate_rows(
         self,
         rows: list[dict[str, str]],
@@ -374,159 +578,48 @@ class AssetImportService:
             name = (row.get("name") or "").strip()
             type_name = (row.get("type") or "").strip()
 
-            if not asset_number:
-                row_errors.append(
-                    RowError(row=idx, field="asset_number", code="REQUIRED", message="asset_number is required")
-                )
-            if not name:
-                row_errors.append(RowError(row=idx, field="name", code="REQUIRED", message="name is required"))
-            if not type_name:
-                row_errors.append(
-                    RowError(row=idx, field="type", code="REQUIRED", message="type (asset type name) is required")
-                )
-
-            asset_type = type_map.get(type_name.lower()) if type_name else None
-            if type_name and asset_type is None:
-                row_errors.append(
-                    RowError(
-                        row=idx,
-                        field="type",
-                        code="UNKNOWN_TYPE",
-                        message=f"Unknown asset type '{type_name}'",
-                    )
-                )
-
-            if asset_number:
-                if asset_number in seen_in_file:
-                    row_errors.append(
-                        RowError(
-                            row=idx,
-                            field="asset_number",
-                            code="DUPLICATE_IN_FILE",
-                            message=(
-                                f"Duplicate asset_number '{asset_number}' "
-                                f"(also on row {seen_in_file[asset_number]})"
-                            ),
-                        )
-                    )
-                else:
-                    seen_in_file[asset_number] = idx
-                if asset_number in existing_numbers:
-                    row_errors.append(
-                        RowError(
-                            row=idx,
-                            field="asset_number",
-                            code="DUPLICATE_EXISTING",
-                            message=f"asset_number '{asset_number}' already exists",
-                        )
-                    )
-
             owner_email = (row.get("owner_email") or "").strip()
             owner_user_id_raw = (row.get("owner_user_id") or "").strip()
-            owner_user_id: int | None = None
-            if owner_email and owner_user_id_raw:
-                row_errors.append(
-                    RowError(
-                        row=idx,
-                        field="owner_email",
-                        code="OWNER_AMBIGUOUS",
-                        message="Provide owner_email or owner_user_id, not both",
-                    )
-                )
-            elif owner_email:
-                user = users_by_email.get(owner_email.lower())
-                if user is None:
-                    row_errors.append(
-                        RowError(
-                            row=idx,
-                            field="owner_email",
-                            code="UNKNOWN_OWNER",
-                            message=f"No user with email '{owner_email}' in tenant",
-                        )
-                    )
-                else:
-                    owner_user_id = user.id
-            elif owner_user_id_raw:
-                try:
-                    parsed_id = self._parse_owner_user_id(owner_user_id_raw)
-                    user = users_by_id.get(parsed_id)
-                    if user is None:
-                        row_errors.append(
-                            RowError(
-                                row=idx,
-                                field="owner_user_id",
-                                code="UNKNOWN_OWNER",
-                                message=f"No user with id {parsed_id} in tenant",
-                            )
-                        )
-                    else:
-                        owner_user_id = parsed_id
-                except ValueError as exc:
-                    row_errors.append(
-                        RowError(
-                            row=idx,
-                            field="owner_user_id",
-                            code="INVALID_OWNER_ID",
-                            message=str(exc),
-                        )
-                    )
-
             location_name = (row.get("location_name") or "").strip()
             vehicle_reg = (row.get("vehicle_reg") or "").strip() or None
-            location_id: int | None = None
-            if location_name and vehicle_reg:
-                row_errors.append(
-                    RowError(
-                        row=idx,
-                        field="location_name",
-                        code="ASSIGNMENT_XOR",
-                        message="Set location_name or vehicle_reg, not both",
-                    )
-                )
-            elif location_name:
-                loc = location_map.get(location_name.lower())
-                if loc is None:
-                    row_errors.append(
-                        RowError(
-                            row=idx,
-                            field="location_name",
-                            code="UNKNOWN_LOCATION",
-                            message=f"Unknown location '{location_name}'",
-                        )
-                    )
-                else:
-                    location_id = loc.id
-
             status_raw = (row.get("status") or "").strip() or AssetStatus.ACTIVE.value
-            try:
-                status = AssetStatus(status_raw.lower()).value
-            except ValueError:
-                row_errors.append(
-                    RowError(
-                        row=idx,
-                        field="status",
-                        code="INVALID_STATUS",
-                        message=(
-                            f"Invalid status '{status_raw}'. " f"Allowed: {', '.join(s.value for s in AssetStatus)}"
-                        ),
-                    )
-                )
-                status = AssetStatus.ACTIVE.value
-
-            expiry_date: datetime | None = None
             expiry_raw = (row.get("expiry_date") or "").strip()
-            if expiry_raw:
-                try:
-                    expiry_date = self._parse_expiry(expiry_raw)
-                except ValueError as exc:
-                    row_errors.append(
-                        RowError(
-                            row=idx,
-                            field="expiry_date",
-                            code="INVALID_DATE",
-                            message=str(exc),
-                        )
-                    )
+            asset_type = self._validate_required_fields(
+                row_number=idx,
+                asset_number=asset_number,
+                name=name,
+                type_name=type_name,
+                type_map=type_map,
+                errors=row_errors,
+            )
+            self._validate_asset_number(
+                row_number=idx,
+                asset_number=asset_number,
+                seen_in_file=seen_in_file,
+                existing_numbers=existing_numbers,
+                errors=row_errors,
+            )
+            owner_user_id = self._resolve_owner(
+                row_number=idx,
+                owner_email=owner_email,
+                owner_user_id_raw=owner_user_id_raw,
+                users_by_email=users_by_email,
+                users_by_id=users_by_id,
+                errors=row_errors,
+            )
+            location_id = self._resolve_assignment(
+                row_number=idx,
+                location_name=location_name,
+                vehicle_reg=vehicle_reg,
+                location_map=location_map,
+                errors=row_errors,
+            )
+            status, expiry_date = self._parse_status_and_expiry(
+                row_number=idx,
+                status_raw=status_raw,
+                expiry_raw=expiry_raw,
+                errors=row_errors,
+            )
 
             if row_errors:
                 errors.extend(row_errors)
