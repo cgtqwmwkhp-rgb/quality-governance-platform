@@ -9,6 +9,7 @@ import {
   Smartphone,
   LogOut,
   User,
+  Briefcase,
 } from 'lucide-react'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
@@ -104,6 +105,32 @@ export default function Portal() {
               </p>
             </div>
             <ChevronRight className="w-6 h-6 text-primary group-hover:translate-x-1 transition-transform" />
+          </button>
+
+
+          {/* My Work inbox (CUJ-P10) */}
+          <button
+            data-testid="portal-work-btn"
+            type="button"
+            aria-label="My Work — assigned actions and reading"
+            onClick={() => navigate('/portal/work')}
+            className={cn(
+              'w-full flex items-center gap-4 p-5 rounded-2xl transition-all group',
+              'bg-card hover:bg-muted/40 border-2 border-border hover:border-primary/30',
+            )}
+          >
+            <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Briefcase className="w-7 h-7 text-primary" />
+            </div>
+            <div className="flex-1 text-left">
+              <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
+                My Work
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Assigned actions, pending reading, profile link
+              </p>
+            </div>
+            <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:translate-x-1 transition-transform" />
           </button>
 
           {/* Secondary Action: Track Status */}

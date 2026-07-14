@@ -2,7 +2,8 @@
 
 Polls curated public sources (not unrestricted web crawl), persists
 RegulatoryUpdate rows, and matches impacts against policies / MSDS / RAMS / COSHH.
-High-confidence impacts auto-create tasks; others go to the exception inbox.
+High-confidence impacts auto-create real CAPA Actions (owner + due);
+others stay in the watch inbox for manual create-action / dismiss.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from src.domain.models.compliance_automation import RegulatoryUpdate
 from src.domain.models.document import Document
 from src.domain.models.governed_knowledge import AiDecisionLog, RegulatoryImpactStatus, RegulatoryWatchImpact
 from src.domain.services.governed_knowledge_service import AUTO_CONFIRM_THRESHOLD
+from src.domain.services.regulatory_watch_actions import regulatory_watch_actions_service
 
 logger = logging.getLogger(__name__)
 
@@ -137,14 +139,23 @@ class RegulatoryWatchService:
             impacts = await self.match_impacts_for_update(db, update=update, tenant_id=tenant_id)
             for impact in impacts:
                 db.add(impact)
+                await db.flush()
                 created_impacts += 1
                 if (
                     impact.confidence is not None
                     and impact.confidence >= AUTO_CONFIRM_THRESHOLD
                     and impact.status == RegulatoryImpactStatus.NEW
                 ):
-                    # AI-first: high confidence → mark as task_created automatically
-                    impact.status = RegulatoryImpactStatus.TASK_CREATED
+                    # AI-first closed-loop: high confidence → real Action with owner/due
+                    await regulatory_watch_actions_service.create_action_for_impact(
+                        db,
+                        impact=impact,
+                        created_by_id=triggered_by or 1,
+                        tenant_id=tenant_id,
+                        owner_id=triggered_by,
+                        auto_applied=True,
+                        commit=False,
+                    )
                     auto_tasks += 1
 
         db.add(
@@ -171,6 +182,10 @@ class RegulatoryWatchService:
             "updates_created": created_updates,
             "impacts_created": created_impacts,
             "auto_tasks": auto_tasks,
+            "message": (
+                f"Watch complete: {created_updates} updates, {created_impacts} impacts, "
+                f"{auto_tasks} Actions auto-created"
+            ),
         }
 
     async def fetch_curated_feeds(self) -> list[FeedItem]:
