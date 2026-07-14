@@ -1,0 +1,3 @@
+asset_number,name,type,make,model,serial,owner_email,location_name,vehicle_reg,expiry_date,status
+FE-100,Extinguisher Bay A,Fire Extinguisher,Amerex,B402,SN-100,owner@example.com,Main Depot,,2026-12-01,active
+TK-200,Tool Kit Van 12,Engineer Tool Kit,Snap-on,K12,SN-200,,,AB12 CDE,2027-06-15,active

@@ -268,3 +268,52 @@ class TemplateListResponse(BaseModel):
 
     items: List[AuditTemplateSummaryResponse]
     total: int
+
+
+# ============== CSV Import Schemas (AM-IMPORT) ==============
+
+
+class AssetImportRowError(BaseModel):
+    """Single row-level validation error from CSV dry-run / commit."""
+
+    row: int
+    code: str
+    message: str
+    field: Optional[str] = None
+
+
+class AssetImportPreviewRow(BaseModel):
+    """Normalised preview of a valid CSV row."""
+
+    row: int
+    asset_number: str
+    name: str
+    asset_type_id: int
+    make: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
+    owner_user_id: Optional[int] = None
+    location_id: Optional[int] = None
+    vehicle_reg: Optional[str] = None
+    expiry_date: Optional[str] = None
+    status: str = "active"
+
+
+class AssetImportValidationReportResponse(BaseModel):
+    """Dry-run validation report for CSV asset import."""
+
+    dry_run: bool
+    total_rows: int
+    valid_rows: int
+    error_rows: int
+    ok: bool
+    errors: List[AssetImportRowError] = Field(default_factory=list)
+    preview: List[AssetImportPreviewRow] = Field(default_factory=list)
+
+
+class AssetImportCommitResponse(BaseModel):
+    """Result of a successful CSV asset import commit."""
+
+    created_count: int
+    created_asset_ids: List[int]
+    report: AssetImportValidationReportResponse
