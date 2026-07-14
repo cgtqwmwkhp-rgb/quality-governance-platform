@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import { canOfferStaffDeepLink, portalStaffRecordLabel } from './portalSubmitSuccess'
+import { API_BASE_URL } from '../config/apiBase'
 
 // Portal report submission - uses public endpoint (no auth required)
 interface PortalReportPayload {
