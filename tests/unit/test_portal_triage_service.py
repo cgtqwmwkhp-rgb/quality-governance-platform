@@ -4,10 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.domain.services.portal_triage_service import (
-    apply_portal_owner,
-    pick_triage_owner_from_users,
-)
+from src.domain.services.portal_triage_service import apply_portal_owner, pick_triage_owner_from_users
 
 
 def _role(name: str, permissions: str = "") -> SimpleNamespace:
