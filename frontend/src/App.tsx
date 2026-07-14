@@ -73,6 +73,7 @@ const DigitalSignatures = lazy(() => import('./pages/DigitalSignatures'))
 const VehicleChecklists = lazy(() => import('./pages/VehicleChecklists'))
 const SafetyAssetRegister = lazy(() => import('./pages/SafetyAssetRegister'))
 const SafetyAssetDetail = lazy(() => import('./pages/SafetyAssetDetail'))
+const AssetHealthAnalytics = lazy(() => import('./pages/AssetHealthAnalytics'))
 const WorkforceAssessmentCreate = lazy(() => import('./pages/workforce/AssessmentCreate'))
 const WorkforceInductionCreate = lazy(() => import('./pages/workforce/InductionCreate'))
 const WorkforceAssessments = lazy(() => import('./pages/workforce/Assessments'))
@@ -286,6 +287,7 @@ function App() {
                 <Route path="complaints/:id" element={<ComplaintDetail />} />
                 <Route path="vehicle-checklists" element={<VehicleChecklists />} />
                 <Route path="safety-assets" element={<SafetyAssetRegister />} />
+                <Route path="safety-assets/analytics" element={<AssetHealthAnalytics />} />
                 <Route path="safety-assets/:id" element={<SafetyAssetDetail />} />
               </Route>
 
