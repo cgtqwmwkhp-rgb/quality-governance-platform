@@ -45,6 +45,7 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const PortalReport = lazy(() => import('./pages/PortalReport'))
 const PortalTrack = lazy(() => import('./pages/PortalTrack'))
 const PortalHelp = lazy(() => import('./pages/PortalHelp'))
+const PortalWork = lazy(() => import('./pages/PortalWork'))
 const PortalIncidentForm = lazy(() => import('./pages/PortalIncidentForm'))
 const PortalRTAForm = lazy(() => import('./pages/PortalRTAForm'))
 const PortalNearMissForm = lazy(() => import('./pages/PortalNearMissForm'))
@@ -236,6 +237,7 @@ function App() {
               <Route path="report/near-miss-static" element={<PortalNearMissForm />} />
               <Route path="track" element={<PortalTrack />} />
               <Route path="track/:referenceNumber" element={<PortalTrack />} />
+              <Route path="work" element={<PortalWork />} />
               <Route path="help" element={<PortalHelp />} />
             </Route>
 

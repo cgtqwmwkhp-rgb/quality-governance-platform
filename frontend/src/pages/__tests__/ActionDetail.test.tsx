@@ -10,13 +10,15 @@ const mockGetDeliveryStatus = vi.fn()
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) =>
+    t: (key: string, fallback?: string) =>
       ({
         'actions.view_finding': 'View finding',
+        'actions.view_incident': 'View incident',
+        'actions.view_investigation': 'View investigation',
         'actions.email_unavailable.title': 'Email alerts unavailable',
         'actions.email_unavailable.body':
           'The assignee is saved, but email alerts are unavailable while outbound email is not configured.',
-      } as Record<string, string>)[key] || key,
+      } as Record<string, string>)[key] || fallback || key,
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
@@ -56,14 +58,14 @@ const auditFindingAction = {
   created_at: '2026-07-12T10:00:00Z',
 }
 
-const renderDetail = () =>
+const renderDetail = (key = 'capa%3A9') =>
   render(
-    <MemoryRouter initialEntries={['/actions/item?key=capa%3A9']}>
+    <MemoryRouter initialEntries={[`/actions/item?key=${key}`]}>
       <ActionDetail />
     </MemoryRouter>,
   )
 
-describe('ActionDetail finding deep-link', () => {
+describe('ActionDetail source deep-links', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetByKey.mockResolvedValue({ data: auditFindingAction })
@@ -76,10 +78,9 @@ describe('ActionDetail finding deep-link', () => {
     renderDetail()
 
     expect(await screen.findByRole('heading', { name: 'Correct audit finding' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'View finding' })).toHaveAttribute(
-      'href',
-      '/audits?view=findings&findingId=42',
-    )
+    const link = screen.getByTestId('action-source-deeplink')
+    expect(link).toHaveAttribute('href', '/audits?view=findings&findingId=42')
+    expect(link).toHaveTextContent('View finding')
   })
 
   it('does not link an audit finding with a non-positive source id', async () => {
@@ -88,7 +89,67 @@ describe('ActionDetail finding deep-link', () => {
     renderDetail()
 
     expect(await screen.findByRole('heading', { name: 'Correct audit finding' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'View finding' })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('action-source-deeplink')).not.toBeInTheDocument()
+  })
+
+  it('links incident-backed actions back to the incident', async () => {
+    mockGetByKey.mockResolvedValue({
+      data: {
+        ...auditFindingAction,
+        id: 3,
+        title: 'Cordon north gate',
+        action_key: 'incident_action:3',
+        source_type: 'incident',
+        source_id: 11,
+      },
+    })
+
+    renderDetail('incident_action%3A3')
+
+    expect(await screen.findByRole('heading', { name: 'Cordon north gate' })).toBeInTheDocument()
+    const link = screen.getByTestId('action-source-deeplink')
+    expect(link).toHaveAttribute('href', '/incidents/11')
+    expect(link).toHaveTextContent('View incident')
+  })
+
+  it('links capa_incident actions back to the incident', async () => {
+    mockGetByKey.mockResolvedValue({
+      data: {
+        ...auditFindingAction,
+        id: 14,
+        title: 'CAPA from incident',
+        action_key: 'capa:14',
+        source_type: 'capa_incident',
+        source_id: 11,
+      },
+    })
+
+    renderDetail('capa%3A14')
+
+    expect(await screen.findByRole('heading', { name: 'CAPA from incident' })).toBeInTheDocument()
+    expect(screen.getByTestId('action-source-deeplink')).toHaveAttribute('href', '/incidents/11')
+  })
+
+  it('links investigation-backed actions back to the investigation', async () => {
+    mockGetByKey.mockResolvedValue({
+      data: {
+        ...auditFindingAction,
+        id: 5,
+        title: 'Install anti-slip matting',
+        action_key: 'investigation_action:5',
+        source_type: 'investigation',
+        source_id: 21,
+      },
+    })
+
+    renderDetail('investigation_action%3A5')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Install anti-slip matting' }),
+    ).toBeInTheDocument()
+    const link = screen.getByTestId('action-source-deeplink')
+    expect(link).toHaveAttribute('href', '/investigations/21')
+    expect(link).toHaveTextContent('View investigation')
   })
 
   it('shows SMTP honesty beside CAPA assignment when email is unconfigured', async () => {

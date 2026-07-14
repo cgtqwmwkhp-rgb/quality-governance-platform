@@ -125,6 +125,7 @@ class IncidentService:
             payload=incident_data.model_dump(mode="json"),
             user_id=user_id,
             request_id=request_id,
+            tenant_id=tenant_id,
         )
 
         await self.db.flush()
@@ -222,6 +223,7 @@ class IncidentService:
             payload=update_dict,
             user_id=user_id,
             request_id=request_id,
+            tenant_id=tenant_id,
         )
 
         if "status" in raw_update and raw_update["status"] == IncidentStatus.CLOSED.value:
@@ -265,6 +267,7 @@ class IncidentService:
             },
             user_id=user_id,
             request_id=request_id,
+            tenant_id=tenant_id,
         )
 
         await self.db.delete(incident)

@@ -1,15 +1,18 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 /**
- * Complaint admin lifecycle critical journey (mocked APIs).
- * CUJ-01: detail → acknowledge → action → investigation (stay on detail)
+ * Complaint admin critical journey (mocked APIs).
+ * CUJ-01: detail → investigation (stay on detail)
  * CUJ-02: running-sheet narrative + key dates honesty
+ * CUJ-03: create → list → detail proof
+ * CUJ-04: SMTP honesty when email_configured=false + list unavailable ≠ empty
  */
 
 const E2E_JWT =
   "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJlMmUiLCJleHAiOjE4MTUxODgxNTUsInJvbGUiOiJhZG1pbiIsImlzX3N1cGVydXNlciI6dHJ1ZSwidGVuYW50X2lkIjoxfQ.e2e";
 
 const COMPLAINT_ID = 15;
+const NEW_COMPLAINT_ID = 42;
 const INVESTIGATION_ID = 25;
 const ACTION_ID = 301;
 
@@ -45,20 +48,91 @@ const complaintRecord = {
   },
 };
 
+async function installReadyz(page: Page, emailConfigured = true) {
+  await page.route("**/readyz", async (route) => {
+    await json(route, { status: "ok", email_configured: emailConfigured });
+  });
+}
+
 async function installComplaintCujMocks(
   page: Page,
-  options?: { investigations?: unknown[]; runningSheet?: unknown[]; actions?: unknown[] },
+  options?: {
+    investigations?: unknown[];
+    runningSheet?: unknown[];
+    actions?: unknown[];
+    listItems?: unknown[];
+    listFail?: boolean;
+    emailConfigured?: boolean;
+  },
 ) {
   let complaint = { ...complaintRecord };
   const investigations = options?.investigations ?? [];
   const runningSheet = options?.runningSheet ?? [];
   const actions = options?.actions ?? [];
+  const listItems = options?.listItems ?? [{ ...complaintRecord }];
+  const listFail = options?.listFail ?? false;
+
+  await installReadyz(page, options?.emailConfigured ?? true);
 
   await page.route("**/api/v1/**", async (route) => {
     const req = route.request();
     const url = new URL(req.url());
-    const path = url.pathname;
+    const path = url.pathname.replace(/\/$/, "");
     const method = req.method();
+
+    if ((path.endsWith("/complaints") || path.endsWith("/api/v1/complaints")) && method === "GET") {
+      if (listFail) {
+        await json(route, { detail: "Service unavailable" }, 503);
+        return;
+      }
+      await json(route, {
+        items: listItems,
+        total: listItems.length,
+        page: 1,
+        page_size: 50,
+        pages: listItems.length > 0 ? 1 : 0,
+      });
+      return;
+    }
+
+    if ((path.endsWith("/complaints") || path.endsWith("/api/v1/complaints")) && method === "POST") {
+      const body = req.postDataJSON() as Record<string, unknown>;
+      const created = {
+        id: NEW_COMPLAINT_ID,
+        reference_number: "COMP-00042",
+        title: body.title,
+        description: body.description,
+        complaint_type: body.complaint_type || "other",
+        priority: body.priority || "medium",
+        status: "received",
+        received_date: body.received_date || new Date().toISOString(),
+        complainant_name: body.complainant_name || "",
+        complainant_email: body.complainant_email || "",
+        complainant_phone: body.complainant_phone || "",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      listItems.unshift(created);
+      await json(route, created, 201);
+      return;
+    }
+
+    if (path.endsWith(`/complaints/${NEW_COMPLAINT_ID}`) && method === "GET") {
+      const created = listItems.find((c) => (c as { id: number }).id === NEW_COMPLAINT_ID) || {
+        id: NEW_COMPLAINT_ID,
+        reference_number: "COMP-00042",
+        title: "Portal delay",
+        description: "Created in CUJ-03",
+        complaint_type: "service",
+        priority: "medium",
+        status: "received",
+        received_date: new Date().toISOString(),
+        complainant_name: "Alex Resident",
+        created_at: new Date().toISOString(),
+      };
+      await json(route, created);
+      return;
+    }
 
     if (path.endsWith(`/complaints/${COMPLAINT_ID}`) && method === "GET") {
       await json(route, complaint);
@@ -83,8 +157,18 @@ async function installComplaintCujMocks(
       return;
     }
 
+    if (path.endsWith(`/complaints/${NEW_COMPLAINT_ID}/investigations`) && method === "GET") {
+      await json(route, { items: [], total: 0, page: 1, page_size: 10, pages: 0 });
+      return;
+    }
+
     if (path.endsWith(`/complaints/${COMPLAINT_ID}/running-sheet`) && method === "GET") {
       await json(route, runningSheet);
+      return;
+    }
+
+    if (path.endsWith(`/complaints/${NEW_COMPLAINT_ID}/running-sheet`) && method === "GET") {
+      await json(route, []);
       return;
     }
 
@@ -122,7 +206,9 @@ async function installComplaintCujMocks(
       const sourceType = url.searchParams.get("source_type") || url.searchParams.get("sourceType");
       const sourceId = Number(url.searchParams.get("source_id") || url.searchParams.get("sourceId"));
       const items =
-        sourceType === "complaint" && sourceId === COMPLAINT_ID ? actions : [];
+        sourceType === "complaint" && (sourceId === COMPLAINT_ID || sourceId === NEW_COMPLAINT_ID)
+          ? actions
+          : [];
       await json(route, {
         items,
         total: items.length,
@@ -147,7 +233,10 @@ async function installComplaintCujMocks(
       return;
     }
 
-    await json(route, method === "GET" ? { items: [], total: 0, page: 1, page_size: 50, pages: 0 } : { ok: true });
+    await json(
+      route,
+      method === "GET" ? { items: [], total: 0, page: 1, page_size: 50, pages: 0 } : { ok: true },
+    );
   });
 }
 
@@ -207,5 +296,51 @@ test.describe("Complaint admin lifecycle CUJ", () => {
     await expect(page.getByText("Acknowledged complainant by phone")).toBeVisible({
       timeout: 10_000,
     });
+  });
+
+  test("CUJ-03: create → list → detail journey", async ({ page }) => {
+    await page.addInitScript((token) => {
+      localStorage.setItem("access_token", token);
+    }, E2E_JWT);
+
+    await installComplaintCujMocks(page, { listItems: [] });
+    await page.goto("/complaints", { waitUntil: "domcontentloaded" });
+
+    await expect(page.getByTestId("complaints-new")).toBeVisible({ timeout: 20_000 });
+    await page.getByTestId("complaints-new").click();
+
+    await page.getByPlaceholder(/brief summary|title/i).first().fill("Portal delay");
+    await page.locator("textarea").first().fill("Resident waiting on portal response");
+    await page.getByPlaceholder(/full name|name/i).first().fill("Alex Resident");
+    await page.getByRole("button", { name: /create complaint/i }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/complaints/${NEW_COMPLAINT_ID}$`), {
+      timeout: 15_000,
+    });
+    await expect(page.getByRole("heading", { name: "Portal delay" })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByText("COMP-00042")).toBeVisible();
+  });
+
+  test("CUJ-04: SMTP honesty banner and unavailable list is not empty theatre", async ({
+    page,
+  }) => {
+    await page.addInitScript((token) => {
+      localStorage.setItem("access_token", token);
+    }, E2E_JWT);
+
+    await installComplaintCujMocks(page, {
+      listFail: true,
+      emailConfigured: false,
+    });
+    await page.goto("/complaints", { waitUntil: "domcontentloaded" });
+
+    await expect(page.getByTestId("complaints-email-unavailable")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId("complaints-list-unavailable")).toBeVisible();
+    await expect(page.getByText("Complaints unavailable")).toBeVisible();
+    await expect(page.getByText("No complaints found")).toHaveCount(0);
   });
 });
