@@ -66,10 +66,7 @@ const ENTITY_TYPE_OPTIONS = [
   { value: 'audit_finding', label: 'Audit finding' },
 ] as const
 
-/**
- * Signal types returned on evidence links. Filtered client-side because
- * GET /exceptions does not yet accept signal_type (Follow-up A / #922 gap).
- */
+/** Signal types — filtered server-side via GET /exceptions?signal_type=. */
 const SIGNAL_TYPE_OPTIONS = [
   { value: 'all', label: 'All signal types' },
   { value: 'evidence', label: 'Evidence' },
@@ -129,6 +126,7 @@ export default function KnowledgeExceptions() {
     try {
       const response = await knowledgeBankApi.listExceptions({
         entityType: entityTypeFilter === 'all' ? undefined : entityTypeFilter,
+        signalType: signalTypeFilter === 'all' ? undefined : signalTypeFilter,
       })
       setItems(response.data)
       setSelectedIds([])
@@ -138,19 +136,14 @@ export default function KnowledgeExceptions() {
     } finally {
       setLoading(false)
     }
-  }, [entityTypeFilter])
+  }, [entityTypeFilter, signalTypeFilter])
 
   useEffect(() => {
     void loadExceptions()
   }, [loadExceptions])
 
-  /** Client-side signal filter on the loaded API page (limit 200) — no fabricated totals. */
-  const visibleItems = useMemo(() => {
-    if (signalTypeFilter === 'all') return items
-    return items.filter(
-      (item) => (item.signal_type || '').toLowerCase() === signalTypeFilter,
-    )
-  }, [items, signalTypeFilter])
+  /** Server already filters signal_type; inbox page still capped at 200. */
+  const visibleItems = items
 
   const allSelected = useMemo(
     () => visibleItems.length > 0 && selectedIds.length === visibleItems.length,
@@ -228,9 +221,18 @@ export default function KnowledgeExceptions() {
 
   const handleBulkReject = async () => {
     if (selectedIds.length === 0) return
+    const rationale = window.prompt(
+      'Reject rationale (required — recorded on each link for auditability):',
+    )
+    if (!rationale || rationale.trim().length < 3) {
+      toast.error('Reject requires a rationale (min 3 characters)')
+      return
+    }
     setActing(true)
     try {
-      await Promise.all(selectedIds.map((id) => knowledgeBankApi.rejectLink(id)))
+      await Promise.all(
+        selectedIds.map((id) => knowledgeBankApi.rejectLink(id, rationale.trim())),
+      )
       toast.success(`Rejected ${selectedIds.length} item(s)`)
       setSelectedIds([])
       if (returnTo) {
@@ -281,6 +283,15 @@ export default function KnowledgeExceptions() {
           </Button>
         </div>
       </div>
+
+      <Card className="p-4 border-primary/20 bg-primary/5" data-testid="exceptions-map-cta-banner">
+        <p className="text-sm font-medium text-foreground">Map inputs → standards</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Open a document&apos;s Standards &amp; Evidence tab or a case detail Standards Assessment
+          panel, then run <strong>Map to ISO / UVDB / Planet Mark</strong>. Proposed links land here
+          for confirm/reject (reject requires a rationale).
+        </p>
+      </Card>
 
       {returnTo ? (
         <Card
@@ -348,9 +359,9 @@ export default function KnowledgeExceptions() {
         </div>
         <p className="text-xs text-muted-foreground sm:pb-2" data-testid="exceptions-filter-honesty">
           Showing {visibleItems.length}
-          {signalTypeFilter !== 'all' ? ` of ${items.length} loaded` : ''}
           {entityTypeFilter !== 'all' ? ` · entity=${entityTypeFilter}` : ''}
-          {' '}(inbox page ≤200; signal filter is client-side)
+          {signalTypeFilter !== 'all' ? ` · signal=${signalTypeFilter}` : ''}
+          {' '}(server filters; inbox page ≤200 — not a global facet total)
         </p>
       </div>
 
@@ -360,14 +371,18 @@ export default function KnowledgeExceptions() {
         </div>
       )}
 
-      {visibleItems.length === 0 ? (
+      {error ? null : visibleItems.length === 0 ? (
         <EmptyState
           icon={<CheckCircle2 className="w-8 h-8 text-success" />}
-          title={items.length === 0 ? 'Inbox clear' : 'No matches for filters'}
+          title={
+            entityTypeFilter !== 'all' || signalTypeFilter !== 'all'
+              ? 'No matches for filters'
+              : 'Inbox clear'
+          }
           description={
-            items.length === 0
-              ? 'No proposed or needs-review evidence links at this time.'
-              : 'Try another entity or signal type. Counts reflect the loaded inbox page only.'
+            entityTypeFilter !== 'all' || signalTypeFilter !== 'all'
+              ? 'Server returned no exceptions for these filters on the current inbox page (≤200). This is not a global zero.'
+              : 'No proposed or needs-review evidence links at this time.'
           }
         />
       ) : (
