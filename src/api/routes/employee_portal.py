@@ -26,6 +26,7 @@ from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintS
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.rta import RoadTrafficCollision, RTASeverity, RTAStatus
+from src.domain.services.portal_triage_service import assign_and_notify_portal_intake
 
 router = APIRouter(tags=["Employee Portal"])
 
@@ -75,6 +76,7 @@ class QuickReportResponse(BaseModel):
     entity_type: Optional[str] = None
     staff_href: Optional[str] = None
     can_open_staff_record: bool = False
+    triage_assigned: bool = False
 
 
 class ReportStatusResponse(BaseModel):
@@ -413,6 +415,27 @@ async def commit_portal_record(db: DbSession, record_label: str) -> None:
         ) from exc
 
 
+async def complete_portal_intake_triage(
+    db: DbSession,
+    *,
+    entity: Any,
+    entity_type: str,
+    reference_number: str,
+    tenant_id: int,
+    current_user: Optional[Any],
+) -> bool:
+    """Assign case owner and notify after portal submit; never blocks the 201 response."""
+    owner_id = await assign_and_notify_portal_intake(
+        db,
+        entity=entity,
+        entity_type=entity_type,
+        reference=reference_number,
+        tenant_id=tenant_id,
+        submitter=current_user,
+    )
+    return owner_id is not None
+
+
 # ============================================================================
 # API Endpoints
 # ============================================================================
@@ -455,6 +478,14 @@ async def submit_quick_report(
         db.add(incident)
         await commit_portal_record(db, "incident")
         await db.refresh(incident)
+        triage_assigned = await complete_portal_intake_triage(
+            db,
+            entity=incident,
+            entity_type="incident",
+            reference_number=ref_number,
+            tenant_id=portal_tenant_id,
+            current_user=current_user,
+        )
 
         return QuickReportResponse(
             success=True,
@@ -463,6 +494,7 @@ async def submit_quick_report(
             message="Your incident report has been submitted successfully.",
             estimated_response="You will receive an update within 24-48 hours.",
             qr_code_url=f"/api/v1/portal/qr/{ref_number}",
+            triage_assigned=triage_assigned,
             **staff_golden_thread_fields(current_user, entity_type="incident", entity_id=incident.id),
         )
 
@@ -480,6 +512,14 @@ async def submit_quick_report(
         db.add(complaint)
         await commit_portal_record(db, "complaint")
         await db.refresh(complaint)
+        triage_assigned = await complete_portal_intake_triage(
+            db,
+            entity=complaint,
+            entity_type="complaint",
+            reference_number=ref_number,
+            tenant_id=portal_tenant_id,
+            current_user=current_user,
+        )
 
         return QuickReportResponse(
             success=True,
@@ -488,6 +528,7 @@ async def submit_quick_report(
             message="Your complaint has been submitted successfully.",
             estimated_response="A case manager will review your complaint within 24 hours.",
             qr_code_url=f"/api/v1/portal/qr/{ref_number}",
+            triage_assigned=triage_assigned,
             **staff_golden_thread_fields(current_user, entity_type="complaint", entity_id=complaint.id),
         )
 
@@ -514,6 +555,14 @@ async def submit_quick_report(
         db.add(rta)
         await commit_portal_record(db, "RTA")
         await db.refresh(rta)
+        triage_assigned = await complete_portal_intake_triage(
+            db,
+            entity=rta,
+            entity_type="rta",
+            reference_number=ref_number,
+            tenant_id=portal_tenant_id,
+            current_user=current_user,
+        )
 
         return QuickReportResponse(
             success=True,
@@ -522,6 +571,7 @@ async def submit_quick_report(
             message="Your RTA report has been submitted successfully.",
             estimated_response="A fleet manager will review your report within 24 hours.",
             qr_code_url=f"/api/v1/portal/qr/{ref_number}",
+            triage_assigned=triage_assigned,
             **staff_golden_thread_fields(current_user, entity_type="rta", entity_id=rta.id),
         )
 
@@ -557,6 +607,14 @@ async def submit_quick_report(
         db.add(near_miss)
         await commit_portal_record(db, "near miss")
         await db.refresh(near_miss)
+        triage_assigned = await complete_portal_intake_triage(
+            db,
+            entity=near_miss,
+            entity_type="near_miss",
+            reference_number=ref_number,
+            tenant_id=portal_tenant_id,
+            current_user=current_user,
+        )
 
         return QuickReportResponse(
             success=True,
@@ -565,6 +623,7 @@ async def submit_quick_report(
             message="Your near miss report has been submitted successfully.",
             estimated_response="A safety manager will review your report within 24 hours.",
             qr_code_url=f"/api/v1/portal/qr/{ref_number}",
+            triage_assigned=triage_assigned,
             **staff_golden_thread_fields(current_user, entity_type="near_miss", entity_id=near_miss.id),
         )
 
