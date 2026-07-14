@@ -396,7 +396,7 @@ async def confirm_evidence_link(
     """Manually confirm a proposed evidence link."""
     tenant_id = _tenant_id_for(current_user)
     link = await _get_evidence_link_or_404(db, link_id, tenant_id)
-    prior = link.status.value if hasattr(link.status, "value") else str(link.status)
+    prior = link.effective_status.value
     link.status = EvidenceLinkStatus.CONFIRMED
     link.auto_applied = False
     db.add(
@@ -430,7 +430,7 @@ async def reject_evidence_link(
     """Reject a proposed evidence link. Prefer a rationale body for auditability."""
     tenant_id = _tenant_id_for(current_user)
     link = await _get_evidence_link_or_404(db, link_id, tenant_id)
-    prior = link.status.value if hasattr(link.status, "value") else str(link.status)
+    prior = link.effective_status.value
     link.status = EvidenceLinkStatus.REJECTED
     link.auto_applied = False
     rationale = body.rationale.strip() if body and body.rationale else ""
