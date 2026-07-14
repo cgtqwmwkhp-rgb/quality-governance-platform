@@ -73,6 +73,12 @@ class ExternalAuditImportService:
     async def promote_job(self, *, job_id: int, tenant_id: int | None, user_id: int) -> ExternalAuditImportJob:
         return await self.promotion_service.promote_job(job_id=job_id, tenant_id=tenant_id, user_id=user_id)
 
+    async def enqueue_promote(self, *, job_id: int, tenant_id: int | None, user_id: int) -> ExternalAuditImportJob:
+        return await self.promotion_service.enqueue_promote(job_id=job_id, tenant_id=tenant_id, user_id=user_id)
+
+    async def run_promote_chunks(self, *, job_id: int, tenant_id: int | None, user_id: int) -> ExternalAuditImportJob:
+        return await self.promotion_service.run_promote_chunks(job_id=job_id, tenant_id=tenant_id, user_id=user_id)
+
     @staticmethod
     def _scheme_home(scheme: str | None) -> tuple[str, str]:
         return ExternalAuditPromotionService._scheme_home(scheme)
@@ -328,6 +334,17 @@ class ExternalAuditImportService:
             ExternalAuditImportStatus.PROMOTING,
         ):
             return
+        if job.status == ExternalAuditImportStatus.PROMOTING and job.promote_lease_expires_at:
+            expires_at = job.promote_lease_expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) >= expires_at:
+                job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
+                job.promote_lease_expires_at = None
+                job.error_code = "STALE_PROMOTION_LEASE"
+                job.error_detail = "Promotion lease expired; accepted drafts remain available for a safe retry."
+                await self.db.flush()
+            return
         updated_at = job.updated_at if hasattr(job, "updated_at") and job.updated_at else job.created_at
         if updated_at is None:
             return
@@ -343,6 +360,13 @@ class ExternalAuditImportService:
                 job.id,
                 elapsed,
             )
+            if prior_status == ExternalAuditImportStatus.PROMOTING:
+                job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
+                job.promote_lease_expires_at = None
+                job.error_code = "STALE_PROMOTION_LEASE"
+                job.error_detail = "Promotion lease expired; accepted drafts remain available for a safe retry."
+                await self.db.flush()
+                return
             job.status = ExternalAuditImportStatus.FAILED
             if prior_status == ExternalAuditImportStatus.QUEUED:
                 job.error_code = "STALE_QUEUE_TIMEOUT"

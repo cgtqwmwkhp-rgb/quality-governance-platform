@@ -48,4 +48,29 @@ describe('ImportReviewOverview', () => {
     expect(screen.getByText(/IMP-00072/i)).toBeInTheDocument()
     expect(screen.getAllByText(/Achilles UVDB/i).length).toBeGreaterThan(0)
   })
+
+  it('shows promotion progress and lease recovery guidance', () => {
+    render(
+      <ImportReviewOverview
+        job={{ ...job, status: 'promoting', promote_total: 4, promote_succeeded: 2 } as never}
+        drafts={[]}
+        declaredProgramLabel="Achilles UVDB"
+        declaredSourceOrigin="third_party"
+        declaredScheme="Achilles UVDB"
+        resolvedTemplateName="Template"
+        resolvedTemplateId={11}
+        resolvedTemplateVersion={3}
+        declaredExternalBody={null}
+        declaredExternalReference={null}
+        approvedCount={2}
+        promoteableCount={2}
+        isProcessing={false}
+        lastUpdatedAt={new Date('2026-07-14T12:00:00Z')}
+        isDocumentHidden={false}
+      />,
+    )
+
+    expect(screen.getByText(/2 of 4 materialized/i)).toBeInTheDocument()
+    expect(screen.getByText(/expired worker lease returns accepted drafts/i)).toBeInTheDocument()
+  })
 })

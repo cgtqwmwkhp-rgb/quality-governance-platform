@@ -36,6 +36,8 @@ if TYPE_CHECKING:
     from src.domain.services.external_audit_import_service import ExternalAuditImportService
 
 logger = logging.getLogger(__name__)
+PROMOTE_LEASE_TTL = timedelta(minutes=20)
+PROMOTE_CHUNK_SIZE = 10
 
 # In-process outcome counters — observable without App Insights, asserted by unit tests.
 # Keys: promote completed|partial|all_failed|error and uvdb_sync ok|skipped|n_a|failed|already_synced|synced
@@ -352,13 +354,15 @@ class ExternalAuditPromotionService:
         accepted: list[ExternalAuditDraft],
         user_id: int,
         resolved_tenant_id: int,
+        promotion_result: PromotionResult | None = None,
     ) -> ExternalAuditImportJob:
         """Materialize drafts, link evidence, scheme sync, reconciliation, and persist job summary."""
-        promotion_result: PromotionResult = await self._promote_accepted_drafts(
-            accepted=accepted,
-            user_id=user_id,
-            resolved_tenant_id=resolved_tenant_id,
-        )
+        if promotion_result is None:
+            promotion_result = await self._promote_accepted_drafts(
+                accepted=accepted,
+                user_id=user_id,
+                resolved_tenant_id=resolved_tenant_id,
+            )
         promoted_findings = promotion_result["promoted_findings"]
         document_clause_ids = promotion_result["document_clause_ids"]
         failed_drafts = promotion_result["failed_drafts"]
@@ -429,6 +433,16 @@ class ExternalAuditPromotionService:
             self._apply_run_completion(run, job)
             job.status = ExternalAuditImportStatus.COMPLETED
             job.promoted_at = datetime.now(timezone.utc)
+        job.promote_lease_expires_at = None
+        job.promote_total = len(accepted)
+        job.promote_succeeded = len(reconciled_drafts)
+        job.promote_failed = len(failed_drafts)
+        job.promote_progress_json = {
+            "total": len(accepted),
+            "succeeded": len(reconciled_drafts),
+            "failed": len(failed_drafts),
+            "state": job.status.value,
+        }
         job.updated_by_id = user_id
         job.promotion_summary_json = {
             **(job.promotion_summary_json or {}),
@@ -454,15 +468,18 @@ class ExternalAuditPromotionService:
             logger.debug("Promote outcome metric skipped", exc_info=True)
         return job
 
-    async def promote_job(self, *, job_id: int, tenant_id: int | None, user_id: int) -> ExternalAuditImportJob:
-        """Materialize accepted drafts into live findings, then scheme sync and reconciliation.
-
-        **Idempotency / retries:** Drafts that already have ``promoted_finding_id`` are skipped.
-        If promotion fails, the job returns to ``review_required``; fixing drafts and calling
-        promote again is safe and does not duplicate findings for already-promoted rows.
-        """
+    async def enqueue_promote(self, *, job_id: int, tenant_id: int | None, user_id: int) -> ExternalAuditImportJob:
+        """Durably claim a review-ready job before dispatching asynchronous promotion."""
         job = await self.host.get_job(job_id=job_id, tenant_id=tenant_id)
         effective_tenant_id = job.tenant_id
+        accepted_total = sum(
+            1
+            for draft in await self.host.list_job_drafts(job_id=job_id, tenant_id=effective_tenant_id)
+            if draft.status == ExternalAuditDraftStatus.ACCEPTED
+        )
+        if not accepted_total:
+            raise ValidationError("At least one draft must be accepted before promotion")
+        now = datetime.now(timezone.utc)
         transitioned = await self.db.execute(
             update(ExternalAuditImportJob)
             .where(
@@ -472,6 +489,12 @@ class ExternalAuditPromotionService:
             )
             .values(
                 status=ExternalAuditImportStatus.PROMOTING,
+                promote_attempt=ExternalAuditImportJob.promote_attempt + 1,
+                promote_lease_expires_at=now + PROMOTE_LEASE_TTL,
+                promote_total=accepted_total,
+                promote_succeeded=0,
+                promote_failed=0,
+                promote_progress_json={"total": accepted_total, "succeeded": 0, "failed": 0, "state": "promoting"},
                 updated_by_id=user_id,
             )
         )
@@ -482,29 +505,53 @@ class ExternalAuditPromotionService:
             if job.status == ExternalAuditImportStatus.PROMOTING:
                 raise ConflictError("Import job promotion is already in progress")
             raise ValidationError("Import job must be in review_required state before promotion")
+        await self.db.commit()
+        return await self.host.get_job(job_id=job_id, tenant_id=effective_tenant_id)
 
-        job = await self.host.get_job(job_id=job_id, tenant_id=effective_tenant_id)
+    begin_promote = enqueue_promote
+
+    async def run_promote_chunks(self, *, job_id: int, tenant_id: int | None, user_id: int) -> ExternalAuditImportJob:
+        """Materialize accepted drafts in independently committed, retry-safe chunks."""
+        job = await self.host.get_job(job_id=job_id, tenant_id=tenant_id)
+        if job.status == ExternalAuditImportStatus.COMPLETED:
+            return job
+        if job.status != ExternalAuditImportStatus.PROMOTING:
+            raise ValidationError("Import job must be promoting before chunked promotion runs")
+        effective_tenant_id = job.tenant_id
         drafts = await self.host.list_job_drafts(job_id=job_id, tenant_id=effective_tenant_id)
         accepted = [draft for draft in drafts if draft.status == ExternalAuditDraftStatus.ACCEPTED]
-        if not accepted:
-            job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
-            job.updated_by_id = user_id
-            await self.db.flush()
-            raise ValidationError("At least one draft must be accepted before promotion")
-
         run = await self.host._get_run(audit_run_id=job.audit_run_id, tenant_id=effective_tenant_id)
-        resolved_tenant_id = run.tenant_id or job.tenant_id or tenant_id
+        resolved_tenant_id = run.tenant_id or effective_tenant_id or tenant_id
         if resolved_tenant_id is None:
             raise ValidationError("Cannot promote external audit findings without a tenant context")
+        await self._backfill_tenant_ids(resolved_tenant_id=resolved_tenant_id, run=run, job=job, drafts=drafts)
 
-        await self._backfill_tenant_ids(
-            resolved_tenant_id=resolved_tenant_id,
-            run=run,
-            job=job,
-            drafts=drafts,
-        )
-
+        promoted_findings: list[int] = []
+        document_clause_ids: set[str] = set()
+        failed_drafts: list[dict[str, object]] = []
         try:
+            for start in range(0, len(accepted), PROMOTE_CHUNK_SIZE):
+                result = await self._promote_accepted_drafts(
+                    accepted=accepted[start : start + PROMOTE_CHUNK_SIZE],
+                    user_id=user_id,
+                    resolved_tenant_id=resolved_tenant_id,
+                )
+                promoted_findings.extend(result["promoted_findings"])
+                document_clause_ids.update(result["document_clause_ids"])
+                failed_drafts.extend(result["failed_drafts"])
+                job.promote_succeeded = sum(1 for draft in accepted if draft.promoted_finding_id)
+                job.promote_failed = len(failed_drafts)
+                job.promote_progress_json = {
+                    "total": len(accepted),
+                    "succeeded": job.promote_succeeded,
+                    "failed": job.promote_failed,
+                    "state": "promoting",
+                }
+                job.promote_lease_expires_at = datetime.now(timezone.utc) + PROMOTE_LEASE_TTL
+                await self.db.commit()
+
+            drafts = await self.host.list_job_drafts(job_id=job_id, tenant_id=effective_tenant_id)
+            job = await self.host.get_job(job_id=job_id, tenant_id=effective_tenant_id)
             job = await self._finalize_promotion_pipeline(
                 job=job,
                 run=run,
@@ -512,46 +559,29 @@ class ExternalAuditPromotionService:
                 accepted=accepted,
                 user_id=user_id,
                 resolved_tenant_id=resolved_tenant_id,
+                promotion_result={
+                    "promoted_findings": promoted_findings,
+                    "document_clause_ids": document_clause_ids,
+                    "failed_drafts": failed_drafts,
+                },
             )
-        except ValidationError as exc:
-            logger.warning(
-                "Promotion validation failure for job %s: %s",
-                job_id,
-                exc.message,
-                extra={"draft_count": len(exc.details.get("failed_drafts", [])) if exc.details else 0},
-            )
-            try:
-                _record_promote_outcome("all_failed")
-            except Exception:
-                logger.debug("Promote outcome metric skipped", exc_info=True)
-            try:
-                await self._recover_job_after_promotion_failure(job_id=job_id, user_id=user_id, exc=exc)
-            except Exception as cleanup_exc:
-                logger.warning("Could not persist promotion error for job %s: %s", job_id, cleanup_exc)
-            raise
+            await self.db.commit()
         except Exception as exc:
-            logger.error("Promotion failed for job %s: %s", job_id, exc, exc_info=True)
-            try:
-                _record_promote_outcome("error")
-            except Exception:
-                logger.debug("Promote outcome metric skipped", exc_info=True)
-            try:
-                await self._recover_job_after_promotion_failure(job_id=job_id, user_id=user_id, exc=exc)
-            except Exception as cleanup_exc:
-                logger.warning("Could not persist promotion error for job %s: %s", job_id, cleanup_exc)
+            logger.exception("Chunked promotion failed for job %s", job_id)
+            await self._recover_job_after_promotion_failure(job_id=job_id, user_id=user_id, exc=exc)
             raise
 
-        try:
-            await invalidate_tenant_cache(resolved_tenant_id, "audits")
-            await invalidate_tenant_cache(resolved_tenant_id, "capa")
-            await invalidate_tenant_cache(resolved_tenant_id, "risk-register")
-            await invalidate_tenant_cache(resolved_tenant_id, "risks")
-            await invalidate_tenant_cache(resolved_tenant_id, "governance")
-            await invalidate_tenant_cache(resolved_tenant_id, "uvdb")
-        except Exception:
-            logger.debug("Cache invalidation after promotion skipped (not available)")
-
+        for namespace in ("audits", "capa", "risk-register", "risks", "governance", "uvdb"):
+            try:
+                await invalidate_tenant_cache(resolved_tenant_id, namespace)
+            except Exception:
+                logger.debug("Cache invalidation after promotion skipped", exc_info=True)
         return job
+
+    async def promote_job(self, *, job_id: int, tenant_id: int | None, user_id: int) -> ExternalAuditImportJob:
+        """Synchronous compatibility entry point used by legacy callers and tests."""
+        await self.enqueue_promote(job_id=job_id, tenant_id=tenant_id, user_id=user_id)
+        return await self.run_promote_chunks(job_id=job_id, tenant_id=tenant_id, user_id=user_id)
 
     async def _backfill_tenant_ids(
         self,
@@ -621,6 +651,8 @@ class ExternalAuditPromotionService:
         for draft in accepted:
             if draft.promoted_finding_id:
                 draft.status = ExternalAuditDraftStatus.PROMOTED
+                draft.promoted_at = draft.promoted_at or datetime.now(timezone.utc)
+                draft.promotion_error_code = None
                 continue
             try:
                 async with self.db.begin_nested():
@@ -663,6 +695,8 @@ class ExternalAuditPromotionService:
                     )
                     draft.promoted_finding_id = finding_id
                     draft.status = ExternalAuditDraftStatus.PROMOTED
+                    draft.promoted_at = datetime.now(timezone.utc)
+                    draft.promotion_error_code = None
                     draft.updated_by_id = user_id
                     promoted_findings.append(finding_id)
                     document_clause_ids.update(clause_ids)
@@ -674,7 +708,10 @@ class ExternalAuditPromotionService:
                     exc,
                     exc_info=True,
                 )
-                draft.status = ExternalAuditDraftStatus.DRAFT
+                # Keep review approval intact: the retry can safely materialize this row
+                # without making an operator re-accept it.
+                draft.status = ExternalAuditDraftStatus.ACCEPTED
+                draft.promotion_error_code = "PROMOTION_FAILED"
                 existing_notes = draft.review_notes or ""
                 draft.review_notes = f"{existing_notes}\n\nPromotion failed: {str(exc)[:200]}".strip()
                 failed_drafts.append(
@@ -688,16 +725,6 @@ class ExternalAuditPromotionService:
                     }
                 )
 
-        if failed_drafts and not promoted_findings:
-            first = failed_drafts[0]
-            raise ValidationError(
-                f"All {len(failed_drafts)} accepted draft(s) failed to materialize into live findings. "
-                f"First draft id={first.get('draft_id')}: {first.get('error', 'unknown error')}",
-                details={
-                    "failed_total": len(failed_drafts),
-                    "failed_drafts": failed_drafts[:20],
-                },
-            )
         if failed_drafts:
             logger.warning(
                 "Partial promotion: %d succeeded, %d failed",
@@ -912,16 +939,19 @@ class ExternalAuditPromotionService:
                 existing.scope_3_co2e = pm_data_ex["scope_3_co2e_tonnes"]  # type: ignore[assignment]
             await self.db.flush()
 
+            # The registry row and UVDB projection are independently durable.
+            # Backfill UVDB even when a previous attempt created only the EAR.
             uvdb_audit_id = None
             if self._is_uvdb_scheme(job, run):
-                uvdb_result = await self.db.execute(
-                    select(UVDBAudit).where(
-                        UVDBAudit.tenant_id == tenant_id,
-                        UVDBAudit.audit_reference == run.reference_number,
-                    )
+                uvdb_audit_id = await self._sync_uvdb_audit(
+                    job=job,
+                    run=run,
+                    tenant_id=tenant_id,
+                    findings_count=findings_count,
+                    major=major,
+                    minor=minor,
+                    obs=obs,
                 )
-                uvdb_row = uvdb_result.scalar_one_or_none()
-                uvdb_audit_id = uvdb_row.id if uvdb_row else None
             return {
                 "status": "already_synced",
                 "scheme": job.detected_scheme,
