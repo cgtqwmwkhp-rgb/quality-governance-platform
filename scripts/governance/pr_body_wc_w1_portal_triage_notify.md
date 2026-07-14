@@ -53,7 +53,8 @@ Closes P0-INT-2 residual (Journey C): portal `/reports/` submit now auto-assigns
 - `frontend/src/pages/__tests__/portalSubmitSuccess.test.ts`
 
 ## Critical journeys
-- **CUJ-C**: Anonymous portal submit → case owner assigned → assignee in-app notify → staff case (not unassigned dead-end)
+- **CUJ-01**: Anonymous portal submit → triage owner assigned → assignee receives in-app assignment notification
+- **CUJ-02**: Assigned case excluded from `owner=unassigned` queue → staff opens case from notify (not dead-end ops queue)
 
 ## Observability
 - Warning log when no triage owner resolvable in tenant
@@ -68,6 +69,10 @@ Closes P0-INT-2 residual (Journey C): portal `/reports/` submit now auto-assigns
 1. Revert squash commit on main
 2. Redeploy previous SHA
 3. Portal intakes revert to unassigned queue behaviour (#935 manual triage remains)
+
+## Evidence pack
+- CI run links attached after push
+- Staging portal submit screenshot: pending Gate 3
 
 ## Gate checklist
 - [x] Gate 0 — change ledger
