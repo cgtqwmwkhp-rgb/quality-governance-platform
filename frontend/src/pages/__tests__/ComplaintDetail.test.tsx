@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
@@ -74,6 +74,9 @@ vi.mock('../../api/client', () => ({
     create: vi.fn(),
     update: vi.fn(),
   },
+  notificationsApi: {
+    getDeliveryStatus: vi.fn(),
+  },
   getApiErrorMessage: (err: Error) => err.message,
 }))
 
@@ -127,6 +130,9 @@ describe('ComplaintDetail', () => {
     client.complaintsApi.listRunningSheet.mockResolvedValue({ data: [] })
     client.actionsApi.list.mockResolvedValue({
       data: { items: [{ id: 3, title: 'Acknowledge complainant', status: 'open' }] },
+    })
+    client.notificationsApi.getDeliveryStatus.mockResolvedValue({
+      data: { email_configured: true },
     })
   })
 
@@ -221,5 +227,50 @@ describe('ComplaintDetail', () => {
     expect(screen.getByText('Key dates')).toBeInTheDocument()
     expect(screen.getByText(/Running Sheet tab/i)).toBeInTheDocument()
     expect(screen.queryByText('complaints.detail.activity_timeline')).not.toBeInTheDocument()
+  })
+
+  it('shows SMTP honesty banner when email is not configured', async () => {
+    client.notificationsApi.getDeliveryStatus.mockResolvedValue({
+      data: { email_configured: false },
+    })
+
+    renderPage()
+
+    expect(await screen.findByTestId('complaint-detail-email-unavailable')).toBeInTheDocument()
+    expect(screen.getByText('Email alerts unavailable')).toBeInTheDocument()
+  })
+
+  it('shows action-modal SMTP honesty and toasts when email is down', async () => {
+    client.notificationsApi.getDeliveryStatus.mockResolvedValue({
+      data: { email_configured: false },
+    })
+    client.actionsApi.create.mockResolvedValue({
+      data: { id: 99, title: 'Call complainant', status: 'open' },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Late repairs response' })).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'complaints.detail.add_action' }))
+    expect(await screen.findByTestId('complaint-action-email-unavailable')).toBeInTheDocument()
+
+    await userEvent.type(
+      screen.getByPlaceholderText('complaints.detail.action_title_placeholder'),
+      'Call complainant',
+    )
+
+    const form = screen.getByTestId('complaint-action-email-unavailable').closest('form')
+    expect(form).toBeTruthy()
+    fireEvent.submit(form!)
+
+    await waitFor(() => {
+      expect(client.actionsApi.create).toHaveBeenCalled()
+    })
+    expect(mockToastSuccess).toHaveBeenCalledWith(
+      expect.stringMatching(/email alerts are unavailable/i),
+    )
   })
 })

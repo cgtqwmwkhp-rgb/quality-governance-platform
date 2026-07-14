@@ -59,7 +59,16 @@ export function StandardsAssessmentPanel({
         setStatement(response.data[0].notes)
       }
     } catch (err) {
-      toast.error(getApiErrorMessage(err))
+      // Missing assessment is an empty state, not a user-facing failure.
+      // Axios 404 / route drift should not toast "Request failed with status code 404".
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 404) {
+        setLinks([])
+      } else {
+        toast.error(
+          getApiErrorMessage(err, 'Could not load standards assessment. Please try again.'),
+        )
+      }
     } finally {
       setLoading(false)
     }
@@ -81,7 +90,9 @@ export function StandardsAssessmentPanel({
         `Assessed against standards — ${response.data.links_created} proposed link(s) sent to Exceptions`,
       )
     } catch (err) {
-      toast.error(getApiErrorMessage(err))
+      toast.error(
+        getApiErrorMessage(err, 'Could not assess against standards. Please try again.'),
+      )
     } finally {
       setAssessing(false)
     }

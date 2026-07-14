@@ -2321,5 +2321,9 @@
   "workforce.training.stage1": "Stage 1",
   "workforce.training.stage2": "Stage 2",
   "workforce.training.subtitle": "Training programs and records",
-  "workforce.training.title": "Training"
+  "workforce.training.title": "Training",
+  "incidents.detail.actions_unavailable": "Linked actions are temporarily unavailable.",
+  "incidents.detail.proof_eyebrow": "Investigation & CAPA proof",
+  "incidents.detail.proof_actions": "Linked actions",
+  "investigations.handoff.actions_unavailable": "Handoff actions are temporarily unavailable."
 }

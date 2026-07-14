@@ -29,8 +29,15 @@ vi.mock('../../api/client', () => ({
     list: (...args: unknown[]) => mockList(...args),
     create: vi.fn(),
   },
+  notificationsApi: {
+    getDeliveryStatus: vi.fn().mockResolvedValue({ data: { email_configured: true } }),
+  },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Something went wrong',
+}))
+
+vi.mock('../../contexts/ToastContext', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
 }))
 
 vi.mock('../../utils/errorTracker', () => ({

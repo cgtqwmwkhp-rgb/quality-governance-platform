@@ -29,6 +29,7 @@ RULES: list[tuple[str, list[str], list[str]]] = [
             "src.infrastructure.storage",
             "src.infrastructure.websocket",
             "src.infrastructure.tasks",
+            "src.infrastructure.middleware",
         ],
     ),
     ("src/core", ["src.api"], []),
