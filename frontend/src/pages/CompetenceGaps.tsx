@@ -97,9 +97,7 @@ export default function CompetenceGaps() {
     setLinkDrafts((prev) => ({
       ...prev,
       [gapId]: {
-        engineerId: '',
-        requirementId: '',
-        ...prev[gapId],
+        ...(prev[gapId] ?? { engineerId: '', requirementId: '' }),
         ...patch,
       },
     }))
