@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useDeferredValue, useMemo } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Search,
@@ -132,6 +132,7 @@ type SourceTypeFilter =
   | 'ncr'
   | 'capa_incident'
   | 'capa_complaint'
+  | 'regulatory_watch'
 type SortMode = 'newest' | 'due_first'
 
 // Form state type for creating actions
@@ -155,8 +156,17 @@ const INITIAL_FORM: CreateActionForm = {
   source_id: '',
 }
 
+function isSafeActionsReturnTo(path: string | null | undefined): path is string {
+  if (!path) return false
+  if (!path.startsWith('/')) return false
+  if (path.startsWith('//')) return false
+  if (path.includes('://')) return false
+  return true
+}
+
 export default function Actions() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [actions, setActions] = useState<Action[]>([])
   const [loading, setLoading] = useState(true)
@@ -177,6 +187,10 @@ export default function Actions() {
   const [summary, setSummary] = useState<ActionsSummary | null>(null)
   const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
   const [serverFilterError, setServerFilterError] = useState<string | null>(null)
+  const createReturnTo = useMemo(() => {
+    const raw = searchParams.get('returnTo')
+    return isSafeActionsReturnTo(raw) ? raw : null
+  }, [searchParams])
 
   const currentUserId = useMemo(() => {
     const token = getPlatformToken()
@@ -193,6 +207,29 @@ export default function Actions() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<ApiError | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+
+  // Running Sheet / case bridge: ?create=1 opens modal with prefills + optional returnTo.
+  useEffect(() => {
+    if (searchParams.get('create') !== '1') return
+    const title = searchParams.get('title') || ''
+    const description = searchParams.get('description') || ''
+    const sourceType = searchParams.get('sourceType') || 'incident'
+    const sourceId = searchParams.get('sourceId') || ''
+    setFormData({
+      ...INITIAL_FORM,
+      title: title.slice(0, 300),
+      description,
+      source_type: sourceType,
+      source_id: sourceId,
+    })
+    setShowModal(true)
+    const next = new URLSearchParams(searchParams)
+    next.delete('create')
+    next.delete('title')
+    next.delete('description')
+    // Keep sourceType/sourceId/returnTo for filter + return banner.
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
 
   // Transform API response to UI model
   const transformAction = (apiAction: ApiAction): Action => ({
@@ -331,6 +368,9 @@ export default function Actions() {
         setShowModal(false)
         setFormData(INITIAL_FORM)
         setSubmitSuccess(false)
+        if (createReturnTo) {
+          navigate(createReturnTo)
+        }
       }, 1500)
     } catch (err) {
       console.error('Failed to create action:', err)
@@ -478,6 +518,20 @@ export default function Actions() {
           {t('actions.new')}
         </Button>
       </div>
+
+      {createReturnTo ? (
+        <div
+          className="rounded-xl border border-primary/20 bg-primary/5 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+          data-testid="actions-return-to-case"
+        >
+          <p className="text-sm text-foreground">
+            Creating from a case Running Sheet — after save you return to the case.
+          </p>
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link to={createReturnTo}>Back to case</Link>
+          </Button>
+        </div>
+      ) : null}
 
       {emailConfigured === false ? (
         <div
@@ -633,6 +687,7 @@ export default function Actions() {
             <SelectItem value="ncr">NCR / defects (CAPA)</SelectItem>
             <SelectItem value="capa_incident">CAPA (incident-linked)</SelectItem>
             <SelectItem value="capa_complaint">CAPA (complaint-linked)</SelectItem>
+            <SelectItem value="regulatory_watch">Regulatory watch</SelectItem>
           </SelectContent>
         </Select>
 

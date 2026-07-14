@@ -8,6 +8,7 @@ const mockList = vi.fn()
 const mockSummary = vi.fn()
 const mockGetDeliveryStatus = vi.fn()
 const mockToastError = vi.fn()
+const mockCreate = vi.fn()
 
 const { tMock } = vi.hoisted(() => {
   const messages: Record<string, string> = {
@@ -45,7 +46,7 @@ vi.mock('../../api/client', () => ({
   actionsApi: {
     list: (...args: unknown[]) => mockList(...args),
     summary: (...args: unknown[]) => mockSummary(...args),
-    create: vi.fn(),
+    create: (...args: unknown[]) => mockCreate(...args),
   },
   notificationsApi: {
     getDeliveryStatus: (...args: unknown[]) => mockGetDeliveryStatus(...args),
@@ -251,5 +252,31 @@ describe('Actions My Work / Overdue server filters', () => {
     expect(await screen.findByTestId('actions-filter-error')).toHaveTextContent(
       'Server filter failed',
     )
+  })
+})
+
+describe('Actions Running Sheet create bridge', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSummary.mockResolvedValue({ data: { total: 0, by_display_status: {} } })
+    mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: true } })
+    mockList.mockResolvedValue({ data: { items: [] } })
+  })
+
+  it('opens create modal prefilled from query and shows returnTo banner', async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          '/actions?create=1&sourceType=incident&sourceId=7&title=Follow-up%20from%20INC-7&description=From%20running%20sheet&returnTo=%2Fincidents%2F7',
+        ]}
+      >
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('actions-return-to-case')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Follow-up from INC-7')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('From running sheet')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('7')).toBeInTheDocument()
   })
 })

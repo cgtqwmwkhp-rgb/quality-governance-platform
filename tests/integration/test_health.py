@@ -9,6 +9,20 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
+async def test_api_v1_health_alias(client: AsyncClient):
+    """Probes that hit /api/v1/health (without /healthz) must not 404."""
+    response = await client.get("/api/v1/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "healthy"
+    assert "timestamp" in data
+
+    trailing = await client.get("/api/v1/health/")
+    assert trailing.status_code == 200
+    assert trailing.json()["status"] == "healthy"
+
+
+@pytest.mark.asyncio
 async def test_health_check(client: AsyncClient):
     """Test health check endpoint returns healthy status."""
     response = await client.get("/health")

@@ -25,6 +25,13 @@ vi.mock('../../utils/errorTracker', () => ({
   trackError: vi.fn(),
 }))
 
+vi.mock('../../contexts/ToastContext', () => ({
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
+  },
+}))
+
 vi.mock('../../utils/investigationStatusFilter', () => ({
   getStatusDisplay: () => ({
     label: 'In Progress',
@@ -203,6 +210,23 @@ describe('InvestigationDetail', () => {
     expect(within(proof).getAllByText('1')).toHaveLength(2)
     expect(screen.getByTestId('investigation-capa-handoff-cta')).toHaveTextContent(
       'investigations.handoff.open_capa',
+    )
+  })
+
+  it('shows unavailable CAPA counts instead of faux zero when actions fail', async () => {
+    const { toast } = await import('../../contexts/ToastContext')
+    client.actionsApi.list.mockRejectedValue(new Error('actions down'))
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-capa-count')).toHaveTextContent('—')
+    })
+
+    expect(toast.error).toHaveBeenCalled()
+    expect(screen.queryByText('investigations.handoff.no_actions')).not.toBeInTheDocument()
+    expect(screen.getByTestId('investigation-capa-handoff-cta')).toHaveTextContent(
+      'investigations.handoff.create_action',
     )
   })
 })

@@ -5,11 +5,13 @@ Complaint admin lifecycle E2E verification script.
 Flow:
 1. Login
 2. Create complaint
-3. Patch status (received → acknowledged)
-4. List linked actions (expect empty initially)
-5. Create investigation from complaint via from-record
-6. Add running-sheet entry and list entries
-7. Assert investigation appears on complaint investigations list
+3. List complaints (assert created id is tenant-visible)
+4. Get complaint detail
+5. Patch status (received → acknowledged)
+6. List linked actions (expect empty initially)
+7. Create investigation from complaint via from-record
+8. Add running-sheet entry and list entries
+9. Assert investigation appears on complaint investigations list
 
 Exit code:
 - 0 if all critical steps succeed
@@ -162,6 +164,76 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
             "create_complaint",
             True,
             f"Created complaint_id={complaint_id} ref={complaint.get('reference_number')}",
+        )
+    )
+
+    list_resp = _request_step(
+        results,
+        "list_complaints",
+        "GET",
+        f"{base_url}/api/v1/complaints/?page=1&page_size=50",
+        token=token,
+    )
+    if list_resp is None:
+        return results
+    if list_resp.status_code != 200:
+        results.append(
+            StepResult(
+                "list_complaints",
+                False,
+                f"Expected 200, got {list_resp.status_code}",
+                {"body": list_resp.text[:300]},
+            )
+        )
+        return results
+    list_payload = list_resp.json()
+    list_items = list_payload.get("items") or list_payload.get("data") or []
+    if not any(item.get("id") == complaint_id for item in list_items if isinstance(item, dict)):
+        results.append(
+            StepResult(
+                "list_complaints",
+                False,
+                f"Created complaint_id={complaint_id} not present in tenant-scoped list",
+                {"total": list_payload.get("total"), "count": len(list_items)},
+            )
+        )
+        return results
+    results.append(
+        StepResult(
+            "list_complaints",
+            True,
+            f"Created complaint visible in list (total={list_payload.get('total', len(list_items))})",
+        )
+    )
+
+    get_resp = _request_step(
+        results,
+        "get_complaint_detail",
+        "GET",
+        f"{base_url}/api/v1/complaints/{complaint_id}",
+        token=token,
+    )
+    if get_resp is None:
+        return results
+    if get_resp.status_code != 200:
+        results.append(
+            StepResult(
+                "get_complaint_detail",
+                False,
+                f"Expected 200, got {get_resp.status_code}",
+                {"body": get_resp.text[:300]},
+            )
+        )
+        return results
+    detail = get_resp.json()
+    if detail.get("id") != complaint_id:
+        results.append(StepResult("get_complaint_detail", False, "Detail id mismatch"))
+        return results
+    results.append(
+        StepResult(
+            "get_complaint_detail",
+            True,
+            f"Detail ok ref={detail.get('reference_number')} status={detail.get('status')}",
         )
     )
 

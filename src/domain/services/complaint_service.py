@@ -111,6 +111,7 @@ class ComplaintService:
             payload=complaint_data.model_dump(mode="json"),
             user_id=user_id,
             request_id=request_id,
+            tenant_id=tenant_id,
         )
 
         await self.db.flush()
@@ -197,6 +198,7 @@ class ComplaintService:
             },
             user_id=user_id,
             request_id=request_id,
+            tenant_id=tenant_id,
         )
 
         await self.db.flush()

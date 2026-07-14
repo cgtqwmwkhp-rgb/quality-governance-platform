@@ -252,6 +252,7 @@ test.describe("Incident → Investigation → CAPA CUJ", () => {
 
     await expect(page.getByText("Loader slip investigation")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId("investigation-workflow-proof")).toBeVisible();
+    await expect(page.getByTestId("investigation-capa-count")).toHaveTextContent("1");
     await page.getByTestId("investigation-capa-handoff-cta").click();
     await expect(page).toHaveURL(
       new RegExp(`/actions\\?.*sourceType=investigation.*sourceId=${INVESTIGATION_ID}`),
@@ -259,5 +260,112 @@ test.describe("Incident → Investigation → CAPA CUJ", () => {
     await expect(page.getByTestId("actions-investigation-playbook")).toBeVisible({
       timeout: 20_000,
     });
+  });
+
+  test("Incident workflow proof strip is honest and CAPA CTA stays wired", async ({ page }) => {
+    await page.addInitScript((token) => {
+      localStorage.setItem("access_token", token);
+    }, E2E_JWT);
+
+    await installIncidentCujMocks(page, { withActions: true });
+    await page.goto(`/incidents/${INCIDENT_ID}`, { waitUntil: "domcontentloaded" });
+
+    await expect(page.getByText("Loader slip near north gate")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("incident-workflow-proof")).toBeVisible();
+    await expect(page.getByTestId("incident-capa-count")).toHaveTextContent("1");
+    await page.getByTestId("incident-capa-handoff-cta").click();
+    await expect(page).toHaveURL(
+      new RegExp(`/actions\\?.*sourceType=incident.*sourceId=${INCIDENT_ID}`),
+    );
+  });
+
+  test("Action detail reverse deep-links incident and investigation sources", async ({ page }) => {
+    await page.addInitScript((token) => {
+      localStorage.setItem("access_token", token);
+    }, E2E_JWT);
+
+    await page.route("**/api/v1/**", async (route) => {
+      const req = route.request();
+      const url = new URL(req.url());
+      const path = url.pathname;
+      const method = req.method();
+
+      if (path.includes("/actions/by-key") && method === "GET") {
+        const key = url.searchParams.get("key") || "";
+        if (key === `incident_action:${ACTION_ID}`) {
+          await json(route, {
+            id: ACTION_ID,
+            reference_number: "INA-00901",
+            title: "Install anti-slip matting",
+            description: "Reduce slip risk at north gate",
+            action_type: "corrective",
+            status: "open",
+            display_status: "open",
+            action_key: `incident_action:${ACTION_ID}`,
+            source_type: "incident",
+            source_id: INCIDENT_ID,
+            priority: "high",
+            created_at: "2026-03-12T12:00:00Z",
+          });
+          return;
+        }
+        if (key === `investigation_action:${ACTION_ID}`) {
+          await json(route, {
+            id: ACTION_ID,
+            reference_number: "INA-00901",
+            title: "Root-cause CAPA",
+            description: "Investigation-backed corrective action",
+            action_type: "corrective",
+            status: "open",
+            display_status: "open",
+            action_key: `investigation_action:${ACTION_ID}`,
+            source_type: "investigation",
+            source_id: INVESTIGATION_ID,
+            priority: "high",
+            created_at: "2026-03-12T12:00:00Z",
+          });
+          return;
+        }
+      }
+
+      if (path.includes("/actions/") && path.includes("/owner-notes") && method === "GET") {
+        await json(route, { items: [], total: 0 });
+        return;
+      }
+
+      if (path.includes("/evidence-assets") && method === "GET") {
+        await json(route, { items: [], total: 0, page: 1, page_size: 50, pages: 0 });
+        return;
+      }
+
+      if (path.includes("/notifications/delivery-status") && method === "GET") {
+        await json(route, { email_configured: true });
+        return;
+      }
+
+      await json(route, method === "GET" ? { items: [], total: 0 } : { ok: true });
+    });
+
+    await page.goto(`/actions/item?key=incident_action%3A${ACTION_ID}`, {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(page.getByRole("heading", { name: "Install anti-slip matting" })).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId("action-source-deeplink")).toHaveAttribute(
+      "href",
+      `/incidents/${INCIDENT_ID}`,
+    );
+
+    await page.goto(`/actions/item?key=investigation_action%3A${ACTION_ID}`, {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(page.getByRole("heading", { name: "Root-cause CAPA" })).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByTestId("action-source-deeplink")).toHaveAttribute(
+      "href",
+      `/investigations/${INVESTIGATION_ID}`,
+    );
   });
 });

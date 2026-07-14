@@ -101,6 +101,7 @@ class CAPAService:
             description=f"CAPA {action.reference_number} created",
             payload=data.model_dump(mode="json"),
             user_id=user_id,
+            tenant_id=tenant_id,
         )
 
         return action
@@ -188,6 +189,7 @@ class CAPAService:
                 "comment": comment,
             },
             user_id=user_id,
+            tenant_id=tenant_id,
         )
 
         await self.db.commit()
@@ -220,6 +222,7 @@ class CAPAService:
                 "reference_number": action.reference_number,
             },
             user_id=user_id,
+            tenant_id=tenant_id,
         )
 
         await self.db.delete(action)

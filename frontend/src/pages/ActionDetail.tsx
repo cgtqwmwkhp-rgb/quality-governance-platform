@@ -37,6 +37,7 @@ import {
 } from '../components/ui/Select'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
+import { getActionSourceLink } from '../components/investigations/handoffLinks'
 
 const MAX_EVIDENCE_FILE_SIZE_BYTES = 50 * 1024 * 1024
 /** Matches `ActionOwnerNoteCreate.body` max_length on the API. */
@@ -390,6 +391,7 @@ export default function ActionDetail() {
 
   const statusDirty = statusDraft !== (action.display_status || action.status)
   const isCapa = action.action_key.startsWith('capa:') || action.source_type === 'capa'
+  const sourceLink = getActionSourceLink(action.source_type, action.source_id)
 
   return (
     <div className="space-y-6 p-4 max-w-3xl mx-auto animate-fade-in">
@@ -436,12 +438,16 @@ export default function ActionDetail() {
           {action.priority ? (
             <Badge variant="outline">priority: {action.priority}</Badge>
           ) : null}
-          {action.source_type === 'audit_finding' &&
-          Number.isFinite(action.source_id) &&
-          action.source_id > 0 ? (
-            <Button variant="outline" size="sm" className="h-7" asChild>
-              <Link to={`/audits?view=findings&findingId=${action.source_id}`}>
-                {t('actions.view_finding')}
+          {sourceLink ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7"
+              asChild
+              data-testid="action-source-deeplink"
+            >
+              <Link to={sourceLink.href}>
+                {t(sourceLink.labelKey, sourceLink.labelFallback)}
                 <ExternalLink className="w-3 h-3 ml-1" />
               </Link>
             </Button>
