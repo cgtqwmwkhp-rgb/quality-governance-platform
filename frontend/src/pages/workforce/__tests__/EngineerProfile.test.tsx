@@ -267,7 +267,7 @@ describe('EngineerProfile', () => {
     )
 
     expect(
-      await screen.findByTestId('requirements-match-error', {}, { timeout: 5000 }),
+      await screen.findByTestId('requirements-match-error', { timeout: 5000 }),
     ).toBeInTheDocument()
     expect(screen.getByText(/requirements down/)).toBeInTheDocument()
     expect(screen.queryByTestId('requirements-match-percent')).not.toBeInTheDocument()
