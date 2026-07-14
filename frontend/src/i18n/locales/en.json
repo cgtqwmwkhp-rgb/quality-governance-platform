@@ -2083,6 +2083,7 @@
   "standards.load_error": "Failed to load standards data",
   "standards.no_clauses": "No clauses found for this standard",
   "standards.not_set": "Not Set",
+  "standards.ops_signals": "{{count}} inbound operational signals",
   "standards.search_placeholder": "Search standards…",
   "standards.select_standard": "Select a Standard",
   "standards.select_standard_description": "Choose a standard from the list to view its clauses and compliance status",

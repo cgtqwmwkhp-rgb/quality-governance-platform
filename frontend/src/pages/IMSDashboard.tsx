@@ -71,6 +71,14 @@ const complianceHubDestinations: ComplianceHubDestination[] = [
     path: '/standards',
   },
   {
+    id: 'knowledge-exceptions',
+    title: 'Operational signals',
+    description: 'Inbound case→clause exceptions from Standards assessor — filter by clause from the library.',
+    icon: AlertTriangle,
+    colorBg: 'bg-amber-500',
+    path: '/knowledge-exceptions?operational=1',
+  },
+  {
     id: 'evidence',
     title: 'Evidence & Coverage',
     description: 'Link evidence, view coverage gaps, and export compliance reports.',
