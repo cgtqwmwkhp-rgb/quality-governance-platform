@@ -23,10 +23,7 @@ from src.domain.models.near_miss import NearMiss, NearMissRunningSheetEntry
 from src.domain.models.risk import Risk, RiskStatus
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
-from src.domain.services.near_miss_risk_links import (
-    append_linked_risk_id,
-    near_miss_risk_source,
-)
+from src.domain.services.near_miss_risk_links import append_linked_risk_id, near_miss_risk_source
 from src.domain.services.near_miss_service import NearMissService
 from src.domain.services.reference_number import ReferenceNumberService
 from src.domain.services.risk_scoring import calculate_risk_level
@@ -449,9 +446,12 @@ async def raise_risk_from_near_miss(
     near_miss_id: int,
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("risk:create"))],
-    body: RaiseRiskFromNearMissRequest = RaiseRiskFromNearMissRequest(),
+    request_id: str = Depends(get_request_id),
+    body: Optional[RaiseRiskFromNearMissRequest] = None,
 ):
     """Create a risk register entry linked bidirectionally to this near miss."""
+    if body is None:
+        body = RaiseRiskFromNearMissRequest.model_validate({})
     near_miss = await _get_near_miss_or_404(db, near_miss_id, current_user)
 
     severity_impact = {
@@ -523,7 +523,7 @@ async def raise_risk_from_near_miss(
         description=f"Risk {risk.reference_number} raised from near miss {near_miss.reference_number}",
         payload={"risk_id": risk.id, "risk_reference": risk.reference_number},
         user_id=current_user.id,
-        request_id=get_request_id(),
+        request_id=request_id,
     )
 
     await db.commit()
