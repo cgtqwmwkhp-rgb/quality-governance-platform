@@ -18,20 +18,22 @@ const listEngineers = vi.fn()
 const listAssessments = vi.fn()
 const listInductions = vi.fn()
 const navigate = vi.fn()
+const { t } = vi.hoisted(() => ({
+  t: (key: string, options?: string | Record<string, unknown>) => {
+    if (typeof options === 'string') return options
+    if (options && typeof options === 'object') {
+      const template = typeof options.defaultValue === 'string' ? options.defaultValue : key
+      return template.replace(/\{\{(\w+)\}\}/g, (_, name: string) =>
+        String(options[name] ?? `{{${name}}}`),
+      )
+    }
+    return key
+  },
+}))
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: string | Record<string, unknown>) => {
-      if (typeof options === 'string') return options
-      if (options && typeof options === 'object') {
-        const template =
-          typeof options.defaultValue === 'string' ? options.defaultValue : key
-        return template.replace(/\{\{(\w+)\}\}/g, (_, name: string) =>
-          String(options[name] ?? `{{${name}}}`),
-        )
-      }
-      return key
-    },
+    t,
     i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
@@ -51,8 +53,7 @@ vi.mock('../../../api/client', () => ({
     listAssessments: (...args: unknown[]) => listAssessments(...args),
     listInductions: (...args: unknown[]) => listInductions(...args),
   },
-  getApiErrorMessage: (err: unknown) =>
-    err instanceof Error ? err.message : 'load failed',
+  getApiErrorMessage: (err: unknown) => (err instanceof Error ? err.message : 'load failed'),
 }))
 
 vi.mock('../../../utils/errorTracker', () => ({
@@ -132,9 +133,7 @@ describe('calendar helpers', () => {
   })
 
   it('maps execute routes by type', () => {
-    expect(executeRouteForEvent('assessment', 'a-1')).toBe(
-      '/workforce/assessments/a-1/execute',
-    )
+    expect(executeRouteForEvent('assessment', 'a-1')).toBe('/workforce/assessments/a-1/execute')
     expect(executeRouteForEvent('induction', 'i-1')).toBe('/workforce/training/i-1/execute')
   })
 
@@ -181,7 +180,7 @@ describe('calendar helpers', () => {
 describe('Calendar page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Anchor "today" so month view shows July 2026 fixtures — use real July by setting system? 
+    // Anchor "today" so month view shows July 2026 fixtures — use real July by setting system?
     // Instead schedule on current month dynamically.
     const now = new Date()
     const y = now.getFullYear()
@@ -279,7 +278,9 @@ describe('Calendar page', () => {
 
     await user.click(await screen.findByTestId('calendar-view-list'))
     const list = await screen.findByTestId('calendar-list-view')
-    const assessRow = within(list).getByText(/ASS-001/).closest('button')
+    const assessRow = within(list)
+      .getByText(/ASS-001/)
+      .closest('button')
     expect(assessRow).toHaveAttribute('data-type', 'assessment')
     expect(assessRow).toHaveAttribute('data-status', 'scheduled')
   })
