@@ -68,6 +68,7 @@ class ComplaintUpdate(BaseModel):
     root_cause: Optional[str] = None
     resolution_summary: Optional[str] = None
     customer_satisfied: Optional[bool] = None
+    owner_id: Optional[int] = Field(None, description="Case owner user id (null clears assignment)")
 
     @field_validator("title", "description", "investigation_notes", "root_cause", "resolution_summary", mode="before")
     @classmethod

@@ -77,14 +77,19 @@ export interface ComplaintUpdate {
   customer_satisfied?: boolean
   compensation_offered?: string
   resolution_summary?: string
+  owner_id?: number | null
 }
 
 export function createComplaintsApi(api: AxiosInstance) {
   return {
-    list: (page = 1, pageSize = 10) =>
-      api.get<PaginatedResponse<Complaint>>(
-        `/api/v1/complaints/?page=${page}&page_size=${pageSize}`,
-      ),
+    list: (page = 1, pageSize = 10, options?: { owner?: 'unassigned' }) => {
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+      })
+      if (options?.owner) params.set('owner', options.owner)
+      return api.get<PaginatedResponse<Complaint>>(`/api/v1/complaints/?${params.toString()}`)
+    },
     create: (data: ComplaintCreate) => api.post<Complaint>('/api/v1/complaints/', data),
     get: (id: number) => api.get<Complaint>(`/api/v1/complaints/${id}`),
     update: (id: number, data: ComplaintUpdate) =>

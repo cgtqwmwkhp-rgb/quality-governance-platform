@@ -40,11 +40,54 @@ from src.domain.models.investigation import InvestigationAction, InvestigationAc
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.notification_service import NotificationService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _resolve_assignee_id_or_raise(
+    db: Any,
+    assigned_to_email: str,
+    tenant_id: Optional[int],
+) -> int:
+    """Resolve assignee email to user id; fail loudly if missing (no silent unowned)."""
+    result = await db.execute(select(User).where(User.email == assigned_to_email, User.tenant_id == tenant_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise BadRequestError(
+            f"No user found with email '{assigned_to_email}' in this tenant. "
+            "Action was not created unowned — fix the assignee email and retry."
+        )
+    return user.id
+
+
+async def _notify_action_assignment(
+    db: Any,
+    *,
+    action_id: int,
+    assigned_to_user_id: int,
+    assigned_by_user_id: int,
+    title: str,
+    priority: str = "medium",
+    due_date: Optional[datetime] = None,
+) -> None:
+    """Wire NotificationService.create_assignment after owner_id is set."""
+    try:
+        service = NotificationService(db)
+        await service.create_assignment(
+            entity_type="action",
+            entity_id=str(action_id),
+            assigned_to_user_id=assigned_to_user_id,
+            assigned_by_user_id=assigned_by_user_id,
+            due_date=due_date,
+            priority=priority if priority in ("low", "medium", "high", "critical") else "medium",
+            notes=f"You have been assigned action: {title}",
+        )
+    except Exception:
+        logger.exception("Failed to notify assignment for action %s", action_id)
 
 
 # ============== Schemas ==============
@@ -958,15 +1001,10 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     else:
         raise BadRequestError("Invalid source_type")
 
-    # Find owner by email if provided (scoped to tenant)
+    # Find owner by email if provided (scoped to tenant) — fail loudly on unknown email
     owner_id: Optional[int] = None
     if action_data.assigned_to_email:
-        result = await db.execute(
-            select(User).where(User.email == action_data.assigned_to_email, User.tenant_id == current_user.tenant_id)
-        )
-        user = result.scalar_one_or_none()
-        if user:
-            owner_id = user.id
+        owner_id = await _resolve_assignee_id_or_raise(db, action_data.assigned_to_email, current_user.tenant_id)
 
     # Generate reference number based on source type
     year = datetime.now().year
@@ -1146,6 +1184,17 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         )
 
     track_metric("actions.created")
+
+    if owner_id:
+        await _notify_action_assignment(
+            db,
+            action_id=action.id,
+            assigned_to_user_id=owner_id,
+            assigned_by_user_id=current_user.id,
+            title=action_data.title,
+            priority=action_data.priority or "medium",
+            due_date=parsed_due_date,
+        )
 
     if isinstance(action, CAPAAction):
         out = await _capa_to_response(db, action)
@@ -1666,6 +1715,9 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         raise NotFoundError("Action not found")
 
     # Apply updates - only update fields that were provided
+    previous_owner_id = getattr(action, "owner_id", None) or getattr(action, "assigned_to_id", None)
+    new_owner_id: Optional[int] = None
+
     if action_data.title is not None:
         action.title = action_data.title
     if action_data.description is not None:
@@ -1697,14 +1749,10 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
                 elif status_value not in ("completed", "closed"):
                     action.completed_at = None
         if action_data.assigned_to_email is not None:
-            result = await db.execute(
-                select(User).where(
-                    User.email == action_data.assigned_to_email, User.tenant_id == current_user.tenant_id
-                )
+            new_owner_id = await _resolve_assignee_id_or_raise(
+                db, action_data.assigned_to_email, current_user.tenant_id
             )
-            user = result.scalar_one_or_none()
-            if user:
-                action.assigned_to_id = user.id
+            action.assigned_to_id = new_owner_id
         if action_data.completion_notes is not None:
             action.verification_result = action_data.completion_notes
     else:
@@ -1729,14 +1777,10 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             elif status_value != "completed":
                 action.completed_at = None
         if action_data.assigned_to_email is not None:
-            result = await db.execute(
-                select(User).where(
-                    User.email == action_data.assigned_to_email, User.tenant_id == current_user.tenant_id
-                )
+            new_owner_id = await _resolve_assignee_id_or_raise(
+                db, action_data.assigned_to_email, current_user.tenant_id
             )
-            user = result.scalar_one_or_none()
-            if user:
-                action.owner_id = user.id
+            action.owner_id = new_owner_id
         if action_data.completion_notes is not None:
             action.completion_notes = action_data.completion_notes
 
@@ -1771,6 +1815,17 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             bridge_result=bridge_result,
             capa=action,
             actor_user_id=current_user.id,
+        )
+
+    if new_owner_id is not None and new_owner_id != previous_owner_id:
+        await _notify_action_assignment(
+            db,
+            action_id=action.id,
+            assigned_to_user_id=new_owner_id,
+            assigned_by_user_id=current_user.id,
+            title=getattr(action, "title", None) or "Action",
+            priority=str(getattr(action, "priority", "medium") or "medium"),
+            due_date=getattr(action, "due_date", None),
         )
 
     if isinstance(action, CAPAAction):

@@ -18,11 +18,51 @@ from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictE
 from src.domain.models.complaint import Complaint, ComplaintRunningSheetEntry
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.notification_service import NotificationService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.services.complaint_service import ComplaintService
 
 router = APIRouter(tags=["Complaints"])
 logger = logging.getLogger(__name__)
+
+
+async def _validate_case_owner(db: DbSession, owner_id: int, tenant_id: int | None) -> User:
+    """Ensure owner_id refers to an active user in the tenant."""
+    result = await db.execute(select(User).where(User.id == owner_id))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise BadRequestError(f"No active user found with id {owner_id}")
+    if tenant_id is not None and user.tenant_id != tenant_id:
+        raise BadRequestError(f"User {owner_id} is not in this tenant")
+    return user
+
+
+async def _notify_case_owner_assignment(
+    db: DbSession,
+    *,
+    entity_type: str,
+    entity_id: int,
+    assigned_to_user_id: int,
+    assigned_by_user_id: int,
+    reference: str,
+) -> None:
+    """In-app assignment notify; never rewrite NotificationService — call site only."""
+    try:
+        service = NotificationService(db)
+        await service.create_assignment(
+            entity_type=entity_type,
+            entity_id=str(entity_id),
+            assigned_to_user_id=assigned_to_user_id,
+            assigned_by_user_id=assigned_by_user_id,
+            notes=f"You have been assigned as case owner for {reference}",
+            priority="high",
+        )
+    except Exception:
+        logger.exception(
+            "Failed to notify case owner assignment for %s %s",
+            entity_type,
+            entity_id,
+        )
 
 
 async def _trigger_operational_standards_assess(
@@ -119,6 +159,10 @@ async def list_complaints(
     page_size: int = Query(20, ge=1, le=100),
     status_filter: Optional[str] = Query(None, alias="status"),
     complainant_email: Optional[str] = Query(None, description="Filter by complainant email"),
+    owner: Optional[str] = Query(
+        None,
+        description="Filter by case owner: 'unassigned' for intakes with no owner_id",
+    ),
 ) -> ComplaintListResponse:
     """
     List all complaints with deterministic ordering.
@@ -132,6 +176,9 @@ async def list_complaints(
     import math
 
     logger = logging.getLogger(__name__)
+
+    if owner is not None and owner != "unassigned":
+        raise BadRequestError("Invalid owner filter. Supported value: unassigned")
 
     # SECURITY FIX: If filtering by email, enforce that users can only access their own data
     # unless they have admin/view-all permissions
@@ -177,6 +224,8 @@ async def list_complaints(
             query = query.where(Complaint.complainant_email == complainant_email)
         if status_filter:
             query = query.where(Complaint.status == status_filter)
+        if owner == "unassigned":
+            query = query.where(Complaint.owner_id.is_(None))
 
         # Total count
         count_query = select(func.count()).select_from(query.subquery())
@@ -241,8 +290,19 @@ async def update_complaint(
     Requires authentication. StateTransitionError is caught by the
     global domain error handler and returned as a structured JSON response.
     """
+    updates = complaint_in.model_dump(exclude_unset=True)
+    if "owner_id" in updates and updates["owner_id"] is not None:
+        await _validate_case_owner(db, updates["owner_id"], current_user.tenant_id)
+
     svc = ComplaintService(db)
     try:
+        existing = await svc.get_complaint(
+            complaint_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+        previous_owner_id = existing.owner_id
+
         complaint = await svc.update_complaint(
             complaint_id,
             complaint_in,
@@ -252,6 +312,18 @@ async def update_complaint(
             skip_tenant_check=current_user.is_superuser,
         )
         await _trigger_operational_standards_assess(db, complaint, current_user)
+
+        if "owner_id" in updates and updates["owner_id"] is not None and updates["owner_id"] != previous_owner_id:
+            await _notify_case_owner_assignment(
+                db,
+                entity_type="complaint",
+                entity_id=complaint.id,
+                assigned_to_user_id=updates["owner_id"],
+                assigned_by_user_id=current_user.id,
+                reference=complaint.reference_number,
+            )
+            # NotificationService.create_assignment commits; reattach for response serialization
+            await db.refresh(complaint)
         return complaint
     except LookupError:
         raise NotFoundError(f"Complaint {complaint_id} not found")

@@ -1,5 +1,5 @@
 import { useEffect, useState, useDeferredValue } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
 import { Plus, MessageSquare, Search, Loader2, MailWarning } from 'lucide-react'
@@ -9,6 +9,7 @@ import {
   ComplaintCreate,
   getApiErrorMessage,
   notificationsApi,
+  UserSearchResult,
 } from '../api/client'
 import { queueForSync } from '../lib/syncService'
 import { toast } from '../contexts/ToastContext'
@@ -19,6 +20,7 @@ import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge, type BadgeVariant } from '../components/ui/Badge'
+import { UserEmailSearch } from '../components/UserEmailSearch'
 import {
   Dialog,
   DialogContent,
@@ -35,8 +37,11 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 
+type OwnerFilter = 'all' | 'unassigned'
+
 export default function Complaints() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useTranslation()
   const [complaints, setComplaints] = useState<Complaint[]>([])
   const [loading, setLoading] = useState(true)
@@ -47,6 +52,13 @@ export default function Complaints() {
   const [listUnavailable, setListUnavailable] = useState(false)
   const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>(
+    searchParams.get('owner') === 'unassigned' ? 'unassigned' : 'all',
+  )
+  const [assigningId, setAssigningId] = useState<number | null>(null)
+  const [assigneeById, setAssigneeById] = useState<
+    Record<number, { email: string; user?: UserSearchResult }>
+  >({})
   const [formData, setFormData] = useState<ComplaintCreate>({
     title: '',
     description: '',
@@ -60,9 +72,30 @@ export default function Complaints() {
 
   useEffect(() => {
     let cancelled = false
+    notificationsApi
+      .getDeliveryStatus()
+      .then((response) => {
+        if (!cancelled) setEmailConfigured(response.data.email_configured)
+      })
+      .catch(() => {
+        // Optional honesty signal: omit the banner when readiness cannot be read.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
     const load = async () => {
+      setLoading(true)
+      setLoadError(null)
       try {
-        const response = await complaintsApi.list(1, 50)
+        const response = await complaintsApi.list(
+          1,
+          50,
+          ownerFilter === 'unassigned' ? { owner: 'unassigned' } : undefined,
+        )
         if (!cancelled) {
           setComplaints(response.data.items ?? [])
           setListUnavailable(false)
@@ -85,7 +118,44 @@ export default function Complaints() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [ownerFilter])
+
+  const setFilter = (next: OwnerFilter) => {
+    setOwnerFilter(next)
+    if (next === 'unassigned') {
+      setSearchParams({ owner: 'unassigned' })
+    } else {
+      setSearchParams({})
+    }
+  }
+
+  const handleAssignOwner = async (complaintId: number) => {
+    const picked = assigneeById[complaintId]
+    if (!picked?.user?.id) {
+      toast.error(t('complaints.triage.select_owner', 'Select a case owner from search results'))
+      return
+    }
+    setAssigningId(complaintId)
+    try {
+      await complaintsApi.update(complaintId, { owner_id: picked.user.id })
+      toast.success(
+        emailConfigured === false
+          ? t('complaints.triage.assigned_in_app', 'Assigned in-app (email alerts unavailable)')
+          : t('complaints.triage.assigned', 'Case owner assigned'),
+      )
+      setComplaints((prev) => prev.filter((c) => c.id !== complaintId))
+      setAssigneeById((prev) => {
+        const next = { ...prev }
+        delete next[complaintId]
+        return next
+      })
+    } catch (err) {
+      trackError(err, { component: 'Complaints', action: 'assign_owner' })
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setAssigningId(null)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -299,6 +369,35 @@ export default function Complaints() {
         </div>
       )}
 
+      <div className="flex gap-2" role="group" aria-label={t('complaints.triage.tabs', 'Triage filters')}>
+        <Button
+          type="button"
+          variant={ownerFilter === 'all' ? 'default' : 'outline'}
+          size="sm"
+          data-testid="complaints-filter-all"
+          onClick={() => setFilter('all')}
+        >
+          {t('complaints.triage.all', 'All')}
+        </Button>
+        <Button
+          type="button"
+          variant={ownerFilter === 'unassigned' ? 'default' : 'outline'}
+          size="sm"
+          data-testid="complaints-filter-unassigned"
+          onClick={() => setFilter('unassigned')}
+        >
+          {t('complaints.triage.unassigned', 'Unassigned')}
+        </Button>
+      </div>
+      {ownerFilter === 'unassigned' ? (
+        <p className="text-sm text-muted-foreground" data-testid="complaints-server-filter-label">
+          {t(
+            'complaints.triage.server_filter_label',
+            'Server filter: owner=unassigned (portal intakes without a case owner)',
+          )}
+        </p>
+      ) : null}
+
       {/* Search */}
       <div className="flex gap-4">
         <div className="flex-1 relative">
@@ -343,6 +442,11 @@ export default function Complaints() {
                   <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     {t('complaints.table.received')}
                   </th>
+                  {ownerFilter === 'unassigned' ? (
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {t('complaints.triage.assign_owner', 'Assign owner')}
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -360,7 +464,7 @@ export default function Complaints() {
                   </tr>
                 ) : filteredComplaints.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={ownerFilter === 'unassigned' ? 8 : 7}>
                       <EmptyState
                         icon={<MessageSquare className="w-6 h-6 text-muted-foreground" />}
                         title={
@@ -395,12 +499,12 @@ export default function Complaints() {
                   filteredComplaints.map((complaint, index) => (
                     <tr
                       key={complaint.id}
-                      className="hover:bg-surface transition-colors cursor-pointer"
+                      className="hover:bg-surface transition-colors"
                       style={{ animationDelay: `${index * 30}ms` }}
                       onClick={() => navigate(`/complaints/${complaint.id}`)}
                       role="button"
                       tabIndex={0}
-                      data-testid={`complaints-row-${complaint.id}`}
+                      data-testid="complaint-row-link"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
@@ -408,12 +512,18 @@ export default function Complaints() {
                         }
                       }}
                     >
-                      <td className="px-6 py-4">
+                      <td
+                        className="px-6 py-4 cursor-pointer"
+                        onClick={() => navigate(`/complaints/${complaint.id}`)}
+                      >
                         <span className="font-mono text-sm text-primary">
                           {complaint.reference_number}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
+                      <td
+                        className="px-6 py-4 cursor-pointer"
+                        onClick={() => navigate(`/complaints/${complaint.id}`)}
+                      >
                         <p className="text-sm font-medium text-foreground truncate max-w-xs">
                           {complaint.title}
                         </p>
@@ -442,6 +552,41 @@ export default function Complaints() {
                       <td className="px-6 py-4 text-sm text-muted-foreground">
                         {new Date(complaint.received_date).toLocaleDateString()}
                       </td>
+                      {ownerFilter === 'unassigned' ? (
+                        <td
+                          className="px-6 py-4"
+                          onClick={(e) => e.stopPropagation()}
+                          data-testid={`complaint-assign-${complaint.id}`}
+                        >
+                          <div className="flex flex-col gap-2 min-w-[220px]">
+                            <UserEmailSearch
+                              value={assigneeById[complaint.id]?.email || ''}
+                              onChange={(email, user) =>
+                                setAssigneeById((prev) => ({
+                                  ...prev,
+                                  [complaint.id]: { email, user },
+                                }))
+                              }
+                              placeholder={t(
+                                'complaints.triage.search_owner',
+                                'Search case owner…',
+                              )}
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={assigningId === complaint.id}
+                              onClick={() => handleAssignOwner(complaint.id)}
+                            >
+                              {assigningId === complaint.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                t('complaints.triage.assign', 'Assign')
+                              )}
+                            </Button>
+                          </div>
+                        </td>
+                      ) : null}
                     </tr>
                   ))
                 )}
