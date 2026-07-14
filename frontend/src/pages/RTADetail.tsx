@@ -55,6 +55,7 @@ import { Input } from '../components/ui/Input'
 import { Switch } from '../components/ui/Switch'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
+import { AssetPicker } from '../components/AssetPicker'
 import { RunningSheetPanel } from '../components/case/RunningSheetPanel'
 import { SubmissionSections } from '../components/case/SubmissionSections'
 import {
@@ -181,6 +182,7 @@ export default function RTADetail() {
       company_vehicle_registration: data.company_vehicle_registration,
       company_vehicle_make_model: data.company_vehicle_make_model,
       company_vehicle_damage: data.company_vehicle_damage,
+      asset_id: data.asset_id ?? null,
       driver_name: data.driver_name,
       driver_statement: data.driver_statement,
       driver_injured: data.driver_injured,
@@ -933,11 +935,22 @@ export default function RTADetail() {
                     <label htmlFor="rta-v1-damage" className="text-sm font-medium text-muted-foreground">Damage Description</label>
                     <Textarea id="rta-v1-damage" value={editForm.company_vehicle_damage || ''} onChange={(e) => setEditForm({ ...editForm, company_vehicle_damage: e.target.value })} rows={3} className="mt-1" placeholder="Describe damage to company vehicle" />
                   </div>
+                  <div className="col-span-2">
+                    <AssetPicker
+                      value={editForm.asset_id}
+                      onChange={(assetId) => setEditForm({ ...editForm, asset_id: assetId })}
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Registration" value={rta.company_vehicle_registration} />
                   <Field label="Make / Model" value={rta.company_vehicle_make_model} />
+                  {rta.asset_id != null && (
+                    <div className="col-span-2">
+                      <Field label="Linked asset" value={`Asset #${rta.asset_id}`} />
+                    </div>
+                  )}
                   <div className="col-span-2">
                     <Field label="Damage" value={rta.company_vehicle_damage} />
                   </div>

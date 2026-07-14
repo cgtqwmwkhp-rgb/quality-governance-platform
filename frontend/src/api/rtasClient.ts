@@ -61,6 +61,8 @@ export interface RTA {
   company_vehicle_registration?: string
   company_vehicle_make_model?: string
   company_vehicle_damage?: string
+  /** Linked Asset registry id (golden thread). */
+  asset_id?: number | null
   driver_name?: string
   driver_id?: number
   driver_email?: string
@@ -129,6 +131,7 @@ export interface RTAUpdate {
   company_vehicle_registration?: string
   company_vehicle_make_model?: string
   company_vehicle_damage?: string
+  asset_id?: number | null
   driver_name?: string
   driver_id?: number
   driver_email?: string

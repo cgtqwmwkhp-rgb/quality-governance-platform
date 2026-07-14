@@ -34,6 +34,7 @@ import { Textarea } from '../components/ui/Textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
 import { RunningSheetPanel, buildRunningSheetCreateActionHref } from '../components/case/RunningSheetPanel'
+import { AssetPicker } from '../components/AssetPicker'
 import { parseLinkedRiskIds, riskRegisterHref } from './nearMissRiskLinks'
 
 export default function NearMissDetail() {
@@ -95,6 +96,7 @@ export default function NearMissDetail() {
         corrective_actions_taken: response.data.corrective_actions_taken,
         risk_category: response.data.risk_category,
         potential_severity: response.data.potential_severity,
+        asset_id: response.data.asset_id ?? null,
       })
       loadInvestigations(nearMissId)
       loadRunningSheet(nearMissId)
@@ -181,6 +183,7 @@ export default function NearMissDetail() {
       corrective_actions_taken: nearMiss.corrective_actions_taken,
       risk_category: nearMiss.risk_category,
       potential_severity: nearMiss.potential_severity,
+      asset_id: nearMiss.asset_id ?? null,
     })
     setIsEditing(false)
   }
@@ -474,6 +477,12 @@ export default function NearMissDetail() {
                           className="mt-1"
                         />
                       </div>
+                      <div className="mt-2">
+                        <AssetPicker
+                          value={editForm.asset_id}
+                          onChange={(assetId) => setEditForm({ ...editForm, asset_id: assetId })}
+                        />
+                      </div>
                     </>
                   ) : (
                     <>
@@ -481,6 +490,19 @@ export default function NearMissDetail() {
                         <h3 className="text-sm font-medium text-muted-foreground mb-2">{t('common.description')}</h3>
                         <p className="text-foreground whitespace-pre-wrap">{nearMiss.description}</p>
                       </div>
+                      {(nearMiss.asset_id != null || nearMiss.asset_number) && (
+                        <div>
+                          <h3 className="text-sm font-medium text-muted-foreground mb-2">Linked asset</h3>
+                          <p className="text-foreground">
+                            {nearMiss.asset_id != null ? `Asset #${nearMiss.asset_id}` : null}
+                            {nearMiss.asset_number
+                              ? `${nearMiss.asset_id != null ? ' · ' : ''}${nearMiss.asset_number}${
+                                  nearMiss.asset_type ? ` (${nearMiss.asset_type})` : ''
+                                }`
+                              : ''}
+                          </p>
+                        </div>
+                      )}
                       <div>
                         <h3 className="text-sm font-medium text-muted-foreground mb-2">
                           {t('near_misses.form.potential_consequences', 'Potential consequences')}

@@ -29,6 +29,7 @@ class RTABase(BaseModel):
     company_vehicle_registration: Optional[str] = Field(None, max_length=20)
     company_vehicle_make_model: Optional[str] = Field(None, max_length=100)
     company_vehicle_damage: Optional[str] = None
+    asset_id: Optional[int] = Field(None, description="Linked Asset registry id (golden thread)")
     driver_name: Optional[str] = Field(None, max_length=200)
     driver_statement: Optional[str] = None
     driver_injured: bool = False
@@ -94,6 +95,7 @@ class RTAUpdate(BaseModel):
     company_vehicle_registration: Optional[str] = Field(None, max_length=20)
     company_vehicle_make_model: Optional[str] = Field(None, max_length=100)
     company_vehicle_damage: Optional[str] = None
+    asset_id: Optional[int] = Field(None, description="Linked Asset registry id (null clears link)")
     driver_id: Optional[int] = None
     driver_name: Optional[str] = Field(None, max_length=200)
     driver_statement: Optional[str] = None
@@ -161,6 +163,7 @@ class RTAResponse(BaseModel):
     company_vehicle_registration: Optional[str] = None
     company_vehicle_make_model: Optional[str] = None
     company_vehicle_damage: Optional[str] = None
+    asset_id: Optional[int] = None
     driver_name: Optional[str] = None
     driver_statement: Optional[str] = None
     driver_injured: bool = False

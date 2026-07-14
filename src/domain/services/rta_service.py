@@ -95,6 +95,7 @@ class RTAService:
         severity: Optional[str] = None,
         status_filter: Optional[str] = None,
         reporter_email: Optional[str] = None,
+        asset_id: Optional[int] = None,
     ):
         """List RTAs with pagination and optional filters."""
         query = (
@@ -109,6 +110,8 @@ class RTAService:
             query = query.where(RoadTrafficCollision.status == status_filter)
         if reporter_email:
             query = query.where(RoadTrafficCollision.reporter_email == reporter_email)
+        if asset_id is not None:
+            query = query.where(RoadTrafficCollision.asset_id == asset_id)
 
         query = query.order_by(
             RoadTrafficCollision.created_at.desc(),
