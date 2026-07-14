@@ -416,8 +416,30 @@ async def confirm_evidence_link(
             },
         )
     )
+    # Minimal Assessor → Workforce hook: competence_gap / nonconformity / gap → from-signal.
+    competence_gap_id = None
+    competence_gap_href = None
+    try:
+        from src.domain.services.competence_gap_service import competence_gap_service
+
+        gap = await competence_gap_service.from_evidence_link(
+            db,
+            link=link,
+            created_by_id=current_user.id,
+            tenant_id=tenant_id,
+            commit=False,
+        )
+        if gap is not None:
+            competence_gap_id = gap.id
+            competence_gap_href = f"/workforce/competence-gaps?id={gap.id}"
+    except Exception:
+        logger.exception("competence gap from-signal failed for evidence link %s", link_id)
     await db.commit()
-    return {"status": "confirmed", "link_id": link_id}
+    payload: dict[str, Any] = {"status": "confirmed", "link_id": link_id}
+    if competence_gap_id is not None:
+        payload["competence_gap_id"] = competence_gap_id
+        payload["competence_gap_href"] = competence_gap_href
+    return payload
 
 
 @router.post("/evidence/{link_id}/reject")
@@ -480,11 +502,33 @@ async def bulk_confirm_evidence(
         )
     )
     links = list(result.scalars().all())
-    for link in links:
-        link.status = EvidenceLinkStatus.CONFIRMED
-        link.auto_applied = False
+    competence_gap_ids: list[int] = []
+    try:
+        from src.domain.services.competence_gap_service import competence_gap_service
+
+        for link in links:
+            link.status = EvidenceLinkStatus.CONFIRMED
+            link.auto_applied = False
+            gap = await competence_gap_service.from_evidence_link(
+                db,
+                link=link,
+                created_by_id=current_user.id,
+                tenant_id=tenant_id,
+                commit=False,
+            )
+            if gap is not None:
+                competence_gap_ids.append(gap.id)
+    except Exception:
+        logger.exception("competence gap bulk from-signal failed")
+        for link in links:
+            link.status = EvidenceLinkStatus.CONFIRMED
+            link.auto_applied = False
     await db.commit()
-    return {"status": "confirmed", "count": len(links)}
+    return {
+        "status": "confirmed",
+        "count": len(links),
+        "competence_gap_ids": competence_gap_ids,
+    }
 
 
 @router.get("/exceptions", response_model=list[EvidenceLinkDetailResponse])

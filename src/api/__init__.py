@@ -72,6 +72,7 @@ from src.api.routes import (
     wdp_analytics,
     workflow,
     workflows,
+    workforce_competence_gaps,
     xml_import,
 )
 from src.core.config import settings
@@ -194,6 +195,11 @@ router.include_router(
     competency_requirements.router,
     prefix="/competency-requirements",
     tags=["Competency Requirements"],
+)
+router.include_router(
+    workforce_competence_gaps.router,
+    prefix="/workforce/competence-gaps",
+    tags=["Workforce Competence Gaps"],
 )
 router.include_router(wdp_analytics.router, prefix="/wdp-analytics", tags=["Workforce Analytics"])
 # Governance Framework (Workforce Development Platform)

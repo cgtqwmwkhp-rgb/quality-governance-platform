@@ -42,6 +42,7 @@ class CAPASource(str, PyEnum):
     LOLER_EXAMINATION = "loler_examination"
     VEHICLE_DEFECT = "vehicle_defect"
     REGULATORY_WATCH = "regulatory_watch"
+    COMPETENCE_GAP = "competence_gap"
 
 
 def _enum_values(enum_cls: type[PyEnum]) -> list[str]:

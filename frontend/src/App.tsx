@@ -80,6 +80,7 @@ const WorkforceEngineers = lazy(() => import('./pages/workforce/Engineers'))
 const WorkforceEngineerProfile = lazy(() => import('./pages/workforce/EngineerProfile'))
 const WorkforceCalendar = lazy(() => import('./pages/workforce/Calendar'))
 const WorkforceCompetencyDashboard = lazy(() => import('./pages/workforce/CompetencyDashboard'))
+const CompetenceGaps = lazy(() => import('./pages/CompetenceGaps'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const FormsList = lazy(() => import('./pages/admin/FormsList'))
@@ -403,6 +404,14 @@ function App() {
                   element={
                     <RequireRole allowed={['admin', 'supervisor']}>
                       <WorkforceCompetencyDashboard />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="workforce/competence-gaps"
+                  element={
+                    <RequireRole allowed={['admin', 'supervisor']}>
+                      <CompetenceGaps />
                     </RequireRole>
                   }
                 />
