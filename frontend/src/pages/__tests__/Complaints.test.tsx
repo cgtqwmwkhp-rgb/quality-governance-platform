@@ -5,6 +5,8 @@ import type { ReactNode } from 'react'
 import Complaints from '../Complaints'
 
 const mockNavigate = vi.fn()
+const mockToastError = vi.fn()
+const mockToastSuccess = vi.fn()
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
@@ -13,19 +15,40 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, fallbackOrOptions?: string | Record<string, unknown>) => {
+      if (typeof fallbackOrOptions === 'string') return fallbackOrOptions
+      if (
+        fallbackOrOptions &&
+        typeof fallbackOrOptions === 'object' &&
+        'defaultValue' in fallbackOrOptions
+      ) {
+        return String(fallbackOrOptions.defaultValue)
+      }
+      return key
+    },
     i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
 
+vi.mock('../../contexts/ToastContext', () => ({
+  toast: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+  },
+}))
+
 const mockList = vi.fn()
 const mockCreate = vi.fn()
+const mockGetDeliveryStatus = vi.fn()
 
 vi.mock('../../api/client', () => ({
   complaintsApi: {
     list: (...args: unknown[]) => mockList(...args),
     create: (...args: unknown[]) => mockCreate(...args),
+  },
+  notificationsApi: {
+    getDeliveryStatus: (...args: unknown[]) => mockGetDeliveryStatus(...args),
   },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Something went wrong',
@@ -82,17 +105,18 @@ describe('Complaints', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockList.mockResolvedValue(paginatedResponse)
+    mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: true } })
     mockCreate.mockResolvedValue({
       data: {
         id: 3,
         reference_number: 'CMP-003',
-        title: '',
-        description: '',
+        title: 'New complaint',
+        description: 'Detailed description',
         complaint_type: 'other',
         priority: 'medium',
         status: 'received',
         received_date: new Date().toISOString(),
-        complainant_name: '',
+        complainant_name: 'Jane Doe',
         complainant_email: '',
         complainant_phone: '',
       },
@@ -107,7 +131,7 @@ describe('Complaints', () => {
     expect(screen.getByText('complaints.title')).toBeInTheDocument()
   })
 
-  it('renders complaint list after data loads', async () => {
+  it('renders complaint list after data loads with live badge', async () => {
     render(<Complaints />, { wrapper: Wrapper })
 
     await waitFor(() => {
@@ -117,6 +141,7 @@ describe('Complaints', () => {
     expect(screen.getByText('Late delivery issue')).toBeInTheDocument()
     expect(screen.getByText('CMP-002')).toBeInTheDocument()
     expect(screen.getByText('Billing overcharge')).toBeInTheDocument()
+    expect(screen.getByTestId('complaints-live-badge')).toBeInTheDocument()
     expect(mockList).toHaveBeenCalledWith(1, 50)
   })
 
@@ -146,7 +171,7 @@ describe('Complaints', () => {
     expect(screen.getByText('complaints.form.description')).toBeInTheDocument()
   })
 
-  it('handles API errors on load and calls trackError', async () => {
+  it('shows unavailable empty state (not fake empty) when list fails', async () => {
     mockList.mockRejectedValue(new Error('Server unavailable'))
 
     render(<Complaints />, { wrapper: Wrapper })
@@ -155,9 +180,23 @@ describe('Complaints', () => {
       const { trackError } = await import('../../utils/errorTracker')
       expect(trackError).toHaveBeenCalled()
     })
+
+    expect(await screen.findByTestId('complaints-list-unavailable')).toBeInTheDocument()
+    expect(screen.getByText('Complaints unavailable')).toBeInTheDocument()
+    expect(screen.queryByText('No complaints found')).not.toBeInTheDocument()
+    expect(mockToastError).toHaveBeenCalledWith('Complaints list unavailable: Server unavailable')
   })
 
-  it('creates a complaint via the form', async () => {
+  it('shows SMTP honesty banner when email is not configured', async () => {
+    mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: false } })
+
+    render(<Complaints />, { wrapper: Wrapper })
+
+    expect(await screen.findByTestId('complaints-email-unavailable')).toBeInTheDocument()
+    expect(screen.getByText('Email alerts unavailable')).toBeInTheDocument()
+  })
+
+  it('creates a complaint, toasts, and navigates to detail', async () => {
     render(<Complaints />, { wrapper: Wrapper })
 
     await waitFor(() => {
@@ -189,6 +228,8 @@ describe('Complaints', () => {
     const callArgs = mockCreate.mock.calls[0][0]
     expect(callArgs.title).toBe('New complaint')
     expect(callArgs.description).toBe('Detailed description')
+    expect(mockToastSuccess).toHaveBeenCalled()
+    expect(mockNavigate).toHaveBeenCalledWith('/complaints/3')
   })
 
   it('shows error when creation fails', async () => {
@@ -221,22 +262,49 @@ describe('Complaints', () => {
     await waitFor(() => {
       expect(screen.getByText('Validation failed')).toBeInTheDocument()
     })
+    expect(mockNavigate).not.toHaveBeenCalled()
   })
 
-  it('filters complaints via search', async () => {
+  it('filters complaints via search without crashing on null complainant', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [
+          ...sampleComplaints,
+          {
+            id: 9,
+            reference_number: 'CMP-009',
+            title: 'Null-safe row',
+            description: 'Missing complainant',
+            complaint_type: 'other',
+            priority: 'low',
+            status: 'received',
+            received_date: '2026-02-20T10:00:00Z',
+            complainant_name: null,
+            complainant_email: '',
+            complainant_phone: '',
+          },
+        ],
+        total: 3,
+        page: 1,
+        page_size: 50,
+        total_pages: 1,
+      },
+    })
+
     render(<Complaints />, { wrapper: Wrapper })
 
     await waitFor(() => {
       expect(screen.getByText('CMP-001')).toBeInTheDocument()
     })
 
-    expect(screen.getByText('Billing overcharge')).toBeInTheDocument()
+    expect(screen.getByText('Null-safe row')).toBeInTheDocument()
 
     const searchInput = screen.getByPlaceholderText('complaints.search_placeholder')
     fireEvent.change(searchInput, { target: { value: 'delivery' } })
 
     expect(screen.getByText('Late delivery issue')).toBeInTheDocument()
     expect(screen.queryByText('Billing overcharge')).not.toBeInTheDocument()
+    expect(screen.queryByText('Null-safe row')).not.toBeInTheDocument()
   })
 
   it('navigates to complaint detail when a row is clicked', async () => {

@@ -22,6 +22,7 @@ CAPA_ONLY_API_SOURCE_TYPES: frozenset[str] = frozenset(
         "management_review",
         "loler_examination",
         "vehicle_defect",
+        "regulatory_watch",
         "capa_incident",
         "capa_complaint",
     }

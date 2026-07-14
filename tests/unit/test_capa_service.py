@@ -126,6 +126,10 @@ class TestCreateCAPAAction:
         mock_cache.assert_awaited_once_with(10, "capa")
         mock_metric.assert_called_once_with("capa.created")
         mock_audit.assert_awaited_once()
+        audit_kwargs = mock_audit.await_args.kwargs
+        assert audit_kwargs["tenant_id"] == 10
+        assert audit_kwargs["event_type"] == "capa.created"
+        assert audit_kwargs["action"] == "create"
 
 
 class TestUpdateCAPAAction:
@@ -174,6 +178,8 @@ class TestTransitionStatus:
         result = await svc.transition_status(1, CAPAStatus.IN_PROGRESS, user_id=5, tenant_id=10)
         assert result.status == CAPAStatus.IN_PROGRESS
         db.commit.assert_awaited()
+        assert mock_audit.await_args.kwargs["tenant_id"] == 10
+        assert mock_audit.await_args.kwargs["event_type"] == "capa.status_changed"
 
     @pytest.mark.asyncio
     async def test_invalid_transition_raises_state_error(self):
