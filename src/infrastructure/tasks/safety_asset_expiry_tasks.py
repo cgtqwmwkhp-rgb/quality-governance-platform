@@ -30,6 +30,7 @@ BAND_WINDOWS: tuple[tuple[str, int, int], ...] = (
     ("due_90", 61, 90),
 )
 
+
 def _as_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)

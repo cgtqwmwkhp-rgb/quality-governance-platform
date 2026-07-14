@@ -17,7 +17,6 @@ from src.infrastructure.tasks.safety_asset_expiry_tasks import (
     recipient_user_ids,
 )
 
-
 NOW = datetime(2026, 7, 14, 12, 0, tzinfo=timezone.utc)
 
 
