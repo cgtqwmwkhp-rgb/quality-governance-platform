@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
+import { resolveRtaDetailTab } from './rtaStandardsTab'
 import { trackError } from '../utils/errorTracker'
 import {
   ArrowLeft,
@@ -87,6 +88,8 @@ export default function RTADetail() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const defaultTab = resolveRtaDetailTab(searchParams.get('tab'))
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [rta, setRta] = useState<RTA | null>(null)
@@ -658,7 +661,7 @@ export default function RTADetail() {
       </h2>
 
       {/* ═══════════════════ TABBED CONTENT ═══════════════════ */}
-      <Tabs defaultValue="overview" className="w-full">
+      <Tabs defaultValue={defaultTab} key={defaultTab} className="w-full">
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="overview"><FileText className="w-4 h-4 mr-1.5" />{t('rtas.tabs.overview', 'Overview')}</TabsTrigger>
           <TabsTrigger value="standards"><Shield className="w-4 h-4 mr-1.5" />Standards</TabsTrigger>
@@ -895,8 +898,11 @@ export default function RTADetail() {
           </div>
         </TabsContent>
 
-        <TabsContent value="standards">
-          <StandardsAssessmentPanel entityType="rta" entityId={rta.id} />
+        <TabsContent value="standards" className="mt-6">
+          {/* Same StandardsAssessmentPanel host pattern as NearMissDetail */}
+          <div data-testid="rta-standards-panel" id="standards-assessment-panel">
+            <StandardsAssessmentPanel entityType="rta" entityId={rta.id} />
+          </div>
         </TabsContent>
 
         <TabsContent value="submission">

@@ -51,10 +51,26 @@ vi.mock('../../components/UserEmailSearch', () => ({
 }))
 
 vi.mock('../../components/ui/Tabs', () => ({
-  Tabs: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  Tabs: ({ children, defaultValue }: { children: ReactNode; defaultValue?: string }) => (
+    <div data-testid="rta-tabs" data-default-tab={defaultValue}>{children}</div>
+  ),
   TabsList: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TabsTrigger: ({ children }: { children: ReactNode }) => <button type="button">{children}</button>,
   TabsContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}))
+
+vi.mock('../../components/StandardsAssessmentPanel', () => ({
+  StandardsAssessmentPanel: ({
+    entityType,
+    entityId,
+  }: {
+    entityType: string
+    entityId: number | string
+  }) => (
+    <div data-testid="standards-assessment-panel-mock">
+      {entityType}:{entityId}
+    </div>
+  ),
 }))
 
 vi.mock('../../api/client', () => ({
@@ -294,5 +310,14 @@ describe('RTADetail', () => {
     expect(screen.getByText('Key dates')).toBeInTheDocument()
     expect(screen.getByText(/Running Sheet tab/i)).toBeInTheDocument()
     expect(screen.queryByText('rtas.detail.activity_timeline')).not.toBeInTheDocument()
+  })
+
+  it('hosts StandardsAssessmentPanel like Near Miss (rta entity) with mt-6 parity', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rta-standards-panel')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('standards-assessment-panel-mock')).toHaveTextContent('rta:42')
   })
 })
