@@ -28,6 +28,7 @@ This phase lands:
 
 | Table | Status | Notes |
 | --- | --- | --- |
+| `engineers` / `competency_records` / `competency_requirements` | **Done (incremental)** | Workforce P0 spine (`20260713_wf_tenant_nn`): fail-safe backfill (engineers←users, records←engineers); requirements enforce only when fully attributed. ORM `nullable=False`. |
 | `audit_findings` | **Done (incremental)** | Fail-safe backfill from `audit_runs` + conditional `NOT NULL` (`20260710_af_tenant_nn`). ORM `nullable=False`. See `docs/data/audit-findings-tenant-backfill.md`. |
 | `incident_actions` | **Done (incremental)** | Fail-safe backfill from `incidents` + conditional `NOT NULL` (`20260710_ia_tenant_nn`). ORM `nullable=False`. See `docs/data/incident-actions-tenant-backfill.md`. |
 | `complaint_actions` | **Done (incremental)** | Fail-safe backfill from `complaints` + conditional `NOT NULL` (`20260710_ca_tenant_nn`). ORM `nullable=False`. See `docs/data/complaint-actions-tenant-backfill.md`. |
@@ -112,8 +113,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `carbon_evidence` | `CarbonEvidence` |
 | `carbon_improvement_action` | `ImprovementAction` |
 | `carbon_reporting_year` | `CarbonReportingYear` |
-| `competency_records` | `CompetencyRecord` |
-| `competency_requirements` | `CompetencyRequirement` |
 | `contracts` | `Contract` |
 | `copilot_actions` | `CopilotAction` |
 | `copilot_knowledge` | `CopilotKnowledge` |
@@ -133,7 +132,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `driver_acknowledgements` | `DriverAcknowledgement` |
 | `driver_profiles` | `DriverProfile` |
 | `emission_source` | `EmissionSource` |
-| `engineers` | `Engineer` |
 | `evidence_assets` | `EvidenceAsset` |
 | `fleet_emission_record` | `FleetEmissionRecord` |
 | `ims_control_requirement_mappings` | `IMSControlRequirementMapping` |
