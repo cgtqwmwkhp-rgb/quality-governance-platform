@@ -1,16 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 const mockList = vi.fn()
 const mockAssess = vi.fn()
 const mockReject = vi.fn()
 const mockConfirm = vi.fn()
+const mockToastError = vi.fn()
+const mockToastSuccess = vi.fn()
 
 vi.mock('../../contexts/ToastContext', () => ({
   toast: {
-    error: vi.fn(),
-    success: vi.fn(),
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
     warning: vi.fn(),
     info: vi.fn(),
   },
@@ -51,5 +53,75 @@ describe('StandardsAssessmentPanel closed-loop deeplink', () => {
     await waitFor(() => {
       expect(mockList).toHaveBeenCalledWith('near_miss', 12)
     })
+  })
+})
+
+describe('StandardsAssessmentPanel', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue({ data: [] })
+    mockAssess.mockResolvedValue({
+      data: {
+        links_created: 1,
+        links: [],
+        related_documents: [],
+        assessment_statement: 'Mapped',
+        signal_type: 'gap',
+      },
+    })
+  })
+
+  it('shows clear Map to ISO / UVDB / Planet Mark CTA', async () => {
+    const { StandardsAssessmentPanel } = await import('../StandardsAssessmentPanel')
+    render(
+      <MemoryRouter>
+        <StandardsAssessmentPanel entityType="incident" entityId={7} />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByTestId('standards-map-cta')).toHaveTextContent(
+      /Map to ISO \/ UVDB \/ Planet Mark/i,
+    )
+    fireEvent.click(screen.getByTestId('standards-map-cta'))
+    await waitFor(() => {
+      expect(mockAssess).toHaveBeenCalledWith('incident', 7)
+    })
+  })
+
+  it('requires reject rationale before calling API', async () => {
+    mockList.mockResolvedValue({
+      data: [
+        {
+          id: 3,
+          entity_type: 'incident',
+          entity_id: '7',
+          clause_id: 'ISO9001:8.5',
+          linked_by: 'ai',
+          confidence: 0.5,
+          status: 'proposed',
+          scheme: 'iso9001',
+          auto_applied: false,
+          rationale: 'possible gap',
+          title: 'Gap',
+          notes: null,
+          signal_type: 'gap',
+          created_at: '2026-07-13T00:00:00Z',
+          created_by_email: null,
+        },
+      ],
+    })
+    const prompt = vi.spyOn(window, 'prompt').mockReturnValue('')
+    const { StandardsAssessmentPanel } = await import('../StandardsAssessmentPanel')
+    render(
+      <MemoryRouter>
+        <StandardsAssessmentPanel entityType="incident" entityId={7} />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText('ISO9001:8.5')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Reject/i }))
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith(expect.stringMatching(/rationale/i))
+    })
+    expect(mockReject).not.toHaveBeenCalled()
+    prompt.mockRestore()
   })
 })
