@@ -43,6 +43,8 @@ export interface NearMiss {
   asset_type?: string
   risk_category?: string
   potential_severity?: string
+  /** Comma-separated risk register IDs linked from this near miss. */
+  linked_risk_ids?: string
   status: string
   priority: string
   assigned_to_id?: number
@@ -91,6 +93,28 @@ export interface NearMissUpdate {
   potential_severity?: string
 }
 
+export interface RaiseRiskFromNearMissRequest {
+  title?: string
+  description?: string
+  likelihood?: number
+  impact?: number
+  category?: string
+  treatment_strategy?: string
+}
+
+export interface RaiseRiskFromNearMissResponse {
+  risk: {
+    id: number
+    reference_number: string
+    title: string
+    risk_source?: string | null
+  }
+  near_miss_id: number
+  linked_risk_ids: string
+  near_miss_href: string
+  risk_register_href: string
+}
+
 export function createNearMissesApi(api: AxiosInstance) {
   return {
     list: (page = 1, pageSize = 10) =>
@@ -101,6 +125,8 @@ export function createNearMissesApi(api: AxiosInstance) {
     get: (id: number) => api.get<NearMiss>(`/api/v1/near-misses/${id}`),
     update: (id: number, data: NearMissUpdate) =>
       api.patch<NearMiss>(`/api/v1/near-misses/${id}`, data),
+    raiseRisk: (id: number, data?: RaiseRiskFromNearMissRequest) =>
+      api.post<RaiseRiskFromNearMissResponse>(`/api/v1/near-misses/${id}/raise-risk`, data || {}),
     listInvestigations: (id: number, page = 1, pageSize = 10) =>
       api.get<PaginatedResponse<Investigation>>(
         `/api/v1/near-misses/${id}/investigations?page=${page}&page_size=${pageSize}`,

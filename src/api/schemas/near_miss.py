@@ -96,6 +96,7 @@ class NearMissResponse(BaseModel):
     asset_type: Optional[str] = None
     risk_category: Optional[str] = None
     potential_severity: Optional[str] = None
+    linked_risk_ids: Optional[str] = None
     status: str
     priority: str
     assigned_to_id: Optional[int] = None
