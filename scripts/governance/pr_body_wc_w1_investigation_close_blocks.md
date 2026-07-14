@@ -33,6 +33,29 @@ Investigation closure now fails closed when investigation-scoped CAPA/actions re
 - `tests/unit/test_investigation_closure_gate.py`
 - `frontend/src/pages/__tests__/InvestigationDetail.test.tsx` (closure blockers)
 
+## Critical journeys
+- **CUJ-01**: Investigator with open investigation action → closure-validation returns `OPEN_ACTIONS_REMAIN` and blocker list
+- **CUJ-02**: Investigator completes all open actions → PATCH `status=closed` succeeds; InvestigationDetail checklist clears blockers
+
+## Observability
+- Closure gate returns stable reason code `OPEN_ACTIONS_REMAIN` in API response
+- 409 on PATCH close includes same reason code for client handling
+- No new metrics; existing investigation audit trail unchanged
+
+## Release plan
+1. Squash-merge after CI green (DO NOT merge from authoring step)
+2. Staging: create investigation with open action → verify closure blocked → complete action → close
+3. Production deploy with full release SHA
+
+## Rollback plan
+1. Revert squash commit on main
+2. Redeploy previous SHA
+3. Investigations revert to prior close-without-open-work-check behaviour
+
+## Evidence pack
+- CI run links attached after push
+- Staging closure-gate screenshot: pending Gate 3
+
 ## Gate checklist
 - [x] Gate 0 — change ledger (this file)
 - [x] Gate 1 — exclusive allowlist respected
