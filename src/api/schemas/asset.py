@@ -5,6 +5,58 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# ============== Location Schemas ==============
+
+
+class LocationBase(BaseModel):
+    """Base schema for Location."""
+
+    name: str = Field(..., min_length=1, max_length=200)
+    kind: str = Field(..., description="Location kind: site | workshop")
+    parent_id: Optional[int] = None
+    is_active: bool = True
+
+
+class LocationCreate(LocationBase):
+    """Schema for creating a Location."""
+
+    pass
+
+
+class LocationUpdate(BaseModel):
+    """Schema for updating a Location."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    kind: Optional[str] = None
+    parent_id: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class LocationResponse(BaseModel):
+    """Response schema for Locations."""
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    id: int
+    name: str
+    kind: str
+    parent_id: Optional[int] = None
+    is_active: bool = True
+    tenant_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class LocationListResponse(BaseModel):
+    """Schema for paginated location list response."""
+
+    items: List[LocationResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
 # ============== Asset Type Schemas ==============
 
 
@@ -92,9 +144,16 @@ class AssetBase(BaseModel):
     last_loler_date: Optional[datetime] = None
     next_loler_due: Optional[datetime] = None
 
-    # Location
+    # Location (legacy free-text — kept for back-compat)
     site: Optional[str] = Field(None, max_length=200)
     department: Optional[str] = Field(None, max_length=100)
+
+    # Structured assignment (Safety AM spine)
+    location_id: Optional[int] = None
+    vehicle_reg: Optional[str] = Field(None, max_length=20)
+    owner_user_id: Optional[int] = None
+    expiry_date: Optional[datetime] = None
+    photo_evidence_id: Optional[int] = None
 
     # QR code
     qr_code_data: Optional[str] = Field(None, max_length=500)
@@ -129,6 +188,11 @@ class AssetUpdate(BaseModel):
     next_loler_due: Optional[datetime] = None
     site: Optional[str] = None
     department: Optional[str] = None
+    location_id: Optional[int] = None
+    vehicle_reg: Optional[str] = Field(None, max_length=20)
+    owner_user_id: Optional[int] = None
+    expiry_date: Optional[datetime] = None
+    photo_evidence_id: Optional[int] = None
     qr_code_data: Optional[str] = None
     metadata_json: Optional[Dict[str, Any]] = None
 
@@ -161,6 +225,11 @@ class AssetResponse(BaseModel):
     next_loler_due: Optional[datetime] = None
     site: Optional[str] = None
     department: Optional[str] = None
+    location_id: Optional[int] = None
+    vehicle_reg: Optional[str] = None
+    owner_user_id: Optional[int] = None
+    expiry_date: Optional[datetime] = None
+    photo_evidence_id: Optional[int] = None
     qr_code_data: Optional[str] = None
     metadata_json: Optional[Dict[str, Any]] = None
     tenant_id: Optional[int] = None
