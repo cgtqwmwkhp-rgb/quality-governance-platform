@@ -43,10 +43,26 @@ vi.mock('../../components/UserEmailSearch', () => ({
 }))
 
 vi.mock('../../components/ui/Tabs', () => ({
-  Tabs: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  Tabs: ({ children, defaultValue }: { children: ReactNode; defaultValue?: string }) => (
+    <div data-testid="incident-tabs" data-default-tab={defaultValue}>{children}</div>
+  ),
   TabsList: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TabsTrigger: ({ children }: { children: ReactNode }) => <button type="button">{children}</button>,
   TabsContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}))
+
+vi.mock('../../components/StandardsAssessmentPanel', () => ({
+  StandardsAssessmentPanel: ({
+    entityType,
+    entityId,
+  }: {
+    entityType: string
+    entityId: number | string
+  }) => (
+    <div data-testid="standards-assessment-panel-mock">
+      {entityType}:{entityId}
+    </div>
+  ),
 }))
 
 vi.mock('../../api/client', () => ({
@@ -185,5 +201,14 @@ describe('IncidentDetail', () => {
     expect(screen.getByTestId('incident-capa-handoff-cta')).toHaveTextContent(
       'investigations.handoff.create_action',
     )
+  })
+
+  it('hosts StandardsAssessmentPanel like Near Miss (incident entity)', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('incident-standards-panel')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('standards-assessment-panel-mock')).toHaveTextContent('incident:11')
   })
 })
