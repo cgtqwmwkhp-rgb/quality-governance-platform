@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, Loader2, Plus, Search } from 'lucide-react'
 import { nearMissesApi, NearMiss, NearMissCreate, getApiErrorMessage } from '../api/client'
@@ -28,8 +28,37 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 
+const ALL_FILTER = 'all'
+const PAGE_SIZE = 50
+
+function parseListPage(raw: string | null): number {
+  const n = parseInt(raw || '1', 10)
+  return Number.isFinite(n) && n >= 1 ? n : 1
+}
+
+function parseListFilter(raw: string | null): string {
+  const value = raw?.trim()
+  return value && value !== ALL_FILTER ? value : ALL_FILTER
+}
+
+function buildNearMissesListSearch(params: {
+  q: string
+  status: string
+  severity: string
+  page: number
+}): string {
+  const next = new URLSearchParams()
+  const q = params.q.trim()
+  if (q) next.set('q', q)
+  if (params.status !== ALL_FILTER) next.set('status', params.status)
+  if (params.severity !== ALL_FILTER) next.set('severity', params.severity)
+  if (params.page > 1) next.set('page', String(params.page))
+  return next.toString()
+}
+
 export default function NearMisses() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useTranslation()
   const [nearMisses, setNearMisses] = useState<NearMiss[]>([])
   const [loading, setLoading] = useState(true)
@@ -37,7 +66,12 @@ export default function NearMisses() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '')
+  const [statusFilter, setStatusFilter] = useState(() => parseListFilter(searchParams.get('status')))
+  const [severityFilter, setSeverityFilter] = useState(() =>
+    parseListFilter(searchParams.get('severity')),
+  )
+  const [page, setPage] = useState(() => parseListPage(searchParams.get('page')))
   const [formData, setFormData] = useState<NearMissCreate>({
     reporter_name: '',
     contract: '',
@@ -50,11 +84,38 @@ export default function NearMisses() {
   })
   const eventDateInput = formData.event_date ? formData.event_date.slice(0, 16) : ''
 
+  // Hydrate list filters from shareable URL (back/forward + deep links).
+  useEffect(() => {
+    const nextQ = searchParams.get('q') || ''
+    const nextStatus = parseListFilter(searchParams.get('status'))
+    const nextSeverity = parseListFilter(searchParams.get('severity'))
+    const nextPage = parseListPage(searchParams.get('page'))
+    setSearchTerm((prev) => (prev === nextQ ? prev : nextQ))
+    setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus))
+    setSeverityFilter((prev) => (prev === nextSeverity ? prev : nextSeverity))
+    setPage((prev) => (prev === nextPage ? prev : nextPage))
+  }, [searchParams])
+
+  // Keep q/status/severity/page in the URL (omit defaults); replace history entry.
+  useEffect(() => {
+    const desired = buildNearMissesListSearch({
+      q: searchTerm,
+      status: statusFilter,
+      severity: severityFilter,
+      page,
+    })
+    if (desired !== searchParams.toString()) {
+      setSearchParams(desired ? new URLSearchParams(desired) : new URLSearchParams(), {
+        replace: true,
+      })
+    }
+  }, [searchTerm, statusFilter, severityFilter, page, searchParams, setSearchParams])
+
   useEffect(() => {
     let cancelled = false
     const load = async () => {
       try {
-        const response = await nearMissesApi.list(1, 50)
+        const response = await nearMissesApi.list(page, PAGE_SIZE)
         if (!cancelled) setNearMisses(response.data.items ?? [])
       } catch (err) {
         if (!cancelled) {
@@ -69,7 +130,7 @@ export default function NearMisses() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [page])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -99,12 +160,22 @@ export default function NearMisses() {
   }
 
   const deferredSearch = useDeferredValue(searchTerm)
-  const filteredNearMisses = nearMisses.filter(
-    (item) =>
-      item.reference_number.toLowerCase().includes(deferredSearch.toLowerCase()) ||
-      item.location.toLowerCase().includes(deferredSearch.toLowerCase()) ||
-      item.contract.toLowerCase().includes(deferredSearch.toLowerCase()),
-  )
+  const filteredNearMisses = nearMisses.filter((item) => {
+    if (statusFilter !== ALL_FILTER && item.status !== statusFilter) return false
+    if (
+      severityFilter !== ALL_FILTER &&
+      (item.potential_severity || 'medium') !== severityFilter
+    ) {
+      return false
+    }
+    const needle = deferredSearch.trim().toLowerCase()
+    if (!needle) return true
+    return (
+      item.reference_number.toLowerCase().includes(needle) ||
+      item.location.toLowerCase().includes(needle) ||
+      item.contract.toLowerCase().includes(needle)
+    )
+  })
 
   if (loading) {
     return (

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
 import {
@@ -101,6 +101,39 @@ type ViewMode = 'grid' | 'list'
 const UPLOAD_TIMEOUT_MS = 120000
 const ALL_TYPES_VALUE = 'all-types'
 const ALL_STATUS_VALUE = 'all-status'
+const PAGE_SIZE = 50
+
+function parseListPage(raw: string | null): number {
+  const n = parseInt(raw || '1', 10)
+  return Number.isFinite(n) && n >= 1 ? n : 1
+}
+
+function parseDocumentTypeFilter(raw: string | null): string {
+  const value = raw?.trim()
+  if (!value || value === ALL_TYPES_VALUE) return ALL_TYPES_VALUE
+  return value
+}
+
+function parseDocumentStatusFilter(raw: string | null): string {
+  const value = raw?.trim()
+  if (!value || value === ALL_STATUS_VALUE) return ALL_STATUS_VALUE
+  return value
+}
+
+function buildDocumentsListSearch(params: {
+  q: string
+  status: string
+  type: string
+  page: number
+}): string {
+  const next = new URLSearchParams()
+  const q = params.q.trim()
+  if (q) next.set('q', q)
+  if (params.status !== ALL_STATUS_VALUE) next.set('status', params.status)
+  if (params.type !== ALL_TYPES_VALUE) next.set('type', params.type)
+  if (params.page > 1) next.set('page', String(params.page))
+  return next.toString()
+}
 
 const FILE_ICONS: Record<string, typeof FileText> = {
   pdf: FileText,
@@ -136,12 +169,13 @@ const getStatusVariant = (status: string) => {
 export default function Documents() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [documents, setDocuments] = useState<Document[]>([])
   const [stats, setStats] = useState<DocumentStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '')
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
@@ -149,8 +183,13 @@ export default function Documents() {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [dragActive, setDragActive] = useState(false)
-  const [filterType, setFilterType] = useState<string>(ALL_TYPES_VALUE)
-  const [filterStatus, setFilterStatus] = useState<string>(ALL_STATUS_VALUE)
+  const [filterType, setFilterType] = useState<string>(() =>
+    parseDocumentTypeFilter(searchParams.get('type')),
+  )
+  const [filterStatus, setFilterStatus] = useState<string>(() =>
+    parseDocumentStatusFilter(searchParams.get('status')),
+  )
+  const [page, setPage] = useState(() => parseListPage(searchParams.get('page')))
   const [loadError, setLoadError] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [docsUnavailable, setDocsUnavailable] = useState(false)
@@ -158,13 +197,16 @@ export default function Documents() {
   const [searchUnavailable, setSearchUnavailable] = useState(false)
   const [partialLoadWarning, setPartialLoadWarning] = useState<string | null>(null)
 
-  const loadData = useCallback(async (docType?: string, status?: string) => {
+  const loadData = useCallback(async (docType?: string, status?: string, listPage = 1) => {
     setLoadError(null)
     setPartialLoadWarning(null)
     setDocsUnavailable(false)
     setStatsUnavailable(false)
     try {
-      const params = new URLSearchParams({ page: '1', page_size: '50' })
+      const params = new URLSearchParams({
+        page: String(listPage),
+        page_size: String(PAGE_SIZE),
+      })
       if (docType) params.set('document_type', docType)
       if (status) params.set('status', status)
       const [docsResult, statsResult] = await Promise.allSettled([
@@ -218,6 +260,33 @@ export default function Documents() {
     }
   }, [])
 
+  // Hydrate list filters from shareable URL (back/forward + deep links).
+  useEffect(() => {
+    const nextQ = searchParams.get('q') || ''
+    const nextStatus = parseDocumentStatusFilter(searchParams.get('status'))
+    const nextType = parseDocumentTypeFilter(searchParams.get('type'))
+    const nextPage = parseListPage(searchParams.get('page'))
+    setSearchTerm((prev) => (prev === nextQ ? prev : nextQ))
+    setFilterStatus((prev) => (prev === nextStatus ? prev : nextStatus))
+    setFilterType((prev) => (prev === nextType ? prev : nextType))
+    setPage((prev) => (prev === nextPage ? prev : nextPage))
+  }, [searchParams])
+
+  // Keep q/status/type/page in the URL (omit defaults); replace history entry.
+  useEffect(() => {
+    const desired = buildDocumentsListSearch({
+      q: searchTerm,
+      status: filterStatus,
+      type: filterType,
+      page,
+    })
+    if (desired !== searchParams.toString()) {
+      setSearchParams(desired ? new URLSearchParams(desired) : new URLSearchParams(), {
+        replace: true,
+      })
+    }
+  }, [searchTerm, filterStatus, filterType, page, searchParams, setSearchParams])
+
   useEffect(() => {
     loadData()
   }, [loadData])
@@ -226,8 +295,9 @@ export default function Documents() {
     loadData(
       filterType === ALL_TYPES_VALUE ? undefined : filterType,
       filterStatus === ALL_STATUS_VALUE ? undefined : filterStatus,
+      page,
     )
-  }, [filterType, filterStatus, loadData])
+  }, [filterType, filterStatus, page, loadData])
 
   const handleSemanticSearch = useCallback(async (query: string) => {
     if (query.length < 3) {
@@ -339,6 +409,7 @@ export default function Documents() {
       await loadData(
         filterType === ALL_TYPES_VALUE ? undefined : filterType,
         filterStatus === ALL_STATUS_VALUE ? undefined : filterStatus,
+        page,
       )
       setShowUploadModal(false)
     } catch (err) {
@@ -575,7 +646,13 @@ export default function Documents() {
         </div>
 
         <div className="flex gap-2">
-          <Select value={filterType} onValueChange={setFilterType}>
+          <Select
+            value={filterType}
+            onValueChange={(value) => {
+              setFilterType(value)
+              setPage(1)
+            }}
+          >
             <SelectTrigger className="w-[140px]" aria-label="Filter by document type">
               <SelectValue placeholder="All Types" />
             </SelectTrigger>
@@ -589,7 +666,13 @@ export default function Documents() {
             </SelectContent>
           </Select>
 
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <Select
+            value={filterStatus}
+            onValueChange={(value) => {
+              setFilterStatus(value)
+              setPage(1)
+            }}
+          >
             <SelectTrigger className="w-[140px]" aria-label="Filter by document status">
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
