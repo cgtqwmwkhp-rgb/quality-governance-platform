@@ -118,7 +118,7 @@ describe('KnowledgeExceptions closed loop', () => {
     )
 
     await waitFor(() => {
-      expect(mockList).toHaveBeenCalledWith({ entityType: 'incident' })
+      expect(mockList).toHaveBeenCalledWith({ entityType: 'incident', signalType: undefined })
     })
     expect(screen.getByTestId('exceptions-return-to-case')).toBeInTheDocument()
     expect(screen.getByTestId('exceptions-return-to-case-link')).toHaveAttribute(
@@ -149,5 +149,28 @@ describe('KnowledgeExceptions closed loop', () => {
       expect(mockConfirm).toHaveBeenCalledWith(9)
     })
     expect(await screen.findByTestId('case-home')).toBeInTheDocument()
+  })
+})
+
+describe('KnowledgeExceptions server signal filter honesty', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue({ data: [] })
+  })
+
+  it('loads exceptions and shows map CTA + server-filter honesty copy', async () => {
+    const KnowledgeExceptions = (await import('../KnowledgeExceptions')).default
+    render(
+      <MemoryRouter>
+        <KnowledgeExceptions />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByTestId('exceptions-map-cta-banner')).toHaveTextContent(
+      /Map inputs/i,
+    )
+    expect(screen.getByTestId('exceptions-filter-honesty')).toHaveTextContent(/server filters/i)
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalled()
+    })
   })
 })
