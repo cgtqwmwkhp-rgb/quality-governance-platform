@@ -24,7 +24,7 @@ import {
   incidentsApi,
   rtasApi,
   complaintsApi,
-  risksApi,
+  riskRegisterApi,
   actionsApi,
   auditsApi,
   notificationsApi,
@@ -32,7 +32,6 @@ import {
   type Incident,
   type RTA,
   type Complaint,
-  type Risk,
   type Action,
   type AuditRun,
   type PaginatedResponse,
@@ -339,7 +338,7 @@ export default function Dashboard() {
         incidentsApi.list(1, 100),
         rtasApi.list(1, 100),
         complaintsApi.list(1, 100),
-        risksApi.list(1, 100),
+        riskRegisterApi.getSummary(),
         actionsApi.list(1, 100),
         auditsApi.listRuns(1, 100),
         notificationsApi.getUnreadCount(),
@@ -379,15 +378,22 @@ export default function Dashboard() {
           c.due_date && c.due_date < today() && c.status !== 'closed' && c.status !== 'resolved',
       ).length
 
-      const riskData = getData(
-        results[3] as PromiseSettledResult<{ data: PaginatedResponse<Risk> }>,
-        { items: [], total: 0, page: 1, page_size: 50, pages: 0 } as PaginatedResponse<Risk>,
+      type RiskSummaryPayload = {
+        total_risks?: number
+        by_level?: { high?: number; critical?: number }
+        high?: number
+        critical?: number
+        outside_appetite?: number
+      }
+      const riskSummary = getData(
+        results[3] as PromiseSettledResult<{ data: RiskSummaryPayload }>,
+        {} as RiskSummaryPayload,
       )
-      const riskItems = riskData?.items ?? []
-      const riskTotal = riskData?.total ?? 0
-      const riskHigh = riskItems.filter(
-        (r) => r.risk_level === 'high' || r.risk_level === 'critical',
-      ).length
+      const riskTotal = riskSummary.total_risks ?? 0
+      const riskHigh =
+        (riskSummary.by_level?.high ?? riskSummary.high ?? 0) +
+        (riskSummary.by_level?.critical ?? riskSummary.critical ?? 0)
+      const riskOutsideAppetite = riskSummary.outside_appetite ?? 0
 
       const actionData = getData(
         results[4] as PromiseSettledResult<{ data: PaginatedResponse<Action> }>,
@@ -517,7 +523,7 @@ export default function Dashboard() {
           trend: 0,
         },
         actions: { total: actionTotal, overdue: actionOverdue, dueSoon: actionDueSoon, trend: 0 },
-        risks: { total: riskTotal, high: riskHigh, outsideAppetite: 0 },
+        risks: { total: riskTotal, high: riskHigh, outsideAppetite: riskOutsideAppetite },
         compliance: (() => {
           const coverageResult = results[7]
           const byStd =

@@ -12,6 +12,13 @@ export function parseLinkedRiskIds(raw?: string | null): number[] {
   return ids
 }
 
-export function riskRegisterHref(riskId: number): string {
-  return `/risk-register?riskId=${riskId}`
+/** Enterprise Risk Register deep link (canonical UI). */
+export function riskRegisterHref(
+  riskId: number,
+  options?: { nearMissRef?: string | null },
+): string {
+  const params = new URLSearchParams()
+  params.set('riskId', String(riskId))
+  if (options?.nearMissRef) params.set('nearMissRef', options.nearMissRef)
+  return `/risk-register?${params.toString()}`
 }
