@@ -10,6 +10,7 @@ import { PortalAuthProvider } from './contexts/PortalAuthContext'
 import { useNotificationStore } from './stores'
 import { getValidPlatformToken, setAdminToken, clearTokens, revokeSession } from './utils/auth'
 import { useFeatureFlag } from './hooks/useFeatureFlag'
+import { LegacyActionItemRedirect } from './pages/actionLinks'
 import { useSessionKeepalive } from './hooks/useSessionKeepalive'
 import { useServiceWorkerAuthBridge } from './hooks/useServiceWorkerAuthBridge'
 
@@ -297,7 +298,8 @@ function App() {
                 <Route path="investigations/:id" element={<InvestigationDetail />} />
                 <Route path="standards" element={<Standards />} />
                 <Route path="actions" element={<Actions />} />
-                <Route path="actions/item" element={<ActionDetail />} />
+                <Route path="actions/item" element={<LegacyActionItemRedirect />} />
+                <Route path="actions/:id" element={<ActionDetail />} />
                 <Route path="compliance" element={<ComplianceEvidence />} />
                 <Route path="uvdb" element={<UVDBAudits />} />
                 <Route path="planet-mark" element={<PlanetMark />} />
