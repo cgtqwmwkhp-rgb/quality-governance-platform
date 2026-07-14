@@ -32,10 +32,7 @@ from src.domain.models.document_control import (
     ObsoleteDocumentRecord,
 )
 from src.domain.models.user import User
-from src.domain.services.document_version_service import (
-    assert_document_metadata_editable,
-    document_version_service,
-)
+from src.domain.services.document_version_service import assert_document_metadata_editable, document_version_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
