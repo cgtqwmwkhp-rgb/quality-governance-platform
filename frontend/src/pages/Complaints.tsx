@@ -369,27 +369,6 @@ export default function Complaints() {
         </div>
       )}
 
-      {emailConfigured === false ? (
-        <div
-          className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
-          role="status"
-          data-testid="complaints-email-unavailable"
-        >
-          <div className="flex items-start gap-3">
-            <MailWarning className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-            <div>
-              <p className="font-semibold">{t('actions.email_unavailable.title')}</p>
-              <p className="mt-1 text-sm">
-                {t(
-                  'complaints.triage.email_unavailable_body',
-                  'Case owners are notified in-app. Email alerts are unavailable while outbound email is not configured.',
-                )}
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       <div className="flex gap-2" role="group" aria-label={t('complaints.triage.tabs', 'Triage filters')}>
         <Button
           type="button"
