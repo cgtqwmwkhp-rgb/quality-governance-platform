@@ -22,6 +22,13 @@ Closes D-W1-11 residual: prove and harden assignee notify + audit for the **unif
 | `tests/unit/test_action_assignment_notify.py` | NEW — notify + audit unit proof |
 | `scripts/governance/pr_body_wc_w1_action_assignment_notify.md` | This ledger |
 
+## Impact map
+| Surface | Before (#935) | After |
+|---------|---------------|-------|
+| Unified `POST /api/v1/actions` | Inline notify + generic audit | Extracted service + `unified_action.assigned` audit |
+| Unified `PATCH` reassign | Inline notify on email change | Service helper + explicit assigned audit |
+| Regression safety | Integration CUJ only | Unit proof for notify + audit helpers |
+
 ## Out of scope (honesty)
 - **Legacy nested routes** without notify: `POST/PATCH /rtas/{id}/actions`, `/api/v1/capa`, vehicle checklist defect actions, Planet Mark improvement actions — not in exclusive allowlist; unified fabric is the platform contract for My Work.
 - **Portal auto-triage** (#970 lane) — separate D-W1-08 work.
@@ -40,12 +47,30 @@ Closes D-W1-11 residual: prove and harden assignee notify + audit for the **unif
 - Existing: `tests/integration/test_ops_intake_triage_cuj.py` (incident action create notify)
 
 ## Critical journeys
-- **CUJ-A**: Create action from any unified source with assignee → in-app notify + assigned audit.
-- **CUJ-B**: Reassign action via unified PATCH → new assignee notified + assigned audit (skip when unchanged).
+- **CUJ-01**: Create unified action from any source with assignee → in-app notify + `unified_action.assigned` audit
+- **CUJ-02**: Reassign unified action via PATCH with new `assigned_to_email` → new assignee notified + assigned audit
 
 ## Compatibility
 - Additive audit events and payload fields only.
 - Notify failures logged; committed assign is not rolled back (same as #935).
+
+## Observability
+- `unified_action.assigned` audit events on create-with-assignee and reassign
+- Notify failures logged at exception without rolling back committed assign
+
+## Release plan
+1. Update branch from main, then squash-merge after CI green
+2. Staging: create + reassign unified action; confirm notification + audit trail
+3. Production deploy with full release SHA
+
+## Rollback plan
+1. Revert squash commit on main
+2. Redeploy previous SHA
+3. Unified actions revert to #935 inline notify (no `unified_action.assigned` audit)
+
+## Evidence pack
+- CI run links attached after push
+- Staging notify + audit screenshot: pending Gate 3
 
 ## Gate checklist
 - [x] Gate 0 — change ledger
