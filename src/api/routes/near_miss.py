@@ -483,7 +483,11 @@ async def raise_risk_from_near_miss(
     description = body.description or (
         f"Raised from near miss {near_miss.reference_number}.\n\n"
         f"{near_miss.description}"
-        + (f"\n\nPotential consequences: {near_miss.potential_consequences}" if near_miss.potential_consequences else "")
+        + (
+            f"\n\nPotential consequences: {near_miss.potential_consequences}"
+            if near_miss.potential_consequences
+            else ""
+        )
     )
 
     score, level, _ = calculate_risk_level(body.likelihood, impact)

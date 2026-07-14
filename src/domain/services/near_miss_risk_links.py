@@ -44,9 +44,7 @@ def near_miss_risk_source(near_miss_id: int, reference_number: str | None = None
     return f"{NEAR_MISS_RISK_SOURCE_PREFIX}{near_miss_id}"
 
 
-_NEAR_MISS_SOURCE_RE = re.compile(
-    rf"^{re.escape(NEAR_MISS_RISK_SOURCE_PREFIX)}(\d+)(?:\|(.+))?$"
-)
+_NEAR_MISS_SOURCE_RE = re.compile(rf"^{re.escape(NEAR_MISS_RISK_SOURCE_PREFIX)}(\d+)(?:\|(.+))?$")
 
 
 def parse_near_miss_id_from_risk_source(risk_source: Optional[str]) -> Optional[int]:
