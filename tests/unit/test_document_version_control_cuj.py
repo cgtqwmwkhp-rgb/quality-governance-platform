@@ -7,12 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.api.routes.document_control import (
-    DocumentCreate,
-    DocumentUpdate,
-    create_document,
-    update_document,
-)
+from src.api.routes.document_control import DocumentCreate, DocumentUpdate, create_document, update_document
 from src.domain.exceptions import BadRequestError
 from src.domain.models.document_control import ControlledDocument, ControlledDocumentVersion
 from src.domain.services.document_version_service import DocumentVersionService
