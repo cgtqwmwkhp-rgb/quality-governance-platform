@@ -86,6 +86,7 @@ CELERY_TASK_MODULES = (
     "src.infrastructure.tasks.notification_tasks",
     "src.infrastructure.tasks.pams_sync_tasks",
     "src.infrastructure.tasks.report_tasks",
+    "src.infrastructure.tasks.safety_asset_expiry_tasks",
     "src.infrastructure.tasks.sms_tasks",
     "src.infrastructure.tasks.webhook_tasks",
     "src.infrastructure.tasks.regulatory_watch_tasks",
@@ -143,6 +144,10 @@ celery_app.conf.beat_schedule = {
     "check-competency-expiry": {
         "task": "src.infrastructure.tasks.competency_tasks.check_competency_expiry",
         "schedule": crontab(hour=7, minute=0),
+    },
+    "check-safety-asset-expiry": {
+        "task": "src.infrastructure.tasks.safety_asset_expiry_tasks.check_safety_asset_expiry",
+        "schedule": crontab(hour=7, minute=30),  # Daily at 07:30 UTC
     },
     "recalculate-compliance-scores": {
         "task": "src.infrastructure.tasks.report_tasks.recalculate_compliance_scores",
