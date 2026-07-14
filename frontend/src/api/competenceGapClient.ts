@@ -55,7 +55,40 @@ export interface GoldenThreadResponse {
   }>
 }
 
+/** Minimal engineer shape for inbox link pickers (GET /api/v1/engineers/). */
+export interface CompetenceGapPickerEngineer {
+  id: number
+  employee_number?: string
+  job_title?: string
+  is_active?: boolean
+}
+
+/** Minimal requirement shape for inbox link pickers. */
+export interface CompetenceGapPickerRequirement {
+  id: number
+  name: string
+}
+
 const BASE = '/api/v1/workforce/competence-gaps'
+const KNOWN_SOURCE_TYPES = new Set([
+  'assessor_case',
+  'external_audit_finding',
+  'compliance_evidence_link',
+])
+
+export function competenceGapSourceLabelKey(sourceType: string): string {
+  return KNOWN_SOURCE_TYPES.has(sourceType)
+    ? `competenceGaps.source.${sourceType}`
+    : 'competenceGaps.source.unknown'
+}
+
+export function engineerPickerLabel(engineer: CompetenceGapPickerEngineer): string {
+  return engineer.employee_number || engineer.job_title || `Engineer #${engineer.id}`
+}
+
+export function requirementPickerLabel(requirement: CompetenceGapPickerRequirement): string {
+  return requirement.name?.trim() || `Requirement #${requirement.id}`
+}
 
 export const competenceGapApi = {
   list: (params?: { status?: string }) =>
@@ -97,4 +130,16 @@ export const competenceGapApi = {
 
   goldenThread: (id: number) =>
     api.get<GoldenThreadResponse>(`${BASE}/${id}/golden-thread`),
+
+  /** Picker data for link step — existing workforce list endpoints. */
+  listPickerEngineers: (params?: { page?: number; page_size?: number }) =>
+    api.get<{ items: CompetenceGapPickerEngineer[]; total: number }>('/api/v1/engineers/', {
+      params: { page: 1, page_size: 200, ...params },
+    }),
+
+  listPickerRequirements: (params?: { page?: number; page_size?: number }) =>
+    api.get<{ items: CompetenceGapPickerRequirement[]; total: number }>(
+      '/api/v1/competency-requirements/',
+      { params: { page: 1, page_size: 200, ...params } },
+    ),
 }

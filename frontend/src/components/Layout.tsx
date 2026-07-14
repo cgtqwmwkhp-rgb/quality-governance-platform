@@ -34,6 +34,8 @@ import {
   FileText,
   Building,
   Download,
+  Package,
+  ShieldAlert,
 } from 'lucide-react'
 import { useState, useEffect, useCallback, lazy, Suspense, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -83,6 +85,11 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/complaints', icon: MessageSquare, label: t('nav.complaints') },
         { path: '/investigations', icon: FlaskConical, label: t('nav.investigations') },
         { path: '/vehicle-checklists', icon: Truck, label: t('nav.vehicle_checklists') },
+        {
+          path: '/safety-assets',
+          icon: Package,
+          label: t('nav.safety_asset_register', { defaultValue: 'Asset Register' }),
+        },
       ],
     },
     ...(canAccessWorkforce
@@ -109,6 +116,11 @@ export default function Layout({ onLogout }: LayoutProps) {
               },
               { path: '/workforce/engineers', icon: Users, label: t('nav.engineers') },
               { path: '/workforce/calendar', icon: Calendar, label: t('nav.calendar') },
+              {
+                path: '/workforce/competence-gaps',
+                icon: ShieldAlert,
+                label: t('nav.competence_gaps'),
+              },
             ],
           },
         ]
