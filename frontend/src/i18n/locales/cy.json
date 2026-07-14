@@ -2246,5 +2246,9 @@
   "workforce.training.stage1": "Cam 1",
   "workforce.training.stage2": "Cam 2",
   "workforce.training.subtitle": "Rhaglenni hyfforddiant a chofnodion",
-  "workforce.training.title": "Hyfforddiant"
+  "workforce.training.title": "Hyfforddiant",
+  "incidents.detail.actions_unavailable": "Nid yw gweithredoedd cysylltiedig ar gael dros dro.",
+  "incidents.detail.proof_eyebrow": "Prawf ymchwiliad a CAPA",
+  "incidents.detail.proof_actions": "Gweithredoedd cysylltiedig",
+  "investigations.handoff.actions_unavailable": "Nid yw gweithredoedd trosglwyddo ar gael dros dro."
 }

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
 import { trackError } from '../utils/errorTracker'
+import { toast } from '../contexts/ToastContext'
 import {
   AlertTriangle,
   Car,
@@ -128,6 +129,7 @@ export default function InvestigationDetail() {
 
   const [actions, setActions] = useState<Action[]>([])
   const [actionsLoading, setActionsLoading] = useState(false)
+  const [actionsLoadFailed, setActionsLoadFailed] = useState(false)
   const [actionStatusFilter, setActionStatusFilter] = useState<string>('all')
 
   // ── Loaders ──────────────────────────────────────────────
@@ -213,6 +215,7 @@ export default function InvestigationDetail() {
   const loadActions = useCallback(async () => {
     if (!investigationId) return
     setActionsLoading(true)
+    setActionsLoadFailed(false)
     try {
       const response = await actionsApi.list(
         1,
@@ -224,6 +227,9 @@ export default function InvestigationDetail() {
       setActions(response.data.items || [])
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'loadActions' })
+      setActions([])
+      setActionsLoadFailed(true)
+      toast.error('CAPA actions could not be loaded — counts may be incomplete.')
     } finally {
       setActionsLoading(false)
     }
@@ -510,6 +516,8 @@ export default function InvestigationDetail() {
   const statusDisplay = getStatusDisplay(investigation.status)
   const sourceLink = getInvestigationSourceLink(investigation)
   const capaHref = getCapaLink('investigation', investigation.id)
+  const capaCountLabel = actionsLoading ? '…' : actionsLoadFailed ? '—' : String(actions.length)
+  const capaHandoffCount = actionsLoadFailed ? 0 : actions.length
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -545,7 +553,7 @@ export default function InvestigationDetail() {
               data-testid="investigation-capa-handoff-cta"
             >
               <ExternalLink className="w-4 h-4 mr-2" />
-              {t(getCapaHandoffLabelKey('investigation', actions.length), {
+              {t(getCapaHandoffLabelKey('investigation', capaHandoffCount), {
                 count: actions.length,
               })}
             </Button>
@@ -571,8 +579,11 @@ export default function InvestigationDetail() {
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 {t('investigations.handoff.proof_actions', 'CAPA actions')}
               </p>
-              <p className="mt-1 text-lg font-semibold text-foreground">
-                {actionsLoading ? '…' : actions.length}
+              <p
+                className="mt-1 text-lg font-semibold text-foreground"
+                data-testid="investigation-capa-count"
+              >
+                {capaCountLabel}
               </p>
             </div>
             <div className="rounded-lg border border-primary/15 bg-background/60 p-3">
@@ -593,13 +604,21 @@ export default function InvestigationDetail() {
             ) : null}
             <Button variant="outline" size="sm" onClick={() => navigate(capaHref)}>
               <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-              {t(getCapaHandoffLabelKey('investigation', actions.length), {
+              {t(getCapaHandoffLabelKey('investigation', capaHandoffCount), {
                 count: actions.length,
               })}
             </Button>
           </div>
         </div>
-        {!actionsLoading && actions.length === 0 && (
+        {actionsLoadFailed ? (
+          <p className="text-sm text-amber-700 dark:text-amber-400 mt-4 pt-4 border-t border-primary/10" role="status">
+            {t(
+              'investigations.handoff.actions_unavailable',
+              'CAPA actions could not be loaded — counts may be incomplete.',
+            )}
+          </p>
+        ) : null}
+        {!actionsLoading && !actionsLoadFailed && actions.length === 0 && (
           <p className="text-sm text-muted-foreground mt-4 pt-4 border-t border-primary/10">
             {t('investigations.handoff.no_actions')}
           </p>

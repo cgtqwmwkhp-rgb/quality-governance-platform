@@ -171,14 +171,25 @@ def _build_api_readyz_checks(
     return checks
 
 
-@router.get("/healthz", response_model=Dict[str, Any])
-async def health_check():
-    """Basic health check."""
+def _basic_health_payload() -> Dict[str, Any]:
     return {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "version": os.getenv("APP_VERSION", "dev"),
     }
+
+
+@router.get("", response_model=Dict[str, Any], include_in_schema=True)
+@router.get("/", response_model=Dict[str, Any], include_in_schema=False)
+async def health_root():
+    """Alias for probes that hit ``/api/v1/health`` (without ``/healthz``)."""
+    return _basic_health_payload()
+
+
+@router.get("/healthz", response_model=Dict[str, Any])
+async def health_check():
+    """Basic health check."""
+    return _basic_health_payload()
 
 
 @router.get("/readyz", response_model=Dict[str, Any])
