@@ -611,6 +611,27 @@ class GovernedKnowledgeService:
             len(links),
             len(related_documents),
         )
+
+        if links:
+            try:
+                from src.domain.services.standards_assessment_notifications import notify_proposed_standards_links
+
+                await notify_proposed_standards_links(
+                    db,
+                    entity_type=entity_type,
+                    entity_id=str(entity_id),
+                    tenant_id=tenant_id,
+                    links_created=len(links),
+                    sender_id=getattr(user, "id", None),
+                )
+            except Exception:
+                logger.warning(
+                    "standards proposed notification failed for %s:%s; assess continues",
+                    entity_type,
+                    entity_id,
+                    exc_info=True,
+                )
+
         return OperationalAssessmentResult(
             entity_type=entity_type,
             entity_id=str(entity_id),

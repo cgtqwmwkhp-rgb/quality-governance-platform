@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
@@ -136,6 +136,7 @@ const getStatusVariant = (status: string) => {
 export default function Documents() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [documents, setDocuments] = useState<Document[]>([])
   const [stats, setStats] = useState<DocumentStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -259,10 +260,36 @@ export default function Documents() {
         handleSemanticSearch(searchTerm)
       } else {
         setSearchResults(null)
+        setSearchUnavailable(false)
       }
     }, 300)
     return () => clearTimeout(timer)
   }, [searchTerm, handleSemanticSearch])
+
+  /** Keyboard `/` focuses library search (skip when typing in another field). */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      if (
+        tag === 'input' ||
+        tag === 'textarea' ||
+        tag === 'select' ||
+        target?.isContentEditable
+      ) {
+        return
+      }
+      event.preventDefault()
+      searchInputRef.current?.focus()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  const focusLibrarySearch = useCallback(() => {
+    searchInputRef.current?.focus()
+  }, [])
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
@@ -374,6 +401,14 @@ export default function Documents() {
     return true
   })
 
+  const keywordMatchCount = searchTerm.trim()
+    ? documents.filter(
+        (doc) =>
+          doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          doc.reference_number.toLowerCase().includes(searchTerm.toLowerCase()),
+      ).length
+    : null
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -470,26 +505,73 @@ export default function Documents() {
         </div>
       )}
 
-      {/* Search & Filters */}
+      {/* Search & Filters — discoverable via label + `/` shortcut */}
       <div className="flex flex-col lg:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-          {isSearching && (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary animate-spin" />
-          )}
-          <Input
-            type="text"
-            placeholder="AI-powered semantic search... (min 3 characters)"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 pr-10"
-          />
-          {searchTerm.length >= 3 && (
-            <div className="absolute left-0 right-0 top-full mt-1 flex items-center gap-2 text-xs text-primary">
-              <Sparkles className="w-3 h-3" />
-              <span>Using AI semantic search</span>
-            </div>
-          )}
+        <div className="flex-1 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <label htmlFor="documents-library-search" className="text-sm font-medium text-foreground">
+              Search library
+            </label>
+            <span className="text-xs text-muted-foreground" data-testid="documents-search-shortcut-hint">
+              Press <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">/</kbd> to focus
+            </span>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" aria-hidden="true" />
+            {isSearching && (
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary animate-spin" aria-hidden="true" />
+            )}
+            <Input
+              ref={searchInputRef}
+              id="documents-library-search"
+              data-testid="documents-library-search"
+              type="search"
+              role="searchbox"
+              aria-label="Search document library"
+              placeholder="Search by title or reference… (AI semantic from 3 characters)"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-10"
+            />
+          </div>
+          <div
+            className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+            data-testid="documents-search-status"
+          >
+            {searchTerm.trim() ? (
+              <>
+                <span>
+                  Showing{' '}
+                  <strong className="text-foreground">{filteredDocuments.length}</strong>
+                  {' '}in list
+                  {keywordMatchCount != null ? (
+                    <>
+                      {' '}· keyword matches:{' '}
+                      <strong className="text-foreground">{keywordMatchCount}</strong>
+                    </>
+                  ) : null}
+                </span>
+                {searchTerm.length >= 3 && searchUnavailable ? (
+                  <span className="text-warning" data-testid="documents-search-count-unavailable">
+                    · Semantic count unavailable (not zero)
+                  </span>
+                ) : null}
+                {searchTerm.length >= 3 && !searchUnavailable && searchResults ? (
+                  <span>
+                    · Semantic:{' '}
+                    <strong className="text-foreground">{searchResults.length}</strong>
+                  </span>
+                ) : null}
+                {searchTerm.length >= 3 && !searchUnavailable ? (
+                  <span className="inline-flex items-center gap-1 text-primary">
+                    <Sparkles className="w-3 h-3" /> AI semantic search
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <span>Type to filter, or press / — counts never invent a zero when search is unavailable.</span>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-2">
@@ -622,10 +704,33 @@ export default function Documents() {
           ) : filteredDocuments.length === 0 ? (
             <div className="md:col-span-4" data-testid="documents-empty">
               <EmptyState
-                icon={<FileText className="w-8 h-8 text-muted-foreground" />}
-                title={t('documents.empty.title')}
-                description={t('documents.empty.subtitle')}
+                icon={<Search className="w-8 h-8 text-muted-foreground" />}
+                title={
+                  searchTerm.trim()
+                    ? 'No matching documents'
+                    : t('documents.empty.title')
+                }
+                description={
+                  searchTerm.trim()
+                    ? `No list matches for “${searchTerm}”.${
+                        searchUnavailable
+                          ? ' Semantic search is unavailable — this is not a confirmed global zero.'
+                          : ''
+                      }`
+                    : 'Press / or use Search library to find policies, procedures, and SOPs.'
+                }
               />
+              <div className="flex justify-center mt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  data-testid="documents-search-empty-cta"
+                  onClick={focusLibrarySearch}
+                >
+                  <Search className="w-4 h-4" />
+                  {searchTerm.trim() ? 'Refine search' : 'Search library'}
+                </Button>
+              </div>
             </div>
           ) : (
             filteredDocuments.map((doc) => {
@@ -727,10 +832,33 @@ export default function Documents() {
                 <tr>
                   <td colSpan={5} className="px-6 py-8" data-testid="documents-empty">
                     <EmptyState
-                      icon={<FileText className="w-8 h-8 text-muted-foreground" />}
-                      title={t('documents.empty.title')}
-                      description={t('documents.empty.subtitle')}
+                      icon={<Search className="w-8 h-8 text-muted-foreground" />}
+                      title={
+                        searchTerm.trim()
+                          ? 'No matching documents'
+                          : t('documents.empty.title')
+                      }
+                      description={
+                        searchTerm.trim()
+                          ? `No list matches for “${searchTerm}”.${
+                              searchUnavailable
+                                ? ' Semantic search is unavailable — this is not a confirmed global zero.'
+                                : ''
+                            }`
+                          : 'Press / or use Search library to find policies, procedures, and SOPs.'
+                      }
                     />
+                    <div className="flex justify-center mt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        data-testid="documents-search-empty-cta"
+                        onClick={focusLibrarySearch}
+                      >
+                        <Search className="w-4 h-4" />
+                        {searchTerm.trim() ? 'Refine search' : 'Search library'}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ) : (

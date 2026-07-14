@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Loader2, Sparkles, CheckCircle2, XCircle } from 'lucide-react'
+import { ExternalLink, Loader2, Sparkles, CheckCircle2, XCircle } from 'lucide-react'
 import {
   getApiErrorMessage,
   knowledgeBankApi,
@@ -8,6 +8,7 @@ import {
   type RelatedDocumentHit,
 } from '../api/client'
 import { toast } from '../contexts/ToastContext'
+import { knowledgeExceptionsClosedLoopHref } from '../helpers/knowledgeExceptionsLinks'
 import { Button } from './ui/Button'
 import { Badge } from './ui/Badge'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
@@ -46,6 +47,11 @@ export function StandardsAssessmentPanel({
   const [signalType, setSignalType] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [assessing, setAssessing] = useState(false)
+
+  const exceptionsHref = useMemo(
+    () => knowledgeExceptionsClosedLoopHref(entityType, entityId),
+    [entityType, entityId],
+  )
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -131,12 +137,40 @@ export function StandardsAssessmentPanel({
             operational cases.
           </p>
         </div>
-        <Button type="button" onClick={() => void runAssess()} disabled={assessing}>
-          {assessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-          Assess against standards
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+          <Button type="button" variant="outline" asChild>
+            <Link
+              to={exceptionsHref}
+              data-testid="standards-exceptions-deeplink"
+              title="Review proposed links filtered to this case"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Review in Exceptions
+            </Link>
+          </Button>
+          <Button type="button" onClick={() => void runAssess()} disabled={assessing}>
+            {assessing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            Assess against standards
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        <p className="text-xs text-muted-foreground" data-testid="standards-exceptions-hint">
+          Proposed signals also appear in{' '}
+          <Link
+            className="text-primary underline-offset-2 hover:underline"
+            to={exceptionsHref}
+          >
+            Knowledge Exceptions
+          </Link>{' '}
+          (pre-filtered to this {entityType.replace('_', ' ')}). Confirm or reject there to return
+          to this case.
+        </p>
+
         {(signalType || statement) && (
           <div className="rounded-md border border-border/60 bg-muted/30 p-3 space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
@@ -218,13 +252,6 @@ export function StandardsAssessmentPanel({
                 </li>
               ))}
             </ul>
-            <p className="text-xs text-muted-foreground">
-              Links open the document Standards &amp; Evidence tab. Proposed signals also appear in{' '}
-              <Link className="text-primary underline-offset-2 hover:underline" to="/knowledge-exceptions">
-                Knowledge Exceptions
-              </Link>
-              .
-            </p>
           </div>
         ) : null}
       </CardContent>

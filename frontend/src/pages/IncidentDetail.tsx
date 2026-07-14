@@ -59,7 +59,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
 import { SubmissionSections } from '../components/case/SubmissionSections'
-import { RunningSheetPanel } from '../components/case/RunningSheetPanel'
+import { RunningSheetPanel, buildRunningSheetCreateActionHref } from '../components/case/RunningSheetPanel'
 import {
   buildIncidentSubmissionSections,
   getSubmissionPhotoSummary,
@@ -1143,6 +1143,12 @@ export default function IncidentDetail() {
             onNewEntryChange={setNewEntry}
             onAddEntry={handleAddEntry}
             onDeleteEntry={handleDeleteEntry}
+            createActionHref={buildRunningSheetCreateActionHref({
+              sourceType: 'incident',
+              sourceId: incident.id,
+              referenceNumber: incident.reference_number,
+              entrySnippet: runningSheet[0]?.content,
+            })}
           />
         </TabsContent>
       </Tabs>
