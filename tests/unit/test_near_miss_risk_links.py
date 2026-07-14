@@ -60,9 +60,7 @@ def test_map_treatment_strategy(raw: str | None, expected: str) -> None:
         ("bogus", "also-bogus", "safety"),
     ],
 )
-def test_resolve_enterprise_category(
-    preferred: str | None, near_miss_category: str | None, expected: str
-) -> None:
+def test_resolve_enterprise_category(preferred: str | None, near_miss_category: str | None, expected: str) -> None:
     assert resolve_enterprise_category(preferred, near_miss_category) == expected
 
 

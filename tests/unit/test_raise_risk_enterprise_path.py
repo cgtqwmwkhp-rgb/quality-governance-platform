@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NEAR_MISS_ROUTE = REPO_ROOT / "src/api/routes/near_miss.py"
 HELPERS = REPO_ROOT / "src/domain/services/near_miss_risk_links.py"
