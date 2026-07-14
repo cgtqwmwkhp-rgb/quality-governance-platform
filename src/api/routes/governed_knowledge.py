@@ -413,7 +413,7 @@ async def reject_evidence_link(
     link = await _get_evidence_link_or_404(db, link_id, tenant_id)
     link.status = EvidenceLinkStatus.REJECTED
     link.auto_applied = False
-    rationale = (body.rationale.strip() if body and body.rationale else "")
+    rationale = body.rationale.strip() if body and body.rationale else ""
     if rationale:
         reject_note = f"Rejected: {rationale}"
         link.notes = f"{link.notes}\n{reject_note}".strip() if link.notes else reject_note

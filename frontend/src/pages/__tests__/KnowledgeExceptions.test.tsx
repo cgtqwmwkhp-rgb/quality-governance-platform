@@ -118,7 +118,7 @@ describe('KnowledgeExceptions closed loop', () => {
     )
 
     await waitFor(() => {
-      expect(mockList).toHaveBeenCalledWith({ entityType: 'incident' })
+      expect(mockList).toHaveBeenCalledWith({ entityType: 'incident', signalType: undefined })
     })
     expect(screen.getByTestId('exceptions-return-to-case')).toBeInTheDocument()
     expect(screen.getByTestId('exceptions-return-to-case-link')).toHaveAttribute(
