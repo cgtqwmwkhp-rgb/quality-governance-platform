@@ -60,6 +60,7 @@ import {
   parseActionsViewParam,
   type ActionsViewMode,
 } from './actionsViewScope'
+import { buildActionDetailPath } from './actionLinks'
 
 function startOfDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
@@ -394,6 +395,8 @@ export default function Actions() {
         setSubmitSuccess(false)
         if (createReturnTo) {
           navigate(createReturnTo)
+        } else if (response.data?.action_key) {
+          navigate(buildActionDetailPath(response.data.action_key))
         }
       }, 1500)
     } catch (err) {
@@ -1067,7 +1070,7 @@ export default function Actions() {
 
                         <div className="mt-2 flex flex-wrap gap-2">
                           <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
-                            <Link to={`/actions/item?key=${encodeURIComponent(action.action_key)}`}>
+                            <Link to={buildActionDetailPath(action.action_key)}>
                               {t('actions.open_profile')}
                               <ExternalLink className="w-3 h-3 ml-1" />
                             </Link>
