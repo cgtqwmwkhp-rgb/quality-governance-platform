@@ -306,7 +306,9 @@ jobs:
             echo "[WARN] VALIDATION MODE: Simulating NO_TESTS by using filter that matches nothing"
             npx playwright test --grep="NONEXISTENT_TEST_PATTERN_12345" --reporter=list,json,junit 2>&1
           else
-            npx playwright test tests/e2e/staging-verification.spec.ts tests/e2e/import-reset-promote.spec.ts tests/e2e/inspection-capa-risk-cuj.spec.ts --reporter=list,json,junit 2>&1
+            # workers=1: parallel specs share the staging API IP and trip 429s,
+            # which aborts mocked import-review hydration mid-flight.
+            npx playwright test --workers=1 tests/e2e/staging-verification.spec.ts tests/e2e/import-reset-promote.spec.ts tests/e2e/inspection-capa-risk-cuj.spec.ts --reporter=list,json,junit 2>&1
           fi
           EXIT_CODE=$?
           set -e

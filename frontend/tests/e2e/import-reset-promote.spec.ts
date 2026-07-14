@@ -78,9 +78,19 @@ async function installImportMocks(page: Page) {
   let promoteCalls = 0;
   let resetCalls = 0;
 
-  await page.route("**/api/**", async (route) => {
+  // Never hit live staging from this suite — parallel gate workers otherwise
+  // trip shared IP rate limits (429) and abandon import-review hydration.
+  await page.route("**/readyz**", async (route) => {
+    await json(route, { status: "ok", upstream: { degraded: false } });
+  });
+
+  await page.route("**/api/v1/**", async (route) => {
     const req = route.request();
     const method = req.method();
+    if (method === "OPTIONS") {
+      await route.fulfill({ status: 204, headers: { "Access-Control-Allow-Origin": "*" } });
+      return;
+    }
     const url = new URL(req.url());
     const path = url.pathname;
 
@@ -247,11 +257,14 @@ async function openImportReview(page: Page) {
   await expect(page.getByRole("heading", { name: "External Audit Review" })).toBeVisible({
     timeout: 20_000,
   });
+  await expect(page).toHaveURL(new RegExp(`/audits/${AUDIT_ID}/import-review`));
   // Wait until mocked drafts hydrate (accepted draft shows reset control).
+  await expect(page.getByText("Needs follow-up", { exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
   await expect(page.getByRole("button", { name: /Reset finding to draft/i })).toBeVisible({
     timeout: 20_000,
   });
-  await expect(page.getByText("Needs follow-up", { exact: true })).toBeVisible();
   return counters;
 }
 
