@@ -39,6 +39,36 @@ import {
 
 type OwnerFilter = 'all' | 'unassigned'
 
+const ALL_FILTER = 'all'
+const PAGE_SIZE = 50
+
+function parseListPage(raw: string | null): number {
+  const n = parseInt(raw || '1', 10)
+  return Number.isFinite(n) && n >= 1 ? n : 1
+}
+
+function parseListFilter(raw: string | null): string {
+  const value = raw?.trim()
+  return value && value !== ALL_FILTER ? value : ALL_FILTER
+}
+
+function buildIncidentsListSearch(params: {
+  q: string
+  status: string
+  severity: string
+  page: number
+  owner: OwnerFilter
+}): string {
+  const next = new URLSearchParams()
+  const q = params.q.trim()
+  if (q) next.set('q', q)
+  if (params.status !== ALL_FILTER) next.set('status', params.status)
+  if (params.severity !== ALL_FILTER) next.set('severity', params.severity)
+  if (params.page > 1) next.set('page', String(params.page))
+  if (params.owner === 'unassigned') next.set('owner', 'unassigned')
+  return next.toString()
+}
+
 export default function Incidents() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -49,7 +79,12 @@ export default function Incidents() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '')
+  const [statusFilter, setStatusFilter] = useState(() => parseListFilter(searchParams.get('status')))
+  const [severityFilter, setSeverityFilter] = useState(() =>
+    parseListFilter(searchParams.get('severity')),
+  )
+  const [page, setPage] = useState(() => parseListPage(searchParams.get('page')))
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>(
     searchParams.get('owner') === 'unassigned' ? 'unassigned' : 'all',
   )
@@ -82,6 +117,37 @@ export default function Incidents() {
     }
   }, [])
 
+  // Hydrate list filters from shareable URL (back/forward + deep links).
+  useEffect(() => {
+    const nextQ = searchParams.get('q') || ''
+    const nextStatus = parseListFilter(searchParams.get('status'))
+    const nextSeverity = parseListFilter(searchParams.get('severity'))
+    const nextPage = parseListPage(searchParams.get('page'))
+    const nextOwner: OwnerFilter =
+      searchParams.get('owner') === 'unassigned' ? 'unassigned' : 'all'
+    setSearchTerm((prev) => (prev === nextQ ? prev : nextQ))
+    setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus))
+    setSeverityFilter((prev) => (prev === nextSeverity ? prev : nextSeverity))
+    setPage((prev) => (prev === nextPage ? prev : nextPage))
+    setOwnerFilter((prev) => (prev === nextOwner ? prev : nextOwner))
+  }, [searchParams])
+
+  // Keep q/status/severity/page/owner in the URL (omit defaults); replace history entry.
+  useEffect(() => {
+    const desired = buildIncidentsListSearch({
+      q: searchTerm,
+      status: statusFilter,
+      severity: severityFilter,
+      page,
+      owner: ownerFilter,
+    })
+    if (desired !== searchParams.toString()) {
+      setSearchParams(desired ? new URLSearchParams(desired) : new URLSearchParams(), {
+        replace: true,
+      })
+    }
+  }, [searchTerm, statusFilter, severityFilter, page, ownerFilter, searchParams, setSearchParams])
+
   useEffect(() => {
     let cancelled = false
     const load = async () => {
@@ -89,8 +155,8 @@ export default function Incidents() {
       setLoadError(null)
       try {
         const response = await incidentsApi.list(
-          1,
-          50,
+          page,
+          PAGE_SIZE,
           ownerFilter === 'unassigned' ? { owner: 'unassigned' } : undefined,
         )
         if (!cancelled) setIncidents(response.data.items ?? [])
@@ -107,15 +173,11 @@ export default function Incidents() {
     return () => {
       cancelled = true
     }
-  }, [ownerFilter])
+  }, [ownerFilter, page])
 
   const setFilter = (next: OwnerFilter) => {
     setOwnerFilter(next)
-    if (next === 'unassigned') {
-      setSearchParams({ owner: 'unassigned' })
-    } else {
-      setSearchParams({})
-    }
+    setPage(1)
   }
 
   const handleAssignOwner = async (incidentId: number) => {
@@ -240,11 +302,16 @@ export default function Incidents() {
   }
 
   const deferredSearch = useDeferredValue(searchTerm)
-  const filteredIncidents = incidents.filter(
-    (i) =>
-      i.title.toLowerCase().includes(deferredSearch.toLowerCase()) ||
-      i.reference_number.toLowerCase().includes(deferredSearch.toLowerCase()),
-  )
+  const filteredIncidents = incidents.filter((i) => {
+    if (statusFilter !== ALL_FILTER && i.status !== statusFilter) return false
+    if (severityFilter !== ALL_FILTER && i.severity !== severityFilter) return false
+    const needle = deferredSearch.trim().toLowerCase()
+    if (!needle) return true
+    return (
+      i.title.toLowerCase().includes(needle) ||
+      i.reference_number.toLowerCase().includes(needle)
+    )
+  })
 
   if (loading) {
     return (
