@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Optional, TypedDict
 
 from src.infrastructure.tasks.celery_app import celery_app
 
@@ -29,6 +29,14 @@ BAND_WINDOWS: tuple[tuple[str, int, int], ...] = (
     ("due_60", 31, 60),
     ("due_90", 61, 90),
 )
+
+
+class _ExpirySweepResults(TypedDict):
+    assets_scanned: int
+    in_band: int
+    notifications_created: int
+    notifications_skipped_dedupe: int
+    admin_role: str
 
 
 def _as_utc(dt: datetime) -> datetime:
@@ -228,7 +236,7 @@ def build_notification_kwargs(
     bind=True,
     max_retries=3,
 )
-def check_safety_asset_expiry(self) -> dict:
+def check_safety_asset_expiry(self) -> _ExpirySweepResults:
     """Sweep assets and emit in-app expiry-band notifications.
 
     Runs daily via Celery beat. Dedupes per (user, asset, band) so repeat runs
@@ -243,7 +251,7 @@ def check_safety_asset_expiry(self) -> dict:
     from src.infrastructure.database import SessionLocal
 
     now = datetime.now(timezone.utc)
-    results = {
+    results: _ExpirySweepResults = {
         "assets_scanned": 0,
         "in_band": 0,
         "notifications_created": 0,
