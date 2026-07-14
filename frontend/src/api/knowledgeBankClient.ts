@@ -27,6 +27,17 @@ export interface RelatedDocumentHit {
   title: string | null
 }
 
+export interface AssessEntityResponse {
+  entity_type: string
+  entity_id: string
+  signal_type: string
+  links_created: number
+  links: KnowledgeEvidenceLink[]
+  related_documents: RelatedDocumentHit[]
+  assessment_statement: string | null
+  stages_summary?: Record<string, unknown> | null
+}
+
 export interface AssessmentTrailItem {
   id: number
   action: string
