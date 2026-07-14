@@ -614,9 +614,7 @@ class GovernedKnowledgeService:
 
         if links:
             try:
-                from src.domain.services.standards_assessment_notifications import (
-                    notify_proposed_standards_links,
-                )
+                from src.domain.services.standards_assessment_notifications import notify_proposed_standards_links
 
                 await notify_proposed_standards_links(
                     db,
