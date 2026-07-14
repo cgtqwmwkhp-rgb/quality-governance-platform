@@ -11,6 +11,17 @@ vi.mock('react-i18next', () => ({
 }))
 
 vi.mock('../../api/client', () => ({
+  default: {
+    get: vi.fn().mockResolvedValue({
+      data: {
+        total: 0,
+        expiry_bands: { overdue: 0, due_30: 0, due_60: 0, due_90: 0, in_date: 0, no_expiry: 0 },
+        by_type: {},
+        by_status: { quarantined: 0 },
+        generated_at: '2026-07-14T00:00:00Z',
+      },
+    }),
+  },
   incidentsApi: {
     list: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
   },
@@ -23,6 +34,11 @@ vi.mock('../../api/client', () => ({
   risksApi: {
     list: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
   },
+  riskRegisterApi: {
+    getSummary: vi.fn().mockResolvedValue({
+      data: { total: 0, open: 0, high: 0, medium: 0, low: 0 },
+    }),
+  },
   actionsApi: {
     list: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
   },
@@ -31,6 +47,10 @@ vi.mock('../../api/client', () => ({
   },
   notificationsApi: {
     getUnreadCount: vi.fn().mockResolvedValue({ data: { unread_count: 0 } }),
+  },
+  complianceApi: {
+    listClauses: vi.fn().mockResolvedValue({ data: [] }),
+    getCoverage: vi.fn().mockResolvedValue({ data: { standards: [] } }),
   },
 }))
 

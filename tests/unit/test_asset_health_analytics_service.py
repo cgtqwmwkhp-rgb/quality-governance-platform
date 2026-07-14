@@ -2,10 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
-from src.domain.services.asset_health_analytics_service import (
-    AssetHealthRow,
-    aggregate_asset_health_kpis,
-)
+from src.domain.services.asset_health_analytics_service import AssetHealthRow, aggregate_asset_health_kpis
 
 
 def test_aggregate_asset_health_kpis_groups_expiry_type_and_status():
