@@ -401,12 +401,12 @@ class CompetenceGapService:
             if close_capa and gap.capa_action_id:
                 capa = await db.get(CAPAAction, gap.capa_action_id)
                 if capa is not None and capa.tenant_id == tenant_id and capa.status != CAPAStatus.CLOSED:
-                    capa.status = CAPAStatus.CLOSED
-                    capa.completed_at = now.replace(tzinfo=None)
-                    capa.verified_at = now.replace(tzinfo=None)
-                    capa.verified_by_id = resolved_by_id
+                    capa.status = CAPAStatus.CLOSED  # type: ignore[assignment]
+                    capa.completed_at = now.replace(tzinfo=None)  # type: ignore[assignment]
+                    capa.verified_at = now.replace(tzinfo=None)  # type: ignore[assignment]
+                    capa.verified_by_id = resolved_by_id  # type: ignore[assignment]
                     if resolution_notes:
-                        capa.verification_result = resolution_notes
+                        capa.verification_result = resolution_notes  # type: ignore[assignment]
 
         gap.resolved_at = now
         gap.resolved_by_id = resolved_by_id
@@ -572,10 +572,7 @@ class CompetenceGapService:
         if gap.ticket_scheme:
             # TrainingTicket owned by P0 spine — soft probe, never invent table.
             try:
-                from src.domain.models.engineer import (  # type: ignore[import-not-found]
-                    TicketVerifyState,
-                    TrainingTicket,
-                )
+                from src.domain.models.engineer import TicketVerifyState, TrainingTicket  # type: ignore[attr-defined]
             except ImportError as exc:
                 raise ValueError(
                     "Cannot resolve via ticket_scheme until TrainingTicket "
