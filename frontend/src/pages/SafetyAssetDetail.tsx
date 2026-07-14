@@ -18,7 +18,6 @@ import {
 import { evidenceAssetsApi, getApiErrorMessage } from '../api/client'
 import { toast } from '../contexts/ToastContext'
 import { Badge, type BadgeVariant } from '../components/ui/Badge'
-import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
 import {
   Select,

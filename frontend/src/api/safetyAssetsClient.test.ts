@@ -63,7 +63,7 @@ describe('safetyAssetsApi', () => {
   })
 
   it('getKpis derives in_date from total − overdue when both succeed', async () => {
-    mockGet.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
+    mockGet.mockImplementation((_url: string, config?: { params?: Record<string, unknown> }) => {
       const band = config?.params?.expiry_band
       const status = config?.params?.status
       let total = 100
