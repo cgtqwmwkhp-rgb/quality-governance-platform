@@ -94,9 +94,7 @@ async def resolve_case_notify_user_ids(
         from src.domain.models.audit import AuditFinding
 
         row = (
-            await db.execute(
-                select(AuditFinding).where(AuditFinding.id == eid, AuditFinding.tenant_id == tenant_id)
-            )
+            await db.execute(select(AuditFinding).where(AuditFinding.id == eid, AuditFinding.tenant_id == tenant_id))
         ).scalar_one_or_none()
         if row and getattr(row, "created_by_id", None):
             owner_ids.append(int(row.created_by_id))

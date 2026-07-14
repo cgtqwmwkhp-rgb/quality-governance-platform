@@ -34,23 +34,24 @@ async def test_resolve_near_miss_owner_and_creator() -> None:
     result.scalar_one_or_none.return_value = near_miss
     db.execute = AsyncMock(return_value=result)
 
-    ids = await resolve_case_notify_user_ids(
-        db, entity_type="near_miss", entity_id="11", tenant_id=1
-    )
+    ids = await resolve_case_notify_user_ids(db, entity_type="near_miss", entity_id="11", tenant_id=1)
     assert ids == [7, 3]
 
 
 @pytest.mark.asyncio
 async def test_notify_skips_sender_and_zero_links() -> None:
     db = AsyncMock()
-    assert await notify_proposed_standards_links(
-        db,
-        entity_type="incident",
-        entity_id="1",
-        tenant_id=1,
-        links_created=0,
-        sender_id=5,
-    ) == []
+    assert (
+        await notify_proposed_standards_links(
+            db,
+            entity_type="incident",
+            entity_id="1",
+            tenant_id=1,
+            links_created=0,
+            sender_id=5,
+        )
+        == []
+    )
 
     with patch(
         "src.domain.services.standards_assessment_notifications.resolve_case_notify_user_ids",
