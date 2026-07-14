@@ -176,6 +176,65 @@ async def get_vehicle(reg: str, db: DbSession, user: CurrentUser):
     )
 
 
+class VehicleKitAssetItem(BaseModel):
+    id: int
+    asset_number: str
+    name: str
+    asset_type_id: int
+    asset_type_name: Optional[str] = None
+    category: Optional[str] = None
+    status: str
+    expiry_date: Optional[datetime] = None
+    expiry_status: str
+    is_kit_asset: bool = True
+
+
+class VehicleSafetyAssetsResponse(BaseModel):
+    """Child safety / kit assets for a vehicle plus dual-read expiry fields."""
+
+    vehicle_reg: str
+    asset_id: Optional[int] = None
+    linked_asset_id: Optional[int] = None
+    linked_asset_status: Optional[str] = None
+    assets: list[VehicleKitAssetItem]
+    fire_extinguisher_expiry: Optional[datetime] = None
+    fire_extinguisher_expiry_source: str = "none"
+    fire_extinguisher_expiry_status: str = "unknown"
+    tooling_calibration_expiry: Optional[datetime] = None
+    tooling_calibration_expiry_source: str = "none"
+    tooling_calibration_expiry_status: str = "unknown"
+    registry_fire_extinguisher_expiry: Optional[datetime] = None
+    registry_tooling_calibration_expiry: Optional[datetime] = None
+
+
+@router.get("/{reg}/safety-assets", response_model=VehicleSafetyAssetsResponse)
+async def list_vehicle_safety_assets(reg: str, db: DbSession, user: CurrentUser):
+    """List child safety/kit assets assigned to a vehicle (AM-VAN thin join).
+
+    Dual-reads fire extinguisher / tooling expiry: prefer child Asset.expiry_date
+    when present, otherwise fall back to vehicle_registry columns.
+    """
+    from src.domain.services.allocation_gate import (
+        build_kit_compliance_payload,
+        load_linked_asset,
+        load_vehicle_kit_assets,
+    )
+
+    query = select(VehicleRegistry).where(VehicleRegistry.vehicle_reg == reg)
+    if user.tenant_id:
+        query = query.where(VehicleRegistry.tenant_id == user.tenant_id)
+    result = await db.execute(query)
+    vehicle = result.scalar_one_or_none()
+
+    if vehicle is None:
+        raise NotFoundError(f"Vehicle '{reg}' not found")
+
+    child_assets = await load_vehicle_kit_assets(db, reg, user.tenant_id)
+    linked_asset = await load_linked_asset(db, vehicle.asset_id, user.tenant_id)
+    payload = build_kit_compliance_payload(vehicle, child_assets, linked_asset)
+    return VehicleSafetyAssetsResponse(**payload)
+
+
 @router.get("/{reg}/compliance", response_model=ComplianceGateResponse)
 async def compliance_gate(reg: str, db: DbSession, user: CurrentUser):
     """Compliance gate check — can this vehicle be dispatched?"""
