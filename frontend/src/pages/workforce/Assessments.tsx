@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../../utils/errorTracker'
 import { Plus, Search, Filter, ChevronRight } from 'lucide-react'
@@ -46,16 +46,9 @@ export default function Assessments() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [engineerFilter] = useState('')
+  const [engineerFilter, setEngineerFilter] = useState('')
   const [assetTypeFilter, setAssetTypeFilter] = useState('')
-
-  // Search debounce (300ms)
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300)
-    return () => clearTimeout(timer)
-  }, [searchTerm])
 
   // Load asset types, engineers, and templates for name resolution
   useEffect(() => {
@@ -77,8 +70,8 @@ export default function Assessments() {
       .listTemplates(1, 500, { is_published: true })
       .then((res) => {
         const map: Record<number, string> = {}
-        for (const t of res.data?.items || []) {
-          map[t.id] = t.name
+        for (const tmpl of res.data?.items || []) {
+          map[tmpl.id] = tmpl.name
         }
         setTemplateMap(map)
       })
@@ -89,8 +82,8 @@ export default function Assessments() {
     const load = async () => {
       setLoading(true)
       try {
+        // List API supports status / engineer_id / asset_type_id only — never send `search`.
         const params: Record<string, string> = { page: '1', page_size: '50' }
-        if (debouncedSearch) params.search = debouncedSearch
         if (statusFilter) params.status = statusFilter
         if (engineerFilter) params.engineer_id = engineerFilter
         if (assetTypeFilter) params.asset_type_id = assetTypeFilter
@@ -105,7 +98,26 @@ export default function Assessments() {
       }
     }
     load()
-  }, [debouncedSearch, statusFilter, engineerFilter, assetTypeFilter])
+  }, [statusFilter, engineerFilter, assetTypeFilter])
+
+  const filteredAssessments = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase()
+    if (!q) return assessments
+    return assessments.filter((a) => {
+      const ref = (a.reference_number || '').toLowerCase()
+      const eng = (engineerMap[a.engineer_id] ?? `#${a.engineer_id}`).toLowerCase()
+      const tmpl = (templateMap[a.template_id] ?? `#${a.template_id}`).toLowerCase()
+      return ref.includes(q) || eng.includes(q) || tmpl.includes(q)
+    })
+  }, [assessments, searchTerm, engineerMap, templateMap])
+
+  const engineerOptions = useMemo(
+    () =>
+      Object.entries(engineerMap)
+        .map(([id, label]) => ({ id, label }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [engineerMap],
+  )
 
   return (
     <div className="space-y-6">
@@ -131,6 +143,7 @@ export default function Assessments() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9"
+                aria-label="Search assessments (client-side)"
               />
             </div>
             <div className="flex flex-wrap gap-2">
@@ -138,6 +151,7 @@ export default function Assessments() {
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
+                aria-label={t('common.status')}
               >
                 <option value="">{t('workforce.common.all_statuses')}</option>
                 <option value="draft">{t('common.draft')}</option>
@@ -149,9 +163,23 @@ export default function Assessments() {
                 <option value="cancelled">{t('common.cancelled')}</option>
               </select>
               <select
+                value={engineerFilter}
+                onChange={(e) => setEngineerFilter(e.target.value)}
+                className="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
+                aria-label={t('workforce.common.engineer')}
+              >
+                <option value="">All engineers</option>
+                {engineerOptions.map((eng) => (
+                  <option key={eng.id} value={eng.id}>
+                    {eng.label}
+                  </option>
+                ))}
+              </select>
+              <select
                 value={assetTypeFilter}
                 onChange={(e) => setAssetTypeFilter(e.target.value)}
                 className="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
+                aria-label={t('workforce.common.asset_type')}
               >
                 <option value="">{t('workforce.common.all_asset_types')}</option>
                 {assetTypes.map((at) => (
@@ -160,7 +188,14 @@ export default function Assessments() {
                   </option>
                 ))}
               </select>
-              <Button variant="outline" size="sm" className="gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                disabled
+                title="Additional filters are not available yet"
+                aria-disabled="true"
+              >
                 <Filter className="w-4 h-4" />
                 {t('workforce.common.filters')}
               </Button>
@@ -200,14 +235,14 @@ export default function Assessments() {
                   </tr>
                 </thead>
                 <tbody>
-                  {assessments.length === 0 ? (
+                  {filteredAssessments.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="py-12 text-center text-muted-foreground">
                         {t('workforce.assessments.empty')}
                       </td>
                     </tr>
                   ) : (
-                    assessments.map((a) => (
+                    filteredAssessments.map((a) => (
                       <tr
                         key={a.id}
                         className={cn(
