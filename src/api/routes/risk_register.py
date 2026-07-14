@@ -208,6 +208,7 @@ async def list_risks(
                 "next_review_date": (r.next_review_date.isoformat() if r.next_review_date else None),
                 "linked_audits": r.linked_audits or [],
                 "linked_actions": r.linked_actions or [],
+                "linked_incidents": r.linked_incidents or [],
                 "suggestion_triage_status": r.suggestion_triage_status,
             }
             for r in risks
