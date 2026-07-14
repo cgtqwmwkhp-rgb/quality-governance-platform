@@ -141,12 +141,7 @@ export default function Complaints() {
           complainant_email: '',
           complainant_phone: '',
         })
-        toast.success(
-          t('complaints.created', 'Complaint {{reference}} recorded', {
-            reference: response.data.reference_number,
-            defaultValue: `Complaint ${response.data.reference_number} recorded`,
-          }),
-        )
+        toast.success(`Complaint ${response.data.reference_number} recorded`)
         // Prove create → list → detail: land on the new record after it is in local list state.
         navigate(`/complaints/${response.data.id}`)
       }
@@ -284,14 +279,10 @@ export default function Complaints() {
           <div className="flex items-start gap-3">
             <MailWarning className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             <div>
-              <p className="font-semibold">
-                {t('complaints.email_unavailable.title', 'Email alerts unavailable')}
-              </p>
+              <p className="font-semibold">Email alerts unavailable</p>
               <p className="mt-1 text-sm">
-                {t(
-                  'complaints.email_unavailable.body',
-                  'Complaints and follow-up actions are saved, but outbound email is not configured — do not expect complainant or assignee alerts to send.',
-                )}
+                Complaints and follow-up actions are saved, but outbound email is not configured — do
+                not expect complainant or assignee alerts to send.
               </p>
             </div>
           </div>
@@ -361,11 +352,8 @@ export default function Complaints() {
                       <div data-testid="complaints-list-unavailable">
                         <EmptyState
                           icon={<MessageSquare className="w-6 h-6 text-muted-foreground" />}
-                          title={t('complaints.unavailable.title', 'Complaints unavailable')}
-                          description={t(
-                            'complaints.unavailable.subtitle',
-                            'The complaints list could not be loaded. This is not an empty register — retry when the service recovers.',
-                          )}
+                          title="Complaints unavailable"
+                          description="The complaints list could not be loaded. This is not an empty register — retry when the service recovers."
                         />
                       </div>
                     </td>
@@ -377,15 +365,12 @@ export default function Complaints() {
                         icon={<MessageSquare className="w-6 h-6 text-muted-foreground" />}
                         title={
                           needle
-                            ? t('complaints.empty_search.title', 'No matching complaints')
+                            ? 'No matching complaints'
                             : t('complaints.empty.title', 'No complaints found')
                         }
                         description={
                           needle
-                            ? t(
-                                'complaints.empty_search.subtitle',
-                                'Try a different search term. Tenant-scoped results only — other tenants are never shown.',
-                              )
+                            ? 'Try a different search term. Tenant-scoped results only — other tenants are never shown.'
                             : t(
                                 'complaints.empty.subtitle',
                                 'Create your first complaint to get started.',

@@ -333,13 +333,10 @@ export default function ComplaintDetail() {
       loadActions()
       if (emailConfigured === false) {
         toast.success(
-          t(
-            'complaints.detail.action_saved_email_unavailable',
-            'Action saved. Assignee recorded, but email alerts are unavailable while outbound email is not configured.',
-          ),
+          'Action saved. Assignee recorded, but email alerts are unavailable while outbound email is not configured.',
         )
       } else {
-        toast.success(t('complaints.detail.action_created', 'Action created'))
+        toast.success('Action created')
       }
     } catch (err: unknown) {
       trackError(err, { component: 'ComplaintDetail', action: 'createAction' })
@@ -553,14 +550,10 @@ export default function ComplaintDetail() {
           <div className="flex items-start gap-3">
             <MailWarning className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
             <div>
-              <p className="font-semibold">
-                {t('complaints.email_unavailable.title', 'Email alerts unavailable')}
-              </p>
+              <p className="font-semibold">Email alerts unavailable</p>
               <p className="mt-1 text-sm">
-                {t(
-                  'complaints.email_unavailable.detail_body',
-                  'Actions and assignees are saved on this complaint, but outbound email is not configured — do not expect assignee alerts to send.',
-                )}
+                Actions and assignees are saved on this complaint, but outbound email is not
+                configured — do not expect assignee alerts to send.
               </p>
             </div>
           </div>
@@ -1325,14 +1318,10 @@ export default function ComplaintDetail() {
                 role="status"
                 data-testid="complaint-action-email-unavailable"
               >
-                <p className="text-sm font-semibold">
-                  {t('complaints.email_unavailable.title', 'Email alerts unavailable')}
-                </p>
+                <p className="text-sm font-semibold">Email alerts unavailable</p>
                 <p className="mt-1 text-xs">
-                  {t(
-                    'complaints.email_unavailable.action_body',
-                    'The assignee will be saved on the action, but email alerts will not send while outbound email is not configured.',
-                  )}
+                  The assignee will be saved on the action, but email alerts will not send while
+                  outbound email is not configured.
                 </p>
               </div>
             ) : null}
