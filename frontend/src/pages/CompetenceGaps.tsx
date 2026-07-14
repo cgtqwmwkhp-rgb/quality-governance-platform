@@ -11,7 +11,12 @@ import {
 } from 'lucide-react'
 import {
   competenceGapApi,
+  competenceGapSourceLabelKey,
+  engineerPickerLabel,
+  requirementPickerLabel,
   type CompetenceGapAction,
+  type CompetenceGapPickerEngineer,
+  type CompetenceGapPickerRequirement,
   type GoldenThreadResponse,
 } from '../api/competenceGapClient'
 import { getApiErrorMessage } from '../api/client'
@@ -20,15 +25,9 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { EmptyState } from '../components/ui/EmptyState'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/Select'
-import { Input } from '../components/ui/Input'
 import { cn } from '../helpers/utils'
+
+type LinkDraft = { engineerId: string; requirementId: string }
 
 const reportFailure = (err: unknown): string => {
   const message = getApiErrorMessage(err)
@@ -58,19 +57,68 @@ export function competenceGapActionHref(id: number): string {
   return `/workforce/competence-gaps?id=${id}`
 }
 
+export function resolveEngineerLabel(
+  engineerId: number | null | undefined,
+  engineers: CompetenceGapPickerEngineer[],
+  fallback = '—',
+): string {
+  if (engineerId == null) return fallback
+  const match = engineers.find((e) => e.id === engineerId)
+  return match ? engineerPickerLabel(match) : `Engineer #${engineerId}`
+}
+
+export function resolveRequirementLabel(
+  requirementId: number | null | undefined,
+  requirements: CompetenceGapPickerRequirement[],
+  fallback = '—',
+): string {
+  if (requirementId == null) return fallback
+  const match = requirements.find((r) => r.id === requirementId)
+  return match ? requirementPickerLabel(match) : `Requirement #${requirementId}`
+}
+
 export default function CompetenceGaps() {
   const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
   const focusId = searchParams.get('id')
 
   const [items, setItems] = useState<CompetenceGapAction[]>([])
+  const [engineers, setEngineers] = useState<CompetenceGapPickerEngineer[]>([])
+  const [requirements, setRequirements] = useState<CompetenceGapPickerRequirement[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [actingId, setActingId] = useState<number | null>(null)
-  const [engineerIdInput, setEngineerIdInput] = useState('')
-  const [requirementIdInput, setRequirementIdInput] = useState('')
+  /** Per-row drafts — never share one engineer/requirement input across rows. */
+  const [linkDrafts, setLinkDrafts] = useState<Record<number, LinkDraft>>({})
   const [thread, setThread] = useState<GoldenThreadResponse | null>(null)
+
+  const updateLinkDraft = (gapId: number, patch: Partial<LinkDraft>) => {
+    setLinkDrafts((prev) => ({
+      ...prev,
+      [gapId]: {
+        engineerId: '',
+        requirementId: '',
+        ...prev[gapId],
+        ...patch,
+      },
+    }))
+  }
+
+  const loadPickers = useCallback(async () => {
+    try {
+      const [engRes, reqRes] = await Promise.all([
+        competenceGapApi.listPickerEngineers(),
+        competenceGapApi.listPickerRequirements(),
+      ])
+      setEngineers(engRes.data.items ?? [])
+      setRequirements(reqRes.data.items ?? [])
+    } catch {
+      // Pickers are best-effort; link still works once options load on retry.
+      setEngineers([])
+      setRequirements([])
+    }
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -91,6 +139,10 @@ export default function CompetenceGaps() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    void loadPickers()
+  }, [loadPickers])
 
   const focused = useMemo(() => {
     if (!focusId) return null
@@ -116,25 +168,29 @@ export default function CompetenceGaps() {
   }
 
   const handleLink = async (id: number) => {
-    const engineerId = Number(engineerIdInput)
+    const draft = linkDrafts[id] ?? { engineerId: '', requirementId: '' }
+    const engineerId = Number(draft.engineerId)
     if (!Number.isFinite(engineerId) || engineerId <= 0) {
       toast.error(t('competenceGaps.toast.engineer_required'))
       return
     }
-    const requirementRaw = requirementIdInput.trim()
+    const requirementRaw = draft.requirementId.trim()
     const requirementId = requirementRaw ? Number(requirementRaw) : undefined
     setActingId(id)
     try {
       await competenceGapApi.link(id, {
         engineer_id: engineerId,
         requirement_id:
-          requirementId !== undefined && Number.isFinite(requirementId)
+          requirementId !== undefined && Number.isFinite(requirementId) && requirementId > 0
             ? requirementId
             : undefined,
       })
       toast.success(t('competenceGaps.toast.linked'))
-      setEngineerIdInput('')
-      setRequirementIdInput('')
+      setLinkDrafts((prev) => {
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
       await load()
     } catch (err) {
       reportFailure(err)
@@ -184,6 +240,14 @@ export default function CompetenceGaps() {
     )
   }
 
+  const isFilterActive = statusFilter !== 'all'
+  const emptyTitle = isFilterActive
+    ? t('competenceGaps.empty.filter_title')
+    : t('competenceGaps.empty.title')
+  const emptyDescription = isFilterActive
+    ? t('competenceGaps.empty.filter_description')
+    : t('competenceGaps.empty.description')
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -197,18 +261,20 @@ export default function CompetenceGaps() {
           <label htmlFor="competence-gap-status" className="text-xs font-medium text-muted-foreground">
             {t('competenceGaps.filter.label')}
           </label>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger id="competence-gap-status" aria-label={t('competenceGaps.filter.label')}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {t(opt.labelKey)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <select
+            id="competence-gap-status"
+            aria-label={t('competenceGaps.filter.label')}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            data-testid="competence-gap-status-filter"
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {t(opt.labelKey)}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -225,131 +291,162 @@ export default function CompetenceGaps() {
       {items.length === 0 && !error ? (
         <EmptyState
           icon={<ShieldAlert className="w-10 h-10 text-muted-foreground" />}
-          title={t('competenceGaps.empty.title')}
-          description={t('competenceGaps.empty.description')}
+          title={emptyTitle}
+          description={emptyDescription}
         />
       ) : (
         <div className="space-y-3">
-          {items.map((gap) => (
-            <Card
-              key={gap.id}
-              className={cn(
-                'p-4 space-y-3',
-                focused?.id === gap.id && 'ring-2 ring-primary/40',
-              )}
-            >
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-foreground">
-                      {t('competenceGaps.row.id', { id: gap.id })}
-                    </span>
-                    {statusBadge(gap.status)}
-                    <Badge variant="outline">{gap.signal_type}</Badge>
+          {items.map((gap) => {
+            const draft = linkDrafts[gap.id] ?? { engineerId: '', requirementId: '' }
+            const sourceLabel = t(competenceGapSourceLabelKey(gap.source_type), {
+              defaultValue: gap.source_type.replace(/_/g, ' '),
+            })
+            const signalLabel = t(`competenceGaps.signal.${gap.signal_type}`, {
+              defaultValue: gap.signal_type.replace(/_/g, ' '),
+            })
+            return (
+              <Card
+                key={gap.id}
+                className={cn(
+                  'p-4 space-y-3',
+                  focused?.id === gap.id && 'ring-2 ring-primary/40',
+                )}
+                data-testid={`competence-gap-row-${gap.id}`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-foreground">
+                        {t('competenceGaps.row.id', { id: gap.id })}
+                      </span>
+                      {statusBadge(gap.status)}
+                      <Badge variant="outline">{signalLabel}</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {t('competenceGaps.row.source', {
+                        source: sourceLabel,
+                        id: gap.source_id,
+                      })}
+                      {gap.confidence != null ? ` · ${Math.round(gap.confidence * 100)}%` : ''}
+                    </p>
+                    {gap.rationale && (
+                      <p className="text-sm text-foreground/90 line-clamp-3">{gap.rationale}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {t('competenceGaps.row.links', {
+                        engineer: resolveEngineerLabel(gap.engineer_id, engineers),
+                        requirement: resolveRequirementLabel(gap.requirement_id, requirements),
+                        capa: gap.capa_action_id ?? '—',
+                      })}
+                    </p>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {gap.source_type}:{gap.source_id}
-                    {gap.confidence != null ? ` · ${Math.round(gap.confidence * 100)}%` : ''}
-                  </p>
-                  {gap.rationale && (
-                    <p className="text-sm text-foreground/90 line-clamp-3">{gap.rationale}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    {t('competenceGaps.row.links', {
-                      engineer: gap.engineer_id ?? '—',
-                      requirement: gap.requirement_id ?? '—',
-                      capa: gap.capa_action_id ?? '—',
-                    })}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {gap.action_key && (
-                    <Button variant="outline" size="sm" asChild>
-                      <Link to={`/actions?action_key=${encodeURIComponent(gap.action_key)}`}>
-                        {t('competenceGaps.actions.open_capa')}
-                      </Link>
-                    </Button>
-                  )}
-                  {!gap.capa_action_id &&
-                    gap.status !== 'resolved' &&
-                    gap.status !== 'dismissed' && (
-                      <Button
-                        size="sm"
-                        disabled={actingId === gap.id}
-                        onClick={() => void handleCreateCapa(gap.id)}
-                      >
-                        <CheckCircle2 className="w-4 h-4 mr-1" />
-                        {t('competenceGaps.actions.create_capa')}
+                  <div className="flex flex-wrap gap-2">
+                    {gap.action_key && (
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/actions?action_key=${encodeURIComponent(gap.action_key)}`}>
+                          {t('competenceGaps.actions.open_capa')}
+                        </Link>
                       </Button>
                     )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={actingId === gap.id}
-                    onClick={() => void handleGoldenThread(gap.id)}
-                  >
-                    {t('competenceGaps.actions.golden_thread')}
-                  </Button>
-                  {gap.status !== 'resolved' && gap.status !== 'dismissed' && (
-                    <>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={actingId === gap.id}
-                        onClick={() => void handleResolve(gap.id, false)}
-                      >
-                        {t('competenceGaps.actions.resolve')}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={actingId === gap.id}
-                        onClick={() => void handleResolve(gap.id, true)}
-                      >
-                        <XCircle className="w-4 h-4 mr-1" />
-                        {t('competenceGaps.actions.dismiss')}
-                      </Button>
-                    </>
-                  )}
+                    {!gap.capa_action_id &&
+                      gap.status !== 'resolved' &&
+                      gap.status !== 'dismissed' && (
+                        <Button
+                          size="sm"
+                          disabled={actingId === gap.id}
+                          onClick={() => void handleCreateCapa(gap.id)}
+                        >
+                          <CheckCircle2 className="w-4 h-4 mr-1" />
+                          {t('competenceGaps.actions.create_capa')}
+                        </Button>
+                      )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={actingId === gap.id}
+                      onClick={() => void handleGoldenThread(gap.id)}
+                    >
+                      {t('competenceGaps.actions.golden_thread')}
+                    </Button>
+                    {gap.status !== 'resolved' && gap.status !== 'dismissed' && (
+                      <>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={actingId === gap.id}
+                          onClick={() => void handleResolve(gap.id, false)}
+                        >
+                          {t('competenceGaps.actions.resolve')}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={actingId === gap.id}
+                          onClick={() => void handleResolve(gap.id, true)}
+                        >
+                          <XCircle className="w-4 h-4 mr-1" />
+                          {t('competenceGaps.actions.dismiss')}
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              {gap.status !== 'resolved' && gap.status !== 'dismissed' && !gap.engineer_id && (
-                <div className="flex flex-col sm:flex-row gap-2 items-end border-t border-border pt-3">
-                  <div className="space-y-1 flex-1">
-                    <label className="text-xs text-muted-foreground" htmlFor={`eng-${gap.id}`}>
-                      {t('competenceGaps.link.engineer_id')}
-                    </label>
-                    <Input
-                      id={`eng-${gap.id}`}
-                      value={engineerIdInput}
-                      onChange={(e) => setEngineerIdInput(e.target.value)}
-                      placeholder="42"
-                    />
+                {gap.status !== 'resolved' && gap.status !== 'dismissed' && !gap.engineer_id && (
+                  <div className="flex flex-col sm:flex-row gap-2 items-end border-t border-border pt-3">
+                    <div className="space-y-1 flex-1 w-full">
+                      <label className="text-xs text-muted-foreground" htmlFor={`eng-${gap.id}`}>
+                        {t('competenceGaps.link.engineer')}
+                      </label>
+                      <select
+                        id={`eng-${gap.id}`}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={draft.engineerId}
+                        onChange={(e) => updateLinkDraft(gap.id, { engineerId: e.target.value })}
+                        data-testid={`competence-gap-engineer-${gap.id}`}
+                      >
+                        <option value="">{t('competenceGaps.link.engineer_placeholder')}</option>
+                        {engineers.map((eng) => (
+                          <option key={eng.id} value={String(eng.id)}>
+                            {engineerPickerLabel(eng)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1 flex-1 w-full">
+                      <label className="text-xs text-muted-foreground" htmlFor={`req-${gap.id}`}>
+                        {t('competenceGaps.link.requirement')}
+                      </label>
+                      <select
+                        id={`req-${gap.id}`}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={draft.requirementId}
+                        onChange={(e) =>
+                          updateLinkDraft(gap.id, { requirementId: e.target.value })
+                        }
+                        data-testid={`competence-gap-requirement-${gap.id}`}
+                      >
+                        <option value="">{t('competenceGaps.link.requirement_optional')}</option>
+                        {requirements.map((req) => (
+                          <option key={req.id} value={String(req.id)}>
+                            {requirementPickerLabel(req)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <Button
+                      size="sm"
+                      disabled={actingId === gap.id}
+                      onClick={() => void handleLink(gap.id)}
+                    >
+                      <Link2 className="w-4 h-4 mr-1" />
+                      {t('competenceGaps.actions.link')}
+                    </Button>
                   </div>
-                  <div className="space-y-1 flex-1">
-                    <label className="text-xs text-muted-foreground" htmlFor={`req-${gap.id}`}>
-                      {t('competenceGaps.link.requirement_id')}
-                    </label>
-                    <Input
-                      id={`req-${gap.id}`}
-                      value={requirementIdInput}
-                      onChange={(e) => setRequirementIdInput(e.target.value)}
-                      placeholder={t('competenceGaps.link.requirement_optional')}
-                    />
-                  </div>
-                  <Button
-                    size="sm"
-                    disabled={actingId === gap.id}
-                    onClick={() => void handleLink(gap.id)}
-                  >
-                    <Link2 className="w-4 h-4 mr-1" />
-                    {t('competenceGaps.actions.link')}
-                  </Button>
-                </div>
-              )}
-            </Card>
-          ))}
+                )}
+              </Card>
+            )
+          })}
         </div>
       )}
 
