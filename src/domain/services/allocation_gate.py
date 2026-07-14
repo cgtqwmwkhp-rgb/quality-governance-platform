@@ -179,7 +179,8 @@ def _consult_asset_status(
     if band == "overdue":
         reasons.append(f"{label} '{asset.asset_number}' expiry is overdue")
     elif band == "due_30":
-        days = (_as_utc(asset.expiry_date) - now).days  # type: ignore[operator]
+        expiry = _as_utc(asset.expiry_date)
+        days = (expiry - now).days if expiry is not None else 0
         expiry_warnings.append(f"{label} '{asset.asset_number}' expires in {days} days")
 
 
@@ -284,7 +285,8 @@ async def check_allocation(
     now = datetime.now(timezone.utc)
     checks_current = True
     if vehicle.last_daily_check_at:
-        hours_since = (now - _as_utc(vehicle.last_daily_check_at)).total_seconds() / 3600  # type: ignore[arg-type]
+        last_check = _as_utc(vehicle.last_daily_check_at)
+        hours_since = (now - last_check).total_seconds() / 3600 if last_check is not None else 0
         if hours_since > 24:
             checks_current = False
             reasons.append("Daily check overdue (>24h)")
@@ -292,11 +294,12 @@ async def check_allocation(
         checks_current = False
         reasons.append("No daily check recorded")
 
-    if vehicle.road_tax_expiry and _as_utc(vehicle.road_tax_expiry) < now:  # type: ignore[operator]
+    road_tax = _as_utc(vehicle.road_tax_expiry)
+    if road_tax is not None and road_tax < now:
         reasons.append("Road tax expired")
-    elif vehicle.road_tax_expiry and (_as_utc(vehicle.road_tax_expiry) - now).days <= 30:  # type: ignore[operator]
+    elif road_tax is not None and (road_tax - now).days <= 30:
         expiry_warnings.append(
-            f"Road tax expires in {(_as_utc(vehicle.road_tax_expiry) - now).days} days"  # type: ignore[operator]
+            f"Road tax expires in {(road_tax - now).days} days"
         )
 
     # AM-VAN: consult linked vehicle Asset + child kit assets
