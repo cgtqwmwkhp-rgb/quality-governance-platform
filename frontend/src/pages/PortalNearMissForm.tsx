@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
+import { canOfferStaffDeepLink, portalStaffRecordLabel } from './portalSubmitSuccess'
 import { API_BASE_URL } from '../config/apiBase'
 
 // Portal report submission - uses public endpoint (no auth required)
@@ -24,12 +25,23 @@ interface PortalReportResponse {
   tracking_code: string
   message: string
   estimated_response: string
+  entity_id?: number | null
+  entity_type?: string | null
+  staff_href?: string | null
+  can_open_staff_record?: boolean
 }
 
-async function submitPortalReport(payload: PortalReportPayload): Promise<PortalReportResponse> {
+async function submitPortalReport(
+  payload: PortalReportPayload,
+  platformToken?: string | null,
+): Promise<PortalReportResponse> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (platformToken) {
+    headers.Authorization = `Bearer ${platformToken}`
+  }
   const response = await fetch(`${API_BASE_URL}/api/v1/portal/reports/`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(payload),
   })
 
@@ -147,10 +159,14 @@ type Step = 1 | 2 | 3 | 4
 export default function PortalNearMissForm() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { user } = usePortalAuth()
+  const { user, platformToken } = usePortalAuth()
   const [step, setStep] = useState<Step>(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submittedRef, setSubmittedRef] = useState<string | null>(null)
+  const [submittedTrackingCode, setSubmittedTrackingCode] = useState<string | null>(null)
+  const [staffHref, setStaffHref] = useState<string | null>(null)
+  const [canOpenStaff, setCanOpenStaff] = useState(false)
+  const [submittedEntityType, setSubmittedEntityType] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const {
@@ -282,12 +298,16 @@ export default function PortalNearMissForm() {
         is_anonymous: false,
       }
 
-      const response = await submitPortalReport(payload)
+      const response = await submitPortalReport(payload, platformToken)
       setSubmittedRef(response.reference_number)
       // Store tracking code for anonymous access if needed
       if (response.tracking_code) {
         sessionStorage.setItem(`tracking_${response.reference_number}`, response.tracking_code)
+        setSubmittedTrackingCode(response.tracking_code)
       }
+      setCanOpenStaff(Boolean(response.can_open_staff_record && response.staff_href))
+      setStaffHref(response.staff_href ?? null)
+      setSubmittedEntityType(response.entity_type ?? 'near_miss')
     } catch (error) {
       console.error('Submission error:', error)
       // Show real error - do NOT generate fake reference numbers
@@ -317,28 +337,53 @@ export default function PortalNearMissForm() {
 
   // Success screen
   if (submittedRef) {
+    const offerStaff = canOfferStaffDeepLink({
+      reference_number: submittedRef,
+      can_open_staff_record: canOpenStaff,
+      staff_href: staffHref,
+    })
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center p-4">
-        <Card className="p-8 max-w-md w-full text-center">
+        <Card className="p-8 max-w-md w-full text-center" data-testid="portal-nearmiss-success">
           <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-6">
             <Check className="w-10 h-10 text-success" />
           </div>
           <h1 className="text-2xl font-bold text-foreground mb-2">Near Miss Reported</h1>
           <p className="text-muted-foreground mb-6">Your reference number is:</p>
-          <div className="bg-surface border border-border rounded-xl px-6 py-4 mb-6">
-            <span className="text-2xl font-mono font-bold text-primary">{submittedRef}</span>
+          <div className="bg-surface border border-border rounded-xl px-6 py-4 mb-4">
+            <span className="text-2xl font-mono font-bold text-primary" data-testid="portal-tracking-ref">
+              {submittedRef}
+            </span>
           </div>
+          {!offerStaff && submittedTrackingCode ? (
+            <p className="text-xs text-muted-foreground mb-4" data-testid="portal-tracking-code-hint">
+              Keep this tracking reference to check status. Staff deep-link is not available for this
+              session.
+            </p>
+          ) : null}
           <p className="text-sm text-muted-foreground mb-6">{t('portal.thank_you_near_miss')}</p>
-          <div className="flex gap-3">
-            <Button
-              onClick={() => navigate('/portal/track/' + submittedRef)}
-              className="flex-1 bg-primary hover:bg-primary/90"
-            >
-              Track Status
-            </Button>
-            <Button variant="outline" onClick={() => navigate('/portal')} className="flex-1">
-              Done
-            </Button>
+          <div className="flex flex-col gap-3">
+            {offerStaff && staffHref ? (
+              <Button
+                onClick={() => navigate(staffHref)}
+                className="w-full bg-primary hover:bg-primary/90"
+                data-testid="portal-open-staff-record"
+              >
+                {portalStaffRecordLabel(submittedEntityType)}
+              </Button>
+            ) : null}
+            <div className="flex gap-3">
+              <Button
+                onClick={() => navigate('/portal/track/' + submittedRef)}
+                className="flex-1"
+                variant={offerStaff ? 'outline' : 'default'}
+              >
+                Track Status
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/portal')} className="flex-1">
+                Done
+              </Button>
+            </div>
           </div>
         </Card>
       </div>

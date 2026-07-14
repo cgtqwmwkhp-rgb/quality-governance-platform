@@ -29,6 +29,7 @@ import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
 import BodyInjurySelector, { InjurySelection } from '../components/BodyInjurySelector'
 import DraftRecoveryDialog from '../components/DraftRecoveryDialog'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
+import { canOfferStaffDeepLink, portalStaffRecordLabel } from './portalSubmitSuccess'
 import { useGeolocation } from '../hooks/useGeolocation'
 import { useVoiceToText } from '../hooks/useVoiceToText'
 import { useFormAutosave } from '../hooks/useFormAutosave'
@@ -66,12 +67,23 @@ interface PortalReportResponse {
   tracking_code: string
   message: string
   estimated_response: string
+  entity_id?: number | null
+  entity_type?: string | null
+  staff_href?: string | null
+  can_open_staff_record?: boolean
 }
 
-async function submitPortalReport(payload: PortalReportPayload): Promise<PortalReportResponse> {
+async function submitPortalReport(
+  payload: PortalReportPayload,
+  platformToken?: string | null,
+): Promise<PortalReportResponse> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (platformToken) {
+    headers.Authorization = `Bearer ${platformToken}`
+  }
   const response = await fetch(`${API_BASE_URL}/api/v1/portal/reports/`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(payload),
   })
 
@@ -185,13 +197,16 @@ export default function PortalIncidentForm() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
-  const { user } = usePortalAuth()
+  const { user, platformToken } = usePortalAuth()
   const reportType = getReportTypeFromPath(location.pathname)
   const config = REPORT_CONFIGS[reportType]
 
   const [step, setStep] = useState<Step>(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submittedRef, setSubmittedRef] = useState<string | null>(null)
+  const [staffHref, setStaffHref] = useState<string | null>(null)
+  const [canOpenStaff, setCanOpenStaff] = useState(false)
+  const [submittedEntityType, setSubmittedEntityType] = useState<string | null>(null)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -425,8 +440,11 @@ export default function PortalIncidentForm() {
         reporter_submission: reporterSubmission,
       }
 
-      const response = await submitPortalReport(payload)
+      const response = await submitPortalReport(payload, platformToken)
       setSubmittedRef(response.reference_number)
+      setCanOpenStaff(Boolean(response.can_open_staff_record && response.staff_href))
+      setStaffHref(response.staff_href ?? null)
+      setSubmittedEntityType(response.entity_type ?? null)
       // Store tracking code for anonymous access if needed
       if (response.tracking_code) {
         sessionStorage.setItem(`tracking_${response.reference_number}`, response.tracking_code)
@@ -469,9 +487,14 @@ export default function PortalIncidentForm() {
 
   // Success screen
   if (submittedRef) {
+    const offerStaff = canOfferStaffDeepLink({
+      reference_number: submittedRef,
+      can_open_staff_record: canOpenStaff,
+      staff_href: staffHref,
+    })
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center p-4">
-        <Card className="p-8 max-w-md w-full text-center">
+        <Card className="p-8 max-w-md w-full text-center" data-testid="portal-incident-success">
           <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-6">
             <Check className="w-10 h-10 text-success" />
           </div>
@@ -479,16 +502,39 @@ export default function PortalIncidentForm() {
             {t('portal.report_submitted_title')}
           </h1>
           <p className="text-muted-foreground mb-6">{t('portal.reference_label')}</p>
-          <div className="bg-surface border border-border rounded-xl px-6 py-4 mb-6">
-            <span className="text-2xl font-mono font-bold text-primary">{submittedRef}</span>
+          <div className="bg-surface border border-border rounded-xl px-6 py-4 mb-4">
+            <span className="text-2xl font-mono font-bold text-primary" data-testid="portal-tracking-ref">
+              {submittedRef}
+            </span>
           </div>
-          <div className="flex gap-3">
-            <Button onClick={() => navigate('/portal/track/' + submittedRef)} className="flex-1">
-              {t('portal.track_status')}
-            </Button>
-            <Button variant="outline" onClick={() => navigate('/portal')} className="flex-1">
-              {t('portal.done')}
-            </Button>
+          {!offerStaff ? (
+            <p className="text-xs text-muted-foreground mb-4" data-testid="portal-tracking-code-hint">
+              Keep this tracking reference to check status. Staff deep-link is not available for this
+              session.
+            </p>
+          ) : null}
+          <div className="flex flex-col gap-3">
+            {offerStaff && staffHref ? (
+              <Button
+                onClick={() => navigate(staffHref)}
+                className="w-full"
+                data-testid="portal-open-staff-record"
+              >
+                {portalStaffRecordLabel(submittedEntityType)}
+              </Button>
+            ) : null}
+            <div className="flex gap-3">
+              <Button
+                onClick={() => navigate('/portal/track/' + submittedRef)}
+                className="flex-1"
+                variant={offerStaff ? 'outline' : 'default'}
+              >
+                {t('portal.track_status')}
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/portal')} className="flex-1">
+                {t('portal.done')}
+              </Button>
+            </div>
           </div>
         </Card>
       </div>
