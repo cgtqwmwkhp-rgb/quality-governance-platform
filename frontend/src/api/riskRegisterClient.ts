@@ -50,6 +50,7 @@ export interface RiskEntry {
   escalation_reason?: string
   linked_audits?: string[]
   linked_actions?: string[]
+  linked_incidents?: string[]
   /** pending | accepted | rejected — import-sourced suggestions only */
   suggestion_triage_status?: string | null
 }
@@ -65,10 +66,19 @@ export interface RiskHeatmapData {
 
 export interface RiskSummary {
   total_risks: number
-  critical: number
-  high: number
-  medium: number
-  low: number
+  critical?: number
+  high?: number
+  medium?: number
+  low?: number
+  by_level?: {
+    critical?: number
+    high?: number
+    medium?: number
+    low?: number
+  }
+  outside_appetite?: number
+  overdue_review?: number
+  escalated?: number
   by_category: Record<string, number>
 }
 

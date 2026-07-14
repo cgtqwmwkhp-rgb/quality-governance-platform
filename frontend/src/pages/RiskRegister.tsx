@@ -78,6 +78,7 @@ interface Risk {
   escalation_reason?: string
   linked_audits?: string[]
   linked_actions?: string[]
+  linked_incidents?: string[]
   suggestion_triage_status?: string | null
 }
 
@@ -148,6 +149,8 @@ export default function RiskRegister() {
   const [showFilters, setShowFilters] = useState(false)
   const [auditOnly, setAuditOnly] = useState(searchParams.get('auditOnly') === '1')
   const [auditRefFilter, setAuditRefFilter] = useState(searchParams.get('auditRef') || '')
+  const focusRiskId = Number(searchParams.get('riskId') || '')
+  const nearMissRefFilter = (searchParams.get('nearMissRef') || '').trim()
   const [summary, setSummary] = useState<RegisterSummary>(EMPTY_SUMMARY)
   const [registerMode, setRegisterMode] = useState<'active' | 'import_triage'>('active')
   const [pendingTriageCount, setPendingTriageCount] = useState(0)
@@ -248,10 +251,46 @@ export default function RiskRegister() {
           escalation_reason: r.escalation_reason,
           linked_audits: r.linked_audits ?? [],
           linked_actions: r.linked_actions ?? [],
+          linked_incidents: r.linked_incidents ?? [],
           suggestion_triage_status: r.suggestion_triage_status ?? null,
         }
       })
       setRisks(mappedRisks)
+
+      if (Number.isInteger(focusRiskId) && focusRiskId > 0) {
+        const focused = mappedRisks.find((risk) => risk.id === focusRiskId)
+        if (focused) {
+          setSelectedRisk(focused)
+        } else {
+          // Deep-linked risk may be outside first page — fetch detail as selection stub.
+          try {
+            const detail = await riskRegisterApi.get(focusRiskId)
+            const d = detail.data
+            setSelectedRisk({
+              id: d.id,
+              reference: d.reference ?? `RISK-${d.id}`,
+              title: d.title,
+              category: d.category ?? 'operational',
+              department: d.department ?? '',
+              inherent_score: d.inherent_score ?? d.risk_score ?? 0,
+              residual_score: d.residual_score ?? d.risk_score ?? 0,
+              risk_level: 'medium',
+              risk_color: 'hsl(var(--info))',
+              treatment_strategy: d.treatment_strategy ?? 'treat',
+              status: d.status ?? 'open',
+              is_within_appetite: d.is_within_appetite ?? true,
+              risk_owner_name: d.risk_owner_name ?? d.risk_owner ?? '',
+              next_review_date: d.next_review_date ?? null,
+              linked_audits: d.linked_audits ?? [],
+              linked_actions: d.linked_actions ?? [],
+              linked_incidents: d.linked_incidents ?? [],
+              suggestion_triage_status: d.suggestion_triage_status ?? null,
+            })
+          } catch {
+            /* leave selection empty — list still usable */
+          }
+        }
+      }
 
       if (pendingResult.status === 'fulfilled') {
         const pendingTotal = pendingResult.value.data?.total
@@ -459,7 +498,7 @@ export default function RiskRegister() {
     } finally {
       setLoading(false)
     }
-  }, [registerMode])
+  }, [registerMode, focusRiskId])
 
   useEffect(() => {
     void loadRisks()
@@ -518,6 +557,13 @@ export default function RiskRegister() {
       const needle = auditRefFilter.toLowerCase()
       const linkedAudits = (risk.linked_audits ?? []).map((value) => String(value).toLowerCase())
       if (!linkedAudits.some((value) => value.includes(needle))) {
+        return false
+      }
+    }
+    if (nearMissRefFilter) {
+      const needle = nearMissRefFilter.toLowerCase()
+      const linkedCases = (risk.linked_incidents ?? []).map((value) => String(value).toLowerCase())
+      if (!linkedCases.some((value) => value.includes(needle))) {
         return false
       }
     }
@@ -916,8 +962,8 @@ export default function RiskRegister() {
                         ? 'Risk register unavailable — not an empty register.'
                         : registerMode === 'import_triage'
                           ? 'No import-sourced risks awaiting triage.'
-                          : auditOnly || auditRefFilter
-                            ? 'No risks match the current audit filters.'
+                          : auditOnly || auditRefFilter || nearMissRefFilter
+                            ? 'No risks match the current filters.'
                             : 'No risks found in the register'}
                     </td>
                   </tr>
@@ -925,7 +971,12 @@ export default function RiskRegister() {
                 {visibleRisks.map((risk) => (
                   <tr
                     key={risk.id}
-                    className="hover:bg-muted/30 transition-colors cursor-pointer"
+                    className={`hover:bg-muted/30 transition-colors cursor-pointer ${
+                      focusRiskId === risk.id || selectedRisk?.id === risk.id
+                        ? 'bg-primary/5 ring-1 ring-inset ring-primary/30'
+                        : ''
+                    }`}
+                    data-testid={focusRiskId === risk.id ? 'risk-register-focused-row' : undefined}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => {

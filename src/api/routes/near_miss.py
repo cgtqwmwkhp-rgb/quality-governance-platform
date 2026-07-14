@@ -8,25 +8,29 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
-from src.api.schemas.risk import RiskResponse
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
 from src.api.utils.errors import api_error
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.near_miss import NearMiss, NearMissRunningSheetEntry
-from src.domain.models.risk import Risk, RiskStatus
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
-from src.domain.services.near_miss_risk_links import append_linked_risk_id, near_miss_risk_source
+from src.domain.services.near_miss_risk_links import (
+    append_linked_risk_id,
+    create_enterprise_risk_from_near_miss,
+    near_miss_detail_href,
+    resolve_enterprise_category,
+    risk_register_href,
+)
 from src.domain.services.near_miss_service import NearMissService
 from src.domain.services.reference_number import ReferenceNumberService
-from src.domain.services.risk_scoring import calculate_risk_level
 
 router = APIRouter(tags=["Near Misses"])
 logger = logging.getLogger(__name__)
@@ -426,11 +430,30 @@ class RaiseRiskFromNearMissRequest(BaseModel):
         "environmental",
         "information_security",
     ] = "safety"
-    treatment_strategy: Literal["accept", "mitigate", "transfer", "avoid", "exploit"] = "mitigate"
+    # Accept legacy CUJ values; mapped to enterprise treat/tolerate/transfer/terminate.
+    treatment_strategy: Literal[
+        "accept",
+        "mitigate",
+        "transfer",
+        "avoid",
+        "exploit",
+        "treat",
+        "tolerate",
+        "terminate",
+    ] = "mitigate"
+
+
+class RaisedEnterpriseRiskSummary(BaseModel):
+    """Slim risk payload for FE toast/navigation (enterprise register)."""
+
+    id: int
+    reference_number: str
+    title: str
+    risk_source: Optional[str] = None
 
 
 class RaiseRiskFromNearMissResponse(BaseModel):
-    risk: RiskResponse
+    risk: RaisedEnterpriseRiskSummary
     near_miss_id: int
     linked_risk_ids: str
     near_miss_href: str
@@ -449,10 +472,20 @@ async def raise_risk_from_near_miss(
     request_id: str = Depends(get_request_id),
     body: Optional[RaiseRiskFromNearMissRequest] = None,
 ):
-    """Create a risk register entry linked bidirectionally to this near miss."""
+    """Create an Enterprise Risk Register entry linked to this near miss."""
     if body is None:
         body = RaiseRiskFromNearMissRequest.model_validate({})
     near_miss = await _get_near_miss_or_404(db, near_miss_id, current_user)
+
+    if (
+        not current_user.is_superuser
+        and current_user.tenant_id is not None
+        and near_miss.tenant_id != current_user.tenant_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Near Miss with ID {near_miss_id} not found"),
+        )
 
     severity_impact = {
         "low": 2,
@@ -464,21 +497,7 @@ async def raise_risk_from_near_miss(
     if body.impact == 3 and near_miss.potential_severity:
         impact = severity_impact.get(str(near_miss.potential_severity).lower(), 3)
 
-    category = body.category
-    if near_miss.risk_category:
-        rc = str(near_miss.risk_category).lower()
-        if rc in {
-            "strategic",
-            "operational",
-            "financial",
-            "compliance",
-            "reputational",
-            "safety",
-            "environmental",
-            "information_security",
-        }:
-            category = rc  # type: ignore[assignment]
-
+    category = resolve_enterprise_category(body.category, near_miss.risk_category)
     title = body.title or f"Risk from near miss {near_miss.reference_number}"
     description = body.description or (
         f"Raised from near miss {near_miss.reference_number}.\n\n"
@@ -490,49 +509,62 @@ async def raise_risk_from_near_miss(
         )
     )
 
-    score, level, _ = calculate_risk_level(body.likelihood, impact)
-    risk = Risk(
-        title=title[:300],
-        description=description,
-        category=category,
-        risk_source=near_miss_risk_source(near_miss.id, near_miss.reference_number),
-        risk_event=(near_miss.description or "")[:500] or None,
-        risk_consequence=(near_miss.potential_consequences or "")[:500] or None,
-        likelihood=body.likelihood,
-        impact=impact,
-        risk_score=score,
-        risk_level=level,
-        status=RiskStatus.OPEN,
-        treatment_strategy=body.treatment_strategy,
-        created_by_id=current_user.id,
-        tenant_id=near_miss.tenant_id,
-        owner_id=near_miss.assigned_to_id or current_user.id,
-    )
-    risk.reference_number = await ReferenceNumberService.generate(db, "risk", Risk)
-    db.add(risk)
-    await db.flush()
+    try:
+        risk = await create_enterprise_risk_from_near_miss(
+            db,
+            near_miss=near_miss,
+            actor_user_id=current_user.id,
+            title=title,
+            description=description,
+            likelihood=body.likelihood,
+            impact=impact,
+            category=category,
+            treatment_strategy=body.treatment_strategy,
+        )
+        near_miss.linked_risk_ids = append_linked_risk_id(near_miss.linked_risk_ids, risk.id)
 
-    near_miss.linked_risk_ids = append_linked_risk_id(near_miss.linked_risk_ids, risk.id)
+        await record_audit_event(
+            db=db,
+            event_type="near_miss.risk_raised",
+            entity_type="near_miss",
+            entity_id=str(near_miss.id),
+            action="create",
+            description=f"Risk {risk.reference} raised from near miss {near_miss.reference_number}",
+            payload={"risk_id": risk.id, "risk_reference": risk.reference},
+            user_id=current_user.id,
+            request_id=request_id,
+            tenant_id=near_miss.tenant_id,
+        )
 
-    await record_audit_event(
-        db=db,
-        event_type="near_miss.risk_raised",
-        entity_type="near_miss",
-        entity_id=str(near_miss.id),
-        action="create",
-        description=f"Risk {risk.reference_number} raised from near miss {near_miss.reference_number}",
-        payload={"risk_id": risk.id, "risk_reference": risk.reference_number},
-        user_id=current_user.id,
-        request_id=request_id,
-    )
-
-    await db.commit()
-    await db.refresh(risk)
+        await db.commit()
+        await db.refresh(risk)
+    except IntegrityError as exc:
+        await db.rollback()
+        logger.exception("raise-risk IntegrityError for near_miss_id=%s", near_miss_id)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=api_error(
+                ErrorCode.DATABASE_ERROR,
+                "Could not raise risk due to a data conflict. Check assignee and try again.",
+            ),
+        ) from exc
+    except Exception as exc:
+        await db.rollback()
+        logger.exception("raise-risk failed for near_miss_id=%s", near_miss_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=api_error(ErrorCode.INTERNAL_ERROR, "Could not raise risk from near miss."),
+        ) from exc
 
     return RaiseRiskFromNearMissResponse(
-        risk=RiskResponse.model_validate(risk),
+        risk=RaisedEnterpriseRiskSummary(
+            id=risk.id,
+            reference_number=risk.reference,
+            title=risk.title,
+            risk_source=risk.context,
+        ),
         near_miss_id=near_miss.id,
         linked_risk_ids=near_miss.linked_risk_ids or str(risk.id),
-        near_miss_href=f"/near-misses/{near_miss.id}",
-        risk_register_href=f"/risk-register?riskId={risk.id}",
+        near_miss_href=near_miss_detail_href(near_miss.id),
+        risk_register_href=risk_register_href(risk.id, near_miss_ref=near_miss.reference_number),
     )

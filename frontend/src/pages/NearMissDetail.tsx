@@ -616,7 +616,13 @@ export default function NearMissDetail() {
                           key={riskId}
                           type="button"
                           className="w-full rounded-lg border border-border p-3 text-left hover:bg-muted/40"
-                          onClick={() => navigate(riskRegisterHref(riskId))}
+                          onClick={() =>
+                            navigate(
+                              riskRegisterHref(riskId, {
+                                nearMissRef: nearMiss.reference_number,
+                              }),
+                            )
+                          }
                           data-testid={`near-miss-linked-risk-${riskId}`}
                         >
                           <div className="font-medium text-foreground">Risk #{riskId}</div>
