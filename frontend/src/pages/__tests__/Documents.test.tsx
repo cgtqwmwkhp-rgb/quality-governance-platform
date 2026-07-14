@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 const mockGet = vi.fn()
 const mockPost = vi.fn()
@@ -282,5 +282,42 @@ describe('Documents', () => {
         expect(mockNavigate).toHaveBeenCalledWith('/documents/11')
       })
     }
+  })
+
+  it('hydrates q/status/type filters from shareable URL', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/documents/?')) {
+        expect(url).toContain('document_type=policy')
+        expect(url).toContain('status=approved')
+        expect(url).toContain('page=2')
+        return Promise.resolve({ data: { items: [sampleDoc] } })
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.resolve({
+          data: {
+            total_documents: 1,
+            indexed_documents: 0,
+            total_chunks: 0,
+            by_status: { approved: 1 },
+            by_type: { policy: 1 },
+          },
+        })
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
+
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents?q=Safety&status=approved&type=policy&page=2']}>
+        <Routes>
+          <Route path="/documents" element={<Documents />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('documents-library-search')).toHaveValue('Safety')
+    })
+    expect(await screen.findByText('Safety Policy')).toBeInTheDocument()
   })
 })
