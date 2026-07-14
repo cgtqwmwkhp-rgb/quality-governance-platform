@@ -572,7 +572,7 @@ class CompetenceGapService:
         if gap.ticket_scheme:
             # TrainingTicket owned by P0 spine — soft probe, never invent table.
             try:
-                from src.domain.models.engineer import TicketVerifyState, TrainingTicket  # type: ignore[attr-defined]
+                from src.domain.models.engineer import TicketVerifyState, TrainingTicket
             except ImportError as exc:
                 raise ValueError(
                     "Cannot resolve via ticket_scheme until TrainingTicket "
