@@ -72,6 +72,7 @@
 - [ ] **Gate 2:** CI green (lint/type/build/tests)
 - [ ] **Gate 3:** Staging verification complete (evidence linked)
 - [ ] **Gate 4:** Rollback plan verified
+- [ ] **Gate 5:** Evidence pack linked / LIVE honesty noted
 
 ## Exclusive allowlist (this PR)
 - `frontend/src/api/workforceClient.ts`
