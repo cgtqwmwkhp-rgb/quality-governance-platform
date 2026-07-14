@@ -1,23 +1,34 @@
 """Allocation Compliance Gate Service.
 
 Enforces compliance rules before a vehicle can be allocated to a driver
-or dispatched. Checks fleet status, open defects, check currency, and
-expiry dates.
+or dispatched. Checks fleet status, open defects, check currency, expiry
+dates, and linked / child Safety Assets (AM-VAN).
 """
+
+from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from src.domain.models.asset import Asset, AssetCategory, AssetStatus
 from src.domain.models.vehicle_defect import VehicleDefect
-from src.domain.models.vehicle_registry import ComplianceStatus, FleetStatus, VehicleRegistry
+from src.domain.models.vehicle_registry import FleetStatus, VehicleRegistry
 
 logger = logging.getLogger(__name__)
 
 OPEN_STATUSES = ["open", "auto_detected", "acknowledged", "action_assigned"]
+
+# Asset statuses that must block dispatch when linked to a vehicle.
+BLOCKING_ASSET_STATUSES = {AssetStatus.VOR, AssetStatus.QUARANTINED}
+
+FIRE_EXTINGUISHER_TYPE_HINTS = ("fire extinguisher", "extinguisher")
+TOOLING_TYPE_HINTS = ("engineer tool", "tooling", "calibration")
+KIT_TYPE_HINTS = FIRE_EXTINGUISHER_TYPE_HINTS + TOOLING_TYPE_HINTS + ("first aid",)
 
 
 class AllocationDecision:
@@ -51,6 +62,182 @@ class AllocationDecision:
             "checks_current": self.checks_current,
             "expiry_warnings": self.expiry_warnings,
         }
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _type_name(asset: Asset) -> str:
+    if getattr(asset, "asset_type", None) is not None:
+        return (asset.asset_type.name or "").strip()
+    return ""
+
+
+def _matches_hints(name: str, hints: tuple[str, ...]) -> bool:
+    lowered = name.lower()
+    return any(hint in lowered for hint in hints)
+
+
+def pick_kit_asset_expiry(assets: list[Asset], hints: tuple[str, ...]) -> datetime | None:
+    """Prefer the soonest expiry among child assets matching type name hints."""
+    candidates: list[datetime] = []
+    for asset in assets:
+        if not _matches_hints(_type_name(asset), hints):
+            continue
+        expiry = _as_utc(asset.expiry_date)
+        if expiry is not None:
+            candidates.append(expiry)
+    if not candidates:
+        return None
+    return min(candidates)
+
+
+def dual_read_expiry(
+    registry_expiry: datetime | None,
+    child_assets: list[Asset],
+    hints: tuple[str, ...],
+) -> tuple[datetime | None, str]:
+    """Prefer child-asset expiry when present; else fall back to vehicle_registry."""
+    child_expiry = pick_kit_asset_expiry(child_assets, hints)
+    if child_expiry is not None:
+        return child_expiry, "asset"
+    registry = _as_utc(registry_expiry)
+    if registry is not None:
+        return registry, "registry"
+    return None, "none"
+
+
+def expiry_band(expiry: datetime | None, now: datetime) -> str:
+    """Return overdue | due_30 | in_date | unknown for UI / gate messaging."""
+    expiry_utc = _as_utc(expiry)
+    if expiry_utc is None:
+        return "unknown"
+    if expiry_utc < now:
+        return "overdue"
+    if (expiry_utc - now).days <= 30:
+        return "due_30"
+    return "in_date"
+
+
+async def load_vehicle_kit_assets(
+    db: AsyncSession,
+    vehicle_reg: str,
+    tenant_id: Optional[int] = None,
+) -> list[Asset]:
+    """Load safety (and other) assets assigned to a vehicle_reg."""
+    query = select(Asset).options(selectinload(Asset.asset_type)).where(Asset.vehicle_reg.ilike(vehicle_reg.strip()))
+    if tenant_id is not None:
+        query = query.where(or_(Asset.tenant_id == tenant_id, Asset.tenant_id.is_(None)))
+    result = await db.execute(query.order_by(Asset.asset_number))
+    return list(result.scalars().all())
+
+
+async def load_linked_asset(
+    db: AsyncSession,
+    asset_id: int | None,
+    tenant_id: Optional[int] = None,
+) -> Asset | None:
+    if asset_id is None:
+        return None
+    query = select(Asset).options(selectinload(Asset.asset_type)).where(Asset.id == asset_id)
+    if tenant_id is not None:
+        query = query.where(or_(Asset.tenant_id == tenant_id, Asset.tenant_id.is_(None)))
+    result = await db.execute(query)
+    return result.scalar_one_or_none()
+
+
+def _consult_asset_status(
+    asset: Asset,
+    *,
+    reasons: list[str],
+    expiry_warnings: list[str],
+    now: datetime,
+    label: str,
+) -> None:
+    status = asset.status
+    if isinstance(status, AssetStatus):
+        status_value = status
+    else:
+        try:
+            status_value = AssetStatus(str(status).lower())
+        except ValueError:
+            status_value = None
+
+    if status_value in BLOCKING_ASSET_STATUSES:
+        reasons.append(
+            f"{label} '{asset.asset_number}' status is '{status_value.value}' — vehicle must not be dispatched"
+        )
+    elif status_value == AssetStatus.MAINTENANCE:
+        expiry_warnings.append(f"{label} '{asset.asset_number}' is in maintenance")
+
+    band = expiry_band(asset.expiry_date, now)
+    if band == "overdue":
+        reasons.append(f"{label} '{asset.asset_number}' expiry is overdue")
+    elif band == "due_30":
+        days = (_as_utc(asset.expiry_date) - now).days  # type: ignore[operator]
+        expiry_warnings.append(f"{label} '{asset.asset_number}' expires in {days} days")
+
+
+def build_kit_compliance_payload(
+    vehicle: VehicleRegistry,
+    child_assets: list[Asset],
+    linked_asset: Asset | None = None,
+) -> dict[str, Any]:
+    """Serialize van kit dual-read expiry + child assets for the compliance panel API."""
+    now = datetime.now(timezone.utc)
+    fire_expiry, fire_source = dual_read_expiry(
+        vehicle.fire_extinguisher_expiry, child_assets, FIRE_EXTINGUISHER_TYPE_HINTS
+    )
+    tool_expiry, tool_source = dual_read_expiry(vehicle.tooling_calibration_expiry, child_assets, TOOLING_TYPE_HINTS)
+
+    items: list[dict[str, Any]] = []
+    for asset in child_assets:
+        type_name = _type_name(asset)
+        category = None
+        if getattr(asset, "asset_type", None) is not None:
+            cat = asset.asset_type.category
+            category = cat.value if isinstance(cat, AssetCategory) else str(cat)
+        status_val = asset.status.value if isinstance(asset.status, AssetStatus) else str(asset.status)
+        items.append(
+            {
+                "id": asset.id,
+                "asset_number": asset.asset_number,
+                "name": asset.name,
+                "asset_type_id": asset.asset_type_id,
+                "asset_type_name": type_name or None,
+                "category": category,
+                "status": status_val,
+                "expiry_date": _as_utc(asset.expiry_date),
+                "expiry_status": expiry_band(asset.expiry_date, now),
+                "is_kit_asset": _matches_hints(type_name, KIT_TYPE_HINTS)
+                or (category == AssetCategory.SAFETY.value if category else False),
+            }
+        )
+
+    return {
+        "vehicle_reg": vehicle.vehicle_reg,
+        "asset_id": vehicle.asset_id,
+        "linked_asset_id": linked_asset.id if linked_asset else vehicle.asset_id,
+        "linked_asset_status": (
+            (linked_asset.status.value if isinstance(linked_asset.status, AssetStatus) else str(linked_asset.status))
+            if linked_asset
+            else None
+        ),
+        "assets": items,
+        "fire_extinguisher_expiry": fire_expiry,
+        "fire_extinguisher_expiry_source": fire_source,
+        "fire_extinguisher_expiry_status": expiry_band(fire_expiry, now),
+        "tooling_calibration_expiry": tool_expiry,
+        "tooling_calibration_expiry_source": tool_source,
+        "tooling_calibration_expiry_status": expiry_band(tool_expiry, now),
+        "registry_fire_extinguisher_expiry": _as_utc(vehicle.fire_extinguisher_expiry),
+        "registry_tooling_calibration_expiry": _as_utc(vehicle.tooling_calibration_expiry),
+    }
 
 
 async def check_allocation(
@@ -97,7 +284,7 @@ async def check_allocation(
     now = datetime.now(timezone.utc)
     checks_current = True
     if vehicle.last_daily_check_at:
-        hours_since = (now - vehicle.last_daily_check_at).total_seconds() / 3600
+        hours_since = (now - _as_utc(vehicle.last_daily_check_at)).total_seconds() / 3600  # type: ignore[arg-type]
         if hours_since > 24:
             checks_current = False
             reasons.append("Daily check overdue (>24h)")
@@ -105,17 +292,49 @@ async def check_allocation(
         checks_current = False
         reasons.append("No daily check recorded")
 
-    if vehicle.road_tax_expiry and vehicle.road_tax_expiry < now:
+    if vehicle.road_tax_expiry and _as_utc(vehicle.road_tax_expiry) < now:  # type: ignore[operator]
         reasons.append("Road tax expired")
-    elif vehicle.road_tax_expiry and (vehicle.road_tax_expiry - now).days <= 30:
-        expiry_warnings.append(f"Road tax expires in {(vehicle.road_tax_expiry - now).days} days")
+    elif vehicle.road_tax_expiry and (_as_utc(vehicle.road_tax_expiry) - now).days <= 30:  # type: ignore[operator]
+        expiry_warnings.append(
+            f"Road tax expires in {(_as_utc(vehicle.road_tax_expiry) - now).days} days"  # type: ignore[operator]
+        )
 
-    if vehicle.fire_extinguisher_expiry and vehicle.fire_extinguisher_expiry < now:
-        reasons.append("Fire extinguisher expired")
-    elif vehicle.fire_extinguisher_expiry and (vehicle.fire_extinguisher_expiry - now).days <= 30:
-        expiry_warnings.append(f"Fire extinguisher expires in {(vehicle.fire_extinguisher_expiry - now).days} days")
+    # AM-VAN: consult linked vehicle Asset + child kit assets
+    child_assets = await load_vehicle_kit_assets(db, vehicle_reg, tenant_id)
+    linked_asset = await load_linked_asset(db, vehicle.asset_id, tenant_id)
 
-    if vehicle.tooling_calibration_expiry and vehicle.tooling_calibration_expiry < now:
+    if linked_asset is not None:
+        _consult_asset_status(
+            linked_asset,
+            reasons=reasons,
+            expiry_warnings=expiry_warnings,
+            now=now,
+            label="Linked vehicle asset",
+        )
+
+    for asset in child_assets:
+        _consult_asset_status(
+            asset,
+            reasons=reasons,
+            expiry_warnings=expiry_warnings,
+            now=now,
+            label="Kit asset",
+        )
+
+    # Dual-read kit expiries: prefer child-asset expiry when present.
+    # Child assets are already consulted above; registry fallbacks apply only when
+    # no matching child asset expiry exists (keeps legacy PAMS columns live).
+    fire_expiry, fire_source = dual_read_expiry(
+        vehicle.fire_extinguisher_expiry, child_assets, FIRE_EXTINGUISHER_TYPE_HINTS
+    )
+    if fire_source == "registry" and fire_expiry is not None:
+        if fire_expiry < now:
+            reasons.append("Fire extinguisher expired")
+        elif (fire_expiry - now).days <= 30:
+            expiry_warnings.append(f"Fire extinguisher expires in {(fire_expiry - now).days} days")
+
+    tool_expiry, tool_source = dual_read_expiry(vehicle.tooling_calibration_expiry, child_assets, TOOLING_TYPE_HINTS)
+    if tool_source == "registry" and tool_expiry is not None and tool_expiry < now:
         expiry_warnings.append("Tooling calibration expired")
 
     allowed = len(reasons) == 0
