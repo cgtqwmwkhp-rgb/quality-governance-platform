@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
+import { resolveIncidentDetailTab } from './incidentStandardsTab'
 import {
   ArrowLeft,
   AlertTriangle,
@@ -98,6 +99,8 @@ export default function IncidentDetail() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const defaultTab = resolveIncidentDetailTab(searchParams.get('tab'))
   const [incident, setIncident] = useState<Incident | null>(null)
   const [actions, setActions] = useState<Action[]>([])
   const [actionsLoading, setActionsLoading] = useState(false)
@@ -624,7 +627,7 @@ export default function IncidentDetail() {
         ]}
       />
 
-      <Tabs defaultValue="overview" className="w-full">
+      <Tabs defaultValue={defaultTab} key={defaultTab} className="w-full">
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="standards">Standards</TabsTrigger>
@@ -1118,7 +1121,10 @@ export default function IncidentDetail() {
         </TabsContent>
 
         <TabsContent value="standards" className="mt-6">
-          <StandardsAssessmentPanel entityType="incident" entityId={incident.id} />
+          {/* Same StandardsAssessmentPanel host pattern as NearMissDetail */}
+          <div data-testid="incident-standards-panel" id="standards-assessment-panel">
+            <StandardsAssessmentPanel entityType="incident" entityId={incident.id} />
+          </div>
         </TabsContent>
 
         <TabsContent value="submission" className="mt-6">
