@@ -63,6 +63,7 @@ import InvestigationActions from './investigation/InvestigationActions'
 import type { ActionFormData } from './investigation/InvestigationActions'
 import InvestigationEvidence from './investigation/InvestigationEvidence'
 import {
+  formatCapaActionsCount,
   getCapaHandoffLabelKey,
   getCapaLink,
   getInvestigationSourceLink,
@@ -516,7 +517,6 @@ export default function InvestigationDetail() {
   const statusDisplay = getStatusDisplay(investigation.status)
   const sourceLink = getInvestigationSourceLink(investigation)
   const capaHref = getCapaLink('investigation', investigation.id)
-  const capaCountLabel = actionsLoading ? '…' : actionsLoadFailed ? '—' : String(actions.length)
   const capaHandoffCount = actionsLoadFailed ? 0 : actions.length
 
   return (
@@ -583,7 +583,11 @@ export default function InvestigationDetail() {
                 className="mt-1 text-lg font-semibold text-foreground"
                 data-testid="investigation-capa-count"
               >
-                {capaCountLabel}
+                {formatCapaActionsCount({
+                  loading: actionsLoading,
+                  unavailable: actionsLoadFailed,
+                  count: actions.length,
+                })}
               </p>
             </div>
             <div className="rounded-lg border border-primary/15 bg-background/60 p-3">
@@ -611,7 +615,11 @@ export default function InvestigationDetail() {
           </div>
         </div>
         {actionsLoadFailed ? (
-          <p className="text-sm text-amber-700 dark:text-amber-400 mt-4 pt-4 border-t border-primary/10" role="status">
+          <p
+            className="text-sm text-amber-700 dark:text-amber-400 mt-4 pt-4 border-t border-primary/10"
+            role="status"
+            data-testid="investigation-capa-unavailable"
+          >
             {t(
               'investigations.handoff.actions_unavailable',
               'CAPA actions could not be loaded — counts may be incomplete.',
@@ -619,7 +627,10 @@ export default function InvestigationDetail() {
           </p>
         ) : null}
         {!actionsLoading && !actionsLoadFailed && actions.length === 0 && (
-          <p className="text-sm text-muted-foreground mt-4 pt-4 border-t border-primary/10">
+          <p
+            className="text-sm text-muted-foreground mt-4 pt-4 border-t border-primary/10"
+            data-testid="investigation-capa-empty"
+          >
             {t('investigations.handoff.no_actions')}
           </p>
         )}

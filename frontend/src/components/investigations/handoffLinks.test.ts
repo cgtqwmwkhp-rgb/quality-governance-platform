@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Investigation } from '../../api/client'
 import {
+  formatCapaActionsCount,
   getActionSourceLink,
   getCapaHandoffLabelKey,
   getCapaLink,
+  getInvestigationDetailHref,
   getInvestigationSourceLink,
   resolveCapaHandoffMode,
 } from './handoffLinks'
@@ -58,5 +60,15 @@ describe('action source reverse deep-links', () => {
     expect(getActionSourceLink('incident', 0)).toBeNull()
     expect(getActionSourceLink('incident', null)).toBeNull()
     expect(getActionSourceLink(undefined, 5)).toBeNull()
+  })
+
+  it('formats CAPA counts with residual honesty', () => {
+    expect(formatCapaActionsCount({ loading: true, count: 0 })).toBe('…')
+    expect(formatCapaActionsCount({ unavailable: true, count: 0 })).toBe('—')
+    expect(formatCapaActionsCount({ count: 3 })).toBe('3')
+  })
+
+  it('builds investigation detail deep links', () => {
+    expect(getInvestigationDetailHref(21)).toBe('/investigations/21')
   })
 })
