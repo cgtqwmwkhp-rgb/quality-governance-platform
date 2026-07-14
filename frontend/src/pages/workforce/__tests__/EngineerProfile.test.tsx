@@ -37,6 +37,23 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
 
+
+vi.mock('../../../api/workforceClient', () => ({
+  createWorkforceApi: () => ({
+    listAssetTypes,
+    getEngineer,
+    getCompetencies,
+    trainingTickets: {
+      list: (...args: unknown[]) => listTickets(...args),
+      create: (...args: unknown[]) => createTicket(...args),
+      update: (...args: unknown[]) => updateTicket(...args),
+    },
+    competencyRequirements: {
+      list: (...args: unknown[]) => listRequirements(...args),
+    },
+  }),
+}))
+
 vi.mock('../../../api/client', () => ({
   workforceApi: {
     listAssetTypes,
@@ -254,8 +271,7 @@ describe('EngineerProfile', () => {
   })
 
   it('surfaces requirements load error instead of silent zero percent', async () => {
-    listRequirements.mockReset()
-    listRequirements.mockRejectedValue(new Error('requirements down'))
+    listRequirements.mockRejectedValueOnce(new Error('requirements down'))
     const EngineerProfile = (await import('../EngineerProfile')).default
 
     render(
@@ -266,9 +282,10 @@ describe('EngineerProfile', () => {
       </MemoryRouter>,
     )
 
-    expect(
-      await screen.findByTestId('requirements-match-error', { timeout: 5000 }),
-    ).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByTestId('engineer-identity')).toBeInTheDocument()
+    })
+    expect(await screen.findByTestId('requirements-match-error')).toBeInTheDocument()
     expect(screen.getByText(/requirements down/)).toBeInTheDocument()
     expect(screen.queryByTestId('requirements-match-percent')).not.toBeInTheDocument()
   })
