@@ -1,22 +1,38 @@
 """Asset Registry domain service.
 
 Provides business logic and data access for asset types, assets,
-and template-asset-type linkages. All operations are tenant-scoped.
+locations, and template-asset-type linkages. All operations are tenant-scoped.
+
+Assignment rule
+---------------
+Prefer assignment as **location XOR vehicle**: an asset may be assigned to a
+``location_id`` *or* a ``vehicle_reg``, but not both at the same time. Setting
+both raises ``BadRequestError``. Owner (``owner_user_id``) is independent of
+this XOR rule. Changes to owner / location / vehicle append
+``asset_assignment_events`` rows (append-only audit).
 """
 
 from __future__ import annotations
 
 import dataclasses
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.domain.exceptions import NotFoundError
-from src.domain.models.asset import Asset, AssetCategory, AssetStatus, AssetType, TemplateAssetType
+from src.domain.exceptions import BadRequestError, NotFoundError
+from src.domain.models.asset import (
+    Asset,
+    AssetAssignmentEvent,
+    AssetCategory,
+    AssetStatus,
+    AssetType,
+    TemplateAssetType,
+)
 from src.domain.models.audit import AuditTemplate
+from src.domain.models.location import Location, LocationKind
 
 # ---------------------------------------------------------------------------
 # Value objects
@@ -30,6 +46,9 @@ class PaginatedResult:
     page: int
     page_size: int
     pages: int
+
+
+_EXPIRY_BANDS = frozenset({"overdue", "due_30", "due_60", "due_90"})
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +114,142 @@ class AssetService:
                 setattr(entity, key, value)
         if hasattr(entity, "updated_at"):
             entity.updated_at = datetime.now(timezone.utc)  # type: ignore[attr-defined]
+
+    @staticmethod
+    def _assert_location_xor_vehicle(
+        location_id: int | None,
+        vehicle_reg: str | None,
+    ) -> None:
+        """Enforce location XOR vehicle assignment (not both).
+
+        Owner is independent. Empty/blank vehicle_reg is treated as unset.
+        """
+        reg = (vehicle_reg or "").strip() or None
+        if location_id is not None and reg is not None:
+            raise BadRequestError(
+                "Asset assignment must be location XOR vehicle: " "set location_id or vehicle_reg, not both"
+            )
+
+    @staticmethod
+    def _normalize_vehicle_reg(value: Any) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    def _record_assignment_event(
+        self,
+        *,
+        asset: Asset,
+        actor_user_id: int,
+        from_location_id: int | None,
+        to_location_id: int | None,
+        from_vehicle_reg: str | None,
+        to_vehicle_reg: str | None,
+        from_owner_user_id: int | None,
+        to_owner_user_id: int | None,
+        note: str | None = None,
+    ) -> None:
+        if (
+            from_location_id == to_location_id
+            and from_vehicle_reg == to_vehicle_reg
+            and from_owner_user_id == to_owner_user_id
+        ):
+            return
+        self.db.add(
+            AssetAssignmentEvent(
+                asset_id=asset.id,
+                tenant_id=asset.tenant_id,
+                actor_user_id=actor_user_id,
+                from_location_id=from_location_id,
+                to_location_id=to_location_id,
+                from_vehicle_reg=from_vehicle_reg,
+                to_vehicle_reg=to_vehicle_reg,
+                from_owner_user_id=from_owner_user_id,
+                to_owner_user_id=to_owner_user_id,
+                note=note,
+            )
+        )
+
+    # ==================================================================
+    # Location methods
+    # ==================================================================
+
+    async def list_locations(
+        self,
+        tenant_id: int,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+        kind: str | None = None,
+        is_active: bool | None = None,
+        parent_id: int | None = None,
+        search: str | None = None,
+    ) -> PaginatedResult:
+        query = select(Location).where(
+            or_(
+                Location.tenant_id == tenant_id,
+                Location.tenant_id.is_(None),
+            )
+        )
+        if kind is not None:
+            try:
+                query = query.where(Location.kind == LocationKind(kind))
+            except ValueError:
+                pass
+        if is_active is not None:
+            query = query.where(Location.is_active == is_active)
+        if parent_id is not None:
+            query = query.where(Location.parent_id == parent_id)
+        if search:
+            query = query.where(Location.name.ilike(f"%{search}%"))
+        query = query.order_by(Location.kind, Location.name)
+        return await self._paginate(query, page, page_size)
+
+    async def create_location(
+        self,
+        data: dict[str, Any],
+        *,
+        user_id: int,
+        tenant_id: int,
+    ) -> Location:
+        if "kind" in data:
+            data["kind"] = LocationKind(data["kind"])
+        location = Location(
+            **data,
+            created_by_id=user_id,
+            updated_by_id=user_id,
+            tenant_id=tenant_id,
+        )
+        self.db.add(location)
+        await self.db.commit()
+        await self.db.refresh(location)
+        return location
+
+    async def get_location(self, location_id: int, tenant_id: int) -> Location:
+        return await self._get_entity(Location, location_id, tenant_id=tenant_id)
+
+    async def update_location(
+        self,
+        location_id: int,
+        update_data: dict[str, Any],
+        *,
+        tenant_id: int,
+        actor_user_id: int,
+    ) -> Location:
+        location: Location = await self._get_entity(Location, location_id, tenant_id=tenant_id)
+        if "kind" in update_data:
+            update_data["kind"] = LocationKind(update_data["kind"])
+        self._apply_dict(location, update_data, exclude={"id", "tenant_id"})
+        location.updated_by_id = actor_user_id
+        await self.db.commit()
+        await self.db.refresh(location)
+        return location
+
+    async def delete_location(self, location_id: int, *, tenant_id: int) -> None:
+        location: Location = await self._get_entity(Location, location_id, tenant_id=tenant_id)
+        await self.db.delete(location)
+        await self.db.commit()
 
     # ==================================================================
     # Asset Type methods
@@ -199,6 +354,10 @@ class AssetService:
         asset_type_id: int | None = None,
         status: str | None = None,
         site: str | None = None,
+        location_id: int | None = None,
+        vehicle_reg: str | None = None,
+        owner_user_id: int | None = None,
+        expiry_band: str | None = None,
     ) -> PaginatedResult:
         query = (
             select(Asset)
@@ -225,6 +384,24 @@ class AssetService:
                 pass
         if site is not None:
             query = query.where(Asset.site.ilike(f"%{site}%"))
+        if location_id is not None:
+            query = query.where(Asset.location_id == location_id)
+        if vehicle_reg is not None:
+            query = query.where(Asset.vehicle_reg.ilike(vehicle_reg.strip()))
+        if owner_user_id is not None:
+            query = query.where(Asset.owner_user_id == owner_user_id)
+        if expiry_band is not None and expiry_band in _EXPIRY_BANDS:
+            now = datetime.now(timezone.utc)
+            if expiry_band == "overdue":
+                query = query.where(Asset.expiry_date.is_not(None), Asset.expiry_date < now)
+            else:
+                days = {"due_30": 30, "due_60": 60, "due_90": 90}[expiry_band]
+                end = now + timedelta(days=days)
+                query = query.where(
+                    Asset.expiry_date.is_not(None),
+                    Asset.expiry_date >= now,
+                    Asset.expiry_date <= end,
+                )
         query = query.order_by(Asset.asset_number)
         return await self._paginate(query, page, page_size)
 
@@ -240,6 +417,9 @@ class AssetService:
         metadata = data.pop("metadata_json", data.pop("metadata", None))
         if metadata is not None:
             data["metadata_json"] = metadata
+        if "vehicle_reg" in data:
+            data["vehicle_reg"] = self._normalize_vehicle_reg(data["vehicle_reg"])
+        self._assert_location_xor_vehicle(data.get("location_id"), data.get("vehicle_reg"))
         asset = Asset(
             **data,
             created_by_id=user_id,
@@ -247,6 +427,19 @@ class AssetService:
             tenant_id=tenant_id,
         )
         self.db.add(asset)
+        await self.db.flush()
+        if asset.location_id is not None or asset.vehicle_reg is not None or asset.owner_user_id is not None:
+            self._record_assignment_event(
+                asset=asset,
+                actor_user_id=user_id,
+                from_location_id=None,
+                to_location_id=asset.location_id,
+                from_vehicle_reg=None,
+                to_vehicle_reg=asset.vehicle_reg,
+                from_owner_user_id=None,
+                to_owner_user_id=asset.owner_user_id,
+                note="initial assignment",
+            )
         await self.db.commit()
         await self.db.refresh(asset)
         return asset
@@ -286,8 +479,31 @@ class AssetService:
         metadata = update_data.pop("metadata_json", update_data.pop("metadata", None))
         if metadata is not None:
             update_data["metadata_json"] = metadata
+        if "vehicle_reg" in update_data:
+            update_data["vehicle_reg"] = self._normalize_vehicle_reg(update_data["vehicle_reg"])
+
+        from_location_id = asset.location_id
+        from_vehicle_reg = asset.vehicle_reg
+        from_owner_user_id = asset.owner_user_id
+
+        effective_location = update_data["location_id"] if "location_id" in update_data else asset.location_id
+        effective_vehicle = update_data["vehicle_reg"] if "vehicle_reg" in update_data else asset.vehicle_reg
+        self._assert_location_xor_vehicle(effective_location, effective_vehicle)
+
         self._apply_dict(asset, update_data, exclude={"id", "external_id", "tenant_id"})
         asset.updated_by_id = actor_user_id
+
+        self._record_assignment_event(
+            asset=asset,
+            actor_user_id=actor_user_id,
+            from_location_id=from_location_id,
+            to_location_id=asset.location_id,
+            from_vehicle_reg=from_vehicle_reg,
+            to_vehicle_reg=asset.vehicle_reg,
+            from_owner_user_id=from_owner_user_id,
+            to_owner_user_id=asset.owner_user_id,
+        )
+
         await self.db.commit()
         await self.db.refresh(asset)
         return asset
