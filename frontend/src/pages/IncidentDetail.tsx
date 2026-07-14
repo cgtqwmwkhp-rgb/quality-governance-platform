@@ -22,6 +22,7 @@ import {
   Save,
   X,
   ExternalLink,
+  ShieldAlert,
 } from 'lucide-react'
 import {
   incidentsApi,
@@ -69,6 +70,11 @@ import {
 import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
 import { getCapaHandoffLabelKey, getCapaLink } from '../components/investigations/handoffLinks'
+import {
+  parseLinkedRiskIds,
+  riskRegisterHref,
+  severityAllowsRaiseRisk,
+} from './incidentRiskLinks'
 
 // Status options for action updates
 const ACTION_STATUS_OPTIONS = [
@@ -123,6 +129,7 @@ export default function IncidentDetail() {
   const [runningSheet, setRunningSheet] = useState<RunningSheetEntry[]>([])
   const [newEntry, setNewEntry] = useState('')
   const [addingEntry, setAddingEntry] = useState(false)
+  const [raisingRisk, setRaisingRisk] = useState(false)
 
   // Completion dialog state
   const [showCompletionDialog, setShowCompletionDialog] = useState(false)
@@ -277,6 +284,29 @@ export default function IncidentDetail() {
     } catch (err) {
       trackError(err, { component: 'IncidentDetail', action: 'deleteRunningSheetEntry' })
       toast.error(getApiErrorMessage(err))
+    }
+  }
+
+  const handleRaiseRisk = async () => {
+    if (!incident) return
+    setRaisingRisk(true)
+    try {
+      const response = await incidentsApi.raiseRisk(incident.id)
+      setIncident({
+        ...incident,
+        linked_risk_ids: response.data.linked_risk_ids,
+      })
+      toast.success(
+        t('incidents.feedback.risk_raised', 'Risk {{ref}} raised and linked', {
+          ref: response.data.risk.reference_number,
+        }),
+      )
+      navigate(response.data.risk_register_href)
+    } catch (err) {
+      trackError(err, { component: 'IncidentDetail', action: 'raiseRisk' })
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setRaisingRisk(false)
     }
   }
 
@@ -498,6 +528,7 @@ export default function IncidentDetail() {
     : actionsLoadFailed
       ? '—'
       : `${openActions.length} open`
+  const canRaiseRisk = severityAllowsRaiseRisk(incident.severity)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -563,6 +594,19 @@ export default function IncidentDetail() {
             </>
           ) : (
             <>
+              {canRaiseRisk && (
+                <Button
+                  variant="outline"
+                  onClick={() => void handleRaiseRisk()}
+                  disabled={raisingRisk}
+                  data-testid="incident-raise-risk"
+                >
+                  <ShieldAlert className="w-4 h-4 mr-2" />
+                  {raisingRisk
+                    ? t('incidents.raising_risk', 'Raising…')
+                    : t('incidents.actions.raise_risk', 'Raise risk')}
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setIsEditing(true)}>
                 <Pencil className="w-4 h-4 mr-2" />
                 {t('edit')}
@@ -623,6 +667,11 @@ export default function IncidentDetail() {
             label: 'Medical response',
             value: medicalAssistance,
             icon: <AlertTriangle className="w-4 h-4" />,
+          },
+          {
+            label: t('incidents.summary.linked_risks', 'Linked risks'),
+            value: `${parseLinkedRiskIds(incident.linked_risk_ids).length}`,
+            icon: <ShieldAlert className="w-4 h-4" />,
           },
         ]}
       />
@@ -1081,6 +1130,51 @@ export default function IncidentDetail() {
                   })}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-primary" />
+                {t('incidents.summary.linked_risks', 'Linked risks')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {parseLinkedRiskIds(incident.linked_risk_ids).length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {canRaiseRisk
+                    ? t(
+                        'incidents.detail.no_linked_risks',
+                        'No linked risks yet. Use Raise risk to create a register entry.',
+                      )
+                    : t(
+                        'incidents.detail.raise_risk_severity_gate',
+                        'Raise risk is available for high and critical severity incidents.',
+                      )}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {parseLinkedRiskIds(incident.linked_risk_ids).map((riskId) => (
+                    <button
+                      key={riskId}
+                      type="button"
+                      className="w-full rounded-lg border border-border p-3 text-left hover:bg-muted/40"
+                      onClick={() =>
+                        navigate(
+                          riskRegisterHref(riskId, {
+                            incidentRef: incident.reference_number,
+                          }),
+                        )
+                      }
+                      data-testid={`incident-linked-risk-${riskId}`}
+                    >
+                      <div className="font-medium text-foreground">Risk #{riskId}</div>
+                      <div className="text-sm text-muted-foreground">Open in risk register</div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
