@@ -526,7 +526,7 @@ async def create_capa_for_investigation(
     from src.domain.services.capa_service import CAPAService
 
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
-    payload = body or CreateInvestigationCapaRequest()
+    payload = body if body is not None else CreateInvestigationCapaRequest.model_validate({})
     svc = CAPAService(db)
     try:
         capa = await svc.create_capa_for_investigation(

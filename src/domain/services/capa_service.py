@@ -6,7 +6,7 @@ Raises domain exceptions instead of HTTPException.
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -322,7 +322,8 @@ class CAPAService:
                 raise LookupError(f"User not found for email: {assignee_email}")
             resolved_assignee = user.id
         if resolved_assignee is None:
-            resolved_assignee = investigation.assigned_to_user_id or user_id
+            inv_assignee = cast(int | None, investigation.assigned_to_user_id)
+            resolved_assignee = inv_assignee if inv_assignee is not None else user_id
 
         capa_priority = CAPAPriority.MEDIUM
         if priority:

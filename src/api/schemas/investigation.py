@@ -347,7 +347,7 @@ class InvestigationClosureValidationResponse(BaseModel):
 class CreateInvestigationCapaRequest(BaseModel):
     """Optional overrides when creating a CAPA from an investigation."""
 
-    title: Optional[str] = Field(None, max_length=255)
+    title: Optional[str] = Field(default=None, max_length=255)
     description: Optional[str] = None
     assignee_id: Optional[int] = None
     assignee_email: Optional[str] = None
