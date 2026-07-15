@@ -143,9 +143,9 @@ function mapTemplateToUi(template: FormTemplateResponse): FormTemplate {
               order: field.order ?? fieldIndex,
               placeholder: field.placeholder,
               help_text: field.help_text,
-              is_required: field.is_required,
+              is_required: field.is_required ?? false,
               options: field.options,
-              width: field.width,
+              width: field.width ?? 'full',
             })),
           }))
         : [
@@ -221,7 +221,7 @@ export default function FormBuilder() {
           ),
         )
       } catch {
-        setLoadError(t('admin.forms.load_error', 'Unable to load form template.'))
+        setLoadError(t('portal.form_load_error'))
       } finally {
         setIsLoading(false)
       }
