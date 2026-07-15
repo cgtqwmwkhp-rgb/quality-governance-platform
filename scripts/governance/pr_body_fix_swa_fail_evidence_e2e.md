@@ -3,17 +3,18 @@
 ## File allowlist (exclusive)
 
 - `frontend/tests/e2e/inspection-capa-risk-cuj.spec.ts`
+- `requirements.lock` (CI Lockfile Freshness — `pypdfium2` 5.11→5.12 upstream drift)
 - `scripts/governance/pr_body_fix_swa_fail_evidence_e2e.md`
 
-**Zero overlap** with product UI (`AuditExecution.tsx` / Mobile), SWA workflow YAML, backend, or alembic. Gate-unblock e2e only.
+**Zero overlap** with product UI (`AuditExecution.tsx` / Mobile), SWA workflow YAML, backend app code, or alembic. Gate-unblock e2e + lock refresh only.
 
 ## 1) Summary
 
 - **Feature / Change name:** fix(e2e/ci) — live inspection CUJ respects R2 fail→mandatory evidence
 - **User goal:** Green **Staging UI Verification (GATE)** on main so **Deploy Production SWA (prod API bake)** can run and purple-water leaves the staging API bake
-- **In scope:** Update `inspection-capa-risk-cuj` live-completion test to attach photo after NO, Continue to review, then submit
+- **In scope:** Update `inspection-capa-risk-cuj` live-completion test to attach photo after NO, Continue to review, then submit; refresh `requirements.lock` for Lockfile Freshness
 - **Out of scope:** Product gate logic (already shipped in #1018); OCR keys; partner tokens; investigation builders
-- **Root cause:** After #1018, `failure_triggers_action: true` + NO blocks auto-advance until ≥1 photo. The CUJ still expected **Submit Audit & Generate Action Plan** immediately after NO → Staging UI Verification fails → prod SWA bake skipped → FE remains on staging API.
+- **Root cause:** After #1018, `failure_triggers_action: true` + NO blocks auto-advance until ≥1 photo. The CUJ still expected **Submit Audit & Generate Action Plan** immediately after NO → Staging UI Verification fails → prod SWA bake skipped → FE remains on staging API. Separately, PyPI published `pypdfium2==5.12.0` after tip CI, so PR Lockfile Freshness fails until lock regenerates.
 
 ## 2) Impact Map
 
@@ -35,7 +36,8 @@
 - [x] AC-01: After NO on gated question, test asserts fail-evidence alert and Submit is absent
 - [x] AC-02: Test attaches a PNG via hidden file input and waits for Evidence 1 preview
 - [x] AC-03: Test Continues to review, submits, and still proves CAPA Actions handoff
-- [x] AC-04: Exclusive allowlist only (e2e + this Change Ledger)
+- [x] AC-04: Exclusive allowlist only (e2e + requirements.lock + this Change Ledger)
+- [x] AC-04b: `requirements.lock` pins `pypdfium2==5.12.0` (Lockfile Freshness green)
 - [ ] AC-05: Staging UI Verification (GATE) green on this PR / post-merge main
 - [ ] AC-06: Deploy Production SWA runs; purple-water API host = `app-qgp-prod`
 
