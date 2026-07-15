@@ -479,7 +479,27 @@ test.describe("Inspection → CAPA → Risk CUJ", () => {
       timeout: 20_000,
     });
 
+    // R2 fail→mandatory evidence: NO blocks auto-advance until a photo is attached.
     await page.getByRole("button", { name: "NO" }).click();
+    await expect(
+      page.getByText("Attach at least one photo before continuing after a failed response."),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Submit Audit & Generate Action Plan" })).toHaveCount(
+      0,
+    );
+
+    const tinyPng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+      name: "ppe-fail-evidence.png",
+      mimeType: "image/png",
+      buffer: tinyPng,
+    });
+    await expect(page.getByAltText("Evidence 1")).toBeVisible();
+
+    await page.getByRole("button", { name: /Continue/i }).click();
     await expect(page.getByRole("button", { name: "Submit Audit & Generate Action Plan" })).toBeVisible();
     await page.getByRole("button", { name: "Submit Audit & Generate Action Plan" }).click();
 
