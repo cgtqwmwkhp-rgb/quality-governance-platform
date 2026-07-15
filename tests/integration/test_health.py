@@ -319,3 +319,11 @@ async def test_root_readyz_includes_sms_and_channels(client: AsyncClient, monkey
     assert "pagerduty" not in data
     assert "dlq" in data
     assert "depth" in data["dlq"]
+    assert data["dlq"].get("status") in {"ok", "unavailable", "error"}
+    assert data["dlq"].get("warn_threshold") == 10
+    assert data["dlq"].get("critical_threshold") == 50
+    if data["dlq"]["status"] == "ok":
+        assert isinstance(data["dlq"]["depth"], int)
+    else:
+        assert data["dlq"]["depth"] is None
+        assert "error_class" in data["dlq"]

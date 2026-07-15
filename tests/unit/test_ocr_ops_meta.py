@@ -37,8 +37,26 @@ def test_ocr_providers_meta_not_configured(monkeypatch, client: TestClient) -> N
     assert data["capabilities"]["ocr_artifacts_table"] is True
     assert data["capabilities"]["dispute_ack_stubs"] is True
     assert "as_of" in data
-    assert data["endpoint"] == "/api/v1/health/meta/ocr-providers"
+    assert data["endpoint"] == "/api/v1/meta/ocr-providers"
+    assert data["canonical_endpoint"] == "/api/v1/meta/ocr-providers"
+    assert data["legacy_endpoint"] == "/api/v1/health/meta/ocr-providers"
     assert "test-" not in json.dumps(data)
+
+
+def test_ocr_providers_canonical_meta_alias(monkeypatch, client: TestClient) -> None:
+    monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    legacy = client.get("/api/v1/health/meta/ocr-providers")
+    canonical = client.get("/api/v1/meta/ocr-providers")
+    assert legacy.status_code == 200
+    assert canonical.status_code == 200
+    legacy_body = legacy.json()
+    canonical_body = canonical.json()
+    assert canonical_body["status"] == legacy_body["status"]
+    assert canonical_body["providers"] == legacy_body["providers"]
+    assert canonical_body["endpoint"] == "/api/v1/meta/ocr-providers"
 
 
 def test_ocr_providers_meta_mistral_only(monkeypatch, client: TestClient) -> None:
@@ -95,5 +113,6 @@ def test_readyz_includes_ocr_providers_summary(monkeypatch, client: TestClient) 
     ocr = checks.get("ocr_providers", {})
     assert ocr.get("mistral_configured") is True
     assert ocr.get("gemini_configured") is True
-    assert ocr.get("meta_endpoint") == "/api/v1/health/meta/ocr-providers"
+    assert ocr.get("meta_endpoint") == "/api/v1/meta/ocr-providers"
+    assert ocr.get("legacy_meta_endpoint") == "/api/v1/health/meta/ocr-providers"
     assert ocr.get("capabilities", {}).get("page_consensus_persist") is True

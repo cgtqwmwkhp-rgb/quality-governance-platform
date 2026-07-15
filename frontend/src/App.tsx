@@ -8,7 +8,12 @@ import PortalLayout from './components/PortalLayout'
 import Login from './pages/Login'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
 import { useNotificationStore } from './stores'
-import { getValidPlatformToken, setAdminToken, clearTokens, revokeSession } from './utils/auth'
+import {
+  getValidPlatformToken,
+  establishPlatformSession,
+  clearAuthState,
+  revokeSession,
+} from './utils/auth'
 import { useFeatureFlag } from './hooks/useFeatureFlag'
 import { LegacyActionItemRedirect } from './pages/actionLinks'
 import { useSessionKeepalive } from './hooks/useSessionKeepalive'
@@ -191,13 +196,14 @@ function App() {
   }, [isAuthenticated])
 
   const handleLogin = (token: string, refreshToken?: string) => {
-    setAdminToken(token, refreshToken)
+    // Mirror JWT into portal storage so /portal/* works without a second Entra prompt.
+    establishPlatformSession(token, refreshToken)
     setIsAuthenticated(true)
   }
 
   const handleLogout = async () => {
     await revokeSession()
-    clearTokens()
+    clearAuthState()
     useNotificationStore.getState().clearAll()
     setIsAuthenticated(false)
   }

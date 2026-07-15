@@ -6,10 +6,10 @@ Machine-readable OCR configuration honesty for external audit import and future 
 
 | Path | Auth | Purpose |
 |------|------|---------|
-| `GET /api/v1/health/meta/ocr-providers` | None | Provider configuration flags + capability notes |
-| `GET /api/v1/health/readyz` → `checks.ocr_providers` | None | Summary booleans for probes |
-
-> **Path note:** Canonical target is `/api/v1/meta/ocr-providers` (alongside `/api/v1/meta/version`). This lane mounts under `/api/v1/health/meta/` because `src/api/__init__.py` / `main.py` are outside the W4 allowlist. A follow-up PR may add a top-level alias.
+| `GET /api/v1/meta/ocr-providers` | None | Canonical provider configuration flags + capability notes |
+| `GET /api/v1/meta/ocr-capabilities` | None | Canonical R5 capability flags + endpoint map |
+| `GET /api/v1/health/meta/ocr-providers` | None | Legacy alias (same payload) |
+| `GET /api/v1/health/readyz` → `checks.ocr_providers` | None | Summary booleans for probes (`meta_endpoint` = canonical) |
 
 ## Providers reported
 

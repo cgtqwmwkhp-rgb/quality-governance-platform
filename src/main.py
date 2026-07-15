@@ -30,6 +30,8 @@ from src.infrastructure.storage import validate_storage_dependencies
 
 async def _probe_dlq_depth_root(async_session_maker, logger, request_id: str) -> dict:
     """Pending FailedTask count for root /readyz (informational)."""
+    from src.infrastructure.tasks.dlq_status import dlq_depth_from_exception, dlq_depth_ok
+
     try:
         from sqlalchemy import func, select
 
@@ -40,20 +42,10 @@ async def _probe_dlq_depth_root(async_session_maker, logger, request_id: str) ->
                 session.execute(select(func.count(FailedTask.id)).where(FailedTask.retried.is_(False))),
                 timeout=2.0,
             )
-            return {
-                "status": "ok",
-                "depth": int(result.scalar() or 0),
-                "warn_threshold": 10,
-                "critical_threshold": 50,
-            }
+            return dlq_depth_ok(int(result.scalar() or 0))
     except Exception as e:
         logger.warning("Readiness: DLQ depth check failed: %s", e, extra={"request_id": request_id})
-        return {
-            "status": "error",
-            "depth": None,
-            "warn_threshold": 10,
-            "critical_threshold": 50,
-        }
+        return dlq_depth_from_exception(e)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -77,6 +69,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         if (
             path in ("/healthz", "/readyz", "/health", "/.well-known/security.txt")
             or path.startswith("/api/v1/health/")
+            or path.startswith("/api/v1/meta/")
             or path.startswith("/api/v1/privacy/")
         ):
             response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"

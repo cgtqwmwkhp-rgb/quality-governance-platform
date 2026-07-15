@@ -111,6 +111,7 @@ from src.domain.models.external_audit_import import (
     ExternalAuditImportStatus,
 )
 from src.domain.models.external_audit_record import ExternalAuditRecord
+from src.domain.models.failed_task import FailedTask
 
 # Evidence Assets (Shared Attachments Module)
 from src.domain.models.feature_flag import FeatureFlag
@@ -242,6 +243,7 @@ __all__ = [
     "TenantUser",
     "TenantInvitation",
     "TokenBlacklist",
+    "FailedTask",
     # Standard models
     "Standard",
     "Clause",

@@ -2,8 +2,10 @@
  * Centralized authentication token utilities.
  *
  * TOKEN CONTRACT:
- * - Admin login stores token in: localStorage['access_token']
- * - Portal login stores token in: sessionStorage['platform_access_token']
+ * - Admin chrome historically used localStorage['access_token']
+ * - Portal chrome historically used sessionStorage['platform_access_token']
+ * - establishPlatformSession() mirrors the same platform JWT into BOTH stores
+ *   so admin ↔ portal navigation does not require a second Microsoft prompt.
  *
  * This module provides a single source of truth for token access.
  */
@@ -14,6 +16,9 @@ const ADMIN_TOKEN_KEY = 'access_token'
 const ADMIN_REFRESH_TOKEN_KEY = 'refresh_token'
 const PORTAL_TOKEN_KEY = 'platform_access_token'
 const PORTAL_REFRESH_TOKEN_KEY = 'platform_refresh_token'
+const PORTAL_USER_KEY = 'portal_user'
+const PORTAL_SESSION_TIME_KEY = 'portal_session_time'
+const PORTAL_ID_TOKEN_KEY = 'portal_id_token'
 
 /**
  * Get the platform refresh token (portal/SSO only).
@@ -65,6 +70,31 @@ export function clearTokens(): void {
 }
 
 /**
+ * Clear tokens plus portal profile / OAuth scratch keys (full auth wipe).
+ */
+export function clearAuthState(): void {
+  clearTokens()
+  localStorage.removeItem(PORTAL_USER_KEY)
+  localStorage.removeItem(PORTAL_SESSION_TIME_KEY)
+  localStorage.removeItem(PORTAL_ID_TOKEN_KEY)
+  sessionStorage.removeItem('oauth_state')
+  sessionStorage.removeItem('oauth_nonce')
+  sessionStorage.removeItem('admin_oauth_state')
+  sessionStorage.removeItem('admin_oauth_nonce')
+  sessionStorage.removeItem('portal_oauth_state')
+  sessionStorage.removeItem('portal_oauth_nonce')
+}
+
+/**
+ * Mirror a platform JWT into both admin and portal stores.
+ * Call after any successful login / refresh so both shells share one session.
+ */
+export function establishPlatformSession(accessToken: string, refreshToken?: string): void {
+  setAdminToken(accessToken, refreshToken)
+  setPortalToken(accessToken, refreshToken)
+}
+
+/**
  * Best-effort server-side session revoke before clearing local tokens.
  * Failures are swallowed so local logout always proceeds.
  */
@@ -110,7 +140,7 @@ export function setAdminToken(token: string, refreshToken?: string): void {
 export function setPortalToken(accessToken: string, refreshToken?: string): void {
   sessionStorage.setItem(PORTAL_TOKEN_KEY, accessToken)
   if (refreshToken) {
-    sessionStorage.setItem('platform_refresh_token', refreshToken)
+    sessionStorage.setItem(PORTAL_REFRESH_TOKEN_KEY, refreshToken)
   }
 }
 

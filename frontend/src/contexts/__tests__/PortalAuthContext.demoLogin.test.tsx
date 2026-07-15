@@ -12,9 +12,16 @@ vi.mock('../../config/apiBase', () => ({
   API_BASE_URL: 'http://localhost:8000',
 }))
 
-vi.mock('../../utils/auth', () => ({
-  revokeSession: vi.fn().mockResolvedValue(undefined),
-}))
+vi.mock('../../utils/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../utils/auth')>()
+  return {
+    ...actual,
+    revokeSession: vi.fn().mockResolvedValue(undefined),
+    getValidPlatformToken: vi.fn().mockReturnValue(null),
+    establishPlatformSession: vi.fn(),
+    clearAuthState: vi.fn(),
+  }
+})
 
 import { PortalAuthProvider, usePortalAuth } from '../PortalAuthContext'
 

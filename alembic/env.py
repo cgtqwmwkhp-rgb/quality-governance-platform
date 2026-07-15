@@ -38,6 +38,7 @@ for _metadata_mod in (
     "src.domain.models.workflow",
     "src.domain.models.workflow_rules",
     "src.domain.models.ocr_artifact",
+    "src.domain.models.failed_task",
 ):
     importlib.import_module(_metadata_mod)
 

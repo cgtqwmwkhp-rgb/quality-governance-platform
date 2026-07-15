@@ -156,7 +156,12 @@ def test_ocr_capabilities_meta_endpoint(client: TestClient):
     assert data["ocr_artifacts_table"] is True
     assert data["page_consensus_persist"] is True
     assert data["provider_dial_on_probes"] is False
-    assert data["endpoint"] == "/api/v1/health/meta/ocr-capabilities"
+    assert data["endpoint"] == "/api/v1/meta/ocr-capabilities"
+    assert data["legacy_endpoint"] == "/api/v1/health/meta/ocr-capabilities"
+
+    canonical = client.get("/api/v1/meta/ocr-capabilities")
+    assert canonical.status_code == 200
+    assert canonical.json()["endpoint"] == "/api/v1/meta/ocr-capabilities"
 
 
 def test_dispute_stub_route_contract(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:

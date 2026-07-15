@@ -29,6 +29,8 @@ router.include_router(ocr_ops.router, prefix="/meta")
 
 async def _probe_dlq_depth() -> dict[str, Any]:
     """Return pending FailedTask count for /readyz (informational)."""
+    from src.infrastructure.tasks.dlq_status import dlq_depth_from_exception, dlq_depth_ok
+
     try:
         from sqlalchemy import func, select
 
@@ -39,20 +41,10 @@ async def _probe_dlq_depth() -> dict[str, Any]:
                 conn.execute(select(func.count(FailedTask.id)).where(FailedTask.retried.is_(False))),
                 timeout=2.0,
             )
-            return {
-                "status": "ok",
-                "depth": int(result.scalar() or 0),
-                "warn_threshold": 10,
-                "critical_threshold": 50,
-            }
+            return dlq_depth_ok(int(result.scalar() or 0))
     except Exception as exc:
         logger.warning("Readiness probe: DLQ depth check failed: %s", exc)
-        return {
-            "status": "error",
-            "depth": None,
-            "warn_threshold": 10,
-            "critical_threshold": 50,
-        }
+        return dlq_depth_from_exception(exc)
 
 
 def _lane1_channel_snapshot() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -280,7 +272,8 @@ async def readiness_check():
         "mistral_configured": ocr_meta["providers"]["mistral"]["configured"],
         "gemini_configured": ocr_meta["providers"]["gemini"]["configured"],
         "azure_di_configured": ocr_meta["providers"]["azure_di"]["configured"],
-        "meta_endpoint": "/api/v1/health/meta/ocr-providers",
+        "meta_endpoint": "/api/v1/meta/ocr-providers",
+        "legacy_meta_endpoint": "/api/v1/health/meta/ocr-providers",
         "capabilities": ocr_meta.get("capabilities", {}),
     }
     if ocr_meta.get("note"):
