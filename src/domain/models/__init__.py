@@ -176,6 +176,12 @@ from src.domain.models.iso27001 import (
 )
 from src.domain.models.location import Location, LocationKind
 from src.domain.models.loler import LOLERDefect, LOLERDefectCategory, LOLERExamination, LOLERExaminationType
+from src.domain.models.partner_webhook import (
+    PARTNER_WEBHOOK_EVENTS,
+    WebhookDeliveryLog,
+    WebhookDeliveryStatus,
+    WebhookSubscription,
+)
 
 # Planet Mark Carbon Management
 from src.domain.models.planet_mark import (
@@ -291,6 +297,11 @@ __all__ = [
     # Policy models
     "Policy",
     "PolicyVersion",
+    # Partner webhook models (Wave5)
+    "PARTNER_WEBHOOK_EVENTS",
+    "WebhookDeliveryLog",
+    "WebhookDeliveryStatus",
+    "WebhookSubscription",
     # Document models
     "Document",
     "DocumentChunk",

@@ -50,6 +50,7 @@ from src.api.routes import (
     loler_inspections,
     near_miss,
     notifications,
+    partner_webhooks,
     planet_mark,
     policies,
     policy_acknowledgment,
@@ -138,6 +139,12 @@ router.include_router(iso27001.router, prefix="/iso27001", tags=["ISO 27001 ISMS
 router.include_router(ims_dashboard.router, tags=["IMS Dashboard"])  # prefix="/ims" declared on router
 # UVDB Achilles Verify B2 Audit Protocol
 router.include_router(uvdb.router, prefix="/uvdb", tags=["UVDB Achilles Verify"])
+# Partner Webhooks (Wave5 cash-in-wall scaffold)
+router.include_router(
+    partner_webhooks.router,
+    prefix="/partner-webhooks",
+    tags=["Partner Webhooks"],
+)
 # Planet Mark Carbon Management
 router.include_router(planet_mark.router, prefix="/planet-mark", tags=["Planet Mark Carbon"])
 # AI Copilot (Tier 2)
