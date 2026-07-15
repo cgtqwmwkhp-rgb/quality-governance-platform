@@ -1,7 +1,7 @@
 """Add CAPASource.investigation enum value.
 
 Revision ID: 20260716_capa_inv_src
-Revises: 20260714_e0_promote_async
+Revises: 20260715_audit_db_integrity
 Create Date: 2026-07-16
 
 Adds 'investigation' to the PostgreSQL capasource enum (idempotent).
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260716_capa_inv_src"
-down_revision: Union[str, Sequence[str], None] = "20260714_e0_promote_async"
+down_revision: Union[str, Sequence[str], None] = "20260715_audit_db_integrity"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
