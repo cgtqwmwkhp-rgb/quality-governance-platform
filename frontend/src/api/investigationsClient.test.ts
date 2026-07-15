@@ -74,4 +74,27 @@ describe('createInvestigationsApi', () => {
     )
     expect(api.get).toHaveBeenCalledWith('/api/v1/investigations/4/closure-validation')
   })
+
+  it('investigation template CRUD paths', () => {
+    const api = mockApi()
+    const inv = createInvestigationsApi(api as never)
+    inv.listTemplates({ page: 1, page_size: 20, is_active: true })
+    inv.getTemplate(3)
+    inv.createTemplate({
+      name: 'RCA',
+      structure: { sections: [] },
+      applicable_entity_types: ['complaint'],
+    })
+    inv.updateTemplate(3, { name: 'RCA v2' })
+    inv.deleteTemplate(3)
+    expect(api.get).toHaveBeenCalledWith('/api/v1/investigation-templates/?page=1&page_size=20&is_active=true')
+    expect(api.get).toHaveBeenCalledWith('/api/v1/investigation-templates/3')
+    expect(api.post).toHaveBeenCalledWith('/api/v1/investigation-templates/', {
+      name: 'RCA',
+      structure: { sections: [] },
+      applicable_entity_types: ['complaint'],
+    })
+    expect(api.patch).toHaveBeenCalledWith('/api/v1/investigation-templates/3', { name: 'RCA v2' })
+    expect(api.delete).toHaveBeenCalledWith('/api/v1/investigation-templates/3')
+  })
 })

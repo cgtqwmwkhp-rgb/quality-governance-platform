@@ -190,6 +190,48 @@ export interface ClosureValidation {
   open_work_count?: number
 }
 
+// ============ Investigation Template Types ============
+
+export interface InvestigationTemplate {
+  id: number
+  name: string
+  description?: string
+  version: string
+  is_active: boolean
+  structure: Record<string, unknown>
+  applicable_entity_types: string[]
+  created_at: string
+  updated_at: string
+  created_by_id?: number
+  updated_by_id?: number
+}
+
+export interface InvestigationTemplateCreate {
+  name: string
+  description?: string
+  version?: string
+  is_active?: boolean
+  structure: Record<string, unknown>
+  applicable_entity_types: string[]
+}
+
+export interface InvestigationTemplateUpdate {
+  name?: string
+  description?: string
+  version?: string
+  is_active?: boolean
+  structure?: Record<string, unknown>
+  applicable_entity_types?: string[]
+}
+
+export interface InvestigationTemplateListResponse {
+  items: InvestigationTemplate[]
+  total: number
+  page: number
+  page_size: number
+  pages: number
+}
+
 export function createInvestigationsApi(api: AxiosInstance) {
   return {
   list: (page = 1, pageSize = 10, status?: string) => {
@@ -292,5 +334,29 @@ export function createInvestigationsApi(api: AxiosInstance) {
    */
   getClosureValidation: (id: number) =>
     api.get<ClosureValidation>(`/api/v1/investigations/${id}/closure-validation`),
+
+  // ============ Investigation Template Endpoints ============
+
+  listTemplates: (options?: { page?: number; page_size?: number; is_active?: boolean }) => {
+    const params = new URLSearchParams()
+    if (options?.page) params.set('page', String(options.page))
+    if (options?.page_size) params.set('page_size', String(options.page_size))
+    if (options?.is_active != null) params.set('is_active', String(options.is_active))
+    const query = params.toString()
+    return api.get<InvestigationTemplateListResponse>(
+      query ? `/api/v1/investigation-templates/?${query}` : '/api/v1/investigation-templates/',
+    )
+  },
+
+  getTemplate: (id: number) =>
+    api.get<InvestigationTemplate>(`/api/v1/investigation-templates/${id}`),
+
+  createTemplate: (data: InvestigationTemplateCreate) =>
+    api.post<InvestigationTemplate>('/api/v1/investigation-templates/', data),
+
+  updateTemplate: (id: number, data: InvestigationTemplateUpdate) =>
+    api.patch<InvestigationTemplate>(`/api/v1/investigation-templates/${id}`, data),
+
+  deleteTemplate: (id: number) => api.delete<void>(`/api/v1/investigation-templates/${id}`),
 }
 }
