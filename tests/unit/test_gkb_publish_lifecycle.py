@@ -19,8 +19,8 @@ from src.domain.services.gkb_publish_lifecycle import (
 )
 
 
-def _ctx(**overrides: object) -> PublishLifecycleContext:
-    values: dict[str, object] = {
+def _ctx(**overrides: Any) -> PublishLifecycleContext:
+    values: dict[str, Any] = {
         "tenant_id": 7,
         "document_id": 101,
         "new_version": "1.2.0",
@@ -31,7 +31,16 @@ def _ctx(**overrides: object) -> PublishLifecycleContext:
         "policy_updated": True,
     }
     values.update(overrides)
-    return PublishLifecycleContext(**values)  # type: ignore[arg-type]
+    return PublishLifecycleContext(
+        tenant_id=values["tenant_id"],
+        document_id=values["document_id"],
+        new_version=values["new_version"],
+        has_library_document=bool(values["has_library_document"]),
+        has_content=bool(values["has_content"]),
+        has_existing_quizzes=bool(values["has_existing_quizzes"]),
+        re_acknowledge_on_update=values["re_acknowledge_on_update"],
+        policy_updated=bool(values["policy_updated"]),
+    )
 
 
 @pytest.mark.parametrize(

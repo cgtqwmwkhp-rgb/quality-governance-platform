@@ -214,6 +214,10 @@ async def apply_publish_lifecycle_hooks(
             skipped_missing_service=service is None and not plan.denied,
         )
 
+    # Plan decisions already require ids; skip hooks if caller omitted them.
+    if document_id is None or tenant_id is None:
+        return PublishLifecycleExecutionResult(planned=plan)
+
     rematch_invoked = False
     quizzes_stale_invoked = False
     quiz_draft_invoked = False
@@ -224,10 +228,10 @@ async def apply_publish_lifecycle_hooks(
     if plan.rematch_evidence and hasattr(service, GKS_REMATCH_EVIDENCE_ON_VERSION):
         rematch_result = await service.rematch_evidence_on_version(
             db,
-            document_id,  # type: ignore[arg-type]
+            document_id,
             content,
             doc_type,
-            tenant_id,  # type: ignore[arg-type]
+            tenant_id,
             user,
         )
         rematch_invoked = True
@@ -235,8 +239,8 @@ async def apply_publish_lifecycle_hooks(
     if plan.mark_quizzes_stale and hasattr(service, GKS_MARK_QUIZZES_STALE_FOR_DOCUMENT):
         stale_count = await service.mark_quizzes_stale_for_document(
             db,
-            document_id=document_id,  # type: ignore[arg-type]
-            tenant_id=tenant_id,  # type: ignore[arg-type]
+            document_id=document_id,
+            tenant_id=tenant_id,
             new_version=new_version or "",
         )
         quizzes_stale_invoked = True
@@ -244,10 +248,10 @@ async def apply_publish_lifecycle_hooks(
     if plan.generate_quiz_draft and hasattr(service, GKS_GENERATE_QUIZ_DRAFT):
         quiz_draft = await service.generate_quiz_draft(
             db,
-            document_id=document_id,  # type: ignore[arg-type]
+            document_id=document_id,
             content=content,
             version=new_version or "",
-            tenant_id=tenant_id,  # type: ignore[arg-type]
+            tenant_id=tenant_id,
             user=user,
             question_count=5,
             include_open=True,
