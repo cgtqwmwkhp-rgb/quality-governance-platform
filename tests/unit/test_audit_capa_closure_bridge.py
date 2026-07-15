@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.domain.exceptions import StateTransitionError
 from src.domain.models.audit import FindingStatus
 from src.domain.models.capa import CAPASource, CAPAStatus
 from src.domain.services.audit_service import AuditService
 from src.domain.services.capa_service import CAPAService
-from src.domain.exceptions import StateTransitionError
 
 
 def _fake_capa(**overrides):

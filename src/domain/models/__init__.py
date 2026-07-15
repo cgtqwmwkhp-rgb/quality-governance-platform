@@ -203,8 +203,8 @@ from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment
 # Enterprise Risk Register (Tier 1)
 from src.domain.models.risk_register import (
     BowTieElement,
-    EnterpriseKeyRiskIndicator,
     CaseRiskLink,
+    EnterpriseKeyRiskIndicator,
     EnterpriseRisk,
     EnterpriseRiskControl,
     RiskAppetiteStatement,

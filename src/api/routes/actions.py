@@ -38,8 +38,8 @@ from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.incident import ActionStatus, Incident, IncidentAction
 from src.domain.models.induction import InductionRun
 from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus, InvestigationRun
-from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.rca_tools import CAPAItem
+from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.user import User
 from src.domain.services.action_assignment_service import notify_action_assignment, record_action_assigned_audit
 from src.domain.services.audit_service import record_audit_event
