@@ -37,6 +37,7 @@ from src.domain.models.audit import (
 from src.domain.models.audit_log import AuditEvent
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.risk_register import EnterpriseRisk
+from src.domain.models.user import User
 from src.domain.services.audit_log_service import AuditLogService
 from src.domain.services.audit_risk_gate import AUDIT_RISK_SEVERITIES, should_create_risk
 from src.domain.services.audit_scoring_service import AuditScoringService
@@ -1847,6 +1848,112 @@ class AuditService:
         await invalidate_tenant_cache(tenant_id, "risks")
         track_metric("audits.findings.flag_risk")
         return finding
+
+    async def _resolve_user_id_by_email(
+        self,
+        email: str,
+        *,
+        tenant_id: int,
+    ) -> int:
+        """Resolve a tenant-scoped user id by email; raise ValidationError if missing."""
+        normalized = email.strip().lower()
+        result = await self.db.execute(
+            select(User).where(
+                func.lower(User.email) == normalized,
+                User.tenant_id == tenant_id,
+            )
+        )
+        user = result.scalar_one_or_none()
+        if user is None:
+            raise ValidationError(f"No user found with email '{email}' in this tenant")
+        return user.id
+
+    async def create_capa_for_finding(
+        self,
+        finding_id: int,
+        *,
+        tenant_id: int,
+        actor_user_id: int,
+        title: str | None = None,
+        description: str | None = None,
+        assignee_email: str | None = None,
+    ) -> CAPAAction:
+        """Create a CAPA linked to an audit finding (primary finding→CAPA CUJ).
+
+        Idempotent: if a CAPA already exists for this finding under the tenant,
+        return the existing action. Explicit create always proceeds even when
+        ``corrective_action_required`` is false (unlike ``_ensure_action_for_finding``).
+        """
+        finding: AuditFinding = await self._get_entity(
+            AuditFinding,
+            finding_id,
+            tenant_id=tenant_id,
+        )
+        run: AuditRun = await self._get_entity(AuditRun, finding.run_id, tenant_id=tenant_id)
+
+        existing_result = await self.db.execute(
+            select(CAPAAction).where(
+                CAPAAction.tenant_id == tenant_id,
+                CAPAAction.source_type == CAPASource.AUDIT_FINDING,
+                CAPAAction.source_id == finding.id,
+            )
+        )
+        existing = existing_result.scalar_one_or_none()
+        if existing is not None:
+            return existing
+
+        assigned_to_id = run.assigned_to_id
+        if assignee_email:
+            assigned_to_id = await self._resolve_user_id_by_email(
+                assignee_email,
+                tenant_id=tenant_id,
+            )
+
+        finding.corrective_action_required = True
+
+        action_title = (title or f"Action plan: {finding.title}")[:255]
+        action_desc = finding.description if description is None else description
+
+        action = CAPAAction(
+            tenant_id=tenant_id,
+            reference_number=await ReferenceNumberService.generate(self.db, "capa", CAPAAction),
+            title=action_title,
+            description=action_desc,
+            capa_type=CAPAType.CORRECTIVE,
+            status=CAPAStatus.OPEN,
+            priority=self._priority_from_severity(finding.severity),
+            source_type=CAPASource.AUDIT_FINDING,
+            source_id=finding.id,
+            created_by_id=actor_user_id,
+            assigned_to_id=assigned_to_id,
+            due_date=(
+                finding.corrective_action_due_date.replace(tzinfo=None)
+                if finding.corrective_action_due_date and finding.corrective_action_due_date.tzinfo
+                else finding.corrective_action_due_date
+            ),
+            iso_standard=run.assurance_scheme,
+            clause_reference=run.external_reference,
+        )
+        self.db.add(action)
+        await self.db.flush()
+        await self.db.refresh(action)
+        await invalidate_tenant_cache(tenant_id, "audits")
+        await invalidate_tenant_cache(tenant_id, "capa")
+        track_metric("audits.findings.create_capa")
+        await record_audit_event(
+            db=self.db,
+            event_type="capa.created_from_finding",
+            entity_type="capa",
+            entity_id=str(action.id),
+            action="create",
+            description=(
+                f"CAPA {action.reference_number} created from finding " f"{finding.reference_number or finding.id}"
+            ),
+            payload={"finding_id": finding.id, "title": action.title},
+            user_id=actor_user_id,
+            tenant_id=tenant_id,
+        )
+        return action
 
     # ------------------------------------------------------------------
     # CAPA → finding closure bridge (CUJ-AUDIT-CAPA-CLOSURE-BRIDGE)

@@ -43,9 +43,11 @@ from src.api.schemas.audit import (
     AuditTemplateListResponse,
     AuditTemplateResponse,
     AuditTemplateUpdate,
+    CreateFindingCapaRequest,
     FlagFindingRiskRequest,
     PurgeExpiredTemplatesResponse,
 )
+from src.api.schemas.capa import CAPAResponse
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.api.utils.pagination import PaginationParams
@@ -1502,3 +1504,31 @@ async def flag_finding_to_risk(
         severity=body.severity,
     )
     return AuditFindingResponse.model_validate(finding)
+
+
+@router.post(
+    "/findings/{finding_id}/capa",
+    response_model=CAPAResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_finding_capa(
+    finding_id: int,
+    body: CreateFindingCapaRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("capa:create"))],
+) -> CAPAResponse:
+    """Create (or return existing) CAPA linked to an audit finding.
+
+    Primary finding→CAPA CUJ. Idempotent when a CAPA is already linked.
+    Deep-link Actions handoff remains available as a fallback.
+    """
+    service = AuditService(db)
+    action = await service.create_capa_for_finding(
+        finding_id,
+        tenant_id=require_tenant_id(getattr(current_user, "tenant_id", None)),
+        actor_user_id=current_user.id,
+        title=body.title,
+        description=body.description,
+        assignee_email=body.assignee_email,
+    )
+    return CAPAResponse.model_validate(action)
