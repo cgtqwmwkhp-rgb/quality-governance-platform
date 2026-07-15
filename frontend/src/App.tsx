@@ -27,6 +27,9 @@ const Policies = lazy(() => import('./pages/Policies'))
 const Audits = lazy(() => import('./pages/Audits'))
 const Investigations = lazy(() => import('./pages/Investigations'))
 const InvestigationDetail = lazy(() => import('./pages/InvestigationDetail'))
+const InvestigationTemplateBuilder = lazy(
+  () => import('./pages/investigation-builder/InvestigationTemplateBuilder'),
+)
 const Standards = lazy(() => import('./pages/Standards'))
 const Actions = lazy(() => import('./pages/Actions'))
 const ActionDetail = lazy(() => import('./pages/ActionDetail'))
@@ -301,6 +304,12 @@ function App() {
                 <Route path="audits/:auditId/import-review" element={<AuditImportReview />} />
                 <Route path="audits/:auditId/mobile" element={<AuditExecution />} />
                 <Route path="investigations" element={<Investigations />} />
+                <Route path="investigations/templates/builder" element={<InvestigationTemplateBuilder />} />
+                <Route path="investigations/templates/builder/new" element={<InvestigationTemplateBuilder />} />
+                <Route
+                  path="investigations/templates/builder/:templateId/edit"
+                  element={<InvestigationTemplateBuilder />}
+                />
                 <Route path="investigations/:id" element={<InvestigationDetail />} />
                 <Route path="standards" element={<Standards />} />
                 <Route path="actions" element={<Actions />} />
