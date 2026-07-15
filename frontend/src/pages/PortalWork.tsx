@@ -113,7 +113,12 @@ export default function PortalWork() {
     setPassport({ status: 'loading' })
     try {
       const response = await engineersApi.getByUserMe()
-      setPassport({ status: 'linked', engineer: response.data })
+      const profile = response.data
+      if (!profile.linked || profile.id == null) {
+        setPassport({ status: 'unlinked' })
+        return
+      }
+      setPassport({ status: 'linked', engineer: profile })
     } catch (err) {
       if (isNotFound(err)) {
         setPassport({ status: 'unlinked' })
@@ -366,7 +371,7 @@ export default function PortalWork() {
               <p className="text-sm text-muted-foreground mt-1">
                 {[passport.engineer.employee_number, passport.engineer.department, passport.engineer.site]
                   .filter(Boolean)
-                  .join(' · ') || `Engineer #${passport.engineer.id}`}
+                  .join(' · ') || `Engineer #${passport.engineer.id ?? '—'}`}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
                 Competency matrix and training tickets live in the full workforce passport (separate
@@ -375,7 +380,7 @@ export default function PortalWork() {
               <div className="mt-3">
                 <Button variant="outline" size="sm" asChild>
                   <a
-                    href={`/workforce/engineers/${passport.engineer.id}`}
+                    href={`/workforce/engineers/${passport.engineer.id ?? ''}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >

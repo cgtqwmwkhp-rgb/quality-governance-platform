@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock
 import pytest
 
 from src.api.routes.engineers import get_engineer_by_user_me
-from src.domain.exceptions import NotFoundError
 
 
 class _FakeResult:
@@ -42,19 +41,19 @@ async def test_get_engineer_by_user_me_returns_linked_profile():
 
     result = await get_engineer_by_user_me(db, user)
 
+    assert result.linked is True
     assert result.id == 10
     assert result.user_id == 42
     assert result.job_title == "Field Engineer"
 
 
 @pytest.mark.asyncio
-async def test_get_engineer_by_user_me_404_when_unlinked():
+async def test_get_engineer_by_user_me_returns_unlinked_payload():
     db = types.SimpleNamespace(execute=AsyncMock(return_value=_FakeResult(None)))
     user = types.SimpleNamespace(id=42, tenant_id=1, is_superuser=False, roles=[])
 
-    with pytest.raises(NotFoundError) as exc_info:
-        await get_engineer_by_user_me(db, user)
+    result = await get_engineer_by_user_me(db, user)
 
-    assert exc_info.value.http_status == 404
-    detail = str(exc_info.value).lower() + " " + str(getattr(exc_info.value, "message", "")).lower()
-    assert "not linked" in detail or "not found" in detail
+    assert result.linked is False
+    assert result.id is None
+    assert result.user_id is None

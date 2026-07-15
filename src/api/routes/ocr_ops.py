@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 
-from src.api.dependencies import DbSession
+from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.ocr_artifact import (
     OCRArtifactAckRequest,
     OCRArtifactDisputeRequest,
@@ -52,13 +52,18 @@ async def get_ocr_capabilities_meta() -> dict[str, Any]:
 async def dispute_ocr_artifact(
     body: OCRArtifactDisputeRequest,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> OCRArtifactOverrideResponse:
-    """Record human dispute on an OCR artifact — stub only, never dials providers."""
+    """Record human dispute on an OCR artifact — stub only, never dials providers.
+
+    Auth required: previously public POST allowed unauthenticated writes.
+    """
+    actor = current_user.email or body.actor or f"user:{current_user.id}"
     service = OCRArtifactService(db)
     artifact = await service.record_dispute(
         artifact_id=body.artifact_id,
         note=body.note,
-        actor=body.actor,
+        actor=actor,
     )
     if artifact is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="OCR artifact not found")
@@ -73,13 +78,18 @@ async def dispute_ocr_artifact(
 async def acknowledge_ocr_artifact(
     body: OCRArtifactAckRequest,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> OCRArtifactOverrideResponse:
-    """Record human acknowledgement on an OCR artifact — stub only, never dials providers."""
+    """Record human acknowledgement on an OCR artifact — stub only, never dials providers.
+
+    Auth required: previously public POST allowed unauthenticated writes.
+    """
+    actor = current_user.email or body.actor or f"user:{current_user.id}"
     service = OCRArtifactService(db)
     artifact = await service.record_ack(
         artifact_id=body.artifact_id,
         note=body.note,
-        actor=body.actor,
+        actor=actor,
     )
     if artifact is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="OCR artifact not found")

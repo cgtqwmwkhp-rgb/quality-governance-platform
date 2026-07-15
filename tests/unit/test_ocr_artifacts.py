@@ -164,7 +164,20 @@ def test_ocr_capabilities_meta_endpoint(client: TestClient):
     assert canonical.json()["endpoint"] == "/api/v1/meta/ocr-capabilities"
 
 
+def test_dispute_stub_requires_auth(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/health/meta/ocr-artifacts/dispute",
+        json={"artifact_id": 99, "note": "Needs review", "actor": "ops@example.com"},
+    )
+    assert response.status_code in {401, 403}
+
+
 def test_dispute_stub_route_contract(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:
+    from types import SimpleNamespace
+
+    from src.api.dependencies import get_current_user
+    from src.main import app
+
     artifact = OCRArtifact(
         id=99,
         provider="mistral",
@@ -187,15 +200,22 @@ def test_dispute_stub_route_contract(monkeypatch: pytest.MonkeyPatch, client: Te
 
     monkeypatch.setattr("src.api.routes.ocr_ops.OCRArtifactService", StubService)
 
-    response = client.post(
-        "/api/v1/health/meta/ocr-artifacts/dispute",
-        json={"artifact_id": 99, "note": "Needs review", "actor": "ops@example.com"},
-    )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["stub"] is True
-    assert body["provider_dialed"] is False
-    assert body["artifact"]["override_status"] == "disputed"
+    async def _user():
+        return SimpleNamespace(id=1, email="ops@example.com", tenant_id=1, is_superuser=True)
+
+    app.dependency_overrides[get_current_user] = _user
+    try:
+        response = client.post(
+            "/api/v1/health/meta/ocr-artifacts/dispute",
+            json={"artifact_id": 99, "note": "Needs review", "actor": "ops@example.com"},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["stub"] is True
+        assert body["provider_dialed"] is False
+        assert body["artifact"]["override_status"] == "disputed"
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
 
 
 def test_readyz_includes_ocr_capabilities(client: TestClient, monkeypatch: pytest.MonkeyPatch):

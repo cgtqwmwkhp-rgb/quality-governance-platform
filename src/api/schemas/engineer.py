@@ -58,6 +58,36 @@ class EngineerResponse(BaseModel):
     updated_at: datetime
 
 
+class EngineerLinkStatusResponse(BaseModel):
+    """Honest self-resolve for portal inbox: linked profile or explicit unlinked state."""
+
+    linked: bool
+    id: Optional[int] = None
+    external_id: Optional[str] = None
+    user_id: Optional[int] = None
+    employee_number: Optional[str] = None
+    job_title: Optional[str] = None
+    department: Optional[str] = None
+    site: Optional[str] = None
+    start_date: Optional[datetime] = None
+    specialisations_json: Optional[List[Any]] = None
+    certifications_json: Optional[List[Any]] = None
+    is_active: Optional[bool] = None
+    notes: Optional[str] = None
+    tenant_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    @classmethod
+    def from_engineer(cls, engineer: object) -> "EngineerLinkStatusResponse":
+        profile = EngineerResponse.model_validate(engineer)
+        return cls(linked=True, **profile.model_dump())
+
+    @classmethod
+    def unlinked(cls) -> "EngineerLinkStatusResponse":
+        return cls(linked=False)
+
+
 class EngineerListResponse(BaseModel):
     """Schema for paginated engineer list."""
 

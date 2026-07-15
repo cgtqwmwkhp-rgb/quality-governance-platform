@@ -50,7 +50,8 @@ SKIP_PATHS = frozenset(
 # investigation_actions), 20260711_rls_force_expand_actions
 # (incident_actions, complaint_actions, rta_actions), and
 # 20260711_rls_force_expand_docs (document_versions, controlled_documents,
-# controlled_document_versions).
+# controlled_document_versions), and 20260719_rls_gt_exp (risks_v2,
+# evidence_assets).
 RLS_TABLES = (
     "incidents",
     "complaints",
@@ -73,6 +74,8 @@ RLS_TABLES = (
     "document_versions",
     "controlled_documents",
     "controlled_document_versions",
+    "risks_v2",
+    "evidence_assets",
 )
 
 _current_tenant_id: ContextVar[Optional[int]] = ContextVar("current_tenant_id", default=None)

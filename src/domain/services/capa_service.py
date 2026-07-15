@@ -170,6 +170,17 @@ class CAPAService:
                 details={"allowed": [s.value for s in allowed]},
             )
 
+        if new_status == CAPAStatus.CLOSED:
+            # Prefer explicit verification_result; allow one-shot close via comment.
+            if comment and not (action.verification_result and str(action.verification_result).strip()):
+                action.verification_result = comment  # type: ignore[assignment]
+            if not (action.verification_result and str(action.verification_result).strip()):
+                raise StateTransitionError(
+                    "verification_result is required before closing a CAPA",
+                    code="MISSING_REQUIRED_FIELD",
+                    details={"field": "verification_result"},
+                )
+
         action.status = new_status
         # CAPA timestamp columns are TIMESTAMP WITHOUT TIME ZONE — store UTC-naive.
         now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)

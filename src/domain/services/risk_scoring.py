@@ -23,6 +23,8 @@ from src.domain.models.kri import (
 )
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.risk import Risk, RiskAssessment, RiskStatus
+from src.domain.models.risk_register import EnterpriseRisk
+from src.domain.services.case_risk_links import get_case_linked_risk_ids
 
 logger = logging.getLogger(__name__)
 
@@ -67,13 +69,14 @@ class RiskScoringService:
         if not incident:
             return None
 
-        # Get linked risks
-        linked_risk_ids = []
-        if getattr(incident, "linked_risk_ids", None):  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
-            try:
-                linked_risk_ids = [int(x.strip()) for x in str(incident.linked_risk_ids).split(",") if x.strip()]
-            except ValueError:
-                pass
+        # Get linked risks — prefer junction, fall back to legacy CSV.
+        linked_risk_ids = await get_case_linked_risk_ids(
+            self.db,
+            tenant_id=incident.tenant_id,
+            case_type="incident",
+            case_id=incident_id,
+            csv_fallback=getattr(incident, "linked_risk_ids", None),
+        )
 
         if not linked_risk_ids:
             # Try to find related risks by category/department
@@ -122,13 +125,14 @@ class RiskScoringService:
         if not near_miss:
             return None
 
-        # Get linked risks
-        linked_risk_ids = []
-        if getattr(near_miss, "linked_risk_ids", None):  # type: ignore[attr-defined]  # SA column  # TYPE-IGNORE: MYPY-OVERRIDE
-            try:
-                linked_risk_ids = [int(x.strip()) for x in str(near_miss.linked_risk_ids).split(",") if x.strip()]  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
-            except ValueError:
-                pass
+        # Get linked risks — prefer junction, fall back to legacy CSV.
+        linked_risk_ids = await get_case_linked_risk_ids(
+            self.db,
+            tenant_id=near_miss.tenant_id,
+            case_type="near_miss",
+            case_id=near_miss_id,
+            csv_fallback=getattr(near_miss, "linked_risk_ids", None),
+        )
 
         updated_risks = []
 
@@ -155,23 +159,49 @@ class RiskScoringService:
         trigger_entity_id: int,
         severity: Optional[IncidentSeverity] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Update a specific risk's score."""
+        """Update a specific risk's score.
+
+        Prefer canonical ``risks_v2`` (EnterpriseRisk). Fall back to legacy ``risks``
+        for grandfathered IDs that still point at the operational table.
+        """
+        er_result = await self.db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))
+        enterprise = er_result.scalar_one_or_none()
+        if enterprise is not None and severity:
+            adjustment = self.SEVERITY_IMPACT.get(severity, 0)
+            old_likelihood = int(enterprise.residual_likelihood or 0)
+            old_score = int(enterprise.residual_score or 0)
+            new_likelihood = min(5, old_likelihood + adjustment)
+            if new_likelihood != old_likelihood:
+                enterprise.residual_likelihood = new_likelihood
+                impact = int(enterprise.residual_impact or 1)
+                enterprise.residual_score = new_likelihood * impact
+                await self.db.commit()
+                return {
+                    "risk_id": risk_id,
+                    "risk_table": "risks_v2",
+                    "old_score": old_score,
+                    "new_score": enterprise.residual_score,
+                    "old_level": self._calculate_risk_level(old_score),
+                    "new_level": self._calculate_risk_level(int(enterprise.residual_score or 0)),
+                }
+            return None
+
         result = await self.db.execute(select(Risk).where(Risk.id == risk_id))
         risk = result.scalar_one_or_none()
 
         if not risk:
             return None
 
-        # Calculate score adjustment
-        old_score: int = int(risk.risk_score or 0)
-        old_likelihood: int = int(risk.likelihood or 0)
+        # Calculate score adjustment (legacy risks table)
+        legacy_old_score: int = int(risk.risk_score or 0)
+        legacy_old_likelihood: int = int(risk.likelihood or 0)
 
         # Increase likelihood based on incident severity
         if severity:
             adjustment = self.SEVERITY_IMPACT.get(severity, 0)
-            new_likelihood = min(5, old_likelihood + adjustment)
+            new_likelihood = min(5, legacy_old_likelihood + adjustment)
 
-            if new_likelihood != old_likelihood:
+            if new_likelihood != legacy_old_likelihood:
                 risk.likelihood = new_likelihood
                 risk.risk_score = int(risk.likelihood) * int(risk.impact)
                 risk.risk_level = self._calculate_risk_level(risk.risk_score)
@@ -187,8 +217,8 @@ class RiskScoringService:
                     trigger_type=trigger_type,
                     trigger_entity_type=trigger_entity_type,
                     trigger_entity_id=trigger_entity_id,
-                    previous_score=old_score,
-                    score_change=int(risk.risk_score) - old_score,
+                    previous_score=legacy_old_score,
+                    score_change=int(risk.risk_score) - legacy_old_score,
                     change_reason=f"Automatic update from {trigger_entity_type} #{trigger_entity_id}",
                 )
                 self.db.add(history)
@@ -196,9 +226,10 @@ class RiskScoringService:
 
                 return {
                     "risk_id": risk_id,
-                    "old_score": old_score,
+                    "risk_table": "risks",
+                    "old_score": legacy_old_score,
                     "new_score": risk.risk_score,
-                    "old_level": self._calculate_risk_level(old_score),
+                    "old_level": self._calculate_risk_level(legacy_old_score),
                     "new_level": risk.risk_level,
                 }
 

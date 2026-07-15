@@ -138,10 +138,16 @@ export function useServiceWorker(): UseServiceWorkerReturn {
 
       console.log('[SW] Push subscription:', subscription)
 
-      // Send subscription to backend
-      await fetch('/api/notifications/subscribe', {
+      // Send subscription to backend (canonical v1 push path + auth when present)
+      const { API_BASE_URL } = await import('../config/apiBase')
+      const { getPlatformToken } = await import('../utils/auth')
+      const token = getPlatformToken()
+      await fetch(`${API_BASE_URL}/api/v1/notifications/push/subscribe`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(subscription),
       })
 

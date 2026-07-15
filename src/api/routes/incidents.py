@@ -22,6 +22,7 @@ from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictE
 from src.domain.models.incident import Incident, IncidentRunningSheetEntry
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.case_risk_links import sync_case_risk_links_from_csv
 from src.domain.services.incident_risk_links import (
     append_linked_risk_id,
     create_enterprise_risk_from_incident,
@@ -277,6 +278,14 @@ async def raise_risk_from_incident(
             treatment_strategy=body.treatment_strategy,
         )
         incident.linked_risk_ids = append_linked_risk_id(incident.linked_risk_ids, risk.id)
+        if incident.tenant_id is not None:
+            await sync_case_risk_links_from_csv(
+                db,
+                tenant_id=incident.tenant_id,
+                case_type="incident",
+                case_id=incident.id,
+                linked_risk_ids_raw=incident.linked_risk_ids,
+            )
 
         await record_audit_event(
             db=db,

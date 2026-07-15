@@ -653,6 +653,9 @@ async def readiness_check(request: Request):
 
     payload = {
         "status": overall,
+        "contract": "flat_v1",
+        "canonical_probe": "/readyz",
+        "nested_probe": "/api/v1/health/readyz",
         "database": db_status,
         "redis": redis_status,
         "push": vapid["status"],

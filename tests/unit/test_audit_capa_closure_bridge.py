@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.domain.exceptions import StateTransitionError
 from src.domain.models.audit import FindingStatus
 from src.domain.models.capa import CAPASource, CAPAStatus
 from src.domain.services.audit_service import AuditService
@@ -92,6 +93,64 @@ class TestHonestChainStatus:
 
     def test_no_capa_open(self):
         assert AuditService._honest_chain_status(FindingStatus.OPEN.value, []) == "finding_open_no_capa"
+
+    def test_desynced_when_finding_closed_capa_open(self):
+        assert (
+            AuditService._honest_chain_status(
+                FindingStatus.CLOSED.value,
+                [{"status": CAPAStatus.OPEN.value}],
+            )
+            == "desynced_finding_closed_capa_open"
+        )
+
+
+class TestUpdateFindingCloseGate:
+    @pytest.mark.asyncio
+    async def test_update_finding_rejects_close_with_open_capa(self):
+        finding = _fake_finding(status=FindingStatus.OPEN)
+        open_capa = _fake_capa(id=11, status=CAPAStatus.OPEN)
+
+        db = AsyncMock()
+        siblings = MagicMock()
+        siblings.scalars.return_value.all.return_value = [open_capa]
+        db.execute.return_value = siblings
+
+        svc = AuditService(db)
+        svc._get_entity = AsyncMock(return_value=finding)
+
+        with pytest.raises(StateTransitionError, match="linked CAPA actions remain open"):
+            await svc.update_finding(
+                finding.id,
+                {"status": FindingStatus.CLOSED.value},
+                tenant_id=1,
+                actor_user_id=5,
+            )
+
+    @pytest.mark.asyncio
+    @patch("src.domain.services.audit_service.invalidate_tenant_cache", new_callable=AsyncMock)
+    async def test_update_finding_allows_close_when_all_capas_closed(self, _cache):
+        finding = _fake_finding(status=FindingStatus.PENDING_VERIFICATION)
+        closed_capa = _fake_capa(id=11, status=CAPAStatus.CLOSED)
+        run = _fake_run()
+
+        db = AsyncMock()
+        capa_result = MagicMock()
+        capa_result.scalars.return_value.all.return_value = [closed_capa]
+        db.execute.return_value = capa_result
+
+        svc = AuditService(db)
+        svc._get_entity = AsyncMock(side_effect=[finding, run])
+        svc._ensure_action_for_finding = AsyncMock(return_value=closed_capa)
+        svc._ensure_risk_for_finding = AsyncMock(return_value=None)
+
+        updated = await svc.update_finding(
+            finding.id,
+            {"status": FindingStatus.CLOSED.value},
+            tenant_id=1,
+            actor_user_id=5,
+        )
+
+        assert updated.status == FindingStatus.CLOSED
 
 
 class TestApplyCapaClosureBridge:

@@ -179,7 +179,8 @@ def _basic_health_payload() -> Dict[str, Any]:
     return {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": os.getenv("APP_VERSION", "dev"),
+        # Align with /api/v1/meta/version — never claim "dev" when BUILD_SHA is set.
+        "version": (os.getenv("APP_VERSION") or os.getenv("BUILD_SHA") or os.getenv("GITHUB_SHA") or "dev")[:12],
     }
 
 
@@ -306,6 +307,8 @@ async def readiness_check():
     payload = {
         "status": overall_status,
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "contract": "nested_v1",
+        "canonical_probe": "/readyz",
         "checks": checks,
     }
 

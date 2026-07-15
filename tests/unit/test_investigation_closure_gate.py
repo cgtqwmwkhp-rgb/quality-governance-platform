@@ -33,13 +33,23 @@ def _fake_action(**overrides):
 
 
 class TestFetchOpenWorkForInvestigation:
+    @staticmethod
+    def _db_with_queries(*row_lists):
+        """AsyncMock db where each execute() returns the next scalars list (inv/capa/item)."""
+        db = AsyncMock()
+        results = []
+        for rows in row_lists:
+            result = MagicMock()
+            result.scalars.return_value.all.return_value = rows
+            results.append(result)
+        db.execute = AsyncMock(side_effect=results)
+        return db
+
     @pytest.mark.asyncio
     async def test_returns_open_investigation_actions(self):
-        db = AsyncMock()
         open_action = _fake_action()
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = [open_action]
-        db.execute.return_value = result
+        # Investigation actions only; CAPAAction + CAPAItem queries empty.
+        db = self._db_with_queries([open_action], [], [])
 
         items = await fetch_open_work_for_investigation(db, investigation_id=7, tenant_id=1)
 
@@ -50,10 +60,7 @@ class TestFetchOpenWorkForInvestigation:
 
     @pytest.mark.asyncio
     async def test_returns_empty_when_no_open_actions(self):
-        db = AsyncMock()
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = []
-        db.execute.return_value = result
+        db = self._db_with_queries([], [], [])
 
         items = await fetch_open_work_for_investigation(db, investigation_id=7, tenant_id=1)
 
@@ -63,10 +70,7 @@ class TestFetchOpenWorkForInvestigation:
 class TestAssertInvestigationCanClose:
     @pytest.mark.asyncio
     async def test_passes_when_no_open_work(self):
-        db = AsyncMock()
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = []
-        db.execute.return_value = result
+        db = TestFetchOpenWorkForInvestigation._db_with_queries([], [], [])
 
         open_work = await assert_investigation_can_close(db, investigation_id=7, tenant_id=1)
 
@@ -74,10 +78,7 @@ class TestAssertInvestigationCanClose:
 
     @pytest.mark.asyncio
     async def test_raises_when_open_work_remains(self):
-        db = AsyncMock()
-        result = MagicMock()
-        result.scalars.return_value.all.return_value = [_fake_action()]
-        db.execute.return_value = result
+        db = TestFetchOpenWorkForInvestigation._db_with_queries([_fake_action()], [], [])
 
         with pytest.raises(StateTransitionError) as exc_info:
             await assert_investigation_can_close(db, investigation_id=7, tenant_id=1)

@@ -3,6 +3,7 @@
     "ocr_artifacts_table": true,
     "page_consensus_persist": true,
     "dispute_ack_stubs": true,
+    "dispute_ack_auth_required": true,
     "pipeline_version": "2026.07.r5",
     "provider_dial_on_probes": false
   },

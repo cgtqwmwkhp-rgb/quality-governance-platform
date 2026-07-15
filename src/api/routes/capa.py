@@ -96,6 +96,7 @@ class CAPAStatusTransition(BaseModel):
 
 
 @router.get("", response_model=CAPAListResponse)
+@router.get("/", response_model=CAPAListResponse, include_in_schema=False)
 async def list_capa_actions(
     db: DbSession,
     current_user: CurrentUser,
@@ -121,6 +122,7 @@ async def list_capa_actions(
 
 
 @router.post("", response_model=CAPAResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=CAPAResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def create_capa_action(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("capa:create"))],

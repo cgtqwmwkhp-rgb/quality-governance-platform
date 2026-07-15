@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.models.incident import Incident, IncidentSeverity
 from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.user import User
+from src.domain.services.case_risk_links import upsert_case_risk_link
 from src.domain.services.reference_number import ReferenceNumberService
 
 INCIDENT_RISK_SOURCE_PREFIX = "incident:"
@@ -237,4 +238,12 @@ async def create_enterprise_risk_from_incident(
     )
     db.add(risk)
     await db.flush()
+    if incident.tenant_id is not None:
+        await upsert_case_risk_link(
+            db,
+            tenant_id=incident.tenant_id,
+            case_type="incident",
+            case_id=incident.id,
+            risk_id=risk.id,
+        )
     return risk

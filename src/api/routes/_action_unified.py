@@ -10,6 +10,7 @@ STORAGE_RTA_ACTION = "rta_action"
 STORAGE_COMPLAINT_ACTION = "complaint_action"
 STORAGE_INVESTIGATION_ACTION = "investigation_action"
 STORAGE_CAPA = "capa"
+STORAGE_CAPA_ITEM = "capa_item"
 
 # API source_type values that map only to capa_actions (not incident_actions / complaint_actions).
 CAPA_ONLY_API_SOURCE_TYPES: frozenset[str] = frozenset(
@@ -26,6 +27,8 @@ CAPA_ONLY_API_SOURCE_TYPES: frozenset[str] = frozenset(
         "competence_gap",
         "capa_incident",
         "capa_complaint",
+        "near_miss",
+        "rta",
     }
 )
 

@@ -22,6 +22,7 @@ from src.domain.exceptions import StateTransitionError
 from src.domain.models.near_miss import NearMiss, NearMissRunningSheetEntry
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.case_risk_links import sync_case_risk_links_from_csv
 from src.domain.services.near_miss_risk_links import (
     append_linked_risk_id,
     create_enterprise_risk_from_near_miss,
@@ -525,6 +526,14 @@ async def raise_risk_from_near_miss(
             treatment_strategy=body.treatment_strategy,
         )
         near_miss.linked_risk_ids = append_linked_risk_id(near_miss.linked_risk_ids, risk.id)
+        if near_miss.tenant_id is not None:
+            await sync_case_risk_links_from_csv(
+                db,
+                tenant_id=near_miss.tenant_id,
+                case_type="near_miss",
+                case_id=near_miss.id,
+                linked_risk_ids_raw=near_miss.linked_risk_ids,
+            )
 
         await record_audit_event(
             db=db,

@@ -26,7 +26,10 @@ export function getInvestigationSourceLink(investigation: Investigation) {
   }
 }
 
-export function getCapaLink(sourceType: 'incident' | 'investigation', sourceId: number) {
+export function getCapaLink(
+  sourceType: 'incident' | 'investigation' | 'near_miss' | 'rta',
+  sourceId: number,
+) {
   const params = new URLSearchParams({
     sourceType,
     sourceId: String(sourceId),
@@ -44,13 +47,14 @@ export function resolveCapaHandoffMode(actionsCount: number): CapaHandoffMode {
 
 /** Shared i18n keys for incident/investigation CAPA hand-off buttons. */
 export function getCapaHandoffLabelKey(
-  sourceType: 'incident' | 'investigation',
+  sourceType: 'incident' | 'investigation' | 'near_miss' | 'rta',
   actionsCount: number,
 ): string {
   if (resolveCapaHandoffMode(actionsCount) === 'open') {
-    return sourceType === 'incident'
-      ? 'incidents.detail.open_capa'
-      : 'investigations.handoff.open_capa'
+    if (sourceType === 'incident') return 'incidents.detail.open_capa'
+    if (sourceType === 'near_miss') return 'near_misses.detail.open_capa'
+    if (sourceType === 'rta') return 'rtas.detail.open_capa'
+    return 'investigations.handoff.open_capa'
   }
   return 'investigations.handoff.create_action'
 }
@@ -92,6 +96,20 @@ export function getActionSourceLink(
       href: `/audits?view=findings&findingId=${sourceId}`,
       labelKey: 'actions.view_finding',
       labelFallback: 'View finding',
+    }
+  }
+  if (kind === 'near_miss') {
+    return {
+      href: `/near-misses/${sourceId}`,
+      labelKey: 'actions.view_near_miss',
+      labelFallback: 'View near miss',
+    }
+  }
+  if (kind === 'rta') {
+    return {
+      href: `/rtas/${sourceId}`,
+      labelKey: 'actions.view_rta',
+      labelFallback: 'View RTA',
     }
   }
   return null

@@ -654,9 +654,12 @@ class ComplianceAutomationService:
         hse_reference = f"RIDDOR-{incident_id:06d}-{submitted_at.strftime('%Y%m%d%H%M%S')}"
         return {
             "incident_id": incident_id,
-            "status": "submitted",
+            "status": "stubbed",
             "hse_reference": hse_reference,
             "submitted_at": submitted_at.isoformat(),
             "submitted_by": submitted_by,
-            "confirmation": "Acknowledged by HSE submission stub (integrate production gateway separately)",
+            "confirmation": (
+                "Stub only — not submitted to HSE. Integrate production RIDDOR gateway before treating as filed."
+            ),
+            "gateway": "not_connected",
         }

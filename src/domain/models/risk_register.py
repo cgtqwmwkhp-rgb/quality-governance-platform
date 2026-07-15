@@ -15,7 +15,18 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB as _PG_JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -415,4 +426,30 @@ class RiskAppetiteStatement(Base):
         DateTime,
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+
+
+class CaseRiskLink(Base):
+    """Normalized case ↔ enterprise risk junction (dual-write with legacy CSV/JSONB)."""
+
+    __tablename__ = "case_risk_links"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "case_type",
+            "case_id",
+            "risk_id",
+            name="uq_case_risk_links_tenant_case_risk",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    case_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    case_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    risk_id: Mapped[int] = mapped_column(ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
     )

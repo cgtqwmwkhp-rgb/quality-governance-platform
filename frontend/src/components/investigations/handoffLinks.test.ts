@@ -34,6 +34,7 @@ describe('investigation hand-off links', () => {
       '/actions?sourceType=investigation&sourceId=7',
     )
     expect(getCapaLink('incident', 11)).toBe('/actions?sourceType=incident&sourceId=11')
+    expect(getCapaLink('near_miss', 3)).toBe('/actions?sourceType=near_miss&sourceId=3')
   })
 
   it('resolves create vs open CAPA hand-off mode', () => {
@@ -42,6 +43,7 @@ describe('investigation hand-off links', () => {
     expect(getCapaHandoffLabelKey('incident', 0)).toBe('investigations.handoff.create_action')
     expect(getCapaHandoffLabelKey('incident', 1)).toBe('incidents.detail.open_capa')
     expect(getCapaHandoffLabelKey('investigation', 3)).toBe('investigations.handoff.open_capa')
+    expect(getCapaHandoffLabelKey('near_miss', 2)).toBe('near_misses.detail.open_capa')
   })
 })
 
@@ -51,6 +53,7 @@ describe('action source reverse deep-links', () => {
     ['capa_incident', 11, '/incidents/11', 'actions.view_incident'],
     ['investigation', 21, '/investigations/21', 'actions.view_investigation'],
     ['audit_finding', 42, '/audits?view=findings&findingId=42', 'actions.view_finding'],
+    ['near_miss', 3, '/near-misses/3', 'actions.view_near_miss'],
   ] as const)('maps %s/%s to %s', (sourceType, sourceId, href, labelKey) => {
     expect(getActionSourceLink(sourceType, sourceId)).toMatchObject({ href, labelKey })
   })
