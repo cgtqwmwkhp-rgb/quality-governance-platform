@@ -58,6 +58,8 @@
 - `tests/unit/test_rls_gt_exp.py`
 - `tests/unit/test_tenant_context_middleware.py`
 - `tests/unit/test_workflow_engine.py`
+- `tests/unit/test_investigation_closure_gate.py`
+- `tests/unit/test_risk_service.py`
 - `scripts/governance/pr_body_gt_remediation_wave1.md`
 
 **Zero overlap** with E4 Azure DI prod key enablement, partner token surface, or SWA workflow YAML.

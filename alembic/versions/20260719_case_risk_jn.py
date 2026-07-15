@@ -37,9 +37,7 @@ def _backfill_from_case_csv() -> None:
         if not inspector.has_table(table):
             continue
 
-        op.execute(
-            sa.text(
-                f"""
+        op.execute(sa.text(f"""
                 INSERT INTO case_risk_links (tenant_id, case_type, case_id, risk_id)
                 SELECT src.tenant_id, :case_type, src.id, candidate.risk_id
                 FROM {table} AS src
@@ -53,9 +51,7 @@ def _backfill_from_case_csv() -> None:
                  AND risk.tenant_id = src.tenant_id
                 WHERE src.tenant_id IS NOT NULL
                 ON CONFLICT (tenant_id, case_type, case_id, risk_id) DO NOTHING
-                """
-            ).bindparams(case_type=case_type)
-        )
+                """).bindparams(case_type=case_type))
 
 
 def _backfill_from_risk_linked_incidents() -> None:
@@ -78,9 +74,7 @@ def _backfill_from_risk_linked_incidents() -> None:
     for case_type, table, ref_col in ref_sources:
         if not inspector.has_table(table):
             continue
-        op.execute(
-            sa.text(
-                f"""
+        op.execute(sa.text(f"""
                 INSERT INTO case_risk_links (tenant_id, case_type, case_id, risk_id)
                 SELECT risk.tenant_id, :case_type, src.id, risk.id
                 FROM risks_v2 AS risk
@@ -98,9 +92,7 @@ def _backfill_from_risk_linked_incidents() -> None:
                  AND src.tenant_id = risk.tenant_id
                 WHERE risk.tenant_id IS NOT NULL
                 ON CONFLICT (tenant_id, case_type, case_id, risk_id) DO NOTHING
-                """
-            ).bindparams(case_type=case_type)
-        )
+                """).bindparams(case_type=case_type))
 
 
 def upgrade() -> None:

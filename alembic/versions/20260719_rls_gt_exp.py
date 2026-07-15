@@ -85,9 +85,7 @@ def _backfill_evidence_assets_tenant_id() -> None:
     for source_module, parent_table in _EVIDENCE_PARENT_BACKFILLS:
         if not inspector.has_table(parent_table):
             continue
-        op.execute(
-            sa.text(
-                f"""
+        op.execute(sa.text(f"""
                 UPDATE evidence_assets AS ea
                 SET tenant_id = parent.tenant_id
                 FROM {parent_table} AS parent
@@ -95,9 +93,7 @@ def _backfill_evidence_assets_tenant_id() -> None:
                   AND ea.source_module = :source_module
                   AND ea.source_id = CAST(parent.id AS VARCHAR)
                   AND parent.tenant_id IS NOT NULL
-                """
-            ).bindparams(source_module=source_module)
-        )
+                """).bindparams(source_module=source_module))
 
     result = bind.execute(sa.text("SELECT COUNT(*) FROM evidence_assets WHERE tenant_id IS NULL"))
     remaining = int(result.scalar() or 0)
