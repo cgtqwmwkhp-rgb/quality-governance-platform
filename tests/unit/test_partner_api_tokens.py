@@ -36,7 +36,7 @@ def test_partner_api_tokens_migration_scaffold():
     assert MIGRATION.is_file()
     text = MIGRATION.read_text(encoding="utf-8")
     assert 'revision: str = "20260717_partner_api_tokens"' in text
-    assert 'down_revision: Union[str, Sequence[str], None] = "20260716_partner_webhooks"' in text
+    assert 'down_revision: Union[str, Sequence[str], None] = "20260717_ocr_artifacts"' in text
     assert "partner_api_tokens" in text
 
 

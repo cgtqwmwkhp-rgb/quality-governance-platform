@@ -1,10 +1,10 @@
 """R6: partner API tokens (scoped bearer credentials).
 
 Revision ID: 20260717_partner_api_tokens
-Revises: 20260716_partner_webhooks
+Revises: 20260717_ocr_artifacts
 Create Date: 2026-07-17
 
-Chained after Wave5 partner webhooks (#1013) ``20260716_partner_webhooks``.
+Chained after R5 OCR artifacts (#1016) ``20260717_ocr_artifacts``.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260717_partner_api_tokens"
-down_revision: Union[str, Sequence[str], None] = "20260716_partner_webhooks"
+down_revision: Union[str, Sequence[str], None] = "20260717_ocr_artifacts"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
