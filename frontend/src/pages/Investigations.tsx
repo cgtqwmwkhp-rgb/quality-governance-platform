@@ -17,6 +17,7 @@ import {
   ExternalLink,
   RefreshCw,
   Save,
+  Layers,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -499,6 +500,7 @@ function CreateInvestigationModal({
 
 export default function Investigations() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [investigations, setInvestigations] = useState<Investigation[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -726,10 +728,16 @@ export default function Investigations() {
           <h1 className="text-3xl font-bold text-foreground">{t('investigations.title')}</h1>
           <p className="text-muted-foreground mt-1">{t('investigations.subtitle')}</p>
         </div>
-        <Button onClick={() => setShowModal(true)}>
-          <Plus size={20} aria-hidden="true" />
-          {t('investigations.new')}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => navigate('/investigations/templates/builder')}>
+            <Layers size={20} aria-hidden="true" />
+            Template Builder
+          </Button>
+          <Button onClick={() => setShowModal(true)}>
+            <Plus size={20} aria-hidden="true" />
+            {t('investigations.new')}
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
