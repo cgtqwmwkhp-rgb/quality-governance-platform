@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
-from typing import Protocol, Sequence
+from typing import Callable, Protocol, Sequence
+
+PAGE_CONSENSUS_PIPELINE_VERSION = "2026.07.r5"
 
 
 class OCRPageSource(Protocol):
@@ -12,6 +15,9 @@ class OCRPageSource(Protocol):
     provider: str
     page_number: int
     text: str
+
+
+PageConsensusPersistHook = Callable[["OCRPageConsensus", Sequence[OCRPageSource]], None]
 
 
 @dataclass(frozen=True)
@@ -38,6 +44,12 @@ class OCRPageConsensus:
 def normalize_ocr_text(text: str) -> str:
     """Normalize harmless OCR whitespace differences before comparison."""
     return " ".join(text.casefold().split())
+
+
+def hash_ocr_text(text: str) -> str:
+    """Return SHA-256 hex digest of normalized OCR text for artifact storage."""
+    normalized = normalize_ocr_text(text)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 def character_error_rate(reference: str, observed: str) -> float | None:
@@ -67,11 +79,15 @@ def build_page_consensus(
     candidates: Sequence[OCRPageSource],
     *,
     reference_text: str | None = None,
+    persist_hook: PageConsensusPersistHook | None = None,
 ) -> OCRPageConsensus:
     """Select deterministic page text and calculate provider agreement.
 
     The most frequent normalized text wins. Ties retain the first supplied
     candidate, allowing callers to express a provider preference explicitly.
+
+    When ``persist_hook`` is supplied it is invoked with the consensus result
+    and original candidates so callers can persist ``ocr_artifacts`` rows.
     """
     if not candidates:
         raise ValueError("At least one OCR page candidate is required.")
@@ -88,7 +104,7 @@ def build_page_consensus(
     winner = candidates[winner_index]
     agreement = normalized_texts.count(normalized_texts[winner_index]) / len(candidates)
 
-    return OCRPageConsensus(
+    consensus = OCRPageConsensus(
         page_number=winner.page_number,
         selected_text=winner.text,
         selected_provider=winner.provider,
@@ -98,13 +114,19 @@ def build_page_consensus(
         ),
         providers=tuple(candidate.provider for candidate in candidates),
     )
+    if persist_hook is not None:
+        persist_hook(consensus, candidates)
+    return consensus
 
 
 __all__ = [
     "OCRPageCandidate",
     "OCRPageConsensus",
     "OCRPageSource",
+    "PAGE_CONSENSUS_PIPELINE_VERSION",
+    "PageConsensusPersistHook",
     "build_page_consensus",
     "character_error_rate",
+    "hash_ocr_text",
     "normalize_ocr_text",
 ]

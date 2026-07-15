@@ -34,6 +34,8 @@ def test_ocr_providers_meta_not_configured(monkeypatch, client: TestClient) -> N
     assert data["providers"]["azure_di"]["configured"] is False
     assert data["providers"]["azure_di"]["enabled_in_prod"] is False
     assert "e4_non_goal" in data
+    assert data["capabilities"]["ocr_artifacts_table"] is True
+    assert data["capabilities"]["dispute_ack_stubs"] is True
     assert "as_of" in data
     assert data["endpoint"] == "/api/v1/health/meta/ocr-providers"
     assert "test-" not in json.dumps(data)
@@ -94,3 +96,4 @@ def test_readyz_includes_ocr_providers_summary(monkeypatch, client: TestClient) 
     assert ocr.get("mistral_configured") is True
     assert ocr.get("gemini_configured") is True
     assert ocr.get("meta_endpoint") == "/api/v1/health/meta/ocr-providers"
+    assert ocr.get("capabilities", {}).get("page_consensus_persist") is True
