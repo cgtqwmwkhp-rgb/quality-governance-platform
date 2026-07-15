@@ -12,7 +12,6 @@ from src.domain.services.investigation_structure_normalize import (
     structure_specs_to_json,
 )
 
-
 SAMPLE_STRUCTURE = {
     "sections": [
         {

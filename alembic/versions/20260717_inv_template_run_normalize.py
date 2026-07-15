@@ -1,12 +1,14 @@
 """W2: investigation template/run structure normalization tables.
 
-Revision ID: 20260717_inv_template_run_normalize
+Revision ID: 20260717_inv_tmpl_normalize
 Revises: 20260716_partner_webhooks
 Create Date: 2026-07-17
 
 Chained after Wave5 (#1013) ``20260716_partner_webhooks``.
 Rebase note: if partner webhooks revision id differs on target branch, adjust
 down_revision before merge.
+
+Revision id kept ≤32 chars for alembic_version.version_num VARCHAR(32).
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "20260717_inv_template_run_normalize"
+revision: str = "20260717_inv_tmpl_normalize"
 down_revision: Union[str, Sequence[str], None] = "20260716_partner_webhooks"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
