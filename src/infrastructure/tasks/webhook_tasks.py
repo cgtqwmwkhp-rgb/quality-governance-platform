@@ -176,3 +176,128 @@ def deliver_webhook(
             exc,
         )
         raise
+
+
+def _finalize_partner_delivery_log(
+    *,
+    delivery_log_id: int,
+    status: str,
+    http_status: Optional[int] = None,
+    error_message: Optional[str] = None,
+) -> None:
+    """Update partner webhook delivery log after HTTP attempt (sync Celery worker)."""
+    from datetime import datetime, timezone
+
+    from src.domain.models.partner_webhook import WebhookDeliveryLog, WebhookDeliveryStatus
+    from src.infrastructure.database import SessionLocal
+
+    now = datetime.now(timezone.utc)
+    delivery_status = WebhookDeliveryStatus(status)
+
+    with SessionLocal() as session:
+        log = session.get(WebhookDeliveryLog, delivery_log_id)
+        if log is None:
+            logger.error("Partner delivery log %s not found for finalize", delivery_log_id)
+            return
+        log.status = delivery_status
+        log.http_status = http_status
+        log.error_message = error_message
+        if delivery_status == WebhookDeliveryStatus.DELIVERED:
+            log.delivered_at = now
+        session.commit()
+
+
+@celery_app.task(
+    name="src.infrastructure.tasks.webhook_tasks.deliver_partner_webhook",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,
+    autoretry_for=(WebhookServerError,),
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+    queue="default",
+)
+def deliver_partner_webhook(
+    self,
+    delivery_log_id: int,
+    url: str,
+    headers: Optional[dict[str, Any]] = None,
+    payload: Optional[dict[str, Any]] = None,
+    timeout: Optional[float] = None,
+) -> dict[str, Any]:
+    """Deliver a signed partner webhook with retries on network/5xx; finalize delivery log."""
+    if not url:
+        _finalize_partner_delivery_log(
+            delivery_log_id=delivery_log_id,
+            status="failed",
+            error_message="Webhook URL is required",
+        )
+        raise WebhookClientError("Webhook URL is required")
+
+    timeout_seconds = float(timeout) if timeout is not None else _DEFAULT_TIMEOUT_SECONDS
+    request_headers = _normalize_headers(headers)
+    json_body = payload if isinstance(payload, dict) else {}
+
+    try:
+        result = _deliver_webhook(
+            url=url,
+            method="POST",
+            headers=request_headers,
+            json_body=json_body,
+            timeout=timeout_seconds,
+        )
+        _finalize_partner_delivery_log(
+            delivery_log_id=delivery_log_id,
+            status="delivered",
+            http_status=result["status_code"],
+        )
+        logger.info(
+            "Partner webhook delivered delivery_log_id=%s url=%s status_code=%s attempt=%s",
+            delivery_log_id,
+            url,
+            result["status_code"],
+            self.request.retries + 1,
+        )
+        return {
+            **result,
+            "delivery_log_id": delivery_log_id,
+            "attempt": self.request.retries + 1,
+            "max_attempts": _MAX_ATTEMPTS,
+        }
+    except WebhookClientError as exc:
+        _finalize_partner_delivery_log(
+            delivery_log_id=delivery_log_id,
+            status="failed",
+            error_message=str(exc),
+        )
+        logger.error(
+            "Partner webhook non-retryable failure delivery_log_id=%s url=%s error=%s",
+            delivery_log_id,
+            url,
+            exc,
+        )
+        return {
+            "status": "failed",
+            "retryable": False,
+            "delivery_log_id": delivery_log_id,
+            "url": url,
+            "error": str(exc),
+            "attempt": self.request.retries + 1,
+            "max_attempts": _MAX_ATTEMPTS,
+        }
+    except WebhookServerError as exc:
+        if self.request.retries >= self.max_retries:
+            _finalize_partner_delivery_log(
+                delivery_log_id=delivery_log_id,
+                status="failed",
+                error_message=str(exc),
+            )
+        logger.warning(
+            "Partner webhook retryable failure delivery_log_id=%s url=%s attempt=%s error=%s",
+            delivery_log_id,
+            url,
+            self.request.retries + 1,
+            exc,
+        )
+        raise
