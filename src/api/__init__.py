@@ -47,6 +47,7 @@ from src.api.routes import (
     investigations,
     iso27001,
     kri,
+    loler_inspections,
     near_miss,
     notifications,
     planet_mark,
@@ -183,6 +184,7 @@ router.include_router(rca_tools.router, tags=["RCA Tools"])  # prefix="/rca-tool
 router.include_router(capa.router, prefix="/capa", tags=["CAPA"])
 # Asset Registry (Workforce Development Platform)
 router.include_router(assets.router, prefix="/assets", tags=["Asset Registry"])
+router.include_router(loler_inspections.router, tags=["LOLER Inspections"])
 router.include_router(
     asset_health_analytics.router,
     prefix="/asset-health",
