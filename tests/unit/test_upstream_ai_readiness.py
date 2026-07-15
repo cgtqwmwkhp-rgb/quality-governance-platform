@@ -2,7 +2,7 @@
 
 import os
 
-from src.infrastructure.upstream.ai_status import get_upstream_ai_readiness
+from src.infrastructure.upstream.ai_status import get_ocr_providers_readiness, get_upstream_ai_readiness
 
 
 def test_upstream_ai_not_configured_when_keys_missing(monkeypatch):
@@ -56,3 +56,32 @@ def test_upstream_ai_honors_ocr_timeout_env(monkeypatch):
     # Never leak key material
     assert "test-mistral" not in str(result)
     assert os.getenv("MISTRAL_API_KEY") == "test-mistral"
+
+
+def test_ocr_providers_readiness_includes_azure_di(monkeypatch):
+    monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT", "https://di.example.azure.com/")
+    monkeypatch.setenv("AZURE_DOCUMENT_INTELLIGENCE_KEY", "azure-key-placeholder")
+
+    result = get_ocr_providers_readiness()
+    assert result["status"] == "partial"
+    azure = result["providers"]["azure_di"]
+    assert azure["configured"] is True
+    assert azure["enabled_in_prod"] is False
+    assert "e4_non_goal" in result
+    assert "azure-key-placeholder" not in str(result)
+    assert "di.example.azure.com" not in str(result)
+
+
+def test_ocr_providers_readiness_all_configured(monkeypatch):
+    monkeypatch.setenv("MISTRAL_API_KEY", "test-mistral")
+    monkeypatch.setenv("GOOGLE_GEMINI_API_KEY", "test-gemini")
+    monkeypatch.setenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT", "https://di.example.azure.com/")
+    monkeypatch.setenv("AZURE_DOCUMENT_INTELLIGENCE_KEY", "azure-key")
+
+    result = get_ocr_providers_readiness()
+    assert result["status"] == "configured"
+    assert result["providers"]["mistral"]["configured"] is True
+    assert result["providers"]["gemini"]["configured"] is True
+    assert result["providers"]["azure_di"]["configured"] is True
