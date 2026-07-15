@@ -678,6 +678,14 @@ class FlagFindingRiskRequest(BaseModel):
     )
 
 
+class CreateFindingCapaRequest(BaseModel):
+    """Optional overrides when creating a CAPA from an audit finding."""
+
+    title: Optional[str] = Field(default=None, max_length=255)
+    description: Optional[str] = None
+    assignee_email: Optional[str] = Field(default=None, max_length=255)
+
+
 class AuditFindingResponse(BaseModel):
     """Schema for Audit Finding response.
 

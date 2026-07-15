@@ -77,6 +77,25 @@ export interface AuditFinding {
   closure_note?: string | null
 }
 
+/** CAPA created (or returned) from POST /audits/findings/{id}/capa. */
+export interface FindingCapaResponse {
+  id: number
+  reference_number: string
+  title: string
+  description?: string | null
+  capa_type: string
+  status: string
+  priority: string
+  source_type?: string | null
+  source_id?: number | null
+  assigned_to_id?: number | null
+  created_by_id: number
+  tenant_id?: number | null
+  due_date?: string | null
+  created_at: string
+  updated_at?: string | null
+}
+
 export interface AuditTemplate {
   id: number
   reference_number: string
@@ -462,5 +481,10 @@ export function createAuditsApi(api: AxiosInstance) {
     api.patch<AuditFinding>(`/api/v1/audits/findings/${findingId}`, data),
   flagFindingToRisk: (findingId: number, data: { severity?: 'critical' | 'high' | 'medium' | 'low' } = {}) =>
     api.post<AuditFinding>(`/api/v1/audits/findings/${findingId}/flag-risk`, data),
+  createFindingCapa: (
+    findingId: number,
+    body: { title?: string; description?: string; assignee_email?: string } = {},
+  ) =>
+    api.post<FindingCapaResponse>(`/api/v1/audits/findings/${findingId}/capa`, body),
 }
 }
