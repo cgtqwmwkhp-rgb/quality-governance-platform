@@ -41,7 +41,7 @@ def test_ocr_artifacts_migration_scaffold():
     assert MIGRATION.is_file()
     text = MIGRATION.read_text(encoding="utf-8")
     assert 'revision: str = "20260717_ocr_artifacts"' in text
-    assert 'down_revision: Union[str, Sequence[str], None] = "20260716_partner_webhooks"' in text
+    assert 'down_revision: Union[str, Sequence[str], None] = "20260717_inv_tmpl_normalize"' in text
     assert "ocr_artifacts" in text
     assert "canonical" not in text.lower() or "advisory" in text.lower()
 
