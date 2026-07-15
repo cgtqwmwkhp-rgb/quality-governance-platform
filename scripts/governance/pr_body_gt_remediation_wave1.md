@@ -15,6 +15,7 @@
 - `frontend/src/pages/PortalWork.tsx`
 - `frontend/src/pages/RiskRegister.tsx`
 - `frontend/src/pages/__tests__/PortalWork.test.tsx`
+- `frontend/src/pages/__tests__/NearMissDetail.test.tsx`
 - `frontend/tests/e2e/portal-work-inbox.spec.ts`
 - `src/api/routes/_action_unified.py`
 - `src/api/routes/actions.py`

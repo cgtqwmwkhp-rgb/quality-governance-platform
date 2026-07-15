@@ -83,14 +83,15 @@ async def fetch_open_work_for_investigation(
     )
     capa_result = await db.execute(capa_query)
     for capa_row in capa_result.scalars().all():
+        capa_id = int(capa_row.id)
         items.append(
             OpenWorkItem(
                 kind="capa_action",
-                id=capa_row.id,
-                reference_number=capa_row.reference_number or f"CAPA-{capa_row.id}",
-                title=capa_row.title,
+                id=capa_id,
+                reference_number=str(capa_row.reference_number or f"CAPA-{capa_id}"),
+                title=str(capa_row.title or ""),
                 status=_status_value(capa_row.status),
-                action_key=f"capa:{capa_row.id}",
+                action_key=f"capa:{capa_id}",
             )
         )
 
@@ -104,17 +105,18 @@ async def fetch_open_work_for_investigation(
     )
     item_result = await db.execute(item_query)
     for capa_item in item_result.scalars().all():
-        status = (capa_item.status or "open").strip().lower()
+        status = str(capa_item.status or "open").strip().lower()
         if status in _CAPA_ITEM_DONE_STATUSES:
             continue
+        item_id = int(capa_item.id)
         items.append(
             OpenWorkItem(
                 kind="capa_item",
-                id=capa_item.id,
-                reference_number=f"CAPA-ITEM-{capa_item.id}",
-                title=capa_item.title or f"CAPA item {capa_item.id}",
+                id=item_id,
+                reference_number=f"CAPA-ITEM-{item_id}",
+                title=str(capa_item.title or f"CAPA item {item_id}"),
                 status=status,
-                action_key=f"capa_item:{capa_item.id}",
+                action_key=f"capa_item:{item_id}",
             )
         )
 

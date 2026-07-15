@@ -136,7 +136,7 @@ describe('NearMissDetail investigation → CAPA honesty', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/investigations/21')
 
     fireEvent.click(screen.getByTestId('near-miss-capa-handoff-cta'))
-    expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=investigation&sourceId=21')
+    expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=near_miss&sourceId=5')
   })
 
   it('shows em dash when CAPA actions fail to load', async () => {
