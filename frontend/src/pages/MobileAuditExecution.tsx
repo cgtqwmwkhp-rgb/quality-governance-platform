@@ -425,7 +425,7 @@ const PhotoCapture = ({
   photos: string[]
   onAdd: (photo: string) => void
   onRemove: (index: number) => void
-  captureButtonRef?: React.RefObject<HTMLButtonElement | null>
+  captureButtonRef?: React.RefObject<HTMLButtonElement>
   captureButtonId?: string
   ariaInvalid?: boolean
   ariaDescribedBy?: string
