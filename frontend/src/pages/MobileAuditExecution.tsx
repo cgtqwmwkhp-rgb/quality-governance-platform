@@ -34,6 +34,12 @@ import {
   Send,
   ClipboardCheck,
 } from 'lucide-react'
+import {
+  FAIL_EVIDENCE_ERROR_MESSAGE,
+  canAdvancePastFailEvidenceGate,
+  isFailEvidenceGateActive,
+  shouldShowFailEvidencePanel,
+} from './AuditExecution'
 
 // ============================================================================
 // TYPES
@@ -67,6 +73,8 @@ interface AuditQuestion {
   guidance?: string
   riskLevel?: string
   isoClause?: string
+  positiveAnswer?: 'yes' | 'no'
+  failureTriggersAction: boolean
 }
 
 /** Map builder/API question_type values to MobileAuditExecution widget types (parity with desktop). */
@@ -267,6 +275,8 @@ const TouchResponseButton = ({
     neutral: 'active:bg-slate-500/40 active:scale-95',
   }
 
+  const accessibleLabel = typeof children === 'string' ? children : undefined
+
   return (
     <button
       type="button"
@@ -274,7 +284,8 @@ const TouchResponseButton = ({
         onClick()
         triggerHaptic(selected ? 'light' : 'medium')
       }}
-      className={`flex-1 flex flex-col items-center justify-center gap-2 py-6 px-4 rounded-2xl border-2 font-bold transition-all duration-150 min-h-[100px]
+      aria-label={accessibleLabel}
+      className={`flex-1 flex flex-col items-center justify-center gap-2 py-6 px-4 rounded-2xl border-2 font-bold transition-all duration-150 min-h-[100px] outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950
         ${selected ? variantStyles[variant] : `border-slate-700 bg-slate-800/80 text-slate-400 ${hoverStyles[variant]}`}`}
     >
       {Icon && <Icon className={`w-8 h-8 ${selected ? '' : 'opacity-60'}`} />}
@@ -406,10 +417,18 @@ const PhotoCapture = ({
   photos,
   onAdd,
   onRemove,
+  captureButtonRef,
+  captureButtonId,
+  ariaInvalid,
+  ariaDescribedBy,
 }: {
   photos: string[]
   onAdd: (photo: string) => void
   onRemove: (index: number) => void
+  captureButtonRef?: React.RefObject<HTMLButtonElement | null>
+  captureButtonId?: string
+  ariaInvalid?: boolean
+  ariaDescribedBy?: string
 }) => {
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -437,9 +456,14 @@ const PhotoCapture = ({
       />
 
       <button
+        ref={captureButtonRef}
+        id={captureButtonId}
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="w-full py-4 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 rounded-xl text-cyan-300 font-medium flex items-center justify-center gap-2 active:scale-98"
+        aria-label="Take photo or upload evidence"
+        aria-invalid={ariaInvalid || undefined}
+        aria-describedby={ariaDescribedBy}
+        className="w-full py-4 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 rounded-xl text-cyan-300 font-medium flex items-center justify-center gap-2 active:scale-98 outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
       >
         <Camera className="w-5 h-5" />
         {photos.length > 0 ? `Add Photo (${photos.length})` : 'Take Photo'}
@@ -559,7 +583,9 @@ export default function MobileAuditExecution() {
   const [batteryLevel] = useState(85)
   const [aiLoading, setAiLoading] = useState(false)
   const [showAISuggestion, setShowAISuggestion] = useState(true)
+  const [failEvidenceGateError, setFailEvidenceGateError] = useState(false)
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const evidenceCaptureRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     return () => {
@@ -637,6 +663,16 @@ export default function MobileAuditExecution() {
   const currentQuestion = currentSection?.questions[currentQuestionIndex]
   const currentResponse = currentQuestion ? responses[currentQuestion.id] : undefined
   const currentAISuggestion = currentQuestion ? AI_SUGGESTIONS[currentQuestion.id] : undefined
+  const failEvidenceErrorId = currentQuestion ? `fail-evidence-error-${currentQuestion.id}` : 'fail-evidence-error'
+  const showEvidencePanel = currentQuestion
+    ? shouldShowFailEvidencePanel(currentQuestion, currentResponse)
+    : false
+  const failEvidenceGateActive = currentQuestion
+    ? isFailEvidenceGateActive(currentQuestion, currentResponse)
+    : false
+  const canAdvance = currentQuestion
+    ? canAdvancePastFailEvidenceGate(currentQuestion, currentResponse)
+    : true
 
   // Calculate progress
   const totalQuestions = audit.sections.reduce((sum, s) => sum + s.questions.length, 0)
@@ -693,7 +729,33 @@ export default function MobileAuditExecution() {
   }
 
   // Navigation
+  const blockForFailEvidenceGate = () => {
+    setFailEvidenceGateError(true)
+    requestAnimationFrame(() => evidenceCaptureRef.current?.focus())
+  }
+
+  const handleScoredResponse = (value: ResponseType) => {
+    if (!currentQuestion) return
+    updateResponse({ response: value })
+    if (
+      isFailEvidenceGateActive(currentQuestion, {
+        response: value,
+        photos: currentResponse?.photos,
+      })
+    ) {
+      blockForFailEvidenceGate()
+    } else {
+      setFailEvidenceGateError(false)
+    }
+  }
+
   const goNext = () => {
+    if (!currentQuestion) return
+    if (isFailEvidenceGateActive(currentQuestion, currentResponse)) {
+      blockForFailEvidenceGate()
+      return
+    }
+    setFailEvidenceGateError(false)
     triggerHaptic('light')
     if (currentQuestionIndex < currentSection.questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1)
@@ -719,23 +781,29 @@ export default function MobileAuditExecution() {
   const renderQuestionInput = () => {
     if (!currentQuestion) return null
 
+    const isInverted = currentQuestion.positiveAnswer === 'no'
+    const yesVariant: 'success' | 'danger' = isInverted ? 'danger' : 'success'
+    const noVariant: 'success' | 'danger' = isInverted ? 'success' : 'danger'
+    const yesIcon = isInverted ? XCircle : CheckCircle2
+    const noIcon = isInverted ? CheckCircle2 : XCircle
+
     switch (currentQuestion.type) {
       case 'pass_fail':
         return (
           <div className="flex gap-3">
             <TouchResponseButton
               selected={currentResponse?.response === 'pass'}
-              onClick={() => updateResponse({ response: 'pass' })}
-              variant="success"
-              icon={CheckCircle2}
+              onClick={() => handleScoredResponse('pass')}
+              variant={yesVariant}
+              icon={yesIcon}
             >
               PASS
             </TouchResponseButton>
             <TouchResponseButton
               selected={currentResponse?.response === 'fail'}
-              onClick={() => updateResponse({ response: 'fail' })}
-              variant="danger"
-              icon={XCircle}
+              onClick={() => handleScoredResponse('fail')}
+              variant={noVariant}
+              icon={noIcon}
             >
               FAIL
             </TouchResponseButton>
@@ -747,17 +815,17 @@ export default function MobileAuditExecution() {
           <div className="flex gap-3">
             <TouchResponseButton
               selected={currentResponse?.response === 'yes'}
-              onClick={() => updateResponse({ response: 'yes' })}
-              variant="success"
-              icon={CheckCircle2}
+              onClick={() => handleScoredResponse('yes')}
+              variant={yesVariant}
+              icon={yesIcon}
             >
               YES
             </TouchResponseButton>
             <TouchResponseButton
               selected={currentResponse?.response === 'no'}
-              onClick={() => updateResponse({ response: 'no' })}
-              variant="danger"
-              icon={XCircle}
+              onClick={() => handleScoredResponse('no')}
+              variant={noVariant}
+              icon={noIcon}
             >
               NO
             </TouchResponseButton>
@@ -769,23 +837,23 @@ export default function MobileAuditExecution() {
           <div className="flex gap-2">
             <TouchResponseButton
               selected={currentResponse?.response === 'yes'}
-              onClick={() => updateResponse({ response: 'yes' })}
-              variant="success"
-              icon={CheckCircle2}
+              onClick={() => handleScoredResponse('yes')}
+              variant={yesVariant}
+              icon={yesIcon}
             >
               YES
             </TouchResponseButton>
             <TouchResponseButton
               selected={currentResponse?.response === 'no'}
-              onClick={() => updateResponse({ response: 'no' })}
-              variant="danger"
-              icon={XCircle}
+              onClick={() => handleScoredResponse('no')}
+              variant={noVariant}
+              icon={noIcon}
             >
               NO
             </TouchResponseButton>
             <TouchResponseButton
               selected={currentResponse?.response === 'na'}
-              onClick={() => updateResponse({ response: 'na' })}
+              onClick={() => handleScoredResponse('na')}
               variant="neutral"
               icon={MinusCircle}
             >
@@ -1249,25 +1317,51 @@ export default function MobileAuditExecution() {
           </div>
 
           {/* Evidence Section (skip when question type is already photo/signature) */}
-          {currentQuestion.evidenceRequired &&
-            currentQuestion.type !== 'photo' &&
-            currentQuestion.type !== 'signature' && (
+          {showEvidencePanel && (
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
-              <h3 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
+              <h3
+                id={`fail-evidence-label-${currentQuestion.id}`}
+                className="text-sm font-medium text-white mb-3 flex items-center gap-2"
+              >
                 <Camera className="w-4 h-4 text-cyan-400" />
-                Photo Evidence
+                {failEvidenceGateActive
+                  ? 'Photo Evidence Required (failed response)'
+                  : 'Photo Evidence'}
               </h3>
+              {failEvidenceGateError && (
+                <div
+                  id={failEvidenceErrorId}
+                  role="alert"
+                  className="mb-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300"
+                >
+                  {FAIL_EVIDENCE_ERROR_MESSAGE}
+                </div>
+              )}
               <PhotoCapture
                 photos={currentResponse?.photos || []}
+                captureButtonRef={evidenceCaptureRef}
+                captureButtonId={`fail-evidence-capture-${currentQuestion.id}`}
+                ariaInvalid={failEvidenceGateError}
+                ariaDescribedBy={
+                  failEvidenceGateError ? failEvidenceErrorId : `fail-evidence-label-${currentQuestion.id}`
+                }
                 onAdd={(photo) => {
                   updateResponse({
                     photos: [...(currentResponse?.photos || []), photo],
                   })
+                  setFailEvidenceGateError(false)
                 }}
                 onRemove={(idx) => {
-                  updateResponse({
-                    photos: currentResponse?.photos?.filter((_, i) => i !== idx) || [],
-                  })
+                  const nextPhotos = currentResponse?.photos?.filter((_, i) => i !== idx) || []
+                  updateResponse({ photos: nextPhotos })
+                  if (
+                    isFailEvidenceGateActive(currentQuestion, {
+                      response: currentResponse?.response ?? null,
+                      photos: nextPhotos,
+                    })
+                  ) {
+                    setFailEvidenceGateError(true)
+                  }
                 }}
               />
             </div>
@@ -1363,7 +1457,8 @@ export default function MobileAuditExecution() {
 
           <button
             onClick={goNext}
-            className="flex-1 flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-bold active:scale-98"
+            disabled={!canAdvance}
+            className="flex-1 flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-bold active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {currentSectionIndex === audit.sections.length - 1 &&
             currentQuestionIndex === currentSection.questions.length - 1
