@@ -1,10 +1,10 @@
 """R5: OCR artifacts table for page-level consensus persistence.
 
 Revision ID: 20260717_ocr_artifacts
-Revises: 20260716_partner_webhooks
+Revises: 20260717_inv_tmpl_normalize
 Create Date: 2026-07-17
 
-Chained after Wave5 (#1013) ``20260716_partner_webhooks``.
+Chained after W2 normalize (#1015) ``20260717_inv_tmpl_normalize``.
 Sibling lanes may rebase; down_revision is exclusive to this chain head.
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260717_ocr_artifacts"
-down_revision: Union[str, Sequence[str], None] = "20260716_partner_webhooks"
+down_revision: Union[str, Sequence[str], None] = "20260717_inv_tmpl_normalize"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
