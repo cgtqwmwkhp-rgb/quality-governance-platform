@@ -10,8 +10,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.api.schemas.capa import CAPAResponse
 from src.api.schemas.investigation import (
     CreateFromRecordRequest,
+    CreateInvestigationCapaRequest,
     InvestigationClosureValidationResponse,
     InvestigationCommentResponse,
     InvestigationCommentsResponse,
@@ -511,6 +513,38 @@ async def get_investigation(
         raise NotFoundError(f"Investigation with ID {investigation_id} not found")
 
     return investigation
+
+
+@router.post("/{investigation_id:int}/capa", response_model=CAPAResponse, status_code=201)
+async def create_capa_for_investigation(
+    investigation_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("investigation:update"))],
+    body: CreateInvestigationCapaRequest | None = None,
+):
+    """Create a CAPA action linked to an investigation (idempotent if already linked)."""
+    from src.domain.services.capa_service import CAPAService
+
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    payload = body if body is not None else CreateInvestigationCapaRequest.model_validate({})
+    svc = CAPAService(db)
+    try:
+        capa = await svc.create_capa_for_investigation(
+            investigation_id,
+            user_id=current_user.id,
+            tenant_id=tenant_id,
+            title=payload.title,
+            description=payload.description,
+            assignee_id=payload.assignee_id,
+            assignee_email=payload.assignee_email,
+            due_date=payload.due_date,
+            priority=payload.priority,
+        )
+    except LookupError as exc:
+        raise NotFoundError(str(exc)) from exc
+    except ValueError as exc:
+        raise BadRequestError(str(exc)) from exc
+    return CAPAResponse.model_validate(capa)
 
 
 @router.patch("/{investigation_id:int}", response_model=InvestigationRunResponse)

@@ -6,7 +6,7 @@ Raises domain exceptions instead of HTTPException.
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -16,6 +16,8 @@ from src.core.pagination import PaginatedResponse, PaginationInput, paginate
 from src.core.update import apply_updates
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
+from src.domain.models.investigation import InvestigationRun
+from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
@@ -276,3 +278,113 @@ class CAPAService:
             "in_progress": in_progress.scalar_one(),
             "overdue": overdue.scalar_one(),
         }
+
+    async def create_capa_for_investigation(
+        self,
+        investigation_id: int,
+        *,
+        user_id: int,
+        tenant_id: int,
+        title: str | None = None,
+        description: str | None = None,
+        assignee_id: int | None = None,
+        assignee_email: str | None = None,
+        due_date: str | datetime | None = None,
+        priority: str | None = None,
+    ) -> CAPAAction:
+        """Create a CAPA linked to an investigation (idempotent if already linked)."""
+        inv_result = await self.db.execute(
+            select(InvestigationRun).where(
+                InvestigationRun.id == investigation_id,
+                InvestigationRun.tenant_id == tenant_id,
+            )
+        )
+        investigation = inv_result.scalar_one_or_none()
+        if investigation is None:
+            raise LookupError(f"Investigation with ID {investigation_id} not found")
+
+        prior = await self.db.execute(
+            select(CAPAAction).where(
+                CAPAAction.tenant_id == tenant_id,
+                CAPAAction.source_type == CAPASource.INVESTIGATION,
+                CAPAAction.source_id == investigation_id,
+            )
+        )
+        existing_capa = prior.scalar_one_or_none()
+        if existing_capa is not None:
+            return existing_capa
+
+        resolved_assignee = assignee_id
+        if resolved_assignee is None and assignee_email:
+            user_result = await self.db.execute(select(User).where(User.email == assignee_email))
+            user = user_result.scalar_one_or_none()
+            if user is None:
+                raise LookupError(f"User not found for email: {assignee_email}")
+            resolved_assignee = user.id
+        if resolved_assignee is None:
+            inv_assignee = cast(int | None, investigation.assigned_to_user_id)
+            resolved_assignee = inv_assignee if inv_assignee is not None else user_id
+
+        capa_priority = CAPAPriority.MEDIUM
+        if priority:
+            try:
+                capa_priority = CAPAPriority(priority.lower())
+            except ValueError as exc:
+                raise ValueError(f"Invalid priority: {priority}") from exc
+
+        parsed_due: datetime | None = None
+        if due_date is not None:
+            if isinstance(due_date, datetime):
+                parsed_due = due_date.replace(tzinfo=None) if due_date.tzinfo else due_date
+            else:
+                raw = due_date.strip()
+                if raw:
+                    try:
+                        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                        parsed_due = parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+                    except ValueError:
+                        parsed_due = datetime.strptime(raw[:10], "%Y-%m-%d")
+
+        action_title = (title or f"Action plan: {investigation.title}")[:255]
+        action_desc = description if description is not None else investigation.description
+
+        ref = await ReferenceNumberService.generate(self.db, "capa", CAPAAction)
+        capa = CAPAAction(
+            reference_number=ref,
+            title=action_title,
+            description=action_desc,
+            capa_type=CAPAType.CORRECTIVE,
+            status=CAPAStatus.OPEN,
+            priority=capa_priority,
+            source_type=CAPASource.INVESTIGATION,
+            source_id=investigation_id,
+            source_reference=f"investigation:{investigation_id}",
+            assigned_to_id=resolved_assignee,
+            created_by_id=user_id,
+            due_date=parsed_due,
+            tenant_id=tenant_id,
+        )
+        self.db.add(capa)
+        await self.db.flush()
+
+        await record_audit_event(
+            db=self.db,
+            event_type="capa.created_from_investigation",
+            entity_type="capa",
+            entity_id=str(capa.id),
+            action="create",
+            description=f"CAPA {ref} created from investigation {investigation.reference_number}",
+            payload={
+                "investigation_id": investigation_id,
+                "capa_id": capa.id,
+                "reference_number": ref,
+            },
+            user_id=user_id,
+            tenant_id=tenant_id,
+        )
+
+        await self.db.commit()
+        await self.db.refresh(capa)
+        await invalidate_tenant_cache(tenant_id, "capa")
+        track_metric("investigations.create_capa")
+        return capa
