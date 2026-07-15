@@ -16,7 +16,9 @@
 - `src/domain/models/__init__.py`
 - `alembic/env.py`
 - `alembic/versions/20260718_failed_tasks.py`
+- `docs/governance/tenant_id_catalog_exceptions.json`
 - `docs/ops/ocr-provider-readiness.md`
+- `frontend/src/contexts/__tests__/PortalAuthContext.demoLogin.test.tsx`
 - `tests/fixtures/ocr/capabilities.json`
 - `tests/unit/test_ocr_ops_meta.py`
 - `tests/unit/test_ocr_artifacts.py`

@@ -37,10 +37,7 @@ def is_missing_failed_tasks_relation(exc: BaseException) -> bool:
             return True
         msg = str(current).lower()
         if "failed_tasks" in msg and (
-            "does not exist" in msg
-            or "no such table" in msg
-            or "undefinedtable" in msg
-            or "undefined table" in msg
+            "does not exist" in msg or "no such table" in msg or "undefinedtable" in msg or "undefined table" in msg
         ):
             return True
         orig = getattr(current, "orig", None)
@@ -64,10 +61,7 @@ def dlq_depth_from_exception(exc: BaseException) -> dict[str, Any]:
             "depth": None,
             **_thresholds(),
             "error_class": error_class,
-            "note": (
-                "failed_tasks table is not present; DLQ depth cannot be measured "
-                "until migrations apply."
-            ),
+            "note": ("failed_tasks table is not present; DLQ depth cannot be measured " "until migrations apply."),
         }
     return {
         "status": "error",
