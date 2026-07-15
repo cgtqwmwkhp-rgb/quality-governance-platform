@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://plantexpand.com/schemas/ocr-ops-status.json",
+  "title": "OCRProviderReadiness",
+  "description": "Configuration-only OCR provider meta (no secrets). Path-to-10 W4.",
+  "type": "object",
+  "required": ["status", "providers", "external_audit_import", "e4_non_goal"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["configured", "partial", "not_configured"]
+    },
+    "providers": {
+      "type": "object",
+      "required": ["mistral", "gemini", "azure_di"],
+      "properties": {
+        "mistral": {
+          "type": "object",
+          "required": ["configured", "api_key_present", "status", "role"],
+          "properties": {
+            "configured": { "type": "boolean" },
+            "api_key_present": { "type": "boolean" },
+            "status": { "type": "string" },
+            "role": { "const": "ocr" },
+            "timeout_seconds": { "type": "integer" },
+            "capabilities": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": true
+        },
+        "gemini": {
+          "type": "object",
+          "required": ["configured", "api_key_present", "status", "role"],
+          "properties": {
+            "configured": { "type": "boolean" },
+            "api_key_present": { "type": "boolean" },
+            "status": { "type": "string" },
+            "role": { "const": "review" },
+            "capabilities": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": true
+        },
+        "azure_di": {
+          "type": "object",
+          "required": [
+            "configured",
+            "endpoint_present",
+            "api_key_present",
+            "status",
+            "enabled_in_prod"
+          ],
+          "properties": {
+            "configured": { "type": "boolean" },
+            "endpoint_present": { "type": "boolean" },
+            "api_key_present": { "type": "boolean" },
+            "status": { "type": "string" },
+            "enabled_in_prod": { "const": false },
+            "role": { "type": "string" },
+            "capabilities": { "type": "array", "items": { "type": "string" } },
+            "note": { "type": "string" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "external_audit_import": {
+      "type": "object",
+      "required": ["ocr_configured", "review_configured", "native_extraction_always_available"],
+      "properties": {
+        "ocr_configured": { "type": "boolean" },
+        "review_configured": { "type": "boolean" },
+        "native_extraction_always_available": { "type": "boolean" },
+        "note": { "type": "string" }
+      }
+    },
+    "e4_non_goal": { "type": "string" },
+    "ocr_ping": {
+      "type": "object",
+      "properties": {
+        "status": { "const": "skipped" },
+        "connectivity": { "const": "unprobed" },
+        "note": { "type": "string" }
+      }
+    },
+    "as_of": { "type": "string", "format": "date-time" },
+    "endpoint": { "type": "string" },
+    "canonical_endpoint": { "type": "string" },
+    "note": { "type": "string" }
+  },
+  "additionalProperties": true
+}

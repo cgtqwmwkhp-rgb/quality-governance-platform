@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["health"])
 
+from src.api.routes import ocr_ops  # noqa: E402  — mount meta OCR ops under /health/meta
+
+router.include_router(ocr_ops.router, prefix="/meta")
+
 
 async def _probe_dlq_depth() -> dict[str, Any]:
     """Return pending FailedTask count for /readyz (informational)."""
@@ -92,6 +96,7 @@ def _build_api_readyz_checks(
     upstream_storage: dict[str, Any] | None = None,
     upstream_celery: dict[str, Any] | None = None,
     upstream_degraded: dict[str, Any] | None = None,
+    ocr_providers: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     checks: dict[str, Any] = {
         "database": db_status,
@@ -135,6 +140,13 @@ def _build_api_readyz_checks(
         "memory_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
         "cpu_percent": psutil.cpu_percent(interval=0.1),
         "circuit_breakers": circuit_breakers,
+        "ocr_providers": ocr_providers
+        or {
+            "status": "unknown",
+            "mistral_configured": False,
+            "gemini_configured": False,
+            "azure_di_configured": False,
+        },
         "upstream": {
             "ai": upstream_ai or {"status": "unknown"},
             "storage": upstream_storage or {"status": "unknown"},
@@ -256,12 +268,22 @@ async def readiness_check():
 
     # WCS-B06 / Lane-1 channels: push/SMTP/SMS informational (PagerDuty removed — EA-05 Cancelled)
     vapid, email, sms = _lane1_channel_snapshot()
-    from src.infrastructure.upstream.ai_status import get_upstream_ai_readiness
+    from src.infrastructure.upstream.ai_status import get_ocr_providers_readiness, get_upstream_ai_readiness
     from src.infrastructure.upstream.celery_status import get_upstream_celery_readiness
     from src.infrastructure.upstream.degraded_status import get_upstream_degraded_readiness
     from src.infrastructure.upstream.storage_status import get_upstream_storage_readiness
 
     upstream_ai = get_upstream_ai_readiness()
+    ocr_meta = get_ocr_providers_readiness()
+    ocr_providers = {
+        "status": ocr_meta["status"],
+        "mistral_configured": ocr_meta["providers"]["mistral"]["configured"],
+        "gemini_configured": ocr_meta["providers"]["gemini"]["configured"],
+        "azure_di_configured": ocr_meta["providers"]["azure_di"]["configured"],
+        "meta_endpoint": "/api/v1/health/meta/ocr-providers",
+    }
+    if ocr_meta.get("note"):
+        ocr_providers["note"] = ocr_meta["note"]
     upstream_storage = get_upstream_storage_readiness()
     upstream_celery = await get_upstream_celery_readiness()
     # Informational only — never flips readiness HTTP status.
@@ -284,6 +306,7 @@ async def readiness_check():
         upstream_storage=upstream_storage,
         upstream_celery=upstream_celery,
         upstream_degraded=upstream_degraded,
+        ocr_providers=ocr_providers,
     )
 
     payload = {
