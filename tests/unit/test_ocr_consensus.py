@@ -7,11 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from src.domain.services.ocr_consensus import (
-    OCRPageCandidate,
-    build_page_consensus,
-    character_error_rate,
-)
+from src.domain.services.ocr_consensus import OCRPageCandidate, build_page_consensus, character_error_rate
 from src.infrastructure.external.azure_document_intelligence import AzureDocumentIntelligenceClient
 
 FIXTURE_PATH = Path(__file__).parents[1] / "fixtures" / "ocr" / "page_consensus.json"
