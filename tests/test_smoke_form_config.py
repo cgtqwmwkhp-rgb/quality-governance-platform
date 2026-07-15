@@ -172,6 +172,35 @@ class TestFormTemplateEndpoints:
         assert response.json()["published_at"] is not None
 
     @pytest.mark.asyncio
+    async def test_unpublish_template(
+        self,
+        async_client: AsyncClient,
+        auth_headers: dict,
+        sample_template_data: dict,
+    ):
+        """Test unpublishing a form template via PATCH."""
+        create_response = await async_client.post(
+            "/api/v1/admin/config/templates",
+            headers=auth_headers,
+            json={**sample_template_data, "slug": "test-unpublish"},
+        )
+        template_id = create_response.json()["id"]
+
+        await async_client.post(
+            f"/api/v1/admin/config/templates/{template_id}/publish",
+            headers=auth_headers,
+        )
+
+        response = await async_client.patch(
+            f"/api/v1/admin/config/templates/{template_id}",
+            headers=auth_headers,
+            json={"is_published": False},
+        )
+        assert response.status_code == 200
+        assert response.json()["is_published"] is False
+        assert response.json()["published_at"] is None
+
+    @pytest.mark.asyncio
     async def test_delete_template(
         self,
         async_client: AsyncClient,

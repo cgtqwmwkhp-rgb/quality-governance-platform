@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import delete
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
@@ -55,7 +56,11 @@ async def list_form_templates(
     page_size: int = Query(20, ge=1, le=100),
 ) -> FormTemplateListResponse:
     """List all form templates with pagination."""
-    query = select(FormTemplate).where(FormTemplate.tenant_id == current_user.tenant_id)
+    query = (
+        select(FormTemplate)
+        .where(FormTemplate.tenant_id == current_user.tenant_id)
+        .options(selectinload(FormTemplate.steps).selectinload(FormStep.fields))
+    )
 
     if form_type:
         query = query.where(FormTemplate.form_type == form_type)
@@ -188,10 +193,12 @@ async def get_form_template(
 ) -> FormTemplate:
     """Get a form template by ID."""
     result = await db.execute(
-        select(FormTemplate).where(
+        select(FormTemplate)
+        .where(
             FormTemplate.id == template_id,
             FormTemplate.tenant_id == current_user.tenant_id,
         )
+        .options(selectinload(FormTemplate.steps).selectinload(FormStep.fields))
     )
     template = result.scalar_one_or_none()
 
@@ -246,6 +253,8 @@ async def update_form_template(
 
     # Update fields
     update_data = data.model_dump(exclude_unset=True)
+    if update_data.get("is_published") is False:
+        template.published_at = None
     for field, value in update_data.items():
         setattr(template, field, value)
 
