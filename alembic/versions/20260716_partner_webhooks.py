@@ -1,12 +1,10 @@
 """Wave5: partner webhook subscriptions + delivery log scaffold.
 
 Revision ID: 20260716_partner_webhooks
-Revises: 20260715_audit_db_integrity
+Revises: 20260716_capa_inv_src
 Create Date: 2026-07-16
 
-Rebase note: if Wave2a (#1009) lands on main first with
-``20260716_capa_investigation_source``, rebase this migration to chain after
-that revision instead of ``20260715_audit_db_integrity``.
+Chained after Wave2a (#1009) ``20260716_capa_inv_src``.
 """
 
 from __future__ import annotations
@@ -17,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260716_partner_webhooks"
-down_revision: Union[str, Sequence[str], None] = "20260715_audit_db_integrity"
+down_revision: Union[str, Sequence[str], None] = "20260716_capa_inv_src"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
