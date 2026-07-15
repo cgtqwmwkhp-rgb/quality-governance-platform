@@ -249,6 +249,20 @@ def test_pack_excludes_comments_and_revisions():
     print("\n✅ Comments and revision history correctly excluded")
 
 
+def test_dual_write_read_helpers_available():
+    """W2 spine helpers are exposed on InvestigationService."""
+    from src.domain.services.investigation_service import InvestigationService
+
+    for helper in (
+        "dual_write_template_structure",
+        "dual_write_run_responses",
+        "dual_read_template_structure",
+        "dual_read_run_data",
+    ):
+        assert hasattr(InvestigationService, helper), f"Missing helper: {helper}"
+    print("✓ W2 dual-write/read helpers available")
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("INVESTIGATION SERVICE GOLDEN TESTS")
@@ -266,6 +280,8 @@ if __name__ == "__main__":
     test_evidence_visibility_matrix()
     print()
     test_pack_excludes_comments_and_revisions()
+    print()
+    test_dual_write_read_helpers_available()
 
     print()
     print("=" * 60)

@@ -15,6 +15,7 @@ from src.api.schemas.investigation import (
 )
 from src.domain.models.investigation import InvestigationTemplate
 from src.domain.models.user import User
+from src.domain.services.investigation_structure_normalize import sync_template_structure_from_json
 
 router = APIRouter()
 
@@ -44,6 +45,9 @@ async def create_template(
     )
 
     db.add(template)
+    await db.commit()
+    await db.refresh(template)
+    await sync_template_structure_from_json(db, template)
     await db.commit()
     await db.refresh(template)
 
@@ -167,6 +171,10 @@ async def update_template(
 
     await db.commit()
     await db.refresh(template)
+    if "structure" in update_data:
+        await sync_template_structure_from_json(db, template)
+        await db.commit()
+        await db.refresh(template)
 
     return template
 
