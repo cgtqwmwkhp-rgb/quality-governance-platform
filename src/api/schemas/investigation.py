@@ -342,3 +342,14 @@ class InvestigationClosureValidationResponse(BaseModel):
     reasons: List[str]
     open_work: List[InvestigationClosureBlockingItem] = Field(default_factory=list)
     open_work_count: int = 0
+
+
+class CreateInvestigationCapaRequest(BaseModel):
+    """Optional overrides when creating a CAPA from an investigation."""
+
+    title: Optional[str] = Field(None, max_length=255)
+    description: Optional[str] = None
+    assignee_id: Optional[int] = None
+    assignee_email: Optional[str] = None
+    due_date: Optional[str] = None
+    priority: Optional[str] = None
