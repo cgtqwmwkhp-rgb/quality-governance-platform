@@ -176,6 +176,12 @@ from src.domain.models.iso27001 import (
 )
 from src.domain.models.location import Location, LocationKind
 from src.domain.models.loler import LOLERDefect, LOLERDefectCategory, LOLERExamination, LOLERExaminationType
+from src.domain.models.partner_webhook import (
+    PARTNER_WEBHOOK_EVENTS,
+    WebhookDeliveryLog,
+    WebhookDeliveryStatus,
+    WebhookSubscription,
+)
 
 # Planet Mark Carbon Management
 from src.domain.models.planet_mark import (
@@ -189,12 +195,6 @@ from src.domain.models.planet_mark import (
     Scope3CategoryData,
     SupplierEmissionData,
     UtilityMeterReading,
-)
-from src.domain.models.partner_webhook import (
-    PARTNER_WEBHOOK_EVENTS,
-    WebhookDeliveryLog,
-    WebhookDeliveryStatus,
-    WebhookSubscription,
 )
 from src.domain.models.policy import Policy, PolicyVersion
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment
