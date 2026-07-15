@@ -1777,10 +1777,7 @@ class AuditService:
         if new_status is not None:
             target_status = self._enum_value(new_status) or str(new_status)
             current_status = self._enum_value(finding.status) or FindingStatus.OPEN.value
-            if (
-                target_status == FindingStatus.CLOSED.value
-                and current_status != FindingStatus.CLOSED.value
-            ):
+            if target_status == FindingStatus.CLOSED.value and current_status != FindingStatus.CLOSED.value:
                 await self._assert_no_open_capas_for_finding_close(finding)
 
         handled = self._apply_json_field_updates(
@@ -1998,15 +1995,9 @@ class AuditService:
             )
         )
         siblings = list(siblings_result.scalars().all())
-        blockers = [
-            capa
-            for capa in siblings
-            if self._enum_value(capa.status) != CAPAStatus.CLOSED.value
-        ]
+        blockers = [capa for capa in siblings if self._enum_value(capa.status) != CAPAStatus.CLOSED.value]
         if blockers:
-            raise StateTransitionError(
-                "Cannot close finding while linked CAPA actions remain open"
-            )
+            raise StateTransitionError("Cannot close finding while linked CAPA actions remain open")
 
     async def apply_capa_closure_bridge(
         self,

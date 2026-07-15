@@ -11,7 +11,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { notificationsApi } from '../../api/notificationsClient'
+import { notificationsApi } from '../../api/client'
 import { getPlatformToken } from '../../utils/auth'
 import { trackError } from '../../utils/errorTracker'
 import {
@@ -61,7 +61,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
     const fetchNotifications = async () => {
       if (!getPlatformToken()) return
       try {
-        const response = await notificationsApi.list({ page: 1, pageSize: 50 })
+        const response = await notificationsApi.list({ page: 1, page_size: 50 })
         const items = (response.data.items || []) as Notification[]
         setNotifications(items)
         setUnreadCount(

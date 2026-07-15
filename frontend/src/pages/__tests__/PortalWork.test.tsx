@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import axios from 'axios'
 import PortalWork from '../PortalWork'
 
 const mockList = vi.fn()
