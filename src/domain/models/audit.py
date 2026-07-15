@@ -3,7 +3,7 @@
 import enum
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import (
     JSON,
@@ -25,6 +25,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, Base, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
 from src.domain.models.risk_register import EnterpriseRisk
+
+if TYPE_CHECKING:
+    from src.domain.models.asset import Asset
+    from src.domain.models.engineer import Engineer
 
 audit_finding_risks = Table(
     "audit_finding_risks",
@@ -304,6 +308,8 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     __table_args__ = (
         Index("ix_audit_runs_tenant_status", "tenant_id", "status"),
         Index("ix_audit_runs_tenant_created", "tenant_id", "created_at"),
+        Index("ix_audit_runs_tenant_asset", "tenant_id", "asset_id"),
+        Index("ix_audit_runs_tenant_engineer", "tenant_id", "engineer_id"),
         CheckConstraint("score >= 0", name="ck_audit_run_score_positive"),
         CheckConstraint(
             "score_percentage >= 0 AND score_percentage <= 100",
@@ -332,6 +338,16 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     )
     source_document_label: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
+    # Optional subject links (asset / engineer under audit)
+    asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("assets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    engineer_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("engineers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # GPS coordinates
     latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -358,6 +374,8 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     # Relationships
     template: Mapped["AuditTemplate"] = relationship("AuditTemplate", back_populates="runs")
+    asset: Mapped[Optional["Asset"]] = relationship("Asset")
+    engineer: Mapped[Optional["Engineer"]] = relationship("Engineer")
     responses: Mapped[List["AuditResponse"]] = relationship(
         "AuditResponse",
         back_populates="run",
@@ -377,6 +395,7 @@ class AuditResponse(Base, TimestampMixin):
     """Audit response model for individual question answers."""
 
     __tablename__ = "audit_responses"
+    __table_args__ = (UniqueConstraint("run_id", "question_id", name="uq_audit_responses_run_question"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False)
