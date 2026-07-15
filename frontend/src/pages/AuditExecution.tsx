@@ -103,7 +103,8 @@ const SECTION_COLORS = [
   'from-red-500/20 to-red-600/20',
 ]
 
-function mapBackendQuestionType(q: {
+/** Map builder/API question_type values to AuditExecution widget types. */
+export function mapBackendQuestionType(q: {
   question_type: string
   question_text?: string
   allow_na?: boolean
@@ -116,7 +117,8 @@ function mapBackendQuestionType(q: {
     case 'pass_fail':
       return 'pass_fail'
     case 'date':
-      return 'date'
+    case 'datetime':
+      return q.question_type === 'datetime' ? 'datetime' : 'date'
     case 'text': {
       const label = (q.question_text || '').toLowerCase().trim()
       if (
@@ -134,6 +136,14 @@ function mapBackendQuestionType(q: {
       return 'numeric'
     case 'signature':
       return 'signature'
+    case 'photo':
+    case 'file':
+      return 'photo'
+    case 'radio':
+    case 'dropdown':
+      return 'multi_choice'
+    case 'checkbox':
+      return 'checklist'
     case 'rating':
     case 'score':
       return (q.max_score ?? q.max_value ?? 5) > 5 ? 'scale_1_10' : 'scale_1_5'
@@ -149,6 +159,14 @@ function parseResponseValue(value: string | undefined | null, questionType: stri
   if (['scale_1_5', 'scale_1_10', 'numeric'].includes(questionType)) {
     const num = Number(value)
     return isNaN(num) ? value : num
+  }
+  if (questionType === 'checklist') {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed : value
+    } catch {
+      return value
+    }
   }
   return value
 }
@@ -973,7 +991,10 @@ export default function AuditExecution() {
   const isLastQuestion =
     currentSectionIndex === audit.sections.length - 1 &&
     currentQuestionIndex === currentSection.questions.length - 1
-  const canAdvance = !currentQuestion.required || Boolean(currentResponse?.response)
+  const canAdvance =
+    !currentQuestion.required ||
+    Boolean(currentResponse?.response) ||
+    (currentQuestion.type === 'photo' && (currentResponse?.photos?.length ?? 0) > 0)
   const globalQuestionIndex =
     audit.sections.slice(0, currentSectionIndex).reduce((sum, s) => sum + s.questions.length, 0) +
     currentQuestionIndex
@@ -1218,6 +1239,16 @@ export default function AuditExecution() {
           />
         )
 
+      case 'datetime':
+        return (
+          <input
+            type="datetime-local"
+            value={(currentResponse?.response as string) || ''}
+            onChange={(e) => updateResponse({ response: e.target.value })}
+            className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground focus:outline-none focus:border-ring cursor-pointer"
+          />
+        )
+
       case 'text_short':
         return (
           <input
@@ -1248,6 +1279,94 @@ export default function AuditExecution() {
             onChange={(e) => updateResponse({ response: e.target.value })}
             placeholder="Enter number..."
             className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring"
+          />
+        )
+
+      case 'multi_choice': {
+        const selected = (currentResponse?.response as string) || ''
+        const options = currentQuestion.options || []
+        return (
+          <div className="space-y-2" role="radiogroup" aria-label={currentQuestion.text}>
+            {options.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No options configured for this question.</p>
+            ) : (
+              options.map((opt) => (
+                <label
+                  key={opt.id}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${
+                    selected === opt.value
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-border bg-secondary text-foreground hover:border-ring'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name={`q-${currentQuestion.id}`}
+                    value={opt.value}
+                    checked={selected === opt.value}
+                    onChange={() => updateResponse({ response: opt.value })}
+                    className="accent-primary"
+                  />
+                  <span>{opt.label}</span>
+                </label>
+              ))
+            )}
+          </div>
+        )
+      }
+
+      case 'checklist': {
+        const selected = Array.isArray(currentResponse?.response)
+          ? (currentResponse.response as string[])
+          : []
+        const options = currentQuestion.options || []
+        const toggle = (value: string) => {
+          const next = selected.includes(value)
+            ? selected.filter((v) => v !== value)
+            : [...selected, value]
+          updateResponse({ response: next })
+        }
+        return (
+          <div className="space-y-2" role="group" aria-label={currentQuestion.text}>
+            {options.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No options configured for this question.</p>
+            ) : (
+              options.map((opt) => (
+                <label
+                  key={opt.id}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors ${
+                    selected.includes(opt.value)
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-border bg-secondary text-foreground hover:border-ring'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    value={opt.value}
+                    checked={selected.includes(opt.value)}
+                    onChange={() => toggle(opt.value)}
+                    className="accent-primary"
+                  />
+                  <span>{opt.label}</span>
+                </label>
+              ))
+            )}
+          </div>
+        )
+      }
+
+      case 'photo':
+        return (
+          <PhotoCapture
+            photos={currentResponse?.photos || []}
+            onAdd={(photo) => {
+              const photos = [...(currentResponse?.photos || []), photo]
+              updateResponse({ photos, response: photos.length ? 'captured' : null })
+            }}
+            onRemove={(idx) => {
+              const photos = currentResponse?.photos?.filter((_, i) => i !== idx) || []
+              updateResponse({ photos, response: photos.length ? 'captured' : null })
+            }}
           />
         )
 
@@ -1621,8 +1740,10 @@ export default function AuditExecution() {
               {/* Response Input */}
               <div>{renderQuestionInput()}</div>
 
-              {/* Evidence Required */}
-              {currentQuestion.evidenceRequired && (
+              {/* Evidence Required (skip when question type is already photo/signature) */}
+              {currentQuestion.evidenceRequired &&
+                currentQuestion.type !== 'photo' &&
+                currentQuestion.type !== 'signature' && (
                 <div className="pt-4 border-t border-border">
                   <div className="flex items-center gap-2 mb-3">
                     <Camera className="w-4 h-4 text-info" />

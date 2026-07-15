@@ -39,7 +39,7 @@ import {
 // TYPES
 // ============================================================================
 
-type ResponseType = 'yes' | 'no' | 'na' | 'pass' | 'fail' | number | string | null
+type ResponseType = 'yes' | 'no' | 'na' | 'pass' | 'fail' | number | string | string[] | null
 
 interface QuestionResponse {
   questionId: string
@@ -62,10 +62,60 @@ interface AuditQuestion {
   type: string
   required: boolean
   weight: number
+  options?: { id: string; label: string; value: string; score?: number }[]
   evidenceRequired: boolean
   guidance?: string
   riskLevel?: string
   isoClause?: string
+}
+
+/** Map builder/API question_type values to MobileAuditExecution widget types (parity with desktop). */
+export function mapBackendQuestionType(q: {
+  question_type: string
+  question_text?: string
+  allow_na?: boolean
+  max_score?: number
+  max_value?: number
+}): string {
+  switch (q.question_type) {
+    case 'yes_no':
+      return q.allow_na ? 'yes_no_na' : 'yes_no'
+    case 'pass_fail':
+      return 'pass_fail'
+    case 'date':
+    case 'datetime':
+      return q.question_type === 'datetime' ? 'datetime' : 'date'
+    case 'text': {
+      const label = (q.question_text || '').toLowerCase().trim()
+      if (
+        label === 'date' ||
+        label === 'date of inspection' ||
+        label === 'inspection date' ||
+        label === 'audit date'
+      )
+        return 'date'
+      return 'text_short'
+    }
+    case 'textarea':
+      return 'text_long'
+    case 'number':
+      return 'numeric'
+    case 'signature':
+      return 'signature'
+    case 'photo':
+    case 'file':
+      return 'photo'
+    case 'radio':
+    case 'dropdown':
+      return 'multi_choice'
+    case 'checkbox':
+      return 'checklist'
+    case 'rating':
+    case 'score':
+      return (q.max_score ?? q.max_value ?? 5) > 5 ? 'scale_1_10' : 'scale_1_5'
+    default:
+      return 'text_short'
+  }
 }
 
 interface AuditSection {
@@ -753,6 +803,57 @@ export default function MobileAuditExecution() {
           />
         )
 
+      case 'scale_1_10':
+        return (
+          <TouchScaleInput
+            value={currentResponse?.response as number | null}
+            onChange={(val) => updateResponse({ response: val })}
+            max={10}
+          />
+        )
+
+      case 'date':
+        return (
+          <input
+            type="date"
+            value={(currentResponse?.response as string) || ''}
+            onChange={(e) => updateResponse({ response: e.target.value })}
+            className="w-full px-4 py-4 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-purple-500 text-lg"
+          />
+        )
+
+      case 'datetime':
+        return (
+          <input
+            type="datetime-local"
+            value={(currentResponse?.response as string) || ''}
+            onChange={(e) => updateResponse({ response: e.target.value })}
+            className="w-full px-4 py-4 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-purple-500 text-lg"
+          />
+        )
+
+      case 'text_short':
+        return (
+          <input
+            type="text"
+            value={(currentResponse?.response as string) || ''}
+            onChange={(e) => updateResponse({ response: e.target.value })}
+            placeholder="Enter response..."
+            className="w-full px-4 py-4 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 text-lg"
+          />
+        )
+
+      case 'text_long':
+        return (
+          <textarea
+            value={(currentResponse?.response as string) || ''}
+            onChange={(e) => updateResponse({ response: e.target.value })}
+            placeholder="Enter response..."
+            rows={3}
+            className="w-full px-4 py-4 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 text-lg"
+          />
+        )
+
       case 'numeric':
         return (
           <input
@@ -762,6 +863,110 @@ export default function MobileAuditExecution() {
             onChange={(e) => updateResponse({ response: e.target.value })}
             placeholder="Enter number..."
             className="w-full px-4 py-4 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 text-lg text-center"
+          />
+        )
+
+      case 'multi_choice': {
+        const selected = (currentResponse?.response as string) || ''
+        const options = currentQuestion.options || []
+        return (
+          <div className="space-y-2" role="radiogroup" aria-label={currentQuestion.text}>
+            {options.map((opt) => (
+              <label
+                key={opt.id}
+                className={`flex items-center gap-3 px-4 py-4 rounded-xl border ${
+                  selected === opt.value
+                    ? 'border-purple-500 bg-purple-500/20 text-white'
+                    : 'border-slate-700 bg-slate-800 text-slate-200'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={`q-${currentQuestion.id}`}
+                  value={opt.value}
+                  checked={selected === opt.value}
+                  onChange={() => updateResponse({ response: opt.value })}
+                  className="accent-purple-500"
+                />
+                <span className="text-lg">{opt.label}</span>
+              </label>
+            ))}
+          </div>
+        )
+      }
+
+      case 'checklist': {
+        const selected = Array.isArray(currentResponse?.response)
+          ? (currentResponse.response as string[])
+          : []
+        const options = currentQuestion.options || []
+        const toggle = (value: string) => {
+          const next = selected.includes(value)
+            ? selected.filter((v) => v !== value)
+            : [...selected, value]
+          updateResponse({ response: next })
+        }
+        return (
+          <div className="space-y-2" role="group" aria-label={currentQuestion.text}>
+            {options.map((opt) => (
+              <label
+                key={opt.id}
+                className={`flex items-center gap-3 px-4 py-4 rounded-xl border ${
+                  selected.includes(opt.value)
+                    ? 'border-purple-500 bg-purple-500/20 text-white'
+                    : 'border-slate-700 bg-slate-800 text-slate-200'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  value={opt.value}
+                  checked={selected.includes(opt.value)}
+                  onChange={() => toggle(opt.value)}
+                  className="accent-purple-500"
+                />
+                <span className="text-lg">{opt.label}</span>
+              </label>
+            ))}
+          </div>
+        )
+      }
+
+      case 'photo':
+        return (
+          <PhotoCapture
+            photos={currentResponse?.photos || []}
+            onAdd={(photo) => {
+              const photos = [...(currentResponse?.photos || []), photo]
+              updateResponse({ photos, response: photos.length ? 'captured' : null })
+            }}
+            onRemove={(idx) => {
+              const photos = currentResponse?.photos?.filter((_, i) => i !== idx) || []
+              updateResponse({ photos, response: photos.length ? 'captured' : null })
+            }}
+          />
+        )
+
+      case 'signature':
+        // No canvas pad on mobile — reuse photo capture as signature evidence.
+        return (
+          <PhotoCapture
+            photos={currentResponse?.photos || []}
+            onAdd={(photo) => {
+              const photos = [...(currentResponse?.photos || []), photo]
+              updateResponse({
+                photos,
+                signature: photo,
+                response: photos.length ? 'signed' : null,
+              })
+            }}
+            onRemove={(idx) => {
+              const photos = currentResponse?.photos?.filter((_, i) => i !== idx) || []
+              updateResponse({
+                photos,
+                signature: photos[0],
+                response: photos.length ? 'signed' : null,
+              })
+            }}
           />
         )
 
@@ -1043,8 +1248,10 @@ export default function MobileAuditExecution() {
             </div>
           </div>
 
-          {/* Evidence Section */}
-          {currentQuestion.evidenceRequired && (
+          {/* Evidence Section (skip when question type is already photo/signature) */}
+          {currentQuestion.evidenceRequired &&
+            currentQuestion.type !== 'photo' &&
+            currentQuestion.type !== 'signature' && (
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
               <h3 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
                 <Camera className="w-4 h-4 text-cyan-400" />
