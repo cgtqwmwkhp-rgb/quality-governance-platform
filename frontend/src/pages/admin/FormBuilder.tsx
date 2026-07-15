@@ -21,6 +21,11 @@ import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Textarea } from '../../components/ui/Textarea'
 import { cn } from '../../helpers/utils'
+import {
+  formConfigApi,
+  type FormFieldPayload,
+  type FormTemplateResponse,
+} from '../../api/formConfigClient'
 
 // Field type definitions
 const FIELD_TYPES = [
@@ -89,6 +94,73 @@ interface FormTemplate {
   steps: FormStep[]
 }
 
+const isServerId = (id: string) => /^\d+$/.test(id)
+
+function mapFieldToPayload(field: FormField, order: number): FormFieldPayload {
+  return {
+    name: field.name,
+    label: field.label,
+    field_type: field.field_type,
+    order,
+    placeholder: field.placeholder,
+    help_text: field.help_text,
+    is_required: field.is_required,
+    options: field.options,
+    width: field.width,
+  }
+}
+
+function mapTemplateToUi(template: FormTemplateResponse): FormTemplate {
+  return {
+    id: template.id,
+    name: template.name,
+    slug: template.slug,
+    description: template.description,
+    form_type: template.form_type,
+    icon: template.icon,
+    color: template.color,
+    allow_drafts: template.allow_drafts ?? true,
+    allow_attachments: template.allow_attachments ?? true,
+    require_signature: template.require_signature ?? false,
+    auto_assign_reference: template.auto_assign_reference ?? true,
+    reference_prefix: template.reference_prefix ?? undefined,
+    notify_on_submit: template.notify_on_submit ?? true,
+    notification_emails: template.notification_emails ?? undefined,
+    steps:
+      template.steps.length > 0
+        ? template.steps.map((step, index) => ({
+            id: String(step.id),
+            name: step.name,
+            description: step.description,
+            order: step.order ?? index,
+            icon: step.icon,
+            isExpanded: index === 0,
+            fields: step.fields.map((field, fieldIndex) => ({
+              id: String(field.id),
+              name: field.name,
+              label: field.label,
+              field_type: field.field_type,
+              order: field.order ?? fieldIndex,
+              placeholder: field.placeholder,
+              help_text: field.help_text,
+              is_required: field.is_required,
+              options: field.options,
+              width: field.width,
+            })),
+          }))
+        : [
+            {
+              id: 'step-1',
+              name: 'Step 1',
+              description: '',
+              order: 0,
+              fields: [],
+              isExpanded: true,
+            },
+          ],
+  }
+}
+
 export default function FormBuilder() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -125,14 +197,38 @@ export default function FormBuilder() {
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(isEditing)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadedStepIds, setLoadedStepIds] = useState<number[]>([])
+  const [loadedFieldIdsByStep, setLoadedFieldIdsByStep] = useState<Record<string, number[]>>({})
 
   // Load existing template if editing
   useEffect(() => {
-    if (templateId) {
-      // In real implementation, fetch from API
-      // For now, use placeholder
+    if (!templateId) return
+
+    const loadTemplate = async () => {
+      setIsLoading(true)
+      setLoadError(null)
+      try {
+        const data = await formConfigApi.getTemplate(Number(templateId))
+        const mapped = mapTemplateToUi(data)
+        setTemplate(mapped)
+        setSelectedStepId(mapped.steps[0]?.id ?? null)
+        setLoadedStepIds(data.steps.map((step) => step.id))
+        setLoadedFieldIdsByStep(
+          Object.fromEntries(
+            data.steps.map((step) => [String(step.id), step.fields.map((field) => field.id)]),
+          ),
+        )
+      } catch {
+        setLoadError(t('admin.forms.load_error', 'Unable to load form template.'))
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }, [templateId])
+
+    void loadTemplate()
+  }, [templateId, t])
 
   const generateSlug = (name: string) => {
     return name
@@ -226,12 +322,113 @@ export default function FormBuilder() {
     })
   }
 
+  const buildTemplatePayload = () => ({
+    name: template.name,
+    slug: template.slug,
+    description: template.description,
+    form_type: template.form_type,
+    icon: template.icon,
+    color: template.color,
+    allow_drafts: template.allow_drafts,
+    allow_attachments: template.allow_attachments,
+    require_signature: template.require_signature,
+    auto_assign_reference: template.auto_assign_reference,
+    reference_prefix: template.reference_prefix,
+    notify_on_submit: template.notify_on_submit,
+    notification_emails: template.notification_emails,
+  })
+
+  const syncSteps = async (templateId: number, steps: FormStep[]) => {
+    const currentStepIds: number[] = []
+
+    for (let stepIndex = 0; stepIndex < steps.length; stepIndex++) {
+      const step = steps[stepIndex]
+      const stepPayload = {
+        name: step.name,
+        description: step.description,
+        order: stepIndex,
+      }
+
+      let stepId: number
+      if (isServerId(step.id)) {
+        stepId = Number(step.id)
+        await formConfigApi.updateStep(stepId, stepPayload)
+      } else {
+        const created = await formConfigApi.createStep(templateId, stepPayload)
+        stepId = created.id
+      }
+      currentStepIds.push(stepId)
+
+      const originalFieldIds = loadedFieldIdsByStep[isServerId(step.id) ? step.id : ''] ?? []
+      const currentFieldIds: number[] = []
+
+      for (let fieldIndex = 0; fieldIndex < step.fields.length; fieldIndex++) {
+        const field = step.fields[fieldIndex]
+        const fieldPayload = mapFieldToPayload(field, fieldIndex)
+
+        if (isServerId(field.id)) {
+          const fieldId = Number(field.id)
+          await formConfigApi.updateField(fieldId, fieldPayload)
+          currentFieldIds.push(fieldId)
+        } else {
+          const created = await formConfigApi.createField(stepId, fieldPayload)
+          currentFieldIds.push(created.id)
+        }
+      }
+
+      for (const fieldId of originalFieldIds) {
+        if (!currentFieldIds.includes(fieldId)) {
+          await formConfigApi.deleteField(fieldId)
+        }
+      }
+    }
+
+    for (const stepId of loadedStepIds) {
+      if (!currentStepIds.includes(stepId)) {
+        await formConfigApi.deleteStep(stepId)
+      }
+    }
+
+    return currentStepIds
+  }
+
   const handleSave = async () => {
+    if (!template.name.trim() || !template.slug.trim()) {
+      setSaveError(t('admin.forms.save_error', 'Name and slug are required.'))
+      return
+    }
+
     setIsSaving(true)
     setSaveError(null)
     try {
-      // In real implementation, save to API
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      if (template.id) {
+        await formConfigApi.updateTemplate(template.id, buildTemplatePayload())
+        await syncSteps(template.id, template.steps)
+        const refreshed = await formConfigApi.getTemplate(template.id)
+        const mapped = mapTemplateToUi(refreshed)
+        setTemplate(mapped)
+        setLoadedStepIds(refreshed.steps.map((step) => step.id))
+        setLoadedFieldIdsByStep(
+          Object.fromEntries(
+            refreshed.steps.map((step) => [String(step.id), step.fields.map((field) => field.id)]),
+          ),
+        )
+      } else {
+        const created = await formConfigApi.createTemplate({
+          ...buildTemplatePayload(),
+          steps: template.steps.map((step, stepIndex) => ({
+            name: step.name,
+            description: step.description,
+            order: stepIndex,
+            fields: step.fields.map((field, fieldIndex) => mapFieldToPayload(field, fieldIndex)),
+          })),
+        })
+        setSaveSuccess(true)
+        setTimeout(() => setSaveSuccess(false), 2000)
+        navigate(`/admin/forms/${created.id}`, { replace: true })
+        return
+      }
+
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 2000)
     } catch {
@@ -240,6 +437,25 @@ export default function FormBuilder() {
     } finally {
       setIsSaving(false)
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-muted-foreground animate-spin" />
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-surface flex flex-col items-center justify-center gap-4">
+        <p className="text-destructive">{loadError}</p>
+        <Button variant="outline" onClick={() => navigate('/admin/forms')}>
+          Back to forms
+        </Button>
+      </div>
+    )
   }
 
   return (

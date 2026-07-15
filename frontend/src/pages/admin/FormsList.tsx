@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Plus,
@@ -15,6 +15,7 @@ import {
   Eye,
   Check,
   X,
+  Loader2,
 } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
@@ -27,20 +28,7 @@ import {
   DialogFooter,
 } from '../../components/ui/Dialog'
 import { cn } from '../../helpers/utils'
-
-interface FormTemplate {
-  id: number
-  name: string
-  slug: string
-  form_type: string
-  description?: string
-  is_active: boolean
-  is_published: boolean
-  version: number
-  steps_count: number
-  fields_count: number
-  updated_at: string
-}
+import { formConfigApi, type FormTemplateListItem } from '../../api/formConfigClient'
 
 const FORM_TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   incident: {
@@ -75,15 +63,34 @@ const FORM_TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode; c
   },
 }
 
-const MOCK_FORMS: FormTemplate[] = []
-
 export default function FormsList() {
   const navigate = useNavigate()
-  const [forms, setForms] = useState<FormTemplate[]>(MOCK_FORMS)
+  const [forms, setForms] = useState<FormTemplateListItem[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState<string | null>(null)
   const [activeMenu, setActiveMenu] = useState<number | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  const loadForms = async () => {
+    setIsLoading(true)
+    setLoadError(null)
+    try {
+      const response = await formConfigApi.listTemplates({ page_size: 100 })
+      setForms(response.items)
+    } catch {
+      setLoadError('Unable to load forms. Please try again.')
+      setForms([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadForms()
+  }, [])
 
   const filteredForms = forms.filter((form) => {
     const matchesSearch =
@@ -98,29 +105,100 @@ export default function FormsList() {
     setActiveMenu(null)
   }
 
-  const confirmDelete = () => {
-    if (deleteTarget !== null) {
+  const confirmDelete = async () => {
+    if (deleteTarget === null) return
+    setActionError(null)
+    try {
+      await formConfigApi.deleteTemplate(deleteTarget)
       setForms((prev) => prev.filter((f) => f.id !== deleteTarget))
+    } catch {
+      setActionError('Failed to delete form.')
+    } finally {
+      setDeleteTarget(null)
     }
-    setDeleteTarget(null)
   }
 
-  const handleDuplicate = (form: FormTemplate) => {
-    const duplicate: FormTemplate = {
-      ...form,
-      id: Date.now(),
-      name: `${form.name} (Copy)`,
-      slug: `${form.slug}-copy`,
-      is_published: false,
-      version: 1,
-    }
-    setForms((prev) => [...prev, duplicate])
+  const handleDuplicate = async (form: FormTemplateListItem) => {
+    setActionError(null)
     setActiveMenu(null)
+    try {
+      const source = await formConfigApi.getTemplate(form.id)
+      const copySlug = `${source.slug}-copy-${Date.now()}`
+      const created = await formConfigApi.createTemplate({
+        name: `${source.name} (Copy)`,
+        slug: copySlug,
+        description: source.description,
+        form_type: source.form_type,
+        icon: source.icon,
+        color: source.color,
+        allow_drafts: source.allow_drafts,
+        allow_attachments: source.allow_attachments,
+        require_signature: source.require_signature,
+        auto_assign_reference: source.auto_assign_reference,
+        reference_prefix: source.reference_prefix,
+        notify_on_submit: source.notify_on_submit,
+        notification_emails: source.notification_emails,
+        steps: source.steps.map((step, stepIndex) => ({
+          name: step.name,
+          description: step.description,
+          order: stepIndex,
+          icon: step.icon,
+          fields: step.fields.map((field, fieldIndex) => ({
+            name: field.name,
+            label: field.label,
+            field_type: field.field_type,
+            order: fieldIndex,
+            placeholder: field.placeholder,
+            help_text: field.help_text,
+            is_required: field.is_required,
+            options: field.options,
+            width: field.width,
+          })),
+        })),
+      })
+      setForms((prev) => [
+        ...prev,
+        {
+          id: created.id,
+          name: created.name,
+          slug: created.slug,
+          form_type: created.form_type,
+          description: created.description,
+          is_active: created.is_active,
+          is_published: created.is_published,
+          version: created.version,
+          steps_count: created.steps.length,
+          fields_count: created.steps.reduce((sum, step) => sum + step.fields.length, 0),
+          updated_at: created.updated_at,
+        },
+      ])
+    } catch {
+      setActionError('Failed to duplicate form.')
+    }
   }
 
-  const togglePublish = (id: number) => {
-    setForms((prev) => prev.map((f) => (f.id === id ? { ...f, is_published: !f.is_published } : f)))
+  const togglePublish = async (form: FormTemplateListItem) => {
+    setActionError(null)
     setActiveMenu(null)
+    try {
+      const updated = form.is_published
+        ? await formConfigApi.updateTemplate(form.id, { is_published: false })
+        : await formConfigApi.publishTemplate(form.id)
+      setForms((prev) =>
+        prev.map((f) =>
+          f.id === form.id
+            ? {
+                ...f,
+                is_published: updated.is_published,
+                version: updated.version,
+                updated_at: updated.updated_at,
+              }
+            : f,
+        ),
+      )
+    } catch {
+      setActionError('Failed to update publish status.')
+    }
   }
 
   return (
@@ -187,7 +265,25 @@ export default function FormsList() {
 
       {/* Forms Grid */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        {filteredForms.length === 0 ? (
+        {actionError && (
+          <p className="text-sm text-destructive mb-4" role="alert">
+            {actionError}
+          </p>
+        )}
+
+        {isLoading ? (
+          <Card className="p-12 text-center">
+            <Loader2 className="w-8 h-8 mx-auto text-muted-foreground animate-spin mb-4" />
+            <p className="text-muted-foreground">Loading forms...</p>
+          </Card>
+        ) : loadError ? (
+          <Card className="p-12 text-center">
+            <p className="text-destructive mb-4">{loadError}</p>
+            <Button variant="outline" onClick={() => void loadForms()}>
+              Retry
+            </Button>
+          </Card>
+        ) : filteredForms.length === 0 ? (
           <Card className="p-12 text-center">
             <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-2">No forms found</h3>
@@ -291,14 +387,14 @@ export default function FormsList() {
                           Preview
                         </button>
                         <button
-                          onClick={() => handleDuplicate(form)}
+                          onClick={() => void handleDuplicate(form)}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
                         >
                           <Copy className="w-4 h-4" />
                           Duplicate
                         </button>
                         <button
-                          onClick={() => togglePublish(form.id)}
+                          onClick={() => void togglePublish(form)}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
                         >
                           {form.is_published ? (
@@ -343,7 +439,7 @@ export default function FormsList() {
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
+            <Button variant="destructive" onClick={() => void confirmDelete()}>
               Delete
             </Button>
           </DialogFooter>
