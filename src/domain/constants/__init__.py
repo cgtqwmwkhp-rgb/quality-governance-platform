@@ -1,0 +1,1 @@
+"""Domain-level constant registries."""
