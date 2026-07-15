@@ -1,0 +1,40 @@
+{
+  "status": "partial",
+  "providers": {
+    "mistral": {
+      "configured": true,
+      "api_key_present": true,
+      "status": "configured",
+      "role": "ocr",
+      "capabilities": [
+        "external_audit_import_ocr",
+        "scanned_pdf_fallback",
+        "native_extraction_merge"
+      ]
+    },
+    "gemini": {
+      "configured": false,
+      "api_key_present": false,
+      "status": "not_configured",
+      "role": "review",
+      "capabilities": ["external_audit_import_review"]
+    },
+    "azure_di": {
+      "configured": false,
+      "endpoint_present": false,
+      "api_key_present": false,
+      "status": "not_configured",
+      "enabled_in_prod": false
+    }
+  },
+  "external_audit_import": {
+    "ocr_configured": true,
+    "review_configured": false,
+    "native_extraction_always_available": true
+  },
+  "ocr_ping": {
+    "status": "skipped",
+    "connectivity": "unprobed"
+  },
+  "e4_non_goal": "Azure Document Intelligence is not enabled in production."
+}

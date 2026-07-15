@@ -123,3 +123,87 @@ def get_upstream_ai_readiness() -> dict[str, Any]:
             + ". Import CUJs that need the missing provider will degrade."
         )
     return payload
+
+
+def get_ocr_providers_readiness() -> dict[str, Any]:
+    """Return OCR provider meta for ops dashboards (configuration only, no secrets).
+
+    Aggregate ``status``:
+    - ``configured``: Mistral + Gemini keys present (Azure DI reported separately)
+    - ``partial``: at least one of Mistral/Gemini/Azure DI env groups present
+    - ``not_configured``: no OCR-related credentials present
+    """
+    from src.infrastructure.external.azure_document_intelligence import get_azure_di_readiness
+
+    ai = get_upstream_ai_readiness()
+    azure_di = get_azure_di_readiness()
+
+    mistral_configured = bool(ai["mistral"]["api_key_present"])
+    gemini_configured = bool(ai["gemini"]["api_key_present"])
+    azure_di_configured = bool(azure_di["configured"])
+    azure_di_env_present = azure_di_configured or azure_di["status"] == "partial"
+
+    if mistral_configured and gemini_configured:
+        aggregate = "configured"
+    elif mistral_configured or gemini_configured or azure_di_env_present:
+        aggregate = "partial"
+    else:
+        aggregate = "not_configured"
+
+    providers: dict[str, Any] = {
+        "mistral": {
+            **ai["mistral"],
+            "configured": mistral_configured,
+            "capabilities": [
+                "external_audit_import_ocr",
+                "scanned_pdf_fallback",
+                "native_extraction_merge",
+            ],
+        },
+        "gemini": {
+            **ai["gemini"],
+            "configured": gemini_configured,
+            "capabilities": ["external_audit_import_review"],
+        },
+        "azure_di": azure_di,
+    }
+
+    payload: dict[str, Any] = {
+        "status": aggregate,
+        "providers": providers,
+        "external_audit_import": {
+            "ocr_configured": mistral_configured,
+            "review_configured": gemini_configured,
+            "native_extraction_always_available": True,
+            "note": (
+                "Native PDF/DOCX/XLSX extraction runs without OCR keys. "
+                "Mistral OCR supplements scanned or image-heavy imports when configured."
+            ),
+        },
+        "circuits": ai.get("circuits", {}),
+        "ocr_ping": ai.get("ocr_ping"),
+        "e4_non_goal": (
+            "Azure Document Intelligence is not enabled in production. "
+            "azure_di.* fields report env-var presence only; no outbound DI calls from probes."
+        ),
+    }
+
+    if aggregate == "not_configured":
+        payload["note"] = (
+            "No OCR providers configured. External audit import uses native extraction only. "
+            "Set MISTRAL_API_KEY and GOOGLE_GEMINI_API_KEY when OCR/review is required."
+        )
+    elif aggregate == "partial" and not (mistral_configured and gemini_configured):
+        missing = []
+        if not mistral_configured:
+            missing.append("MISTRAL_API_KEY")
+        if not gemini_configured:
+            missing.append("GOOGLE_GEMINI_API_KEY")
+        if missing:
+            payload["note"] = (
+                "OCR providers partially configured. Missing: "
+                + ", ".join(missing)
+                + ". Import CUJs needing missing providers will degrade."
+            )
+
+    return payload
