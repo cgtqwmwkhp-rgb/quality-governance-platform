@@ -20,6 +20,7 @@ import logging
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "20260719_rls_gt_exp"

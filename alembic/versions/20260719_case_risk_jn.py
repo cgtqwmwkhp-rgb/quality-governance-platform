@@ -11,6 +11,7 @@ and risks_v2.linked_incidents JSONB. Legacy columns remain for one transition re
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "20260719_case_risk_jn"
