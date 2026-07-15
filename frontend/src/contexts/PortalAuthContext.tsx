@@ -1,7 +1,12 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react'
 import { API_BASE_URL } from '../config/apiBase'
 import { isPortalDemoLoginEnabled } from '../config/portalDemoLogin'
-import { revokeSession } from '../utils/auth'
+import {
+  clearAuthState,
+  establishPlatformSession,
+  getValidPlatformToken,
+  revokeSession,
+} from '../utils/auth'
 
 // Microsoft Entra ID (Azure AD) configuration
 const MSAL_CONFIG = {
@@ -78,14 +83,29 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
   const [user, setUser] = useState<PortalUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [platformToken, setPlatformToken] = useState<string | null>(() => {
-    // Restore platform token from sessionStorage on mount
-    return sessionStorage.getItem('platform_access_token')
-  })
+  const [platformToken, setPlatformToken] = useState<string | null>(() => getValidPlatformToken())
   const demoLoginAvailable = isPortalDemoLoginEnabled()
   const isAuthenticated = Boolean(
     user && ((demoLoginAvailable && user.isDemoUser) || platformToken),
   )
+
+  const portalUserFromMe = (me: {
+    id?: number | string
+    email?: string
+    full_name?: string
+    name?: string
+  }): PortalUser => {
+    const name = me.full_name || me.name || me.email || 'User'
+    return {
+      id: String(me.id ?? '0'),
+      email: me.email || '',
+      name,
+      firstName: String(name).split(' ')[0] || 'User',
+      lastName: String(name).split(' ').slice(1).join(' ') || '',
+      jobTitle: '',
+      department: '',
+    }
+  }
 
   // Exchange Azure AD id_token for platform JWT
   const exchangeToken = async (idToken: string): Promise<TokenExchangeResponse | null> => {
@@ -108,9 +128,8 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
         console.log('[PortalAuth] Token exchange successful for user:', data.user.email)
       }
 
-      // Store platform tokens securely (sessionStorage clears on tab close)
-      sessionStorage.setItem('platform_access_token', data.access_token)
-      sessionStorage.setItem('platform_refresh_token', data.refresh_token)
+      // Mirror into admin + portal stores so both shells share one session.
+      establishPlatformSession(data.access_token, data.refresh_token)
       setPlatformToken(data.access_token)
 
       return data
@@ -207,6 +226,8 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
       }
 
       try {
+        const sharedToken = getValidPlatformToken()
+
         // Check localStorage for existing portal session
         const savedUser = localStorage.getItem('portal_user')
         if (savedUser) {
@@ -223,34 +244,30 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
                 console.warn('[PortalAuth] Discarded demo portal session — demo login gate closed')
                 setUser(null)
                 setPlatformToken(null)
+              } else if (sharedToken) {
+                // Ensure portal store mirrors admin JWT when only localStorage was set.
+                establishPlatformSession(sharedToken)
+                setUser(parsedUser)
+                setPlatformToken(sharedToken)
+                console.log(
+                  '[PortalAuth] Session restored with platform token for:',
+                  parsedUser.email,
+                )
+              } else if (parsedUser?.isDemoUser && isPortalDemoLoginEnabled()) {
+                setUser(parsedUser)
+                console.log('[PortalAuth] Demo portal session restored for:', parsedUser.email)
               } else {
-                // CRITICAL: Only restore full session if platform token exists
-                // Without platformToken, My Reports won't work (half-authenticated state)
-                // Exception: gated demo users may restore without a platform token.
-                const storedPlatformToken = sessionStorage.getItem('platform_access_token')
-                if (storedPlatformToken) {
-                  setUser(parsedUser)
-                  setPlatformToken(storedPlatformToken)
-                  console.log(
-                    '[PortalAuth] Session restored with platform token for:',
-                    parsedUser.email,
-                  )
-                } else if (parsedUser?.isDemoUser && isPortalDemoLoginEnabled()) {
-                  setUser(parsedUser)
-                  console.log('[PortalAuth] Demo portal session restored for:', parsedUser.email)
-                } else {
-                  // Fail closed instead of restoring a misleading partial session.
-                  localStorage.removeItem('portal_user')
-                  localStorage.removeItem('portal_session_time')
-                  console.warn(
-                    '[PortalAuth] Discarded portal session without platform token - re-login required',
-                  )
-                  setError(
-                    'Your session needs to be refreshed. Please sign out and sign in again to view your reports.',
-                  )
-                  setUser(null)
-                  setPlatformToken(null)
-                }
+                // Fail closed instead of restoring a misleading partial session.
+                localStorage.removeItem('portal_user')
+                localStorage.removeItem('portal_session_time')
+                console.warn(
+                  '[PortalAuth] Discarded portal session without platform token - re-login required',
+                )
+                setError(
+                  'Your session needs to be refreshed. Please sign out and sign in again to view your reports.',
+                )
+                setUser(null)
+                setPlatformToken(null)
               }
             } else {
               // Session expired - clear everything
@@ -262,6 +279,27 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
               sessionStorage.removeItem('platform_refresh_token')
               setPlatformToken(null)
             }
+          }
+        } else if (sharedToken) {
+          // Admin (or other) shell already authenticated — bootstrap portal profile via /me.
+          try {
+            const meRes = await fetch(`${API_BASE}/api/v1/auth/me`, {
+              headers: { Authorization: `Bearer ${sharedToken}` },
+            })
+            if (meRes.ok) {
+              const me = await meRes.json()
+              const bootstrapped = portalUserFromMe(me)
+              establishPlatformSession(sharedToken)
+              localStorage.setItem('portal_user', JSON.stringify(bootstrapped))
+              localStorage.setItem('portal_session_time', Date.now().toString())
+              setUser(bootstrapped)
+              setPlatformToken(sharedToken)
+              console.log('[PortalAuth] Bootstrapped portal session from shared JWT for:', bootstrapped.email)
+            } else {
+              console.warn('[PortalAuth] /auth/me failed during bootstrap:', meRes.status)
+            }
+          } catch (bootstrapErr) {
+            console.error('[PortalAuth] Bootstrap from shared JWT failed:', bootstrapErr)
           }
         }
       } catch (err) {
@@ -352,15 +390,8 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
 
     setUser(null)
     setPlatformToken(null)
-
-    // Clear all stored tokens
-    localStorage.removeItem('portal_user')
-    localStorage.removeItem('portal_session_time')
-    localStorage.removeItem('portal_id_token')
-    sessionStorage.removeItem('oauth_state')
-    sessionStorage.removeItem('oauth_nonce')
-    sessionStorage.removeItem('platform_access_token')
-    sessionStorage.removeItem('platform_refresh_token')
+    // Wipe admin + portal stores so neither shell stays half-authenticated.
+    clearAuthState()
 
     // If was Azure AD user, redirect to Microsoft logout
     if (wasAzureUser) {

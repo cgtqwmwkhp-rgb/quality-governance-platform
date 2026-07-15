@@ -3,10 +3,8 @@ import {
   getPlatformToken,
   getPlatformRefreshToken,
   isTokenExpired,
-  clearTokens,
-  setPortalToken,
-  setAdminToken,
-  isAdminSession,
+  clearAuthState,
+  establishPlatformSession,
 } from '../utils/auth'
 import { API_BASE_URL } from '../config/apiBase'
 import { toast } from '../contexts/ToastContext'
@@ -256,7 +254,8 @@ function isPortalPath(pathname: string): boolean {
 }
 
 function isLoginPagePath(pathname: string): boolean {
-  return pathname === '/login' || pathname === '/portal' || pathname === '/portal/login'
+  // Only true login routes — /portal itself is an authenticated shell.
+  return pathname === '/login' || pathname === '/portal/login'
 }
 
 function getLoginRedirectPath(pathname: string): string {
@@ -284,7 +283,7 @@ function clearAndRedirectToLogin(): void {
   } catch {
     /* never let the soft-recovery hook block the redirect */
   }
-  clearTokens()
+  clearAuthState()
   const currentPath = window.location.pathname
   const isLoginPage = isLoginPagePath(currentPath)
   if (!isLoginPage) {
@@ -308,11 +307,8 @@ async function doRefreshToken(): Promise<string | null> {
     )
     const data = res.data
     if (data.access_token) {
-      if (isAdminSession()) {
-        setAdminToken(data.access_token, data.refresh_token)
-      } else {
-        setPortalToken(data.access_token, data.refresh_token)
-      }
+      // Keep admin + portal stores in lockstep after refresh.
+      establishPlatformSession(data.access_token, data.refresh_token)
       return data.access_token
     }
     return null

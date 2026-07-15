@@ -50,6 +50,7 @@ from src.api.routes import (
     loler_inspections,
     near_miss,
     notifications,
+    ocr_ops,
     partner_auth,
     partner_webhooks,
     planet_mark,
@@ -247,6 +248,8 @@ router.include_router(feature_flags.router, prefix="/feature-flags", tags=["Feat
 router.include_router(slo.router, prefix="/slo", tags=["SLO Metrics"])
 # Health & Resource Monitoring
 router.include_router(health.router, prefix="/health", tags=["Health"])
+# Canonical OCR / meta ops (alias; legacy remains under /health/meta)
+router.include_router(ocr_ops.router, prefix="/meta", tags=["Meta"])
 # GDPR data-subject rights (Art. 15 export, Art. 17 erasure)
 router.include_router(gdpr.router, tags=["GDPR"])
 # Public privacy contact + lifecycle capability flags (Path-to-10 S15)

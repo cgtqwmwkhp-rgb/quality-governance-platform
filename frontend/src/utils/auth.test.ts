@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  clearAuthState,
   clearTokens,
+  establishPlatformSession,
   getPlatformRefreshToken,
   getPlatformToken,
   hasToken,
@@ -40,6 +42,30 @@ describe('auth token helpers', () => {
     expect(getPlatformToken()).toBeNull()
     expect(getPlatformRefreshToken()).toBeNull()
     expect(hasToken()).toBe(false)
+  })
+
+  it('establishPlatformSession mirrors JWT into admin and portal stores', () => {
+    establishPlatformSession('shared-access', 'shared-refresh')
+    expect(localStorage.getItem('access_token')).toBe('shared-access')
+    expect(localStorage.getItem('refresh_token')).toBe('shared-refresh')
+    expect(sessionStorage.getItem('platform_access_token')).toBe('shared-access')
+    expect(sessionStorage.getItem('platform_refresh_token')).toBe('shared-refresh')
+    expect(getPlatformToken()).toBe('shared-access')
+    expect(getPlatformRefreshToken()).toBe('shared-refresh')
+  })
+
+  it('clearAuthState wipes tokens plus portal profile/oauth scratch', () => {
+    establishPlatformSession('tok', 'ref')
+    localStorage.setItem('portal_user', '{"email":"a@b.c"}')
+    localStorage.setItem('portal_session_time', '1')
+    sessionStorage.setItem('oauth_state', 'x')
+    sessionStorage.setItem('portal_oauth_nonce', 'y')
+    clearAuthState()
+    expect(getPlatformToken()).toBeNull()
+    expect(localStorage.getItem('portal_user')).toBeNull()
+    expect(localStorage.getItem('portal_session_time')).toBeNull()
+    expect(sessionStorage.getItem('oauth_state')).toBeNull()
+    expect(sessionStorage.getItem('portal_oauth_nonce')).toBeNull()
   })
 
   it('revokeSession no-ops without access token', async () => {

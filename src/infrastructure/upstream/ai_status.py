@@ -134,10 +134,14 @@ def get_ocr_ops_capabilities() -> dict[str, Any]:
         "pipeline_version": "2026.07.r5",
         "provider_dial_on_probes": False,
         "endpoints": {
-            "ocr_providers": "/api/v1/health/meta/ocr-providers",
-            "ocr_capabilities": "/api/v1/health/meta/ocr-capabilities",
-            "dispute": "/api/v1/health/meta/ocr-artifacts/dispute",
-            "ack": "/api/v1/health/meta/ocr-artifacts/ack",
+            "ocr_providers": "/api/v1/meta/ocr-providers",
+            "ocr_capabilities": "/api/v1/meta/ocr-capabilities",
+            "dispute": "/api/v1/meta/ocr-artifacts/dispute",
+            "ack": "/api/v1/meta/ocr-artifacts/ack",
+            "legacy_ocr_providers": "/api/v1/health/meta/ocr-providers",
+            "legacy_ocr_capabilities": "/api/v1/health/meta/ocr-capabilities",
+            "legacy_dispute": "/api/v1/health/meta/ocr-artifacts/dispute",
+            "legacy_ack": "/api/v1/health/meta/ocr-artifacts/ack",
         },
         "e4_non_goal": (
             "Azure Document Intelligence production enablement (E4) is out of scope. "

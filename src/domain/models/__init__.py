@@ -56,6 +56,7 @@ from src.domain.models.competence_gap import (
 )
 from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
+from src.domain.models.failed_task import FailedTask
 
 # Digital Signatures (Tier 2)
 from src.domain.models.digital_signature import (
@@ -242,6 +243,7 @@ __all__ = [
     "TenantUser",
     "TenantInvitation",
     "TokenBlacklist",
+    "FailedTask",
     # Standard models
     "Standard",
     "Clause",

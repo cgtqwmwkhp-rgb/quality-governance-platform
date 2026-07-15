@@ -30,8 +30,9 @@ async def get_ocr_providers_meta() -> dict[str, Any]:
     """Return OCR provider configuration flags and capability notes (no secrets)."""
     payload = get_ocr_providers_readiness()
     payload["as_of"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    payload["endpoint"] = "/api/v1/health/meta/ocr-providers"
+    payload["endpoint"] = "/api/v1/meta/ocr-providers"
     payload["canonical_endpoint"] = "/api/v1/meta/ocr-providers"
+    payload["legacy_endpoint"] = "/api/v1/health/meta/ocr-providers"
     if not payload.get("note"):
         payload["note"] = "Configuration-only meta; live OCR calls occur on import/analysis paths only."
     return payload
@@ -42,7 +43,8 @@ async def get_ocr_capabilities_meta() -> dict[str, Any]:
     """Return R5 OCR ops capability flags (artifacts, consensus persist, dispute stubs)."""
     payload = get_ocr_ops_capabilities()
     payload["as_of"] = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    payload["endpoint"] = "/api/v1/health/meta/ocr-capabilities"
+    payload["endpoint"] = "/api/v1/meta/ocr-capabilities"
+    payload["legacy_endpoint"] = "/api/v1/health/meta/ocr-capabilities"
     return payload
 
 
