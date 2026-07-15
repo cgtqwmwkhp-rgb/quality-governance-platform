@@ -74,7 +74,7 @@ operational governance — enabling data-driven decisions and regulatory readine
 | # | Feature | Persona | Journey | Priority |
 |---|---------|---------|---------|----------|
 | R11 | Multi-tenant onboarding wizard | P4 | Scale | High |
-| R12 | Scheduled audit recurrence | P2 | Audit efficiency | High |
+| R12 | Scheduled audit recurrence *(template `frequency` ≠ live scheduler until this ships — see [upstream-ingestion-honesty](../ops/upstream-ingestion-honesty.md))* | P2 | Audit efficiency | High |
 | R13 | ISO 27001 evidence auto-mapping | P3 | Compliance readiness | Medium |
 | R14 | Canary/blue-green deployment | P4 (dev) | Release safety | Medium |
 | R15 | Cost attribution per tenant | P5 | FinOps | Low |
