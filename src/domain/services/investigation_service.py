@@ -34,6 +34,12 @@ from src.domain.models.investigation import (
     InvestigationStatus,
     InvestigationTemplate,
 )
+from src.domain.services.investigation_structure_normalize import (
+    build_run_data_json_from_rows,
+    build_structure_json_from_rows,
+    sync_run_field_responses_from_json,
+    sync_template_structure_from_json,
+)
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -758,6 +764,9 @@ class InvestigationService:
         db.add(investigation)
         await db.commit()
         await db.refresh(investigation)
+        if data:
+            await sync_run_field_responses_from_json(db, investigation, template=template)
+            await db.commit()
         await invalidate_tenant_cache(tenant_id, "investigations")
         track_metric("investigations.started", 1, {"tenant_id": str(tenant_id)})
 
@@ -976,6 +985,8 @@ class InvestigationService:
             old_value=old_data,
             new_value=data,
         )
+
+        await sync_run_field_responses_from_json(db, investigation)
 
         await db.commit()
         await db.refresh(investigation)
@@ -1201,6 +1212,10 @@ class InvestigationService:
         for asset in evidence_assets:
             asset.linked_investigation_id = investigation.id
 
+        await db.commit()
+        await db.refresh(investigation)
+
+        await sync_run_field_responses_from_json(db, investigation, template=template)
         await db.commit()
         await db.refresh(investigation)
 
@@ -1488,6 +1503,46 @@ class InvestigationService:
             return True
         return False
 
+    @classmethod
+    async def dual_write_template_structure(
+        cls,
+        db: AsyncSession,
+        template: InvestigationTemplate,
+    ) -> Tuple[int, int]:
+        """Persist normalized template section/field rows from structure JSON."""
+        return await sync_template_structure_from_json(db, template)
+
+    @classmethod
+    async def dual_write_run_responses(
+        cls,
+        db: AsyncSession,
+        run: InvestigationRun,
+        *,
+        template: Optional[InvestigationTemplate] = None,
+    ) -> int:
+        """Persist normalized run field responses from data JSON."""
+        return await sync_run_field_responses_from_json(db, run, template=template)
+
+    @classmethod
+    async def dual_read_template_structure(
+        cls,
+        db: AsyncSession,
+        template_id: int,
+    ) -> Dict[str, Any]:
+        """Rebuild structure JSON from normalized rows when present."""
+        return await build_structure_json_from_rows(db, template_id)
+
+    @classmethod
+    async def dual_read_run_data(
+        cls,
+        db: AsyncSession,
+        run_id: int,
+        *,
+        wrap_sections: bool = True,
+    ) -> Dict[str, Any]:
+        """Rebuild run.data JSON from normalized response rows when present."""
+        return await build_run_data_json_from_rows(db, run_id, wrap_sections=wrap_sections)
+
 
 # ---------------------------------------------------------------------------
 # Standalone helpers (kept for backward compatibility)
@@ -1552,6 +1607,9 @@ async def get_or_create_default_template(
         updated_by_id=created_by_id,
     )
     db.add(default_template)
+    await db.commit()
+    await db.refresh(default_template)
+    await sync_template_structure_from_json(db, default_template)
     await db.commit()
     await db.refresh(default_template)
     return default_template

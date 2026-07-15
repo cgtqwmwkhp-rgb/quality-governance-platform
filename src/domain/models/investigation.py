@@ -13,9 +13,9 @@ Stage 2 Enhancements:
 
 import enum
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, Base, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
@@ -102,9 +102,106 @@ class InvestigationTemplate(Base, TimestampMixin, AuditTrailMixin):
 
     # Relationships
     investigation_runs = relationship("InvestigationRun", back_populates="template", cascade="all, delete-orphan")
+    template_sections: Mapped[List["InvestigationTemplateSection"]] = relationship(
+        "InvestigationTemplateSection",
+        back_populates="template",
+        cascade="all, delete-orphan",
+        order_by="InvestigationTemplateSection.display_order",
+    )
+    template_fields: Mapped[List["InvestigationTemplateField"]] = relationship(
+        "InvestigationTemplateField",
+        back_populates="template",
+        cascade="all, delete-orphan",
+        order_by="InvestigationTemplateField.display_order",
+    )
 
     def __repr__(self) -> str:
         return f"<InvestigationTemplate(id={self.id}, name='{self.name}', version='{self.version}')>"
+
+
+class InvestigationTemplateSection(Base, TimestampMixin):
+    """Normalized section row for an investigation template (W2 hard-spine)."""
+
+    __tablename__ = "investigation_template_sections"
+    __table_args__ = (UniqueConstraint("template_id", "section_key", name="uq_inv_template_section_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    template_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("investigation_templates.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    section_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    config_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
+    template: Mapped["InvestigationTemplate"] = relationship(
+        "InvestigationTemplate",
+        back_populates="template_sections",
+    )
+    fields: Mapped[List["InvestigationTemplateField"]] = relationship(
+        "InvestigationTemplateField",
+        back_populates="section",
+        cascade="all, delete-orphan",
+        order_by="InvestigationTemplateField.display_order",
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<InvestigationTemplateSection(id={self.id}, template_id={self.template_id}, "
+            f"section_key='{self.section_key}')>"
+        )
+
+
+class InvestigationTemplateField(Base, TimestampMixin):
+    """Normalized field row within an investigation template section (W2 hard-spine)."""
+
+    __tablename__ = "investigation_template_fields"
+    __table_args__ = (UniqueConstraint("section_id", "field_key", name="uq_inv_template_field_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    template_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("investigation_templates.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    section_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("investigation_template_sections.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    field_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    label: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    field_type: Mapped[str] = mapped_column(String(50), nullable=False, default="text")
+    required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    config_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
+    template: Mapped["InvestigationTemplate"] = relationship(
+        "InvestigationTemplate",
+        back_populates="template_fields",
+    )
+    section: Mapped["InvestigationTemplateSection"] = relationship(
+        "InvestigationTemplateSection",
+        back_populates="fields",
+    )
+    run_responses: Mapped[List["InvestigationRunFieldResponse"]] = relationship(
+        "InvestigationRunFieldResponse",
+        back_populates="template_field",
+        cascade="all, delete-orphan",
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<InvestigationTemplateField(id={self.id}, section_id={self.section_id}, "
+            f"field_key='{self.field_key}')>"
+        )
 
 
 class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
@@ -206,12 +303,51 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
         back_populates="investigation",
         cascade="all, delete-orphan",
     )
+    field_responses: Mapped[List["InvestigationRunFieldResponse"]] = relationship(
+        "InvestigationRunFieldResponse",
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return (
             f"<InvestigationRun(id={self.id}, ref='{self.reference_number}', "
             f"status='{self.status}', entity='{self.assigned_entity_type}:{self.assigned_entity_id}')>"
         )
+
+
+class InvestigationRunFieldResponse(Base, TimestampMixin):
+    """Normalized per-field response for an investigation run (W2 hard-spine)."""
+
+    __tablename__ = "investigation_run_field_responses"
+    __table_args__ = (UniqueConstraint("run_id", "template_field_id", name="uq_inv_run_field_response"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    run_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("investigation_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    template_field_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("investigation_template_fields.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    section_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    field_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    value_json: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
+
+    run: Mapped["InvestigationRun"] = relationship("InvestigationRun", back_populates="field_responses")
+    template_field: Mapped["InvestigationTemplateField"] = relationship(
+        "InvestigationTemplateField",
+        back_populates="run_responses",
+    )
+
+    def __repr__(self) -> str:
+        return f"<InvestigationRunFieldResponse(id={self.id}, run_id={self.run_id}, " f"field_key='{self.field_key}')>"
 
 
 class InvestigationComment(Base, TimestampMixin):

@@ -7,7 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from src.domain.services.ocr_consensus import OCRPageCandidate, build_page_consensus, character_error_rate
+from src.domain.services.ocr_consensus import (
+    OCRPageCandidate,
+    build_page_consensus,
+    character_error_rate,
+    hash_ocr_text,
+)
 from src.infrastructure.external.azure_document_intelligence import AzureDocumentIntelligenceClient
 
 FIXTURE_PATH = Path(__file__).parents[1] / "fixtures" / "ocr" / "page_consensus.json"
@@ -39,6 +44,10 @@ def test_page_consensus_requires_candidates_from_one_page() -> None:
 
     with pytest.raises(ValueError, match="same page"):
         build_page_consensus(candidates)
+
+
+def test_hash_ocr_text_normalizes_whitespace_and_case() -> None:
+    assert hash_ocr_text("Hello  WORLD") == hash_ocr_text("hello world")
 
 
 @pytest.mark.asyncio

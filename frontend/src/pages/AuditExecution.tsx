@@ -152,6 +152,68 @@ export function mapBackendQuestionType(q: {
   }
 }
 
+export type FailEvidenceQuestion = {
+  type: string
+  positiveAnswer?: 'yes' | 'no'
+  evidenceRequired: boolean
+  failureTriggersAction: boolean
+}
+
+export type FailEvidenceResponse = {
+  response: ResponseType
+  photos?: string[]
+}
+
+export const FAIL_EVIDENCE_ERROR_MESSAGE =
+  'Attach at least one photo before continuing after a failed response.'
+
+/** True when the answer counts as a finding (fail, or inverted yes/pass). */
+export function isQuestionFinding(
+  question: FailEvidenceQuestion,
+  responseValue: ResponseType,
+): boolean {
+  if (responseValue == null) return false
+  if (!['pass_fail', 'yes_no', 'yes_no_na'].includes(question.type)) return false
+
+  const inverted = question.positiveAnswer === 'no'
+  if (question.type === 'pass_fail') {
+    return inverted ? responseValue === 'pass' : responseValue === 'fail'
+  }
+  return inverted ? responseValue === 'yes' : responseValue === 'no'
+}
+
+export function questionCanRequireFailEvidence(question: FailEvidenceQuestion): boolean {
+  return question.evidenceRequired || question.failureTriggersAction
+}
+
+/** Gate is active when a finding lacks mandatory photo evidence. */
+export function isFailEvidenceGateActive(
+  question: FailEvidenceQuestion,
+  response: FailEvidenceResponse | undefined,
+): boolean {
+  if (!response || response.response == null) return false
+  if (!questionCanRequireFailEvidence(question)) return false
+  if (!isQuestionFinding(question, response.response)) return false
+  return (response.photos?.length ?? 0) < 1
+}
+
+export function canAdvancePastFailEvidenceGate(
+  question: FailEvidenceQuestion,
+  response: FailEvidenceResponse | undefined,
+): boolean {
+  return !isFailEvidenceGateActive(question, response)
+}
+
+export function shouldShowFailEvidencePanel(
+  question: FailEvidenceQuestion,
+  response: FailEvidenceResponse | undefined,
+): boolean {
+  if (question.type === 'photo' || question.type === 'signature') return false
+  if (question.evidenceRequired) return true
+  if (!response || response.response == null) return false
+  return isQuestionFinding(question, response.response) && question.failureTriggersAction
+}
+
 function parseResponseValue(value: string | undefined | null, questionType: string): ResponseType {
   if (value == null || value === '') return null
   if (['yes_no', 'yes_no_na'].includes(questionType)) return value as 'yes' | 'no' | 'na'
@@ -212,11 +274,14 @@ const ResponseButton = ({
     neutral: 'hover:bg-muted-foreground/30 hover:border-muted-foreground',
   }
 
+  const accessibleLabel = typeof children === 'string' ? children : undefined
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative flex-1 flex items-center justify-center gap-2 py-4 px-4 rounded-xl border-2 font-semibold transition-all duration-200 overflow-hidden
+      aria-label={accessibleLabel}
+      className={`relative flex-1 flex items-center justify-center gap-2 py-4 px-4 rounded-xl border-2 font-semibold transition-all duration-200 overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background
         ${selected ? variantStyles[variant] : `border-border bg-secondary text-muted-foreground ${hoverStyles[variant]}`}`}
     >
       {Icon && <Icon className="w-5 h-5" />}
@@ -264,10 +329,18 @@ const PhotoCapture = ({
   photos,
   onAdd,
   onRemove,
+  captureButtonRef,
+  captureButtonId,
+  ariaInvalid,
+  ariaDescribedBy,
 }: {
   photos: string[]
   onAdd: (photo: string) => void
   onRemove: (index: number) => void
+  captureButtonRef?: React.RefObject<HTMLButtonElement>
+  captureButtonId?: string
+  ariaInvalid?: boolean
+  ariaDescribedBy?: string
 }) => {
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -294,9 +367,14 @@ const PhotoCapture = ({
       />
 
       <button
+        ref={captureButtonRef}
+        id={captureButtonId}
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="w-full py-4 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
+        aria-label="Take photo or upload evidence"
+        aria-invalid={ariaInvalid || undefined}
+        aria-describedby={ariaDescribedBy}
+        className="w-full py-4 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <Camera className="w-5 h-5" />
         Take Photo / Upload
@@ -455,7 +533,9 @@ export default function AuditExecution() {
   const [completionSummary, setCompletionSummary] = useState<CompletionSummary | null>(null)
   const [stayOnCompletionProof, setStayOnCompletionProof] = useState(false)
   const [autoAdvancePending, setAutoAdvancePending] = useState(false)
+  const [failEvidenceGateError, setFailEvidenceGateError] = useState(false)
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const evidenceCaptureRef = useRef<HTMLButtonElement>(null)
 
   // Periodic-autosave + soft-recovery state
   // -----------------------------------------------------------------------
@@ -992,9 +1072,13 @@ export default function AuditExecution() {
     currentSectionIndex === audit.sections.length - 1 &&
     currentQuestionIndex === currentSection.questions.length - 1
   const canAdvance =
-    !currentQuestion.required ||
-    Boolean(currentResponse?.response) ||
-    (currentQuestion.type === 'photo' && (currentResponse?.photos?.length ?? 0) > 0)
+    (!currentQuestion.required ||
+      Boolean(currentResponse?.response) ||
+      (currentQuestion.type === 'photo' && (currentResponse?.photos?.length ?? 0) > 0)) &&
+    canAdvancePastFailEvidenceGate(currentQuestion, currentResponse)
+  const failEvidenceErrorId = `fail-evidence-error-${currentQuestion.id}`
+  const showEvidencePanel = shouldShowFailEvidencePanel(currentQuestion, currentResponse)
+  const failEvidenceGateActive = isFailEvidenceGateActive(currentQuestion, currentResponse)
   const globalQuestionIndex =
     audit.sections.slice(0, currentSectionIndex).reduce((sum, s) => sum + s.questions.length, 0) +
     currentQuestionIndex
@@ -1002,13 +1086,7 @@ export default function AuditExecution() {
   const isFindingResponse = (response: QuestionResponse): boolean => {
     const question = allQuestions.find((q) => q.id === response.questionId)
     if (!question) return false
-    if (!['pass_fail', 'yes_no', 'yes_no_na'].includes(question.type)) return false
-
-    const inverted = question.positiveAnswer === 'no'
-    if (question.type === 'pass_fail') {
-      return inverted ? response.response === 'pass' : response.response === 'fail'
-    }
-    return inverted ? response.response === 'yes' : response.response === 'no'
+    return isQuestionFinding(question, response.response)
   }
 
   // Calculate progress
@@ -1077,7 +1155,17 @@ export default function AuditExecution() {
   }
 
   // Navigation
+  const blockForFailEvidenceGate = () => {
+    setFailEvidenceGateError(true)
+    requestAnimationFrame(() => evidenceCaptureRef.current?.focus())
+  }
+
   const goNext = () => {
+    if (isFailEvidenceGateActive(currentQuestion, currentResponse)) {
+      blockForFailEvidenceGate()
+      return
+    }
+    setFailEvidenceGateError(false)
     if (currentQuestionIndex < currentSection.questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1)
     } else if (currentSectionIndex < audit.sections.length - 1) {
@@ -1112,6 +1200,19 @@ export default function AuditExecution() {
     }
 
     updateResponse({ response: value as ResponseType })
+
+    const gateActive = isFailEvidenceGateActive(currentQuestion, {
+      response: value as ResponseType,
+      photos: currentResponse?.photos,
+    })
+
+    if (gateActive) {
+      setAutoAdvancePending(false)
+      blockForFailEvidenceGate()
+      return
+    }
+
+    setFailEvidenceGateError(false)
     setAutoAdvancePending(true)
 
     autoAdvanceTimerRef.current = setTimeout(() => {
@@ -1741,27 +1842,53 @@ export default function AuditExecution() {
               <div>{renderQuestionInput()}</div>
 
               {/* Evidence Required (skip when question type is already photo/signature) */}
-              {currentQuestion.evidenceRequired &&
-                currentQuestion.type !== 'photo' &&
-                currentQuestion.type !== 'signature' && (
+              {showEvidencePanel && (
                 <div className="pt-4 border-t border-border">
                   <div className="flex items-center gap-2 mb-3">
                     <Camera className="w-4 h-4 text-info" />
-                    <span className="text-sm font-medium text-foreground">
-                      Photo Evidence Required
+                    <span
+                      id={`fail-evidence-label-${currentQuestion.id}`}
+                      className="text-sm font-medium text-foreground"
+                    >
+                      {failEvidenceGateActive
+                        ? 'Photo Evidence Required (failed response)'
+                        : 'Photo Evidence Required'}
                     </span>
                   </div>
+                  {failEvidenceGateError && (
+                    <div
+                      id={failEvidenceErrorId}
+                      role="alert"
+                      className="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                    >
+                      {FAIL_EVIDENCE_ERROR_MESSAGE}
+                    </div>
+                  )}
                   <PhotoCapture
                     photos={currentResponse?.photos || []}
+                    captureButtonRef={evidenceCaptureRef}
+                    captureButtonId={`fail-evidence-capture-${currentQuestion.id}`}
+                    ariaInvalid={failEvidenceGateError}
+                    ariaDescribedBy={
+                      failEvidenceGateError ? failEvidenceErrorId : `fail-evidence-label-${currentQuestion.id}`
+                    }
                     onAdd={(photo) => {
                       updateResponse({
                         photos: [...(currentResponse?.photos || []), photo],
                       })
+                      setFailEvidenceGateError(false)
                     }}
                     onRemove={(idx) => {
-                      updateResponse({
-                        photos: currentResponse?.photos?.filter((_, i) => i !== idx) || [],
-                      })
+                      const nextPhotos = currentResponse?.photos?.filter((_, i) => i !== idx) || []
+                      updateResponse({ photos: nextPhotos })
+                      if (
+                        isFailEvidenceGateActive(currentQuestion, {
+                          response: currentResponse?.response ?? null,
+                          photos: nextPhotos,
+                        })
+                      ) {
+                        setFailEvidenceGateError(true)
+                      }
                     }}
                   />
                 </div>
@@ -1771,9 +1898,15 @@ export default function AuditExecution() {
               <div className="pt-4 border-t border-border">
                 <div className="flex items-center gap-2 mb-3">
                   <MessageSquare className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm font-medium text-foreground">Additional Notes</span>
+                  <label
+                    htmlFor={`audit-notes-${currentQuestion.id}`}
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Additional Notes
+                  </label>
                 </div>
                 <textarea
+                  id={`audit-notes-${currentQuestion.id}`}
                   value={currentResponse?.notes || ''}
                   onChange={(e) => updateResponse({ notes: e.target.value })}
                   placeholder="Add any additional observations..."
@@ -1834,7 +1967,8 @@ export default function AuditExecution() {
           {isAutoAdvanceType && currentResponse?.response && !autoAdvancePending && (
             <button
               onClick={goNext}
-              className="flex-1 flex items-center justify-center gap-2 py-3 bg-secondary text-foreground rounded-xl text-sm font-medium transition-colors hover:bg-muted"
+              disabled={!canAdvancePastFailEvidenceGate(currentQuestion, currentResponse)}
+              className="flex-1 flex items-center justify-center gap-2 py-3 bg-secondary text-foreground rounded-xl text-sm font-medium transition-colors hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Continue <ArrowRight className="w-4 h-4" />
             </button>

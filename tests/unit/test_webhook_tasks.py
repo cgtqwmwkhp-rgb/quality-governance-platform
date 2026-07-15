@@ -10,6 +10,8 @@ from src.infrastructure.tasks.webhook_tasks import (
     WebhookServerError,
     _build_payload,
     _deliver_webhook,
+    _finalize_partner_delivery_log,
+    deliver_partner_webhook,
     deliver_webhook,
 )
 
@@ -172,3 +174,100 @@ def test_celery_task_success_includes_entity_context():
     assert called_kwargs["json"]["entity_type"] == "complaint"
     assert called_kwargs["json"]["entity_id"] == 3
     assert called_kwargs["json"]["source"] == "workflow"
+
+
+def test_deliver_partner_webhook_success_finalizes_log():
+    response = MagicMock()
+    response.status_code = 200
+    response.text = "ok"
+
+    with patch("src.infrastructure.tasks.webhook_tasks.httpx.Client") as mock_client_cls:
+        client = MagicMock()
+        client.__enter__.return_value = client
+        client.__exit__.return_value = False
+        client.request.return_value = response
+        mock_client_cls.return_value = client
+
+        with patch("src.infrastructure.tasks.webhook_tasks._finalize_partner_delivery_log") as finalize:
+            result = deliver_partner_webhook.run(
+                delivery_log_id=42,
+                url="https://partner.example/hooks",
+                headers={"X-Partner-Signature": "abc"},
+                payload={"event": "finding.created", "id": 1},
+            )
+
+    assert result["status"] == "delivered"
+    assert result["delivery_log_id"] == 42
+    finalize.assert_called_once_with(
+        delivery_log_id=42,
+        status="delivered",
+        http_status=200,
+    )
+
+
+def test_deliver_partner_webhook_4xx_marks_failed_without_retry():
+    response = MagicMock()
+    response.status_code = 422
+    response.text = "invalid"
+
+    with patch("src.infrastructure.tasks.webhook_tasks.httpx.Client") as mock_client_cls:
+        client = MagicMock()
+        client.__enter__.return_value = client
+        client.__exit__.return_value = False
+        client.request.return_value = response
+        mock_client_cls.return_value = client
+
+        with patch("src.infrastructure.tasks.webhook_tasks._finalize_partner_delivery_log") as finalize:
+            result = deliver_partner_webhook.run(
+                delivery_log_id=7,
+                url="https://partner.example/hooks",
+                payload={"event": "capa.created"},
+            )
+
+    assert result["status"] == "failed"
+    assert result["retryable"] is False
+    finalize.assert_called_once()
+    assert finalize.call_args.kwargs["status"] == "failed"
+
+
+def test_deliver_partner_webhook_5xx_raises_for_celery_retry():
+    response = MagicMock()
+    response.status_code = 503
+    response.text = "down"
+
+    with patch("src.infrastructure.tasks.webhook_tasks.httpx.Client") as mock_client_cls:
+        client = MagicMock()
+        client.__enter__.return_value = client
+        client.__exit__.return_value = False
+        client.request.return_value = response
+        mock_client_cls.return_value = client
+
+        with patch("src.infrastructure.tasks.webhook_tasks._finalize_partner_delivery_log") as finalize:
+            with pytest.raises(WebhookServerError):
+                deliver_partner_webhook.run(
+                    delivery_log_id=9,
+                    url="https://partner.example/hooks",
+                    payload={"event": "inspection.completed"},
+                )
+
+    finalize.assert_not_called()
+
+
+def test_finalize_partner_delivery_log_updates_session():
+    mock_log = MagicMock()
+    mock_session = MagicMock()
+    mock_session.get.return_value = mock_log
+    mock_session.__enter__.return_value = mock_session
+    mock_session.__exit__.return_value = False
+
+    with patch("src.infrastructure.database.SessionLocal", return_value=mock_session):
+        _finalize_partner_delivery_log(
+            delivery_log_id=11,
+            status="delivered",
+            http_status=201,
+        )
+
+    mock_session.get.assert_called_once()
+    mock_session.commit.assert_called_once()
+    assert mock_log.status.value == "delivered"
+    assert mock_log.http_status == 201

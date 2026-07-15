@@ -1,0 +1,15 @@
+{
+  "capabilities": {
+    "ocr_artifacts_table": true,
+    "page_consensus_persist": true,
+    "dispute_ack_stubs": true,
+    "pipeline_version": "2026.07.r5",
+    "provider_dial_on_probes": false
+  },
+  "endpoints": {
+    "ocr_providers": "/api/v1/health/meta/ocr-providers",
+    "ocr_capabilities": "/api/v1/health/meta/ocr-capabilities",
+    "dispute": "/api/v1/health/meta/ocr-artifacts/dispute",
+    "ack": "/api/v1/health/meta/ocr-artifacts/ack"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "reference_text": "The audit evidence is complete.",
+  "job_ref": "import_job:101",
+  "draft_ref": "draft:55",
+  "tenant_id": 1,
+  "expected": {
+    "page_number": 1,
+    "selected_provider": "azure_document_intelligence",
+    "agreement": 0.6666666666666666,
+    "canonical_provider": "azure_document_intelligence",
+    "advisory_providers": ["secondary_ocr"],
+    "artifact_count": 3
+  },
+  "candidates": [
+    {
+      "provider": "azure_document_intelligence",
+      "page_number": 1,
+      "text": "The audit evidence is complete."
+    },
+    {
+      "provider": "secondary_ocr",
+      "page_number": 1,
+      "text": "The  audit evidence is complete."
+    },
+    {
+      "provider": "native_pdf",
+      "page_number": 1,
+      "text": "The audit evidence is complete."
+    }
+  ]
+}

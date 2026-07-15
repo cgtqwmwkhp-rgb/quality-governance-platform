@@ -7,7 +7,7 @@ import hmac
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -108,7 +108,7 @@ class _ScalarsResult:
 
 
 @pytest.mark.asyncio
-async def test_record_delivery_creates_stubbed_log():
+async def test_record_delivery_creates_pending_log():
     db = AsyncMock()
     service = PartnerWebhookService(db)
     subscription = WebhookSubscription(
@@ -121,18 +121,53 @@ async def test_record_delivery_creates_stubbed_log():
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
     )
-    payload = {"inspection_id": 99}
+    payload = {"event": "inspection.started", "inspection_id": 99}
     log = await service.record_delivery(
         subscription=subscription,
         event_type="inspection.started",
         payload=payload,
-        status=WebhookDeliveryStatus.STUBBED,
+        status=WebhookDeliveryStatus.PENDING,
+        signature="deadbeef",
     )
     assert log.subscription_id == 1
     assert log.tenant_id == 10
     assert log.event_type == "inspection.started"
-    assert log.status == WebhookDeliveryStatus.STUBBED
+    assert log.status == WebhookDeliveryStatus.PENDING
+    assert log.signature == "deadbeef"
+    db.add.assert_called_once()
+    db.flush.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_event_enqueues_signed_delivery():
+    db = AsyncMock()
+    service = PartnerWebhookService(db)
+    subscription = WebhookSubscription(
+        id=1,
+        tenant_id=10,
+        url="https://partner.example/hooks",
+        secret="test-secret-key-16b",
+        events=["inspection.started"],
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    mock_delay = MagicMock()
+    with patch("src.infrastructure.tasks.webhook_tasks.deliver_partner_webhook.delay", mock_delay):
+        log = await service.dispatch_event(
+            subscription=subscription,
+            event_type="inspection.started",
+            payload={"inspection_id": 99},
+        )
+    assert log.status == WebhookDeliveryStatus.PENDING
+    assert log.payload["event"] == "inspection.started"
+    assert log.payload["inspection_id"] == 99
     assert log.signature is not None
+    mock_delay.assert_called_once()
+    call_kwargs = mock_delay.call_args.kwargs
+    assert call_kwargs["delivery_log_id"] == log.id
+    assert call_kwargs["url"] == subscription.url
+    assert call_kwargs["headers"]["X-Partner-Signature"] == log.signature
     db.add.assert_called_once()
     db.flush.assert_awaited()
 

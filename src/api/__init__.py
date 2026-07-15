@@ -50,6 +50,7 @@ from src.api.routes import (
     loler_inspections,
     near_miss,
     notifications,
+    partner_auth,
     partner_webhooks,
     planet_mark,
     policies,
@@ -144,6 +145,12 @@ router.include_router(
     partner_webhooks.router,
     prefix="/partner-webhooks",
     tags=["Partner Webhooks"],
+)
+# Partner API tokens (R6 scoped bearer credentials)
+router.include_router(
+    partner_auth.router,
+    prefix="/partner-auth",
+    tags=["Partner Auth"],
 )
 # Planet Mark Carbon Management
 router.include_router(planet_mark.router, prefix="/planet-mark", tags=["Planet Mark Carbon"])

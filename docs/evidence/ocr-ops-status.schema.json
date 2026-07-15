@@ -74,6 +74,35 @@
       }
     },
     "e4_non_goal": { "type": "string" },
+    "capabilities": {
+      "type": "object",
+      "required": [
+        "ocr_artifacts_table",
+        "page_consensus_persist",
+        "dispute_ack_stubs",
+        "pipeline_version",
+        "provider_dial_on_probes",
+        "e4_non_goal"
+      ],
+      "properties": {
+        "ocr_artifacts_table": { "type": "boolean" },
+        "page_consensus_persist": { "type": "boolean" },
+        "dispute_ack_stubs": { "type": "boolean" },
+        "pipeline_version": { "type": "string" },
+        "provider_dial_on_probes": { "const": false },
+        "endpoints": {
+          "type": "object",
+          "properties": {
+            "ocr_providers": { "type": "string" },
+            "ocr_capabilities": { "type": "string" },
+            "dispute": { "type": "string" },
+            "ack": { "type": "string" }
+          }
+        },
+        "e4_non_goal": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
     "ocr_ping": {
       "type": "object",
       "properties": {
