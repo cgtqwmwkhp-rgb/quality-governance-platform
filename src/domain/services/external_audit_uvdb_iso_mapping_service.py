@@ -55,7 +55,7 @@ class ExternalAuditUVDBISOMappingService:
         return self.enrich_from_rows(
             detected_scheme=detected_scheme,
             candidate_texts=candidate_texts,
-            rows=result.all(),
+            rows=[(mapping, question) for mapping, question in result.all()],
         )
 
     @classmethod
