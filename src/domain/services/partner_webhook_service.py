@@ -1,4 +1,4 @@
-"""Partner webhook subscription service — HMAC signing + delivery log (v1 stub dispatch)."""
+"""Partner webhook subscription service — HMAC signing + Celery HTTP dispatch (R6)."""
 
 from __future__ import annotations
 
@@ -119,13 +119,12 @@ class PartnerWebhookService:
         subscription: WebhookSubscription,
         event_type: str,
         payload: dict[str, Any],
-        status: WebhookDeliveryStatus = WebhookDeliveryStatus.STUBBED,
+        status: WebhookDeliveryStatus = WebhookDeliveryStatus.PENDING,
         http_status: Optional[int] = None,
         error_message: Optional[str] = None,
+        signature: Optional[str] = None,
     ) -> WebhookDeliveryLog:
-        """Record a delivery attempt. v1 stubs outbound HTTP — no external send."""
-        headers = build_signed_headers(subscription.secret, payload)
-        signature = headers[SIGNATURE_HEADER]
+        """Record a delivery attempt."""
         now = datetime.now(timezone.utc)
         log = WebhookDeliveryLog(
             subscription_id=subscription.id,
@@ -152,6 +151,57 @@ class PartnerWebhookService:
         )
         return log
 
+    def _validate_dispatch(self, *, subscription: WebhookSubscription, event_type: str) -> None:
+        if event_type not in PARTNER_WEBHOOK_EVENTS:
+            raise ValueError(f"Unsupported event type: {event_type}")
+        if not subscription.is_active:
+            raise ValueError("Subscription is inactive")
+        if event_type not in subscription.events:
+            raise ValueError(f"Subscription not subscribed to event: {event_type}")
+
+    async def dispatch_event(
+        self,
+        *,
+        subscription: WebhookSubscription,
+        event_type: str,
+        payload: dict[str, Any],
+    ) -> WebhookDeliveryLog:
+        """Sign payload, persist delivery log, and enqueue signed HTTP dispatch."""
+        self._validate_dispatch(subscription=subscription, event_type=event_type)
+
+        outbound_payload = {"event": event_type, **payload}
+        headers = build_signed_headers(subscription.secret, outbound_payload)
+        log = await self.record_delivery(
+            subscription=subscription,
+            event_type=event_type,
+            payload=outbound_payload,
+            status=WebhookDeliveryStatus.PENDING,
+            signature=headers[SIGNATURE_HEADER],
+        )
+
+        from src.infrastructure.tasks.webhook_tasks import deliver_partner_webhook
+
+        try:
+            deliver_partner_webhook.delay(
+                delivery_log_id=log.id,
+                url=subscription.url,
+                headers=headers,
+                payload=outbound_payload,
+            )
+        except Exception as exc:
+            log.status = WebhookDeliveryStatus.FAILED
+            log.error_message = f"Failed to enqueue partner webhook delivery: {exc}"
+            await self.db.flush()
+            logger.error(
+                "partner_webhook_enqueue_failed",
+                extra={
+                    "subscription_id": subscription.id,
+                    "delivery_log_id": log.id,
+                    "error": str(exc),
+                },
+            )
+        return log
+
     async def stub_dispatch(
         self,
         *,
@@ -159,18 +209,11 @@ class PartnerWebhookService:
         event_type: str,
         payload: dict[str, Any],
     ) -> WebhookDeliveryLog:
-        """v1 stub: sign payload and record delivery without HTTP send."""
-        if event_type not in PARTNER_WEBHOOK_EVENTS:
-            raise ValueError(f"Unsupported event type: {event_type}")
-        if not subscription.is_active:
-            raise ValueError("Subscription is inactive")
-        if event_type not in subscription.events:
-            raise ValueError(f"Subscription not subscribed to event: {event_type}")
-        return await self.record_delivery(
+        """Backward-compatible alias for signed HTTP dispatch (R6 replaces stub)."""
+        return await self.dispatch_event(
             subscription=subscription,
             event_type=event_type,
             payload=payload,
-            status=WebhookDeliveryStatus.STUBBED,
         )
 
     async def list_delivery_logs(

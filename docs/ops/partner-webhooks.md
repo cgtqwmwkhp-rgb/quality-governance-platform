@@ -1,8 +1,8 @@
-# Partner Webhooks — Wave5 Ops Runbook
+# Partner Webhooks — Wave5/R6 Ops Runbook
 
 ## Overview
 
-Partner webhooks let external systems receive signed HTTP callbacks when governance events occur. Wave5 v1 is a **scaffold**: subscription CRUD, HMAC signing helper, delivery log persistence, and stub dispatch (no outbound HTTP in v1).
+Partner webhooks let external systems receive signed HTTP callbacks when governance events occur. Wave5 v1 added subscription CRUD, HMAC signing, and delivery audit trail. **R6** adds scoped partner API tokens and replaces stub dispatch with signed HTTP delivery via Celery + httpx retries.
 
 ## Event Catalog (v1)
 
@@ -20,6 +20,21 @@ Query the catalog at runtime:
 ```
 GET /api/v1/partner-webhooks/events
 ```
+
+## Partner API Tokens (R6)
+
+| Method | Path | Permission |
+|--------|------|------------|
+| `POST` | `/api/v1/partner-auth/tokens` | `admin:manage` |
+| `GET` | `/api/v1/partner-auth/tokens` | `admin:manage` |
+| `DELETE` | `/api/v1/partner-auth/tokens/{id}` | `admin:manage` |
+
+- Tokens use prefix `qgp_pt_`; only SHA-256 hash is stored.
+- Plaintext secret returned **once** on create.
+- Scopes: `webhooks:manage`, `inspections:read`.
+- Revoke is idempotent (`is_active=false`, `revoked_at` set).
+
+See `docs/api/partner-openapi.md` for example payloads.
 
 ## Subscription Management
 
@@ -50,32 +65,40 @@ Headers:
 
 Partners should reject requests with timestamps older than 5 minutes (enforcement is partner-side in v1).
 
-## Delivery Logs
+## Delivery (R6)
+
+`PartnerWebhookService.dispatch_event`:
+
+1. Validates subscription + event type
+2. Persists delivery log with `pending` status + signature
+3. Enqueues `deliver_partner_webhook` Celery task
+
+Celery task behaviour:
+
+- **2xx** → log status `delivered`, `http_status` recorded
+- **4xx** → log status `failed`, no retry
+- **5xx / network / timeout** → Celery retry (max 3), then `failed`
 
 ```
 GET /api/v1/partner-webhooks/deliveries?subscription_id={id}
 ```
 
-Statuses: `pending`, `stubbed`, `delivered`, `failed`.
-
-v1 records `stubbed` deliveries when `stub_dispatch` is invoked — no HTTP send occurs until Wave5b wires Celery/httpx delivery.
+Statuses: `pending`, `delivered`, `failed` (legacy `stubbed` on pre-R6 rows).
 
 ## Database
 
-Migration: `20260716_partner_webhooks` (revises `20260716_capa_inv_src`)
+Migrations (in order):
 
-Tables:
-
-- `webhook_subscriptions` — tenant-scoped endpoint + event filter
-- `webhook_delivery_logs` — immutable delivery attempt log (CASCADE on subscription delete)
+1. `20260716_partner_webhooks` — `webhook_subscriptions`, `webhook_delivery_logs`
+2. `20260717_partner_api_tokens` — `partner_api_tokens`
 
 ## Rollback
 
 1. Revert PR
-2. `alembic downgrade 20260716_capa_inv_src`
+2. `alembic downgrade 20260716_partner_webhooks`
 
-## Future (Wave5b+)
+## Future (R6+)
 
 - Wire event emitters from inspection/finding/CAPA domain services
-- Replace stub dispatch with async httpx delivery + retries
-- Dead-letter queue integration for failed deliveries
+- Partner bearer auth middleware for inbound partner API routes
+- Dead-letter queue integration for exhausted retries

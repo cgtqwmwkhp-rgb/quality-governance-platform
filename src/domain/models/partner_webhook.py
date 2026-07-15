@@ -78,3 +78,7 @@ class WebhookDeliveryLog(Base):
 
     def __repr__(self) -> str:
         return f"<WebhookDeliveryLog(id={self.id}, event_type={self.event_type!r}, status={self.status})>"
+
+
+# Register R6 partner API token model when webhook models are imported (Alembic metadata).
+from src.domain.models import partner_api_token as _partner_api_token  # noqa: E402,F401
