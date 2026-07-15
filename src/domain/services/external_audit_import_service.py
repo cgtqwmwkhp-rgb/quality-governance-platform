@@ -33,6 +33,7 @@ from src.domain.services.external_audit_import_ai_metadata import apply_ai_metad
 from src.domain.services.external_audit_import_failure import classify_processing_failure, is_hard_ai_failure
 from src.domain.services.external_audit_ocr_service import MAX_SOURCE_FILE_BYTES, ExternalAuditOcrService
 from src.domain.services.external_audit_promotion_service import ExternalAuditPromotionService, PromotionResult
+from src.domain.services.external_audit_uvdb_iso_mapping_service import ExternalAuditUVDBISOMappingService
 from src.domain.services.gemini_review_service import GeminiReviewService
 from src.domain.services.mistral_analysis_service import MistralAnalysisService
 from src.domain.services.reference_number import ReferenceNumberService
@@ -614,6 +615,21 @@ class ExternalAuditImportService:
                 assurance_scheme=run.assurance_scheme,
                 ai_result=ai_result,
             )
+            uvdb_iso_enrichment = await ExternalAuditUVDBISOMappingService(self.db).enrich(
+                detected_scheme=analysis.detected_scheme,
+                tenant_id=effective_tenant_id,
+                candidate_texts=[f"{candidate.title}\n{candidate.description}" for candidate in analysis.findings],
+            )
+            for candidate, matrix_mappings, readiness in zip(
+                analysis.findings,
+                uvdb_iso_enrichment.candidate_mapped_standards,
+                uvdb_iso_enrichment.candidate_readiness,
+            ):
+                candidate.mapped_standards = ExternalAuditUVDBISOMappingService.merge_mapped_standards(
+                    candidate.mapped_standards, matrix_mappings
+                )
+                candidate.provenance["uvdb_iso_mapping_readiness"] = readiness
+            analysis.classification_basis["uvdb_iso_mapping"] = uvdb_iso_enrichment.readiness_checklist
 
             preview = text[:500] if text else None
             replacement_drafts = [
@@ -659,6 +675,7 @@ class ExternalAuditImportService:
                     "mapped_frameworks": analysis.mapped_frameworks,
                     "mapped_standards": analysis.mapped_standards,
                     "classification_basis": analysis.classification_basis,
+                    "uvdb_iso_mapping_readiness": uvdb_iso_enrichment.readiness_checklist,
                     "declared_vs_detected": {
                         "declared_source_origin": run.source_origin,
                         "declared_assurance_scheme": run.assurance_scheme,
