@@ -353,3 +353,35 @@ class CreateInvestigationCapaRequest(BaseModel):
     assignee_email: Optional[str] = None
     due_date: Optional[str] = None
     priority: Optional[str] = None
+
+
+# === W2 hard-spine: normalized template/run structure (additive) ===
+
+
+class InvestigationTemplateFieldNormalized(BaseModel):
+    """Normalized template field row (dual-read scaffold; not wired to list APIs yet)."""
+
+    field_key: str
+    label: Optional[str] = None
+    field_type: str = "text"
+    required: bool = False
+    display_order: int = 0
+    config_json: Optional[Dict[str, Any]] = None
+
+
+class InvestigationTemplateSectionNormalized(BaseModel):
+    """Normalized template section row (dual-read scaffold; not wired to list APIs yet)."""
+
+    section_key: str
+    title: Optional[str] = None
+    display_order: int = 0
+    config_json: Optional[Dict[str, Any]] = None
+    fields: List[InvestigationTemplateFieldNormalized] = Field(default_factory=list)
+
+
+class InvestigationRunFieldResponseNormalized(BaseModel):
+    """Normalized run field response row (dual-read scaffold)."""
+
+    section_key: str
+    field_key: str
+    value_json: Optional[Any] = None
