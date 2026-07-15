@@ -3,7 +3,7 @@
 import enum
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import (
     JSON,
@@ -25,6 +25,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, Base, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
 from src.domain.models.risk_register import EnterpriseRisk
+
+if TYPE_CHECKING:
+    from src.domain.models.asset import Asset
+    from src.domain.models.engineer import Engineer
 
 audit_finding_risks = Table(
     "audit_finding_risks",

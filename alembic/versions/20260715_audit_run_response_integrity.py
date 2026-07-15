@@ -50,15 +50,6 @@ def _has_index(table_name: str, index_name: str) -> bool:
     return any(index["name"] == index_name for index in _inspector().get_indexes(table_name))
 
 
-def _index_is_unique(table_name: str, index_name: str) -> bool:
-    if not _table_exists(table_name):
-        return False
-    for index in _inspector().get_indexes(table_name):
-        if index["name"] == index_name:
-            return bool(index.get("unique"))
-    return False
-
-
 def _has_unique_constraint(table_name: str, constraint_name: str) -> bool:
     if not _table_exists(table_name):
         return False
@@ -109,18 +100,16 @@ def _ensure_audit_response_uniqueness() -> None:
     if not _table_exists("audit_responses"):
         return
 
+    # Model declares UniqueConstraint; alembic check compares constraints, not
+    # unique indexes. Legacy 20260227 may have created a UNIQUE INDEX under this
+    # name (or a non-unique index when duplicates blocked UNIQUE creation).
     if _has_unique_constraint("audit_responses", UQ_AUDIT_RESPONSES):
-        return
-    if _index_is_unique("audit_responses", UQ_AUDIT_RESPONSES):
         return
 
     _dedupe_audit_responses()
 
-    # Legacy 20260227 may have created a non-unique index under this name when
-    # duplicates blocked UNIQUE creation — drop it before enforcing uniqueness.
-    if _has_index("audit_responses", UQ_AUDIT_RESPONSES) and not _index_is_unique(
-        "audit_responses", UQ_AUDIT_RESPONSES
-    ):
+    # Drop any index (unique or not) so we can create a real UNIQUE CONSTRAINT.
+    if _has_index("audit_responses", UQ_AUDIT_RESPONSES):
         op.drop_index(UQ_AUDIT_RESPONSES, table_name="audit_responses")
 
     if op.get_bind().dialect.name == "sqlite":

@@ -61,6 +61,9 @@ def test_wave1a_migration_scaffold():
     assert "DELETE FROM audit_responses AS older" in text
     assert "USING audit_responses AS newer" in text
     assert "uq_audit_responses_run_question" in text
+    assert "create_unique_constraint" in text
+    assert "drop_index" in text
+    assert "_has_unique_constraint" in text
     assert "fk_audit_runs_asset_id" in text
     assert "fk_audit_runs_engineer_id" in text
     assert "ix_audit_runs_tenant_asset" in text
