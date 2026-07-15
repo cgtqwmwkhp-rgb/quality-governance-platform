@@ -125,6 +125,27 @@ def get_upstream_ai_readiness() -> dict[str, Any]:
     return payload
 
 
+def get_ocr_ops_capabilities() -> dict[str, Any]:
+    """Return R5 OCR ops capability flags for meta and /readyz (no secrets)."""
+    return {
+        "ocr_artifacts_table": True,
+        "page_consensus_persist": True,
+        "dispute_ack_stubs": True,
+        "pipeline_version": "2026.07.r5",
+        "provider_dial_on_probes": False,
+        "endpoints": {
+            "ocr_providers": "/api/v1/health/meta/ocr-providers",
+            "ocr_capabilities": "/api/v1/health/meta/ocr-capabilities",
+            "dispute": "/api/v1/health/meta/ocr-artifacts/dispute",
+            "ack": "/api/v1/health/meta/ocr-artifacts/ack",
+        },
+        "e4_non_goal": (
+            "Azure Document Intelligence production enablement (E4) is out of scope. "
+            "Dispute/ack stubs record human overrides only; they never re-run OCR providers."
+        ),
+    }
+
+
 def get_ocr_providers_readiness() -> dict[str, Any]:
     """Return OCR provider meta for ops dashboards (configuration only, no secrets).
 
@@ -186,6 +207,7 @@ def get_ocr_providers_readiness() -> dict[str, Any]:
             "Azure Document Intelligence is not enabled in production. "
             "azure_di.* fields report env-var presence only; no outbound DI calls from probes."
         ),
+        "capabilities": get_ocr_ops_capabilities(),
     }
 
     if aggregate == "not_configured":

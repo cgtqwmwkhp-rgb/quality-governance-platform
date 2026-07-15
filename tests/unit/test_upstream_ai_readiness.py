@@ -2,7 +2,11 @@
 
 import os
 
-from src.infrastructure.upstream.ai_status import get_ocr_providers_readiness, get_upstream_ai_readiness
+from src.infrastructure.upstream.ai_status import (
+    get_ocr_ops_capabilities,
+    get_ocr_providers_readiness,
+    get_upstream_ai_readiness,
+)
 
 
 def test_upstream_ai_not_configured_when_keys_missing(monkeypatch):
@@ -85,3 +89,13 @@ def test_ocr_providers_readiness_all_configured(monkeypatch):
     assert result["providers"]["mistral"]["configured"] is True
     assert result["providers"]["gemini"]["configured"] is True
     assert result["providers"]["azure_di"]["configured"] is True
+    assert result["capabilities"]["ocr_artifacts_table"] is True
+
+
+def test_ocr_ops_capabilities_flags():
+    caps = get_ocr_ops_capabilities()
+    assert caps["ocr_artifacts_table"] is True
+    assert caps["page_consensus_persist"] is True
+    assert caps["dispute_ack_stubs"] is True
+    assert caps["provider_dial_on_probes"] is False
+    assert "e4_non_goal" in caps

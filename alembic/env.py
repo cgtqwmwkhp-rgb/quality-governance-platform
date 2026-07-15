@@ -37,6 +37,7 @@ for _metadata_mod in (
     "src.domain.models.vehicle_defect",
     "src.domain.models.workflow",
     "src.domain.models.workflow_rules",
+    "src.domain.models.ocr_artifact",
 ):
     importlib.import_module(_metadata_mod)
 
@@ -180,7 +181,8 @@ def _write_drift_inventory(before_filter: list, after_filter: list) -> None:
             {"before_filter": before_filter, "after_filter": after_filter},
             indent=2,
             sort_keys=True,
-        ) + "\n",
+        )
+        + "\n",
         encoding="utf-8",
     )
 

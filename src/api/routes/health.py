@@ -281,6 +281,7 @@ async def readiness_check():
         "gemini_configured": ocr_meta["providers"]["gemini"]["configured"],
         "azure_di_configured": ocr_meta["providers"]["azure_di"]["configured"],
         "meta_endpoint": "/api/v1/health/meta/ocr-providers",
+        "capabilities": ocr_meta.get("capabilities", {}),
     }
     if ocr_meta.get("note"):
         ocr_providers["note"] = ocr_meta["note"]

@@ -50,6 +50,17 @@ Machine-readable OCR configuration honesty for external audit import and future 
 
 See `docs/evidence/ocr-ops-status.schema.json` for the JSON Schema contract.
 
+## R5 capabilities (artifacts + dispute stubs)
+
+| Flag | Meaning |
+|------|---------|
+| `capabilities.ocr_artifacts_table` | `ocr_artifacts` migration landed |
+| `capabilities.page_consensus_persist` | `build_page_consensus` persist hook available |
+| `capabilities.dispute_ack_stubs` | Human override endpoints mounted |
+| `capabilities.provider_dial_on_probes` | Always `false` |
+
+See `docs/ops/ocr-artifacts-dispute-ack.md` for dispute/ack runbook.
+
 ## Runbook
 
 1. **Import OCR failing with `not_configured`:** Check meta endpoint; set Key Vault refs for `MISTRAL_API_KEY`.
