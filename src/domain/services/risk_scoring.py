@@ -192,16 +192,16 @@ class RiskScoringService:
         if not risk:
             return None
 
-        # Calculate score adjustment
-        old_score: int = int(risk.risk_score or 0)
-        old_likelihood: int = int(risk.likelihood or 0)
+        # Calculate score adjustment (legacy risks table)
+        legacy_old_score: int = int(risk.risk_score or 0)
+        legacy_old_likelihood: int = int(risk.likelihood or 0)
 
         # Increase likelihood based on incident severity
         if severity:
             adjustment = self.SEVERITY_IMPACT.get(severity, 0)
-            new_likelihood = min(5, old_likelihood + adjustment)
+            new_likelihood = min(5, legacy_old_likelihood + adjustment)
 
-            if new_likelihood != old_likelihood:
+            if new_likelihood != legacy_old_likelihood:
                 risk.likelihood = new_likelihood
                 risk.risk_score = int(risk.likelihood) * int(risk.impact)
                 risk.risk_level = self._calculate_risk_level(risk.risk_score)
@@ -217,8 +217,8 @@ class RiskScoringService:
                     trigger_type=trigger_type,
                     trigger_entity_type=trigger_entity_type,
                     trigger_entity_id=trigger_entity_id,
-                    previous_score=old_score,
-                    score_change=int(risk.risk_score) - old_score,
+                    previous_score=legacy_old_score,
+                    score_change=int(risk.risk_score) - legacy_old_score,
                     change_reason=f"Automatic update from {trigger_entity_type} #{trigger_entity_id}",
                 )
                 self.db.add(history)
@@ -227,9 +227,9 @@ class RiskScoringService:
                 return {
                     "risk_id": risk_id,
                     "risk_table": "risks",
-                    "old_score": old_score,
+                    "old_score": legacy_old_score,
                     "new_score": risk.risk_score,
-                    "old_level": self._calculate_risk_level(old_score),
+                    "old_level": self._calculate_risk_level(legacy_old_score),
                     "new_level": risk.risk_level,
                 }
 
