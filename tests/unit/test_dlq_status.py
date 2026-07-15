@@ -4,11 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.infrastructure.tasks.dlq_status import (
-    dlq_depth_from_exception,
-    dlq_depth_ok,
-    is_missing_failed_tasks_relation,
-)
+from src.infrastructure.tasks.dlq_status import dlq_depth_from_exception, dlq_depth_ok, is_missing_failed_tasks_relation
 
 
 class _FakeUndefinedTable(Exception):
