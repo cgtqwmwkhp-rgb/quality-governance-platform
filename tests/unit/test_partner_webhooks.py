@@ -60,7 +60,7 @@ def test_partner_webhooks_migration_scaffold():
     assert MIGRATION.is_file()
     text = MIGRATION.read_text(encoding="utf-8")
     assert 'revision: str = "20260716_partner_webhooks"' in text
-    assert "20260715_audit_db_integrity" in text
+    assert 'down_revision: Union[str, Sequence[str], None] = "20260716_capa_inv_src"' in text
     assert "webhook_subscriptions" in text
     assert "webhook_delivery_logs" in text
     assert "Wave2a" in text or "#1009" in text

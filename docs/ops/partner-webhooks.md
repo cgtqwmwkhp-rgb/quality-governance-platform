@@ -62,19 +62,17 @@ v1 records `stubbed` deliveries when `stub_dispatch` is invoked — no HTTP send
 
 ## Database
 
-Migration: `20260716_partner_webhooks`
+Migration: `20260716_partner_webhooks` (revises `20260716_capa_inv_src`)
 
 Tables:
 
 - `webhook_subscriptions` — tenant-scoped endpoint + event filter
 - `webhook_delivery_logs` — immutable delivery attempt log (CASCADE on subscription delete)
 
-**Rebase note:** If Wave2a (#1009) merges `20260716_capa_investigation_source` before this PR, rebase the migration `down_revision` to chain after that head.
-
 ## Rollback
 
 1. Revert PR
-2. `alembic downgrade 20260715_audit_db_integrity` (or current predecessor after rebase)
+2. `alembic downgrade 20260716_capa_inv_src`
 
 ## Future (Wave5b+)
 

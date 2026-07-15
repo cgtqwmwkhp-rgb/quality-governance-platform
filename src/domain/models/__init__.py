@@ -190,6 +190,12 @@ from src.domain.models.planet_mark import (
     SupplierEmissionData,
     UtilityMeterReading,
 )
+from src.domain.models.partner_webhook import (
+    PARTNER_WEBHOOK_EVENTS,
+    WebhookDeliveryLog,
+    WebhookDeliveryStatus,
+    WebhookSubscription,
+)
 from src.domain.models.policy import Policy, PolicyVersion
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment
 
@@ -291,6 +297,11 @@ __all__ = [
     # Policy models
     "Policy",
     "PolicyVersion",
+    # Partner webhook models (Wave5)
+    "PARTNER_WEBHOOK_EVENTS",
+    "WebhookDeliveryLog",
+    "WebhookDeliveryStatus",
+    "WebhookSubscription",
     # Document models
     "Document",
     "DocumentChunk",
