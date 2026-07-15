@@ -1,6 +1,7 @@
 import type { AuditTemplate, Section, Question, QuestionType, ScoringMethod } from './types'
 import type { AuditQuestionCreate, AuditQuestionUpdate, EvidenceRequirement } from '../../api/client'
 import { generateId, createNewSection, SECTION_COLORS } from './types'
+import { fromApiQuestionType, toApiQuestionType } from './questionTypeRegistry'
 
 type BackendQuestion = {
   id: number
@@ -26,34 +27,11 @@ type BackendQuestion = {
 }
 
 function mapBackendQuestionType(q: BackendQuestion): QuestionType {
-  switch (q.question_type) {
-    case 'yes_no':
-      return q.allow_na ? 'yes_no_na' : 'yes_no'
-    case 'pass_fail':
-      return 'pass_fail'
-    case 'date':
-    case 'datetime':
-      return 'date'
-    case 'textarea':
-      return 'text_long'
-    case 'number':
-      return 'numeric'
-    case 'photo':
-      return 'photo'
-    case 'signature':
-      return 'signature'
-    case 'radio':
-    case 'dropdown':
-      return 'multi_choice'
-    case 'checkbox':
-      return 'checklist'
-    case 'rating':
-    case 'score':
-      return (q.max_score ?? q.max_value ?? 5) > 5 ? 'scale_1_10' : 'scale_1_5'
-    case 'text':
-    default:
-      return 'text_short'
-  }
+  return fromApiQuestionType(q.question_type ?? 'text', {
+    allowNa: q.allow_na,
+    maxScore: q.max_score,
+    maxValue: q.max_value,
+  })
 }
 
 function inferEvidenceType(
@@ -197,32 +175,16 @@ export function buildQuestionPayload(
   sortOrder: number,
   sectionId?: number,
 ): AuditQuestionCreate | AuditQuestionUpdate {
-  const isScaleQuestion = q.type === 'scale_1_5' || q.type === 'scale_1_10'
-  const ratingMax = q.type === 'scale_1_10' ? 10 : 5
-  const questionTypeMap: Record<QuestionType, AuditQuestionCreate['question_type']> = {
-    yes_no: 'yes_no',
-    yes_no_na: 'yes_no',
-    scale_1_5: 'rating',
-    scale_1_10: 'rating',
-    text_short: 'text',
-    text_long: 'textarea',
-    numeric: 'number',
-    date: 'date',
-    photo: 'photo',
-    signature: 'signature',
-    multi_choice: 'radio',
-    checklist: 'checkbox',
-    pass_fail: 'pass_fail',
-  }
+  const apiType = toApiQuestionType(q.type)
   const base = {
     question_text: q.text,
-    question_type: questionTypeMap[q.type],
+    question_type: apiType.questionType,
     description: q.description,
     help_text: q.guidance,
     is_required: q.required,
-    allow_na: q.type === 'yes_no_na',
-    max_score: isScaleQuestion ? ratingMax : undefined,
-    max_value: isScaleQuestion ? ratingMax : undefined,
+    allow_na: apiType.allowNa,
+    max_score: apiType.maxScore,
+    max_value: apiType.maxValue,
     weight: q.weight,
     sort_order: sortOrder,
     options: q.options?.length
