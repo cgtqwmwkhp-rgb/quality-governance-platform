@@ -3,9 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const list = vi.fn()
 
+const { t } = vi.hoisted(() => ({
+  t: (key: string) => key,
+}))
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t,
     i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
@@ -13,7 +17,8 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('../../../api/client', () => ({
   workforceApi: { competencyRequirements: { list } },
-  getApiErrorMessage: (error: Error) => error.message,
+  getApiErrorMessage: (error: unknown, fallback?: string) =>
+    error instanceof Error ? error.message : (fallback ?? 'error'),
 }))
 
 describe('RequirementsAdmin', () => {
