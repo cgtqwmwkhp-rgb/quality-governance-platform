@@ -164,6 +164,7 @@ The banner accepts controlled `openCircuits` / `halfOpenCircuits` props, or opti
 
 ## Related
 
+- [`docs/ops/upstream-ingestion-honesty.md`](../ops/upstream-ingestion-honesty.md) — XML / OCR-AI / AI-templates path honesty; template `frequency` is **not** a live scheduler
 - [`docs/architecture/resilience-patterns.md`](resilience-patterns.md) — general circuit breaker catalog (D05)
 - [`src/infrastructure/upstream/ai_status.py`](../../src/infrastructure/upstream/ai_status.py) — OCR/AI readiness honesty + circuit metadata
 - [`src/infrastructure/upstream/storage_status.py`](../../src/infrastructure/upstream/storage_status.py) — Blob readiness honesty + Preferred circuit metadata
