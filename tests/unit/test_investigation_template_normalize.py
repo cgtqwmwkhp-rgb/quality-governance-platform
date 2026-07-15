@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from src.domain.services.investigation_structure_normalize import (
+from src.domain.services.investigation_structure_normalize import (  # noqa: E402
     iter_run_section_values,
     parse_structure_json,
     run_values_to_data_json,

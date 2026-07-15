@@ -278,10 +278,10 @@ async def sync_run_field_responses_from_json(
     if template is None:
         return 0
 
-    field_index = await load_template_field_index(db, template.id)
+    field_index = await load_template_field_index(db, int(template.id))
     if not field_index:
         await sync_template_structure_from_json(db, template)
-        field_index = await load_template_field_index(db, template.id)
+        field_index = await load_template_field_index(db, int(template.id))
 
     existing_result = await db.execute(
         select(InvestigationRunFieldResponse).where(InvestigationRunFieldResponse.run_id == run.id)
