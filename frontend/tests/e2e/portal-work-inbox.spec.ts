@@ -72,10 +72,11 @@ async function installPortalWorkMocks(
     if (path.includes('/engineers/by-user/me') && method === 'GET') {
       seen.byUserMe = true
       if (options?.unlinked) {
-        await json(route, { detail: 'Engineer profile not linked to this user' }, 404)
+        await json(route, { linked: false })
         return
       }
       await json(route, {
+        linked: true,
         id: 10,
         external_id: 'eng-1',
         user_id: 42,

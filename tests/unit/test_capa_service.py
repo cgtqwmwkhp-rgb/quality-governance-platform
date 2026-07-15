@@ -211,6 +211,7 @@ class TestTransitionStatus:
     @patch("src.domain.services.capa_service.record_audit_event", new_callable=AsyncMock)
     async def test_transition_to_closed_sets_verified_fields(self, mock_audit, mock_metric):
         capa = _fake_capa(status=CAPAStatus.VERIFICATION)
+        capa.verification_result = "Effective — residual risk accepted"
         db = AsyncMock()
         result_mock = MagicMock()
         result_mock.scalar_one_or_none.return_value = capa
@@ -221,6 +222,19 @@ class TestTransitionStatus:
         assert result.verified_at is not None
         assert result.verified_by_id == 5
         mock_metric.assert_called_with("capa.closed")
+
+    @pytest.mark.asyncio
+    async def test_transition_to_closed_requires_verification_evidence(self):
+        capa = _fake_capa(status=CAPAStatus.VERIFICATION)
+        capa.verification_result = None
+        db = AsyncMock()
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = capa
+        db.execute.return_value = result_mock
+
+        svc = _make_service(db)
+        with pytest.raises(StateTransitionError, match="verification"):
+            await svc.transition_status(1, CAPAStatus.CLOSED, user_id=5, tenant_id=10)
 
     @pytest.mark.asyncio
     @patch("src.domain.services.capa_service.record_audit_event", new_callable=AsyncMock)

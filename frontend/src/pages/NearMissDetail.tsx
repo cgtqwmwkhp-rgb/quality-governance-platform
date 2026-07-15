@@ -114,27 +114,21 @@ export default function NearMissDetail() {
       const response = await nearMissesApi.listInvestigations(nearMissId, 1, 10)
       const items = response.data.items || []
       setInvestigations(items)
-      const latest = items[0]
-      if (latest?.id) {
-        await loadCapaActions(latest.id)
-      } else {
-        setCapaActions([])
-        setCapaUnavailable(false)
-      }
     } catch (err) {
       trackError(err, { component: 'NearMissDetail', action: 'loadInvestigations' })
       setInvestigations([])
       setInvestigationsUnavailable(true)
-      setCapaActions([])
-      setCapaUnavailable(true)
     }
+    // CAPA is first-class from near-miss — not gated on investigation.
+    await loadCapaActions(nearMissId)
   }
 
-  const loadCapaActions = async (investigationId: number) => {
+  const loadCapaActions = async (nearMissId: number) => {
     setCapaLoading(true)
     setCapaUnavailable(false)
     try {
-      const response = await actionsApi.list(1, 50, undefined, 'investigation', investigationId)
+      // Direct near-miss CAPA source (no investigation gate).
+      const response = await actionsApi.list(1, 50, undefined, 'near_miss', nearMissId)
       setCapaActions(response.data.items || [])
     } catch (err) {
       trackError(err, { component: 'NearMissDetail', action: 'loadCapaActions' })
@@ -582,37 +576,28 @@ export default function NearMissDetail() {
                     <span className="font-medium" data-testid="near-miss-capa-count">
                       {formatCapaActionsCount({
                         loading: capaLoading,
-                        unavailable: capaUnavailable || investigationsUnavailable,
+                        unavailable: capaUnavailable,
                         count: capaActions.length,
                       })}
                     </span>
                   </div>
-                  {investigations[0] ? (
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      disabled={capaLoading}
-                      onClick={() => navigate(getCapaLink('investigation', investigations[0].id))}
-                      data-testid="near-miss-capa-handoff-cta"
-                    >
-                      <ClipboardList className="w-4 h-4 mr-2" />
-                      {t(
-                        capaUnavailable
-                          ? 'investigations.handoff.open_capa'
-                          : getCapaHandoffLabelKey('investigation', capaActions.length),
-                        {
-                          count: capaActions.length,
-                        },
-                      )}
-                    </Button>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      {t(
-                        'near_misses.detail.capa_needs_investigation',
-                        'Create an investigation first to open the CAPA workspace.',
-                      )}
-                    </p>
-                  )}
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={capaLoading || !nearMiss}
+                    onClick={() => nearMiss && navigate(getCapaLink('near_miss', nearMiss.id))}
+                    data-testid="near-miss-capa-handoff-cta"
+                  >
+                    <ClipboardList className="w-4 h-4 mr-2" />
+                    {t(
+                      capaUnavailable
+                        ? 'investigations.handoff.open_capa'
+                        : getCapaHandoffLabelKey('near_miss', capaActions.length),
+                      {
+                        count: capaActions.length,
+                      },
+                    )}
+                  </Button>
                 </CardContent>
               </Card>
 

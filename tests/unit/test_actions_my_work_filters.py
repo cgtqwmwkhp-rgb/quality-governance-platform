@@ -5,14 +5,19 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import select
 
+from src.api.routes._action_unified import STORAGE_CAPA_ITEM, action_key_for
 from src.api.routes.actions import (
+    _CAPA_ITEM_DONE_STATUSES,
     _OPERATIONAL_DONE_STATUSES,
+    _apply_capa_item_status_filter,
     _apply_owner_and_overdue_filters,
+    _capa_item_to_response,
     _resolve_assigned_to_user_id,
 )
 from src.domain.exceptions import ValidationError
 from src.domain.models.capa import CAPAAction, CAPAStatus
 from src.domain.models.incident import IncidentAction
+from src.domain.models.rca_tools import CAPAItem
 
 
 def test_resolve_assigned_to_me_and_numeric() -> None:
@@ -79,6 +84,56 @@ def test_apply_mine_and_overdue_together_for_capa() -> None:
         assigned_to_id=9,
         overdue=True,
         done_statuses=(CAPAStatus.CLOSED,),
+    )
+    sql = str(filtered.compile(compile_kwargs={"literal_binds": True})).lower()
+    assert "assigned_to_id" in sql
+    assert "9" in sql
+    assert "due_date" in sql
+    assert "closed" in sql
+
+
+def test_capa_item_to_response_uses_honest_fields() -> None:
+    item = SimpleNamespace(
+        id=7,
+        title="Replace guard",
+        description="Install missing guard on press",
+        action_type="corrective",
+        priority="high",
+        status="open",
+        investigation_id=99,
+        assigned_to_id=42,
+        due_date=None,
+        completed_at=None,
+        verification_notes=None,
+        created_at=None,
+    )
+    response = _capa_item_to_response(item)  # type: ignore[arg-type]
+    assert response.action_key == action_key_for(STORAGE_CAPA_ITEM, 7)
+    assert response.title == "Replace guard"
+    assert response.description == "Install missing guard on press"
+    assert response.source_type == "investigation"
+    assert response.source_id == 99
+    assert response.owner_id == 42
+
+
+def test_apply_capa_item_status_filter_maps_completed() -> None:
+    q = select(CAPAItem)
+    filtered = _apply_capa_item_status_filter(q, "completed")
+    sql = str(filtered.compile(compile_kwargs={"literal_binds": True})).lower()
+    for done_status in _CAPA_ITEM_DONE_STATUSES:
+        assert done_status in sql
+
+
+def test_apply_mine_and_overdue_together_for_capa_item() -> None:
+    q = select(CAPAItem)
+    filtered = _apply_owner_and_overdue_filters(
+        q,
+        owner_col=CAPAItem.assigned_to_id,
+        due_col=CAPAItem.due_date,
+        status_col=CAPAItem.status,
+        assigned_to_id=9,
+        overdue=True,
+        done_statuses=_CAPA_ITEM_DONE_STATUSES,
     )
     sql = str(filtered.compile(compile_kwargs={"literal_binds": True})).lower()
     assert "assigned_to_id" in sql

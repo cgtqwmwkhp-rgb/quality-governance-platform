@@ -8,7 +8,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.models.capa import CAPAAction, CAPASource, CAPAStatus
 from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus
+from src.domain.models.rca_tools import CAPAItem
 
 CLOSURE_REASON_OPEN_ACTIONS_REMAIN = "OPEN_ACTIONS_REMAIN"
 _INVESTIGATION_ACTION_STORAGE_KIND = "investigation_action"
@@ -17,6 +19,9 @@ _INVESTIGATION_ACTION_DONE_STATUSES: tuple[InvestigationActionStatus, ...] = (
     InvestigationActionStatus.COMPLETED,
     InvestigationActionStatus.CANCELLED,
 )
+
+_CAPA_DONE_STATUSES: tuple[CAPAStatus, ...] = (CAPAStatus.CLOSED,)
+_CAPA_ITEM_DONE_STATUSES = frozenset({"completed", "verified", "closed", "cancelled"})
 
 
 @dataclass(frozen=True)
@@ -41,8 +46,10 @@ async def fetch_open_work_for_investigation(
     investigation_id: int,
     tenant_id: int,
 ) -> list[OpenWorkItem]:
-    """Return investigation-scoped actions that are not completed or cancelled."""
-    query = (
+    """Return investigation-scoped actions/CAPAs that are not completed or cancelled."""
+    items: list[OpenWorkItem] = []
+
+    inv_query = (
         select(InvestigationAction)
         .where(
             InvestigationAction.investigation_id == investigation_id,
@@ -51,22 +58,66 @@ async def fetch_open_work_for_investigation(
         )
         .order_by(InvestigationAction.created_at.asc(), InvestigationAction.id.asc())
     )
-    result = await db.execute(query)
-    rows = result.scalars().all()
-
-    items: list[OpenWorkItem] = []
-    for row in rows:
-        status = _status_value(row.status)
+    inv_result = await db.execute(inv_query)
+    for row in inv_result.scalars().all():
         items.append(
             OpenWorkItem(
                 kind="investigation_action",
                 id=row.id,
                 reference_number=row.reference_number or f"INV-ACT-{row.id}",
                 title=row.title,
-                status=status,
+                status=_status_value(row.status),
                 action_key=f"{_INVESTIGATION_ACTION_STORAGE_KIND}:{row.id}",
             )
         )
+
+    capa_query = (
+        select(CAPAAction)
+        .where(
+            CAPAAction.tenant_id == tenant_id,
+            CAPAAction.source_type == CAPASource.INVESTIGATION,
+            CAPAAction.source_id == investigation_id,
+            CAPAAction.status.notin_(_CAPA_DONE_STATUSES),
+        )
+        .order_by(CAPAAction.id.asc())
+    )
+    capa_result = await db.execute(capa_query)
+    for row in capa_result.scalars().all():
+        items.append(
+            OpenWorkItem(
+                kind="capa_action",
+                id=row.id,
+                reference_number=row.reference_number or f"CAPA-{row.id}",
+                title=row.title,
+                status=_status_value(row.status),
+                action_key=f"capa:{row.id}",
+            )
+        )
+
+    item_query = (
+        select(CAPAItem)
+        .where(
+            CAPAItem.investigation_id == investigation_id,
+            CAPAItem.tenant_id == tenant_id,
+        )
+        .order_by(CAPAItem.id.asc())
+    )
+    item_result = await db.execute(item_query)
+    for row in item_result.scalars().all():
+        status = (row.status or "open").strip().lower()
+        if status in _CAPA_ITEM_DONE_STATUSES:
+            continue
+        items.append(
+            OpenWorkItem(
+                kind="capa_item",
+                id=row.id,
+                reference_number=f"CAPA-ITEM-{row.id}",
+                title=row.title or f"CAPA item {row.id}",
+                status=status,
+                action_key=f"capa_item:{row.id}",
+            )
+        )
+
     return items
 
 

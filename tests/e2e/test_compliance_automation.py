@@ -306,6 +306,7 @@ class TestRIDDORAutomation:
         assert response.status_code == 200
 
         result = response.json()
-        assert result["status"] == "submitted"
+        assert result["status"] == "stubbed"
+        assert result.get("gateway") == "not_connected"
         assert "hse_reference" in result
         assert result["hse_reference"].startswith("RIDDOR-")

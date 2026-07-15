@@ -16,6 +16,7 @@ from src.api.dependencies.request_context import get_request_id
 from src.api.routes._action_unified import (
     CAPA_ONLY_API_SOURCE_TYPES,
     STORAGE_CAPA,
+    STORAGE_CAPA_ITEM,
     STORAGE_COMPLAINT_ACTION,
     STORAGE_INCIDENT_ACTION,
     STORAGE_INVESTIGATION_ACTION,
@@ -38,6 +39,7 @@ from src.domain.models.incident import ActionStatus, Incident, IncidentAction
 from src.domain.models.induction import InductionRun
 from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus, InvestigationRun
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
+from src.domain.models.rca_tools import CAPAItem
 from src.domain.models.user import User
 from src.domain.services.action_assignment_service import notify_action_assignment, record_action_assigned_audit
 from src.domain.services.audit_service import record_audit_event
@@ -378,6 +380,49 @@ def _apply_capa_status_filter(query, status_filter: str):
         return query
 
 
+def _apply_capa_item_status_filter(query, status_filter: str):
+    """Map unified status strings to RCA CAPAItem string statuses."""
+    normalized = status_filter.strip().lower()
+    status_map = {
+        "completed": _CAPA_ITEM_DONE_STATUSES,
+        "pending_verification": ("verified",),
+        "cancelled": ("closed",),
+    }
+    mapped = status_map.get(normalized)
+    if mapped is not None:
+        return query.where(CAPAItem.status.in_(list(mapped)))
+    return query.where(CAPAItem.status == normalized)
+
+
+def _capa_item_to_response(item: CAPAItem) -> ActionResponse:
+    """Convert an RCA CAPAItem to unified action response."""
+    raw_status = (item.status or "open").strip().lower()
+    return ActionResponse(
+        id=item.id,
+        reference_number=None,
+        title=item.title,
+        description=item.description or "",
+        action_type=item.action_type or "corrective",
+        priority=item.priority or "medium",
+        status=raw_status,
+        display_status=display_status_for(raw_status, from_capa=False),
+        action_key=action_key_for(STORAGE_CAPA_ITEM, item.id),
+        due_date=item.due_date.isoformat() if item.due_date else None,
+        completed_at=item.completed_at.isoformat() if item.completed_at else None,
+        completion_notes=item.verification_notes,
+        source_type="investigation",
+        source_id=item.investigation_id or 0,
+        source_reference=None,
+        source_title=None,
+        source_scheme=None,
+        clause_reference=None,
+        audit_run_id=None,
+        owner_id=item.assigned_to_id,
+        owner_email=None,
+        created_at=item.created_at.isoformat() if item.created_at else "",
+    )
+
+
 async def _safe_scalar(db: "DbSession", query, source_label: str) -> int:
     """Execute a count query, returning 0 and logging on failure."""
     try:
@@ -389,6 +434,7 @@ async def _safe_scalar(db: "DbSession", query, source_label: str) -> int:
 
 # Terminal statuses excluded from overdue (matches Actions UI display_status rules).
 _OPERATIONAL_DONE_STATUSES: tuple[str, ...] = ("completed", "cancelled", "verified")
+_CAPA_ITEM_DONE_STATUSES: tuple[str, ...] = ("closed", "completed", "verified")
 
 
 def _resolve_assigned_to_user_id(assigned_to: Optional[str], current_user: User) -> Optional[int]:
@@ -521,6 +567,68 @@ async def _fetch_capa_rows_for_list(
     return list(result.scalars().all())
 
 
+async def _count_capa_item_slice(
+    db: "DbSession",
+    *,
+    tenant_id: Optional[int],
+    status_filter: Optional[str],
+    source_id: Optional[int],
+    assigned_to_id: Optional[int] = None,
+    overdue: bool = False,
+) -> int:
+    """Count RCA CAPAItem rows for tenant with optional investigation slice."""
+    q = select(func.count()).select_from(CAPAItem).where(CAPAItem.tenant_id == tenant_id)
+    if status_filter:
+        q = _apply_capa_item_status_filter(q, status_filter)
+    if source_id is not None:
+        q = q.where(CAPAItem.investigation_id == source_id)
+    q = _apply_owner_and_overdue_filters(
+        q,
+        owner_col=CAPAItem.assigned_to_id,
+        due_col=CAPAItem.due_date,
+        status_col=CAPAItem.status,
+        assigned_to_id=assigned_to_id,
+        overdue=overdue,
+        done_statuses=_CAPA_ITEM_DONE_STATUSES,
+    )
+    return await _safe_scalar(db, q, "capa_item")
+
+
+async def _fetch_capa_item_rows_for_list(
+    db: "DbSession",
+    *,
+    tenant_id: Optional[int],
+    status_filter: Optional[str],
+    source_id: Optional[int],
+    source_type_param: Optional[str],
+    offset: int,
+    page_size: int,
+    cross_source_cap: int,
+    assigned_to_id: Optional[int] = None,
+    overdue: bool = False,
+) -> list[CAPAItem]:
+    q = select(CAPAItem).where(CAPAItem.tenant_id == tenant_id).order_by(CAPAItem.created_at.desc())
+    if status_filter:
+        q = _apply_capa_item_status_filter(q, status_filter)
+    if source_id is not None:
+        q = q.where(CAPAItem.investigation_id == source_id)
+    q = _apply_owner_and_overdue_filters(
+        q,
+        owner_col=CAPAItem.assigned_to_id,
+        due_col=CAPAItem.due_date,
+        status_col=CAPAItem.status,
+        assigned_to_id=assigned_to_id,
+        overdue=overdue,
+        done_statuses=_CAPA_ITEM_DONE_STATUSES,
+    )
+    if source_type_param:
+        q = q.offset(offset).limit(page_size)
+    else:
+        q = q.limit(cross_source_cap)
+    result = await db.execute(q)
+    return list(result.scalars().all())
+
+
 async def _count_for_source(
     db: "DbSession",
     source_type: Optional[str],
@@ -637,9 +745,20 @@ async def _count_for_source(
                 asset_id=asset_id,
             )
 
+    if asset_id is None and (not st or st == "investigation"):
+        total += await _count_capa_item_slice(
+            db,
+            tenant_id=tenant_id,
+            status_filter=status_filter,
+            source_id=source_id if st == "investigation" else None,
+            assigned_to_id=assigned_to_id,
+            overdue=overdue,
+        )
+
     return total
 
 
+@router.get("", response_model=ActionListResponse, include_in_schema=False)
 @router.get("/", response_model=ActionListResponse)
 async def list_actions(
     db: DbSession,
@@ -908,6 +1027,28 @@ async def list_actions(
     except Exception:
         logger.warning("list_actions: capa query failed", exc_info=True)
 
+    _pending_capa_items: list[CAPAItem] = []
+    if asset_id is None:
+        try:
+            stl_items = source_type.lower() if source_type else None
+            if not stl_items or stl_items == "investigation":
+                _pending_capa_items = await _fetch_capa_item_rows_for_list(
+                    db,
+                    tenant_id=current_user.tenant_id,
+                    status_filter=status_filter,
+                    source_id=source_id if stl_items == "investigation" else None,
+                    source_type_param=source_type,
+                    offset=offset,
+                    page_size=page_size,
+                    cross_source_cap=_cross_source_cap,
+                    assigned_to_id=assigned_to_id,
+                    overdue=overdue,
+                )
+            for item in _pending_capa_items:
+                actions_list.append(_capa_item_to_response(item))
+        except Exception:
+            logger.warning("list_actions: capa_item query failed", exc_info=True)
+
     # When listing across ALL source types, merge-sort and slice in Python
     # (cross-table UNION ALL with heterogeneous schemas is impractical here).
     if not source_type:
@@ -925,6 +1066,7 @@ async def list_actions(
     )
 
 
+@router.post("", response_model=ActionResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @router.post("/", response_model=ActionResponse, status_code=status.HTTP_201_CREATED)
 async def create_action(  # noqa: C901 - complexity justified by multi-entity support
     action_data: ActionCreate,
@@ -1020,7 +1162,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         ref_number = f"CMA-{year}-{unique_suffix}"
     elif src_type == "investigation":
         ref_number = f"INVACT-{year}-{unique_suffix}"
-    elif src_type in ("assessment", "induction", "audit_finding"):
+    elif src_type in ("assessment", "induction", "audit_finding", "near_miss"):
         from src.domain.services.reference_number import ReferenceNumberService
 
         ref_number = await ReferenceNumberService.generate(db, "capa", CAPAAction)
@@ -1152,6 +1294,22 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             status=InvestigationActionStatus.OPEN,
             reference_number=ref_number,
             tenant_id=current_user.tenant_id,
+        )
+    elif src_type == "near_miss":
+        action = CAPAAction(
+            reference_number=ref_number,
+            title=action_data.title,
+            description=action_data.description,
+            capa_type=CAPAType.CORRECTIVE,
+            status=CAPAStatus.OPEN,
+            source_type=CAPASource.NEAR_MISS,
+            source_id=src_id,
+            source_reference=None,
+            priority=_parse_capa_priority(action_data.priority),
+            tenant_id=current_user.tenant_id,
+            assigned_to_id=owner_id,
+            created_by_id=current_user.id,
+            due_date=parsed_due_date,
         )
     else:
         raise BadRequestError("Invalid source_type")
@@ -1415,6 +1573,23 @@ async def load_action_response_by_key(
         if capa_row is None:
             raise NotFoundError("Action not found")
         return await _capa_to_response(db, capa_row)
+
+    if kind == STORAGE_CAPA_ITEM:
+        result = await db.execute(
+            select(CAPAItem).where(
+                CAPAItem.id == row_id,
+                CAPAItem.tenant_id == tenant_id,
+            )
+        )
+        capa_item_row = cast(Optional[CAPAItem], result.scalar_one_or_none())
+        if capa_item_row is None:
+            raise NotFoundError("Action not found")
+        out = _capa_item_to_response(capa_item_row)
+        if capa_item_row.assigned_to_id:
+            email = await _resolve_owner_email(db, capa_item_row.assigned_to_id)
+            if email:
+                return out.model_copy(update={"owner_email": email, "assigned_to_email": email})
+        return out
 
     if kind == STORAGE_INCIDENT_ACTION:
         result = await db.execute(

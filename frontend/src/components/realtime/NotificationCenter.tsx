@@ -11,6 +11,8 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { notificationsApi } from '../../api/notificationsClient'
+import { getPlatformToken } from '../../utils/auth'
 import { trackError } from '../../utils/errorTracker'
 import {
   Bell,
@@ -54,16 +56,19 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
   const dropdownRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
-  // Fetch notifications from API
+  // Fetch notifications via authenticated API client (not bare fetch).
   useEffect(() => {
     const fetchNotifications = async () => {
+      if (!getPlatformToken()) return
       try {
-        const response = await fetch('/api/v1/notifications/')
-        if (response.ok) {
-          const data: Notification[] = await response.json()
-          setNotifications(data)
-          setUnreadCount(data.filter((n) => !n.is_read).length)
-        }
+        const response = await notificationsApi.list({ page: 1, pageSize: 50 })
+        const items = (response.data.items || []) as Notification[]
+        setNotifications(items)
+        setUnreadCount(
+          typeof response.data.unread_count === 'number'
+            ? response.data.unread_count
+            : items.filter((n) => !n.is_read).length,
+        )
       } catch (err) {
         trackError(err, { component: 'NotificationCenter', action: 'fetchNotifications' })
       }
@@ -221,7 +226,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
                 </button>
               )}
               <button
-                onClick={() => navigate('/settings/notifications')}
+                onClick={() => navigate('/notifications')}
                 className="text-gray-400 hover:text-white"
                 title="Notification settings"
               >

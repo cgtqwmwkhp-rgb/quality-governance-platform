@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.user import User
+from src.domain.services.case_risk_links import upsert_case_risk_link
 from src.domain.services.reference_number import ReferenceNumberService
 
 NEAR_MISS_RISK_SOURCE_PREFIX = "near_miss:"
@@ -199,4 +200,12 @@ async def create_enterprise_risk_from_near_miss(
     )
     db.add(risk)
     await db.flush()
+    if near_miss.tenant_id is not None:
+        await upsert_case_risk_link(
+            db,
+            tenant_id=near_miss.tenant_id,
+            case_type="near_miss",
+            case_id=near_miss.id,
+            risk_id=risk.id,
+        )
     return risk

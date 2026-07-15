@@ -105,6 +105,21 @@ def _technical_organisational_measures() -> dict[str, Any]:
     }
 
 
+def _optional_ai_transfer_status() -> str:
+    """Honest AI transfer posture based on whether OCR/AI keys are present."""
+    from src.infrastructure.upstream.ai_status import get_ocr_providers_readiness
+
+    readiness = get_ocr_providers_readiness()
+    providers = readiness.get("providers") or {}
+    keys_present = any(
+        bool((providers.get(name) or {}).get("configured") or (providers.get(name) or {}).get("api_key_present"))
+        for name in ("mistral", "gemini", "azure_di")
+    )
+    if keys_present:
+        return "keys_present_pending_vendor_dpa_confirmation"
+    return "pending_vendor_dpa_before_production_keys"
+
+
 def _international_transfers() -> dict[str, Any]:
     """Art. 30(1)(e) international transfers / safeguards summary (unsigned stub).
 
@@ -125,7 +140,7 @@ def _international_transfers() -> dict[str, Any]:
             "Optional AI subprocessors may involve vendor-managed regions and "
             "require SCC or UK IDTA via vendor DPA before production keys."
         ),
-        "optional_ai_transfer_status": "pending_vendor_dpa_before_production_keys",
+        "optional_ai_transfer_status": _optional_ai_transfer_status(),
         "subprocessor_transfer_mechanisms": [
             {
                 "name": sp["name"],
@@ -136,8 +151,9 @@ def _international_transfers() -> dict[str, Any]:
         ],
         "note": (
             "Art. 30(1)(e) readability only — unsigned stub. Does not invent "
-            "signed vendor DPAs; does not flip dpia.status; does not close EA-03. "
-            "Confirm SCC / UK IDTA for Mistral / Gemini before production AI keys."
+            "signed vendor DPAs; does not flip dpia.status. When AI keys are "
+            "present, status is keys_present_pending_vendor_dpa_confirmation "
+            "(ops must still confirm SCC / UK IDTA)."
         ),
     }
 

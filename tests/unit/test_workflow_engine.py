@@ -260,12 +260,10 @@ class TestApprovalManagement:
 
 
 class TestEscalation:
-    def test_check_escalations_returns_overdue(self, engine):
+    def test_check_escalations_returns_empty_without_persistence(self, engine):
+        # Honest empty list — in-memory engine does not fabricate SLA breaches.
         escalations = engine.check_escalations()
-
-        assert len(escalations) >= 1
-        assert escalations[0]["reason"] == "SLA breach"
-        assert escalations[0]["hours_overdue"] > 0
+        assert escalations == []
 
     def test_escalate(self, engine):
         result = engine.escalate(

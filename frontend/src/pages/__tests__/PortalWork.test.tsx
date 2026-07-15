@@ -71,15 +71,7 @@ describe('PortalWork CUJ-P10', () => {
       },
     })
     mockListMyPending.mockResolvedValue({ data: { items: [], total: 0 } })
-    const notFound = new axios.AxiosError('Not Found')
-    notFound.response = {
-      status: 404,
-      data: { detail: 'not linked' },
-      statusText: 'Not Found',
-      headers: {},
-      config: {} as never,
-    }
-    mockGetByUserMe.mockRejectedValue(notFound)
+    mockGetByUserMe.mockResolvedValue({ data: { linked: false } })
   })
 
   it('requests assigned_to=me and renders action + unlinked passport', async () => {
@@ -106,6 +98,7 @@ describe('PortalWork CUJ-P10', () => {
     mockList.mockResolvedValue({ data: { items: [], total: 0 } })
     mockGetByUserMe.mockResolvedValue({
       data: {
+        linked: true,
         id: 10,
         external_id: 'eng-1',
         user_id: 42,
@@ -125,7 +118,7 @@ describe('PortalWork CUJ-P10', () => {
   it('surfaces actions filter failure without silent empty success', async () => {
     mockList.mockRejectedValue(new Error('Server filter failed'))
     mockGetByUserMe.mockResolvedValue({
-      data: { id: 10, external_id: 'e', user_id: 1, is_active: true },
+      data: { linked: true, id: 10, external_id: 'e', user_id: 1, is_active: true },
     })
 
     renderPage()

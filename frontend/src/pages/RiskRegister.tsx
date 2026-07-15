@@ -59,6 +59,80 @@ function formatMetric(value: MetricValue): string {
   return value == null ? '—' : String(value)
 }
 
+/** Residual score bands aligned with GET /risk-register/summary by_level. */
+function residualBandFromScore(score: number): { level: string; color: string } {
+  if (score > 16) {
+    return { level: 'critical', color: 'hsl(var(--destructive))' }
+  }
+  if (score >= 12) {
+    return { level: 'high', color: 'hsl(var(--warning))' }
+  }
+  if (score >= 5) {
+    return { level: 'medium', color: 'hsl(var(--info))' }
+  }
+  return { level: 'low', color: 'hsl(var(--success))' }
+}
+
+/** Matrix cell score bands (likelihood × impact). */
+function matrixBandFromScore(score: number): { level: string; color: string } {
+  return residualBandFromScore(score)
+}
+
+type HeatmapApiCell = {
+  likelihood?: number
+  impact?: number
+  count?: number
+  risk_count?: number
+  risks?: { id: number; title?: string }[]
+  risk_ids?: number[]
+  risk_titles?: string[]
+}
+
+function flattenHeatmapCells(heatmap: {
+  cells?: HeatmapApiCell[]
+  matrix?: HeatmapApiCell[][]
+}): HeatmapApiCell[] {
+  if (Array.isArray(heatmap.cells) && heatmap.cells.length > 0) {
+    return heatmap.cells
+  }
+  if (!Array.isArray(heatmap.matrix)) {
+    return []
+  }
+  return heatmap.matrix.flat()
+}
+
+function binRisksIntoHeatmapCells(
+  risks: Array<{
+    id: number
+    title: string
+    residual_likelihood?: number
+    residual_impact?: number
+  }>,
+): Map<string, { count: number; risk_ids: number[]; risk_titles: string[] }> {
+  const bins = new Map<string, { count: number; risk_ids: number[]; risk_titles: string[] }>()
+  for (const risk of risks) {
+    const likelihood = risk.residual_likelihood
+    const impact = risk.residual_impact
+    if (
+      typeof likelihood !== 'number' ||
+      typeof impact !== 'number' ||
+      likelihood < 1 ||
+      likelihood > 5 ||
+      impact < 1 ||
+      impact > 5
+    ) {
+      continue
+    }
+    const key = `${likelihood}:${impact}`
+    const existing = bins.get(key) ?? { count: 0, risk_ids: [], risk_titles: [] }
+    existing.count += 1
+    existing.risk_ids.push(risk.id)
+    existing.risk_titles.push(risk.title.substring(0, 30))
+    bins.set(key, existing)
+  }
+  return bins
+}
+
 interface Risk {
   id: number
   reference: string
@@ -67,6 +141,8 @@ interface Risk {
   department: string
   inherent_score: number
   residual_score: number
+  residual_likelihood?: number
+  residual_impact?: number
   risk_level: string
   risk_color: string
   treatment_strategy: string
@@ -219,18 +295,7 @@ export default function RiskRegister() {
       const mappedRisks: Risk[] = apiRisks.map((r) => {
         const residual = r.residual_score ?? r.risk_score ?? 0
         const inherent = r.inherent_score ?? r.risk_score ?? 0
-        let riskLevel = 'low'
-        let riskColor = 'hsl(var(--success))'
-        if (residual > 16) {
-          riskLevel = 'critical'
-          riskColor = 'hsl(var(--destructive))'
-        } else if (residual > 9) {
-          riskLevel = 'high'
-          riskColor = 'hsl(var(--warning))'
-        } else if (residual > 4) {
-          riskLevel = 'medium'
-          riskColor = 'hsl(var(--info))'
-        }
+        const { level: riskLevel, color: riskColor } = residualBandFromScore(residual)
 
         return {
           id: r.id,
@@ -240,6 +305,8 @@ export default function RiskRegister() {
           department: r.department ?? '',
           inherent_score: inherent,
           residual_score: residual,
+          residual_likelihood: r.residual_likelihood,
+          residual_impact: r.residual_impact,
           risk_level: riskLevel,
           risk_color: riskColor,
           treatment_strategy: r.treatment_strategy ?? 'treat',
@@ -414,37 +481,48 @@ export default function RiskRegister() {
           },
         }
 
-        const heatmapCells = heatmap?.cells ?? []
+        const heatmapCells = flattenHeatmapCells(heatmap ?? {})
+        const clientBins =
+          heatmapCells.reduce((sum, c) => sum + (c.count ?? c.risk_count ?? 0), 0) === 0 &&
+          mappedRisks.length > 0
+            ? binRisksIntoHeatmapCells(mappedRisks)
+            : null
+
         for (let likelihood = 5; likelihood >= 1; likelihood--) {
           const row: MatrixCell[] = []
           for (let impact = 1; impact <= 5; impact++) {
             const score = likelihood * impact
-            let level = 'low'
-            let color = 'hsl(var(--success))'
-            if (score > 16) {
-              level = 'critical'
-              color = 'hsl(var(--destructive))'
-            } else if (score > 9) {
-              level = 'high'
-              color = 'hsl(var(--warning))'
-            } else if (score > 4) {
-              level = 'medium'
-              color = 'hsl(var(--info))'
-            }
+            const { level, color } = matrixBandFromScore(score)
 
             const apiCell = heatmapCells.find(
-              (c: { likelihood?: number; impact?: number; count?: number; risks?: { id: number; title?: string }[] }) =>
-                c.likelihood === likelihood && c.impact === impact,
+              (c) => c.likelihood === likelihood && c.impact === impact,
             )
+            const clientCell = clientBins?.get(`${likelihood}:${impact}`)
+            const riskCount =
+              apiCell?.count ??
+              apiCell?.risk_count ??
+              clientCell?.count ??
+              0
+            const riskIds =
+              apiCell?.risks?.map((r) => r.id) ??
+              apiCell?.risk_ids ??
+              clientCell?.risk_ids ??
+              []
+            const riskTitles =
+              apiCell?.risks?.map((r) => (r.title ?? '').substring(0, 30)) ??
+              apiCell?.risk_titles ??
+              clientCell?.risk_titles ??
+              []
+
             row.push({
               likelihood,
               impact,
               score,
               level,
               color,
-              risk_count: apiCell?.count ?? 0,
-              risk_ids: apiCell?.risks?.map((r) => r.id) ?? [],
-              risk_titles: apiCell?.risks?.map((r) => (r.title ?? '').substring(0, 30)) ?? [],
+              risk_count: riskCount,
+              risk_ids: riskIds,
+              risk_titles: riskTitles,
             })
           }
           builtHeatMap.matrix.push(row)

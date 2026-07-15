@@ -346,6 +346,12 @@ function App() {
                 <Route path="policies" element={<Policies />} />
                 <Route path="risks" element={<RedirectToRiskRegister />} />
                 <Route path="risks/*" element={<RedirectToRiskRegister />} />
+                {/* Golden-thread UAT: retire dead staff URLs with honest redirects */}
+                <Route path="capa" element={<Navigate to="/actions?sourceType=capa" replace />} />
+                <Route path="my-work" element={<Navigate to="/actions?view=mine" replace />} />
+                <Route path="evidence" element={<Navigate to="/compliance" replace />} />
+                <Route path="knowledge-bank" element={<Navigate to="/documents" replace />} />
+                <Route path="exceptions" element={<Navigate to="/knowledge-exceptions" replace />} />
               </Route>
 
               {/* Workforce routes */}

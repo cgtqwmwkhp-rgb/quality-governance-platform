@@ -68,10 +68,10 @@ class RiskScoringEngine:
 
     @classmethod
     def get_risk_level(cls, score: int) -> str:
-        """Get risk level from score"""
+        """Get risk level from residual score (aligned with /summary by_level bands)."""
         if score <= 4:
             return "low"
-        elif score <= 9:
+        elif score <= 11:
             return "medium"
         elif score <= 16:
             return "high"
@@ -290,11 +290,26 @@ class RiskService:
 
         total_risks = len(risks)
         critical_risks = len([r for r in risks if r.residual_score > 16])
-        high_risks = len([r for r in risks if 12 < r.residual_score <= 16])
+        high_risks = len([r for r in risks if 12 <= r.residual_score <= 16])
         outside_appetite = len([r for r in risks if not r.is_within_appetite])
+
+        cells = [
+            {
+                "likelihood": cell["likelihood"],
+                "impact": cell["impact"],
+                "count": cell["risk_count"],
+                "risks": [
+                    {"id": rid, "title": title}
+                    for rid, title in zip(cell["risk_ids"], cell["risk_titles"], strict=False)
+                ],
+            }
+            for row in matrix
+            for cell in row
+        ]
 
         return {
             "matrix": matrix,
+            "cells": cells,
             "summary": {
                 "total_risks": total_risks,
                 "critical_risks": critical_risks,

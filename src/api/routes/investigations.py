@@ -421,6 +421,19 @@ async def get_closure_validation(
     if open_work:
         reasons.append(CLOSURE_REASON_OPEN_ACTIONS_REMAIN)
 
+    # Emit MISSING_REQUIRED_FIELD / MISSING_REQUIRED_SECTION from template validation.
+    from src.domain.services.investigation_service import InvestigationService
+
+    template_validation = await InvestigationService.validate_closure(
+        db,
+        investigation_id=investigation_id,
+        tenant_id=tenant_id,
+    )
+    for code in getattr(template_validation, "reason_codes", None) or []:
+        code_str = code.value if hasattr(code, "value") else str(code)
+        if code_str not in reasons:
+            reasons.append(code_str)
+
     return {
         "can_close": len(reasons) == 0,
         "reasons": reasons,

@@ -1404,37 +1404,12 @@ class WorkflowTemplateEngine:
     # ==================== Escalation ====================
 
     def check_escalations(self) -> List[Dict[str, Any]]:
-        """Check for workflows that need escalation."""
-        # In production, would query database for SLA breaches
-        escalations = []
-        now = datetime.now(timezone.utc)
+        """Check for workflows that need escalation.
 
-        # Mock escalation data - workflow with SLA breach 2 hours ago
-        mock_sla_due = now - timedelta(hours=2)
-        mock_workflows = [
-            {
-                "id": "WF-20260118001",
-                "template": "CAPA",
-                "sla_due_at": mock_sla_due,
-                "current_step": "Action Plan Review",
-                "priority": "normal",
-            }
-        ]
-
-        for wf in mock_workflows:
-            sla_due = mock_sla_due  # Use the known datetime value
-            if sla_due < now:
-                escalations.append(
-                    {
-                        "workflow_id": wf["id"],
-                        "reason": "SLA breach",
-                        "hours_overdue": int((now - sla_due).total_seconds() / 3600),
-                        "current_step": wf["current_step"],
-                        "recommended_action": "Escalate to Operations Director",
-                    }
-                )
-
-        return escalations
+        Honest empty list: this in-memory template engine does not persist
+        workflow instances, so fabricating SLA breaches would mislead ops/UAT.
+        """
+        return []
 
     def escalate(
         self,

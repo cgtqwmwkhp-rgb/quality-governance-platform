@@ -141,6 +141,7 @@ class SuggestionTriageResolve(BaseModel):
 # ============ EnterpriseRisk CRUD Endpoints ============
 
 
+@router.get("", response_model=dict, include_in_schema=False)
 @router.get("/", response_model=dict)
 async def list_risks(
     current_user: CurrentUser,
@@ -197,6 +198,8 @@ async def list_risks(
                 "department": r.department,
                 "inherent_score": r.inherent_score,
                 "residual_score": r.residual_score,
+                "residual_likelihood": r.residual_likelihood,
+                "residual_impact": r.residual_impact,
                 "risk_level": RiskScoringEngine.get_risk_level(r.residual_score),
                 "risk_color": RiskScoringEngine.get_risk_color(r.residual_score),
                 "treatment_strategy": r.treatment_strategy,

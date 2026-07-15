@@ -15,6 +15,7 @@ from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.engineer import (
     CompetencyRecordResponse,
     EngineerCreate,
+    EngineerLinkStatusResponse,
     EngineerListResponse,
     EngineerResponse,
     EngineerUpdate,
@@ -170,15 +171,16 @@ async def create_engineer(
     return EngineerResponse.model_validate(engineer)
 
 
-@router.get("/by-user/me", response_model=EngineerResponse)
+@router.get("/by-user/me", response_model=EngineerLinkStatusResponse)
 async def get_engineer_by_user_me(
     db: DbSession,
     user: CurrentUser,
 ):
     """Resolve the authenticated user's linked engineer profile (portal self-inbox).
 
-    Returns 404 when no Engineer.user_id link exists — callers must show an honest
-    "profile not linked" empty state (no fabricated passport ticks).
+    Returns HTTP 200 with ``linked: false`` when no Engineer.user_id link exists —
+    callers must show an honest "profile not linked" empty state (no fabricated
+    passport ticks). Legacy 404 responses may still occur from other layers.
     """
     tenant_id = _require_engineer_tenant_id(user)
     query = select(Engineer).options(selectinload(Engineer.competency_records)).where(Engineer.user_id == user.id)
@@ -190,14 +192,14 @@ async def get_engineer_by_user_me(
             "portal_work_inbox_viewed user_id=%s engineer_linked=false",
             getattr(user, "id", None),
         )
-        raise NotFoundError("Engineer profile not linked to this user")
+        return EngineerLinkStatusResponse.unlinked()
     _assert_engineer_access(user, engineer, allow_self_read=True)
     logger.info(
         "portal_work_inbox_viewed user_id=%s engineer_id=%s engineer_linked=true",
         getattr(user, "id", None),
         engineer.id,
     )
-    return EngineerResponse.model_validate(engineer)
+    return EngineerLinkStatusResponse.from_engineer(engineer)
 
 
 @router.get("/{engineer_id}", response_model=EngineerResponse)

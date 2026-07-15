@@ -22,7 +22,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.domain.exceptions import NotFoundError, ValidationError
+from src.domain.exceptions import NotFoundError, StateTransitionError, ValidationError
 from src.domain.models.audit import (
     AuditFinding,
     AuditQuestion,
@@ -1773,6 +1773,16 @@ class AuditService:
             tenant_id=tenant_id,
         )
 
+        new_status = update_data.get("status")
+        if new_status is not None:
+            target_status = self._enum_value(new_status) or str(new_status)
+            current_status = self._enum_value(finding.status) or FindingStatus.OPEN.value
+            if (
+                target_status == FindingStatus.CLOSED.value
+                and current_status != FindingStatus.CLOSED.value
+            ):
+                await self._assert_no_open_capas_for_finding_close(finding)
+
         handled = self._apply_json_field_updates(
             finding,
             update_data,
@@ -1977,6 +1987,26 @@ class AuditService:
         if status_val == CAPAStatus.CLOSED.value:
             return FindingStatus.CLOSED
         return None
+
+    async def _assert_no_open_capas_for_finding_close(self, finding: AuditFinding) -> None:
+        """Fail closed when closing a finding while linked CAPA actions remain open."""
+        siblings_result = await self.db.execute(
+            select(CAPAAction).where(
+                CAPAAction.tenant_id == finding.tenant_id,
+                CAPAAction.source_type == CAPASource.AUDIT_FINDING,
+                CAPAAction.source_id == finding.id,
+            )
+        )
+        siblings = list(siblings_result.scalars().all())
+        blockers = [
+            capa
+            for capa in siblings
+            if self._enum_value(capa.status) != CAPAStatus.CLOSED.value
+        ]
+        if blockers:
+            raise StateTransitionError(
+                "Cannot close finding while linked CAPA actions remain open"
+            )
 
     async def apply_capa_closure_bridge(
         self,

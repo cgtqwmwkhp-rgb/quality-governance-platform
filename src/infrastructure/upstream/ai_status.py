@@ -131,6 +131,7 @@ def get_ocr_ops_capabilities() -> dict[str, Any]:
         "ocr_artifacts_table": True,
         "page_consensus_persist": True,
         "dispute_ack_stubs": True,
+        "dispute_ack_auth_required": True,
         "pipeline_version": "2026.07.r5",
         "provider_dial_on_probes": False,
         "endpoints": {

@@ -251,8 +251,9 @@ class InvestigationService:
         db: AsyncSession,
         source_type: AssignedEntityType,
         source_id: int,
+        tenant_id: Optional[int] = None,
     ) -> Tuple[Optional[Any], Optional[str]]:
-        """Get source record by type and ID.
+        """Get source record by type and ID (tenant-scoped when tenant_id provided).
 
         Returns:
             Tuple of (record, error_message)
@@ -278,6 +279,8 @@ class InvestigationService:
         model_class = getattr(module, class_name)
 
         query = select(model_class).where(model_class.id == source_id)
+        if tenant_id is not None and hasattr(model_class, "tenant_id"):
+            query = query.where(model_class.tenant_id == tenant_id)
         result = await db.execute(query)
         record = result.scalar_one_or_none()
 
@@ -1161,7 +1164,12 @@ class InvestigationService:
                 },
             )
 
-        record, error = await cls.get_source_record(db, source_type_enum, source_id)
+        record, error = await cls.get_source_record(
+            db,
+            source_type_enum,
+            source_id,
+            tenant_id=tenant_id,
+        )
         if error:
             raise NotFoundError(
                 error,

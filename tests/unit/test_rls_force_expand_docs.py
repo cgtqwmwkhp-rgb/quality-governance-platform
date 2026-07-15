@@ -37,7 +37,7 @@ def test_expand_adds_three_ten2_document_tables():
 
 
 def test_middleware_rls_tables_include_docs_expansion():
-    assert len(RLS_TABLES) == 21
+    assert len(RLS_TABLES) == 23
     for table in (
         "document_versions",
         "controlled_documents",

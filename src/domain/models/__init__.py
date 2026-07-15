@@ -204,6 +204,7 @@ from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment
 from src.domain.models.risk_register import (
     BowTieElement,
     EnterpriseKeyRiskIndicator,
+    CaseRiskLink,
     EnterpriseRisk,
     EnterpriseRiskControl,
     RiskAppetiteStatement,
@@ -319,6 +320,7 @@ __all__ = [
     "CostRecord",
     "ROIInvestment",
     # Enterprise Risk Register (Tier 1)
+    "CaseRiskLink",
     "EnterpriseRisk",
     "EnterpriseRiskControl",
     "EnterpriseKeyRiskIndicator",
