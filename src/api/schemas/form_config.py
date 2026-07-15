@@ -156,6 +156,7 @@ class FormTemplateUpdate(BaseModel):
     notification_emails: Optional[str] = None
     workflow_id: Optional[int] = None
     is_active: Optional[bool] = None
+    is_published: Optional[bool] = None
 
 
 class FormTemplateResponse(FormTemplateBase):
