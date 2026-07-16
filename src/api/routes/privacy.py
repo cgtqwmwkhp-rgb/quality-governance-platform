@@ -46,14 +46,19 @@ def _retention_disclosure() -> dict[str, Any]:
         "policy_doc": "docs/privacy/data-retention-policy.md",
         "config_module": "src.core.retention_config",
         "soft_delete_first": soft_delete_first,
-        "matter_level_legal_hold_schema": False,
+        "matter_level_legal_hold_schema": True,
+        "matter_level_legal_hold_ssot": "matter_legal_holds",
+        "matter_level_legal_hold_api": "/api/v1/legal-holds",
+        "matter_level_legal_hold_enforcement": "not_yet_wired_to_retention_workers",
         "purge_schedule": "daily 02:00 UTC (Celery Beat run-data-retention)",
         "entity_horizons_days": {
             entity: policy.retention_days for entity, policy in DEFAULT_RETENTION_POLICIES.items()
         },
         "note": (
             "Horizons mirror DEFAULT_RETENTION_POLICIES; soft-delete-first is coded. "
-            "Matter-level legal-hold columns are not yet schema SSOT — see retention policy §7a."
+            "Matter-level holds have a tenant-scoped persistence SSOT and admin API. "
+            "Retention workers do not yet consume active matter holds, so this is not a "
+            "claim of automated purge prevention — see retention policy §7a."
         ),
     }
 
@@ -259,7 +264,7 @@ def _processing_activities() -> list[dict[str, Any]]:
     Additive ``purpose`` / ``data_subject_categories`` fields close Art. 30
     checklist gaps C/D for auditor readability — still ``article_30_stub``.
     """
-    return [
+    activities: list[dict[str, Any]] = [
         {
             "activity_id": "user-accounts",
             "name": "User account administration",
@@ -368,6 +373,18 @@ def _processing_activities() -> list[dict[str, Any]]:
             "storage": "postgresql",
         },
     ]
+    return [
+        {
+            **activity,
+            "record_status": "platform_scope_documented_pending_controller_review",
+            "controller_ropa_action": "confirm_or_complete_in_controller_record",
+            "source_documents": [
+                "docs/compliance/gdpr-compliance.md",
+                "docs/compliance/article-30-ropa-checklist.md",
+            ],
+        }
+        for activity in activities
+    ]
 
 
 @router.get("/contact")
@@ -418,6 +435,8 @@ async def data_processing_register() -> dict[str, Any]:
     return {
         "register_kind": "article_30_stub",
         "status": "stub",
+        "completion_status": "structured_platform_scope_pending_privacy_lead_and_controller_review",
+        "register_schema": "article-30-platform-register/v2",
         "controller": "tenant_organisation",
         "processor_operator": "Plantexpand (QGP platform operator)",
         "policy_doc": "docs/compliance/gdpr-compliance.md",
@@ -442,6 +461,8 @@ async def data_processing_register() -> dict[str, Any]:
             "and international_transfers for Art. 30(1)(e) readability; link "
             "signed DPAs and complete DPO §9 before treating as full Art. 30 "
             "ROPA. EA-02 is not claimed closed; AI vendor DPAs remain pending; "
-            "DPO identity is not invented."
+            "DPO identity is not invented. Each activity carries its documentary "
+            "sources and a controller-review status; those fields do not make this a "
+            "completed controller ROPA."
         ),
     }

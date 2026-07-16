@@ -85,16 +85,16 @@ For records **beyond active operational retention** but still within legal hold 
 
 ## 7a. Legal hold & soft-delete SSOT (Path-to-10 S15)
 
-**Status:** LIVE documentation — soft-delete-first policy is coded; matter-level legal hold flags are **not** yet a first-class schema.
+**Status:** LIVE documentation — soft-delete-first policy is coded; a matter-level hold register is now a first-class schema. Retention-worker enforcement remains a separate, open implementation step.
 
 | Layer | Source of truth | Behaviour today |
 | --- | --- | --- |
 | **Policy defaults** | `src/core/retention_config.py` (`RetentionPolicy.soft_delete_first=True`) | Entity retention horizons (incidents/complaints/near_misses/audit_runs/audit_logs) prefer soft-delete before hard purge |
 | **Scheduler** | Celery Beat `run-data-retention` → `cleanup_tasks.run_data_retention` | Daily 02:00 UTC; must not purge rows under an active hold |
-| **Legal hold (required)** | Suspend automated purge for affected tenants / matter IDs (see §7) | **Gap:** no dedicated `legal_hold` / `matter_id` column SSOT yet — holds are operational (manual job pause / tenant flag) until schema lands |
+| **Legal hold (required)** | Record an active hold for affected tenant / matter references through `matter_legal_holds` / `POST /api/v1/legal-holds` | **Schema/API LIVE:** tenant-scoped matter hold SSOT; **gap:** retention workers do not yet consult it, so operators must still pause affected purge jobs |
 | **Evidence** | Pre-disposal `AuditLogEntry` + `AuditLogExport.file_hash` | Required before destructive steps where feasible |
 
-**Non-goals for this revision:** inventing SMTP, inventing PagerDuty paging, or shipping a hold schema migration. This section locks the honesty contract so S15 scoring credits documentation + config SSOT without claiming EA-closed hold automation.
+**Scope boundary:** The hold register records and releases tenant-scoped instructions (`matter_reference` is generic because QGP has no canonical legal-matter model). It does not claim a legal assessment, automatically relabel existing evidence, or prevent every purge until workers consume active holds.
 
 ---
 
@@ -105,12 +105,13 @@ Machine-readable retention capability is exposed on `GET /api/v1/privacy/contact
 | Field | Source | Honesty contract |
 | --- | --- | --- |
 | `soft_delete_first` | `DEFAULT_RETENTION_POLICIES` (`RetentionPolicy.soft_delete_first`) | `true` when all coded entity policies prefer soft-delete before hard purge |
-| `matter_level_legal_hold_schema` | Schema inventory | **`false`** until dedicated hold columns land (same gap as §7a) |
+| `matter_level_legal_hold_schema` | Schema inventory | **`true`** — `matter_legal_holds` is the tenant-scoped SSOT |
+| `matter_level_legal_hold_enforcement` | Retention worker integration | **`not_yet_wired_to_retention_workers`** — do not interpret schema/API availability as automated purge prevention |
 | `entity_horizons_days` | `src/core/retention_config.DEFAULT_RETENTION_POLICIES` | Days per entity key — mirrors config SSOT, not a substitute for this policy narrative |
 | `policy_doc` | This file | `docs/privacy/data-retention-policy.md` |
 | `purge_schedule` | Celery Beat | Daily 02:00 UTC `run-data-retention` |
 
-Operators and attestations can discover soft-delete-first + horizon days without opening the repo; they must still treat §7a as the legal-hold gap SSOT.
+Operators and attestations can discover the hold SSOT and its enforcement boundary without opening the repo; they must still treat §7a as the legal-hold gap SSOT.
 
 ---
 

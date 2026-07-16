@@ -28,7 +28,10 @@ async def test_privacy_contact_public(client: AsyncClient):
     assert "Google Gemini" in names
     retention = data["retention"]
     assert retention["soft_delete_first"] is True
-    assert retention["matter_level_legal_hold_schema"] is False
+    assert retention["matter_level_legal_hold_schema"] is True
+    assert retention["matter_level_legal_hold_ssot"] == "matter_legal_holds"
+    assert retention["matter_level_legal_hold_api"] == "/api/v1/legal-holds"
+    assert retention["matter_level_legal_hold_enforcement"] == "not_yet_wired_to_retention_workers"
     assert retention["policy_doc"] == "docs/privacy/data-retention-policy.md"
     assert retention["entity_horizons_days"]["incidents"] == 2555
     assert retention["entity_horizons_days"]["session_logs"] == 90
@@ -49,6 +52,11 @@ async def test_data_processing_register_stub(client: AsyncClient):
     assert "incidents" in activity_ids
     assert "ocr-ai-import" in activity_ids
     assert data["contact"] == "/api/v1/privacy/contact"
+    assert data["completion_status"] == "structured_platform_scope_pending_privacy_lead_and_controller_review"
+    incident = next(row for row in data["activities"] if row["activity_id"] == "incidents")
+    assert incident["record_status"] == "platform_scope_documented_pending_controller_review"
+    assert incident["controller_ropa_action"] == "confirm_or_complete_in_controller_record"
+    assert "docs/compliance/article-30-ropa-checklist.md" in incident["source_documents"]
 
 
 @pytest.mark.asyncio
