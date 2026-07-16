@@ -195,8 +195,9 @@ class TestLoginPerformanceBuckets:
         # Actual bucket classification is client-side
         response = client.post("/api/v1/auth/login", json={"email": "test@example.com", "password": "test"})
 
-        # Should get a response (any status is fine for this test)
-        assert response.status_code in [200, 401, 422, 500, 502, 503]
+        # Should get a response (any status is fine for this test).
+        # 403 is legitimate under login rate-limit / WAF in CI smoke bursts.
+        assert response.status_code in [200, 401, 403, 422, 500, 502, 503]
 
 
 class TestLoginNoPII:
