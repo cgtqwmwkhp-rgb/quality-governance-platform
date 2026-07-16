@@ -22,7 +22,7 @@ import {
   ClipboardCheck,
   Loader2,
 } from 'lucide-react'
-import { auditsApi, getApiErrorMessage } from '../api/client'
+import { auditsApi, evidenceAssetsApi, getApiErrorMessage } from '../api/client'
 import { DownstreamWorkflowProof } from '../components/audit-import/DownstreamWorkflowProof'
 import {
   registerDraftSnapshot,
@@ -31,6 +31,12 @@ import {
   saveAuditDraft,
   type AuditDraft,
 } from '../services/auditDraftStore'
+import {
+  auditQuestionEvidenceDescription,
+  buildEvidenceResponseJson,
+  dataUrlToFile,
+  extractEvidenceAssetIds,
+} from './auditExecutionPhotoEvidence'
 
 // ============================================================================
 // TYPES
@@ -42,7 +48,10 @@ interface QuestionResponse {
   questionId: string
   response: ResponseType
   notes?: string
+  /** Preview URLs (blob/data/signed) for thumbnails in the UI. */
   photos?: string[]
+  /** Persisted evidence-asset IDs linked via response_json. */
+  evidenceAssetIds?: number[]
   signature?: string
   flagged?: boolean
   timestamp: string
@@ -324,7 +333,7 @@ const ScaleInput = ({
   )
 }
 
-// Photo Capture Component
+// Photo Capture Component — files are uploaded by the parent onto evidence-assets.
 const PhotoCapture = ({
   photos,
   onAdd,
@@ -333,26 +342,30 @@ const PhotoCapture = ({
   captureButtonId,
   ariaInvalid,
   ariaDescribedBy,
+  readOnly = false,
+  uploading = false,
 }: {
   photos: string[]
-  onAdd: (photo: string) => void
+  onAdd: (photo: string, file?: File) => void
   onRemove: (index: number) => void
   captureButtonRef?: React.RefObject<HTMLButtonElement>
   captureButtonId?: string
   ariaInvalid?: boolean
   ariaDescribedBy?: string
+  readOnly?: boolean
+  uploading?: boolean
 }) => {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        onAdd(reader.result as string)
-      }
-      reader.readAsDataURL(file)
+    if (!file) return
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      onAdd(reader.result as string, file)
     }
+    reader.readAsDataURL(file)
+    e.target.value = ''
   }
 
   return (
@@ -364,43 +377,51 @@ const PhotoCapture = ({
         capture="environment"
         onChange={handleCapture}
         className="hidden"
+        disabled={readOnly || uploading}
       />
 
-      <button
-        ref={captureButtonRef}
-        id={captureButtonId}
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        aria-label="Take photo or upload evidence"
-        aria-invalid={ariaInvalid || undefined}
-        aria-describedby={ariaDescribedBy}
-        className="w-full py-4 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      >
-        <Camera className="w-5 h-5" />
-        Take Photo / Upload
-      </button>
+      {!readOnly && (
+        <button
+          ref={captureButtonRef}
+          id={captureButtonId}
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          aria-label="Take photo or upload evidence"
+          aria-invalid={ariaInvalid || undefined}
+          aria-describedby={ariaDescribedBy}
+          className="w-full py-4 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-60"
+        >
+          {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
+          {uploading ? 'Uploading photo…' : 'Take Photo / Upload'}
+        </button>
+      )}
 
-      {photos.length > 0 && (
+      {photos.length > 0 ? (
         <div className="grid grid-cols-3 gap-2">
           {photos.map((photo, idx) => (
-            <div key={idx} className="relative group">
+            <div key={`${photo.slice(0, 32)}-${idx}`} className="relative group">
               <img
                 src={photo}
                 alt={`Evidence ${idx + 1}`}
                 className="w-full h-24 object-cover rounded-lg"
               />
-              <button
-                type="button"
-                onClick={() => onRemove(idx)}
-                aria-label="Remove photo"
-                className="absolute top-1 right-1 p-1 bg-destructive rounded-full text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <X className="w-3 h-3" />
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => onRemove(idx)}
+                  aria-label="Remove photo"
+                  className="absolute top-1 right-1 p-1 bg-destructive rounded-full text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
             </div>
           ))}
         </div>
-      )}
+      ) : readOnly ? (
+        <p className="text-sm text-muted-foreground">No photo evidence stored for this question.</p>
+      ) : null}
     </div>
   )
 }
@@ -530,6 +551,7 @@ export default function AuditExecution() {
   const [showGuidance, setShowGuidance] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [runCompleted, setRunCompleted] = useState(false)
+  const [uploadingPhotoFor, setUploadingPhotoFor] = useState<string | null>(null)
   const [completionSummary, setCompletionSummary] = useState<CompletionSummary | null>(null)
   const [stayOnCompletionProof, setStayOnCompletionProof] = useState(false)
   const [autoAdvancePending, setAutoAdvancePending] = useState(false)
@@ -700,14 +722,61 @@ export default function AuditExecution() {
         for (const r of runData.responses || []) {
           const qId = String(r.question_id)
           const qType = questionTypeMap[qId] || 'text_short'
+          const assetIds = extractEvidenceAssetIds(
+            (r as { response_json?: unknown }).response_json,
+          )
           existingResponses[qId] = {
             questionId: qId,
             response: parseResponseValue(r.response_value, qType),
             notes: r.notes || undefined,
             timestamp: r.created_at,
+            evidenceAssetIds: assetIds,
+            photos: [],
           }
           idMap[qId] = r.id
         }
+
+        // Hydrate thumbnails from evidence-assets (signed URLs).
+        // Also recover links for older runs that only stored "captured" by listing run evidence.
+        const listed =
+          Object.values(existingResponses).some((r) => (r.evidenceAssetIds?.length ?? 0) === 0)
+            ? await evidenceAssetsApi
+                .list({ source_module: 'audit', source_id: runIdNum, page_size: 100 })
+                .then((res) => res.data.items || [])
+                .catch(() => [])
+            : []
+
+        await Promise.all(
+          Object.entries(existingResponses).map(async ([qId, resp]) => {
+            let ids = resp.evidenceAssetIds || []
+            if (ids.length === 0 && listed.length > 0) {
+              const needle = auditQuestionEvidenceDescription(qId)
+              ids = listed
+                .filter((asset) => (asset.description || '').includes(needle))
+                .map((asset) => asset.id)
+            }
+            if (ids.length === 0) return
+            const urls = await Promise.all(
+              ids.map(async (assetId) => {
+                try {
+                  const signed = await evidenceAssetsApi.getSignedUrl(assetId)
+                  return signed.data.signed_url
+                } catch {
+                  return null
+                }
+              }),
+            )
+            existingResponses[qId] = {
+              ...resp,
+              evidenceAssetIds: ids,
+              photos: urls.filter((url): url is string => Boolean(url)),
+              response:
+                resp.response ?? (ids.length > 0 ? 'captured' : resp.response),
+            }
+          }),
+        )
+
+        if (cancelled) return
 
         setAudit({
           id: String(runData.id),
@@ -881,11 +950,15 @@ export default function AuditExecution() {
       const updatedIdMap = { ...responseIdMap }
 
       for (const [questionId, resp] of Object.entries(responses)) {
-        if (resp.response === null && !resp.notes) continue
+        const hasPhotos = (resp.evidenceAssetIds?.length ?? 0) > 0
+        if (resp.response === null && !resp.notes && !hasPhotos) continue
 
         const payload = {
           response_value: serializeResponse(resp.response),
           notes: resp.notes || undefined,
+          ...(hasPhotos
+            ? { response_json: buildEvidenceResponseJson(resp.evidenceAssetIds || []) }
+            : {}),
         }
 
         const existingId = updatedIdMap[questionId]
@@ -941,6 +1014,10 @@ export default function AuditExecution() {
   }
 
   const handleSubmitAudit = async () => {
+    if (uploadingPhotoFor) {
+      setError('Wait for photo upload to finish before completing the audit.')
+      return
+    }
     if (!runIdNum) return
 
     const saved = await saveAllResponses()
@@ -1152,6 +1229,83 @@ export default function AuditExecution() {
         timestamp: new Date().toISOString(),
       },
     }))
+  }
+
+  /** Upload photo to evidence-assets and keep preview + asset id on the answer. */
+  const attachPhotoToCurrentQuestion = async (
+    previewDataUrl: string,
+    file?: File,
+    options?: { markCaptured?: boolean },
+  ) => {
+    const questionId = currentQuestion.id
+    const markCaptured = options?.markCaptured !== false
+    const existing = responsesRef.current[questionId]
+    const nextPhotos = [...(existing?.photos || []), previewDataUrl]
+    updateResponse({
+      photos: nextPhotos,
+      ...(markCaptured ? { response: 'captured' as ResponseType } : {}),
+    })
+    setFailEvidenceGateError(false)
+
+    if (!runIdNum || runCompleted) return
+
+    const uploadFile =
+      file ||
+      dataUrlToFile(previewDataUrl, `audit-q${questionId}-${Date.now()}.jpg`)
+    if (!uploadFile) {
+      setError('Could not prepare photo for upload. Please try again.')
+      return
+    }
+
+    setUploadingPhotoFor(questionId)
+    try {
+      const uploaded = await evidenceAssetsApi.upload(uploadFile, {
+        source_module: 'audit',
+        source_id: runIdNum,
+        title: `Audit photo — question ${questionId}`,
+        description: auditQuestionEvidenceDescription(questionId),
+      })
+      const assetId = uploaded.data.id
+      setResponses((prev) => {
+        const current = prev[questionId]
+        if (!current) return prev
+        const evidenceAssetIds = [...(current.evidenceAssetIds || []), assetId]
+        dirtyRef.current = true
+        return {
+          ...prev,
+          [questionId]: {
+            ...current,
+            evidenceAssetIds,
+            response: markCaptured ? 'captured' : current.response,
+            timestamp: new Date().toISOString(),
+          },
+        }
+      })
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Photo upload failed. Retry before finishing the audit.'))
+    } finally {
+      setUploadingPhotoFor((prev) => (prev === questionId ? null : prev))
+    }
+  }
+
+  const removePhotoFromCurrentQuestion = (idx: number, options?: { markCaptured?: boolean }) => {
+    const questionId = currentQuestion.id
+    const existing = responsesRef.current[questionId]
+    const nextPhotos = (existing?.photos || []).filter((_, i) => i !== idx)
+    const nextIds = (existing?.evidenceAssetIds || []).filter((_, i) => i !== idx)
+    const removedId = existing?.evidenceAssetIds?.[idx]
+    updateResponse({
+      photos: nextPhotos,
+      evidenceAssetIds: nextIds,
+      ...(options?.markCaptured !== false
+        ? { response: nextPhotos.length || nextIds.length ? 'captured' : null }
+        : {}),
+    })
+    if (removedId && !runCompleted) {
+      void evidenceAssetsApi.delete(removedId).catch(() => {
+        /* soft-delete best effort — answer ids are source of truth */
+      })
+    }
   }
 
   // Navigation
@@ -1460,14 +1614,12 @@ export default function AuditExecution() {
         return (
           <PhotoCapture
             photos={currentResponse?.photos || []}
-            onAdd={(photo) => {
-              const photos = [...(currentResponse?.photos || []), photo]
-              updateResponse({ photos, response: photos.length ? 'captured' : null })
+            readOnly={runCompleted}
+            uploading={uploadingPhotoFor === currentQuestion.id}
+            onAdd={(photo, file) => {
+              void attachPhotoToCurrentQuestion(photo, file, { markCaptured: true })
             }}
-            onRemove={(idx) => {
-              const photos = currentResponse?.photos?.filter((_, i) => i !== idx) || []
-              updateResponse({ photos, response: photos.length ? 'captured' : null })
-            }}
+            onRemove={(idx) => removePhotoFromCurrentQuestion(idx, { markCaptured: true })}
           />
         )
 
@@ -1866,21 +2018,21 @@ export default function AuditExecution() {
                   )}
                   <PhotoCapture
                     photos={currentResponse?.photos || []}
+                    readOnly={runCompleted}
+                    uploading={uploadingPhotoFor === currentQuestion.id}
                     captureButtonRef={evidenceCaptureRef}
                     captureButtonId={`fail-evidence-capture-${currentQuestion.id}`}
                     ariaInvalid={failEvidenceGateError}
                     ariaDescribedBy={
                       failEvidenceGateError ? failEvidenceErrorId : `fail-evidence-label-${currentQuestion.id}`
                     }
-                    onAdd={(photo) => {
-                      updateResponse({
-                        photos: [...(currentResponse?.photos || []), photo],
-                      })
-                      setFailEvidenceGateError(false)
+                    onAdd={(photo, file) => {
+                      void attachPhotoToCurrentQuestion(photo, file, { markCaptured: false })
                     }}
                     onRemove={(idx) => {
-                      const nextPhotos = currentResponse?.photos?.filter((_, i) => i !== idx) || []
-                      updateResponse({ photos: nextPhotos })
+                      const existing = responsesRef.current[currentQuestion.id]
+                      const nextPhotos = (existing?.photos || []).filter((_, i) => i !== idx)
+                      removePhotoFromCurrentQuestion(idx, { markCaptured: false })
                       if (
                         isFailEvidenceGateActive(currentQuestion, {
                           response: currentResponse?.response ?? null,
