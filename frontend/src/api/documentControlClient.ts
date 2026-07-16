@@ -97,6 +97,45 @@ export interface ControlledDocumentCreate {
   review_frequency_months?: number
 }
 
+export interface ControlledDocumentGoldenThread {
+  controlled_document: Pick<
+    ControlledDocumentDetail,
+    'id' | 'document_number' | 'title' | 'current_version' | 'status'
+  >
+  library_document_candidate: {
+    id: number
+    reference_number: string | null
+    title: string
+    version: string
+    status: string
+    matching_fields: string[]
+  } | null
+  evidence_links: Array<{
+    id: number
+    clause_id: string
+    status: string
+    signal_type: string
+    scheme: string | null
+    confidence: number | null
+    linked_by: string
+    title: string | null
+    rationale: string | null
+    created_at: string | null
+  }>
+  integrity: {
+    relationship_state: 'unverified_candidate' | 'ambiguous' | 'not_found'
+    hard_fk_present: boolean
+    message: string
+  }
+  publish_plan: {
+    should_run: boolean
+    denied: boolean
+    deny_reason: string | null
+    documents_hard_fk_gap: boolean
+    steps: string[]
+  }
+}
+
 export function createDocumentControlApi(api: AxiosInstance) {
   const base = '/api/v1/document-control'
 
@@ -106,6 +145,9 @@ export function createDocumentControlApi(api: AxiosInstance) {
 
     get: (documentId: number) =>
       api.get<ControlledDocumentDetail>(`${base}/${documentId}`),
+
+    goldenThread: (documentId: number) =>
+      api.get<ControlledDocumentGoldenThread>(`${base}/${documentId}/golden-thread`),
 
     create: (data: ControlledDocumentCreate) =>
       api.post<{

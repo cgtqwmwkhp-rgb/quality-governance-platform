@@ -12,6 +12,7 @@ import {
   documentControlApi,
   getApiErrorMessage,
   type ControlledDocumentDetail,
+  type ControlledDocumentGoldenThread,
   type ControlledDocumentSummary,
 } from '../api/client'
 import { toast } from '../contexts/ToastContext'
@@ -67,6 +68,8 @@ export default function DocumentControl() {
   const [submitting, setSubmitting] = useState(false)
   const [revising, setRevising] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [goldenThread, setGoldenThread] = useState<ControlledDocumentGoldenThread | null>(null)
+  const [goldenThreadLoading, setGoldenThreadLoading] = useState(false)
 
   const [createForm, setCreateForm] = useState({
     title: '',
@@ -114,9 +117,11 @@ export default function DocumentControl() {
 
   useEffect(() => {
     if (selectedId) {
+      setGoldenThread(null)
       void loadDetail(selectedId)
     } else {
       setDetail(null)
+      setGoldenThread(null)
     }
   }, [selectedId, loadDetail])
 
@@ -211,6 +216,20 @@ export default function DocumentControl() {
       await loadDetail(selectedId)
     } catch (err) {
       reportFailure(err)
+    }
+  }
+
+  const handleInspectEvidenceChain = async () => {
+    if (!selectedId) return
+    setGoldenThreadLoading(true)
+    try {
+      const response = await documentControlApi.goldenThread(selectedId)
+      setGoldenThread(response.data)
+    } catch (err) {
+      reportFailure(err)
+      setGoldenThread(null)
+    } finally {
+      setGoldenThreadLoading(false)
     }
   }
 
@@ -381,6 +400,57 @@ export default function DocumentControl() {
                 onRevise={handleRevise}
                 onPublish={handlePublish}
               />
+
+              <Card className="p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-medium text-foreground">GKB evidence chain</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Inspect a same-tenant library candidate and its recorded evidence links.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => void handleInspectEvidenceChain()}
+                    disabled={goldenThreadLoading}
+                  >
+                    {goldenThreadLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                    Inspect evidence chain
+                  </Button>
+                </div>
+                {goldenThread && (
+                  <div className="space-y-3 border-t border-border pt-3 text-sm">
+                    <p className="text-muted-foreground">{goldenThread.integrity.message}</p>
+                    {goldenThread.library_document_candidate && (
+                      <div>
+                        <p className="font-medium text-foreground">
+                          Candidate: {goldenThread.library_document_candidate.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Matched on {goldenThread.library_document_candidate.matching_fields.join(' and ')}
+                          {' · '}v{goldenThread.library_document_candidate.version}
+                        </p>
+                      </div>
+                    )}
+                    {goldenThread.evidence_links.length > 0 && (
+                      <div className="space-y-2">
+                        {goldenThread.evidence_links.map((link) => (
+                          <div key={link.id} className="flex flex-wrap items-center gap-2">
+                            <Badge variant={link.status === 'confirmed' ? 'success' : 'outline'}>
+                              {link.status}
+                            </Badge>
+                            <span className="font-mono text-xs">{link.clause_id}</span>
+                            {link.scheme && <span className="text-muted-foreground">{link.scheme}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {goldenThread.library_document_candidate && goldenThread.evidence_links.length === 0 && (
+                      <p className="text-muted-foreground">This candidate has no recorded GKB evidence links.</p>
+                    )}
+                  </div>
+                )}
+              </Card>
 
               <Card className="p-4 space-y-4">
                 <h3 className="font-medium text-foreground">Distribute</h3>
