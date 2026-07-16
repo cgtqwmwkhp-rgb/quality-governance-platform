@@ -779,11 +779,11 @@ async def list_actions(
         description="Filter by linked Asset registry id (CAPA.asset_id or parent case asset_id)",
     ),
 ) -> ActionListResponse:
-    """List actions across all source types with SQL-level pagination.
+    """List actions with accurate page metadata.
 
     When *source_type* is specified, LIMIT/OFFSET is pushed to the database.
-    When listing across all source types, individual queries are capped and
-    merged client-side to honour the requested page window.
+    Across all source types, each query is bounded to the requested page
+    window, then rows are merge-sorted and sliced in process.
     """
     assigned_to_id = _resolve_assigned_to_user_id(assigned_to, current_user)
     total = await _count_for_source(

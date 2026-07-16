@@ -154,6 +154,16 @@ class RiskAssessmentResponse(BaseModel):
     created_at: datetime
 
 
+class RiskAssessmentListResponse(BaseModel):
+    """Paginated risk-assessment history response."""
+
+    items: List[RiskAssessmentResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
 # ============== Risk Schemas ==============
 
 

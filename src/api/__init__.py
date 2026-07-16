@@ -92,7 +92,9 @@ router.include_router(standards.router, prefix="/standards", tags=["Standards Li
 router.include_router(audits.router, prefix="/audits", tags=["Audits & Inspections"])
 router.include_router(audit_templates.router, prefix="/audit-templates", tags=["Audit Template Builder"])
 router.include_router(xml_import.router, prefix="/xml-import", tags=["XML Template Import"])
-router.include_router(risks.router, prefix="/risks", tags=["Risk Register"])
+# `/risks` is the operational Risk model; `/risk-register` is EnterpriseRisk.
+# Keep their OpenAPI tags distinct so consumers do not treat IDs or payloads as interchangeable.
+router.include_router(risks.router, prefix="/risks", tags=["Operational Risk Register"])
 router.include_router(incidents.router, prefix="/incidents", tags=["Incidents"])
 router.include_router(actions.router, prefix="/actions", tags=["Actions"])
 router.include_router(rtas.router, prefix="/rtas", tags=["Road Traffic Collisions"])
