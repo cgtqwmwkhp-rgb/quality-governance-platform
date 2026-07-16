@@ -47,6 +47,7 @@ from src.api.routes import (
     investigations,
     iso27001,
     kri,
+    legal_holds,
     loler_inspections,
     near_miss,
     notifications,
@@ -256,6 +257,8 @@ router.include_router(ocr_ops.router, prefix="/meta", tags=["Meta"])
 router.include_router(gdpr.router, tags=["GDPR"])
 # Public privacy contact + lifecycle capability flags (Path-to-10 S15)
 router.include_router(privacy.router, tags=["Privacy"])
+# Matter legal-hold SSOT; retention-worker enforcement remains separately disclosed.
+router.include_router(legal_holds.router, prefix="/legal-holds", tags=["Legal Holds"])
 # Push Notification Service (VAPID web-push)
 router.include_router(push_notifications.router, prefix="/notifications/push", tags=["Push Notifications"])
 # Vehicle Checklists (PAMS Integration)
