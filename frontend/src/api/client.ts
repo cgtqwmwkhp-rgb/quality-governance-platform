@@ -2606,6 +2606,7 @@ export type {
   ControlledDocumentListResponse,
   ControlledDocumentDetail,
   ControlledDocumentCreate,
+  ControlledDocumentGoldenThread,
 } from './documentControlClient'
 
 export const documentControlApi = createDocumentControlApi(api)
