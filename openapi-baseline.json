@@ -19922,6 +19922,18 @@
             ],
             "title": "Life Altering Potential"
           },
+          "linked_risk_ids": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Comma-separated enterprise risk IDs linked to this incident",
+            "title": "Linked Risk Ids"
+          },
           "location": {
             "anyOf": [
               {
