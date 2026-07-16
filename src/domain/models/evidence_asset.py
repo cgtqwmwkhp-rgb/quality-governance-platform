@@ -12,7 +12,7 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import AuditTrailMixin, Base, CaseInsensitiveEnum, TimestampMixin
@@ -81,7 +81,7 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    # Multi-tenancy
+    # Multi-tenancy — fail-safe NOT NULL when backfill clears orphans (20260720_ea_tenant_nn)
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Storage reference
@@ -163,8 +163,12 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 
-    # Indexes for common queries
+    # Indexes for common queries; source_id CHECK (no polymorphic FK — R63)
     __table_args__ = (
+        CheckConstraint(
+            "source_id IS NOT NULL AND length(trim(source_id)) > 0",
+            name="ck_evidence_assets_source_id_present",
+        ),
         Index("ix_evidence_assets_source", "source_module", "source_id"),
         Index("ix_evidence_assets_type", "asset_type"),
         Index("ix_evidence_assets_visibility", "visibility"),

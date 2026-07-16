@@ -744,7 +744,7 @@ class InvestigationService:
         """Full creation flow: validate inputs, generate reference, persist."""
         from src.domain.services.reference_number import ReferenceNumberService
 
-        template = await get_or_create_default_template(db, template_id, user_id)
+        template = await get_or_create_default_template(db, template_id, user_id, tenant_id=tenant_id)
 
         await cls.validate_assigned_entity(db, assigned_entity_type, assigned_entity_id, tenant_id)
 
@@ -1179,7 +1179,7 @@ class InvestigationService:
 
         source_snapshot = cls.create_source_snapshot(record, source_type_enum)
         data, mapping_log, level = cls.map_source_to_investigation(record, source_type_enum)
-        template = await get_or_create_default_template(db, template_id, user_id)
+        template = await get_or_create_default_template(db, template_id, user_id, tenant_id=tenant_id)
         reference_number = await ReferenceNumberService.generate(db, "investigation", InvestigationRun)
 
         investigation = InvestigationRun(
@@ -1561,12 +1561,16 @@ async def get_or_create_default_template(
     db: AsyncSession,
     template_id: int,
     created_by_id: int,
+    tenant_id: int | None = None,
 ) -> InvestigationTemplate:
     """Get a template or create a default one if it doesn't exist.
 
     When template_id is 1 and no template exists, auto-creates a default
     Investigation Report Template with standard RCA sections. For any
     other template_id, raises HTTP 404.
+
+    tenant_id is stamped when known (R77 app fix). Catalog still allows
+    nullable shared templates — DB NOT NULL is waived.
     """
     result = await db.execute(select(InvestigationTemplate).where(InvestigationTemplate.id == template_id))
     template = result.scalar_one_or_none()
@@ -1587,6 +1591,7 @@ async def get_or_create_default_template(
         description="Standard investigation template for incidents, RTAs, and complaints",
         version="1.0",
         is_active=True,
+        tenant_id=tenant_id,
         structure={
             "sections": [
                 {

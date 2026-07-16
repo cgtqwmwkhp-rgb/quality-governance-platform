@@ -9,14 +9,18 @@ from datetime import datetime, timezone
 from typing import Any, Optional, cast
 
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.pagination import PaginatedResponse, PaginationInput, paginate
 from src.core.update import apply_updates
 from src.domain.exceptions import StateTransitionError
+from src.domain.models.audit import AuditFinding
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
+from src.domain.models.incident import Incident
 from src.domain.models.investigation import InvestigationRun
+from src.domain.models.near_miss import NearMiss
+from src.domain.models.rta import RoadTrafficCollision
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
@@ -24,6 +28,15 @@ from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
+
+# Golden-thread CAPA sources that require a resolvable integer source_id (R47).
+_GT_SOURCE_MODELS: dict[CAPASource, type[Any]] = {
+    CAPASource.AUDIT_FINDING: AuditFinding,
+    CAPASource.INVESTIGATION: InvestigationRun,
+    CAPASource.NEAR_MISS: NearMiss,
+    CAPASource.RTA: RoadTrafficCollision,
+    CAPASource.INCIDENT: Incident,
+}
 
 
 class CAPAService:
@@ -72,6 +85,29 @@ class CAPAService:
         params = PaginationInput(page=page, page_size=page_size)
         return await paginate(self.db, query, params)
 
+    async def validate_capa_source_exists(
+        self,
+        *,
+        source_type: CAPASource | None,
+        source_id: int | None,
+        tenant_id: int | None,
+    ) -> None:
+        """Require resolvable source rows for golden-thread CAPA sources (no polymorphic FK)."""
+        if source_type is None:
+            return
+        if source_type not in _GT_SOURCE_MODELS:
+            return
+        if source_id is None:
+            raise ValueError(f"source_id is required when source_type={source_type.value}")
+
+        model = _GT_SOURCE_MODELS[source_type]
+        query: Select[Any] = select(model).where(model.id == source_id)
+        if tenant_id is not None and hasattr(model, "tenant_id"):
+            query = query.where(model.tenant_id == tenant_id)
+        result = await self.db.execute(query)
+        if result.scalar_one_or_none() is None:
+            raise LookupError(f"CAPA source {source_type.value} with ID {source_id} not found")
+
     async def create_capa_action(
         self,
         *,
@@ -80,12 +116,26 @@ class CAPAService:
         tenant_id: int | None,
     ) -> CAPAAction:
         """Create a new CAPA action with auto-generated reference number."""
+        payload = data.model_dump()
+        source_type = payload.get("source_type")
+        source_id = payload.get("source_id")
+        if isinstance(source_type, str):
+            try:
+                source_type = CAPASource(source_type)
+            except ValueError:
+                source_type = None
+        await self.validate_capa_source_exists(
+            source_type=source_type if isinstance(source_type, CAPASource) else None,
+            source_id=source_id,
+            tenant_id=tenant_id,
+        )
+
         ref = await ReferenceNumberService.generate(self.db, "capa", CAPAAction)
         action = CAPAAction(
             reference_number=ref,
             created_by_id=user_id,
             tenant_id=tenant_id,
-            **data.model_dump(),
+            **payload,
         )
         self.db.add(action)
         await self.db.commit()

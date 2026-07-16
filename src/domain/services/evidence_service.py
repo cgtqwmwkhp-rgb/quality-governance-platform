@@ -75,8 +75,16 @@ class EvidenceService:
             EvidenceSourceModule.INCIDENT.value: "src.domain.models.incident:Incident",
             EvidenceSourceModule.INVESTIGATION.value: "src.domain.models.investigation:InvestigationRun",
             EvidenceSourceModule.AUDIT.value: "src.domain.models.audit:AuditRun",
+            EvidenceSourceModule.ASSET.value: "src.domain.models.asset:Asset",
+            EvidenceSourceModule.CERTIFICATE.value: "src.domain.models.compliance_automation:Certificate",
+            EvidenceSourceModule.ASSESSMENT.value: "src.domain.models.assessment:AssessmentRun",
+            EvidenceSourceModule.INDUCTION.value: "src.domain.models.induction:InductionRun",
+            # ACTION uses polymorphic action_key strings — skip existence probe.
             EvidenceSourceModule.ACTION.value: None,
         }
+
+        if source_module not in source_models:
+            raise ValueError(f"Invalid source module: {source_module}")
 
         model_path = source_models.get(source_module)
         if model_path is None:
@@ -192,6 +200,7 @@ class EvidenceService:
             asset_type=asset_type_enum,
             source_module=source_module_enum,
             source_id=normalized_source_id,
+            tenant_id=tenant_id,
             title=title,
             description=description,
             captured_at=parsed_captured_at,
