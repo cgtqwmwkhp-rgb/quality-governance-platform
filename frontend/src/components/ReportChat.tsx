@@ -2,22 +2,17 @@
  * ReportChat - Two-way messaging between reporter and investigating officer
  *
  * Features:
- * - Real-time messaging interface
- * - File attachments (images, documents, videos)
- * - Message notifications
- * - Read receipts
- * - Conversation closure option
+ * - Read-only display of persisted messages
+ * - Honest messaging availability status
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { trackError } from '../utils/errorTracker'
 import {
-  Send,
   Paperclip,
   Image,
   FileText,
   Video,
-  X,
   Download,
   CheckCheck,
   Clock,
@@ -29,8 +24,6 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { Card } from './ui/Card'
-import { Button } from './ui/Button'
-import { Textarea } from './ui/Textarea'
 import { cn } from '../helpers/utils'
 
 // Types
@@ -63,20 +56,6 @@ interface ReportChatProps {
   onClose?: () => void
 }
 
-// File type detection
-const getFileType = (mimeType: string): Attachment['type'] => {
-  if (mimeType.startsWith('image/')) return 'image'
-  if (mimeType.startsWith('video/')) return 'video'
-  if (
-    mimeType.includes('pdf') ||
-    mimeType.includes('word') ||
-    mimeType.includes('document') ||
-    mimeType.includes('text/')
-  )
-    return 'document'
-  return 'other'
-}
-
 // Format file size
 const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`
@@ -101,18 +80,10 @@ const FileIcon = ({ type }: { type: Attachment['type'] }) => {
 // Attachment preview component
 const AttachmentPreview = ({
   attachment,
-  onRemove,
-  isUploading = false,
 }: {
-  attachment: Attachment | File
-  onRemove?: () => void
-  isUploading?: boolean
+  attachment: Attachment
 }) => {
-  const isFile = attachment instanceof File
-  const name = isFile ? attachment.name : attachment.name
-  const size = isFile ? attachment.size : attachment.size
-  const type = isFile ? getFileType(attachment.type) : attachment.type
-  const url = isFile ? URL.createObjectURL(attachment) : attachment.url
+  const { name, size, type, url } = attachment
 
   return (
     <div className="relative group flex items-center gap-2 p-2 bg-muted rounded-lg">
@@ -127,20 +98,9 @@ const AttachmentPreview = ({
         <p className="text-sm font-medium text-foreground truncate">{name}</p>
         <p className="text-xs text-muted-foreground">{formatFileSize(size)}</p>
       </div>
-      {isUploading ? (
-        <Loader2 className="w-4 h-4 animate-spin text-primary" />
-      ) : onRemove ? (
-        <button
-          onClick={onRemove}
-          className="p-1 hover:bg-destructive/10 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-        >
-          <X className="w-4 h-4 text-destructive" />
-        </button>
-      ) : (
-        <a href={url} download={name} className="p-1 hover:bg-primary/10 rounded">
-          <Download className="w-4 h-4 text-primary" />
-        </a>
-      )}
+      <a href={url} download={name} className="p-1 hover:bg-primary/10 rounded">
+        <Download className="w-4 h-4 text-primary" />
+      </a>
     </div>
   )
 }
@@ -235,13 +195,9 @@ export default function ReportChat({
   onClose,
 }: ReportChatProps) {
   const [messages, setMessages] = useState<Message[]>([])
-  const [newMessage, setNewMessage] = useState('')
-  const [attachments, setAttachments] = useState<File[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isSending, setIsSending] = useState(false)
   const [isExpanded, setIsExpanded] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadMessages = useCallback(async () => {
     setIsLoading(true)
@@ -270,72 +226,6 @@ export default function ReportChat({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
-
-  const handleSend = async () => {
-    if (!newMessage.trim() && attachments.length === 0) return
-
-    setIsSending(true)
-    try {
-      // In production, this would upload files and send to API
-      // const formData = new FormData();
-      // formData.append('content', newMessage);
-      // attachments.forEach(file => formData.append('attachments', file));
-      // await fetch(`/api/v1/portal/reports/${referenceNumber}/messages`, {
-      //   method: 'POST',
-      //   body: formData,
-      // });
-
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      const newMsg: Message = {
-        id: Date.now().toString(),
-        content: newMessage,
-        sender: isReporter ? 'reporter' : 'officer',
-        senderName: isReporter ? reporterName : officerName,
-        timestamp: new Date().toISOString(),
-        attachments: attachments.map((file, index) => ({
-          id: `new-${index}`,
-          name: file.name,
-          type: getFileType(file.type),
-          url: URL.createObjectURL(file),
-          size: file.size,
-          mimeType: file.type,
-        })),
-        isRead: false,
-        isDelivered: true,
-      }
-
-      setMessages((prev) => [...prev, newMsg])
-      setNewMessage('')
-      setAttachments([])
-    } catch (err) {
-      trackError(err, { component: 'ReportChat', action: 'sendMessage' })
-    } finally {
-      setIsSending(false)
-    }
-  }
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files)
-      setAttachments((prev) => [...prev, ...newFiles])
-    }
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
-  }
-
-  const removeAttachment = (index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
-    }
-  }
 
   return (
     <Card className="overflow-hidden">
@@ -411,66 +301,13 @@ export default function ReportChat({
             </div>
           )}
 
-          {/* Attachments preview */}
-          {attachments.length > 0 && (
-            <div className="px-4 py-2 border-t border-border bg-card space-y-2">
-              {attachments.map((file, index) => (
-                <AttachmentPreview
-                  key={index}
-                  attachment={file}
-                  onRemove={() => removeAttachment(index)}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* Input area */}
+          {/* Composer intentionally unavailable until a durable send API exists. */}
           {!isClosed && (
-            <div className="p-4 border-t border-border bg-card">
-              <div className="flex gap-2">
-                {/* File upload button */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept="image/*,video/*,.pdf,.doc,.docx,.txt"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex-shrink-0"
-                >
-                  <Paperclip className="w-4 h-4" />
-                </Button>
-
-                {/* Message input */}
-                <Textarea
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Type a message..."
-                  rows={1}
-                  className="min-h-[40px] max-h-32 resize-none"
-                />
-
-                {/* Send button */}
-                <Button
-                  onClick={handleSend}
-                  disabled={isSending || (!newMessage.trim() && attachments.length === 0)}
-                  className="flex-shrink-0"
-                >
-                  {isSending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Send className="w-4 h-4" />
-                  )}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Press Enter to send • Shift+Enter for new line • Attach images, videos, or documents
+            <div className="p-4 border-t border-border bg-muted/50 flex items-start gap-2 text-sm text-muted-foreground">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <p>
+                Messaging is not available yet. Existing messages are shown here, but replies and attachments
+                cannot be sent until a durable delivery service is enabled.
               </p>
             </div>
           )}

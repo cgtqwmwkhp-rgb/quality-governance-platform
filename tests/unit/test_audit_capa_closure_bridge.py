@@ -152,6 +152,27 @@ class TestUpdateFindingCloseGate:
 
         assert updated.status == FindingStatus.CLOSED
 
+    @pytest.mark.asyncio
+    async def test_update_finding_rejects_transition_that_desynchronises_closed_capas(self):
+        finding = _fake_finding(status=FindingStatus.OPEN)
+        closed_capa = _fake_capa(status=CAPAStatus.CLOSED)
+
+        db = AsyncMock()
+        siblings = MagicMock()
+        siblings.scalars.return_value.all.return_value = [closed_capa]
+        db.execute.return_value = siblings
+
+        svc = AuditService(db)
+        svc._get_entity = AsyncMock(return_value=finding)
+
+        with pytest.raises(StateTransitionError, match="desynced_capa_closed_finding_open"):
+            await svc.update_finding(
+                finding.id,
+                {"status": FindingStatus.OPEN.value},
+                tenant_id=1,
+                actor_user_id=5,
+            )
+
 
 class TestApplyCapaClosureBridge:
     @pytest.mark.asyncio
@@ -229,7 +250,7 @@ class TestApplyCapaClosureBridge:
         assert result["skipped_reason"] == "not_audit_finding_source"
 
     @pytest.mark.asyncio
-    async def test_does_not_downgrade_closed_on_verification(self):
+    async def test_rejects_verification_capa_when_finding_is_already_closed(self):
         finding = _fake_finding(status=FindingStatus.CLOSED)
         capa = _fake_capa(status=CAPAStatus.VERIFICATION)
 
@@ -241,9 +262,8 @@ class TestApplyCapaClosureBridge:
         svc = AuditService(db)
         svc._get_entity = AsyncMock(return_value=finding)
 
-        result = await svc.apply_capa_closure_bridge(capa, actor_user_id=5, tenant_id=1)
-        assert result["changed"] is False
-        assert result["skipped_reason"] == "finding_already_closed"
+        with pytest.raises(StateTransitionError, match="desynced_finding_closed_capa_open"):
+            await svc.apply_capa_closure_bridge(capa, actor_user_id=5, tenant_id=1)
         assert finding.status == FindingStatus.CLOSED
 
     @pytest.mark.asyncio

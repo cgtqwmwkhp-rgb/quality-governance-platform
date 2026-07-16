@@ -2,7 +2,9 @@ import types
 from unittest.mock import AsyncMock
 
 import pytest
+from fastapi import HTTPException
 
+from src.api.routes import auth as auth_routes
 from src.api.routes.auth import AzureTokenExchangeRequest, exchange_azure_token, login
 from src.api.routes.auth import refresh_token as refresh_access_token
 from src.api.schemas.auth import LoginRequest, RefreshTokenRequest
@@ -45,6 +47,60 @@ async def test_login_embeds_user_roles_in_access_token(monkeypatch):
     assert payload["role"] == "admin"
     assert payload["roles"] == ["admin"]
     assert payload["is_superuser"] is False
+
+
+@pytest.mark.asyncio
+async def test_login_is_disabled_in_production_without_break_glass(monkeypatch):
+    monkeypatch.setattr(
+        auth_routes,
+        "settings",
+        types.SimpleNamespace(is_production=True, allow_local_password_login=False),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await login(LoginRequest(email="david.harris@plantexpand.com", password="secret"), AsyncMock())
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["code"] == "PERMISSION_DENIED"
+
+
+def test_local_password_gate_honours_environment_alias(monkeypatch):
+    monkeypatch.setattr(
+        auth_routes,
+        "settings",
+        types.SimpleNamespace(is_production=False, allow_local_password_login=False),
+    )
+    monkeypatch.setenv("ENVIRONMENT", "production")
+
+    assert auth_routes._local_password_login_allowed() is False
+
+
+@pytest.mark.asyncio
+async def test_login_allows_explicit_production_break_glass(monkeypatch):
+    user = types.SimpleNamespace(
+        id=42,
+        email="david.harris@plantexpand.com",
+        hashed_password="hashed",
+        is_active=True,
+        is_superuser=False,
+        roles=[],
+        last_login=None,
+    )
+    db = types.SimpleNamespace(
+        execute=AsyncMock(return_value=_FakeResult(user)),
+        commit=AsyncMock(),
+        refresh=AsyncMock(),
+    )
+    monkeypatch.setattr(
+        auth_routes,
+        "settings",
+        types.SimpleNamespace(is_production=True, allow_local_password_login=True),
+    )
+    monkeypatch.setattr("src.domain.services.auth_service.verify_password", lambda _plain, _hashed: True)
+
+    response = await login(LoginRequest(email="david.harris@plantexpand.com", password="secret"), db)
+
+    assert response.access_token
 
 
 @pytest.mark.asyncio

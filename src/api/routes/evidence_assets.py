@@ -269,6 +269,7 @@ async def upload_evidence_asset(
                 "source_module": source_module,
                 "source_id": normalized_source_id,
                 "uploaded_by": str(current_user.id),
+                "checksum_sha256": checksum,
             },
         )
     except StorageDependencyError:
