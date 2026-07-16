@@ -1779,6 +1779,7 @@ class AuditService:
             current_status = self._enum_value(finding.status) or FindingStatus.OPEN.value
             if target_status == FindingStatus.CLOSED.value and current_status != FindingStatus.CLOSED.value:
                 await self._assert_no_open_capas_for_finding_close(finding)
+            await self._assert_finding_lifecycle_chain_integrity(finding, target_status)
 
         handled = self._apply_json_field_updates(
             finding,
@@ -1999,6 +2000,40 @@ class AuditService:
         if blockers:
             raise StateTransitionError("Cannot close finding while linked CAPA actions remain open")
 
+    async def _assert_finding_lifecycle_chain_integrity(
+        self,
+        finding: AuditFinding,
+        target_status: str,
+        *,
+        capas: list[CAPAAction] | None = None,
+    ) -> None:
+        """Reject a status write that would leave the finding/CAPA chain desynchronised.
+
+        Historical alternate writers can still create rows with incomplete
+        integrity metadata, so this evaluates only the lifecycle write being
+        attempted. Legitimate close paths remain valid when all linked CAPAs
+        are closed (or when the finding has no linked CAPA).
+        """
+        if capas is None:
+            siblings_result = await self.db.execute(
+                select(CAPAAction).where(
+                    CAPAAction.tenant_id == finding.tenant_id,
+                    CAPAAction.source_type == CAPASource.AUDIT_FINDING,
+                    CAPAAction.source_id == finding.id,
+                )
+            )
+            capas = list(siblings_result.scalars().all())
+
+        chain_status = self._honest_chain_status(
+            target_status,
+            [{"status": self._enum_value(capa.status)} for capa in capas],
+        )
+        if chain_status.startswith("desynced_"):
+            raise StateTransitionError(
+                "Cannot update finding lifecycle while linked CAPA actions are desynchronised "
+                f"({chain_status})"
+            )
+
     async def apply_capa_closure_bridge(
         self,
         capa: CAPAAction,
@@ -2076,6 +2111,20 @@ class AuditService:
                 result["skipped_reason"] = "sibling_capa_not_ready"
                 result["to_status"] = from_status
                 return result
+
+        # Validate the state that this bridge will write. A closed finding with
+        # a CAPA moving back into verification is already desynchronised and
+        # must fail rather than silently preserving that state.
+        await self._assert_finding_lifecycle_chain_integrity(
+            finding,
+            target.value,
+            capas=siblings,
+        )
+        if (
+            self._enum_value(finding.status) == FindingStatus.CLOSED.value
+            and target != FindingStatus.CLOSED
+        ):
+            await self._assert_finding_lifecycle_chain_integrity(finding, FindingStatus.CLOSED.value, capas=siblings)
 
         # Never downgrade a closed finding back to pending_verification.
         if target == FindingStatus.PENDING_VERIFICATION and from_status == FindingStatus.CLOSED.value:

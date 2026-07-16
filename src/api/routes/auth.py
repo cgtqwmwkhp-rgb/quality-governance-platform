@@ -1,6 +1,7 @@
 """Authentication API routes."""
 
 import logging
+import os
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -19,6 +20,7 @@ from src.api.schemas.auth import (
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import UserResponse
 from src.api.utils.errors import api_error
+from src.core.config import settings
 from src.domain.services.auth_service import AuthService
 from src.infrastructure.monitoring.azure_monitor import record_auth_logout, track_metric
 from src.infrastructure.websocket.connection_manager import connection_manager
@@ -26,6 +28,20 @@ from src.infrastructure.websocket.connection_manager import connection_manager
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _local_password_login_allowed() -> bool:
+    """Return whether the legacy local-password login path may issue JWTs.
+
+    Production deployments use Azure AD token exchange. Local password login is
+    deliberately opt-in there as a documented, operator-controlled break-glass
+    path. ``ENVIRONMENT`` is honoured alongside the application's ``APP_ENV``
+    setting so a deployment cannot accidentally bypass the gate through an
+    environment-variable naming mismatch.
+    """
+    environment = os.getenv("ENVIRONMENT", "").strip().lower()
+    is_production = settings.is_production or environment == "production"
+    return not is_production or settings.allow_local_password_login
 
 
 def _auth_http_error(status_code: int, code: str, message: str) -> HTTPException:
@@ -103,7 +119,15 @@ async def exchange_azure_token(
 
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest, db: DbSession) -> TokenResponse:
-    """Authenticate user and return access and refresh tokens."""
+    """Authenticate locally and return tokens when this break-glass path is enabled."""
+    if not _local_password_login_allowed():
+        logger.warning("Blocked local password login in production")
+        raise _auth_http_error(
+            status.HTTP_403_FORBIDDEN,
+            ErrorCode.PERMISSION_DENIED,
+            "Local password login is disabled in production. Use Azure AD sign-in.",
+        )
+
     service = AuthService(db)
     try:
         _user, access_token, refresh_token = await service.authenticate(request.email, request.password)

@@ -208,6 +208,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
+    # Password login is a local break-glass path. It is disabled in production
+    # unless an operator explicitly enables it for a controlled incident.
+    allow_local_password_login: bool = False
 
     # Azure AD Authentication (for portal users)
     azure_client_id: str = ""

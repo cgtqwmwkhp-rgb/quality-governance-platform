@@ -174,6 +174,7 @@ class EvidenceService:
                     "source_module": source_module,
                     "source_id": normalized_source_id,
                     "uploaded_by": str(user_id),
+                    "checksum_sha256": checksum,
                 },
             )
         except StorageError as e:
