@@ -2030,8 +2030,7 @@ class AuditService:
         )
         if chain_status.startswith("desynced_"):
             raise StateTransitionError(
-                "Cannot update finding lifecycle while linked CAPA actions are desynchronised "
-                f"({chain_status})"
+                "Cannot update finding lifecycle while linked CAPA actions are desynchronised " f"({chain_status})"
             )
 
     async def apply_capa_closure_bridge(
@@ -2120,10 +2119,7 @@ class AuditService:
             target.value,
             capas=siblings,
         )
-        if (
-            self._enum_value(finding.status) == FindingStatus.CLOSED.value
-            and target != FindingStatus.CLOSED
-        ):
+        if self._enum_value(finding.status) == FindingStatus.CLOSED.value and target != FindingStatus.CLOSED:
             await self._assert_finding_lifecycle_chain_integrity(finding, FindingStatus.CLOSED.value, capas=siblings)
 
         # Never downgrade a closed finding back to pending_verification.
