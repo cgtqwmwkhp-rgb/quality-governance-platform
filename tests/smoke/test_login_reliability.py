@@ -59,8 +59,8 @@ class TestLoginReliability:
         # Must respond within hard timeout (with margin)
         assert elapsed < HARD_TIMEOUT_S, f"Login took {elapsed:.1f}s - exceeds hard timeout!"
 
-        # Must return 401 for invalid credentials
-        assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+        # 401 = invalid credentials; 403 = rate-limit/WAF under CI smoke bursts
+        assert response.status_code in {401, 403}, f"Expected 401 or 403, got {response.status_code}"
 
         # Response must have error structure
         data = response.json()
