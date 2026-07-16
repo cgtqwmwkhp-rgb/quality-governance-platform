@@ -8,6 +8,7 @@ import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import RiskRegister from '../RiskRegister'
 import { expectNoA11yViolations } from '../../test/axe-helper'
+import { TooltipProvider } from '../../components/ui/Tooltip'
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
@@ -25,12 +26,14 @@ vi.mock('react-i18next', () => ({
 const mockList = vi.fn()
 const mockGetSummary = vi.fn()
 const mockGetHeatmap = vi.fn()
+const mockGetTrends = vi.fn()
 
 vi.mock('../../api/client', () => ({
   riskRegisterApi: {
     list: (...args: unknown[]) => mockList(...args),
     getSummary: (...args: unknown[]) => mockGetSummary(...args),
     getHeatmap: (...args: unknown[]) => mockGetHeatmap(...args),
+    getTrends: (...args: unknown[]) => mockGetTrends(...args),
     resolveSuggestionTriage: vi.fn(),
   },
   auditsApi: {
@@ -50,7 +53,11 @@ vi.mock('../../utils/errorTracker', () => ({
 }))
 
 function Wrapper({ children }: { children: ReactNode }) {
-  return <MemoryRouter>{children}</MemoryRouter>
+  return (
+    <MemoryRouter>
+      <TooltipProvider>{children}</TooltipProvider>
+    </MemoryRouter>
+  )
 }
 
 describe('RiskRegister page accessibility (CUJ real page)', () => {
@@ -89,7 +96,31 @@ describe('RiskRegister page accessibility (CUJ real page)', () => {
         low: 0,
       },
     })
-    mockGetHeatmap.mockResolvedValue({ data: { cells: [] } })
+    mockGetTrends.mockResolvedValue({ data: { series: [], top_movers: [] } })
+    mockGetHeatmap.mockResolvedValue({ data: {
+      matrix: Array.from({ length: 5 }, (_, row) =>
+        Array.from({ length: 5 }, (__, col) => ({
+          likelihood: 5 - row,
+          impact: col + 1,
+          score: (5 - row) * (col + 1),
+          level: 'low',
+          color: '#22c55e',
+          risk_count: 0,
+          risk_ids: [],
+          risk_titles: [],
+        })),
+      ),
+      summary: {
+        total_risks: 0,
+        critical_risks: 0,
+        high_risks: 0,
+        outside_appetite: 0,
+        average_inherent_score: 0,
+        average_residual_score: 0,
+      },
+      likelihood_labels: { 1: 'Rare', 2: 'Unlikely', 3: 'Possible', 4: 'Likely', 5: 'Almost Certain' },
+      impact_labels: { 1: 'Insignificant', 2: 'Minor', 3: 'Moderate', 4: 'Major', 5: 'Catastrophic' },
+    } })
   })
 
   it('renders the real Risk Register page without critical axe violations', async () => {

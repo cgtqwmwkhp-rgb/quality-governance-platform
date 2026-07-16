@@ -236,10 +236,45 @@ class RiskSummaryResponse(BaseModel):
 # ============================================================================
 
 
+class HeatMapCell(BaseModel):
+    likelihood: int
+    impact: int
+    score: int
+    level: str
+    color: str
+    risk_count: int = 0
+    risk_ids: list[int] = []
+    risk_ids_truncated: bool = False
+    risk_titles: list[str] = []
+    owners_sample: list[str] = []
+    overdue_count: int = 0
+    outside_appetite_count: int = 0
+    intensity: float = 0.0
+    above_appetite_band: bool = False
+    movers: list[dict[str, Any]] = []
+
+
+class HeatMapSummary(BaseModel):
+    total_risks: int = 0
+    critical_risks: int = 0
+    high_risks: int = 0
+    medium_risks: int = 0
+    low_risks: int = 0
+    outside_appetite: int = 0
+    average_inherent_score: float = 0.0
+    average_residual_score: float = 0.0
+
+
 class HeatMapResponse(BaseModel):
-    matrix: list[list[Any]] = []
-    total_risks: Optional[int] = None
+    matrix: list[list[HeatMapCell]] = []
+    cells: list[dict[str, Any]] = []
+    summary: HeatMapSummary = HeatMapSummary()
+    likelihood_labels: dict[int, str] = {}
+    impact_labels: dict[int, str] = {}
+    score_type: str = "residual"
+    view_mode: str = "residual"
     filters_applied: Optional[dict[str, Any]] = None
+    appetite_overlay: Optional[dict[str, Any]] = None
 
     class Config:
         extra = "allow"

@@ -22,12 +22,13 @@ class TestRiskScoringEngine:
         assert RiskScoringEngine.get_risk_level(4) == "low"
 
     def test_get_risk_level_medium(self):
-        # Summary-aligned bands: medium = 5–11
+        # Canonical bands: medium = 5–9
         assert RiskScoringEngine.get_risk_level(5) == "medium"
-        assert RiskScoringEngine.get_risk_level(11) == "medium"
+        assert RiskScoringEngine.get_risk_level(9) == "medium"
 
     def test_get_risk_level_high(self):
-        # Summary-aligned bands: high = 12–16
+        # Canonical bands: high = 10–16
+        assert RiskScoringEngine.get_risk_level(10) == "high"
         assert RiskScoringEngine.get_risk_level(12) == "high"
         assert RiskScoringEngine.get_risk_level(16) == "high"
 

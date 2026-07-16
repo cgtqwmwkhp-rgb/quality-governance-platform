@@ -151,12 +151,16 @@ async def list_risks(
     status: Optional[str] = Query(None),
     min_score: Optional[int] = Query(None, ge=1, le=25),
     outside_appetite: Optional[bool] = Query(None),
+    residual_likelihood: Optional[int] = Query(None, ge=1, le=5),
+    residual_impact: Optional[int] = Query(None, ge=1, le=5),
+    inherent_likelihood: Optional[int] = Query(None, ge=1, le=5),
+    inherent_impact: Optional[int] = Query(None, ge=1, le=5),
     suggestion_triage: Optional[str] = Query(
         None,
         description="pending=triage queue only; all=no triage filter; default=hide pending suggestions",
     ),
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=200),
 ) -> dict[str, Any]:
     """List risks with filtering options"""
     base_stmt = select(EnterpriseRisk).where(EnterpriseRisk.tenant_id == current_user.tenant_id)
@@ -178,6 +182,14 @@ async def list_risks(
         base_stmt = base_stmt.where(EnterpriseRisk.residual_score >= min_score)
     if outside_appetite:
         base_stmt = base_stmt.where(EnterpriseRisk.is_within_appetite == False)  # noqa: E712
+    if residual_likelihood is not None:
+        base_stmt = base_stmt.where(EnterpriseRisk.residual_likelihood == residual_likelihood)
+    if residual_impact is not None:
+        base_stmt = base_stmt.where(EnterpriseRisk.residual_impact == residual_impact)
+    if inherent_likelihood is not None:
+        base_stmt = base_stmt.where(EnterpriseRisk.inherent_likelihood == inherent_likelihood)
+    if inherent_impact is not None:
+        base_stmt = base_stmt.where(EnterpriseRisk.inherent_impact == inherent_impact)
 
     count_result = await db.execute(select(func.count()).select_from(base_stmt.subquery()))
     total = count_result.scalar_one()
@@ -197,6 +209,8 @@ async def list_risks(
                 "category": r.category,
                 "department": r.department,
                 "inherent_score": r.inherent_score,
+                "inherent_likelihood": r.inherent_likelihood,
+                "inherent_impact": r.inherent_impact,
                 "residual_score": r.residual_score,
                 "residual_likelihood": r.residual_likelihood,
                 "residual_impact": r.residual_impact,
@@ -265,22 +279,40 @@ async def get_risk_heat_map(
     db: DbSession,
     category: Optional[str] = Query(None),
     department: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    score_type: Literal["residual", "inherent", "delta"] = Query("residual"),
 ) -> dict[str, Any]:
-    """Get risk heat map data"""
+    """Get interactive risk heat map data (residual / inherent / delta)."""
     service = RiskService(db)
-    return await service.get_heat_map_data(category, department, tenant_id=current_user.tenant_id)
+    return await service.get_heat_map_data(
+        category=category,
+        department=department,
+        status=status,
+        tenant_id=current_user.tenant_id,
+        score_type=score_type,
+    )
 
 
-@router.get("/trends", response_model=list)
+@router.get("/trends")
 async def get_risk_trends(
     current_user: CurrentUser,
     db: DbSession,
     risk_id: Optional[int] = Query(None),
     days: int = Query(365, ge=30, le=1095),
-) -> list[dict[str, Any]]:
-    """Get risk score trends over time"""
+    include_movers: bool = Query(False),
+) -> Any:
+    """Get risk score trends over time.
+
+    Default: list of monthly points (backward compatible).
+    include_movers=true: {series, top_movers} for executive sparklines.
+    """
     service = RiskService(db)
-    return await service.get_risk_trends(risk_id, days, tenant_id=current_user.tenant_id)
+    return await service.get_risk_trends(
+        risk_id,
+        days,
+        tenant_id=current_user.tenant_id,
+        include_movers=include_movers,
+    )
 
 
 @router.get("/forecast", response_model=list)
@@ -628,66 +660,48 @@ async def list_appetite_statements(
 async def get_risk_summary(
     current_user: CurrentUser,
     db: DbSession,
+    category: Optional[str] = Query(None),
+    department: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
 ) -> dict[str, Any]:
-    """Get overall risk register summary"""
+    """Get overall risk register summary (canonical bands aligned with RiskScoringEngine)."""
     tenant_filter = EnterpriseRisk.tenant_id == current_user.tenant_id
     vis = _register_visibility_clause()
+    status_clause = EnterpriseRisk.status == status if status else EnterpriseRisk.status != "closed"
+    base = [status_clause, tenant_filter, vis]
+    if category:
+        base.append(EnterpriseRisk.category == category)
+    if department:
+        base.append(EnterpriseRisk.department == department)
 
-    total_result = await db.execute(
-        select(func.count(EnterpriseRisk.id)).where(
-            EnterpriseRisk.status != "closed",
-            tenant_filter,
-            vis,
-        )
-    )
+    total_result = await db.execute(select(func.count(EnterpriseRisk.id)).where(*base))
     total_risks = total_result.scalar_one()
 
+    # Canonical: low ≤4, medium 5–9, high 10–16, critical ≥17
     critical_result = await db.execute(
-        select(func.count(EnterpriseRisk.id)).where(
-            EnterpriseRisk.residual_score > 16,
-            EnterpriseRisk.status != "closed",
-            tenant_filter,
-            vis,
-        )
+        select(func.count(EnterpriseRisk.id)).where(EnterpriseRisk.residual_score >= 17, *base)
     )
     critical_risks = critical_result.scalar_one()
 
     high_result = await db.execute(
-        select(func.count(EnterpriseRisk.id)).where(
-            EnterpriseRisk.residual_score.between(12, 16),
-            EnterpriseRisk.status != "closed",
-            tenant_filter,
-            vis,
-        )
+        select(func.count(EnterpriseRisk.id)).where(EnterpriseRisk.residual_score.between(10, 16), *base)
     )
     high_risks = high_result.scalar_one()
 
     medium_result = await db.execute(
-        select(func.count(EnterpriseRisk.id)).where(
-            EnterpriseRisk.residual_score.between(5, 11),
-            EnterpriseRisk.status != "closed",
-            tenant_filter,
-            vis,
-        )
+        select(func.count(EnterpriseRisk.id)).where(EnterpriseRisk.residual_score.between(5, 9), *base)
     )
     medium_risks = medium_result.scalar_one()
 
     low_result = await db.execute(
-        select(func.count(EnterpriseRisk.id)).where(
-            EnterpriseRisk.residual_score <= 4,
-            EnterpriseRisk.status != "closed",
-            tenant_filter,
-            vis,
-        )
+        select(func.count(EnterpriseRisk.id)).where(EnterpriseRisk.residual_score <= 4, *base)
     )
     low_risks = low_result.scalar_one()
 
     appetite_result = await db.execute(
         select(func.count(EnterpriseRisk.id)).where(
             EnterpriseRisk.is_within_appetite == False,  # noqa: E712
-            EnterpriseRisk.status != "closed",
-            tenant_filter,
-            vis,
+            *base,
         )
     )
     outside_appetite = appetite_result.scalar_one()
@@ -695,9 +709,7 @@ async def get_risk_summary(
     overdue_result = await db.execute(
         select(func.count(EnterpriseRisk.id)).where(
             EnterpriseRisk.next_review_date < _naive_utc_now(),
-            EnterpriseRisk.status != "closed",
-            tenant_filter,
-            vis,
+            *base,
         )
     )
     overdue_review = overdue_result.scalar_one()
@@ -705,17 +717,13 @@ async def get_risk_summary(
     escalated_result = await db.execute(
         select(func.count(EnterpriseRisk.id)).where(
             EnterpriseRisk.is_escalated == True,  # noqa: E712
-            EnterpriseRisk.status != "closed",
-            tenant_filter,
-            vis,
+            *base,
         )
     )
     escalated = escalated_result.scalar_one()
 
     cat_result = await db.execute(
-        select(EnterpriseRisk.category, func.count(EnterpriseRisk.id))
-        .where(EnterpriseRisk.status != "closed", tenant_filter, vis)
-        .group_by(EnterpriseRisk.category)
+        select(EnterpriseRisk.category, func.count(EnterpriseRisk.id)).where(*base).group_by(EnterpriseRisk.category)
     )
     categories = cat_result.all()
 
@@ -731,6 +739,7 @@ async def get_risk_summary(
         "overdue_review": overdue_review,
         "escalated": escalated,
         "by_category": {cat: count for cat, count in categories},
+        "filters_applied": {"category": category, "department": department, "status": status},
     }
 
 
