@@ -325,7 +325,12 @@ async def build_structure_json_from_rows(
     db: AsyncSession,
     template_id: int,
 ) -> Dict[str, Any]:
-    """Dual-read helper: rebuild structure JSON from normalized rows when present."""
+    """Rebuild legacy structure JSON from normalized rows.
+
+    Returns an empty structure when no normalized rows exist. API read paths
+    that must distinguish "not migrated" from "canonical empty structure"
+    should use :func:`load_canonical_structure_json_from_rows`.
+    """
     query = (
         select(InvestigationTemplateSection)
         .where(InvestigationTemplateSection.template_id == template_id)
@@ -370,6 +375,27 @@ async def build_structure_json_from_rows(
         )
 
     return structure_specs_to_json(specs)
+
+
+async def load_canonical_structure_json_from_rows(
+    db: AsyncSession,
+    template_id: int,
+) -> Optional[Dict[str, Any]]:
+    """Return the row-backed canonical structure, or ``None`` before cutover.
+
+    JSON remains the compatible API shape. A template switches to row-backed
+    reads only after it has at least one normalized section, allowing existing
+    JSON-only records (including intentionally empty structures) to continue
+    to read unchanged until their first dual-write.
+    """
+    has_rows = await db.scalar(
+        select(InvestigationTemplateSection.id)
+        .where(InvestigationTemplateSection.template_id == template_id)
+        .limit(1)
+    )
+    if has_rows is None:
+        return None
+    return await build_structure_json_from_rows(db, template_id)
 
 
 async def build_run_data_json_from_rows(

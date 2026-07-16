@@ -15,9 +15,21 @@ from src.api.schemas.investigation import (
 )
 from src.domain.models.investigation import InvestigationTemplate
 from src.domain.models.user import User
-from src.domain.services.investigation_structure_normalize import sync_template_structure_from_json
+from src.domain.services.investigation_structure_normalize import (
+    load_canonical_structure_json_from_rows,
+    sync_template_structure_from_json,
+)
 
 router = APIRouter()
+
+
+async def _template_response(db: DbSession, template: InvestigationTemplate) -> InvestigationTemplateResponse:
+    """Serialize rows as the canonical read model while preserving JSON clients."""
+    response = InvestigationTemplateResponse.model_validate(template)
+    canonical_structure = await load_canonical_structure_json_from_rows(db, template.id)
+    if canonical_structure is None:
+        return response
+    return response.model_copy(update={"structure": canonical_structure})
 
 
 @router.post("/", response_model=InvestigationTemplateResponse, status_code=201)
@@ -51,7 +63,7 @@ async def create_template(
     await db.commit()
     await db.refresh(template)
 
-    return template
+    return await _template_response(db, template)
 
 
 @router.get("/", response_model=InvestigationTemplateListResponse)
@@ -90,7 +102,7 @@ async def list_templates(
     total_pages = math.ceil(total / page_size) if total and total > 0 else 1
 
     return InvestigationTemplateListResponse(
-        items=[InvestigationTemplateResponse.model_validate(t) for t in templates],
+        items=[await _template_response(db, template) for template in templates],
         total=total or 0,
         page=page,
         page_size=page_size,
@@ -126,7 +138,7 @@ async def get_template(
             },
         )
 
-    return template
+    return await _template_response(db, template)
 
 
 @router.patch("/{template_id}", response_model=InvestigationTemplateResponse)
@@ -176,7 +188,7 @@ async def update_template(
         await db.commit()
         await db.refresh(template)
 
-    return template
+    return await _template_response(db, template)
 
 
 @router.delete("/{template_id}", status_code=204)
