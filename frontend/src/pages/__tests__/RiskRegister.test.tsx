@@ -1,8 +1,18 @@
+import type { ReactElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import RiskRegister from '../RiskRegister'
 import { toast } from '../../contexts/ToastContext'
+import { TooltipProvider } from '../../components/ui/Tooltip'
+
+function renderRegister(ui: ReactElement = <RiskRegister />) {
+  return render(
+    <MemoryRouter>
+      <TooltipProvider>{ui}</TooltipProvider>
+    </MemoryRouter>,
+  )
+}
 
 const {
   mockRiskList,
@@ -85,11 +95,7 @@ describe('RiskRegister bow-tie gate', () => {
   })
 
   it('hides unfinished bow-tie UI and fabricated labels by default', async () => {
-    render(
-      <MemoryRouter>
-        <RiskRegister />
-      </MemoryRouter>,
-    )
+    renderRegister()
 
     await screen.findByRole('heading', { name: 'Enterprise Risk Register' })
 
@@ -179,11 +185,7 @@ describe('RiskRegister linked audit references', () => {
   })
 
   it('renders resolvable finding and audit references as workspace links', async () => {
-    render(
-      <MemoryRouter>
-        <RiskRegister />
-      </MemoryRouter>,
-    )
+    renderRegister()
 
     expect(await screen.findByRole('link', { name: 'Open finding AF-00501' })).toHaveAttribute(
       'href',
@@ -201,11 +203,7 @@ describe('RiskRegister linked audit references', () => {
   })
 
   it('deep-links CAPA via platform sourceType=risk pattern', async () => {
-    render(
-      <MemoryRouter>
-        <RiskRegister />
-      </MemoryRouter>,
-    )
+    renderRegister()
 
     expect(await screen.findByTestId('risk-linked-action-CAPA-00900')).toHaveTextContent(
       'CAPA-00900',
@@ -217,11 +215,7 @@ describe('RiskRegister linked audit references', () => {
   })
 
   it('reads nested by_level and overdue_review from summary API (no faux zeros)', async () => {
-    render(
-      <MemoryRouter>
-        <RiskRegister />
-      </MemoryRouter>,
-    )
+    renderRegister()
 
     await screen.findByText('Inspection escalation')
     expect(screen.getByTestId('risk-metric-high')).toHaveTextContent('1')
@@ -250,11 +244,7 @@ describe('RiskRegister linked audit references', () => {
       },
     })
 
-    render(
-      <MemoryRouter>
-        <RiskRegister />
-      </MemoryRouter>,
-    )
+    renderRegister()
 
     await screen.findByRole('heading', { name: 'Enterprise Risk Register' })
     expect(screen.getByTestId('risk-metric-total')).toHaveTextContent('125')
@@ -303,11 +293,7 @@ describe('RiskRegister honesty — load and metric failures', () => {
     mockGetSummary.mockRejectedValue(new Error('summary down'))
     mockGetHeatmap.mockRejectedValue(new Error('heatmap down'))
 
-    render(
-      <MemoryRouter>
-        <RiskRegister />
-      </MemoryRouter>,
-    )
+    renderRegister()
 
     expect(await screen.findByTestId('risk-register-load-error')).toBeInTheDocument()
     expect(screen.getByTestId('risk-register-unavailable')).toHaveTextContent(
@@ -352,11 +338,7 @@ describe('RiskRegister honesty — load and metric failures', () => {
       impact_labels: { 1: 'Insignificant', 2: 'Minor', 3: 'Moderate', 4: 'Major', 5: 'Catastrophic' },
     } })
 
-    render(
-      <MemoryRouter>
-        <RiskRegister />
-      </MemoryRouter>,
-    )
+    renderRegister()
 
     await waitFor(() => {
       expect(screen.getByTestId('risk-register-partial-badge')).toBeInTheDocument()

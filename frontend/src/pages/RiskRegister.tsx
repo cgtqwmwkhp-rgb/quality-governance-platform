@@ -28,9 +28,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/Dialog'
+import { Input } from '../components/ui/Input'
+import { Label } from '../components/ui/Label'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/Tooltip'
 import { auditsApi, getApiErrorMessage, riskRegisterApi } from '../api/client'
 import { toast } from '../contexts/ToastContext'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
+import { cn } from '../helpers/utils'
 import {
   RiskHeatMap,
   type HeatMapData as InteractiveHeatMapData,
@@ -39,6 +43,38 @@ import {
   type TopMover,
   type TrendPoint,
 } from '../components/risk/RiskHeatMap'
+
+type HeroFilter =
+  | 'all'
+  | 'critical'
+  | 'high'
+  | 'medium'
+  | 'outside_appetite'
+  | 'overdue'
+
+type DetailMode = 'view' | 'edit' | 'create' | null
+
+function ColumnHeaderTip({ label, tip }: { label: string; tip: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="cursor-help border-b border-dotted border-muted-foreground/50">
+          {label}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs text-left normal-case tracking-normal">
+        {tip}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function isReviewOverdue(nextReviewDate: string | null): boolean {
+  if (!nextReviewDate) return false
+  const due = new Date(nextReviewDate)
+  if (Number.isNaN(due.getTime())) return false
+  return due.getTime() < Date.now()
+}
 
 type MetricValue = number | null
 
@@ -191,6 +227,15 @@ export default function RiskRegister() {
   const [risks, setRisks] = useState<Risk[]>([])
   const [heatMapData, setHeatMapData] = useState<HeatMapData | null>(null)
   const [selectedRisk, setSelectedRisk] = useState<Risk | null>(null)
+  const [detailMode, setDetailMode] = useState<DetailMode>(null)
+  const [ownerDraft, setOwnerDraft] = useState('')
+  const [titleDraft, setTitleDraft] = useState('')
+  const [descriptionDraft, setDescriptionDraft] = useState('')
+  const [categoryDraft, setCategoryDraft] = useState('operational')
+  const [detailSaving, setDetailSaving] = useState(false)
+  const [heroFilter, setHeroFilter] = useState<HeroFilter>(
+    (searchParams.get('hero') as HeroFilter) || 'all',
+  )
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [summaryUnavailable, setSummaryUnavailable] = useState(false)
@@ -256,6 +301,8 @@ export default function RiskRegister() {
     }
     if (view !== 'register') next.set('view', view)
     else next.delete('view')
+    if (heroFilter && heroFilter !== 'all') next.set('hero', heroFilter)
+    else next.delete('hero')
     const nextQuery = next.toString()
     if (nextQuery !== searchParams.toString()) {
       setSearchParams(next, { replace: true })
@@ -269,6 +316,7 @@ export default function RiskRegister() {
     scoreType,
     cellFilter,
     view,
+    heroFilter,
     searchParams,
     setSearchParams,
   ])
@@ -645,6 +693,153 @@ export default function RiskRegister() {
     closeRejectDialog()
   }
 
+  const openRiskDetail = (risk: Risk, mode: 'view' | 'edit') => {
+    setSelectedRisk(risk)
+    setDetailMode(mode)
+    setOwnerDraft(risk.risk_owner_name || '')
+    setTitleDraft(risk.title)
+    setDescriptionDraft('')
+    setCategoryDraft(risk.category || 'operational')
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('riskId', String(risk.id))
+      return next
+    })
+  }
+
+  const closeRiskDetail = () => {
+    setDetailMode(null)
+    setSelectedRisk(null)
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('riskId')
+      return next
+    })
+  }
+
+  const openCreateRisk = () => {
+    setSelectedRisk(null)
+    setDetailMode('create')
+    setOwnerDraft('')
+    setTitleDraft('')
+    setDescriptionDraft('')
+    setCategoryDraft('operational')
+  }
+
+  const saveRiskDetail = async () => {
+    if (detailMode === 'create') {
+      if (titleDraft.trim().length < 5) {
+        toast.error('Title must be at least 5 characters')
+        return
+      }
+      if (descriptionDraft.trim().length < 10) {
+        toast.error('Description must be at least 10 characters')
+        return
+      }
+      setDetailSaving(true)
+      try {
+        await riskRegisterApi.create({
+          title: titleDraft.trim(),
+          description: descriptionDraft.trim(),
+          category: categoryDraft,
+          risk_owner_name: ownerDraft.trim() || undefined,
+          inherent_likelihood: 2,
+          inherent_impact: 2,
+          residual_likelihood: 1,
+          residual_impact: 2,
+          treatment_strategy: 'treat',
+        })
+        toast.success('Risk created')
+        setDetailMode(null)
+        await loadRisks()
+      } catch (error) {
+        toast.error(getApiErrorMessage(error, 'Could not create risk'))
+      } finally {
+        setDetailSaving(false)
+      }
+      return
+    }
+    if (!selectedRisk) return
+    setDetailSaving(true)
+    try {
+      await riskRegisterApi.update(selectedRisk.id, {
+        title: titleDraft.trim() || selectedRisk.title,
+        category: categoryDraft,
+        risk_owner_name: ownerDraft.trim(),
+      })
+      setRisks((prev) =>
+        prev.map((r) =>
+          r.id === selectedRisk.id
+            ? {
+                ...r,
+                title: titleDraft.trim() || r.title,
+                category: categoryDraft,
+                risk_owner_name: ownerDraft.trim(),
+              }
+            : r,
+        ),
+      )
+      setSelectedRisk((prev) =>
+        prev
+          ? {
+              ...prev,
+              title: titleDraft.trim() || prev.title,
+              category: categoryDraft,
+              risk_owner_name: ownerDraft.trim(),
+            }
+          : prev,
+      )
+      toast.success('Risk updated')
+      setDetailMode('view')
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Could not update risk'))
+    } finally {
+      setDetailSaving(false)
+    }
+  }
+
+  const exportRegisterCsv = () => {
+    const rows = visibleRisks.map((r) => [
+      r.reference,
+      r.title,
+      r.category,
+      String(r.inherent_score),
+      String(r.residual_score),
+      r.risk_level,
+      r.treatment_strategy,
+      r.risk_owner_name || '',
+      r.status,
+    ])
+    const header = [
+      'reference',
+      'title',
+      'category',
+      'inherent_gross',
+      'residual_net',
+      'level',
+      'treatment',
+      'owner',
+      'status',
+    ]
+    const escape = (value: string) => `"${value.replace(/"/g, '""')}"`
+    const csv = [header, ...rows]
+      .map((cols) => cols.map((c) => escape(String(c))).join(','))
+      .join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `risk-register-${registerMode}-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${visibleRisks.length} risk${visibleRisks.length === 1 ? '' : 's'}`)
+  }
+
+  const toggleHeroFilter = (next: HeroFilter) => {
+    setView('register')
+    setHeroFilter((prev) => (prev === next ? 'all' : next))
+  }
+
   const visibleRisks = risks.filter((risk) => {
     const auditLinked = (risk.linked_audits?.length ?? 0) > 0 || (risk.linked_actions?.length ?? 0) > 0 || risk.is_escalated
     if (auditOnly && !auditLinked) {
@@ -664,6 +859,11 @@ export default function RiskRegister() {
         return false
       }
     }
+    if (heroFilter === 'critical' && risk.risk_level !== 'critical') return false
+    if (heroFilter === 'high' && risk.risk_level !== 'high') return false
+    if (heroFilter === 'medium' && risk.risk_level !== 'medium') return false
+    if (heroFilter === 'outside_appetite' && risk.is_within_appetite !== false) return false
+    if (heroFilter === 'overdue' && !isReviewOverdue(risk.next_review_date)) return false
     return true
   })
 
@@ -809,15 +1009,23 @@ export default function RiskRegister() {
           ) : null}
         </div>
         <div className="flex gap-3">
-          <Button variant="secondary" onClick={() => setShowFilters(!showFilters)}>
+          <Button
+            variant="secondary"
+            onClick={() => setShowFilters(!showFilters)}
+            data-testid="risk-filters-toggle"
+          >
             <Filter className="w-4 h-4" />
             Filters
           </Button>
-          <Button variant="secondary">
+          <Button
+            variant="secondary"
+            onClick={exportRegisterCsv}
+            data-testid="risk-export-csv"
+          >
             <Download className="w-4 h-4" />
             Export
           </Button>
-          <Button>
+          <Button onClick={openCreateRisk} data-testid="risk-add-button">
             <Plus className="w-4 h-4" />
             Add Risk
           </Button>
@@ -880,7 +1088,8 @@ export default function RiskRegister() {
               filterCategory ||
               filterDepartment ||
               filterStatus ||
-              cellFilter) && (
+              cellFilter ||
+              heroFilter !== 'all') && (
               <Button
                 variant="ghost"
                 onClick={() => {
@@ -890,6 +1099,7 @@ export default function RiskRegister() {
                   setFilterDepartment('')
                   setFilterStatus('')
                   setCellFilter(null)
+                  setHeroFilter('all')
                 }}
               >
                 Clear filters
@@ -899,131 +1109,136 @@ export default function RiskRegister() {
         </Card>
       ) : null}
 
-      {/* Summary Cards */}
+      {heroFilter !== 'all' && (
+        <div
+          className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm"
+          data-testid="risk-hero-filter-chip"
+        >
+          <Badge variant="default">Hero filter</Badge>
+          <span className="text-foreground capitalize">{heroFilter.replace('_', ' ')}</span>
+          <Button size="sm" variant="ghost" onClick={() => setHeroFilter('all')}>
+            Clear
+          </Button>
+        </div>
+      )}
+
+      {/* Summary Cards — clickable filters (Active + Import triage) */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4" data-testid="risk-summary-cards">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-info/20 rounded-lg">
-                <Layers className="w-5 h-5 text-info" />
-              </div>
-              <span
-                className="text-2xl font-bold text-foreground"
-                data-testid="risk-metric-total"
-                aria-label={
-                  summary.total_risks == null ? 'Total risks unavailable' : undefined
-                }
-              >
-                {formatMetric(summary.total_risks)}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">Total Risks</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-destructive/30">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-destructive/20 rounded-lg">
-                <AlertTriangle className="w-5 h-5 text-destructive" />
-              </div>
-              <span
-                className="text-2xl font-bold text-destructive"
-                data-testid="risk-metric-critical"
-                aria-label={
-                  summary.by_level.critical == null ? 'Critical count unavailable' : undefined
-                }
-              >
-                {formatMetric(summary.by_level.critical)}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">Critical</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-warning/30">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-warning/20 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-warning" />
-              </div>
-              <span
-                className="text-2xl font-bold text-warning"
-                data-testid="risk-metric-high"
-                aria-label={summary.by_level.high == null ? 'High count unavailable' : undefined}
-              >
-                {formatMetric(summary.by_level.high)}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">High</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-info/30">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-info/20 rounded-lg">
-                <Activity className="w-5 h-5 text-info" />
-              </div>
-              <span
-                className="text-2xl font-bold text-info"
-                data-testid="risk-metric-medium"
-                aria-label={
-                  summary.by_level.medium == null ? 'Medium count unavailable' : undefined
-                }
-              >
-                {formatMetric(summary.by_level.medium)}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">Medium</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-primary/30">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-primary/20 rounded-lg">
-                <Target className="w-5 h-5 text-primary" />
-              </div>
-              <span
-                className="text-2xl font-bold text-primary"
-                data-testid="risk-metric-outside-appetite"
-                aria-label={
-                  summary.outside_appetite == null
-                    ? 'Outside appetite unavailable'
-                    : undefined
-                }
-              >
-                {formatMetric(summary.outside_appetite)}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">Outside Appetite</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-muted rounded-lg">
-                <Clock className="w-5 h-5 text-muted-foreground" />
-              </div>
-              <span
-                className="text-2xl font-bold text-foreground"
-                data-testid="risk-metric-overdue-review"
-                aria-label={
-                  summary.overdue_review == null
-                    ? 'Overdue review unavailable'
-                    : undefined
-                }
-              >
-                {formatMetric(summary.overdue_review)}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {summary.overdue_review == null ? 'Overdue Review (unavailable)' : 'Overdue Review'}
-            </p>
-          </CardContent>
-        </Card>
+        {(
+          [
+            {
+              key: 'all' as const,
+              label: 'Total Risks',
+              value: summary.total_risks,
+              testId: 'risk-metric-total',
+              icon: <Layers className="w-5 h-5 text-info" />,
+              iconWrap: 'bg-info/20',
+              valueClass: 'text-foreground',
+              cardClass: '',
+            },
+            {
+              key: 'critical' as const,
+              label: 'Critical',
+              value: summary.by_level.critical,
+              testId: 'risk-metric-critical',
+              icon: <AlertTriangle className="w-5 h-5 text-destructive" />,
+              iconWrap: 'bg-destructive/20',
+              valueClass: 'text-destructive',
+              cardClass: 'border-destructive/30',
+            },
+            {
+              key: 'high' as const,
+              label: 'High',
+              value: summary.by_level.high,
+              testId: 'risk-metric-high',
+              icon: <AlertCircle className="w-5 h-5 text-warning" />,
+              iconWrap: 'bg-warning/20',
+              valueClass: 'text-warning',
+              cardClass: 'border-warning/30',
+            },
+            {
+              key: 'medium' as const,
+              label: 'Medium',
+              value: summary.by_level.medium,
+              testId: 'risk-metric-medium',
+              icon: <Activity className="w-5 h-5 text-info" />,
+              iconWrap: 'bg-info/20',
+              valueClass: 'text-info',
+              cardClass: 'border-info/30',
+            },
+            {
+              key: 'outside_appetite' as const,
+              label: 'Outside Appetite',
+              value: summary.outside_appetite,
+              testId: 'risk-metric-outside-appetite',
+              icon: <Target className="w-5 h-5 text-primary" />,
+              iconWrap: 'bg-primary/20',
+              valueClass: 'text-primary',
+              cardClass: 'border-primary/30',
+            },
+            {
+              key: 'overdue' as const,
+              label: 'Overdue Review',
+              value: summary.overdue_review,
+              testId: 'risk-metric-overdue-review',
+              icon: <Clock className="w-5 h-5 text-muted-foreground" />,
+              iconWrap: 'bg-muted',
+              valueClass: 'text-foreground',
+              cardClass: '',
+              unavailableLabel: 'Overdue review unavailable',
+            },
+          ] as const
+        ).map((card) => {
+          const active = heroFilter === card.key
+          const unavailable = card.value == null
+          const unavailableLabel =
+            'unavailableLabel' in card && card.unavailableLabel
+              ? card.unavailableLabel
+              : `${card.label} unavailable`
+          return (
+            <Card
+              key={card.key}
+              className={cn(
+                card.cardClass,
+                'transition-all',
+                unavailable
+                  ? 'opacity-70'
+                  : 'cursor-pointer hover:border-primary/50 focus-within:ring-2 focus-within:ring-ring',
+                active && 'ring-2 ring-primary border-primary/40',
+              )}
+            >
+              <CardContent className="p-0">
+                <button
+                  type="button"
+                  className="w-full p-4 text-left disabled:cursor-not-allowed"
+                  disabled={unavailable}
+                  aria-pressed={active}
+                  data-testid={`risk-hero-filter-${card.key}`}
+                  onClick={() => toggleHeroFilter(card.key)}
+                >
+                  <div className="mb-2 flex items-center gap-3">
+                    <div className={cn('rounded-lg p-2', card.iconWrap)}>{card.icon}</div>
+                    <span
+                      className={cn('text-2xl font-bold', card.valueClass)}
+                      data-testid={card.testId}
+                      aria-label={unavailable ? unavailableLabel : undefined}
+                    >
+                      {formatMetric(card.value)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {unavailable && card.key === 'overdue'
+                      ? 'Overdue Review (unavailable)'
+                      : card.label}
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {unavailable ? 'Unavailable' : active ? 'Filter on — click to clear' : 'Click to filter'}
+                  </p>
+                </button>
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
 
       {/* View Toggle */}
@@ -1061,31 +1276,62 @@ export default function RiskRegister() {
               <thead className="bg-muted/50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    Reference
+                    <ColumnHeaderTip
+                      label="Reference"
+                      tip="Stable risk ID used in audits, CAPA, and deep-links."
+                    />
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    Risk Title
+                    <ColumnHeaderTip
+                      label="Risk Title"
+                      tip="Short description of the risk event or condition being managed."
+                    />
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    Category
+                    <ColumnHeaderTip
+                      label="Category"
+                      tip="Risk taxonomy bucket (e.g. Compliance, Operational, H&S)."
+                    />
                   </th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                    Inherent
+                    <ColumnHeaderTip
+                      label="Inherent (Gross)"
+                      tip="Gross risk score before controls — inherent likelihood × impact."
+                    />
                   </th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                    Residual
+                    <ColumnHeaderTip
+                      label="Residual (Net)"
+                      tip="Net risk score after controls — residual likelihood × impact."
+                    />
                   </th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                    Level
+                    <ColumnHeaderTip
+                      label="Level"
+                      tip="Banded residual score: Low ≤4, Medium 5–9, High 10–16, Critical ≥17."
+                    />
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    Treatment
+                    <ColumnHeaderTip
+                      label="Treatment"
+                      tip="Selected response strategy: Treat, Tolerate, Transfer, or Terminate."
+                    />
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    Owner
+                    <ColumnHeaderTip
+                      label="Owner"
+                      tip="Named person accountable for managing and reviewing this risk."
+                    />
                   </th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                    Actions
+                    <ColumnHeaderTip
+                      label="Actions"
+                      tip={
+                        registerMode === 'import_triage'
+                          ? 'Accept into the live register or reject the import suggestion.'
+                          : 'View risk detail or edit fields such as owner and title.'
+                      }
+                    />
                   </th>
                 </tr>
               </thead>
@@ -1123,10 +1369,10 @@ export default function RiskRegister() {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault()
-                        setSelectedRisk(risk)
+                        openRiskDetail(risk, 'view')
                       }
                     }}
-                    onClick={() => setSelectedRisk(risk)}
+                    onClick={() => openRiskDetail(risk, 'view')}
                   >
                     <td className="px-4 py-4">
                       <span className="font-mono text-primary">{risk.reference}</span>
@@ -1205,28 +1451,66 @@ export default function RiskRegister() {
                       </Badge>
                     </td>
                     <td className="px-4 py-4 text-center">
-                      <span className="text-xl font-bold text-muted-foreground">
+                      <span
+                        className="text-xl font-bold text-muted-foreground"
+                        title="Inherent (gross) score"
+                      >
                         {risk.inherent_score}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-center">
-                      <span className="text-xl font-bold text-primary">{risk.residual_score}</span>
+                      <span
+                        className="text-xl font-bold text-primary"
+                        title="Residual (net) score"
+                      >
+                        {risk.residual_score}
+                      </span>
                     </td>
                     <td className="px-4 py-4 text-center">{getRiskLevelBadge(risk.risk_level)}</td>
                     <td className="px-4 py-4">{getTreatmentBadge(risk.treatment_strategy)}</td>
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <User className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm text-foreground">{risk.risk_owner_name}</span>
-                      </div>
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-muted"
+                        data-testid={`risk-owner-edit-${risk.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openRiskDetail(risk, 'edit')
+                        }}
+                      >
+                        <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span
+                          className={cn(
+                            'text-sm',
+                            risk.risk_owner_name
+                              ? 'text-foreground'
+                              : 'italic text-muted-foreground',
+                          )}
+                        >
+                          {risk.risk_owner_name || 'Unassigned'}
+                        </span>
+                      </button>
                     </td>
                     <td className="px-4 py-4 text-center">
                       {registerMode === 'import_triage' ? (
-                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2">
+                        <div className="flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`View ${risk.reference}`}
+                            data-testid={`risk-view-${risk.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openRiskDetail(risk, 'view')
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                           <Button
                             size="sm"
                             className="text-xs"
                             disabled={triageSubmitting}
+                            data-testid={`risk-accept-${risk.id}`}
                             onClick={(e) => {
                               e.stopPropagation()
                               void resolveImportTriage(risk.id, 'accept')
@@ -1239,6 +1523,7 @@ export default function RiskRegister() {
                             variant="destructive"
                             className="text-xs"
                             disabled={triageSubmitting}
+                            data-testid={`risk-reject-${risk.id}`}
                             onClick={(e) => {
                               e.stopPropagation()
                               openRejectDialog(risk.id)
@@ -1249,11 +1534,29 @@ export default function RiskRegister() {
                         </div>
                       ) : (
                         <div className="flex items-center justify-center gap-2">
-                          <Button variant="ghost" size="sm">
-                            <Eye className="w-4 h-4" />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`View ${risk.reference}`}
+                            data-testid={`risk-view-${risk.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openRiskDetail(risk, 'view')
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="sm">
-                            <Edit2 className="w-4 h-4" />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`Edit ${risk.reference}`}
+                            data-testid={`risk-edit-${risk.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openRiskDetail(risk, 'edit')
+                            }}
+                          >
+                            <Edit2 className="h-4 w-4" />
                           </Button>
                         </div>
                       )}
@@ -1350,6 +1653,137 @@ export default function RiskRegister() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={detailMode != null}
+        onOpenChange={(open) => {
+          if (!open && !detailSaving) closeRiskDetail()
+        }}
+      >
+        <DialogContent className="sm:max-w-lg" data-testid="risk-detail-dialog">
+          <DialogHeader>
+            <DialogTitle>
+              {detailMode === 'create'
+                ? 'Add risk'
+                : detailMode === 'edit'
+                  ? 'Edit risk'
+                  : selectedRisk?.reference || 'Risk detail'}
+            </DialogTitle>
+            <DialogDescription>
+              {detailMode === 'create'
+                ? 'Create a register entry. Inherent is the gross score before controls; residual is the net score after controls.'
+                : 'Inherent (gross) and residual (net) scores summarise likelihood × impact before and after controls.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailMode === 'view' && selectedRisk ? (
+            <div className="space-y-3 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">Title</p>
+                <p className="font-medium text-foreground">{selectedRisk.title}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Inherent (gross)</p>
+                  <p className="text-lg font-bold text-foreground">{selectedRisk.inherent_score}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Residual (net)</p>
+                  <p className="text-lg font-bold text-primary">{selectedRisk.residual_score}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Owner</p>
+                <p className="text-foreground">
+                  {selectedRisk.risk_owner_name || 'Unassigned'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Category / Level / Treatment</p>
+                <p className="text-foreground">
+                  {selectedRisk.category} · {selectedRisk.risk_level} ·{' '}
+                  {selectedRisk.treatment_strategy}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="risk-detail-title">Title</Label>
+                <Input
+                  id="risk-detail-title"
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  disabled={detailSaving}
+                  data-testid="risk-detail-title"
+                />
+              </div>
+              {detailMode === 'create' && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="risk-detail-description">Description</Label>
+                  <textarea
+                    id="risk-detail-description"
+                    value={descriptionDraft}
+                    onChange={(e) => setDescriptionDraft(e.target.value)}
+                    rows={3}
+                    disabled={detailSaving}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    data-testid="risk-detail-description"
+                  />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="risk-detail-owner">Owner name</Label>
+                <Input
+                  id="risk-detail-owner"
+                  value={ownerDraft}
+                  onChange={(e) => setOwnerDraft(e.target.value)}
+                  placeholder="e.g. Jane Smith"
+                  disabled={detailSaving}
+                  data-testid="risk-detail-owner"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="risk-detail-category">Category</Label>
+                <select
+                  id="risk-detail-category"
+                  value={categoryDraft}
+                  onChange={(e) => setCategoryDraft(e.target.value)}
+                  disabled={detailSaving}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  data-testid="risk-detail-category"
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="secondary" onClick={closeRiskDetail} disabled={detailSaving}>
+              {detailMode === 'view' ? 'Close' : 'Cancel'}
+            </Button>
+            {detailMode === 'view' && selectedRisk ? (
+              <Button type="button" onClick={() => setDetailMode('edit')}>
+                Edit
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={() => void saveRiskDetail()}
+                disabled={detailSaving}
+                data-testid="risk-detail-save"
+              >
+                {detailSaving ? 'Saving…' : detailMode === 'create' ? 'Create risk' : 'Save'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={rejectDialogOpen}
