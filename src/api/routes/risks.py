@@ -11,6 +11,7 @@ from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, requi
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.risk import (
     RiskAssessmentCreate,
+    RiskAssessmentListResponse,
     RiskAssessmentResponse,
     RiskControlCreate,
     RiskControlResponse,
@@ -679,14 +680,39 @@ async def list_assessments(
     db: DbSession,
     current_user: CurrentUser,
 ) -> list[RiskAssessmentResponse]:
-    """List assessments for a risk with pagination."""
+    """List the complete assessment history (legacy array response)."""
     await _get_risk_tenant_checked(db, risk_id, current_user)
-    base = (
+    result = await db.execute(
         select(RiskAssessment).where(RiskAssessment.risk_id == risk_id).order_by(RiskAssessment.assessment_date.desc())
     )
-    count_result = await db.execute(select(func.count()).select_from(base.subquery()))
-    total = count_result.scalar_one()
-    result = await db.execute(base.limit(100))
     assessments = result.scalars().all()
 
     return [RiskAssessmentResponse.model_validate(a) for a in assessments]
+
+
+@router.get("/{risk_id}/assessments/paged", response_model=RiskAssessmentListResponse)
+async def list_assessments_paged(
+    risk_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+) -> RiskAssessmentListResponse:
+    """List assessment history with explicit pagination metadata."""
+    await _get_risk_tenant_checked(db, risk_id, current_user)
+    base = (
+        select(RiskAssessment)
+        .where(RiskAssessment.risk_id == risk_id)
+        .order_by(RiskAssessment.assessment_date.desc())
+    )
+    count_result = await db.execute(select(func.count()).select_from(base.subquery()))
+    total = count_result.scalar_one()
+    result = await db.execute(base.offset((page - 1) * page_size).limit(page_size))
+    assessments = result.scalars().all()
+    return RiskAssessmentListResponse(
+        items=[RiskAssessmentResponse.model_validate(a) for a in assessments],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=(total + page_size - 1) // page_size if total > 0 else 0,
+    )

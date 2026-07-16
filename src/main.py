@@ -241,8 +241,12 @@ def create_application() -> FastAPI:
                 "description": "Incident reporting, tracking, and resolution",
             },
             {
-                "name": "Risk Register",
-                "description": "Risk assessment, controls, and mitigation",
+                "name": "Operational Risk Register",
+                "description": "Operational Risk assessment, controls, mitigation, and assessment history",
+            },
+            {
+                "name": "Enterprise Risk Register",
+                "description": "EnterpriseRisk register, appetite, KRIs, and bow-tie analysis",
             },
             {
                 "name": "Audits & Inspections",

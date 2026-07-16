@@ -676,7 +676,7 @@
         "description": "Response schema for actions.",
         "properties": {
           "action_key": {
-            "description": "Stable id: incident_action:1, capa:2, \u2026",
+            "description": "Stable id: incident_action:1, capa:2, …",
             "title": "Action Key",
             "type": "string"
           },
@@ -13827,7 +13827,7 @@
         "type": "object"
       },
       "DocumentStatus": {
-        "description": "Canonical document status \u2014 covers ingestion pipeline and governance lifecycle.",
+        "description": "Canonical document status — covers ingestion pipeline and governance lifecycle.",
         "enum": [
           "pending",
           "processing",
@@ -13851,7 +13851,7 @@
         "type": "string"
       },
       "DocumentType": {
-        "description": "Canonical document type \u2014 superset of document, policy, and controlled-document types.",
+        "description": "Canonical document type — superset of document, policy, and controlled-document types.",
         "enum": [
           "policy",
           "procedure",
@@ -23447,7 +23447,7 @@
         "type": "object"
       },
       "LogoutRequest": {
-        "description": "Optional body for logout \u2014 refresh token is revoked when present.",
+        "description": "Optional body for logout — refresh token is revoked when present.",
         "properties": {
           "refresh_token": {
             "anyOf": [
@@ -25312,7 +25312,7 @@
         "type": "object"
       },
       "OCRArtifactAckRequest": {
-        "description": "Record human acknowledgement of an OCR artifact (stub \u2014 no provider dial).",
+        "description": "Record human acknowledgement of an OCR artifact (stub — no provider dial).",
         "properties": {
           "actor": {
             "maxLength": 128,
@@ -25345,7 +25345,7 @@
         "type": "object"
       },
       "OCRArtifactDisputeRequest": {
-        "description": "Record a human dispute on an OCR artifact (stub \u2014 no provider dial).",
+        "description": "Record a human dispute on an OCR artifact (stub — no provider dial).",
         "properties": {
           "actor": {
             "maxLength": 128,
@@ -30088,6 +30088,43 @@
           "residual_impact"
         ],
         "title": "RiskAssessmentCreate",
+        "type": "object"
+      },
+      "RiskAssessmentListResponse": {
+        "description": "Paginated risk-assessment history response.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RiskAssessmentResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "pages": {
+            "title": "Pages",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size",
+          "pages"
+        ],
+        "title": "RiskAssessmentListResponse",
         "type": "object"
       },
       "RiskAssessmentResponse": {
@@ -41280,29 +41317,9 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/": {
-      "get": {
-        "description": "Root endpoint: Provides basic API information and links.",
-        "operationId": "root__get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Root",
-        "tags": [
-          "Root"
-        ]
-      }
-    },
     "/api/v1/actions/": {
       "get": {
-        "description": "List actions across all source types with SQL-level pagination.\n\nWhen *source_type* is specified, LIMIT/OFFSET is pushed to the database.\nWhen listing across all source types, individual queries are capped and\nmerged client-side to honour the requested page window.",
+        "description": "List actions with accurate page metadata.\n\nWhen *source_type* is specified, LIMIT/OFFSET is pushed to the database.\nAcross all source types, each query is bounded to the requested page\nwindow, then rows are merge-sorted and sliced in process.",
         "operationId": "list_actions_api_v1_actions__get",
         "parameters": [
           {
@@ -41751,12 +41768,12 @@
             }
           },
           {
-            "description": "Source discriminator: incident, rta, complaint, investigation, or CAPA API type (assessment, audit_finding, ncr, capa_incident, \u2026)",
+            "description": "Source discriminator: incident, rta, complaint, investigation, or CAPA API type (assessment, audit_finding, ncr, capa_incident, …)",
             "in": "query",
             "name": "source_type",
             "required": true,
             "schema": {
-              "description": "Source discriminator: incident, rta, complaint, investigation, or CAPA API type (assessment, audit_finding, ncr, capa_incident, \u2026)",
+              "description": "Source discriminator: incident, rta, complaint, investigation, or CAPA API type (assessment, audit_finding, ncr, capa_incident, …)",
               "title": "Source Type",
               "type": "string"
             }
@@ -41808,12 +41825,12 @@
             }
           },
           {
-            "description": "Source discriminator (incident, rta, \u2026 or CAPA API type such as audit_finding, ncr, capa_incident)",
+            "description": "Source discriminator (incident, rta, … or CAPA API type such as audit_finding, ncr, capa_incident)",
             "in": "query",
             "name": "source_type",
             "required": true,
             "schema": {
-              "description": "Source discriminator (incident, rta, \u2026 or CAPA API type such as audit_finding, ncr, capa_incident)",
+              "description": "Source discriminator (incident, rta, … or CAPA API type such as audit_finding, ncr, capa_incident)",
               "title": "Source Type",
               "type": "string"
             }
@@ -49701,7 +49718,7 @@
     },
     "/api/v1/audits/findings/{finding_id}/capa": {
       "post": {
-        "description": "Create (or return existing) CAPA linked to an audit finding.\n\nPrimary finding\u2192CAPA CUJ. Idempotent when a CAPA is already linked.\nDeep-link Actions handoff remains available as a fallback.",
+        "description": "Create (or return existing) CAPA linked to an audit finding.\n\nPrimary finding→CAPA CUJ. Idempotent when a CAPA is already linked.\nDeep-link Actions handoff remains available as a fallback.",
         "operationId": "create_finding_capa_api_v1_audits_findings__finding_id__capa_post",
         "parameters": [
           {
@@ -49817,7 +49834,7 @@
     },
     "/api/v1/audits/findings/{finding_id}/golden-thread": {
       "get": {
-        "description": "Honest finding \u2192 CAPA \u2192 risk chain (closure bridge status).",
+        "description": "Honest finding → CAPA → risk chain (closure bridge status).",
         "operationId": "get_finding_golden_thread_api_v1_audits_findings__finding_id__golden_thread_get",
         "parameters": [
           {
@@ -53708,7 +53725,7 @@
     },
     "/api/v1/compliance/analyze": {
       "post": {
-        "description": "World-class 5-stage ISO evidence analysis powered by Genspark.ai.\n\nRuns a multi-stage pipeline:\n  Stage 1 \u2014 Keyword pre-filter (fast, always runs)\n  Stage 2 \u2014 Genspark LLM semantic mapping (requires GENSPARK_API_KEY)\n  Stage 3 \u2014 Cross-standard mapping identification\n  Stage 4 \u2014 Evidence quality scoring (Direct/Procedural/Documentary)\n  Stage 5 \u2014 Auditor conformance statement generation\n\nReturns a structured evidence analysis package with conformance statements\nsuitable for ISO certification audit packs.",
+        "description": "World-class 5-stage ISO evidence analysis powered by Genspark.ai.\n\nRuns a multi-stage pipeline:\n  Stage 1 — Keyword pre-filter (fast, always runs)\n  Stage 2 — Genspark LLM semantic mapping (requires GENSPARK_API_KEY)\n  Stage 3 — Cross-standard mapping identification\n  Stage 4 — Evidence quality scoring (Direct/Procedural/Documentary)\n  Stage 5 — Auditor conformance statement generation\n\nReturns a structured evidence analysis package with conformance statements\nsuitable for ISO certification audit packs.",
         "operationId": "analyze_evidence_api_v1_compliance_analyze_post",
         "requestBody": {
           "content": {
@@ -56028,7 +56045,7 @@
         ]
       },
       "put": {
-        "description": "Update document metadata (blocked when published/obsolete \u2014 revise first).",
+        "description": "Update document metadata (blocked when published/obsolete — revise first).",
         "operationId": "update_document_api_v1_document_control__document_id__put",
         "parameters": [
           {
@@ -57846,7 +57863,7 @@
     },
     "/api/v1/engineers/by-user/me": {
       "get": {
-        "description": "Resolve the authenticated user's linked engineer profile (portal self-inbox).\n\nReturns HTTP 200 with ``linked: false`` when no Engineer.user_id link exists \u2014\ncallers must show an honest \"profile not linked\" empty state (no fabricated\npassport ticks). Legacy 404 responses may still occur from other layers.",
+        "description": "Resolve the authenticated user's linked engineer profile (portal self-inbox).\n\nReturns HTTP 200 with ``linked: false`` when no Engineer.user_id link exists —\ncallers must show an honest \"profile not linked\" empty state (no fabricated\npassport ticks). Legacy 404 responses may still occur from other layers.",
         "operationId": "get_engineer_by_user_me_api_v1_engineers_by_user_me_get",
         "responses": {
           "200": {
@@ -60667,7 +60684,7 @@
     },
     "/api/v1/health/meta/ocr-artifacts/ack": {
       "post": {
-        "description": "Record human acknowledgement on an OCR artifact \u2014 stub only, never dials providers.\n\nAuth required: previously public POST allowed unauthenticated writes.",
+        "description": "Record human acknowledgement on an OCR artifact — stub only, never dials providers.\n\nAuth required: previously public POST allowed unauthenticated writes.",
         "operationId": "acknowledge_ocr_artifact_api_v1_health_meta_ocr_artifacts_ack_post",
         "requestBody": {
           "content": {
@@ -60716,7 +60733,7 @@
     },
     "/api/v1/health/meta/ocr-artifacts/dispute": {
       "post": {
-        "description": "Record human dispute on an OCR artifact \u2014 stub only, never dials providers.\n\nAuth required: previously public POST allowed unauthenticated writes.",
+        "description": "Record human dispute on an OCR artifact — stub only, never dials providers.\n\nAuth required: previously public POST allowed unauthenticated writes.",
         "operationId": "dispute_ocr_artifact_api_v1_health_meta_ocr_artifacts_dispute_post",
         "requestBody": {
           "content": {
@@ -65323,7 +65340,7 @@
     },
     "/api/v1/knowledge-bank/entities/{entity_type}/{entity_id}/assessment": {
       "get": {
-        "description": "List persisted standards assessment links for a case entity.\n\nAlways returns a list (possibly empty). Missing links are not a 404 \u2014\nthe Standards tab treats empty as \"not assessed yet\".",
+        "description": "List persisted standards assessment links for a case entity.\n\nAlways returns a list (possibly empty). Missing links are not a 404 —\nthe Standards tab treats empty as \"not assessed yet\".",
         "operationId": "get_operational_entity_assessment_api_v1_knowledge_bank_entities__entity_type___entity_id__assessment_get",
         "parameters": [
           {
@@ -65849,7 +65866,7 @@
     },
     "/api/v1/knowledge-bank/regulatory-watch/impacts/{impact_id}/create-action": {
       "post": {
-        "description": "Create a real Action (CAPA) from a regulatory watch impact \u2014 owner + due.",
+        "description": "Create a real Action (CAPA) from a regulatory watch impact — owner + due.",
         "operationId": "create_action_from_watch_impact_api_v1_knowledge_bank_regulatory_watch_impacts__impact_id__create_action_post",
         "parameters": [
           {
@@ -66815,7 +66832,7 @@
     },
     "/api/v1/meta/ocr-artifacts/ack": {
       "post": {
-        "description": "Record human acknowledgement on an OCR artifact \u2014 stub only, never dials providers.\n\nAuth required: previously public POST allowed unauthenticated writes.",
+        "description": "Record human acknowledgement on an OCR artifact — stub only, never dials providers.\n\nAuth required: previously public POST allowed unauthenticated writes.",
         "operationId": "acknowledge_ocr_artifact_api_v1_meta_ocr_artifacts_ack_post",
         "requestBody": {
           "content": {
@@ -66863,7 +66880,7 @@
     },
     "/api/v1/meta/ocr-artifacts/dispute": {
       "post": {
-        "description": "Record human dispute on an OCR artifact \u2014 stub only, never dials providers.\n\nAuth required: previously public POST allowed unauthenticated writes.",
+        "description": "Record human dispute on an OCR artifact — stub only, never dials providers.\n\nAuth required: previously public POST allowed unauthenticated writes.",
         "operationId": "dispute_ocr_artifact_api_v1_meta_ocr_artifacts_dispute_post",
         "requestBody": {
           "content": {
@@ -66955,30 +66972,6 @@
         "summary": "Get Ocr Providers Meta",
         "tags": [
           "Meta",
-          "Meta"
-        ]
-      }
-    },
-    "/api/v1/meta/version": {
-      "get": {
-        "description": "Return build version information for deployment verification.",
-        "operationId": "get_version_api_v1_meta_version_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Version Api V1 Meta Version Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get Version",
-        "tags": [
           "Meta"
         ]
       }
@@ -68255,7 +68248,7 @@
     },
     "/api/v1/notifications/push/vapid-status": {
       "get": {
-        "description": "Public push/VAPID readiness (no secrets beyond the public key).\n\nUsed by admin UI and ops probes. Missing VAPID is not an error \u2014 push is optional.",
+        "description": "Public push/VAPID readiness (no secrets beyond the public key).\n\nUsed by admin UI and ops probes. Missing VAPID is not an error — push is optional.",
         "operationId": "get_vapid_status_api_v1_notifications_push_vapid_status_get",
         "responses": {
           "200": {
@@ -68967,7 +68960,7 @@
     },
     "/api/v1/planet-mark/apply-import": {
       "post": {
-        "description": "Trigger Planet Mark domain sync from a previously processed import job.\n\nThis endpoint lets users explicitly push data from an imported Planet Mark\naudit report (processed via the Audits \u2192 External Audit Import pipeline)\ninto the Planet Mark carbon dashboard.  It is idempotent: calling it\nmultiple times with the same job produces the same result.\n\n**Validation:**\n- ``import_job_id`` must reference a job with ``detected_scheme = \"planet_mark\"``\n- The job must have status ``completed`` (i.e., it has been promoted)\n- The job must have Planet Mark carbon data in its ``provenance_json``",
+        "description": "Trigger Planet Mark domain sync from a previously processed import job.\n\nThis endpoint lets users explicitly push data from an imported Planet Mark\naudit report (processed via the Audits → External Audit Import pipeline)\ninto the Planet Mark carbon dashboard.  It is idempotent: calling it\nmultiple times with the same job produces the same result.\n\n**Validation:**\n- ``import_job_id`` must reference a job with ``detected_scheme = \"planet_mark\"``\n- The job must have status ``completed`` (i.e., it has been promoted)\n- The job must have Planet Mark carbon data in its ``provenance_json``",
         "operationId": "apply_import_to_planet_mark_api_v1_planet_mark_apply_import_post",
         "requestBody": {
           "content": {
@@ -74161,7 +74154,7 @@
         ],
         "summary": "List Risks",
         "tags": [
-          "Risk Register"
+          "Operational Risk Register"
         ]
       },
       "post": {
@@ -74206,7 +74199,7 @@
         ],
         "summary": "Create Risk",
         "tags": [
-          "Risk Register"
+          "Operational Risk Register"
         ]
       }
     },
@@ -74247,7 +74240,7 @@
         ],
         "summary": "Delete Control",
         "tags": [
-          "Risk Register"
+          "Operational Risk Register"
         ]
       },
       "patch": {
@@ -74303,7 +74296,7 @@
         ],
         "summary": "Update Control",
         "tags": [
-          "Risk Register"
+          "Operational Risk Register"
         ]
       }
     },
@@ -74330,7 +74323,7 @@
         ],
         "summary": "Get Risk Matrix",
         "tags": [
-          "Risk Register"
+          "Operational Risk Register"
         ]
       }
     },
@@ -74357,7 +74350,7 @@
         ],
         "summary": "Get Risk Statistics",
         "tags": [
-          "Risk Register"
+          "Operational Risk Register"
         ]
       }
     },
@@ -74398,7 +74391,7 @@
         ],
         "summary": "Delete Risk",
         "tags": [
-          "Risk Register"
+          "Operational Risk Register"
         ]
       },
       "get": {
@@ -74444,7 +74437,7 @@
         ],
         "summary": "Get Risk",
         "tags": [
-          "Risk Register"
+          "Operational Risk Register"
         ]
       },
       "patch": {
@@ -74500,13 +74493,13 @@
         ],
         "summary": "Update Risk",
         "tags": [
-          "Risk Register"
+          "Operational Risk Register"
         ]
       }
     },
     "/api/v1/risks/{risk_id}/assessments": {
       "get": {
-        "description": "List assessments for a risk with pagination.",
+        "description": "List the complete assessment history (legacy array response).",
         "operationId": "list_assessments_api_v1_risks__risk_id__assessments_get",
         "parameters": [
           {
@@ -74552,7 +74545,7 @@
         ],
         "summary": "List Assessments",
         "tags": [
-          "Risk Register"
+          "Operational Risk Register"
         ]
       },
       "post": {
@@ -74608,7 +74601,78 @@
         ],
         "summary": "Create Assessment",
         "tags": [
-          "Risk Register"
+          "Operational Risk Register"
+        ]
+      }
+    },
+    "/api/v1/risks/{risk_id}/assessments/paged": {
+      "get": {
+        "description": "List assessment history with explicit pagination metadata.",
+        "operationId": "list_assessments_paged_api_v1_risks__risk_id__assessments_paged_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "risk_id",
+            "required": true,
+            "schema": {
+              "title": "Risk Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskAssessmentListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Assessments Paged",
+        "tags": [
+          "Operational Risk Register"
         ]
       }
     },
@@ -74681,7 +74745,7 @@
         ],
         "summary": "List Controls",
         "tags": [
-          "Risk Register"
+          "Operational Risk Register"
         ]
       },
       "post": {
@@ -74737,7 +74801,7 @@
         ],
         "summary": "Create Control",
         "tags": [
-          "Risk Register"
+          "Operational Risk Register"
         ]
       }
     },
@@ -80832,7 +80896,7 @@
     },
     "/api/v1/vehicles/analytics/fleet-health": {
       "get": {
-        "description": "Fleet health summary \u2014 counts by fleet status and compliance status.",
+        "description": "Fleet health summary — counts by fleet status and compliance status.",
         "operationId": "fleet_health_api_v1_vehicles_analytics_fleet_health_get",
         "responses": {
           "200": {
@@ -81055,7 +81119,7 @@
     },
     "/api/v1/vehicles/{reg}/compliance": {
       "get": {
-        "description": "Compliance gate check \u2014 can this vehicle be dispatched?",
+        "description": "Compliance gate check — can this vehicle be dispatched?",
         "operationId": "compliance_gate_api_v1_vehicles__reg__compliance_get",
         "parameters": [
           {
@@ -83794,74 +83858,6 @@
           "XML Template Import"
         ]
       }
-    },
-    "/health": {
-      "get": {
-        "description": "Health check endpoint.",
-        "operationId": "health_check_health_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Health Check Health Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Health Check",
-        "tags": [
-          "Health"
-        ]
-      }
-    },
-    "/healthz": {
-      "get": {
-        "description": "Liveness probe: Check if application process is alive.\n\nReturns 200 OK if the application is running.\nUsed by container orchestrators to determine if the container should be restarted.",
-        "operationId": "liveness_check_healthz_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Liveness Check Healthz Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Liveness Check",
-        "tags": [
-          "Health"
-        ]
-      }
-    },
-    "/readyz": {
-      "get": {
-        "description": "Readiness probe: Check if application is ready to accept traffic.\n\nChecks database and Redis connectivity. Returns 200 OK if ready, 503 if not.\nUsed by load balancers to determine if traffic should be routed to this instance.\n\nPer ADR-0003: Readiness Probe Database Check",
-        "operationId": "readiness_check_readyz_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Readiness Check",
-        "tags": [
-          "Health"
-        ]
-      }
     }
   },
   "tags": [
@@ -83878,8 +83874,12 @@
       "name": "Incidents"
     },
     {
-      "description": "Risk assessment, controls, and mitigation",
-      "name": "Risk Register"
+      "description": "Operational Risk assessment, controls, mitigation, and assessment history",
+      "name": "Operational Risk Register"
+    },
+    {
+      "description": "EnterpriseRisk register, appetite, KRIs, and bow-tie analysis",
+      "name": "Enterprise Risk Register"
     },
     {
       "description": "Audit templates, runs, findings, and scoring",
