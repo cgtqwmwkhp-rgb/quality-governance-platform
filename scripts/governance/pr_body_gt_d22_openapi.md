@@ -6,6 +6,7 @@
 - `docs/contracts/openapi.json`
 - `tests/unit/test_gt_openapi_list_routes.py`
 - `scripts/governance/pr_body_gt_d22_openapi.md`
+- `requirements.lock`
 
 **Zero overlap** with schema FK/NOT NULL migrations, Azure DI enablement, or SWA workflow YAML.
 
@@ -74,4 +75,6 @@
 - [x] **Gate 0:** Scope + AC + rollback
 - [x] **Gate 1:** Contract artifacts aligned
 - [ ] **Gate 2:** CI green
-- [ ] **Gate 3:** tip==LIVE + canvas update
+- [ ] **Gate 3:** Staging verification (auto after merge)
+- [x] **Gate 4:** Canary N/A (contract artifact only)
+- [ ] **Gate 5:** tip==LIVE + canvas update
