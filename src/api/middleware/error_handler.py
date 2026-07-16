@@ -40,9 +40,17 @@ def _build_envelope(
     request_id: str,
     details: dict | None = None,
 ) -> dict:
+    """Build the canonical error envelope.
+
+    ``error.code`` is canonical. ``error.error_class`` is its deprecated,
+    value-identical compatibility alias for clients that adopted the earlier
+    vocabulary. It is not emitted for successful domain payloads such as
+    ``SETUP_REQUIRED`` responses.
+    """
     return {
         "error": {
             "code": code,
+            "error_class": code,
             "message": message,
             "details": details or {},
             "request_id": request_id,
@@ -127,6 +135,13 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
         code, message, details = _normalize_http_detail(exc.detail, exc.status_code)
+        # Starlette produces its default 404 before route matching; that is a
+        # missing route, not a missing domain entity. Explicit endpoint 404s
+        # retain the entity-specific code supplied by their route/service.
+        if exc.status_code == status.HTTP_404_NOT_FOUND and request.scope.get("route") is None:
+            code = ErrorCode.ROUTE_NOT_FOUND
+            message = "Route not found"
+            details = {"path": request.url.path}
         resp = JSONResponse(
             status_code=exc.status_code,
             content=_build_envelope(code, message, request_id, details),
