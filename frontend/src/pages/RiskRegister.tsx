@@ -112,51 +112,20 @@ function flattenHeatmapCells(heatmap: {
 function heatmapBandCounts(cells: HeatmapApiCell[]): Record<string, number> {
   return cells.reduce<Record<string, number>>(
     (counts, cell) => {
+      const count = cell.count ?? cell.risk_count
       if (
         typeof cell.likelihood !== 'number' ||
         typeof cell.impact !== 'number' ||
-        typeof cell.count !== 'number'
+        typeof count !== 'number'
       ) {
         return counts
       }
       const { level } = residualBandFromScore(cell.likelihood * cell.impact)
-      counts[level] += cell.count
+      counts[level] += count
       return counts
     },
     { critical: 0, high: 0, medium: 0, low: 0 },
   )
-}
-
-function binRisksIntoHeatmapCells(
-  risks: Array<{
-    id: number
-    title: string
-    residual_likelihood?: number
-    residual_impact?: number
-  }>,
-): Map<string, { count: number; risk_ids: number[]; risk_titles: string[] }> {
-  const bins = new Map<string, { count: number; risk_ids: number[]; risk_titles: string[] }>()
-  for (const risk of risks) {
-    const likelihood = risk.residual_likelihood
-    const impact = risk.residual_impact
-    if (
-      typeof likelihood !== 'number' ||
-      typeof impact !== 'number' ||
-      likelihood < 1 ||
-      likelihood > 5 ||
-      impact < 1 ||
-      impact > 5
-    ) {
-      continue
-    }
-    const key = `${likelihood}:${impact}`
-    const existing = bins.get(key) ?? { count: 0, risk_ids: [], risk_titles: [] }
-    existing.count += 1
-    existing.risk_ids.push(risk.id)
-    existing.risk_titles.push(risk.title.substring(0, 30))
-    bins.set(key, existing)
-  }
-  return bins
 }
 
 interface Risk {
