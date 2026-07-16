@@ -29,9 +29,12 @@ export default function SectionEditor({
   const { t } = useTranslation()
 
   return (
-    <div className="bg-card/50 border border-border rounded-2xl overflow-hidden">
-      <div className={`bg-gradient-to-r ${section.color || 'from-blue-500 to-cyan-500'} p-0.5`}>
-        <div className="bg-card p-4">
+    // overflow-visible so question-type dropdowns are not clipped by the section card
+    <div className="bg-card/50 border border-border rounded-2xl">
+      <div
+        className={`rounded-t-2xl overflow-hidden bg-gradient-to-r ${section.color || 'from-blue-500 to-cyan-500'} p-0.5`}
+      >
+        <div className="bg-card p-4 rounded-t-[0.9rem]">
           <div className="flex items-center gap-3">
             <div className="p-1.5 bg-secondary rounded cursor-grab hover:bg-muted">
               <GripVertical className="w-5 h-5 text-muted-foreground" />

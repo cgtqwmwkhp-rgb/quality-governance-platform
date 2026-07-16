@@ -268,6 +268,9 @@ export default function Audits() {
   )
   const highlightedFindingRef = useRef<HTMLDivElement | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  /** Hero band as dynamic filter — mirrors Risk Register KPI cards. */
+  type HeroFilter = 'all' | 'in_progress' | 'completed' | 'scored' | 'open_findings'
+  const [heroFilter, setHeroFilter] = useState<HeroFilter>('all')
   const [modalMode, setModalMode] = useState<AuditModalMode>('schedule')
   const [showModal, setShowModal] = useState(false)
 
@@ -768,7 +771,7 @@ export default function Audits() {
     }
   }
 
-  const filteredAudits = useMemo(() => {
+  const searchFilteredAudits = useMemo(() => {
     if (!searchTerm.trim()) return scopedAudits
     const term = searchTerm.toLowerCase()
     return scopedAudits.filter(
@@ -781,8 +784,39 @@ export default function Audits() {
     )
   }, [scopedAudits, searchTerm])
 
+  const filteredAudits = useMemo(() => {
+    switch (heroFilter) {
+      case 'in_progress':
+        return searchFilteredAudits.filter((a) => a.status === 'in_progress')
+      case 'completed':
+        return searchFilteredAudits.filter((a) => a.status === 'completed')
+      case 'scored':
+        return [...searchFilteredAudits]
+          .filter((a) => a.score_percentage != null)
+          .sort((a, b) => (a.score_percentage ?? 0) - (b.score_percentage ?? 0))
+      case 'open_findings':
+        // Findings view owns this filter; keep audit list unfiltered by status.
+        return searchFilteredAudits
+      default:
+        return searchFilteredAudits
+    }
+  }, [searchFilteredAudits, heroFilter])
+
   const getAuditsByStatus = (status: string) => {
     return filteredAudits.filter((a) => a.status === status)
+  }
+
+  const applyHeroFilter = (next: HeroFilter) => {
+    const resolved: HeroFilter = heroFilter === next ? 'all' : next
+    setHeroFilter(resolved)
+    if (resolved === 'open_findings') {
+      setViewMode('findings')
+    } else if (resolved === 'all') {
+      // leave current view mode
+    } else {
+      // Status/score filters are clearest in List (Board would show empty sibling lanes).
+      setViewMode('list')
+    }
   }
 
   const getScoreColor = (percentage?: number) => {
@@ -826,17 +860,22 @@ export default function Audits() {
     }
   }
 
+  // Hero counts stay search-aware but not hero-filter-aware (so tiles don't collapse when active).
   const stats = {
-    total: filteredAudits.length,
-    inProgress: filteredAudits.filter((a) => a.status === 'in_progress').length,
-    completed: filteredAudits.filter((a) => a.status === 'completed').length,
+    total: searchFilteredAudits.length,
+    inProgress: searchFilteredAudits.filter((a) => a.status === 'in_progress').length,
+    completed: searchFilteredAudits.filter((a) => a.status === 'completed').length,
     avgScore:
-      filteredAudits
+      searchFilteredAudits
         .filter((a) => a.score_percentage != null)
         .reduce((acc, a) => acc + (a.score_percentage ?? 0), 0) /
-      (filteredAudits.filter((a) => a.score_percentage != null).length || 1),
+      (searchFilteredAudits.filter((a) => a.score_percentage != null).length || 1),
     openFindings: scopedFindings.filter((f) => f.status === 'open').length,
   }
+  const findingsForView =
+    heroFilter === 'open_findings'
+      ? scopedFindings.filter((f) => f.status === 'open')
+      : scopedFindings
   const linkedFindingExists =
     !urlFindingId || scopedFindings.some((finding) => String(finding.id) === String(urlFindingId))
   const executableAudit = scopedAudits.find(
@@ -927,57 +966,91 @@ export default function Audits() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {[
-          {
-            label: t('audits.stats.total'),
-            value: stats.total,
-            icon: ClipboardCheck,
-            variant: 'info' as const,
-          },
-          {
-            label: t('status.in_progress'),
-            value: stats.inProgress,
-            icon: Clock,
-            variant: 'warning' as const,
-          },
-          {
-            label: t('audits.stats.completed'),
-            value: stats.completed,
-            icon: CheckCircle2,
-            variant: 'success' as const,
-          },
-          {
-            label: t('audits.stats.avg_score'),
-            value: `${(stats.avgScore ?? 0).toFixed(0)}%`,
-            icon: BarChart3,
-            variant: 'primary' as const,
-          },
-          {
-            label: t('audits.stats.open_findings'),
-            value: stats.openFindings,
-            icon: AlertCircle,
-            variant: 'destructive' as const,
-          },
-        ].map((stat) => (
-          <Card key={stat.label} hoverable className="p-5">
-            <div
+      {/* Hero band — interactive filters */}
+      <div
+        className="grid grid-cols-2 lg:grid-cols-5 gap-3"
+        role="toolbar"
+        aria-label="Audit filters"
+      >
+        {(
+          [
+            {
+              key: 'all' as const,
+              label: t('audits.stats.total'),
+              value: stats.total,
+              icon: ClipboardCheck,
+              variant: 'info' as const,
+              hint: 'Show all audits',
+            },
+            {
+              key: 'in_progress' as const,
+              label: t('status.in_progress'),
+              value: stats.inProgress,
+              icon: Clock,
+              variant: 'warning' as const,
+              hint: 'Filter in-progress audits',
+            },
+            {
+              key: 'completed' as const,
+              label: t('audits.stats.completed'),
+              value: stats.completed,
+              icon: CheckCircle2,
+              variant: 'success' as const,
+              hint: 'Filter completed audits',
+            },
+            {
+              key: 'scored' as const,
+              label: t('audits.stats.avg_score'),
+              value: `${(stats.avgScore ?? 0).toFixed(0)}%`,
+              icon: BarChart3,
+              variant: 'primary' as const,
+              hint: 'Show scored audits, worst first',
+            },
+            {
+              key: 'open_findings' as const,
+              label: t('audits.stats.open_findings'),
+              value: stats.openFindings,
+              icon: AlertCircle,
+              variant: 'destructive' as const,
+              hint: 'Open findings view',
+            },
+          ] as const
+        ).map((stat) => {
+          const active = heroFilter === stat.key
+          return (
+            <button
+              key={stat.key}
+              type="button"
+              onClick={() => applyHeroFilter(stat.key)}
+              aria-pressed={active}
+              title={stat.hint}
               className={cn(
-                'w-10 h-10 rounded-xl flex items-center justify-center mb-3',
-                stat.variant === 'info' && 'bg-info/10 text-info',
-                stat.variant === 'warning' && 'bg-warning/10 text-warning',
-                stat.variant === 'success' && 'bg-success/10 text-success',
-                stat.variant === 'primary' && 'bg-primary/10 text-primary',
-                stat.variant === 'destructive' && 'bg-destructive/10 text-destructive',
+                'text-left rounded-xl border p-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                active
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                  : 'border-border bg-card hover:border-primary/40 hover:bg-muted/40',
               )}
             >
-              <stat.icon className="w-5 h-5" />
-            </div>
-            <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-            <p className="text-sm text-muted-foreground">{stat.label}</p>
-          </Card>
-        ))}
+              <div
+                className={cn(
+                  'w-9 h-9 rounded-lg flex items-center justify-center mb-2',
+                  stat.variant === 'info' && 'bg-info/10 text-info',
+                  stat.variant === 'warning' && 'bg-warning/10 text-warning',
+                  stat.variant === 'success' && 'bg-success/10 text-success',
+                  stat.variant === 'primary' && 'bg-primary/10 text-primary',
+                  stat.variant === 'destructive' && 'bg-destructive/10 text-destructive',
+                )}
+              >
+                <stat.icon className="w-4 h-4" />
+              </div>
+              <p className="text-2xl font-bold text-foreground tabular-nums">{stat.value}</p>
+              <p className="text-sm text-muted-foreground">{stat.label}</p>
+              {active && (
+                <p className="text-[11px] text-primary mt-1 font-medium">Filter on · click to clear</p>
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {/* Search */}
@@ -1336,12 +1409,16 @@ export default function Audits() {
               </Button>
             </div>
           )}
-          {scopedFindings.length === 0 ? (
+          {findingsForView.length === 0 ? (
             <Card>
               <EmptyState
                 icon={<ClipboardCheck className="h-8 w-8 text-primary" />}
                 title={t('audits.findings.empty.title')}
-                description={t('audits.findings.empty.description')}
+                description={
+                  heroFilter === 'open_findings'
+                    ? 'No open findings match this filter.'
+                    : t('audits.findings.empty.description')
+                }
                 action={
                   <div className="flex flex-wrap justify-center gap-2">
                     <Button type="button" variant="outline" onClick={() => setViewMode('list')}>
@@ -1366,7 +1443,7 @@ export default function Audits() {
               />
             </Card>
           ) : (
-            scopedFindings.map((finding) => {
+            findingsForView.map((finding) => {
               const isHighlighted = urlFindingId && String(finding.id) === String(urlFindingId)
               const findingType = getFindingTypePresentation(finding.finding_type)
               const FindingTypeIcon = findingType.icon
