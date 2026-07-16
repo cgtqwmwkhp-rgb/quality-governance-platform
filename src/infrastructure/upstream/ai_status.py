@@ -126,9 +126,25 @@ def get_upstream_ai_readiness() -> dict[str, Any]:
 
 
 def get_ocr_ops_capabilities() -> dict[str, Any]:
-    """Return R5 OCR ops capability flags for meta and /readyz (no secrets)."""
+    """Return declared OCR ops capabilities without overstating DB readiness.
+
+    This metadata endpoint deliberately does not acquire a database connection.
+    The OCR-artifact schema is part of the application contract, but its
+    presence in the deployed database is therefore declared rather than probed.
+    """
     return {
-        "ocr_artifacts_table": True,
+        "ocr_artifacts_table": {
+            "status": "declared",
+            "schema_expected": True,
+            "database_available": None,
+            "probe": "not_run",
+            "note": (
+                "The application declares the ocr_artifacts schema, but this "
+                "metadata endpoint does not probe the deployed database. "
+                "database_available remains unknown until a database-backed "
+                "OCR operation is exercised."
+            ),
+        },
         "page_consensus_persist": True,
         "dispute_ack_stubs": True,
         "dispute_ack_auth_required": True,
