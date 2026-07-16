@@ -49,6 +49,7 @@
 ## 6) Critical Journeys (CUJ)
 
 - [x] CUJ-01: Partner/OpenAPI consumer can discover golden-thread list mounts from committed contract
+- [x] CUJ-02: Slash dual-mount aliases remain hidden (include_in_schema=False) while canonical list paths stay published
 
 ## 7) Observability
 
