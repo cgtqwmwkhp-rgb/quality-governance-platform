@@ -38,6 +38,7 @@ import {
   ShieldAlert,
   Webhook,
 } from 'lucide-react'
+import { BrandMarkTile } from './BrandMark'
 import { useState, useEffect, useCallback, lazy, Suspense, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import { notificationsApi } from '../api/client'
@@ -368,9 +369,7 @@ export default function Layout({ onLogout }: LayoutProps) {
           {/* Logo */}
           <div className="p-6 border-b border-border">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl gradient-brand flex items-center justify-center shadow-glow">
-                <Shield className="w-6 h-6 text-primary-foreground" />
-              </div>
+              <BrandMarkTile size={44} />
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-lg font-bold text-foreground">QGP</h1>

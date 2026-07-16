@@ -4,13 +4,13 @@ import {
   FileText,
   Search,
   HelpCircle,
-  Shield,
   ChevronRight,
   Smartphone,
   LogOut,
   User,
   Briefcase,
 } from 'lucide-react'
+import { BrandMarkTile } from '../components/BrandMark'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
 import { Card } from '../components/ui/Card'
@@ -38,9 +38,7 @@ export default function Portal() {
         <div className="max-w-lg mx-auto px-4 sm:px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl gradient-brand flex items-center justify-center shadow-glow">
-                <Shield className="w-5 h-5 text-primary-foreground" />
-              </div>
+              <BrandMarkTile size={40} />
               <div>
                 <h1 className="text-foreground font-semibold">Plantexpand</h1>
                 <p className="text-muted-foreground text-xs">Employee Portal</p>

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
-  Shield,
   Lock,
   ArrowLeft,
   AlertCircle,
@@ -11,6 +10,7 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react'
+import { BrandMarkTile } from '../components/BrandMark'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
@@ -117,9 +117,7 @@ export default function ResetPassword() {
       <div className="w-full max-w-md relative animate-fade-in">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-brand mb-4 shadow-glow">
-            <Shield className="w-8 h-8 text-primary-foreground" />
-          </div>
+          <BrandMarkTile size={64} className="mb-4 rounded-2xl" />
           <h1 className="text-2xl font-bold text-foreground mb-2">
             {t('reset_password.create_title')}
           </h1>
