@@ -35,7 +35,7 @@ Boxes below are for the **operator documentary pack** and the LIVE stub. Tenant 
 | E | Categories of personal data | LIVE `activities[].data_categories`; PII inventory script evidence | Ready for review | Re-run `scripts/governance/audit_pii_fields.py` on model changes |
 | F | Categories of recipients | LIVE `subprocessors`; GDPR §8 | Ready for review | Link **signed** vendor DPAs (paths only after legal files exist) |
 | G | Transfers to third country / international org + safeguards | Platform DPIA §7; OCR DPIA §3.1 / §5; LIVE `international_transfers` + subprocessors `transfer_mechanism` | Ready for review | LIVE transfers summary added (unsigned stub) — Confirm SCC / UK IDTA for Mistral / Gemini **before** production AI keys; **do not invent** signed vendor DPAs |
-| H | Retention periods (or criteria) | [`../privacy/data-retention-policy.md`](../privacy/data-retention-policy.md); LIVE `retention` + `activities[].retention_days` | Ready for review | Matter-level legal-hold **schema** still Planned (§7a honesty) |
+| H | Retention periods (or criteria) | [`../privacy/data-retention-policy.md`](../privacy/data-retention-policy.md); LIVE `retention` + `activities[].retention_days` | Ready for review | Matter hold register is LIVE; retention workers still do **not** consume active holds — no automated purge-prevention claim (§7a honesty) |
 | I | General description of technical / organisational security measures | Platform DPIA §5; `docs/security/security-baseline.md`; LIVE `technical_organisational_measures` | Ready for review | LIVE TOM summary added (unsigned stub) — **not** a substitute for EA-02 external pen-test |
 
 ---
@@ -96,7 +96,7 @@ Aligned with `src/api/routes/privacy.py` → `_processing_activities()` after Pr
 | Privacy lead / DPO | _Pending — do not invent_ | | Accept stub interim / require full ROPA expansion |
 | Accountable owner | _Pending_ | | Controllers notified of Art. 30 duties |
 
-**Engineering note:** Do not change LIVE `register_kind` away from `article_30_stub` or claim “full ROPA” until privacy lead accepts expansion and signed DPA links exist.
+**Engineering note:** The LIVE activity rows now include `record_status`, `controller_ropa_action`, and `source_documents` so their scope and review boundary are machine-readable. Do not change LIVE `register_kind` away from `article_30_stub` or claim “full ROPA” until privacy lead accepts expansion and signed DPA links exist.
 
 ---
 
@@ -105,6 +105,7 @@ Aligned with `src/api/routes/privacy.py` → `_processing_activities()` after Pr
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.5 | 2026-07-12 | Platform Engineering | Gaps A/B/P1 surfaced on LIVE stub via `roles_and_contacts` — still **unsigned** / DPO identity not invented |
+| 1.6 | 2026-07-20 | Platform Engineering | Added per-activity source pointers and controller-review status to the LIVE stub — still **unsigned**, not a completed controller ROPA |
 | 1.4 | 2026-07-12 | Platform Engineering | Gap G surfaced on LIVE stub via `international_transfers` — still **unsigned** / AI vendor DPAs not invented |
 | 1.3 | 2026-07-12 | Platform Engineering | Gap I surfaced on LIVE stub via `technical_organisational_measures` — still **unsigned** / EA-02 not claimed |
 | 1.2 | 2026-07-12 | Platform Engineering | Gaps C/D closed on LIVE stub via `purpose` + `data_subject_categories` — still **unsigned** / not full ROPA |
