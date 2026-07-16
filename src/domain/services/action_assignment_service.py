@@ -34,8 +34,19 @@ async def notify_action_assignment(
             priority=priority if priority in ("low", "medium", "high", "critical") else "medium",
             notes=f"You have been assigned action: {title}",
         )
-    except Exception:
-        logger.exception("Failed to notify assignment for action %s", action_id)
+    except Exception as exc:
+        # Assignment is already committed; notification delivery must not undo it.
+        # Keep the failure queryable in structured logs for operational follow-up.
+        logger.warning(
+            "action_assignment_notification_failed",
+            extra={
+                "action_id": action_id,
+                "assigned_to_user_id": assigned_to_user_id,
+                "assigned_by_user_id": assigned_by_user_id,
+                "exception_type": type(exc).__name__,
+            },
+            exc_info=True,
+        )
 
 
 async def record_action_assigned_audit(

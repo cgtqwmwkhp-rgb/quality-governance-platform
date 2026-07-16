@@ -64,13 +64,16 @@ async def test_notify_action_assignment_normalizes_unknown_priority() -> None:
 
 
 @pytest.mark.asyncio
-async def test_notify_action_assignment_swallows_notify_errors() -> None:
+async def test_notify_action_assignment_logs_structured_warning_without_raising() -> None:
     mock_service = AsyncMock()
     mock_service.create_assignment = AsyncMock(side_effect=RuntimeError("notify down"))
 
-    with patch(
-        "src.domain.services.action_assignment_service.NotificationService",
-        return_value=mock_service,
+    with (
+        patch(
+            "src.domain.services.action_assignment_service.NotificationService",
+            return_value=mock_service,
+        ),
+        patch("src.domain.services.action_assignment_service.logger.warning") as warning_mock,
     ):
         await notify_action_assignment(
             object(),
@@ -79,6 +82,17 @@ async def test_notify_action_assignment_swallows_notify_errors() -> None:
             assigned_by_user_id=3,
             title="Should not raise",
         )
+
+    warning_mock.assert_called_once_with(
+        "action_assignment_notification_failed",
+        extra={
+            "action_id": 99,
+            "assigned_to_user_id": 2,
+            "assigned_by_user_id": 3,
+            "exception_type": "RuntimeError",
+        },
+        exc_info=True,
+    )
 
 
 @pytest.mark.asyncio

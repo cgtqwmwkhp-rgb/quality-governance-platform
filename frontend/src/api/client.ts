@@ -234,6 +234,40 @@ const api = axios.create({
   },
 })
 
+const ACTIONS_OR_CAPA_PATH = /(?:^|\/)(?:actions|capa)(?:\/|$)/
+const IDEMPOTENT_WRITE_METHODS = new Set(['post', 'put', 'patch'])
+
+function newIdempotencyKey(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID()
+  }
+  return `qgp-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+/** True only for action/CAPA writes handled by the server idempotency middleware. */
+export function needsActionWriteIdempotency(url?: string, method?: string): boolean {
+  if (!url || !method || !IDEMPOTENT_WRITE_METHODS.has(method.toLowerCase())) return false
+  return ACTIONS_OR_CAPA_PATH.test(url.split('?')[0])
+}
+
+/**
+ * Add a per-request key while preserving a caller-supplied key.
+ *
+ * Axios preserves this header when a 401 triggers its single retry, so the
+ * retry remains a duplicate of the original write rather than a new mutation.
+ */
+export function applyActionWriteIdempotency(
+  config: InternalAxiosRequestConfig,
+): InternalAxiosRequestConfig {
+  if (!needsActionWriteIdempotency(config.url, config.method)) return config
+
+  const headers = config.headers as Record<string, string | undefined>
+  if (!headers['Idempotency-Key'] && !headers['idempotency-key']) {
+    headers['Idempotency-Key'] = newIdempotencyKey()
+  }
+  return config
+}
+
 /** In-flight count for requests that opted into globalLoading. */
 let activeGlobalLoadingRequests = 0
 
@@ -352,6 +386,7 @@ api.interceptors.request.use(async (config) => {
     trackGlobalLoading,
     (loading) => useAppStore.getState().setLoading(loading),
   )
+  applyActionWriteIdempotency(config)
   // Force HTTPS on baseURL
   if (config.baseURL && !isLocalDevHost(config.baseURL) && !config.baseURL.startsWith('https://')) {
     config.baseURL = config.baseURL.replace(/^http:/, 'https:')

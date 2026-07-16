@@ -459,7 +459,13 @@ export default function Actions() {
   }
 
   const isOverdue = (dueDate?: string, displayStatus?: string) => {
-    if (!dueDate || displayStatus === 'completed' || displayStatus === 'cancelled') return false
+    if (
+      !dueDate ||
+      displayStatus === 'completed' ||
+      displayStatus === 'cancelled' ||
+      displayStatus === 'verified'
+    )
+      return false
     return new Date(dueDate) < new Date()
   }
 

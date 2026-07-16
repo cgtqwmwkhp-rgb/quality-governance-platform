@@ -9,6 +9,8 @@ import api, {
   classifyError,
   createApiError,
   getApiErrorMessage,
+  applyActionWriteIdempotency,
+  needsActionWriteIdempotency,
   checkPackCapability,
   authApi,
   auditTrailApi,
@@ -57,6 +59,30 @@ function axiosErr(partial: {
 }
 
 describe('client pure helpers', () => {
+  it('adds idempotency only to Actions and CAPA writes', () => {
+    expect(needsActionWriteIdempotency('/api/v1/actions/', 'post')).toBe(true)
+    expect(needsActionWriteIdempotency('/api/v1/capa/8', 'PATCH')).toBe(true)
+    expect(needsActionWriteIdempotency('/api/v1/audits/findings/8/capa', 'post')).toBe(true)
+    expect(needsActionWriteIdempotency('/api/v1/actions/', 'get')).toBe(false)
+    expect(needsActionWriteIdempotency('/api/v1/incidents/', 'post')).toBe(false)
+
+    const actionWrite = {
+      url: '/api/v1/actions/',
+      method: 'post',
+      headers: {} as Record<string, string>,
+    }
+    applyActionWriteIdempotency(actionWrite as never)
+    expect(actionWrite.headers['Idempotency-Key']).toMatch(/^(?:[0-9a-f]{8}-[0-9a-f-]{27}|qgp-)/i)
+
+    const retry = {
+      url: '/api/v1/capa/8',
+      method: 'patch',
+      headers: { 'Idempotency-Key': 'original-write-key' },
+    }
+    applyActionWriteIdempotency(retry as never)
+    expect(retry.headers['Idempotency-Key']).toBe('original-write-key')
+  })
+
   it('getDurationBucket covers all buckets', () => {
     expect(getDurationBucket(0)).toBe('fast')
     expect(getDurationBucket(1500)).toBe('normal')
