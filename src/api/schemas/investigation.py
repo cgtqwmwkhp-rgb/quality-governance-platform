@@ -359,7 +359,7 @@ class CreateInvestigationCapaRequest(BaseModel):
 
 
 class InvestigationTemplateFieldNormalized(BaseModel):
-    """Normalized template field row (dual-read scaffold; not wired to list APIs yet)."""
+    """Normalized template field row used by the canonical template read spine."""
 
     field_key: str
     label: Optional[str] = None
@@ -370,7 +370,7 @@ class InvestigationTemplateFieldNormalized(BaseModel):
 
 
 class InvestigationTemplateSectionNormalized(BaseModel):
-    """Normalized template section row (dual-read scaffold; not wired to list APIs yet)."""
+    """Normalized template section row used by the canonical template read spine."""
 
     section_key: str
     title: Optional[str] = None
