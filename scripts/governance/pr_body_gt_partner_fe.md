@@ -35,7 +35,7 @@
 
 ## 5) Testing Evidence (link to runs)
 - [x] Backend unit tests: `pytest -q tests/unit/test_partner_webhooks.py` — 13 passed.
-- [x] Frontend focused tests: `npx vitest run --run src/pages/admin/__tests__/PartnerWebhooks.test.tsx` — expected to pass locally without coverage collection.
+- [x] Frontend focused tests: `npx vitest run --run src/pages/admin/__tests__/PartnerWebhooks.test.tsx` — 2 passed.
 - [x] Frontend production build: `npm run build` — passed.
 - [x] Static diagnostics: no IDE linter diagnostics on edited backend/client/page files.
 - [ ] Full CI suite: pending PR CI.
