@@ -135,6 +135,30 @@ describe('Actions finding deep-link', () => {
     expect(link).toHaveAttribute('href', '/actions/capa%3A99')
   })
 
+  it('does not mark a verified past-due action as overdue', async () => {
+    mockSummary.mockResolvedValue({ data: { total: 1, by_display_status: {} } })
+    mockList.mockResolvedValue({
+      data: {
+        items: [
+          action({
+            status: 'verified',
+            display_status: 'verified',
+            due_date: '2020-01-01T00:00:00Z',
+          }),
+        ],
+      },
+    })
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    await screen.findByText('Correct audit finding')
+    expect(screen.queryByText('OVERDUE')).not.toBeInTheDocument()
+  })
+
   it.skip('warns that CAPA assignment does not imply email delivery', async () => {
     // Flaky under TableSkeleton race / delivery-status timing; covered by CUJ honesty docs.
     mockList.mockResolvedValue({ data: { items: [action({})] } })
