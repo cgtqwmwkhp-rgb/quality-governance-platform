@@ -137,6 +137,7 @@ vi.mock('../pages/admin/ContractsManagement', () => ({
   default: () => <div>ContractsManagement</div>,
 }))
 vi.mock('../pages/admin/SystemSettings', () => ({ default: () => <div>SystemSettings</div> }))
+vi.mock('../pages/admin/PartnerWebhooks', () => ({ default: () => <div>PartnerWebhooks</div> }))
 
 describe('App', () => {
   beforeEach(() => {
