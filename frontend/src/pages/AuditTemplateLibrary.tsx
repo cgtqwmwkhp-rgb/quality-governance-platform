@@ -47,6 +47,7 @@ import {
 } from '../components/ui/Dialog'
 import { auditsApi, AuditTemplate, CategoryCount } from '../api/client'
 import { ToastContainer, useToast } from '../components/ui/Toast'
+import { cn } from '../helpers/utils'
 
 // ============================================================================
 // HELPERS
@@ -110,6 +111,9 @@ export default function AuditTemplateLibrary() {
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
+  /** Hero band publish-state filter (all | published | draft). */
+  type PublishFilter = 'all' | 'published' | 'draft'
+  const [publishFilter, setPublishFilter] = useState<PublishFilter>('all')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [showFilters, setShowFilters] = useState(false)
   const [sortBy, setSortBy] = useState<'name' | 'updated'>('updated')
@@ -325,24 +329,34 @@ export default function AuditTemplateLibrary() {
     return { total: published + draft, published, draft }
   }, [templates])
 
+  const publishFilteredTemplates = useMemo(() => {
+    if (publishFilter === 'published') return sortedTemplates.filter((t) => t.is_published)
+    if (publishFilter === 'draft') return sortedTemplates.filter((t) => !t.is_published)
+    return sortedTemplates
+  }, [sortedTemplates, publishFilter])
+
   const recentTemplates = useMemo(() => {
-    return [...templates]
+    return [...publishFilteredTemplates]
       .sort(
         (a, b) =>
           new Date(b.updated_at ?? b.created_at).getTime() -
           new Date(a.updated_at ?? a.created_at).getTime(),
       )
       .slice(0, 4)
-  }, [templates])
+  }, [publishFilteredTemplates])
 
-  const showFeatured = selectedCategory === 'all' && !debouncedSearch && recentTemplates.length > 4
+  const showFeatured =
+    selectedCategory === 'all' &&
+    publishFilter === 'all' &&
+    !debouncedSearch &&
+    recentTemplates.length > 4
 
   const categoryTotal = useMemo(() => categories.reduce((acc, c) => acc + c.count, 0), [categories])
 
   const groupedTemplates = useMemo(() => {
-    if (selectedCategory !== 'all' || debouncedSearch) return null
+    if (selectedCategory !== 'all' || debouncedSearch || publishFilter !== 'all') return null
     const groups: Record<string, AuditTemplate[]> = {}
-    for (const t of sortedTemplates) {
+    for (const t of publishFilteredTemplates) {
       const key = t.category || 'Uncategorised'
       if (!groups[key]) groups[key] = []
       groups[key].push(t)
@@ -363,7 +377,7 @@ export default function AuditTemplateLibrary() {
       category: key,
       templates: groups[key],
     }))
-  }, [sortedTemplates, selectedCategory, debouncedSearch])
+  }, [publishFilteredTemplates, selectedCategory, debouncedSearch, publishFilter])
 
   const toggleGroup = useCallback((category: string) => {
     setCollapsedGroups((prev) => {
@@ -635,48 +649,67 @@ export default function AuditTemplateLibrary() {
         </Card>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        {[
-          {
-            label: 'Total Templates',
-            value: stats.total,
-            icon: Layers,
-            iconBg: 'bg-primary/10',
-            iconColor: 'text-primary',
-          },
-          {
-            label: 'Published',
-            value: stats.published,
-            icon: CheckCircle2,
-            iconBg: 'bg-success/10',
-            iconColor: 'text-success',
-          },
-          {
-            label: 'Drafts',
-            value: stats.draft,
-            icon: Edit,
-            iconBg: 'bg-warning/10',
-            iconColor: 'text-warning',
-          },
-        ].map((stat, index) => (
-          <Card
-            key={stat.label}
-            hoverable
-            className="animate-fade-in"
-            style={{ animationDelay: `${index * 50}ms` }}
-          >
-            <CardContent className="p-5">
+      {/* Interactive hero band — publish-state filters */}
+      <div
+        className="grid grid-cols-2 lg:grid-cols-3 gap-3"
+        role="toolbar"
+        aria-label="Template filters"
+      >
+        {(
+          [
+            {
+              key: 'all' as const,
+              label: 'Total Templates',
+              value: stats.total,
+              icon: Layers,
+              iconBg: 'bg-primary/10',
+              iconColor: 'text-primary',
+            },
+            {
+              key: 'published' as const,
+              label: 'Published',
+              value: stats.published,
+              icon: CheckCircle2,
+              iconBg: 'bg-success/10',
+              iconColor: 'text-success',
+            },
+            {
+              key: 'draft' as const,
+              label: 'Drafts',
+              value: stats.draft,
+              icon: Edit,
+              iconBg: 'bg-warning/10',
+              iconColor: 'text-warning',
+            },
+          ] as const
+        ).map((stat) => {
+          const active = publishFilter === stat.key
+          return (
+            <button
+              key={stat.key}
+              type="button"
+              onClick={() => setPublishFilter((prev) => (prev === stat.key ? 'all' : stat.key))}
+              aria-pressed={active}
+              className={cn(
+                'text-left rounded-xl border p-5 transition-colors animate-fade-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                active
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                  : 'border-border bg-card hover:border-primary/40 hover:bg-muted/40',
+              )}
+            >
               <div
                 className={`w-10 h-10 rounded-lg ${stat.iconBg} flex items-center justify-center mb-3`}
               >
                 <stat.icon className={`w-5 h-5 ${stat.iconColor}`} />
               </div>
-              <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+              <p className="text-2xl font-bold text-foreground tabular-nums">{stat.value}</p>
               <p className="text-sm text-muted-foreground">{stat.label}</p>
-            </CardContent>
-          </Card>
-        ))}
+              {active && (
+                <p className="text-[11px] text-primary mt-1 font-medium">Filter on · click to clear</p>
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {/* Featured / Recently Updated */}
@@ -871,7 +904,7 @@ export default function AuditTemplateLibrary() {
 
       {/* Results Count */}
       <p className="text-sm text-muted-foreground">
-        Showing {sortedTemplates.length} of {totalCount} templates
+        Showing {publishFilteredTemplates.length} of {totalCount} templates
       </p>
 
       {/* Loading */}
@@ -933,7 +966,7 @@ export default function AuditTemplateLibrary() {
       {/* ---- Flat Grid (filtered or searched) ---- */}
       {!loading && !error && viewMode === 'grid' && !groupedTemplates && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {sortedTemplates.map((template, index) => renderTemplateCard(template, index))}
+          {publishFilteredTemplates.map((template, index) => renderTemplateCard(template, index))}
         </div>
       )}
 
@@ -989,7 +1022,7 @@ export default function AuditTemplateLibrary() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {sortedTemplates.map((template) => {
+                {publishFilteredTemplates.map((template) => {
                   const CatIcon = getCategoryIcon(template.category)
                   return (
                     <tr
@@ -1101,7 +1134,7 @@ export default function AuditTemplateLibrary() {
       )}
 
       {/* Empty State */}
-      {!loading && !error && sortedTemplates.length === 0 && (
+      {!loading && !error && publishFilteredTemplates.length === 0 && (
         <div className="text-center py-16">
           <div className="w-16 h-16 rounded-2xl bg-surface flex items-center justify-center mx-auto mb-4">
             <FolderOpen className="w-8 h-8 text-muted-foreground" />
@@ -1110,17 +1143,18 @@ export default function AuditTemplateLibrary() {
             {t('audit_templates.empty.title')}
           </h3>
           <p className="text-muted-foreground mb-6">
-            {searchInput || selectedCategory !== 'all'
+            {searchInput || selectedCategory !== 'all' || publishFilter !== 'all'
               ? t('audit_templates.empty.filter_hint')
               : t('audit_templates.empty.subtitle')}
           </p>
           <div className="flex items-center justify-center gap-3">
-            {(searchInput || selectedCategory !== 'all') && (
+            {(searchInput || selectedCategory !== 'all' || publishFilter !== 'all') && (
               <Button
                 variant="outline"
                 onClick={() => {
                   setSearchInput('')
                   setSelectedCategory('all')
+                  setPublishFilter('all')
                 }}
               >
                 <RotateCcw className="w-4 h-4" /> {t('audit_templates.clear_filters')}

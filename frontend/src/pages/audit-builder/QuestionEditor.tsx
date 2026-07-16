@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import {
   GripVertical,
   Copy,
@@ -87,13 +88,70 @@ function QuestionTypeSelector({
   onSelect: (type: QuestionType) => void
 }) {
   const [isOpen, setIsOpen] = useState(false)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({})
   const selected = QUESTION_TYPES.find((t) => t.type === selectedType)
+
+  useLayoutEffect(() => {
+    if (!isOpen || !buttonRef.current) return
+    const rect = buttonRef.current.getBoundingClientRect()
+    const menuMax = 320 // max-h-80
+    const gap = 4
+    const spaceBelow = window.innerHeight - rect.bottom - gap
+    const openUpward = spaceBelow < Math.min(menuMax, 280) && rect.top > spaceBelow
+    const width = 256
+    const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8)
+    setMenuStyle(
+      openUpward
+        ? {
+            position: 'fixed',
+            left,
+            bottom: window.innerHeight - rect.top + gap,
+            width,
+            zIndex: 80,
+          }
+        : {
+            position: 'fixed',
+            left,
+            top: rect.bottom + gap,
+            width,
+            zIndex: 80,
+          },
+    )
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen) return
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return
+      setIsOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsOpen(false)
+    }
+    const onReposition = () => setIsOpen(false)
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    window.addEventListener('resize', onReposition)
+    window.addEventListener('scroll', onReposition, true)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('resize', onReposition)
+      window.removeEventListener('scroll', onReposition, true)
+    }
+  }, [isOpen])
 
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((open) => !open)}
         className="flex items-center gap-2 px-3 py-2 bg-input border border-input rounded-lg text-sm text-foreground hover:bg-muted transition-colors"
       >
         {selected && <selected.icon className="w-4 h-4 text-primary" />}
@@ -101,33 +159,44 @@ function QuestionTypeSelector({
         <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {isOpen && (
-        <div className="absolute z-20 mt-1 w-64 bg-secondary border border-border rounded-xl shadow-xl overflow-hidden">
-          <div className="max-h-80 overflow-y-auto p-2 space-y-1">
-            {QUESTION_TYPES.map((type) => (
-              <button
-                key={type.type}
-                type="button"
-                onClick={() => {
-                  onSelect(type.type)
-                  setIsOpen(false)
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-                  selectedType === type.type
-                    ? 'bg-primary/20 text-primary'
-                    : 'hover:bg-muted text-foreground'
-                }`}
-              >
-                <type.icon className="w-4 h-4 text-primary" />
-                <div>
-                  <p className="text-sm font-medium">{type.label}</p>
-                  <p className="text-xs text-muted-foreground">{type.description}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {isOpen &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="listbox"
+            aria-label="Question type"
+            style={menuStyle}
+            className="bg-secondary border border-border rounded-xl shadow-xl overflow-hidden"
+            data-testid="question-type-menu"
+          >
+            <div className="max-h-80 overflow-y-auto p-2 space-y-1">
+              {QUESTION_TYPES.map((type) => (
+                <button
+                  key={type.type}
+                  type="button"
+                  role="option"
+                  aria-selected={selectedType === type.type}
+                  onClick={() => {
+                    onSelect(type.type)
+                    setIsOpen(false)
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                    selectedType === type.type
+                      ? 'bg-primary/20 text-primary'
+                      : 'hover:bg-muted text-foreground'
+                  }`}
+                >
+                  <type.icon className="w-4 h-4 text-primary shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">{type.label}</p>
+                    <p className="text-xs text-muted-foreground">{type.description}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }
