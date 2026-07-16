@@ -12,14 +12,15 @@
 - `tests/unit/test_gt_api_honesty_contract.py`
 - `scripts/governance/pr_body_gt_api_honesty.md`
 
-**Zero overlap** with schema migrations, frontend work, or global error-vocabulary standardisation.
+**Zero overlap** with FE risk/CUJ (#1025), schema migrations, or global error-vocabulary standardisation.
 
 ## 1) Summary
 
 - **Feature / Change name:** fix(gt) — API honesty residuals (R24/R25/R57/R58/R59)
 - **User goal:** Make the committed partner contract explicit about action discriminators, risk-history pagination, and the two separate risk APIs without breaking existing consumers.
-- **In scope:** Freeze the required action-detail `source_type`; publish a paginated assessment-history endpoint; preserve the legacy raw array; distinguish Operational Risk from EnterpriseRisk OpenAPI tags; clarify cross-source action paging behaviour.
+- **In scope:** Freeze required action-detail `source_type`; publish paginated assessment-history endpoint; preserve legacy raw array; distinguish Operational vs Enterprise Risk OpenAPI tags; clarify cross-source action paging behaviour.
 - **Out of scope:** Migrations; raw-array removal; list-level `linked_risk_ids`; global error-vocabulary changes.
+- **Root cause:** Contract/docs under-specified pagination and dual risk API tags; assessment array silently capped.
 
 ## 2) Impact Map
 
@@ -53,15 +54,29 @@
 - Regression: `tests/unit/test_gt_openapi_list_routes.py`
 - [ ] CI green post-push
 
-## 6) Release and Rollback
+## 6) Critical Journeys
 
-- **Release:** Squash-merge only when this PR is based on current `main` (tip==LIVE); no migration or SWA bake required.
-- **Rollback:** Revert the squash commit. Legacy array behaviour remains available throughout.
+- [x] CUJ-01: Partner fetches action detail with required `source_type` discriminator
+- [x] CUJ-02: Partner pages risk assessment history via `/assessments/paged` with accurate totals
 
-## 7) Deferred Residuals
+## 7) Observability
 
-- **R39:** list-level `linked_risk_ids` needs cross-resource schema and route consistency work.
-- **R88/R89:** error vocabulary is cross-cutting and outside this narrow API contract allowlist.
+- No new metrics; OpenAPI/docs honesty only. Contract tests fail CI if tags/discriminator regress.
+
+## 8) Release Plan
+
+- Squash-merge only when this PR is based on current `main` (tip==LIVE); no migration or SWA bake required for API-only change.
+
+## 9) Rollback Plan
+
+- Owner: GT remediation owner
+- Rollback steps: Revert the squash commit. Legacy assessment array behaviour remains available throughout.
+
+## 10) Evidence Pack
+
+- Canvas GT UAT flags R24/R25/R57/R58/R59
+- Prior tip: `2b9d7066` schema wave (#1024)
+- Deferred: R39, R88/R89
 
 ---
 
@@ -70,4 +85,6 @@
 - [x] **Gate 0:** Scope + compatibility + rollback
 - [x] **Gate 1:** Focused unit contract coverage
 - [ ] **Gate 2:** CI green
-- [ ] **Gate 3:** tip==LIVE before squash merge
+- [ ] **Gate 3:** Staging verification (auto after merge)
+- [x] **Gate 4:** Canary N/A (API contract; no FE bake)
+- [ ] **Gate 5:** tip==LIVE + canvas update
