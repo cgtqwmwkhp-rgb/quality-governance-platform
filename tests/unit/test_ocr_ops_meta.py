@@ -34,7 +34,11 @@ def test_ocr_providers_meta_not_configured(monkeypatch, client: TestClient) -> N
     assert data["providers"]["azure_di"]["configured"] is False
     assert data["providers"]["azure_di"]["enabled_in_prod"] is False
     assert "e4_non_goal" in data
-    assert data["capabilities"]["ocr_artifacts_table"] is True
+    ocr_artifacts = data["capabilities"]["ocr_artifacts_table"]
+    assert ocr_artifacts["status"] == "declared"
+    assert ocr_artifacts["schema_expected"] is True
+    assert ocr_artifacts["database_available"] is None
+    assert ocr_artifacts["probe"] == "not_run"
     assert data["capabilities"]["dispute_ack_stubs"] is True
     assert "as_of" in data
     assert data["endpoint"] == "/api/v1/meta/ocr-providers"
