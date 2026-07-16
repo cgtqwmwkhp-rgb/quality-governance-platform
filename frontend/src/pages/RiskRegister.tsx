@@ -1314,8 +1314,6 @@ export default function RiskRegister() {
               }}
               onClearCellFilter={() => {
                 setCellFilter(null)
-                setDrawerOpen(false)
-                setDrawerRisks([])
               }}
             />
           </CardContent>
