@@ -89,12 +89,24 @@ def test_ocr_providers_readiness_all_configured(monkeypatch):
     assert result["providers"]["mistral"]["configured"] is True
     assert result["providers"]["gemini"]["configured"] is True
     assert result["providers"]["azure_di"]["configured"] is True
-    assert result["capabilities"]["ocr_artifacts_table"] is True
+    assert result["capabilities"]["ocr_artifacts_table"]["status"] == "declared"
+    assert result["capabilities"]["ocr_artifacts_table"]["database_available"] is None
 
 
 def test_ocr_ops_capabilities_flags():
     caps = get_ocr_ops_capabilities()
-    assert caps["ocr_artifacts_table"] is True
+    assert caps["ocr_artifacts_table"] == {
+        "status": "declared",
+        "schema_expected": True,
+        "database_available": None,
+        "probe": "not_run",
+        "note": (
+            "The application declares the ocr_artifacts schema, but this "
+            "metadata endpoint does not probe the deployed database. "
+            "database_available remains unknown until a database-backed "
+            "OCR operation is exercised."
+        ),
+    }
     assert caps["page_consensus_persist"] is True
     assert caps["dispute_ack_stubs"] is True
     assert caps["provider_dial_on_probes"] is False
