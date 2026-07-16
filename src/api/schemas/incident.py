@@ -121,6 +121,10 @@ class IncidentResponse(BaseModel):
     closed_at: Optional[datetime] = None
     owner_id: Optional[int] = None
     asset_id: Optional[int] = None
+    linked_risk_ids: Optional[str] = Field(
+        None,
+        description="Comma-separated enterprise risk IDs linked to this incident",
+    )
 
 
 class IncidentListResponse(BaseModel):
