@@ -26,6 +26,11 @@ from src.domain.models.risk_register import (
 )
 
 
+def naive_utc_cutoff(days: int) -> datetime:
+    """Naive UTC timestamp for comparisons against naive DateTime columns."""
+    return datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
+
+
 class RiskScoringEngine:
     """5x5 Risk Matrix Scoring Engine"""
 
@@ -441,7 +446,9 @@ class RiskService:
         When include_movers=True, returns {"series": [...], "top_movers": [...]} for board pack /
         executive sparklines. Default remains a list for backward compatibility.
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        # assessment_date is stored naive UTC; bind a naive cutoff so asyncpg
+        # does not raise on aware-vs-naive comparisons (prod /trends 500).
+        cutoff = naive_utc_cutoff(days)
 
         stmt = (
             select(RiskAssessmentHistory)
@@ -475,11 +482,13 @@ class RiskService:
 
         trends = []
         for month, data in sorted(monthly_data.items()):
+            inherent_scores = [s for s in data["inherent_scores"] if s is not None]
+            residual_scores = [s for s in data["residual_scores"] if s is not None]
             trends.append(
                 {
                     "month": month,
-                    "avg_inherent": sum(data["inherent_scores"]) / len(data["inherent_scores"]),
-                    "avg_residual": sum(data["residual_scores"]) / len(data["residual_scores"]),
+                    "avg_inherent": (sum(inherent_scores) / len(inherent_scores)) if inherent_scores else 0,
+                    "avg_residual": (sum(residual_scores) / len(residual_scores)) if residual_scores else 0,
                     "assessment_count": data["count"],
                 }
             )

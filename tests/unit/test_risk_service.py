@@ -168,6 +168,48 @@ class TestRiskService:
         trends = await service.get_risk_trends(tenant_id=1)
         assert trends == []
 
+    def test_naive_utc_cutoff_has_no_tzinfo(self):
+        from src.domain.services.risk_service import naive_utc_cutoff
+
+        cutoff = naive_utc_cutoff(90)
+        assert cutoff.tzinfo is None
+
+    @pytest.mark.asyncio
+    async def test_get_risk_trends_include_movers(self, service):
+        from datetime import datetime as dt
+
+        h1 = MagicMock(
+            risk_id=7,
+            assessment_date=dt(2026, 1, 10),
+            inherent_score=12,
+            residual_score=16,
+        )
+        h2 = MagicMock(
+            risk_id=7,
+            assessment_date=dt(2026, 3, 10),
+            inherent_score=10,
+            residual_score=8,
+        )
+
+        async def _execute(stmt):
+            result = MagicMock()
+            # First call: history rows; second: titles
+            if not hasattr(_execute, "n"):
+                _execute.n = 0
+            _execute.n += 1
+            if _execute.n == 1:
+                result.scalars.return_value.all.return_value = [h1, h2]
+            else:
+                result.all.return_value = [(7, "Mover Risk")]
+            return result
+
+        service.db.execute = _execute
+        payload = await service.get_risk_trends(tenant_id=1, include_movers=True)
+        assert isinstance(payload, dict)
+        assert "series" in payload and "top_movers" in payload
+        assert payload["top_movers"][0]["id"] == 7
+        assert payload["top_movers"][0]["delta"] == -8
+
     @pytest.mark.asyncio
     async def test_forecast_returns_empty_with_insufficient_data(self, service):
         service.get_risk_trends = AsyncMock(return_value=[{"avg_residual": 10, "month": "2026-01"}])
