@@ -17,11 +17,28 @@ from typing import Annotated, Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
-from src.api.dependencies import CurrentUser, require_permission
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.domain.models.user import User
 from src.domain.services.analytics_service import analytics_service
+from src.domain.services.executive_dashboard import ExecutiveDashboardService
 
 router = APIRouter()
+
+
+def _period_days_from_time_range(time_range: str) -> int:
+    normalized = (time_range or "").strip().lower().replace("-", "_")
+    mapping = {
+        "7d": 7,
+        "last_7_days": 7,
+        "30d": 30,
+        "last_30_days": 30,
+        "90d": 90,
+        "last_90_days": 90,
+        "1y": 365,
+        "last_365_days": 365,
+        "last_year": 365,
+    }
+    return mapping.get(normalized, 30)
 
 
 # ============================================================================
@@ -218,11 +235,58 @@ async def preview_widget(
 
 @router.get("/kpis")
 async def get_kpi_summary(
+    db: DbSession,
     current_user: CurrentUser,
     time_range: str = Query("last_30_days"),
 ):
-    """Get summary KPIs across all modules."""
-    return analytics_service.get_kpi_summary(time_range)
+    """Get summary KPIs across all modules from live executive dashboard aggregates."""
+    days = _period_days_from_time_range(time_range)
+    service = ExecutiveDashboardService(db, tenant_id=current_user.tenant_id)
+    dash = await service.get_full_dashboard(days)
+    incidents = dash.get("incidents") or {}
+    complaints = dash.get("complaints") or {}
+    risks = dash.get("risks") or {}
+    compliance = dash.get("compliance") or {}
+    return {
+        "period_days": days,
+        "generated_at": dash.get("generated_at"),
+        "health_score": dash.get("health_score"),
+        "incidents": {
+            "total": incidents.get("total_in_period", 0),
+            "open": incidents.get("open", 0),
+            "closed": max(
+                0,
+                int(incidents.get("total_in_period", 0)) - int(incidents.get("open", 0)),
+            ),
+            "trend": 0.0,
+            "avg_resolution_days": 0.0,
+            "critical_high": incidents.get("critical_high", 0),
+        },
+        "complaints": {
+            "total": complaints.get("total_in_period", 0),
+            "open": complaints.get("open", 0),
+            "closed": complaints.get("closed_in_period", 0),
+            "resolution_rate": complaints.get("resolution_rate", 0),
+        },
+        "rtas": {
+            "total": (dash.get("rtas") or {}).get("total_in_period", 0),
+        },
+        "actions": analytics_service.get_kpi_summary(time_range).get("actions"),
+        "audits": analytics_service.get_kpi_summary(time_range).get("audits"),
+        "risks": {
+            "total": risks.get("total_active", 0),
+            "high": risks.get("high_critical", 0),
+            "medium": (risks.get("by_level") or {}).get("medium", 0),
+            "low": (risks.get("by_level") or {}).get("low", 0),
+            "mitigated": 0,
+        },
+        "compliance": {
+            "overall_score": compliance.get("completion_rate", 0.0),
+            "policy_overdue": compliance.get("overdue", 0),
+        },
+        "training": analytics_service.get_kpi_summary(time_range).get("training"),
+        "source": "executive_dashboard",
+    }
 
 
 @router.get("/trends/{data_source}")

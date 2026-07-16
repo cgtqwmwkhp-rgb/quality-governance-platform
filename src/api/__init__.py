@@ -16,6 +16,7 @@ from src.api.routes import (
     auditor_competence,
     audits,
     auth,
+    calendar,
     capa,
     competency_requirements,
     complaints,
@@ -124,6 +125,7 @@ router.include_router(
 router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 router.include_router(realtime.router, prefix="/realtime", tags=["Real-Time & WebSocket"])
 router.include_router(analytics.router, prefix="/analytics", tags=["Analytics & Reporting"])
+router.include_router(calendar.router, prefix="/calendar", tags=["Governance Calendar"])
 router.include_router(workflows.router, prefix="/workflows", tags=["Workflow Automation"])
 router.include_router(
     compliance_automation.router,

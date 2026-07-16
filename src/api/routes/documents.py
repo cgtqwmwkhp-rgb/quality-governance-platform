@@ -396,6 +396,9 @@ async def upload_document(
 ):
     """Upload and process a new document."""
 
+    if current_user.tenant_id is None:
+        raise BadRequestError("Tenant context required to upload documents")
+
     # Validate file type
     file_ext = file.filename.split(".")[-1].lower() if file.filename else ""
     try:
@@ -409,6 +412,9 @@ async def upload_document(
     content = await file.read()
     file_size = len(content)
 
+    if file_size == 0:
+        raise BadRequestError("Uploaded file is empty")
+
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -419,81 +425,93 @@ async def upload_document(
     file_name = file.filename or safe_filename
     file_path = f"documents/{datetime.now(timezone.utc).strftime('%Y/%m')}/{uuid.uuid4()}/{safe_filename}"
 
-    # Create document record
-    doc = Document(
-        title=title,
-        description=description,
-        file_name=file_name,
-        file_type=file_type,
-        file_size=file_size,
-        file_path=file_path,
-        mime_type=file.content_type,
-        document_type=(
-            DocumentType(document_type) if document_type in [d.value for d in DocumentType] else DocumentType.OTHER
-        ),
-        category=category,
-        department=department,
-        sensitivity=(
-            SensitivityLevel(sensitivity)
-            if sensitivity in [s.value for s in SensitivityLevel]
-            else SensitivityLevel.INTERNAL
-        ),
-        status=DocumentStatus.PROCESSING,
-        version="1.0",
-        created_by_id=current_user.id,
-        tenant_id=current_user.tenant_id,
-    )
-
-    db.add(doc)
-    await db.flush()
-
-    # Honest create: initial draft version row matches document.version tip
-    db.add(
-        document_version_service.build_initial_library_version(
-            doc,
-            created_by_id=current_user.id,
-            change_notes="Initial upload",
-        )
-    )
-
     try:
-        await storage_service().upload(
-            storage_key=file_path,
-            content=content,
-            content_type=file.content_type or "application/octet-stream",
-            metadata={
-                "document_id": str(doc.id),
-                "tenant_id": str(current_user.tenant_id or ""),
-                "uploaded_by": str(current_user.id),
-                "file_name": file_name,
-            },
+        # Create document record
+        doc = Document(
+            title=title,
+            description=description,
+            file_name=file_name,
+            file_type=file_type,
+            file_size=file_size,
+            file_path=file_path,
+            mime_type=file.content_type,
+            document_type=(
+                DocumentType(document_type) if document_type in [d.value for d in DocumentType] else DocumentType.OTHER
+            ),
+            category=category,
+            department=department,
+            sensitivity=(
+                SensitivityLevel(sensitivity)
+                if sensitivity in [s.value for s in SensitivityLevel]
+                else SensitivityLevel.INTERNAL
+            ),
+            status=DocumentStatus.PROCESSING,
+            version="1.0",
+            created_by_id=current_user.id,
+            tenant_id=current_user.tenant_id,
         )
-    except StorageError as exc:
+
+        db.add(doc)
+        await db.flush()
+
+        # Honest create: initial draft version row matches document.version tip
+        db.add(
+            document_version_service.build_initial_library_version(
+                doc,
+                created_by_id=current_user.id,
+                change_notes="Initial upload",
+            )
+        )
+
+        try:
+            await storage_service().upload(
+                storage_key=file_path,
+                content=content,
+                content_type=file.content_type or "application/octet-stream",
+                metadata={
+                    "document_id": str(doc.id),
+                    "tenant_id": str(current_user.tenant_id or ""),
+                    "uploaded_by": str(current_user.id),
+                    "file_name": file_name,
+                },
+            )
+        except StorageError as exc:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to store document content: {exc}",
+            ) from exc
+
+        try:
+            await _process_uploaded_document(db, doc, content, file_name, file_ext, file_type, current_user)
+            await db.commit()
+        except Exception as e:
+            doc.status = DocumentStatus.FAILED
+            doc.indexing_error = str(e)
+            await db.commit()
+
+        await db.refresh(doc)
+
+        track_metric("documents.uploaded")
+
+        return DocumentUploadResponse(
+            id=doc.id,
+            reference_number=doc.reference_number,
+            title=doc.title,
+            status=doc.status.value,
+            message="Document uploaded and processing started",
+        )
+    except HTTPException:
+        raise
+    except BadRequestError:
+        raise
+    except Exception as exc:
+        logger.exception("Document upload failed unexpectedly")
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to store document content: {exc}",
+            detail=f"Document upload failed: {exc}",
         ) from exc
-
-    try:
-        await _process_uploaded_document(db, doc, content, file_name, file_ext, file_type, current_user)
-        await db.commit()
-    except Exception as e:
-        doc.status = DocumentStatus.FAILED
-        doc.indexing_error = str(e)
-        await db.commit()
-
-    await db.refresh(doc)
-
-    track_metric("documents.uploaded")
-
-    return DocumentUploadResponse(
-        id=doc.id,
-        reference_number=doc.reference_number,
-        title=doc.title,
-        status=doc.status.value,
-        message="Document uploaded and processing started",
-    )
 
 
 # =============================================================================

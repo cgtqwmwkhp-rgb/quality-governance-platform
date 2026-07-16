@@ -284,6 +284,70 @@ describe('Documents', () => {
     }
   })
 
+  it('does not crash client search when reference_number is missing', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/documents/?')) {
+        return Promise.resolve({
+          data: {
+            items: [{ ...sampleDoc, id: 12, title: 'Untitled Pack', reference_number: undefined }],
+          },
+        })
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.resolve({
+          data: {
+            total_documents: 1,
+            indexed_documents: 0,
+            total_chunks: 0,
+            by_status: { approved: 1 },
+            by_type: { policy: 1 },
+          },
+        })
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
+
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Untitled Pack')).toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('documents-library-search'), {
+      target: { value: 'untitled' },
+    })
+    expect(screen.getByText('Untitled Pack')).toBeInTheDocument()
+  })
+
+  it('uploads without forcing multipart Content-Type (boundary required)', async () => {
+    mockPost.mockResolvedValue({
+      data: { id: 99, reference_number: 'DOC-99', title: 'upload', status: 'processing' },
+    })
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    await screen.findByTestId('documents-live-badge')
+    fireEvent.click(screen.getByRole('button', { name: /documents\.upload/i }))
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    expect(fileInput).toBeTruthy()
+    const file = new File(['hello'], 'policy.pdf', { type: 'application/pdf' })
+    fireEvent.change(fileInput, { target: { files: [file] } })
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalled()
+    })
+    const [, , config] = mockPost.mock.calls.find((call) =>
+      String(call[0]).includes('/documents/upload'),
+    ) as [string, FormData, { headers?: Record<string, string> }]
+    expect(config?.headers?.['Content-Type']).toBeUndefined()
+  })
+
   it('hydrates q/status/type filters from shareable URL', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url.startsWith('/api/v1/documents/?')) {
