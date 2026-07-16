@@ -91,4 +91,6 @@
 - [x] **Gate 0:** Scope + AC + rollback
 - [ ] **Gate 1:** Lint/type — touched surfaces
 - [ ] **Gate 2:** Unit suites green
-- [ ] **Gate 3:** tip==LIVE + canvas update
+- [ ] **Gate 3:** Staging verification (auto after merge)
+- [x] **Gate 4:** Canary N/A (schema integrity; no FE bake required)
+- [ ] **Gate 5:** tip==LIVE + canvas update
