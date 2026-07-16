@@ -68,14 +68,60 @@ describe('RiskHeatMap', () => {
           onCellSelect={onCellSelect}
           onShowInRegister={vi.fn()}
           onClearCellFilter={vi.fn()}
-          drawerOpen={false}
-          onDrawerOpenChange={vi.fn()}
         />
       </TooltipProvider>,
     )
     expect(screen.getByTestId('risk-heatmap')).toBeInTheDocument()
     expect(screen.getByTestId('risk-heatmap-summary')).toHaveTextContent('3')
+    expect(screen.queryByTestId('risk-heatmap-cell-sheet')).not.toBeInTheDocument()
     fireEvent.click(screen.getByTestId('risk-heatmap-cell-2-2'))
     expect(onCellSelect).toHaveBeenCalled()
+  })
+
+  it('shows interactive cell popup with selectable risks on hover', () => {
+    const onOpenRisk = vi.fn()
+    render(
+      <TooltipProvider>
+        <RiskHeatMap
+          data={sample}
+          scoreType="residual"
+          focusMode="none"
+          selectedCell={null}
+          onScoreTypeChange={vi.fn()}
+          onFocusModeChange={vi.fn()}
+          onCellSelect={vi.fn()}
+          onShowInRegister={vi.fn()}
+          onClearCellFilter={vi.fn()}
+          onOpenRisk={onOpenRisk}
+        />
+      </TooltipProvider>,
+    )
+    fireEvent.mouseEnter(screen.getByTestId('risk-heatmap-cell-2-2').parentElement!)
+    expect(screen.getByTestId('risk-heatmap-cell-popup-2-2')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('risk-heatmap-popup-risk-1'))
+    expect(onOpenRisk).toHaveBeenCalledWith(1)
+  })
+
+  it('renders labeled placement and highlight controls', () => {
+    render(
+      <TooltipProvider>
+        <RiskHeatMap
+          data={sample}
+          scoreType="residual"
+          focusMode="none"
+          selectedCell={null}
+          onScoreTypeChange={vi.fn()}
+          onFocusModeChange={vi.fn()}
+          onCellSelect={vi.fn()}
+          onShowInRegister={vi.fn()}
+          onClearCellFilter={vi.fn()}
+        />
+      </TooltipProvider>,
+    )
+    expect(screen.getByText('Place on grid')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-heatmap-score-residual')).toHaveTextContent('After controls')
+    expect(screen.getByTestId('risk-heatmap-score-inherent')).toHaveTextContent('Before controls')
+    expect(screen.getByTestId('risk-heatmap-score-delta')).toHaveTextContent('Movement')
+    expect(screen.getByText('Highlight')).toBeInTheDocument()
   })
 })

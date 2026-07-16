@@ -223,8 +223,6 @@ export default function RiskRegister() {
       ? { likelihood: L, impact: I }
       : null
   })
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const [drawerRisks, setDrawerRisks] = useState<Risk[]>([])
   const [trends, setTrends] = useState<TrendPoint[]>([])
   const [topMovers, setTopMovers] = useState<TopMover[]>([])
 
@@ -1297,11 +1295,8 @@ export default function RiskRegister() {
               auditFilterActive={auditOnly || Boolean(auditRefFilter)}
               trends={trends}
               topMovers={topMovers}
-              drawerOpen={drawerOpen}
-              onDrawerOpenChange={setDrawerOpen}
-              drawerRisks={drawerRisks}
               onOpenRisk={(id) => {
-                const found = risks.find((r) => r.id === id) ?? drawerRisks.find((r) => r.id === id)
+                const found = risks.find((r) => r.id === id)
                 if (found) setSelectedRisk(found)
                 setSearchParams((prev) => {
                   const next = new URLSearchParams(prev)
@@ -1310,31 +1305,11 @@ export default function RiskRegister() {
                 })
               }}
               onCellSelect={(cell) => {
+                if (cell.risk_count === 0) return
                 setCellFilter({ likelihood: cell.likelihood, impact: cell.impact })
-                const byId = new Map(risks.map((r) => [r.id, r]))
-                const ordered = cell.risk_ids
-                  .map((id) => byId.get(id))
-                  .filter((r): r is Risk => Boolean(r))
-                if (ordered.length > 0) {
-                  setDrawerRisks(ordered)
-                } else {
-                  setDrawerRisks(
-                    risks
-                      .filter((r) =>
-                        scoreType === 'inherent'
-                          ? r.inherent_likelihood === cell.likelihood &&
-                            r.inherent_impact === cell.impact
-                          : r.residual_likelihood === cell.likelihood &&
-                            r.residual_impact === cell.impact,
-                      )
-                      .sort((a, b) => b.residual_score - a.residual_score),
-                  )
-                }
-                setDrawerOpen(true)
               }}
               onShowInRegister={(cell) => {
                 setCellFilter({ likelihood: cell.likelihood, impact: cell.impact })
-                setDrawerOpen(false)
                 setView('register')
               }}
               onClearCellFilter={() => {

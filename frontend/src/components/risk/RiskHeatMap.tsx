@@ -1,17 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Download, FilterX } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/Tooltip'
-import {
-  Sheet,
-  SheetBody,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '../ui/Sheet'
 import { cn } from '../../helpers/utils'
 
 export type HeatMapScoreType = 'residual' | 'inherent' | 'delta'
@@ -75,6 +67,50 @@ export interface TopMover {
   delta: number
 }
 
+const SCORE_MODES: Array<{
+  value: HeatMapScoreType
+  label: string
+  hint: string
+}> = [
+  {
+    value: 'residual',
+    label: 'After controls',
+    hint: 'Place each risk by residual likelihood × impact (after existing controls).',
+  },
+  {
+    value: 'inherent',
+    label: 'Before controls',
+    hint: 'Place each risk by inherent likelihood × impact (before controls).',
+  },
+  {
+    value: 'delta',
+    label: 'Movement',
+    hint: 'Show the residual grid and mark cells where inherent and residual placement differ.',
+  },
+]
+
+const FOCUS_MODES: Array<{
+  value: HeatMapFocusMode
+  label: string
+  hint: string
+}> = [
+  {
+    value: 'none',
+    label: 'None',
+    hint: 'Show every cell at normal emphasis.',
+  },
+  {
+    value: 'appetite',
+    label: 'Outside appetite',
+    hint: 'Highlight cells with risks above appetite; dim empty cells.',
+  },
+  {
+    value: 'overdue',
+    label: 'Overdue review',
+    hint: 'Highlight cells with overdue reviews; dim empty cells.',
+  },
+]
+
 interface RiskHeatMapProps {
   data: HeatMapData
   scoreType: HeatMapScoreType
@@ -86,22 +122,14 @@ interface RiskHeatMapProps {
   onShowInRegister: (cell: HeatMapCell) => void
   onClearCellFilter: () => void
   onOpenRisk?: (riskId: number) => void
-  drawerRisks?: Array<{
-    id: number
-    reference?: string
-    title: string
-    residual_score: number
-    inherent_score?: number
-    risk_owner_name?: string
-    next_review_date?: string | null
-    is_within_appetite?: boolean
-  }>
-  drawerOpen: boolean
-  onDrawerOpenChange: (open: boolean) => void
   trends?: TrendPoint[]
   topMovers?: TopMover[]
   showAppetiteOverlay?: boolean
   auditFilterActive?: boolean
+}
+
+function cellKey(cell: Pick<HeatMapCell, 'likelihood' | 'impact'>) {
+  return `${cell.likelihood}-${cell.impact}`
 }
 
 export function RiskHeatMap({
@@ -115,15 +143,32 @@ export function RiskHeatMap({
   onShowInRegister,
   onClearCellFilter,
   onOpenRisk,
-  drawerRisks = [],
-  drawerOpen,
-  onDrawerOpenChange,
   trends = [],
   topMovers = [],
   showAppetiteOverlay = true,
   auditFilterActive = false,
 }: RiskHeatMapProps) {
   const [boardPackBusy, setBoardPackBusy] = useState(false)
+  const [hoverKey, setHoverKey] = useState<string | null>(null)
+  const closeTimer = useRef<number | null>(null)
+
+  const keepPopupOpen = () => {
+    if (closeTimer.current != null) {
+      window.clearTimeout(closeTimer.current)
+      closeTimer.current = null
+    }
+  }
+
+  const openPopup = (key: string) => {
+    keepPopupOpen()
+    setHoverKey(key)
+  }
+
+  const scheduleClosePopup = () => {
+    keepPopupOpen()
+    closeTimer.current = window.setTimeout(() => setHoverKey(null), 180)
+  }
+
   const reduction =
     data.summary.average_inherent_score > 0
       ? Math.round(
@@ -178,60 +223,113 @@ export function RiskHeatMap({
   }
 
   const sparkMax = Math.max(1, ...trends.map((t) => t.avg_residual))
+  const scoreHeading =
+    scoreType === 'inherent' ? 'Before controls' : scoreType === 'delta' ? 'Movement' : 'After controls'
 
   return (
     <div className="space-y-4" data-testid="risk-heatmap">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h2 className="text-xl font-bold text-foreground">
-            5×5 Risk Heat Map (
-            {scoreType === 'inherent' ? 'Inherent' : scoreType === 'delta' ? 'Delta' : 'Residual'}{' '}
-            Risk)
-          </h2>
+          <h2 className="text-xl font-bold text-foreground">5×5 Risk Heat Map</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Viewing placement: <span className="font-medium text-foreground">{scoreHeading}</span>
+          </p>
           {auditFilterActive && (
             <p className="mt-1 text-xs text-muted-foreground" data-testid="risk-heatmap-audit-scope">
               Matrix is tenant-wide; the register table below may be narrowed by audit filters.
             </p>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {(['residual', 'inherent', 'delta'] as HeatMapScoreType[]).map((mode) => (
-            <Button
-              key={mode}
-              size="sm"
-              variant={scoreType === mode ? 'default' : 'secondary'}
-              onClick={() => onScoreTypeChange(mode)}
-              data-testid={`risk-heatmap-score-${mode}`}
+
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Place on grid
+            </p>
+            <div
+              role="group"
+              aria-label="How risks are placed on the grid"
+              className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5"
             >
-              {mode === 'residual' ? 'Residual' : mode === 'inherent' ? 'Inherent' : 'Delta'}
-            </Button>
-          ))}
-          <Button
-            size="sm"
-            variant={focusMode === 'appetite' ? 'default' : 'secondary'}
-            onClick={() => onFocusModeChange(focusMode === 'appetite' ? 'none' : 'appetite')}
-            data-testid="risk-heatmap-focus-appetite"
-          >
-            Focus appetite
-          </Button>
-          <Button
-            size="sm"
-            variant={focusMode === 'overdue' ? 'default' : 'secondary'}
-            onClick={() => onFocusModeChange(focusMode === 'overdue' ? 'none' : 'overdue')}
-            data-testid="risk-heatmap-focus-overdue"
-          >
-            Focus overdue
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={exportBoardPack}
-            disabled={boardPackBusy}
-            data-testid="risk-heatmap-board-pack"
-          >
-            <Download className="mr-1 h-4 w-4" />
-            Board pack
-          </Button>
+              {SCORE_MODES.map((mode) => (
+                <Tooltip key={mode.value}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                        scoreType === mode.value
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-muted-foreground hover:bg-background hover:text-foreground',
+                      )}
+                      aria-pressed={scoreType === mode.value}
+                      data-testid={`risk-heatmap-score-${mode.value}`}
+                      onClick={() => onScoreTypeChange(mode.value)}
+                    >
+                      {mode.label}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-[220px]">{mode.hint}</TooltipContent>
+                </Tooltip>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Highlight
+            </p>
+            <div
+              role="group"
+              aria-label="Heat map highlight mode"
+              className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5"
+            >
+              {FOCUS_MODES.map((mode) => (
+                <Tooltip key={mode.value}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                        focusMode === mode.value
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-muted-foreground hover:bg-background hover:text-foreground',
+                      )}
+                      aria-pressed={focusMode === mode.value}
+                      data-testid={
+                        mode.value === 'none'
+                          ? 'risk-heatmap-focus-none'
+                          : `risk-heatmap-focus-${mode.value === 'appetite' ? 'appetite' : 'overdue'}`
+                      }
+                      onClick={() => onFocusModeChange(mode.value)}
+                    >
+                      {mode.label}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-[220px]">{mode.hint}</TooltipContent>
+                </Tooltip>
+              ))}
+            </div>
+          </div>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={exportBoardPack}
+                disabled={boardPackBusy}
+                data-testid="risk-heatmap-board-pack"
+              >
+                <Download className="mr-1 h-4 w-4" />
+                Board pack
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-[220px]">
+              Download a JSON snapshot of this matrix, summary, and top movers, then open print for a
+              board pack.
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -275,6 +373,7 @@ export function RiskHeatMap({
                     {data.likelihood_labels[5 - rowIndex]}
                   </div>
                   {row.map((cell) => {
+                    const key = cellKey(cell)
                     const isSelected =
                       selectedCell?.likelihood === cell.likelihood &&
                       selectedCell?.impact === cell.impact
@@ -284,68 +383,133 @@ export function RiskHeatMap({
                       (focusMode === 'overdue' && (cell.overdue_count ?? 0) > 0)
                     const intensity = cell.intensity ?? (cell.risk_count > 0 ? 0.55 : 0.2)
                     const opacity = dimEmpty ? 0.22 : 0.45 + intensity * 0.55
+                    const popupOpen = hoverKey === key && cell.risk_count > 0
+                    const riskEntries = cell.risk_ids.slice(0, 8).map((id, index) => ({
+                      id,
+                      title: cell.risk_titles[index] ?? `Risk ${id}`,
+                    }))
+
                     return (
-                      <Tooltip key={`${cell.likelihood}-${cell.impact}`}>
-                        <TooltipTrigger asChild>
-                          <motion.button
-                            type="button"
-                            layout
-                            transition={{ duration: 0.25 }}
-                            className={cn(
-                              'm-0.5 flex h-16 w-20 flex-col items-center justify-center rounded-lg border-2 transition-all',
-                              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                              isSelected ? 'border-foreground ring-2 ring-ring' : 'border-transparent',
-                              highlight && 'ring-2 ring-warning',
-                              showAppetiteOverlay &&
-                                cell.above_appetite_band &&
-                                'outline outline-2 outline-offset-[-2px] outline-dashed outline-foreground/70',
-                            )}
-                            style={{
-                              backgroundColor: cell.color,
-                              opacity,
-                            }}
-                            aria-label={`${data.likelihood_labels[cell.likelihood]} by ${data.impact_labels[cell.impact]}, score ${cell.score}, ${cell.risk_count} risks`}
-                            data-testid={`risk-heatmap-cell-${cell.likelihood}-${cell.impact}`}
-                            onClick={() => onCellSelect(cell)}
+                      <div
+                        key={key}
+                        className="relative"
+                        onMouseEnter={() => {
+                          if (cell.risk_count > 0) openPopup(key)
+                        }}
+                        onMouseLeave={scheduleClosePopup}
+                      >
+                        <motion.button
+                          type="button"
+                          layout
+                          transition={{ duration: 0.25 }}
+                          className={cn(
+                            'm-0.5 flex h-16 w-20 flex-col items-center justify-center rounded-lg border-2 transition-all',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            isSelected ? 'border-foreground ring-2 ring-ring' : 'border-transparent',
+                            highlight && 'ring-2 ring-warning',
+                            showAppetiteOverlay &&
+                              cell.above_appetite_band &&
+                              'outline outline-2 outline-offset-[-2px] outline-dashed outline-foreground/70',
+                          )}
+                          style={{
+                            backgroundColor: cell.color,
+                            opacity,
+                          }}
+                          aria-label={`${data.likelihood_labels[cell.likelihood]} by ${data.impact_labels[cell.impact]}, score ${cell.score}, ${cell.risk_count} risks`}
+                          aria-expanded={popupOpen}
+                          data-testid={`risk-heatmap-cell-${cell.likelihood}-${cell.impact}`}
+                          onFocus={() => {
+                            if (cell.risk_count > 0) openPopup(key)
+                          }}
+                          onBlur={scheduleClosePopup}
+                          onClick={() => onCellSelect(cell)}
+                        >
+                          <span className="text-lg font-bold text-white">{cell.score}</span>
+                          {cell.risk_count > 0 && (
+                            <span className="text-xs text-white/90">({cell.risk_count})</span>
+                          )}
+                          {scoreType === 'delta' && (cell.movers?.length ?? 0) > 0 && (
+                            <span className="text-[10px] text-white/90">↓{cell.movers?.length}</span>
+                          )}
+                        </motion.button>
+
+                        {popupOpen && (
+                          <div
+                            role="dialog"
+                            aria-label={`Risks in ${data.likelihood_labels[cell.likelihood]} by ${data.impact_labels[cell.impact]}`}
+                            data-testid={`risk-heatmap-cell-popup-${cell.likelihood}-${cell.impact}`}
+                            className="absolute left-1/2 top-[calc(100%-2px)] z-50 w-72 -translate-x-1/2 rounded-lg border border-border bg-card p-3 text-sm text-card-foreground shadow-menu"
+                            onMouseEnter={keepPopupOpen}
+                            onMouseLeave={scheduleClosePopup}
                           >
-                            <span className="text-lg font-bold text-white">{cell.score}</span>
-                            {cell.risk_count > 0 && (
-                              <span className="text-xs text-white/90">
-                                ({cell.risk_count})
-                              </span>
+                            <p className="font-semibold text-foreground">
+                              {data.likelihood_labels[cell.likelihood]} ×{' '}
+                              {data.impact_labels[cell.impact]}
+                            </p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {cell.risk_count} risk{cell.risk_count === 1 ? '' : 's'} · score{' '}
+                              {cell.score}
+                              {(cell.overdue_count ?? 0) > 0
+                                ? ` · ${cell.overdue_count} overdue`
+                                : ''}
+                              {(cell.outside_appetite_count ?? 0) > 0
+                                ? ` · ${cell.outside_appetite_count} outside appetite`
+                                : ''}
+                            </p>
+                            {(cell.owners_sample?.length ?? 0) > 0 && (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Owners: {cell.owners_sample?.join(', ')}
+                              </p>
                             )}
-                            {scoreType === 'delta' && (cell.movers?.length ?? 0) > 0 && (
-                              <span className="text-[10px] text-white/90">↓{cell.movers?.length}</span>
-                            )}
-                          </motion.button>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs space-y-1">
-                          <p className="font-semibold">
-                            {data.likelihood_labels[cell.likelihood]} ×{' '}
-                            {data.impact_labels[cell.impact]}
-                          </p>
-                          <p>
-                            {cell.risk_count} risk{cell.risk_count === 1 ? '' : 's'} · score{' '}
-                            {cell.score}
-                          </p>
-                          {(cell.overdue_count ?? 0) > 0 && (
-                            <p>{cell.overdue_count} overdue review</p>
-                          )}
-                          {(cell.outside_appetite_count ?? 0) > 0 && (
-                            <p>{cell.outside_appetite_count} outside appetite</p>
-                          )}
-                          {(cell.owners_sample?.length ?? 0) > 0 && (
-                            <p>Owners: {cell.owners_sample?.join(', ')}</p>
-                          )}
-                          {(cell.risk_titles?.length ?? 0) > 0 && (
-                            <ul className="list-disc pl-4">
-                              {cell.risk_titles.slice(0, 5).map((t) => (
-                                <li key={t}>{t}</li>
+                            <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                              {riskEntries.map((entry) => (
+                                <li key={entry.id}>
+                                  <button
+                                    type="button"
+                                    className="w-full truncate rounded px-1.5 py-1 text-left text-primary hover:bg-muted"
+                                    data-testid={`risk-heatmap-popup-risk-${entry.id}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      onOpenRisk?.(entry.id)
+                                    }}
+                                  >
+                                    {entry.title}
+                                  </button>
+                                </li>
                               ))}
                             </ul>
-                          )}
-                        </TooltipContent>
-                      </Tooltip>
+                            {(cell.risk_ids_truncated || cell.risk_count > riskEntries.length) && (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Showing {riskEntries.length} of {cell.risk_count}
+                              </p>
+                            )}
+                            <div className="mt-2 flex gap-2 border-t border-border pt-2">
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="h-7 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onShowInRegister(cell)
+                                }}
+                              >
+                                Show in register
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onCellSelect(cell)
+                                }}
+                              >
+                                Filter grid
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )
                   })}
                 </div>
@@ -377,8 +541,7 @@ export function RiskHeatMap({
               </div>
               {showAppetiteOverlay && data.appetite_overlay && (
                 <p className="pt-2 text-xs text-muted-foreground">
-                  Dashed outline = above appetite threshold (
-                  {data.appetite_overlay.threshold})
+                  Dashed outline = above appetite threshold ({data.appetite_overlay.threshold})
                 </p>
               )}
             </div>
@@ -456,69 +619,6 @@ export function RiskHeatMap({
           )}
         </div>
       </div>
-
-      <Sheet open={drawerOpen} onOpenChange={onDrawerOpenChange}>
-        <SheetContent side="right" data-testid="risk-heatmap-cell-sheet">
-          <SheetHeader>
-            <SheetTitle>Cell risks</SheetTitle>
-            <SheetDescription>
-              {selectedLabel ?? 'Select a cell to inspect ranked risks'}
-            </SheetDescription>
-          </SheetHeader>
-          <SheetBody className="space-y-3">
-            {selectedCell && (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  const cell = data.matrix
-                    .flat()
-                    .find(
-                      (c) =>
-                        c.likelihood === selectedCell.likelihood &&
-                        c.impact === selectedCell.impact,
-                    )
-                  if (cell) onShowInRegister(cell)
-                }}
-              >
-                Show in register
-              </Button>
-            )}
-            {drawerRisks.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No risks in this cell.</p>
-            ) : (
-              <ul className="space-y-3">
-                {drawerRisks.map((r) => (
-                  <li
-                    key={r.id}
-                    className="rounded-lg border border-border p-3"
-                    data-testid={`risk-heatmap-drawer-risk-${r.id}`}
-                  >
-                    <button
-                      type="button"
-                      className="text-left font-medium text-primary hover:underline"
-                      onClick={() => onOpenRisk?.(r.id)}
-                    >
-                      {r.reference ? `${r.reference} · ` : ''}
-                      {r.title}
-                    </button>
-                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                      <span>Residual {r.residual_score}</span>
-                      {typeof r.inherent_score === 'number' && (
-                        <span>Inherent {r.inherent_score}</span>
-                      )}
-                      {r.risk_owner_name && <span>{r.risk_owner_name}</span>}
-                      {r.is_within_appetite === false && (
-                        <Badge variant="destructive">Outside appetite</Badge>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </SheetBody>
-        </SheetContent>
-      </Sheet>
     </div>
   )
 }
