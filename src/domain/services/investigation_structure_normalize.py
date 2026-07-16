@@ -389,9 +389,7 @@ async def load_canonical_structure_json_from_rows(
     to read unchanged until their first dual-write.
     """
     has_rows = await db.scalar(
-        select(InvestigationTemplateSection.id)
-        .where(InvestigationTemplateSection.template_id == template_id)
-        .limit(1)
+        select(InvestigationTemplateSection.id).where(InvestigationTemplateSection.template_id == template_id).limit(1)
     )
     if has_rows is None:
         return None
