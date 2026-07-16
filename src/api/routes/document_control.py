@@ -33,6 +33,7 @@ from src.domain.models.document_control import (
 )
 from src.domain.models.user import User
 from src.domain.services.document_version_service import assert_document_metadata_editable, document_version_service
+from src.domain.services.gkb_golden_thread import GoldenThreadContext, decide_golden_thread_publish
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -332,6 +333,140 @@ async def get_document(
             }
             for d in distributions
         ],
+    }
+
+
+@router.get("/{document_id}/golden-thread", response_model=dict)
+async def get_document_golden_thread(
+    document_id: int,
+    current_user: CurrentUser,
+    db: DbSession = None,
+) -> dict[str, Any]:
+    """Read the controlled-document → GKB evidence chain without inventing a FK.
+
+    ``controlled_documents`` has no library-document FK. This endpoint exposes
+    one unambiguous same-tenant candidate only, and labels it as unverified so
+    staff can inspect its real GKB evidence links without treating a title or
+    reference-number match as a governed relationship.
+    """
+    tenant_id = _tenant_id(current_user)
+    document = (
+        await db.execute(
+            apply_tenant_filter(
+                select(ControlledDocument).where(ControlledDocument.id == document_id),
+                ControlledDocument,
+                tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not document:
+        raise NotFoundError("Document not found")
+
+    from src.domain.models.compliance_evidence import ComplianceEvidenceLink
+    from src.domain.models.document import Document as LibraryDocument
+
+    candidates_result = await db.execute(
+        select(LibraryDocument)
+        .where(
+            LibraryDocument.tenant_id == tenant_id,
+            or_(
+                LibraryDocument.title == document.title,
+                LibraryDocument.reference_number == document.document_number,
+            ),
+        )
+        .order_by(LibraryDocument.id)
+        .limit(2)
+    )
+    candidates = list(candidates_result.scalars().all())
+    candidate = candidates[0] if len(candidates) == 1 else None
+    matching_fields: list[str] = []
+    if candidate:
+        if candidate.title == document.title:
+            matching_fields.append("title")
+        if candidate.reference_number == document.document_number:
+            matching_fields.append("reference_number")
+
+    evidence_links: list[dict[str, Any]] = []
+    if candidate:
+        evidence_result = await db.execute(
+            select(ComplianceEvidenceLink)
+            .where(
+                ComplianceEvidenceLink.tenant_id == tenant_id,
+                ComplianceEvidenceLink.entity_type == "document",
+                ComplianceEvidenceLink.entity_id == str(candidate.id),
+                ComplianceEvidenceLink.deleted_at.is_(None),
+            )
+            .order_by(ComplianceEvidenceLink.created_at.desc())
+        )
+        evidence_links = [
+            {
+                "id": link.id,
+                "clause_id": link.clause_id,
+                "status": link.effective_status.value,
+                "signal_type": link.signal_type or "evidence",
+                "scheme": link.scheme,
+                "confidence": link.confidence,
+                "linked_by": link.linked_by.value if hasattr(link.linked_by, "value") else str(link.linked_by),
+                "title": link.title,
+                "rationale": link.rationale,
+                "created_at": link.created_at.isoformat() if link.created_at else None,
+            }
+            for link in evidence_result.scalars().all()
+        ]
+
+    plan = decide_golden_thread_publish(
+        GoldenThreadContext(
+            tenant_id=tenant_id,
+            controlled_document_id=document.id,
+            library_document_id=candidate.id if candidate else None,
+            hard_fk_present=False,
+            publish_event_requested=False,
+        )
+    )
+    candidate_state = "unverified_candidate" if candidate else ("ambiguous" if candidates else "not_found")
+
+    return {
+        "controlled_document": {
+            "id": document.id,
+            "document_number": document.document_number,
+            "title": document.title,
+            "current_version": document.current_version,
+            "status": document.status,
+        },
+        "library_document_candidate": (
+            {
+                "id": candidate.id,
+                "reference_number": candidate.reference_number,
+                "title": candidate.title,
+                "version": candidate.version,
+                "status": candidate.status.value if hasattr(candidate.status, "value") else str(candidate.status),
+                "matching_fields": matching_fields,
+            }
+            if candidate
+            else None
+        ),
+        "evidence_links": evidence_links,
+        "integrity": {
+            "relationship_state": candidate_state,
+            "hard_fk_present": False,
+            "message": (
+                "The displayed library document is an unverified same-tenant candidate; "
+                "its evidence links are not yet controlled-document evidence."
+                if candidate
+                else (
+                    "More than one library document matches; no candidate or evidence links are displayed."
+                    if candidates
+                    else "No library-document candidate matches this controlled document."
+                )
+            ),
+        },
+        "publish_plan": {
+            "should_run": plan.should_run,
+            "denied": plan.denied,
+            "deny_reason": plan.deny_reason.value if plan.deny_reason else None,
+            "documents_hard_fk_gap": plan.documents_hard_fk_gap,
+            "steps": [step.value for step in plan.steps],
+        },
     }
 
 
