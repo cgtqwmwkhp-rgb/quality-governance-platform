@@ -101,6 +101,24 @@ function flattenHeatmapCells(heatmap: {
   return heatmap.matrix.flat()
 }
 
+function heatmapBandCounts(cells: HeatmapApiCell[]): Record<string, number> {
+  return cells.reduce<Record<string, number>>(
+    (counts, cell) => {
+      if (
+        typeof cell.likelihood !== 'number' ||
+        typeof cell.impact !== 'number' ||
+        typeof cell.count !== 'number'
+      ) {
+        return counts
+      }
+      const { level } = residualBandFromScore(cell.likelihood * cell.impact)
+      counts[level] += cell.count
+      return counts
+    },
+    { critical: 0, high: 0, medium: 0, low: 0 },
+  )
+}
+
 function binRisksIntoHeatmapCells(
   risks: Array<{
     id: number
@@ -381,6 +399,12 @@ export default function RiskRegister() {
             }
           | undefined
         const byLevel = s?.by_level
+        const heatmapCells =
+          heatmapResult.status === 'fulfilled'
+            ? flattenHeatmapCells(heatmapResult.value.data ?? {})
+            : []
+        const fallbackBandCounts =
+          heatmapResult.status === 'fulfilled' ? heatmapBandCounts(heatmapCells) : null
         setSummary({
           total_risks: typeof s?.total_risks === 'number' ? s.total_risks : mappedRisks.length,
           by_level: {
@@ -389,25 +413,25 @@ export default function RiskRegister() {
                 ? byLevel.critical
                 : typeof s?.critical === 'number'
                   ? s.critical
-                  : 0,
+                  : fallbackBandCounts?.critical ?? null,
             high:
               typeof byLevel?.high === 'number'
                 ? byLevel.high
                 : typeof s?.high === 'number'
                   ? s.high
-                  : 0,
+                  : fallbackBandCounts?.high ?? null,
             medium:
               typeof byLevel?.medium === 'number'
                 ? byLevel.medium
                 : typeof s?.medium === 'number'
                   ? s.medium
-                  : 0,
+                  : fallbackBandCounts?.medium ?? null,
             low:
               typeof byLevel?.low === 'number'
                 ? byLevel.low
                 : typeof s?.low === 'number'
                   ? s.low
-                  : 0,
+                  : fallbackBandCounts?.low ?? null,
           },
           outside_appetite:
             typeof s?.outside_appetite === 'number'
