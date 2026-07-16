@@ -26,7 +26,7 @@ router = APIRouter()
 async def _template_response(db: DbSession, template: InvestigationTemplate) -> InvestigationTemplateResponse:
     """Serialize rows as the canonical read model while preserving JSON clients."""
     response = InvestigationTemplateResponse.model_validate(template)
-    canonical_structure = await load_canonical_structure_json_from_rows(db, template.id)
+    canonical_structure = await load_canonical_structure_json_from_rows(db, int(template.id))
     if canonical_structure is None:
         return response
     return response.model_copy(update={"structure": canonical_structure})
