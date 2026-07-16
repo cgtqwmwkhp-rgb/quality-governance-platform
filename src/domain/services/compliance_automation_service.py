@@ -603,9 +603,7 @@ class ComplianceAutomationService:
             "is_riddor": is_riddor,
             "riddor_types": riddor_types,
             "deadline": deadline.isoformat() if deadline else None,
-            "submission_url": (
-                "https://notifications.hse.gov.uk/RiddorForms/" if is_riddor else None
-            ),
+            "submission_url": ("https://notifications.hse.gov.uk/RiddorForms/" if is_riddor else None),
         }
 
     def list_riddor_submissions(self, *, status_filter: Optional[str] = None) -> dict[str, Any]:
