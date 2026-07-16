@@ -82,6 +82,9 @@ vi.mock('../../api/client', () => ({
     create: vi.fn(),
     update: vi.fn(),
   },
+  evidenceAssetsApi: {
+    list: vi.fn(),
+  },
   getApiErrorMessage: (err: Error) => err.message,
 }))
 
@@ -138,6 +141,7 @@ describe('IncidentDetail', () => {
     client.actionsApi.list.mockResolvedValue({
       data: { items: [{ id: 1, title: 'Secure CCTV', status: 'open' }] },
     })
+    client.evidenceAssetsApi.list.mockResolvedValue({ data: { items: [] } })
   })
 
   it('surfaces reporter, impact, and submission details on first view', async () => {
@@ -184,6 +188,31 @@ describe('IncidentDetail', () => {
 
     fireEvent.click(createCapa)
     expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=incident&sourceId=11')
+  })
+
+  it('surfaces incident evidence assets instead of relying only on reporter metadata', async () => {
+    client.evidenceAssetsApi.list.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 51,
+            title: 'Scene photograph',
+            original_filename: 'scene.jpg',
+            content_type: 'image/jpeg',
+          },
+        ],
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByTestId('incident-evidence-assets')).toHaveTextContent('Scene photograph')
+    expect(screen.getAllByText('1 evidence asset').length).toBeGreaterThan(0)
+    expect(client.evidenceAssetsApi.list).toHaveBeenCalledWith({
+      source_module: 'incident',
+      source_id: 11,
+      page_size: 50,
+    })
   })
 
   it('renders workflow proof counts without faux zeros when CAPA load fails', async () => {

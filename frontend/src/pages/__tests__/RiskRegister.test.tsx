@@ -180,6 +180,37 @@ describe('RiskRegister linked audit references', () => {
       'Overdue review unavailable',
     )
   })
+
+  it('derives visible band counts from populated heatmap cells when a legacy summary omits them', async () => {
+    mockRiskList
+      .mockResolvedValueOnce({ data: { items: [], total: 125 } })
+      .mockResolvedValueOnce({ data: { items: [], total: 0 } })
+    mockGetSummary.mockResolvedValue({
+      data: { total_risks: 125, outside_appetite: 0, overdue_review: 0, escalated: 0 },
+    })
+    mockGetHeatmap.mockResolvedValue({
+      data: {
+        cells: [
+          { likelihood: 5, impact: 5, count: 12 },
+          { likelihood: 4, impact: 3, count: 20 },
+          { likelihood: 3, impact: 2, count: 50 },
+          { likelihood: 1, impact: 1, count: 43 },
+        ],
+      },
+    })
+
+    render(
+      <MemoryRouter>
+        <RiskRegister />
+      </MemoryRouter>,
+    )
+
+    await screen.findByRole('heading', { name: 'Enterprise Risk Register' })
+    expect(screen.getByTestId('risk-metric-total')).toHaveTextContent('125')
+    expect(screen.getByTestId('risk-metric-critical')).toHaveTextContent('12')
+    expect(screen.getByTestId('risk-metric-high')).toHaveTextContent('20')
+    expect(screen.getByTestId('risk-metric-medium')).toHaveTextContent('50')
+  })
 })
 
 describe('RiskRegister honesty — load and metric failures', () => {

@@ -33,6 +33,8 @@ import {
   investigationsApi,
   actionsApi,
   Action,
+  EvidenceAsset,
+  evidenceAssetsApi,
   UserSearchResult,
   getApiErrorMessage,
   CreateFromRecordError,
@@ -112,6 +114,9 @@ export default function IncidentDetail() {
   const [actions, setActions] = useState<Action[]>([])
   const [actionsLoading, setActionsLoading] = useState(false)
   const [actionsLoadFailed, setActionsLoadFailed] = useState(false)
+  const [evidenceAssets, setEvidenceAssets] = useState<EvidenceAsset[]>([])
+  const [evidenceLoading, setEvidenceLoading] = useState(false)
+  const [evidenceLoadFailed, setEvidenceLoadFailed] = useState(false)
   const [investigations, setInvestigations] = useState<Investigation[]>([])
   const [loading, setLoading] = useState(true)
   const [showInvestigationModal, setShowInvestigationModal] = useState(false)
@@ -184,6 +189,7 @@ export default function IncidentDetail() {
         asset_id: response.data.asset_id ?? null,
       })
       loadActions()
+      loadEvidence(incidentId)
       loadInvestigations(incidentId)
       loadRunningSheet(incidentId)
     } catch (err) {
@@ -213,6 +219,25 @@ export default function IncidentDetail() {
       )
     } finally {
       setActionsLoading(false)
+    }
+  }
+
+  const loadEvidence = async (incidentId: number) => {
+    setEvidenceLoading(true)
+    setEvidenceLoadFailed(false)
+    try {
+      const response = await evidenceAssetsApi.list({
+        source_module: 'incident',
+        source_id: incidentId,
+        page_size: 50,
+      })
+      setEvidenceAssets(response.data.items || [])
+    } catch (err) {
+      trackError(err, { component: 'IncidentDetail', action: 'loadEvidence' })
+      setEvidenceAssets([])
+      setEvidenceLoadFailed(true)
+    } finally {
+      setEvidenceLoading(false)
     }
   }
 
@@ -512,6 +537,13 @@ export default function IncidentDetail() {
         ? 'First aid provided'
         : 'Not provided')
   const evidenceSummary = getSubmissionPhotoSummary(incidentSubmission)
+  const surfacedEvidenceSummary = evidenceLoading
+    ? 'Loading evidence…'
+    : evidenceLoadFailed
+      ? `${evidenceSummary} (evidence assets unavailable)`
+      : evidenceAssets.length > 0
+        ? `${evidenceAssets.length} evidence asset${evidenceAssets.length === 1 ? '' : 's'}`
+        : evidenceSummary
   const latestInvestigation = investigations[0]
   const investigationSummary = latestInvestigation
     ? `${latestInvestigation.reference_number || latestInvestigation.title || 'Linked investigation'}`
@@ -649,7 +681,7 @@ export default function IncidentDetail() {
             value: incident.location || 'Not specified',
             icon: <MapPin className="w-4 h-4" />,
           },
-          { label: 'Evidence', value: evidenceSummary, icon: <FileText className="w-4 h-4" /> },
+          { label: 'Evidence', value: surfacedEvidenceSummary, icon: <FileText className="w-4 h-4" /> },
           {
             label: 'Investigation',
             value: investigationSummary,
@@ -1100,7 +1132,7 @@ export default function IncidentDetail() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Evidence captured</p>
-                <p className="font-medium text-foreground">{evidenceSummary}</p>
+                <p className="font-medium text-foreground">{surfacedEvidenceSummary}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Affected role</p>
@@ -1139,6 +1171,39 @@ export default function IncidentDetail() {
                   })}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary" />
+                Evidence
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {evidenceLoading ? (
+                <p className="text-sm text-muted-foreground">Loading evidence…</p>
+              ) : evidenceLoadFailed ? (
+                <p className="text-sm text-muted-foreground">
+                  Evidence assets could not be loaded. Reporter-submission evidence is shown separately.
+                </p>
+              ) : evidenceAssets.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No evidence assets are linked to this incident.
+                </p>
+              ) : (
+                <ul className="space-y-2" data-testid="incident-evidence-assets">
+                  {evidenceAssets.map((asset) => (
+                    <li key={asset.id} className="rounded-lg border border-border p-3">
+                      <p className="font-medium text-foreground">
+                        {asset.title || asset.original_filename || `Evidence #${asset.id}`}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{asset.content_type}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </CardContent>
           </Card>
 
