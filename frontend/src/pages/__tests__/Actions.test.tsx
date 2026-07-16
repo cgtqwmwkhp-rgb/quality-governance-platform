@@ -135,6 +135,34 @@ describe('Actions finding deep-link', () => {
     expect(link).toHaveAttribute('href', '/actions/capa%3A99')
   })
 
+  it('filters via interactive hero Overdue KPI', async () => {
+    const user = userEvent.setup()
+    mockSummary.mockResolvedValue({
+      data: { total: 3, by_display_status: { open: 2 }, overdue: 1 },
+    })
+    mockList.mockResolvedValue({ data: { items: [action({})] } })
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    await screen.findByTestId('actions-hero-board')
+    await user.click(screen.getByTestId('actions-hero-overdue'))
+
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalledWith(1, 100, undefined, undefined, undefined, {
+        assigned_to: undefined,
+        overdue: true,
+      })
+    })
+    expect(screen.getByTestId('actions-hero-overdue')).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByTestId('actions-server-filter-label')).toHaveTextContent(
+      'overdue=true',
+    )
+  })
+
   it('does not mark a verified past-due action as overdue', async () => {
     mockSummary.mockResolvedValue({ data: { total: 1, by_display_status: {} } })
     mockList.mockResolvedValue({
