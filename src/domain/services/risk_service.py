@@ -345,10 +345,7 @@ class RiskService:
                 movers: list[dict[str, Any]] = []
                 if score_type == "delta":
                     for r in cell_risks_sorted[:10]:
-                        if (
-                            r.inherent_likelihood != r.residual_likelihood
-                            or r.inherent_impact != r.residual_impact
-                        ):
+                        if r.inherent_likelihood != r.residual_likelihood or r.inherent_impact != r.residual_impact:
                             movers.append(
                                 {
                                     "id": r.id,
@@ -394,7 +391,10 @@ class RiskService:
                 "likelihood": cell["likelihood"],
                 "impact": cell["impact"],
                 "count": cell["risk_count"],
-                "risks": [{"id": rid, "title": title} for rid, title in zip(cell["risk_ids"], cell["risk_titles"], strict=False)],
+                "risks": [
+                    {"id": rid, "title": title}
+                    for rid, title in zip(cell["risk_ids"], cell["risk_titles"], strict=False)
+                ],
             }
             for row in matrix
             for cell in row
