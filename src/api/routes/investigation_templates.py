@@ -1,7 +1,7 @@
 """Investigation Template API routes."""
 
 import math
-from typing import Annotated, Optional
+from typing import Annotated, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
@@ -26,7 +26,8 @@ router = APIRouter()
 async def _template_response(db: DbSession, template: InvestigationTemplate) -> InvestigationTemplateResponse:
     """Serialize rows as the canonical read model while preserving JSON clients."""
     response = InvestigationTemplateResponse.model_validate(template)
-    canonical_structure = await load_canonical_structure_json_from_rows(db, int(template.id))
+    template_id = cast(int, template.id)
+    canonical_structure = await load_canonical_structure_json_from_rows(db, template_id)
     if canonical_structure is None:
         return response
     return response.model_copy(update={"structure": canonical_structure})
