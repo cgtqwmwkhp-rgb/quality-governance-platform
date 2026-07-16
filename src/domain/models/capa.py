@@ -57,7 +57,9 @@ class CAPAAction(Base):
     __tablename__ = "capa_actions"
     __table_args__ = (
         CheckConstraint(
-            "source_type NOT IN ("
+            # Cast to text so CI fresh upgrades can reference enum labels added
+            # earlier in the same alembic upgrade head (PG unsafe-new-enum rule).
+            "CAST(source_type AS TEXT) NOT IN ("
             "'audit_finding','investigation','near_miss','rta','incident'"
             ") OR source_id IS NOT NULL",
             name="ck_capa_actions_gt_source_id",

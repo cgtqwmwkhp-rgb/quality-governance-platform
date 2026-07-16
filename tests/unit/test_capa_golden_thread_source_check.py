@@ -12,7 +12,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 MIGRATION_PATH = REPO_ROOT / "alembic/versions/20260720_capa_src_chk.py"
 CONSTRAINT_NAME = "ck_capa_actions_gt_source_id"
 CONSTRAINT_SQL = (
-    "source_type NOT IN (" "'audit_finding','investigation','near_miss','rta','incident'" ") OR source_id IS NOT NULL"
+    "CAST(source_type AS TEXT) NOT IN ("
+    "'audit_finding','investigation','near_miss','rta','incident'"
+    ") OR source_id IS NOT NULL"
 )
 
 

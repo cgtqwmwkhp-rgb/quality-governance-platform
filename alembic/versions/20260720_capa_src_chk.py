@@ -24,8 +24,12 @@ depends_on: Union[str, Sequence[str], None] = None
 TABLE = "capa_actions"
 OLD_CONSTRAINT = "ck_capa_actions_audit_finding_source_id"
 NEW_CONSTRAINT = "ck_capa_actions_gt_source_id"
+# CAST to text avoids PG "unsafe use of new enum value" when earlier revisions
+# ADD VALUE investigation/near_miss/rta in the same upgrade-head transaction.
 NEW_CONSTRAINT_SQL = (
-    "source_type NOT IN (" "'audit_finding','investigation','near_miss','rta','incident'" ") OR source_id IS NOT NULL"
+    "CAST(source_type AS TEXT) NOT IN ("
+    "'audit_finding','investigation','near_miss','rta','incident'"
+    ") OR source_id IS NOT NULL"
 )
 OLD_CONSTRAINT_SQL = "source_type <> 'audit_finding' OR source_id IS NOT NULL"
 

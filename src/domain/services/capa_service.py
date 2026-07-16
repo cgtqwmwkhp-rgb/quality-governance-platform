@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional, cast
 
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.pagination import PaginatedResponse, PaginationInput, paginate
@@ -30,7 +30,7 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 logger = logging.getLogger(__name__)
 
 # Golden-thread CAPA sources that require a resolvable integer source_id (R47).
-_GT_SOURCE_MODELS: dict[CAPASource, type] = {
+_GT_SOURCE_MODELS: dict[CAPASource, type[Any]] = {
     CAPASource.AUDIT_FINDING: AuditFinding,
     CAPASource.INVESTIGATION: InvestigationRun,
     CAPASource.NEAR_MISS: NearMiss,
@@ -101,7 +101,7 @@ class CAPAService:
             raise ValueError(f"source_id is required when source_type={source_type.value}")
 
         model = _GT_SOURCE_MODELS[source_type]
-        query = select(model).where(model.id == source_id)
+        query: Select[Any] = select(model).where(model.id == source_id)
         if tenant_id is not None and hasattr(model, "tenant_id"):
             query = query.where(model.tenant_id == tenant_id)
         result = await self.db.execute(query)
