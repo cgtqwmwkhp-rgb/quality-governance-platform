@@ -175,8 +175,8 @@ from src.domain.models.iso27001 import (
     StatementOfApplicability,
     SupplierSecurityAssessment,
 )
-from src.domain.models.location import Location, LocationKind
 from src.domain.models.legal_hold import LegalHoldStatus, MatterLegalHold
+from src.domain.models.location import Location, LocationKind
 from src.domain.models.loler import LOLERDefect, LOLERDefectCategory, LOLERExamination, LOLERExaminationType
 from src.domain.models.partner_webhook import (
     PARTNER_WEBHOOK_EVENTS,
