@@ -63,7 +63,7 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
         Index("ix_complaints_tenant_status", "tenant_id", "status"),
         Index("ix_complaints_tenant_created", "tenant_id", "created_at"),
         CheckConstraint(
-            "source_type IN ('manual', 'email', 'api', 'phone', 'portal')",
+            "source_type IN ('manual', 'email', 'api', 'phone', 'portal', 'in_person')",
             name="ck_complaint_source_type",
         ),
         CheckConstraint(
@@ -115,6 +115,20 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     # Related reference (e.g., order number, invoice number)
     related_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     related_product_service: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+
+    # Customer / contract (portal + staff intake)
+    contract_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("contracts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+    # Who the complaint is about (staff user and/or free-text name)
+    subject_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    subject_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+
+    # Alleged event datetime (distinct from when the complaint was received)
+    alleged_event_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Assignment
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)

@@ -1,12 +1,14 @@
 """Pydantic schemas for Complaint API."""
 
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from src.api.schemas.validators import sanitize_field
 from src.domain.models.complaint import ComplaintPriority, ComplaintStatus, ComplaintType
+
+ComplaintSourceType = Literal["manual", "email", "api", "phone", "portal", "in_person"]
 
 
 class ComplaintBase(BaseModel):
@@ -22,10 +24,24 @@ class ComplaintBase(BaseModel):
     complainant_phone: Optional[str] = Field(None, max_length=30)
     complainant_company: Optional[str] = Field(None, max_length=200)
     related_reference: Optional[str] = Field(None, max_length=100)
+    source_type: ComplaintSourceType = "manual"
+    contract_id: Optional[int] = Field(None, ge=1, description="Customer/contract FK")
+    subject_user_id: Optional[int] = Field(None, ge=1, description="Staff user the complaint is about")
+    subject_name: Optional[str] = Field(None, max_length=200, description="Free-text subject name")
+    alleged_event_at: Optional[datetime] = Field(
+        None, description="When the alleged event occurred (may differ from received_date)"
+    )
 
-    @field_validator("title", "description", "complainant_name", mode="before")
+    @field_validator(
+        "title",
+        "description",
+        "complainant_name",
+        "complainant_company",
+        "subject_name",
+        mode="before",
+    )
     @classmethod
-    def _sanitize(cls, v: str) -> str:
+    def _sanitize(cls, v: Optional[str]) -> Optional[str]:
         return sanitize_field(v)
 
     @field_validator("title", "complainant_name")
@@ -39,6 +55,13 @@ class ComplaintBase(BaseModel):
         if not v:
             raise ValueError("Field cannot be empty or whitespace only")
         return v
+
+    @model_validator(mode="after")
+    def require_subject_identity(self) -> "ComplaintBase":
+        # Optional on create — either field may be set independently.
+        if self.subject_name is not None:
+            self.subject_name = self.subject_name.strip() or None
+        return self
 
 
 class ComplaintCreate(ComplaintBase):
@@ -64,18 +87,39 @@ class ComplaintUpdate(BaseModel):
     complaint_type: Optional[ComplaintType] = None
     priority: Optional[ComplaintPriority] = None
     status: Optional[ComplaintStatus] = None
+    complainant_name: Optional[str] = Field(None, min_length=1, max_length=200)
+    complainant_email: Optional[EmailStr] = None
+    complainant_phone: Optional[str] = Field(None, max_length=30)
+    complainant_company: Optional[str] = Field(None, max_length=200)
+    related_reference: Optional[str] = Field(None, max_length=100)
+    source_type: Optional[ComplaintSourceType] = None
+    contract_id: Optional[int] = Field(None, ge=1)
+    subject_user_id: Optional[int] = Field(None, ge=1)
+    subject_name: Optional[str] = Field(None, max_length=200)
+    alleged_event_at: Optional[datetime] = None
+    received_date: Optional[datetime] = None
     investigation_notes: Optional[str] = None
     root_cause: Optional[str] = None
     resolution_summary: Optional[str] = None
     customer_satisfied: Optional[bool] = None
     owner_id: Optional[int] = Field(None, description="Case owner user id (null clears assignment)")
 
-    @field_validator("title", "description", "investigation_notes", "root_cause", "resolution_summary", mode="before")
+    @field_validator(
+        "title",
+        "description",
+        "complainant_name",
+        "complainant_company",
+        "subject_name",
+        "investigation_notes",
+        "root_cause",
+        "resolution_summary",
+        mode="before",
+    )
     @classmethod
     def _sanitize(cls, v: Optional[str]) -> Optional[str]:
         return sanitize_field(v)
 
-    @field_validator("title")
+    @field_validator("title", "complainant_name")
     @classmethod
     def strip_whitespace(cls, v: Optional[str]) -> Optional[str]:
         if v is not None:
@@ -107,6 +151,11 @@ class ComplaintResponse(BaseModel):
     complainant_company: Optional[str] = None
     related_reference: Optional[str] = None
     department: Optional[str] = None
+    source_type: str = "manual"
+    contract_id: Optional[int] = None
+    subject_user_id: Optional[int] = None
+    subject_name: Optional[str] = None
+    alleged_event_at: Optional[datetime] = None
     status: ComplaintStatus
     target_resolution_date: Optional[datetime] = None
     resolution_summary: Optional[str] = None
