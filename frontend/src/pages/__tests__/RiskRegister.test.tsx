@@ -8,12 +8,14 @@ const {
   mockRiskList,
   mockGetSummary,
   mockGetHeatmap,
+  mockGetTrends,
   mockAuditRuns,
   mockAuditFindings,
 } = vi.hoisted(() => ({
   mockRiskList: vi.fn(),
   mockGetSummary: vi.fn(),
   mockGetHeatmap: vi.fn(),
+  mockGetTrends: vi.fn(),
   mockAuditRuns: vi.fn(),
   mockAuditFindings: vi.fn(),
 }))
@@ -23,6 +25,7 @@ vi.mock('../../api/client', () => ({
     list: mockRiskList,
     getSummary: mockGetSummary,
     getHeatmap: mockGetHeatmap,
+    getTrends: mockGetTrends,
     resolveSuggestionTriage: vi.fn(),
   },
   auditsApi: {
@@ -52,7 +55,31 @@ describe('RiskRegister bow-tie gate', () => {
         escalated: 0,
       },
     })
-    mockGetHeatmap.mockResolvedValue({ data: { cells: [] } })
+    mockGetHeatmap.mockResolvedValue({ data: {
+      matrix: Array.from({ length: 5 }, (_, row) =>
+        Array.from({ length: 5 }, (__, col) => ({
+          likelihood: 5 - row,
+          impact: col + 1,
+          score: (5 - row) * (col + 1),
+          level: 'low',
+          color: '#22c55e',
+          risk_count: 0,
+          risk_ids: [],
+          risk_titles: [],
+        })),
+      ),
+      summary: {
+        total_risks: 0,
+        critical_risks: 0,
+        high_risks: 0,
+        outside_appetite: 0,
+        average_inherent_score: 0,
+        average_residual_score: 0,
+      },
+      likelihood_labels: { 1: 'Rare', 2: 'Unlikely', 3: 'Possible', 4: 'Likely', 5: 'Almost Certain' },
+      impact_labels: { 1: 'Insignificant', 2: 'Minor', 3: 'Moderate', 4: 'Major', 5: 'Catastrophic' },
+    } })
+    mockGetTrends.mockResolvedValue({ data: { series: [], top_movers: [] } })
     mockAuditRuns.mockResolvedValue({ data: { items: [] } })
     mockAuditFindings.mockResolvedValue({ data: { items: [] } })
   })
@@ -107,7 +134,31 @@ describe('RiskRegister linked audit references', () => {
         escalated: 0,
       },
     })
-    mockGetHeatmap.mockResolvedValue({ data: { cells: [] } })
+    mockGetHeatmap.mockResolvedValue({ data: {
+      matrix: Array.from({ length: 5 }, (_, row) =>
+        Array.from({ length: 5 }, (__, col) => ({
+          likelihood: 5 - row,
+          impact: col + 1,
+          score: (5 - row) * (col + 1),
+          level: 'low',
+          color: '#22c55e',
+          risk_count: 0,
+          risk_ids: [],
+          risk_titles: [],
+        })),
+      ),
+      summary: {
+        total_risks: 0,
+        critical_risks: 0,
+        high_risks: 0,
+        outside_appetite: 0,
+        average_inherent_score: 0,
+        average_residual_score: 0,
+      },
+      likelihood_labels: { 1: 'Rare', 2: 'Unlikely', 3: 'Possible', 4: 'Likely', 5: 'Almost Certain' },
+      impact_labels: { 1: 'Insignificant', 2: 'Minor', 3: 'Moderate', 4: 'Major', 5: 'Catastrophic' },
+    } })
+    mockGetTrends.mockResolvedValue({ data: { series: [], top_movers: [] } })
     mockAuditRuns.mockResolvedValue({
       data: {
         items: [
@@ -218,7 +269,31 @@ describe('RiskRegister honesty — load and metric failures', () => {
     vi.clearAllMocks()
     localStorage.clear()
     delete window.__FEATURE_FLAGS__
-    mockGetHeatmap.mockResolvedValue({ data: { cells: [] } })
+    mockGetHeatmap.mockResolvedValue({ data: {
+      matrix: Array.from({ length: 5 }, (_, row) =>
+        Array.from({ length: 5 }, (__, col) => ({
+          likelihood: 5 - row,
+          impact: col + 1,
+          score: (5 - row) * (col + 1),
+          level: 'low',
+          color: '#22c55e',
+          risk_count: 0,
+          risk_ids: [],
+          risk_titles: [],
+        })),
+      ),
+      summary: {
+        total_risks: 0,
+        critical_risks: 0,
+        high_risks: 0,
+        outside_appetite: 0,
+        average_inherent_score: 0,
+        average_residual_score: 0,
+      },
+      likelihood_labels: { 1: 'Rare', 2: 'Unlikely', 3: 'Possible', 4: 'Likely', 5: 'Almost Certain' },
+      impact_labels: { 1: 'Insignificant', 2: 'Minor', 3: 'Moderate', 4: 'Major', 5: 'Catastrophic' },
+    } })
+    mockGetTrends.mockResolvedValue({ data: { series: [], top_movers: [] } })
     mockAuditRuns.mockResolvedValue({ data: { items: [] } })
     mockAuditFindings.mockResolvedValue({ data: { items: [] } })
   })
@@ -252,7 +327,30 @@ describe('RiskRegister honesty — load and metric failures', () => {
       .mockResolvedValueOnce({ data: { items: [], total: 0 } })
       .mockResolvedValueOnce({ data: { items: [], total: 0 } })
     mockGetSummary.mockRejectedValue(new Error('summary unavailable'))
-    mockGetHeatmap.mockResolvedValue({ data: { cells: [] } })
+    mockGetHeatmap.mockResolvedValue({ data: {
+      matrix: Array.from({ length: 5 }, (_, row) =>
+        Array.from({ length: 5 }, (__, col) => ({
+          likelihood: 5 - row,
+          impact: col + 1,
+          score: (5 - row) * (col + 1),
+          level: 'low',
+          color: '#22c55e',
+          risk_count: 0,
+          risk_ids: [],
+          risk_titles: [],
+        })),
+      ),
+      summary: {
+        total_risks: 0,
+        critical_risks: 0,
+        high_risks: 0,
+        outside_appetite: 0,
+        average_inherent_score: 0,
+        average_residual_score: 0,
+      },
+      likelihood_labels: { 1: 'Rare', 2: 'Unlikely', 3: 'Possible', 4: 'Likely', 5: 'Almost Certain' },
+      impact_labels: { 1: 'Insignificant', 2: 'Minor', 3: 'Moderate', 4: 'Major', 5: 'Catastrophic' },
+    } })
 
     render(
       <MemoryRouter>

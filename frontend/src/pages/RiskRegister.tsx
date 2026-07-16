@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
@@ -31,6 +31,14 @@ import {
 import { auditsApi, getApiErrorMessage, riskRegisterApi } from '../api/client'
 import { toast } from '../contexts/ToastContext'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
+import {
+  RiskHeatMap,
+  type HeatMapData as InteractiveHeatMapData,
+  type HeatMapFocusMode,
+  type HeatMapScoreType,
+  type TopMover,
+  type TrendPoint,
+} from '../components/risk/RiskHeatMap'
 
 type MetricValue = number | null
 
@@ -59,12 +67,12 @@ function formatMetric(value: MetricValue): string {
   return value == null ? '—' : String(value)
 }
 
-/** Residual score bands aligned with GET /risk-register/summary by_level. */
+/** Canonical residual score bands: low ≤4, medium 5–9, high 10–16, critical ≥17. */
 function residualBandFromScore(score: number): { level: string; color: string } {
   if (score > 16) {
     return { level: 'critical', color: 'hsl(var(--destructive))' }
   }
-  if (score >= 12) {
+  if (score >= 10) {
     return { level: 'high', color: 'hsl(var(--warning))' }
   }
   if (score >= 5) {
@@ -158,6 +166,8 @@ interface Risk {
   category: string
   department: string
   inherent_score: number
+  inherent_likelihood?: number
+  inherent_impact?: number
   residual_score: number
   residual_likelihood?: number
   residual_impact?: number
@@ -176,30 +186,7 @@ interface Risk {
   suggestion_triage_status?: string | null
 }
 
-interface MatrixCell {
-  likelihood: number
-  impact: number
-  score: number
-  level: string
-  color: string
-  risk_count: number
-  risk_ids: number[]
-  risk_titles: string[]
-}
-
-interface HeatMapData {
-  matrix: MatrixCell[][]
-  summary: {
-    total_risks: number
-    critical_risks: number
-    high_risks: number
-    outside_appetite: number
-    average_inherent_score: number
-    average_residual_score: number
-  }
-  likelihood_labels: Record<number, string>
-  impact_labels: Record<number, string>
-}
+type HeatMapData = InteractiveHeatMapData
 
 interface LinkedAuditTarget {
   kind: 'audit' | 'finding'
@@ -253,6 +240,24 @@ export default function RiskRegister() {
   const [rejectNotes, setRejectNotes] = useState('')
   const [triageSubmitting, setTriageSubmitting] = useState(false)
   const [linkedAuditTargets, setLinkedAuditTargets] = useState<Record<string, LinkedAuditTarget>>({})
+  const [filterCategory, setFilterCategory] = useState(searchParams.get('category') || '')
+  const [filterDepartment, setFilterDepartment] = useState(searchParams.get('department') || '')
+  const [filterStatus, setFilterStatus] = useState(searchParams.get('status') || '')
+  const [scoreType, setScoreType] = useState<HeatMapScoreType>(
+    (searchParams.get('scoreType') as HeatMapScoreType) || 'residual',
+  )
+  const [focusMode, setFocusMode] = useState<HeatMapFocusMode>('none')
+  const [cellFilter, setCellFilter] = useState<{ likelihood: number; impact: number } | null>(() => {
+    const L = Number(searchParams.get('L') || '')
+    const I = Number(searchParams.get('I') || '')
+    return Number.isInteger(L) && L >= 1 && L <= 5 && Number.isInteger(I) && I >= 1 && I <= 5
+      ? { likelihood: L, impact: I }
+      : null
+  })
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerRisks, setDrawerRisks] = useState<Risk[]>([])
+  const [trends, setTrends] = useState<TrendPoint[]>([])
+  const [topMovers, setTopMovers] = useState<TopMover[]>([])
 
   useEffect(() => {
     if (searchParams.get('triage') === 'import') {
@@ -267,11 +272,48 @@ export default function RiskRegister() {
     else next.delete('auditOnly')
     if (auditRefFilter) next.set('auditRef', auditRefFilter)
     else next.delete('auditRef')
+    if (filterCategory) next.set('category', filterCategory)
+    else next.delete('category')
+    if (filterDepartment) next.set('department', filterDepartment)
+    else next.delete('department')
+    if (filterStatus) next.set('status', filterStatus)
+    else next.delete('status')
+    if (scoreType && scoreType !== 'residual') next.set('scoreType', scoreType)
+    else next.delete('scoreType')
+    if (cellFilter) {
+      next.set('L', String(cellFilter.likelihood))
+      next.set('I', String(cellFilter.impact))
+    } else {
+      next.delete('L')
+      next.delete('I')
+    }
+    if (view !== 'register') next.set('view', view)
+    else next.delete('view')
     const nextQuery = next.toString()
     if (nextQuery !== searchParams.toString()) {
       setSearchParams(next, { replace: true })
     }
-  }, [auditOnly, auditRefFilter, searchParams, setSearchParams])
+  }, [
+    auditOnly,
+    auditRefFilter,
+    filterCategory,
+    filterDepartment,
+    filterStatus,
+    scoreType,
+    cellFilter,
+    view,
+    searchParams,
+    setSearchParams,
+  ])
+
+  const workspaceFilters = useMemo(
+    () => ({
+      category: filterCategory || undefined,
+      department: filterDepartment || undefined,
+      status: filterStatus || undefined,
+    }),
+    [filterCategory, filterDepartment, filterStatus],
+  )
 
   const loadRisks = useCallback(async () => {
     setLoading(true)
@@ -280,16 +322,34 @@ export default function RiskRegister() {
     setHeatmapUnavailable(false)
     setAuditLinksUnavailable(false)
     try {
+      const bandParams =
+        cellFilter != null
+          ? scoreType === 'inherent'
+            ? {
+                inherent_likelihood: cellFilter.likelihood,
+                inherent_impact: cellFilter.impact,
+              }
+            : {
+                residual_likelihood: cellFilter.likelihood,
+                residual_impact: cellFilter.impact,
+              }
+          : {}
       const listParams =
         registerMode === 'import_triage'
-          ? ({ limit: 100, suggestion_triage: 'pending' } as const)
-          : ({ limit: 100 } as const)
-      const [risksResult, summaryResult, heatmapResult, pendingResult] = await Promise.allSettled([
-        riskRegisterApi.list(listParams),
-        riskRegisterApi.getSummary(),
-        riskRegisterApi.getHeatmap(),
-        riskRegisterApi.list({ limit: 1, suggestion_triage: 'pending' }),
-      ])
+          ? ({ limit: 100, suggestion_triage: 'pending' as const, ...workspaceFilters })
+          : ({
+              limit: cellFilter ? 200 : 100,
+              ...workspaceFilters,
+              ...bandParams,
+            })
+      const [risksResult, summaryResult, heatmapResult, pendingResult, trendsResult] =
+        await Promise.allSettled([
+          riskRegisterApi.list(listParams),
+          riskRegisterApi.getSummary(workspaceFilters),
+          riskRegisterApi.getHeatmap({ ...workspaceFilters, score_type: scoreType }),
+          riskRegisterApi.list({ limit: 1, suggestion_triage: 'pending' }),
+          riskRegisterApi.getTrends(365, true),
+        ])
 
       if (risksResult.status === 'rejected') {
         const message = getApiErrorMessage(
@@ -322,6 +382,8 @@ export default function RiskRegister() {
           category: r.category ?? 'operational',
           department: r.department ?? '',
           inherent_score: inherent,
+          inherent_likelihood: r.inherent_likelihood,
+          inherent_impact: r.inherent_impact,
           residual_score: residual,
           residual_likelihood: r.residual_likelihood,
           residual_impact: r.residual_impact,
@@ -406,7 +468,7 @@ export default function RiskRegister() {
         const fallbackBandCounts =
           heatmapResult.status === 'fulfilled' ? heatmapBandCounts(heatmapCells) : null
         setSummary({
-          total_risks: typeof s?.total_risks === 'number' ? s.total_risks : mappedRisks.length,
+          total_risks: typeof s?.total_risks === 'number' ? s.total_risks : null,
           by_level: {
             critical:
               typeof byLevel?.critical === 'number'
@@ -451,112 +513,78 @@ export default function RiskRegister() {
         toast.warning('Risk summary metrics unavailable — counts are not shown as zero.')
       }
 
-      if (heatmapResult.status === 'fulfilled') {
+      if (heatmapResult.status === 'fulfilled' && Array.isArray(heatmapResult.value.data?.matrix)) {
         const heatmap = heatmapResult.value.data
-        const levelCritical =
-          summaryResult.status === 'fulfilled'
-            ? ((summaryResult.value.data as { by_level?: { critical?: number }; critical?: number })
-                ?.by_level?.critical ??
-                (summaryResult.value.data as { critical?: number })?.critical ??
-                0)
-            : 0
-        const levelHigh =
-          summaryResult.status === 'fulfilled'
-            ? ((summaryResult.value.data as { by_level?: { high?: number }; high?: number })?.by_level
-                ?.high ??
-                (summaryResult.value.data as { high?: number })?.high ??
-                0)
-            : 0
-        const builtHeatMap: HeatMapData = {
-          matrix: [],
+        const apiSummary = heatmap.summary
+        setHeatMapData({
+          matrix: heatmap.matrix.map((row) =>
+            row.map((cell) => ({
+              likelihood: cell.likelihood,
+              impact: cell.impact,
+              score: cell.score ?? cell.likelihood * cell.impact,
+              level: cell.level ?? matrixBandFromScore(cell.likelihood * cell.impact).level,
+              color: cell.color ?? matrixBandFromScore(cell.likelihood * cell.impact).color,
+              risk_count: cell.risk_count ?? cell.count ?? 0,
+              risk_ids: cell.risk_ids ?? cell.risks?.map((r) => r.id) ?? [],
+              risk_titles: cell.risk_titles ?? cell.risks?.map((r) => r.title ?? '') ?? [],
+              owners_sample: cell.owners_sample ?? [],
+              overdue_count: cell.overdue_count ?? 0,
+              outside_appetite_count: cell.outside_appetite_count ?? 0,
+              intensity: cell.intensity ?? 0,
+              above_appetite_band: cell.above_appetite_band ?? false,
+              movers: cell.movers ?? [],
+            })),
+          ),
           summary: {
-            total_risks: mappedRisks.length,
-            critical_risks: levelCritical,
-            high_risks: levelHigh,
-            outside_appetite:
-              summaryResult.status === 'fulfilled' &&
-              typeof (summaryResult.value.data as { outside_appetite?: number })?.outside_appetite ===
-                'number'
-                ? (summaryResult.value.data as unknown as { outside_appetite: number })
-                    .outside_appetite
-                : mappedRisks.filter((risk) => risk.is_within_appetite === false).length,
-            average_inherent_score:
-              mappedRisks.length > 0
-                ? mappedRisks.reduce((a, r) => a + r.inherent_score, 0) / mappedRisks.length
-                : 0,
-            average_residual_score:
-              mappedRisks.length > 0
-                ? mappedRisks.reduce((a, r) => a + r.residual_score, 0) / mappedRisks.length
-                : 0,
+            total_risks: apiSummary?.total_risks ?? 0,
+            critical_risks: apiSummary?.critical_risks ?? 0,
+            high_risks: apiSummary?.high_risks ?? 0,
+            medium_risks: apiSummary?.medium_risks,
+            low_risks: apiSummary?.low_risks,
+            outside_appetite: apiSummary?.outside_appetite ?? 0,
+            average_inherent_score: apiSummary?.average_inherent_score ?? 0,
+            average_residual_score: apiSummary?.average_residual_score ?? 0,
           },
-          likelihood_labels: {
+          likelihood_labels: heatmap.likelihood_labels ?? {
             1: 'Rare',
             2: 'Unlikely',
             3: 'Possible',
             4: 'Likely',
             5: 'Almost Certain',
           },
-          impact_labels: {
+          impact_labels: heatmap.impact_labels ?? {
             1: 'Insignificant',
             2: 'Minor',
             3: 'Moderate',
             4: 'Major',
             5: 'Catastrophic',
           },
-        }
-
-        const heatmapCells = flattenHeatmapCells(heatmap ?? {})
-        const clientBins =
-          heatmapCells.reduce((sum, c) => sum + (c.count ?? c.risk_count ?? 0), 0) === 0 &&
-          mappedRisks.length > 0
-            ? binRisksIntoHeatmapCells(mappedRisks)
-            : null
-
-        for (let likelihood = 5; likelihood >= 1; likelihood--) {
-          const row: MatrixCell[] = []
-          for (let impact = 1; impact <= 5; impact++) {
-            const score = likelihood * impact
-            const { level, color } = matrixBandFromScore(score)
-
-            const apiCell = heatmapCells.find(
-              (c) => c.likelihood === likelihood && c.impact === impact,
-            )
-            const clientCell = clientBins?.get(`${likelihood}:${impact}`)
-            const riskCount =
-              apiCell?.count ??
-              apiCell?.risk_count ??
-              clientCell?.count ??
-              0
-            const riskIds =
-              apiCell?.risks?.map((r) => r.id) ??
-              apiCell?.risk_ids ??
-              clientCell?.risk_ids ??
-              []
-            const riskTitles =
-              apiCell?.risks?.map((r) => (r.title ?? '').substring(0, 30)) ??
-              apiCell?.risk_titles ??
-              clientCell?.risk_titles ??
-              []
-
-            row.push({
-              likelihood,
-              impact,
-              score,
-              level,
-              color,
-              risk_count: riskCount,
-              risk_ids: riskIds,
-              risk_titles: riskTitles,
-            })
-          }
-          builtHeatMap.matrix.push(row)
-        }
-        setHeatMapData(builtHeatMap)
+          appetite_overlay: heatmap.appetite_overlay,
+          view_mode: heatmap.view_mode,
+        })
         setHeatmapUnavailable(false)
       } else {
         setHeatMapData(null)
         setHeatmapUnavailable(true)
         toast.warning('Risk heat map unavailable.')
+      }
+
+      if (trendsResult.status === 'fulfilled') {
+        const raw = trendsResult.value.data
+        if (Array.isArray(raw)) {
+          setTrends(raw as TrendPoint[])
+          setTopMovers([])
+        } else if (raw && typeof raw === 'object') {
+          const body = raw as { series?: TrendPoint[]; top_movers?: TopMover[] }
+          setTrends(Array.isArray(body.series) ? body.series : [])
+          setTopMovers(Array.isArray(body.top_movers) ? body.top_movers : [])
+        } else {
+          setTrends([])
+          setTopMovers([])
+        }
+      } else {
+        setTrends([])
+        setTopMovers([])
       }
 
       const [runsResult, findingsResult] = await Promise.allSettled([
@@ -600,7 +628,7 @@ export default function RiskRegister() {
     } finally {
       setLoading(false)
     }
-  }, [registerMode, focusRiskId])
+  }, [registerMode, focusRiskId, workspaceFilters, cellFilter, scoreType])
 
   useEffect(() => {
     void loadRisks()
@@ -831,31 +859,75 @@ export default function RiskRegister() {
 
       {showFilters ? (
         <Card>
-          <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center">
-            <Button
-              variant={auditOnly ? 'default' : 'secondary'}
-              onClick={() => setAuditOnly((prev) => !prev)}
-            >
-              Audit-origin only
-            </Button>
-            <input
-              type="text"
-              value={auditRefFilter}
-              onChange={(e) => setAuditRefFilter(e.target.value)}
-              placeholder="Filter by audit reference"
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-            />
-            {(auditOnly || auditRefFilter) ? (
+          <CardContent className="flex flex-col gap-3 p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                data-testid="risk-filter-category"
+              >
+                <option value="">All categories</option>
+                {CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={filterDepartment}
+                onChange={(e) => setFilterDepartment(e.target.value)}
+                placeholder="Department"
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                data-testid="risk-filter-department"
+              />
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                data-testid="risk-filter-status"
+              >
+                <option value="">All statuses (excl. closed)</option>
+                <option value="active">Active</option>
+                <option value="monitoring">Monitoring</option>
+                <option value="mitigated">Mitigated</option>
+                <option value="draft">Draft</option>
+              </select>
+              <Button
+                variant={auditOnly ? 'default' : 'secondary'}
+                onClick={() => setAuditOnly((prev) => !prev)}
+              >
+                Audit-origin only
+              </Button>
+              <input
+                type="text"
+                value={auditRefFilter}
+                onChange={(e) => setAuditRefFilter(e.target.value)}
+                placeholder="Filter by audit reference"
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              />
+            </div>
+            {(auditOnly ||
+              auditRefFilter ||
+              filterCategory ||
+              filterDepartment ||
+              filterStatus ||
+              cellFilter) && (
               <Button
                 variant="ghost"
                 onClick={() => {
                   setAuditOnly(false)
                   setAuditRefFilter('')
+                  setFilterCategory('')
+                  setFilterDepartment('')
+                  setFilterStatus('')
+                  setCellFilter(null)
                 }}
               >
-                Clear audit filters
+                Clear filters
               </Button>
-            ) : null}
+            )}
           </CardContent>
         </Card>
       ) : null}
@@ -1246,138 +1318,62 @@ export default function RiskRegister() {
       {view === 'heatmap' && heatMapData && !heatmapUnavailable && (
         <Card>
           <CardContent className="p-6">
-            <h2 className="text-xl font-bold mb-6 text-foreground">
-              5×5 Risk Heat Map (Residual Risk)
-            </h2>
-
-            <div className="flex gap-8">
-              {/* Matrix */}
-              <div className="flex-grow">
-                <div className="flex">
-                  {/* Y-axis label */}
-                  <div className="flex flex-col items-center justify-center pr-4">
-                    <span
-                      className="text-muted-foreground text-sm font-medium"
-                      style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-                    >
-                      LIKELIHOOD →
-                    </span>
-                  </div>
-
-                  <div>
-                    {/* Y-axis labels */}
-                    <div className="flex">
-                      <div className="w-24"></div>
-                      {[1, 2, 3, 4, 5].map((impact) => (
-                        <div
-                          key={impact}
-                          className="w-20 text-center text-xs text-muted-foreground mb-2"
-                        >
-                          {heatMapData.impact_labels[impact]}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Matrix Grid */}
-                    {heatMapData.matrix.map((row, rowIndex) => (
-                      <div key={rowIndex} className="flex items-center">
-                        {/* Row label */}
-                        <div className="w-24 text-right pr-4 text-xs text-muted-foreground">
-                          {heatMapData.likelihood_labels[5 - rowIndex]}
-                        </div>
-
-                        {/* Cells */}
-                        {row.map((cell, cellIndex) => (
-                          <div
-                            key={cellIndex}
-                            className="w-20 h-16 m-0.5 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:ring-2 hover:ring-ring transition-all"
-                            style={{ backgroundColor: cell.color }}
-                          >
-                            <span className="text-white font-bold text-lg">{cell.score}</span>
-                            {cell.risk_count > 0 && (
-                              <span className="text-white/80 text-xs">
-                                ({cell.risk_count} risk{cell.risk_count > 1 ? 's' : ''})
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-
-                    {/* X-axis label */}
-                    <div className="text-center mt-4 text-muted-foreground text-sm font-medium">
-                      IMPACT →
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Legend & Stats */}
-              <div className="w-64 space-y-4">
-                <Card>
-                  <CardContent className="p-4">
-                    <h3 className="font-semibold text-foreground mb-3">Risk Levels</h3>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded bg-destructive"></div>
-                        <span className="text-sm text-foreground">Critical (17-25)</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded bg-warning"></div>
-                        <span className="text-sm text-foreground">High (10-16)</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded bg-info"></div>
-                        <span className="text-sm text-foreground">Medium (5-9)</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded bg-success"></div>
-                        <span className="text-sm text-foreground">Low (1-4)</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-4">
-                    <h3 className="font-semibold text-foreground mb-3">Summary</h3>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Total Risks</span>
-                        <span className="font-bold text-foreground">
-                          {heatMapData.summary.total_risks}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Avg Inherent</span>
-                        <span className="font-bold text-muted-foreground">
-                          {(heatMapData.summary?.average_inherent_score ?? 0).toFixed(1)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Avg Residual</span>
-                        <span className="font-bold text-success">
-                          {(heatMapData.summary?.average_residual_score ?? 0).toFixed(1)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Risk Reduction</span>
-                        <span className="font-bold text-success">
-                          {(heatMapData.summary?.average_inherent_score
-                            ? ((heatMapData.summary.average_inherent_score -
-                                (heatMapData.summary.average_residual_score ?? 0)) /
-                                heatMapData.summary.average_inherent_score) *
-                              100
-                            : 0
-                          ).toFixed(0)}
-                          %
-                        </span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
+            <RiskHeatMap
+              data={heatMapData}
+              scoreType={scoreType}
+              focusMode={focusMode}
+              selectedCell={cellFilter}
+              onScoreTypeChange={setScoreType}
+              onFocusModeChange={setFocusMode}
+              auditFilterActive={auditOnly || Boolean(auditRefFilter)}
+              trends={trends}
+              topMovers={topMovers}
+              drawerOpen={drawerOpen}
+              onDrawerOpenChange={setDrawerOpen}
+              drawerRisks={drawerRisks}
+              onOpenRisk={(id) => {
+                const found = risks.find((r) => r.id === id) ?? drawerRisks.find((r) => r.id === id)
+                if (found) setSelectedRisk(found)
+                setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev)
+                  next.set('riskId', String(id))
+                  return next
+                })
+              }}
+              onCellSelect={(cell) => {
+                setCellFilter({ likelihood: cell.likelihood, impact: cell.impact })
+                const byId = new Map(risks.map((r) => [r.id, r]))
+                const ordered = cell.risk_ids
+                  .map((id) => byId.get(id))
+                  .filter((r): r is Risk => Boolean(r))
+                if (ordered.length > 0) {
+                  setDrawerRisks(ordered)
+                } else {
+                  setDrawerRisks(
+                    risks
+                      .filter((r) =>
+                        scoreType === 'inherent'
+                          ? r.inherent_likelihood === cell.likelihood &&
+                            r.inherent_impact === cell.impact
+                          : r.residual_likelihood === cell.likelihood &&
+                            r.residual_impact === cell.impact,
+                      )
+                      .sort((a, b) => b.residual_score - a.residual_score),
+                  )
+                }
+                setDrawerOpen(true)
+              }}
+              onShowInRegister={(cell) => {
+                setCellFilter({ likelihood: cell.likelihood, impact: cell.impact })
+                setDrawerOpen(false)
+                setView('register')
+              }}
+              onClearCellFilter={() => {
+                setCellFilter(null)
+                setDrawerOpen(false)
+                setDrawerRisks([])
+              }}
+            />
           </CardContent>
         </Card>
       )}

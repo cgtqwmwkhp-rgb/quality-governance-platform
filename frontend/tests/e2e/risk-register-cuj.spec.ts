@@ -68,7 +68,30 @@ async function installRiskRegisterMocks(
         await json(route, { detail: "Heatmap unavailable" }, 503);
         return;
       }
-      await json(route, { cells: [] });
+      await json(route, {
+        matrix: Array.from({ length: 5 }, (_, row) =>
+          Array.from({ length: 5 }, (__, col) => ({
+            likelihood: 5 - row,
+            impact: col + 1,
+            score: (5 - row) * (col + 1),
+            level: 'low',
+            color: '#22c55e',
+            risk_count: 0,
+            risk_ids: [],
+            risk_titles: [],
+          })),
+        ),
+        summary: {
+          total_risks: 0,
+          critical_risks: 0,
+          high_risks: 0,
+          outside_appetite: 0,
+          average_inherent_score: 0,
+          average_residual_score: 0,
+        },
+        likelihood_labels: { 1: 'Rare', 2: 'Unlikely', 3: 'Possible', 4: 'Likely', 5: 'Almost Certain' },
+        impact_labels: { 1: 'Insignificant', 2: 'Minor', 3: 'Moderate', 4: 'Major', 5: 'Catastrophic' },
+      });
       return;
     }
 

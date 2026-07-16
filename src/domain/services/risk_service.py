@@ -10,7 +10,7 @@ Provides:
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,29 +66,35 @@ class RiskScoringEngine:
         """Calculate risk score from likelihood and impact"""
         return likelihood * impact
 
+    # Canonical bands: low ≤4, medium 5–9, high 10–16, critical ≥17
+    LEVEL_SCORE_RANGES = {
+        "low": (1, 4),
+        "medium": (5, 9),
+        "high": (10, 16),
+        "critical": (17, 25),
+    }
+
     @classmethod
     def get_risk_level(cls, score: int) -> str:
-        """Get risk level from residual score (aligned with /summary by_level bands)."""
+        """Get risk level from score using canonical 5×5 bands."""
         if score <= 4:
             return "low"
-        elif score <= 11:
+        if score <= 9:
             return "medium"
-        elif score <= 16:
+        if score <= 16:
             return "high"
-        else:
-            return "critical"
+        return "critical"
 
     @classmethod
     def get_risk_color(cls, score: int) -> str:
-        """Get color code for risk score"""
-        if score <= 4:
-            return "#22c55e"  # Green
-        elif score <= 9:
-            return "#eab308"  # Yellow
-        elif score <= 16:
-            return "#f97316"  # Orange
-        else:
-            return "#ef4444"  # Red
+        """Get color code for risk score (aligned with get_risk_level)."""
+        level = cls.get_risk_level(score)
+        return {
+            "low": "#22c55e",
+            "medium": "#eab308",
+            "high": "#f97316",
+            "critical": "#ef4444",
+        }[level]
 
     @classmethod
     def generate_matrix(cls) -> list[list[dict]]:
@@ -248,10 +254,26 @@ class RiskService:
         self,
         category: Optional[str] = None,
         department: Optional[str] = None,
+        status: Optional[str] = None,
         tenant_id: Optional[int] = None,
+        score_type: str = "residual",
     ) -> dict[str, Any]:
-        """Generate heat map data for visualization"""
-        stmt = select(EnterpriseRisk).where(EnterpriseRisk.status != "closed")
+        """Generate interactive heat map data (residual/inherent placement).
+
+        score_type:
+          - residual: place by residual L×I (default)
+          - inherent: place by inherent L×I
+          - delta: residual matrix + per-cell movers (inherent→residual)
+        """
+        if score_type not in {"residual", "inherent", "delta"}:
+            score_type = "residual"
+
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        stmt = select(EnterpriseRisk)
+        if status:
+            stmt = stmt.where(EnterpriseRisk.status == status)
+        else:
+            stmt = stmt.where(EnterpriseRisk.status != "closed")
         stmt = stmt.where(
             or_(
                 EnterpriseRisk.suggestion_triage_status.is_(None),
@@ -266,14 +288,78 @@ class RiskService:
             stmt = stmt.where(EnterpriseRisk.department == department)
 
         result = await self.db.execute(stmt)
-        risks = result.scalars().all()
+        risks = list(result.scalars().all())
+
+        place_attr = "inherent" if score_type == "inherent" else "residual"
+        buckets: dict[tuple[int, int], list[Any]] = {}
+        for r in risks:
+            lik = getattr(r, f"{place_attr}_likelihood")
+            imp = getattr(r, f"{place_attr}_impact")
+            if not (1 <= lik <= 5 and 1 <= imp <= 5):
+                continue
+            buckets.setdefault((lik, imp), []).append(r)
+
+        max_count = max((len(v) for v in buckets.values()), default=1)
+
+        # Appetite overlay threshold (default 12; max residual from any active statement)
+        appetite_threshold = 12
+        appetite_stmt = select(RiskAppetiteStatement).where(RiskAppetiteStatement.is_active == True)  # noqa: E712
+        if tenant_id is not None:
+            appetite_stmt = appetite_stmt.where(
+                or_(
+                    RiskAppetiteStatement.tenant_id == tenant_id,
+                    RiskAppetiteStatement.tenant_id.is_(None),
+                )
+            )
+        appetite_result = await self.db.execute(appetite_stmt)
+        statements = list(appetite_result.scalars().all())
+        thresholds = [s.max_residual_score for s in statements if s.max_residual_score is not None]
+        if thresholds:
+            appetite_threshold = min(thresholds)
 
         matrix = []
         for likelihood in range(5, 0, -1):
             row = []
             for impact in range(1, 6):
-                cell_risks = [r for r in risks if r.residual_likelihood == likelihood and r.residual_impact == impact]
+                cell_risks = buckets.get((likelihood, impact), [])
+                # Stable rank: residual score desc for drawer
+                cell_risks_sorted = sorted(cell_risks, key=lambda r: r.residual_score, reverse=True)
                 score = RiskScoringEngine.calculate_score(likelihood, impact)
+                risk_ids_all = [r.id for r in cell_risks_sorted]
+                truncated = len(risk_ids_all) > 50
+                risk_ids = risk_ids_all[:50]
+                titles = [r.title for r in cell_risks_sorted[:8]]
+                owners: list[str] = []
+                for r in cell_risks_sorted:
+                    name = (r.risk_owner_name or "").strip()
+                    if name and name not in owners:
+                        owners.append(name)
+                    if len(owners) >= 3:
+                        break
+                overdue_count = sum(
+                    1 for r in cell_risks_sorted if r.next_review_date is not None and r.next_review_date < now
+                )
+                outside_appetite_count = sum(1 for r in cell_risks_sorted if not r.is_within_appetite)
+                intensity = (len(cell_risks_sorted) / max_count) if max_count else 0.0
+
+                movers: list[dict[str, Any]] = []
+                if score_type == "delta":
+                    for r in cell_risks_sorted[:10]:
+                        if (
+                            r.inherent_likelihood != r.residual_likelihood
+                            or r.inherent_impact != r.residual_impact
+                        ):
+                            movers.append(
+                                {
+                                    "id": r.id,
+                                    "title": r.title,
+                                    "from": [r.inherent_likelihood, r.inherent_impact],
+                                    "to": [r.residual_likelihood, r.residual_impact],
+                                    "inherent_score": r.inherent_score,
+                                    "residual_score": r.residual_score,
+                                }
+                            )
+
                 row.append(
                     {
                         "likelihood": likelihood,
@@ -281,27 +367,34 @@ class RiskService:
                         "score": score,
                         "level": RiskScoringEngine.get_risk_level(score),
                         "color": RiskScoringEngine.get_risk_color(score),
-                        "risk_count": len(cell_risks),
-                        "risk_ids": [r.id for r in cell_risks],
-                        "risk_titles": [r.title[:30] for r in cell_risks[:5]],
+                        "risk_count": len(cell_risks_sorted),
+                        "risk_ids": risk_ids,
+                        "risk_ids_truncated": truncated,
+                        "risk_titles": titles,
+                        "owners_sample": owners,
+                        "overdue_count": overdue_count,
+                        "outside_appetite_count": outside_appetite_count,
+                        "intensity": round(intensity, 3),
+                        "above_appetite_band": score > appetite_threshold,
+                        "movers": movers,
                     }
                 )
             matrix.append(row)
 
         total_risks = len(risks)
-        critical_risks = len([r for r in risks if r.residual_score > 16])
-        high_risks = len([r for r in risks if 12 <= r.residual_score <= 16])
-        outside_appetite = len([r for r in risks if not r.is_within_appetite])
+        critical_risks = sum(1 for r in risks if RiskScoringEngine.get_risk_level(r.residual_score) == "critical")
+        high_risks = sum(1 for r in risks if RiskScoringEngine.get_risk_level(r.residual_score) == "high")
+        medium_risks = sum(1 for r in risks if RiskScoringEngine.get_risk_level(r.residual_score) == "medium")
+        low_risks = sum(1 for r in risks if RiskScoringEngine.get_risk_level(r.residual_score) == "low")
+        outside_appetite = sum(1 for r in risks if not r.is_within_appetite)
 
+        # Compat flat cells for older clients
         cells = [
             {
                 "likelihood": cell["likelihood"],
                 "impact": cell["impact"],
                 "count": cell["risk_count"],
-                "risks": [
-                    {"id": rid, "title": title}
-                    for rid, title in zip(cell["risk_ids"], cell["risk_titles"], strict=False)
-                ],
+                "risks": [{"id": rid, "title": title} for rid, title in zip(cell["risk_ids"], cell["risk_titles"], strict=False)],
             }
             for row in matrix
             for cell in row
@@ -314,12 +407,26 @@ class RiskService:
                 "total_risks": total_risks,
                 "critical_risks": critical_risks,
                 "high_risks": high_risks,
+                "medium_risks": medium_risks,
+                "low_risks": low_risks,
                 "outside_appetite": outside_appetite,
                 "average_inherent_score": (sum(r.inherent_score for r in risks) / total_risks if total_risks else 0),
                 "average_residual_score": (sum(r.residual_score for r in risks) / total_risks if total_risks else 0),
             },
             "likelihood_labels": RiskScoringEngine.LIKELIHOOD_LABELS,
             "impact_labels": RiskScoringEngine.IMPACT_LABELS,
+            "score_type": score_type if score_type != "delta" else "residual",
+            "view_mode": score_type,
+            "filters_applied": {
+                "category": category,
+                "department": department,
+                "status": status,
+                "score_type": score_type,
+            },
+            "appetite_overlay": {
+                "threshold": appetite_threshold,
+                "source": "risk_appetite_statements" if statements else "default",
+            },
         }
 
     async def get_risk_trends(
@@ -327,8 +434,13 @@ class RiskService:
         risk_id: Optional[int] = None,
         days: int = 365,
         tenant_id: Optional[int] = None,
-    ) -> list[dict[str, Any]]:
-        """Get risk score trends over time"""
+        include_movers: bool = False,
+    ) -> Union[list[dict[str, Any]], dict[str, Any]]:
+        """Get risk score trends over time.
+
+        When include_movers=True, returns {"series": [...], "top_movers": [...]} for board pack /
+        executive sparklines. Default remains a list for backward compatibility.
+        """
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         stmt = (
@@ -346,6 +458,7 @@ class RiskService:
         history = result.scalars().all()
 
         monthly_data: dict[str, dict] = {}
+        per_risk: dict[int, list[tuple[datetime, int]]] = {}
         for h in history:
             month_key = h.assessment_date.strftime("%Y-%m")
             if month_key not in monthly_data:
@@ -358,6 +471,7 @@ class RiskService:
             monthly_data[month_key]["inherent_scores"].append(h.inherent_score)
             monthly_data[month_key]["residual_scores"].append(h.residual_score)
             monthly_data[month_key]["count"] += 1
+            per_risk.setdefault(h.risk_id, []).append((h.assessment_date, h.residual_score))
 
         trends = []
         for month, data in sorted(monthly_data.items()):
@@ -370,7 +484,33 @@ class RiskService:
                 }
             )
 
-        return trends
+        if not include_movers:
+            return trends
+
+        movers: list[dict[str, Any]] = []
+        risk_ids = list(per_risk.keys())
+        titles: dict[int, str] = {}
+        if risk_ids:
+            title_result = await self.db.execute(
+                select(EnterpriseRisk.id, EnterpriseRisk.title).where(EnterpriseRisk.id.in_(risk_ids))
+            )
+            titles = {row[0]: row[1] for row in title_result.all()}
+        for rid, points in per_risk.items():
+            if len(points) < 2:
+                continue
+            points_sorted = sorted(points, key=lambda p: p[0])
+            delta = points_sorted[-1][1] - points_sorted[0][1]
+            movers.append(
+                {
+                    "id": rid,
+                    "title": titles.get(rid, f"Risk {rid}"),
+                    "from_score": points_sorted[0][1],
+                    "to_score": points_sorted[-1][1],
+                    "delta": delta,
+                }
+            )
+        movers.sort(key=lambda m: abs(m["delta"]), reverse=True)
+        return {"series": trends, "top_movers": movers[:10]}
 
     async def forecast_risk_trends(
         self,
