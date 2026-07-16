@@ -701,9 +701,7 @@ async def list_assessments_paged(
     """List assessment history with explicit pagination metadata."""
     await _get_risk_tenant_checked(db, risk_id, current_user)
     base = (
-        select(RiskAssessment)
-        .where(RiskAssessment.risk_id == risk_id)
-        .order_by(RiskAssessment.assessment_date.desc())
+        select(RiskAssessment).where(RiskAssessment.risk_id == risk_id).order_by(RiskAssessment.assessment_date.desc())
     )
     count_result = await db.execute(select(func.count()).select_from(base.subquery()))
     total = count_result.scalar_one()
