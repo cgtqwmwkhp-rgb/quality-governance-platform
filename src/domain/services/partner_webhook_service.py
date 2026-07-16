@@ -69,13 +69,21 @@ class PartnerWebhookService:
         await self.db.flush()
         return subscription
 
-    async def list_subscriptions(self, tenant_id: int) -> list[WebhookSubscription]:
+    async def list_subscriptions(
+        self,
+        tenant_id: int,
+        *,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[WebhookSubscription], int]:
+        """Return one tenant-scoped subscription page and its total."""
+        filters = WebhookSubscription.tenant_id == tenant_id
+        total_result = await self.db.execute(select(func.count(WebhookSubscription.id)).where(filters))
+        total = int(total_result.scalar() or 0)
         result = await self.db.execute(
-            select(WebhookSubscription)
-            .where(WebhookSubscription.tenant_id == tenant_id)
-            .order_by(WebhookSubscription.id.desc())
+            select(WebhookSubscription).where(filters).order_by(WebhookSubscription.id.desc()).offset(skip).limit(limit)
         )
-        return list(result.scalars().all())
+        return list(result.scalars().all()), total
 
     async def get_subscription(self, tenant_id: int, subscription_id: int) -> Optional[WebhookSubscription]:
         result = await self.db.execute(

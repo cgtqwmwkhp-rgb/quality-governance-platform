@@ -36,6 +36,7 @@ import {
   Download,
   Package,
   ShieldAlert,
+  Webhook,
 } from 'lucide-react'
 import { useState, useEffect, useCallback, lazy, Suspense, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -207,6 +208,11 @@ export default function Layout({ onLogout }: LayoutProps) {
                 path: '/admin/notifications',
                 icon: Bell,
                 label: t('nav.notifications', { defaultValue: 'Notifications' }),
+              },
+              {
+                path: '/admin/partner-webhooks',
+                icon: Webhook,
+                label: t('nav.partner_webhooks', { defaultValue: 'Partner Webhooks' }),
               },
               {
                 path: '/admin/lookups',
