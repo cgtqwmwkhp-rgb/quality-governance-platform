@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Shield, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
+import { Loader2, AlertCircle, CheckCircle } from 'lucide-react'
+import { BrandMarkTile } from '../components/BrandMark'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -48,9 +49,7 @@ export default function PortalLogin() {
       <div className="max-w-md w-full relative animate-fade-in">
         {/* Logo & Header */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 rounded-2xl gradient-brand flex items-center justify-center mx-auto mb-6 shadow-glow">
-            <Shield className="w-10 h-10 text-primary-foreground" />
-          </div>
+          <BrandMarkTile size={80} className="mx-auto mb-6 rounded-2xl" />
           <h1 className="text-3xl font-bold text-foreground mb-2">Employee Portal</h1>
           <p className="text-muted-foreground">Sign in with your Plantexpand account</p>
         </div>
