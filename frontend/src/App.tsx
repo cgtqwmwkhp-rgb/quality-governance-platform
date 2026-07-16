@@ -102,6 +102,7 @@ const SystemSettings = lazy(() => import('./pages/admin/SystemSettings'))
 const AdminUserManagement = lazy(() => import('./pages/admin/UserManagement'))
 const LookupTables = lazy(() => import('./pages/admin/LookupTables'))
 const NotificationSettings = lazy(() => import('./pages/admin/NotificationSettings'))
+const PartnerWebhooks = lazy(() => import('./pages/admin/PartnerWebhooks'))
 const RequireRole = lazy(() => import('./components/RequireRole'))
 
 function PageLoader() {
@@ -528,6 +529,14 @@ function App() {
                   element={
                     <RequireRole allowed={['admin']}>
                       <NotificationSettings />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/partner-webhooks"
+                  element={
+                    <RequireRole allowed={['admin']}>
+                      <PartnerWebhooks />
                     </RequireRole>
                   }
                 />

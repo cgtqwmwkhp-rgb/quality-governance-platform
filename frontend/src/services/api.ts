@@ -66,6 +66,10 @@ async function apiRequest<T>(endpoint: string, options: ApiOptions = {}): Promis
     )
   }
 
+  if (response.status === 204) {
+    return undefined as T
+  }
+
   const data = await response.json()
 
   // Cache successful GET responses
@@ -241,6 +245,54 @@ export const settingsApi = {
       method: 'PATCH',
       body: { value },
     }),
+}
+
+// ==================== Partner Webhooks API ====================
+
+export interface PartnerWebhookSubscription {
+  id: number
+  tenant_id: number
+  name?: string | null
+  url: string
+  events: string[]
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface PartnerWebhookSubscriptionInput {
+  name?: string | null
+  url: string
+  secret?: string
+  events: string[]
+  is_active: boolean
+}
+
+export const partnerWebhooksApi = {
+  listEvents: () => apiRequest<{ events: string[] }>('/partner-webhooks/events'),
+
+  listSubscriptions: (skip = 0, limit = 50) =>
+    apiRequest<{ items: PartnerWebhookSubscription[]; total: number }>(
+      `/partner-webhooks/subscriptions?skip=${skip}&limit=${limit}`,
+    ),
+
+  createSubscription: (
+    data: Required<Pick<PartnerWebhookSubscriptionInput, 'url' | 'secret' | 'events'>> &
+      Pick<PartnerWebhookSubscriptionInput, 'name' | 'is_active'>,
+  ) =>
+    apiRequest<PartnerWebhookSubscription>('/partner-webhooks/subscriptions', {
+      method: 'POST',
+      body: data,
+    }),
+
+  updateSubscription: (id: number, data: PartnerWebhookSubscriptionInput) =>
+    apiRequest<PartnerWebhookSubscription>(`/partner-webhooks/subscriptions/${id}`, {
+      method: 'PATCH',
+      body: data,
+    }),
+
+  deleteSubscription: (id: number) =>
+    apiRequest<void>(`/partner-webhooks/subscriptions/${id}`, { method: 'DELETE' }),
 }
 
 // Portal Submissions
