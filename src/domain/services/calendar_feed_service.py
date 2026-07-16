@@ -106,9 +106,7 @@ class CalendarFeedService:
             "sources_failed": sources_failed,
         }
 
-    async def _load_audit_runs(
-        self, start_dt: datetime, end_dt: datetime, today: date
-    ) -> list[dict[str, Any]]:
+    async def _load_audit_runs(self, start_dt: datetime, end_dt: datetime, today: date) -> list[dict[str, Any]]:
         from src.domain.models.audit import AuditRun
 
         start_naive = start_dt.replace(tzinfo=None)
@@ -147,9 +145,7 @@ class CalendarFeedService:
             )
         return out
 
-    async def _load_scheduled_audits(
-        self, start_dt: datetime, end_dt: datetime, today: date
-    ) -> list[dict[str, Any]]:
+    async def _load_scheduled_audits(self, start_dt: datetime, end_dt: datetime, today: date) -> list[dict[str, Any]]:
         from src.domain.models.compliance_automation import ScheduledAudit
 
         start_naive = start_dt.replace(tzinfo=None)
@@ -160,9 +156,7 @@ class CalendarFeedService:
             ScheduledAudit.next_due_date <= end_naive,
         )
         if self.tenant_id is not None:
-            stmt = stmt.where(
-                or_(ScheduledAudit.tenant_id == self.tenant_id, ScheduledAudit.tenant_id.is_(None))
-            )
+            stmt = stmt.where(or_(ScheduledAudit.tenant_id == self.tenant_id, ScheduledAudit.tenant_id.is_(None)))
         result = await self.db.execute(stmt.limit(200))
         rows = list(result.scalars().all())
         out: list[dict[str, Any]] = []
@@ -185,9 +179,7 @@ class CalendarFeedService:
             )
         return out
 
-    async def _load_capa_actions(
-        self, start_dt: datetime, end_dt: datetime, today: date
-    ) -> list[dict[str, Any]]:
+    async def _load_capa_actions(self, start_dt: datetime, end_dt: datetime, today: date) -> list[dict[str, Any]]:
         from src.domain.models.capa import CAPAAction
 
         start_naive = start_dt.replace(tzinfo=None)
@@ -216,8 +208,7 @@ class CalendarFeedService:
                     "status": _status_for(when, status_val, today=today),
                     "priority": (
                         "high"
-                        if str(getattr(row.priority, "value", row.priority)).lower()
-                        in {"high", "critical"}
+                        if str(getattr(row.priority, "value", row.priority)).lower() in {"high", "critical"}
                         else "medium"
                     ),
                     "owner": None,
@@ -229,9 +220,7 @@ class CalendarFeedService:
             )
         return out
 
-    async def _load_certificates(
-        self, start_dt: datetime, end_dt: datetime, today: date
-    ) -> list[dict[str, Any]]:
+    async def _load_certificates(self, start_dt: datetime, end_dt: datetime, today: date) -> list[dict[str, Any]]:
         from src.domain.models.compliance_automation import Certificate
 
         start_naive = start_dt.replace(tzinfo=None)
@@ -241,9 +230,7 @@ class CalendarFeedService:
             Certificate.expiry_date <= end_naive,
         )
         if self.tenant_id is not None:
-            stmt = stmt.where(
-                or_(Certificate.tenant_id == self.tenant_id, Certificate.tenant_id.is_(None))
-            )
+            stmt = stmt.where(or_(Certificate.tenant_id == self.tenant_id, Certificate.tenant_id.is_(None)))
         result = await self.db.execute(stmt.limit(200))
         rows = list(result.scalars().all())
         out: list[dict[str, Any]] = []
@@ -266,9 +253,7 @@ class CalendarFeedService:
             )
         return out
 
-    async def _load_assessments(
-        self, start_dt: datetime, end_dt: datetime, today: date
-    ) -> list[dict[str, Any]]:
+    async def _load_assessments(self, start_dt: datetime, end_dt: datetime, today: date) -> list[dict[str, Any]]:
         from src.domain.models.assessment import AssessmentRun
 
         stmt = select(AssessmentRun).where(
@@ -277,9 +262,7 @@ class CalendarFeedService:
             AssessmentRun.scheduled_date <= end_dt,
         )
         if self.tenant_id is not None:
-            stmt = stmt.where(
-                or_(AssessmentRun.tenant_id == self.tenant_id, AssessmentRun.tenant_id.is_(None))
-            )
+            stmt = stmt.where(or_(AssessmentRun.tenant_id == self.tenant_id, AssessmentRun.tenant_id.is_(None)))
         result = await self.db.execute(stmt.limit(300))
         rows = list(result.scalars().all())
         out: list[dict[str, Any]] = []
@@ -305,9 +288,7 @@ class CalendarFeedService:
             )
         return out
 
-    async def _load_inductions(
-        self, start_dt: datetime, end_dt: datetime, today: date
-    ) -> list[dict[str, Any]]:
+    async def _load_inductions(self, start_dt: datetime, end_dt: datetime, today: date) -> list[dict[str, Any]]:
         from src.domain.models.induction import InductionRun
 
         stmt = select(InductionRun).where(
@@ -316,9 +297,7 @@ class CalendarFeedService:
             InductionRun.scheduled_date <= end_dt,
         )
         if self.tenant_id is not None and hasattr(InductionRun, "tenant_id"):
-            stmt = stmt.where(
-                or_(InductionRun.tenant_id == self.tenant_id, InductionRun.tenant_id.is_(None))
-            )
+            stmt = stmt.where(or_(InductionRun.tenant_id == self.tenant_id, InductionRun.tenant_id.is_(None)))
         result = await self.db.execute(stmt.limit(300))
         rows = list(result.scalars().all())
         out: list[dict[str, Any]] = []
