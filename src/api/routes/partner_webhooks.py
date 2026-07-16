@@ -75,11 +75,14 @@ async def list_subscriptions(
     """List partner webhook subscriptions for the current tenant."""
     tenant_id = _tenant_id_for(current_user)
     service = PartnerWebhookService(db)
-    subscriptions = await service.list_subscriptions(tenant_id)
-    paginated = subscriptions[skip : skip + limit]
+    subscriptions, total = await service.list_subscriptions(
+        tenant_id,
+        skip=skip,
+        limit=limit,
+    )
     return WebhookSubscriptionListResponse(
-        items=[WebhookSubscriptionResponse.model_validate(s) for s in paginated],
-        total=len(subscriptions),
+        items=[WebhookSubscriptionResponse.model_validate(s) for s in subscriptions],
+        total=total,
     )
 
 

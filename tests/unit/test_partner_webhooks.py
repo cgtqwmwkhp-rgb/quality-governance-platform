@@ -256,3 +256,34 @@ async def test_create_subscription_flushes_to_db():
     assert sub.events == ["inspection.completed"]
     db.add.assert_called_once()
     db.flush.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_list_subscriptions_applies_pagination_in_database_query():
+    db = AsyncMock()
+    subscription = WebhookSubscription(
+        id=5,
+        tenant_id=10,
+        url="https://partner.example/hooks",
+        secret="test-secret-key-16b",
+        events=["inspection.completed"],
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db.execute = AsyncMock(
+        side_effect=[
+            _ScalarResult(7),
+            _ScalarsResult([subscription]),
+        ]
+    )
+
+    items, total = await PartnerWebhookService(db).list_subscriptions(10, skip=2, limit=1)
+
+    assert items == [subscription]
+    assert total == 7
+    assert db.execute.await_count == 2
+    paged_query = db.execute.await_args_list[1].args[0]
+    compiled = str(paged_query.compile(compile_kwargs={"literal_binds": True}))
+    assert "LIMIT 1" in compiled
+    assert "OFFSET 2" in compiled

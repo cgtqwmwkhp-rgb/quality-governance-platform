@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  Webhook,
 } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { cn } from '../../helpers/utils'
@@ -76,6 +77,13 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: <Bell className="w-6 h-6" />,
     href: '/admin/notifications',
     color: 'bg-pink-100 text-pink-600',
+  },
+  {
+    title: 'Partner Webhooks',
+    description: 'Manage partner event subscriptions',
+    icon: <Webhook className="w-6 h-6" />,
+    href: '/admin/partner-webhooks',
+    color: 'bg-cyan-100 text-cyan-600',
   },
 ]
 
