@@ -45,8 +45,8 @@ class TestLoginReliability:
         """Create a test HTTP client with reasonable timeout."""
         return httpx.Client(base_url=API_BASE_URL, timeout=30.0)
 
-    def test_login_invalid_credentials_returns_401(self, client):
-        """Invalid credentials should return 401, not hang."""
+    def test_login_invalid_credentials_returns_auth_outcome(self, client):
+        """Invalid credentials must return promptly with a valid auth outcome."""
         start = time.time()
 
         response = client.post(
@@ -59,8 +59,8 @@ class TestLoginReliability:
         # Must respond within hard timeout (with margin)
         assert elapsed < HARD_TIMEOUT_S, f"Login took {elapsed:.1f}s - exceeds hard timeout!"
 
-        # Must return 401 for invalid credentials
-        assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+        # Production disables local-password login (403); when enabled, bad credentials are 401.
+        assert response.status_code in {401, 403}, f"Expected 401 or 403, got {response.status_code}"
 
         # Response must have error structure
         data = response.json()
@@ -148,15 +148,16 @@ class TestLoginErrorCodes:
     def client(self):
         return httpx.Client(base_url=API_BASE_URL, timeout=30.0)
 
-    def test_401_response_has_proper_structure(self, client):
-        """401 response should have bounded error structure."""
+    def test_auth_failure_response_has_proper_structure(self, client):
+        """Auth failure responses should have a bounded error structure."""
         submitted_password = "WrongPass1!"
         response = client.post(
             "/api/v1/auth/login",
             json={"email": "test@example.com", "password": submitted_password},
         )
 
-        assert response.status_code == 401
+        # Production disables local-password login (403); when enabled, bad credentials are 401.
+        assert response.status_code in {401, 403}
 
         data = response.json()
 
@@ -196,7 +197,7 @@ class TestLoginPerformanceBuckets:
         response = client.post("/api/v1/auth/login", json={"email": "test@example.com", "password": "test"})
 
         # Should get a response (any status is fine for this test)
-        assert response.status_code in [200, 401, 422, 500, 502, 503]
+        assert response.status_code in [200, 401, 403, 422, 500, 502, 503]
 
 
 class TestLoginNoPII:
