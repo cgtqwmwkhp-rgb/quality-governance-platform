@@ -96,7 +96,7 @@ describe('RiskHeatMap', () => {
         />
       </TooltipProvider>,
     )
-    fireEvent.mouseEnter(screen.getByTestId('risk-heatmap-cell-2-2').parentElement!)
+    fireEvent.mouseEnter(screen.getByTestId('risk-heatmap-cell-2-2'))
     expect(screen.getByTestId('risk-heatmap-cell-popup-2-2')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('risk-heatmap-popup-risk-1'))
     expect(onOpenRisk).toHaveBeenCalledWith(1)

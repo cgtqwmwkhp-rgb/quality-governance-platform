@@ -166,7 +166,7 @@ export function RiskHeatMap({
 
   const scheduleClosePopup = () => {
     keepPopupOpen()
-    closeTimer.current = window.setTimeout(() => setHoverKey(null), 180)
+    closeTimer.current = window.setTimeout(() => setHoverKey(null), 240)
   }
 
   const reduction =
@@ -390,14 +390,7 @@ export function RiskHeatMap({
                     }))
 
                     return (
-                      <div
-                        key={key}
-                        className="relative"
-                        onMouseEnter={() => {
-                          if (cell.risk_count > 0) openPopup(key)
-                        }}
-                        onMouseLeave={scheduleClosePopup}
-                      >
+                      <div key={key} className="relative">
                         <motion.button
                           type="button"
                           layout
@@ -417,7 +410,12 @@ export function RiskHeatMap({
                           }}
                           aria-label={`${data.likelihood_labels[cell.likelihood]} by ${data.impact_labels[cell.impact]}, score ${cell.score}, ${cell.risk_count} risks`}
                           aria-expanded={popupOpen}
+                          aria-haspopup={cell.risk_count > 0 ? 'dialog' : undefined}
                           data-testid={`risk-heatmap-cell-${cell.likelihood}-${cell.impact}`}
+                          onMouseEnter={() => {
+                            if (cell.risk_count > 0) openPopup(key)
+                          }}
+                          onMouseLeave={scheduleClosePopup}
                           onFocus={() => {
                             if (cell.risk_count > 0) openPopup(key)
                           }}
@@ -434,8 +432,11 @@ export function RiskHeatMap({
                         </motion.button>
 
                         {popupOpen && (
+                          // Hover bridge: keep popup open while pointer moves from cell → panel.
+                          // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- intentional hover affordance
                           <div
                             role="dialog"
+                            tabIndex={-1}
                             aria-label={`Risks in ${data.likelihood_labels[cell.likelihood]} by ${data.impact_labels[cell.impact]}`}
                             data-testid={`risk-heatmap-cell-popup-${cell.likelihood}-${cell.impact}`}
                             className="absolute left-1/2 top-[calc(100%-2px)] z-50 w-72 -translate-x-1/2 rounded-lg border border-border bg-card p-3 text-sm text-card-foreground shadow-menu"
