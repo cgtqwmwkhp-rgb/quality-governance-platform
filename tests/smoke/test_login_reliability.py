@@ -45,8 +45,8 @@ class TestLoginReliability:
         """Create a test HTTP client with reasonable timeout."""
         return httpx.Client(base_url=API_BASE_URL, timeout=30.0)
 
-    def test_login_invalid_credentials_returns_401(self, client):
-        """Invalid credentials should return 401, not hang."""
+    def test_login_invalid_credentials_returns_auth_outcome(self, client):
+        """Invalid credentials must return promptly with a valid auth outcome."""
         start = time.time()
 
         response = client.post(
@@ -59,8 +59,8 @@ class TestLoginReliability:
         # Must respond within hard timeout (with margin)
         assert elapsed < HARD_TIMEOUT_S, f"Login took {elapsed:.1f}s - exceeds hard timeout!"
 
-        # Must return 401 for invalid credentials
-        assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+        # Production disables local-password login (403); when enabled, bad credentials are 401.
+        assert response.status_code in {401, 403}, f"Expected 401 or 403, got {response.status_code}"
 
         # Response must have error structure
         data = response.json()
