@@ -57,8 +57,10 @@ class CAPAAction(Base):
     __tablename__ = "capa_actions"
     __table_args__ = (
         CheckConstraint(
-            "source_type <> 'audit_finding' OR source_id IS NOT NULL",
-            name="ck_capa_actions_audit_finding_source_id",
+            "source_type NOT IN ("
+            "'audit_finding','investigation','near_miss','rta','incident'"
+            ") OR source_id IS NOT NULL",
+            name="ck_capa_actions_gt_source_id",
         ),
     )
 

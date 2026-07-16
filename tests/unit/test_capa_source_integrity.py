@@ -1,69 +1,31 @@
-"""Regression tests for audit-finding CAPA source integrity."""
+"""Regression tests for audit-finding CAPA source integrity (superseded by GT check)."""
 
 from pathlib import Path
-
-import pytest
-from sqlalchemy import CheckConstraint, Column, Integer, MetaData, String, Table, create_engine
-from sqlalchemy.exc import IntegrityError
 
 from src.domain.models.capa import CAPAAction
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MIGRATION_PATH = REPO_ROOT / "alembic/versions/20260712_capa_audit_finding_source_check.py"
+LEGACY_MIGRATION_PATH = REPO_ROOT / "alembic/versions/20260712_capa_audit_finding_source_check.py"
+GT_MIGRATION_PATH = REPO_ROOT / "alembic/versions/20260720_capa_src_chk.py"
 PARTIAL_INDEX_MIGRATION_PATH = REPO_ROOT / "alembic/versions/20260406_capa_audit_finding_unique.py"
-CONSTRAINT_NAME = "ck_capa_actions_audit_finding_source_id"
-CONSTRAINT_SQL = "source_type <> 'audit_finding' OR source_id IS NOT NULL"
 
 
-def _model_constraint() -> CheckConstraint:
-    constraints = {
-        constraint.name: constraint
-        for constraint in CAPAAction.__table__.constraints
-        if isinstance(constraint, CheckConstraint)
-    }
-    return constraints[CONSTRAINT_NAME]
-
-
-def test_model_requires_source_id_for_audit_finding_without_polymorphic_fk():
-    assert str(_model_constraint().sqltext) == CONSTRAINT_SQL
+def test_model_uses_gt_source_check_without_polymorphic_fk():
+    names = {c.name for c in CAPAAction.__table__.constraints if getattr(c, "name", None)}
+    assert "ck_capa_actions_gt_source_id" in names
+    assert "ck_capa_actions_audit_finding_source_id" not in names
     assert not CAPAAction.__table__.c.source_id.foreign_keys
 
 
-def test_constraint_rejects_only_audit_finding_with_null_source_id():
-    metadata = MetaData()
-    table = Table(
-        "capa_source_integrity",
-        metadata,
-        Column("source_type", String(), nullable=True),
-        Column("source_id", Integer(), nullable=True),
-        CheckConstraint(CONSTRAINT_SQL, name=CONSTRAINT_NAME),
-    )
-    engine = create_engine("sqlite://")
-    metadata.create_all(engine)
+def test_legacy_migration_preserved_and_gt_followup_replaces_constraint():
+    legacy = LEGACY_MIGRATION_PATH.read_text(encoding="utf-8")
+    assert 'revision: str = "20260712_capa_src_check"' in legacy
+    assert "ck_capa_actions_audit_finding_source_id" in legacy
 
-    with engine.begin() as connection:
-        connection.execute(
-            table.insert(),
-            [
-                {"source_type": None, "source_id": None},
-                {"source_type": "complaint", "source_id": None},
-                {"source_type": "audit_finding", "source_id": 42},
-            ],
-        )
-
-    with engine.connect() as connection, pytest.raises(IntegrityError):
-        connection.execute(
-            table.insert(),
-            {"source_type": "audit_finding", "source_id": None},
-        )
-
-
-def test_migration_chains_from_head_and_preserves_partial_unique_index():
-    migration = MIGRATION_PATH.read_text(encoding="utf-8")
-    assert 'revision: str = "20260712_capa_src_check"' in migration
-    assert 'down_revision: Union[str, Sequence[str], None] = "20260712_af_risks_jn"' in migration
-    assert f'CONSTRAINT = "{CONSTRAINT_NAME}"' in migration
-    assert f'CONSTRAINT_SQL = "{CONSTRAINT_SQL}"' in migration
+    gt = GT_MIGRATION_PATH.read_text(encoding="utf-8")
+    assert 'revision: str = "20260720_capa_src_chk"' in gt
+    assert "ck_capa_actions_gt_source_id" in gt
+    assert 'OLD_CONSTRAINT = "ck_capa_actions_audit_finding_source_id"' in gt
 
     partial_index_migration = PARTIAL_INDEX_MIGRATION_PATH.read_text(encoding="utf-8")
     assert "uq_capa_actions_tenant_audit_finding_source" in partial_index_migration
