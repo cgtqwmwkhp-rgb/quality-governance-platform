@@ -1,6 +1,12 @@
 {
   "capabilities": {
-    "ocr_artifacts_table": true,
+    "ocr_artifacts_table": {
+      "status": "declared",
+      "schema_expected": true,
+      "database_available": null,
+      "probe": "not_run",
+      "note": "The application declares the ocr_artifacts schema, but this metadata endpoint does not probe the deployed database. database_available remains unknown until a database-backed OCR operation is exercised."
+    },
     "page_consensus_persist": true,
     "dispute_ack_stubs": true,
     "dispute_ack_auth_required": true,

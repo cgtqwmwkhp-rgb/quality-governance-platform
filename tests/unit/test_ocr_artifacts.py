@@ -144,7 +144,8 @@ def test_ocr_ops_capabilities_match_fixture():
 
 def test_ocr_providers_readiness_includes_capabilities():
     payload = get_ocr_providers_readiness()
-    assert payload["capabilities"]["ocr_artifacts_table"] is True
+    assert payload["capabilities"]["ocr_artifacts_table"]["status"] == "declared"
+    assert payload["capabilities"]["ocr_artifacts_table"]["database_available"] is None
     assert payload["capabilities"]["dispute_ack_stubs"] is True
     assert "e4_non_goal" in payload["capabilities"]
 
@@ -153,7 +154,8 @@ def test_ocr_capabilities_meta_endpoint(client: TestClient):
     response = client.get("/api/v1/health/meta/ocr-capabilities")
     assert response.status_code == 200
     data = response.json()
-    assert data["ocr_artifacts_table"] is True
+    assert data["ocr_artifacts_table"]["status"] == "declared"
+    assert data["ocr_artifacts_table"]["database_available"] is None
     assert data["page_consensus_persist"] is True
     assert data["provider_dial_on_probes"] is False
     assert data["endpoint"] == "/api/v1/meta/ocr-capabilities"
