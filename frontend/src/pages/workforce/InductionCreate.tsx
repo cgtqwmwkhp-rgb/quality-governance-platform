@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft } from 'lucide-react'
 import {
@@ -12,6 +12,11 @@ import {
 } from '../../api/client'
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
+import {
+  ACTIVE_EMPLOYEES_LIST_PARAMS,
+  employeePickerOptionLabel,
+  sortEmployeesForPicker,
+} from './employeePickerUtils'
 
 export default function InductionCreate() {
   const { t } = useTranslation()
@@ -30,17 +35,18 @@ export default function InductionCreate() {
   const [location, setLocation] = useState('')
   const [scheduledDate, setScheduledDate] = useState('')
   const [notes, setNotes] = useState('')
+  const rosterEmpty = !loading && engineers.length === 0
 
   useEffect(() => {
     const load = async () => {
       try {
         const [tRes, eRes, aRes] = await Promise.all([
           auditsApi.listTemplates(1, 100, { is_published: true }),
-          workforceApi.listEngineers({ page_size: 200 }),
+          workforceApi.listEngineers({ ...ACTIVE_EMPLOYEES_LIST_PARAMS }),
           workforceApi.listAssetTypes(),
         ])
         setTemplates(tRes.data.items || [])
-        setEngineers(eRes.data.items || [])
+        setEngineers(sortEmployeesForPicker(eRes.data.items || []))
         setAssetTypes(aRes.data.items || [])
       } catch {
         setError('Failed to load form data')
@@ -147,16 +153,32 @@ export default function InductionCreate() {
                 value={engineerId}
                 onChange={(e) => setEngineerId(e.target.value)}
                 required
-                className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                disabled={rosterEmpty}
+                aria-describedby={rosterEmpty ? 'inductioncreate-employees-empty' : undefined}
+                className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
               >
                 <option value="">{t('workforce.common.select_engineer')}</option>
                 {engineers.map((eng) => (
                   <option key={eng.id} value={eng.id}>
-                    {eng.employee_number || `#${eng.id}`} — {eng.job_title || 'Engineer'} (
-                    {eng.department || 'N/A'})
+                    {employeePickerOptionLabel(eng)}
                   </option>
                 ))}
               </select>
+              {rosterEmpty && (
+                <p
+                  id="inductioncreate-employees-empty"
+                  className="mt-2 text-sm text-muted-foreground"
+                  data-testid="induction-create-employees-empty"
+                >
+                  {t('workforce.induction.employees_empty')}{' '}
+                  <Link
+                    to="/workforce/engineers"
+                    className="text-primary underline underline-offset-2"
+                  >
+                    {t('workforce.induction.employees_empty_link')}
+                  </Link>
+                </p>
+              )}
             </div>
 
             <div>

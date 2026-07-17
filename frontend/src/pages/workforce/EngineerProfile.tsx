@@ -56,6 +56,31 @@ export type RequirementsMatch = {
   percent: number | null
 }
 
+/** Case-insensitive role_key ≈ job_title match (aligns with BE ILIKE-style allocate). */
+export function roleKeyMatchesJobTitle(
+  roleKey: string | null | undefined,
+  jobTitle: string | null | undefined,
+): boolean {
+  if (!roleKey?.trim()) return true
+  if (!jobTitle?.trim()) return false
+  const role = roleKey.trim().toLowerCase()
+  const title = jobTitle.trim().toLowerCase()
+  return title.includes(role) || role.includes(title)
+}
+
+/** Filter mandatory requirements applicable to an engineer by site + role_key. */
+export function filterApplicableRequirements(
+  requirements: CompetencyRequirement[],
+  engineer?: Pick<EngineerProfileType, 'site' | 'job_title'> | null,
+): CompetencyRequirement[] {
+  return requirements.filter((req) => {
+    if (!req.is_mandatory) return false
+    if (req.site && engineer?.site && req.site !== engineer.site) return false
+    if (req.role_key && !roleKeyMatchesJobTitle(req.role_key, engineer?.job_title)) return false
+    return true
+  })
+}
+
 /** Mandatory met / mandatory total — a requirement is met when the engineer has an active record for its asset type. */
 export function computeRequirementsMatch(
   requirements: CompetencyRequirement[],
@@ -66,12 +91,7 @@ export function computeRequirementsMatch(
     competencies.filter((c) => c.state === 'active').map((c) => c.asset_type_id),
   )
 
-  const applicable = requirements.filter((req) => {
-    if (!req.is_mandatory) return false
-    if (req.site && engineer?.site && req.site !== engineer.site) return false
-    if (req.role_key && engineer?.job_title && req.role_key !== engineer.job_title) return false
-    return true
-  })
+  const applicable = filterApplicableRequirements(requirements, engineer)
 
   const mandatoryTotal = applicable.length
   if (mandatoryTotal === 0) {
@@ -248,6 +268,10 @@ export default function EngineerProfile() {
     void load()
   }, [id, t, loadTickets, loadRequirements])
 
+  const applicableRequirements = useMemo(
+    () => filterApplicableRequirements(requirements, engineer),
+    [requirements, engineer],
+  )
   const match = useMemo(
     () => computeRequirementsMatch(requirements, competencies, engineer),
     [requirements, competencies, engineer],
@@ -496,11 +520,15 @@ export default function EngineerProfile() {
             </div>
           )}
         </div>
+        <p
+          className="mt-3 text-xs text-muted-foreground"
+          data-testid="requirements-role-key-honesty"
+        >
+          {t('workforce.engineers.requirements.role_key_honesty')}
+        </p>
         {!requirementsError && match.mandatoryTotal > 0 && (
           <ul className="mt-4 divide-y divide-border" data-testid="requirements-list">
-            {requirements
-              .filter((req) => req.is_mandatory)
-              .map((req) => {
+            {applicableRequirements.map((req) => {
                 const met = competencies.some(
                   (c) => c.asset_type_id === req.asset_type_id && c.state === 'active',
                 )
@@ -508,7 +536,12 @@ export default function EngineerProfile() {
                   <li key={req.id} className="py-3 flex items-center justify-between gap-3 text-sm">
                     <div>
                       <p className="font-medium text-foreground">{req.name}</p>
-                      <p className="text-muted-foreground">{assetTypeLabel(req.asset_type_id)}</p>
+                      <p className="text-muted-foreground">
+                        {assetTypeLabel(req.asset_type_id)}
+                        {req.role_key
+                          ? ` · ${t('workforce.engineers.requirements.role_key_label', { role: req.role_key })}`
+                          : ''}
+                      </p>
                     </div>
                     <span
                       className={`px-2 py-0.5 rounded-full text-xs font-medium ${met ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}
