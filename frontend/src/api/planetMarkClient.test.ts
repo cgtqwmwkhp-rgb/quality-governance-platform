@@ -97,8 +97,12 @@ describe('createPlanetMarkApi', () => {
     expect(api.get).toHaveBeenCalledWith(
       '/api/v1/planet-mark/years/3/evidence?document_type=invoice&linked_action_id=8',
     )
+    expect(api.post).toHaveBeenCalledWith(
+      '/api/v1/planet-mark/years/3/evidence/upload',
+      fd,
+      { timeout: 120_000 },
+    )
     expect(api.delete).toHaveBeenCalled()
-    expect(api.post).toHaveBeenCalled()
     expect(api.patch).toHaveBeenCalled()
   })
 })

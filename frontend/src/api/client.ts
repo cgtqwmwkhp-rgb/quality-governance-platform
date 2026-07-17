@@ -895,6 +895,8 @@ export type {
   PlanetMarkActionsResponse,
   PlanetMarkCertificationResponse,
   PlanetMarkDataQualityResponse,
+  PlanetMarkEvidenceRecord,
+  PlanetMarkEvidenceListResponse,
 } from './planetMarkClient'
 export const planetMarkApi = createPlanetMarkApi(api)
 
