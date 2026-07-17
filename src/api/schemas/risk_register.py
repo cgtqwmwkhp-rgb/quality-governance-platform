@@ -2,7 +2,7 @@
 
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # ============================================================================
 # Risk List / CRUD Schemas
@@ -152,6 +152,58 @@ class RiskProfileResponse(BaseModel):
     assessment_history: list[AssessmentHistoryItem] = []
     linked_actions: list[Any] = []
     review_notes: Optional[str] = None
+
+
+# ============================================================================
+# Risk Notes & Activity (RR-W2)
+# ============================================================================
+
+
+class RiskNoteCreate(BaseModel):
+    body: str = Field(..., min_length=1, max_length=16000)
+
+    @model_validator(mode="before")
+    @classmethod
+    def strip_body(cls, data: Any) -> Any:
+        if isinstance(data, dict) and isinstance(data.get("body"), str):
+            return {**data, "body": data["body"].strip()}
+        return data
+
+
+class RiskNoteItem(BaseModel):
+    id: int
+    risk_id: int
+    body: str
+    created_by_id: int
+    created_by_email: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class RiskNoteListResponse(BaseModel):
+    items: list[RiskNoteItem] = []
+    total: int = 0
+    page: int = 1
+    page_size: int = 50
+    pages: int = 1
+
+
+class RiskActivityEventItem(BaseModel):
+    id: int
+    risk_id: int
+    event_type: str
+    summary: str
+    payload: Optional[dict[str, Any]] = None
+    actor_id: int
+    actor_email: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class RiskActivityListResponse(BaseModel):
+    items: list[RiskActivityEventItem] = []
+    total: int = 0
+    page: int = 1
+    page_size: int = 50
+    pages: int = 1
 
 
 # ============================================================================

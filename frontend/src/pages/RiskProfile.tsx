@@ -1,15 +1,60 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, AlertTriangle, Loader2, TrendingDown, TrendingUp, Minus } from 'lucide-react'
+import {
+  ArrowLeft,
+  AlertTriangle,
+  History,
+  Loader2,
+  MessageSquare,
+  TrendingDown,
+  TrendingUp,
+  Minus,
+} from 'lucide-react'
 import { getApiErrorMessage, riskRegisterApi } from '../api/client'
-import type { RiskAssessPayload, RiskProfile, RiskTrendPoint } from '../api/riskRegisterClient'
+import type {
+  RiskActivityEvent,
+  RiskAssessPayload,
+  RiskNote,
+  RiskProfile,
+  RiskTrendPoint,
+} from '../api/riskRegisterClient'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Card, CardContent } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
+import { Textarea } from '../components/ui/Textarea'
 import { trackError } from '../utils/errorTracker'
 
+const MAX_NOTE_BODY_CHARS = 16000
+
+function formatDateTime(value?: string | null): string {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function formatRelativeTime(iso?: string | null): string {
+  if (!iso) return ''
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return ''
+  const sec = Math.round((Date.now() - t) / 1000)
+  if (sec < 45) return 'just now'
+  const min = Math.round(sec / 60)
+  if (min < 60) return `${min}m ago`
+  const h = Math.round(min / 60)
+  if (h < 48) return `${h}h ago`
+  const d = Math.round(h / 24)
+  if (d < 14) return `${d}d ago`
+  return ''
+}
 function formatDate(value?: string | null): string {
   if (!value) return '—'
   const d = new Date(value)
@@ -90,6 +135,11 @@ export default function RiskProfile() {
     assessment_notes: '',
     review_notes: '',
   })
+  const [notes, setNotes] = useState<RiskNote[]>([])
+  const [activity, setActivity] = useState<RiskActivityEvent[]>([])
+  const [noteDraft, setNoteDraft] = useState('')
+  const [postingNote, setPostingNote] = useState(false)
+  const [noteError, setNoteError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const id = Number(riskId)
@@ -99,6 +149,8 @@ export default function RiskProfile() {
       setProfile(null)
       setError(null)
       setTrendSeries([])
+      setNotes([])
+      setActivity([])
       return
     }
 
@@ -106,13 +158,17 @@ export default function RiskProfile() {
     setError(null)
     setNotFound(false)
     try {
-      const [profileRes, trendsRes] = await Promise.all([
+      const [profileRes, trendsRes, notesRes, activityRes] = await Promise.all([
         riskRegisterApi.getProfile(id),
         riskRegisterApi.getTrends(365, false, id),
+        riskRegisterApi.listNotes(id, { page_size: 50 }),
+        riskRegisterApi.listActivity(id, { page_size: 50 }),
       ])
       const nextProfile = profileRes.data
       setProfile(nextProfile)
       setTrendSeries(normalizeTrendSeries(trendsRes.data))
+      setNotes(notesRes.data.items ?? [])
+      setActivity(activityRes.data.items ?? [])
       setAssessForm({
         inherent_likelihood: nextProfile.inherent_likelihood ?? 3,
         inherent_impact: nextProfile.inherent_impact ?? 3,
@@ -129,10 +185,14 @@ export default function RiskProfile() {
         setProfile(null)
         setError(null)
         setTrendSeries([])
+        setNotes([])
+        setActivity([])
       } else {
         setError(getApiErrorMessage(err, t('risk_register.profile.error')))
         setProfile(null)
         setTrendSeries([])
+        setNotes([])
+        setActivity([])
       }
     } finally {
       setLoading(false)
@@ -178,6 +238,27 @@ export default function RiskProfile() {
       setAssessError(getApiErrorMessage(err, t('risk_register.profile.assess_error')))
     } finally {
       setAssessing(false)
+    }
+  }
+
+  const submitNote = async () => {
+    const id = Number(riskId)
+    const trimmed = noteDraft.trim()
+    if (!Number.isInteger(id) || id <= 0 || !trimmed) return
+
+    setPostingNote(true)
+    setNoteError(null)
+    try {
+      const res = await riskRegisterApi.createNote(id, trimmed)
+      setNotes((prev) => [res.data, ...prev])
+      setNoteDraft('')
+      const activityRes = await riskRegisterApi.listActivity(id, { page_size: 50 })
+      setActivity(activityRes.data.items ?? [])
+    } catch (err: unknown) {
+      trackError(err, { component: 'RiskProfile', action: 'createNote', extra: { riskId } })
+      setNoteError(getApiErrorMessage(err, t('risk_register.profile.notes_error')))
+    } finally {
+      setPostingNote(false)
     }
   }
 
@@ -501,6 +582,118 @@ export default function RiskProfile() {
           </form>
         </CardContent>
       </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card data-testid="risk-profile-notes">
+          <CardContent className="space-y-4 p-4">
+            <div>
+              <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+                <MessageSquare className="h-4 w-4" aria-hidden />
+                {t('risk_register.profile.notes_title')}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {t('risk_register.profile.notes_hint')}
+              </p>
+            </div>
+            <form
+              className="space-y-2"
+              onSubmit={(e) => {
+                e.preventDefault()
+                void submitNote()
+              }}
+            >
+              <Textarea
+                value={noteDraft}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setNoteDraft(v.length > MAX_NOTE_BODY_CHARS ? v.slice(0, MAX_NOTE_BODY_CHARS) : v)
+                }}
+                placeholder={t('risk_register.profile.notes_placeholder')}
+                rows={3}
+                maxLength={MAX_NOTE_BODY_CHARS}
+                disabled={postingNote}
+                data-testid="risk-profile-note-input"
+              />
+              {noteError ? (
+                <p className="text-sm text-destructive" data-testid="risk-profile-note-error">
+                  {noteError}
+                </p>
+              ) : null}
+              <Button
+                type="submit"
+                disabled={postingNote || !noteDraft.trim()}
+                data-testid="risk-profile-note-submit"
+              >
+                {postingNote
+                  ? t('risk_register.profile.notes_posting')
+                  : t('risk_register.profile.notes_submit')}
+              </Button>
+            </form>
+            {notes.length === 0 ? (
+              <p className="text-sm text-muted-foreground" data-testid="risk-profile-notes-empty">
+                {t('risk_register.profile.notes_empty')}
+              </p>
+            ) : (
+              <ul className="space-y-3" data-testid="risk-profile-notes-list">
+                {notes.map((note) => (
+                  <li
+                    key={note.id}
+                    className="rounded-md border border-border bg-muted/30 p-3 text-sm"
+                  >
+                    <p className="text-xs text-muted-foreground">
+                      {note.created_by_email || `#${note.created_by_id}`}
+                      {' · '}
+                      {formatRelativeTime(note.created_at)
+                        ? `${formatRelativeTime(note.created_at)} · `
+                        : ''}
+                      {formatDateTime(note.created_at)}
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap text-foreground">{note.body}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card data-testid="risk-profile-activity">
+          <CardContent className="space-y-4 p-4">
+            <div>
+              <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+                <History className="h-4 w-4" aria-hidden />
+                {t('risk_register.profile.activity_title')}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {t('risk_register.profile.activity_hint')}
+              </p>
+            </div>
+            {activity.length === 0 ? (
+              <p className="text-sm text-muted-foreground" data-testid="risk-profile-activity-empty">
+                {t('risk_register.profile.activity_empty')}
+              </p>
+            ) : (
+              <ul className="space-y-3" data-testid="risk-profile-activity-list">
+                {activity.map((event) => (
+                  <li
+                    key={event.id}
+                    className="rounded-md border border-border p-3 text-sm"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{event.event_type}</Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {event.actor_email || `#${event.actor_id}`}
+                        {' · '}
+                        {formatDateTime(event.created_at)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-foreground">{event.summary}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {profile.description ? (
         <Card data-testid="risk-profile-description">

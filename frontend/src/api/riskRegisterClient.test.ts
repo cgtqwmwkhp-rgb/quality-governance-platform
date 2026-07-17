@@ -40,6 +40,9 @@ describe('createRiskRegisterApi', () => {
       residual_likelihood: 2,
       residual_impact: 3,
     })
+    rr.listNotes(2, { page_size: 25 })
+    rr.createNote(2, 'hello')
+    rr.listActivity(2, { event_type: 'assessed' })
     rr.resolveSuggestionTriage(2, { decision: 'accept', notes: 'ok' })
     rr.getHeatmap()
     rr.getSummary()
@@ -55,6 +58,9 @@ describe('createRiskRegisterApi', () => {
       residual_likelihood: 2,
       residual_impact: 3,
     })
+    expect(api.get).toHaveBeenCalledWith('/api/v1/risk-register/2/notes?page_size=25')
+    expect(api.post).toHaveBeenCalledWith('/api/v1/risk-register/2/notes', { body: 'hello' })
+    expect(api.get).toHaveBeenCalledWith('/api/v1/risk-register/2/activity?event_type=assessed')
     expect(api.post).toHaveBeenCalledWith('/api/v1/risk-register/2/suggestion-triage', {
       decision: 'accept',
       notes: 'ok',

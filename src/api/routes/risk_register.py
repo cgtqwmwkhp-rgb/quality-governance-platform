@@ -10,14 +10,23 @@ Provides endpoints for:
 """
 
 from datetime import datetime, timezone
+import math
 from typing import Annotated, Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.api.schemas.risk_register import AssessmentHistoryItem, RiskProfileResponse
+from src.api.schemas.risk_register import (
+    AssessmentHistoryItem,
+    RiskActivityEventItem,
+    RiskActivityListResponse,
+    RiskNoteCreate,
+    RiskNoteItem,
+    RiskNoteListResponse,
+    RiskProfileResponse,
+)
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.risk_register import (
     BowTieElement,
@@ -26,7 +35,9 @@ from src.domain.models.risk_register import (
     EnterpriseRiskControl,
     RiskAppetiteStatement,
     RiskAssessmentHistory,
+    RiskActivityEvent,
     RiskControlMapping,
+    RiskNote,
 )
 from src.domain.models.user import User
 from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
@@ -45,6 +56,35 @@ router = APIRouter()
 def _naive_utc_now() -> datetime:
     """Match the risk_register model's naive-UTC DateTime columns."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+async def _get_tenant_risk_or_404(
+    db: DbSession,
+    tenant_id: int,
+    risk_id: int,
+) -> EnterpriseRisk:
+    result = await db.execute(
+        select(EnterpriseRisk).where(
+            EnterpriseRisk.id == risk_id,
+            EnterpriseRisk.tenant_id == tenant_id,
+        )
+    )
+    risk = result.scalar_one_or_none()
+    if not risk:
+        raise NotFoundError("EnterpriseRisk not found")
+    return risk
+
+
+async def _batch_resolve_user_emails(db: DbSession, user_ids: set[int]) -> dict[int, str]:
+    if not user_ids:
+        return {}
+    result = await db.execute(select(User.id, User.email).where(User.id.in_(user_ids)))
+    return {row.id: row.email for row in result.all() if row.email}
+
+
+async def _resolve_user_email(db: DbSession, user_id: int) -> Optional[str]:
+    result = await db.execute(select(User.email).where(User.id == user_id))
+    return result.scalar_one_or_none()
 
 
 def _register_visibility_clause():
@@ -871,6 +911,135 @@ async def get_risk_profile(
         ],
         linked_actions=list(risk.linked_actions or []),
         review_notes=risk.review_notes,
+    )
+
+
+@router.get("/{risk_id}/notes", response_model=RiskNoteListResponse)
+async def list_risk_notes(
+    current_user: CurrentUser,
+    risk_id: int,
+    db: DbSession,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> RiskNoteListResponse:
+    """List risk commentary notes (newest first, paginated)."""
+    await _get_tenant_risk_or_404(db, current_user.tenant_id, risk_id)
+
+    filters = [
+        RiskNote.risk_id == risk_id,
+        RiskNote.tenant_id == current_user.tenant_id,
+    ]
+    total = await db.scalar(select(func.count(RiskNote.id)).where(*filters)) or 0
+    query = (
+        select(RiskNote)
+        .where(*filters)
+        .order_by(RiskNote.created_at.desc(), RiskNote.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    result = await db.execute(query)
+    rows = result.scalars().all()
+    author_ids = {n.created_by_id for n in rows}
+    email_map = await _batch_resolve_user_emails(db, author_ids)
+
+    return RiskNoteListResponse(
+        items=[
+            RiskNoteItem(
+                id=n.id,
+                risk_id=n.risk_id,
+                body=n.body,
+                created_by_id=n.created_by_id,
+                created_by_email=email_map.get(n.created_by_id),
+                created_at=n.created_at.isoformat() if n.created_at else None,
+            )
+            for n in rows
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=math.ceil(total / page_size) if total else 1,
+    )
+
+
+@router.post("/{risk_id}/notes", response_model=RiskNoteItem, status_code=status.HTTP_201_CREATED)
+async def create_risk_note(
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
+    risk_id: int,
+    body: RiskNoteCreate,
+    db: DbSession,
+) -> RiskNoteItem:
+    """Append a commentary note on a risk."""
+    risk = await _get_tenant_risk_or_404(db, current_user.tenant_id, risk_id)
+    service = RiskService(db)
+    note = await service.append_risk_note(
+        risk,
+        body=body.body,
+        created_by_id=current_user.id,
+    )
+    author_email = await _resolve_user_email(db, current_user.id)
+    if current_user.tenant_id is not None:
+        await invalidate_tenant_cache(current_user.tenant_id, "risk-register")
+    return RiskNoteItem(
+        id=note.id,
+        risk_id=note.risk_id,
+        body=note.body,
+        created_by_id=note.created_by_id,
+        created_by_email=author_email,
+        created_at=note.created_at.isoformat() if note.created_at else None,
+    )
+
+
+@router.get("/{risk_id}/activity", response_model=RiskActivityListResponse)
+async def list_risk_activity(
+    current_user: CurrentUser,
+    risk_id: int,
+    db: DbSession,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
+    event_type: Annotated[Optional[str], Query(max_length=64)] = None,
+) -> RiskActivityListResponse:
+    """List typed risk activity audit events (newest first, paginated)."""
+    await _get_tenant_risk_or_404(db, current_user.tenant_id, risk_id)
+
+    filters = [
+        RiskActivityEvent.risk_id == risk_id,
+        RiskActivityEvent.tenant_id == current_user.tenant_id,
+    ]
+    if event_type:
+        filters.append(RiskActivityEvent.event_type == event_type)
+
+    count_query = select(func.count(RiskActivityEvent.id)).where(*filters)
+    total = await db.scalar(count_query) or 0
+    query = (
+        select(RiskActivityEvent)
+        .where(*filters)
+        .order_by(RiskActivityEvent.created_at.desc(), RiskActivityEvent.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    result = await db.execute(query)
+    rows = result.scalars().all()
+    actor_ids = {e.actor_id for e in rows}
+    email_map = await _batch_resolve_user_emails(db, actor_ids)
+
+    return RiskActivityListResponse(
+        items=[
+            RiskActivityEventItem(
+                id=e.id,
+                risk_id=e.risk_id,
+                event_type=e.event_type,
+                summary=e.summary,
+                payload=e.payload if isinstance(e.payload, dict) else None,
+                actor_id=e.actor_id,
+                actor_email=email_map.get(e.actor_id),
+                created_at=e.created_at.isoformat() if e.created_at else None,
+            )
+            for e in rows
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=math.ceil(total / page_size) if total else 1,
     )
 
 

@@ -210,7 +210,9 @@ from src.domain.models.risk_register import (
     EnterpriseRiskControl,
     RiskAppetiteStatement,
     RiskAssessmentHistory,
+    RiskActivityEvent,
     RiskControlMapping,
+    RiskNote,
 )
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.standard import Clause, Control, Standard
@@ -330,6 +332,8 @@ __all__ = [
     "RiskControlMapping",
     "BowTieElement",
     "RiskAssessmentHistory",
+    "RiskActivityEvent",
+    "RiskNote",
     "RiskAppetiteStatement",
     # IMS Unification (Tier 1)
     "IMSRequirement",

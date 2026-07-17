@@ -22,6 +22,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -426,6 +427,50 @@ class RiskAppetiteStatement(Base):
         DateTime,
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+
+
+class RiskNote(Base):
+    """Append-only commentary on an enterprise risk within a tenant."""
+
+    __tablename__ = "risk_notes"
+    __table_args__ = (
+        Index("ix_risk_notes_tenant_risk_created", "tenant_id", "risk_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    risk_id: Mapped[int] = mapped_column(
+        ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+
+
+class RiskActivityEvent(Base):
+    """Typed audit trail events for enterprise risks (assess, notes, etc.)."""
+
+    __tablename__ = "risk_activity_events"
+    __table_args__ = (
+        Index("ix_risk_activity_events_tenant_risk_created", "tenant_id", "risk_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    risk_id: Mapped[int] = mapped_column(
+        ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[Optional[dict]] = mapped_column(
+        _PG_JSONB().with_variant(JSON, "sqlite"), nullable=True
+    )
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
 
 
