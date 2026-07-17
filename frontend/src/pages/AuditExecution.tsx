@@ -36,6 +36,7 @@ import {
   buildEvidenceResponseJson,
   dataUrlToFile,
   extractEvidenceAssetIds,
+  signatureUploadFilename,
 } from './auditExecutionPhotoEvidence'
 
 // ============================================================================
@@ -429,20 +430,25 @@ const PhotoCapture = ({
   )
 }
 
-// Signature Pad Component
+// Signature Pad Component — uploads to evidence-assets (same spine as photos).
 const SignaturePad = ({
   signature,
   onCapture,
   onClear,
+  uploading = false,
+  readOnly = false,
 }: {
   signature?: string
   onCapture: (sig: string) => void
   onClear: () => void
+  uploading?: boolean
+  readOnly?: boolean
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
 
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+    if (readOnly || uploading || signature) return
     const canvas = canvasRef.current
     if (!canvas) return
 
@@ -459,7 +465,7 @@ const SignaturePad = ({
   }
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDrawing) return
+    if (!isDrawing || readOnly || uploading || signature) return
 
     const canvas = canvasRef.current
     if (!canvas) return
@@ -484,50 +490,74 @@ const SignaturePad = ({
   const stopDrawing = () => {
     if (isDrawing && canvasRef.current) {
       setIsDrawing(false)
-      onCapture(canvasRef.current.toDataURL())
+      onCapture(canvasRef.current.toDataURL('image/png'))
     }
   }
 
   const clearCanvas = () => {
+    if (readOnly || uploading) return
     const canvas = canvasRef.current
-    if (!canvas) return
-
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    if (canvas) {
+      const ctx = canvas.getContext('2d')
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height)
+    }
     onClear()
   }
 
   return (
-    <div className="space-y-3">
-      <div className="relative">
-        <canvas
-          ref={canvasRef}
-          width={400}
-          height={150}
-          onMouseDown={startDrawing}
-          onMouseMove={draw}
-          onMouseUp={stopDrawing}
-          onMouseLeave={stopDrawing}
-          onTouchStart={startDrawing}
-          onTouchMove={draw}
-          onTouchEnd={stopDrawing}
-          className="w-full h-40 bg-secondary border border-border rounded-xl cursor-crosshair touch-none"
-        />
-        {!signature && (
+    <div className="space-y-3" data-testid="audit-signature-pad">
+      {signature ? (
+        <div className="relative">
+          <img
+            src={signature}
+            alt="Captured signature"
+            className="w-full h-40 object-contain bg-secondary border border-border rounded-xl"
+            data-testid="audit-signature-preview"
+          />
+          {uploading ? (
+            <p className="text-sm text-muted-foreground mt-2" data-testid="audit-signature-uploading">
+              Saving signature to evidence store…
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground mt-2" data-testid="audit-signature-persisted">
+              Signature stored on the shared evidence spine (not session-only).
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="relative">
+          <canvas
+            ref={canvasRef}
+            width={400}
+            height={150}
+            onMouseDown={startDrawing}
+            onMouseMove={draw}
+            onMouseUp={stopDrawing}
+            onMouseLeave={stopDrawing}
+            onTouchStart={startDrawing}
+            onTouchMove={draw}
+            onTouchEnd={stopDrawing}
+            className="w-full h-40 bg-secondary border border-border rounded-xl cursor-crosshair touch-none"
+            data-testid="audit-signature-canvas"
+          />
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <p className="text-muted-foreground">Sign here</p>
+            <p className="text-muted-foreground">
+              {uploading ? 'Saving signature…' : 'Sign here'}
+            </p>
           </div>
-        )}
-      </div>
-      <button
-        type="button"
-        onClick={clearCanvas}
-        className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
-      >
-        <RotateCcw className="w-4 h-4" /> Clear Signature
-      </button>
+        </div>
+      )}
+      {!readOnly && (
+        <button
+          type="button"
+          onClick={clearCanvas}
+          disabled={uploading || !signature}
+          className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 disabled:opacity-50"
+          data-testid="audit-signature-clear"
+        >
+          <RotateCcw className="w-4 h-4" /> Clear Signature
+        </button>
+      )}
     </div>
   )
 }
@@ -769,12 +799,20 @@ export default function AuditExecution() {
                 }
               }),
             )
+            const previewUrls = urls.filter((url): url is string => Boolean(url))
+            const isSignatureQuestion = questionTypeMap[qId] === 'signature'
             existingResponses[qId] = {
               ...resp,
               evidenceAssetIds: ids,
-              photos: urls.filter((url): url is string => Boolean(url)),
+              photos: isSignatureQuestion ? [] : previewUrls,
+              signature: isSignatureQuestion ? previewUrls[0] : resp.signature,
               response:
-                resp.response ?? (ids.length > 0 ? 'captured' : resp.response),
+                resp.response ??
+                (ids.length > 0
+                  ? isSignatureQuestion
+                    ? 'signed'
+                    : 'captured'
+                  : resp.response),
             }
           }),
         )
@@ -1018,7 +1056,7 @@ export default function AuditExecution() {
 
   const handleSubmitAudit = async () => {
     if (uploadingPhotoFor) {
-      setError('Wait for photo upload to finish before completing the audit.')
+      setError('Wait for photo/signature upload to finish before completing the audit.')
       return
     }
     if (!runIdNum) return
@@ -1310,6 +1348,79 @@ export default function AuditExecution() {
       })
     }
   }
+
+  /** Upload signature PNG to evidence-assets (AUD-PHOTO-03 parity with photos). */
+  const attachSignatureToCurrentQuestion = async (signatureDataUrl: string) => {
+    const questionId = currentQuestion.id
+    updateResponse({ signature: signatureDataUrl, response: 'signed' })
+
+    if (!runIdNum || runCompleted) return
+
+    const uploadFile = dataUrlToFile(signatureDataUrl, signatureUploadFilename(questionId))
+    if (!uploadFile) {
+      setError('Could not prepare signature for upload. Please try again.')
+      return
+    }
+
+    setUploadingPhotoFor(questionId)
+    try {
+      // Replace any prior signature asset for this question.
+      const priorIds = responsesRef.current[questionId]?.evidenceAssetIds || []
+      for (const priorId of priorIds) {
+        void evidenceAssetsApi.delete(priorId).catch(() => {
+          /* best effort */
+        })
+      }
+
+      const uploaded = await evidenceAssetsApi.upload(uploadFile, {
+        source_module: 'audit',
+        source_id: runIdNum,
+        title: `Audit signature — question ${questionId}`,
+        description: auditQuestionEvidenceDescription(questionId),
+      })
+      const assetId = uploaded.data.id
+      setResponses((prev) => {
+        const current = prev[questionId]
+        if (!current) return prev
+        dirtyRef.current = true
+        return {
+          ...prev,
+          [questionId]: {
+            ...current,
+            signature: signatureDataUrl,
+            evidenceAssetIds: [assetId],
+            response: 'signed',
+            timestamp: new Date().toISOString(),
+          },
+        }
+      })
+    } catch (err) {
+      setError(
+        getApiErrorMessage(err, 'Signature upload failed. Retry before finishing the audit.'),
+      )
+    } finally {
+      setUploadingPhotoFor((prev) => (prev === questionId ? null : prev))
+    }
+  }
+
+  const clearSignatureFromCurrentQuestion = () => {
+    const questionId = currentQuestion.id
+    const existing = responsesRef.current[questionId]
+    const removedIds = existing?.evidenceAssetIds || []
+    updateResponse({
+      signature: undefined,
+      response: null,
+      evidenceAssetIds: [],
+    })
+    if (!runCompleted) {
+      for (const removedId of removedIds) {
+        void evidenceAssetsApi.delete(removedId).catch(() => {
+          /* soft-delete best effort */
+        })
+      }
+    }
+  }
+
 
   // Navigation
   const blockForFailEvidenceGate = () => {
@@ -1630,8 +1741,12 @@ export default function AuditExecution() {
         return (
           <SignaturePad
             signature={currentResponse?.signature}
-            onCapture={(sig) => updateResponse({ signature: sig, response: 'signed' })}
-            onClear={() => updateResponse({ signature: undefined, response: null })}
+            uploading={uploadingPhotoFor === currentQuestion.id}
+            readOnly={runCompleted}
+            onCapture={(sig) => {
+              void attachSignatureToCurrentQuestion(sig)
+            }}
+            onClear={() => clearSignatureFromCurrentQuestion()}
           />
         )
 

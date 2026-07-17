@@ -3,6 +3,8 @@ import {
   auditQuestionEvidenceDescription,
   buildEvidenceResponseJson,
   extractEvidenceAssetIds,
+  isSignatureDataUrl,
+  signatureUploadFilename,
 } from '../auditExecutionPhotoEvidence'
 
 describe('auditExecutionPhotoEvidence', () => {
@@ -16,5 +18,15 @@ describe('auditExecutionPhotoEvidence', () => {
 
   it('tags uploads with a stable question description', () => {
     expect(auditQuestionEvidenceDescription(9)).toBe('audit_question:9')
+  })
+
+  it('detects signature data URLs vs remote signed URLs', () => {
+    expect(isSignatureDataUrl('data:image/png;base64,abc')).toBe(true)
+    expect(isSignatureDataUrl('https://blob.example/sig.png')).toBe(false)
+    expect(isSignatureDataUrl(undefined)).toBe(false)
+  })
+
+  it('builds a signature upload filename for the question', () => {
+    expect(signatureUploadFilename(4)).toMatch(/^audit-signature-q4-\d+\.png$/)
   })
 })
