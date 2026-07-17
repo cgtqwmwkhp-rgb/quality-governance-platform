@@ -147,13 +147,6 @@ function cellKey(cell: Pick<HeatMapCell, 'likelihood' | 'impact'>) {
   return `${cell.likelihood}-${cell.impact}`
 }
 
-function formatDisplayDate(value?: string | null) {
-  if (!value) return null
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return value
-  return parsed.toLocaleDateString()
-}
-
 export function RiskHeatMap({
   data,
   scoreType,
@@ -371,7 +364,7 @@ export function RiskHeatMap({
         </div>
       )}
 
-      <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-stretch">
         <div className="shrink-0 overflow-x-auto">
           <div className="flex min-w-[520px]">
             <div className="flex flex-col items-center justify-center pr-4">
@@ -461,13 +454,13 @@ export function RiskHeatMap({
         </div>
 
         <aside
-          className="flex min-h-[16rem] min-w-0 flex-1 flex-col rounded-xl border border-border bg-card"
+          className="flex h-[22rem] max-h-[min(22rem,55vh)] w-full min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card lg:max-w-md"
           data-testid="risk-heatmap-detail-rail"
           aria-label={t('risk_register.heatmap.detail_rail_label')}
         >
           {!selectedHeatMapCell || selectedHeatMapCell.risk_count === 0 ? (
             <div
-              className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground"
+              className="flex flex-1 items-center justify-center p-4 text-center text-sm text-muted-foreground"
               data-testid="risk-heatmap-detail-empty"
             >
               {t('risk_register.heatmap.select_cell_prompt')}
@@ -475,124 +468,95 @@ export function RiskHeatMap({
           ) : (
             <>
               <div
-                className="border-b border-border p-4"
+                className="shrink-0 border-b border-border px-3 py-2.5"
                 data-testid="risk-heatmap-detail-header"
               >
-                <p className="font-semibold text-foreground">
-                  {data.likelihood_labels[selectedHeatMapCell.likelihood]} ×{' '}
-                  {data.impact_labels[selectedHeatMapCell.impact]}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t('risk_register.n_risks', { count: selectedHeatMapCell.risk_count })}
-                  {' · '}
-                  {t('risk_register.score')} {selectedHeatMapCell.score}
-                  {(selectedHeatMapCell.overdue_count ?? 0) > 0
-                    ? ` · ${selectedHeatMapCell.overdue_count} ${t('risk_register.overdue_review').toLowerCase()}`
-                    : ''}
-                  {(selectedHeatMapCell.outside_appetite_count ?? 0) > 0
-                    ? ` · ${selectedHeatMapCell.outside_appetite_count} ${t('risk_register.outside_appetite').toLowerCase()}`
-                    : ''}
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    data-testid="risk-heatmap-detail-show-register"
-                    onClick={() => onShowInRegister(selectedHeatMapCell)}
-                  >
-                    {t('risk_register.heatmap.show_in_register')}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    data-testid="risk-heatmap-detail-clear"
-                    onClick={onClearCellFilter}
-                  >
-                    {t('risk_register.heatmap.clear_selection')}
-                  </Button>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {data.likelihood_labels[selectedHeatMapCell.likelihood]} ×{' '}
+                      {data.impact_labels[selectedHeatMapCell.impact]}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {t('risk_register.n_risks', { count: selectedHeatMapCell.risk_count })}
+                      {' · '}
+                      {t('risk_register.score')} {selectedHeatMapCell.score}
+                      {(selectedHeatMapCell.overdue_count ?? 0) > 0
+                        ? ` · ${selectedHeatMapCell.overdue_count} ${t('risk_register.overdue_review').toLowerCase()}`
+                        : ''}
+                      {(selectedHeatMapCell.outside_appetite_count ?? 0) > 0
+                        ? ` · ${selectedHeatMapCell.outside_appetite_count} ${t('risk_register.outside_appetite').toLowerCase()}`
+                        : ''}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-7 px-2 text-xs"
+                      data-testid="risk-heatmap-detail-show-register"
+                      onClick={() => onShowInRegister(selectedHeatMapCell)}
+                    >
+                      {t('risk_register.heatmap.show_in_register')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      data-testid="risk-heatmap-detail-clear"
+                      onClick={onClearCellFilter}
+                    >
+                      {t('risk_register.heatmap.clear_selection')}
+                    </Button>
+                  </div>
                 </div>
               </div>
 
               <div
-                className="flex-1 space-y-3 overflow-y-auto p-4"
+                className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-2"
                 data-testid="risk-heatmap-detail-list"
               >
                 {railRiskEntries.map(({ id, title, detail }) => {
-                  const identifiedDate = formatDisplayDate(detail?.created_at)
-                  const nextReview = formatDisplayDate(detail?.next_review_date)
+                  const metaParts = [
+                    detail?.reference,
+                    detail?.owner,
+                    detail?.inherent_score != null ? `G ${detail.inherent_score}` : null,
+                    detail?.residual_score != null ? `N ${detail.residual_score}` : null,
+                    detail?.status
+                      ? detail.status.replace(/_/g, ' ')
+                      : null,
+                  ].filter(Boolean)
                   return (
                     <article
                       key={id}
-                      className="rounded-lg border border-border bg-background p-3"
+                      className="flex items-center gap-2 rounded-md border border-border/80 bg-background px-2 py-1.5"
                       data-testid={`risk-heatmap-detail-card-${id}`}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium text-foreground">{title}</p>
-                          {detail?.reference ? (
-                            <p className="mt-0.5 text-xs text-muted-foreground">{detail.reference}</p>
-                          ) : null}
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="shrink-0"
-                          data-testid={`risk-heatmap-detail-open-${id}`}
-                          onClick={() => onOpenRisk?.(id)}
-                        >
-                          {t('risk_register.heatmap.open')}
-                        </Button>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium leading-snug text-foreground">
+                          {title}
+                        </p>
+                        {metaParts.length > 0 ? (
+                          <p className="mt-0.5 truncate text-[11px] capitalize leading-tight text-muted-foreground">
+                            {metaParts.join(' · ')}
+                          </p>
+                        ) : null}
                       </div>
-                      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                        {identifiedDate ? (
-                          <>
-                            <dt className="text-muted-foreground">{t('risk_register.heatmap.identified')}</dt>
-                            <dd className="text-foreground">{identifiedDate}</dd>
-                          </>
-                        ) : null}
-                        {detail?.category ? (
-                          <>
-                            <dt className="text-muted-foreground">{t('risk_register.heatmap.category')}</dt>
-                            <dd className="capitalize text-foreground">{detail.category.replace(/_/g, ' ')}</dd>
-                          </>
-                        ) : null}
-                        {detail?.owner ? (
-                          <>
-                            <dt className="text-muted-foreground">{t('risk_register.table.owner')}</dt>
-                            <dd className="text-foreground">{detail.owner}</dd>
-                          </>
-                        ) : null}
-                        {detail?.inherent_score != null ? (
-                          <>
-                            <dt className="text-muted-foreground">{t('risk_register.profile.gross')}</dt>
-                            <dd className="text-foreground">{detail.inherent_score}</dd>
-                          </>
-                        ) : null}
-                        {detail?.residual_score != null ? (
-                          <>
-                            <dt className="text-muted-foreground">{t('risk_register.profile.net')}</dt>
-                            <dd className="text-foreground">{detail.residual_score}</dd>
-                          </>
-                        ) : null}
-                        {detail?.status ? (
-                          <>
-                            <dt className="text-muted-foreground">{t('risk_register.heatmap.status')}</dt>
-                            <dd className="capitalize text-foreground">{detail.status.replace(/_/g, ' ')}</dd>
-                          </>
-                        ) : null}
-                        {nextReview ? (
-                          <>
-                            <dt className="text-muted-foreground">{t('risk_register.profile.next_review')}</dt>
-                            <dd className="text-foreground">{nextReview}</dd>
-                          </>
-                        ) : null}
-                      </dl>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="h-7 shrink-0 px-2 text-xs"
+                        data-testid={`risk-heatmap-detail-open-${id}`}
+                        onClick={() => onOpenRisk?.(id)}
+                      >
+                        {t('risk_register.heatmap.open')}
+                      </Button>
                     </article>
                   )
                 })}
                 {(selectedHeatMapCell.risk_ids_truncated ||
                   selectedHeatMapCell.risk_count > railRiskEntries.length) && (
-                  <p className="text-xs text-muted-foreground" data-testid="risk-heatmap-detail-truncated">
+                  <p className="px-1 py-1 text-[11px] text-muted-foreground" data-testid="risk-heatmap-detail-truncated">
                     {t('risk_register.heatmap.truncated_list', {
                       shown: railRiskEntries.length,
                       total: selectedHeatMapCell.risk_count,

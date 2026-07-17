@@ -126,13 +126,17 @@ describe('RiskHeatMap', () => {
     )
   })
 
-  it('shows sticky detail rail with rich risk cards when a cell is selected', () => {
+  it('shows compact scrollable detail rail when a cell is selected', () => {
     const onOpenRisk = vi.fn()
     renderHeatMap({
       selectedCell: { likelihood: 2, impact: 2 },
       riskDetails,
       onOpenRisk,
     })
+    const rail = screen.getByTestId('risk-heatmap-detail-rail')
+    expect(rail.className).toMatch(/max-h-/)
+    expect(rail.className).toMatch(/overflow-hidden/)
+    expect(screen.getByTestId('risk-heatmap-detail-list').className).toMatch(/overflow-y-auto/)
     expect(screen.getByTestId('risk-heatmap-detail-header')).toHaveTextContent('Unlikely × Minor')
     expect(screen.getByTestId('risk-heatmap-detail-card-1')).toHaveTextContent('Alpha')
     expect(screen.getByTestId('risk-heatmap-detail-card-1')).toHaveTextContent('RISK-0001')

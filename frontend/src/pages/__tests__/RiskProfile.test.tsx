@@ -326,6 +326,18 @@ describe('RiskProfile', () => {
     expect(await screen.findByTestId('risk-profile-not-found')).toBeInTheDocument()
   })
 
+  it('keeps profile when secondary panels 404 (does not false not-found)', async () => {
+    mockGetProfile.mockResolvedValue({ data: profileFixture })
+    mockListNotes.mockRejectedValue({ response: { status: 404 } })
+    mockListActions.mockRejectedValue({ response: { status: 404 } })
+    mockListUpstream.mockRejectedValue({ response: { status: 404 } })
+    renderProfile()
+
+    expect(await screen.findByTestId('risk-profile-page')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-profile-title')).toHaveTextContent('Supplier disruption')
+    expect(screen.queryByTestId('risk-profile-not-found')).not.toBeInTheDocument()
+  })
+
   it('shows error honesty with retry', async () => {
     mockGetProfile.mockRejectedValue(new Error('network down'))
     renderProfile()
