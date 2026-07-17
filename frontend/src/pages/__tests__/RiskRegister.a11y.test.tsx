@@ -131,7 +131,7 @@ describe('RiskRegister page accessibility (CUJ real page)', () => {
     // (known product a11y debt outside this allowlist); heat map is still the
     // same real RiskRegister page after data load.
     await waitFor(() => {
-      expect(screen.getByText('Supply chain disruption')).toBeInTheDocument()
+      expect(screen.getByTestId('risk-open-1')).toBeInTheDocument()
     })
     fireEvent.click(screen.getByRole('button', { name: /Heat Map/i }))
     await waitFor(() => {

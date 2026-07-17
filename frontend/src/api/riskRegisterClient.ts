@@ -40,6 +40,8 @@ export interface RiskEntry {
   next_review_date?: string
   created_at: string
   updated_at?: string
+  /** Net-score trend from list DTO (tag-persisted); null/omit when unknown */
+  trend?: 'increasing' | 'stable' | 'decreasing' | null
   risk_owner_name?: string
   review_frequency_days?: number
   inherent_likelihood?: number

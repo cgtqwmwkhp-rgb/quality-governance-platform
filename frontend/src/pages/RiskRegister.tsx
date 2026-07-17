@@ -17,6 +17,9 @@ import {
   GitBranch,
   Clock,
   User,
+  TrendingUp,
+  TrendingDown,
+  Minus,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
@@ -78,6 +81,37 @@ function isReviewOverdue(nextReviewDate: string | null): boolean {
   const due = new Date(nextReviewDate)
   if (Number.isNaN(due.getTime())) return false
   return due.getTime() < Date.now()
+}
+
+type ScoreTrend = 'increasing' | 'stable' | 'decreasing'
+
+function formatListDate(value: string | null | undefined): string | null {
+  if (!value) return null
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+function TrendCell({ trend }: { trend?: ScoreTrend | null }) {
+  const { t } = useTranslation()
+  if (!trend) {
+    return (
+      <span className="text-xs text-muted-foreground" data-testid="risk-trend-unavailable">
+        {t('risk_register.slt.unavailable')}
+      </span>
+    )
+  }
+  const Icon =
+    trend === 'increasing' ? TrendingUp : trend === 'decreasing' ? TrendingDown : Minus
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-xs capitalize text-foreground"
+      data-testid={`risk-trend-${trend}`}
+    >
+      <Icon className="h-3.5 w-3.5" aria-hidden />
+      {t(`risk_register.profile.trend.${trend}`)}
+    </span>
+  )
 }
 
 type MetricValue = number | null
@@ -187,6 +221,8 @@ interface Risk {
   is_within_appetite: boolean
   risk_owner_name: string
   next_review_date: string | null
+  updated_at?: string | null
+  trend?: ScoreTrend | null
   is_escalated?: boolean
   escalation_reason?: string
   linked_audits?: string[]
@@ -419,6 +455,11 @@ export default function RiskRegister() {
           is_within_appetite: r.is_within_appetite ?? true,
           risk_owner_name: r.risk_owner_name ?? r.risk_owner ?? '',
           next_review_date: r.next_review_date ?? r.review_date ?? null,
+          updated_at: r.updated_at ?? null,
+          trend:
+            r.trend === 'increasing' || r.trend === 'stable' || r.trend === 'decreasing'
+              ? r.trend
+              : null,
           is_escalated: r.is_escalated ?? false,
           escalation_reason: r.escalation_reason,
           linked_audits: r.linked_audits ?? [],
@@ -869,6 +910,20 @@ export default function RiskRegister() {
     return true
   })
 
+  /** Top 10 by residual/net — list API already orders residual_score desc. */
+  const topTenRisks = useMemo(
+    () =>
+      [...risks]
+        .sort((a, b) => b.residual_score - a.residual_score)
+        .slice(0, 10),
+    [risks],
+  )
+
+  const overdueLoadedRisks = useMemo(
+    () => risks.filter((risk) => isReviewOverdue(risk.next_review_date)),
+    [risks],
+  )
+
   const getRiskLevelBadge = (level: string) => {
     const variants: Record<string, 'destructive' | 'warning' | 'info' | 'resolved'> = {
       critical: 'destructive',
@@ -1265,6 +1320,114 @@ export default function RiskRegister() {
         })}
       </div>
 
+      {/* SLT dashboard parity — Top 10 + overdue reviews (honesty-scoped to loaded query) */}
+      {!loadError && registerMode === 'active' ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2" data-testid="risk-slt-panels">
+          <Card data-testid="risk-slt-top10">
+            <CardContent className="space-y-3 p-4">
+              <div>
+                <h2 className="text-base font-semibold text-foreground">
+                  {t('risk_register.slt.top10_title')}
+                </h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t('risk_register.slt.top10_hint')}
+                </p>
+              </div>
+              {topTenRisks.length === 0 ? (
+                <p className="text-sm text-muted-foreground" data-testid="risk-slt-top10-empty">
+                  {t('risk_register.slt.top10_empty')}
+                </p>
+              ) : (
+                <ol className="space-y-2" data-testid="risk-slt-top10-list">
+                  {topTenRisks.map((risk, index) => (
+                    <li key={risk.id} className="flex items-center justify-between gap-3 text-sm">
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 truncate text-left text-primary hover:underline"
+                        data-testid={`risk-slt-top10-row-${risk.id}`}
+                        onClick={() => openRiskProfile(risk.id)}
+                      >
+                        <span className="mr-2 font-mono text-muted-foreground">{index + 1}.</span>
+                        <span className="font-mono text-xs text-muted-foreground">{risk.reference}</span>{' '}
+                        {risk.title}
+                      </button>
+                      <span className="shrink-0 font-semibold text-foreground" title="Residual (net)">
+                        {risk.residual_score}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card data-testid="risk-slt-overdue">
+            <CardContent className="space-y-3 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h2 className="text-base font-semibold text-foreground">
+                    {t('risk_register.slt.overdue_title')}
+                  </h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t('risk_register.slt.overdue_hint')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-2xl font-bold text-foreground"
+                    data-testid="risk-slt-overdue-count"
+                    aria-label={
+                      summary.overdue_review == null
+                        ? t('risk_register.slt.overdue_unavailable')
+                        : undefined
+                    }
+                  >
+                    {formatMetric(summary.overdue_review)}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant={heroFilter === 'overdue' ? 'default' : 'secondary'}
+                    disabled={summary.overdue_review == null && overdueLoadedRisks.length === 0}
+                    onClick={() => toggleHeroFilter('overdue')}
+                    data-testid="risk-slt-overdue-filter"
+                  >
+                    {t('risk_register.slt.overdue_filter')}
+                  </Button>
+                </div>
+              </div>
+              {overdueLoadedRisks.length === 0 ? (
+                <p className="text-sm text-muted-foreground" data-testid="risk-slt-overdue-empty">
+                  {summary.overdue_review == null
+                    ? t('risk_register.slt.overdue_unavailable')
+                    : summary.overdue_review > 0
+                      ? t('risk_register.slt.overdue_loaded_none')
+                      : t('risk_register.slt.overdue_empty')}
+                </p>
+              ) : (
+                <ul className="max-h-48 space-y-2 overflow-y-auto" data-testid="risk-slt-overdue-list">
+                  {overdueLoadedRisks.slice(0, 10).map((risk) => (
+                    <li key={risk.id} className="flex items-center justify-between gap-3 text-sm">
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 truncate text-left text-primary hover:underline"
+                        data-testid={`risk-slt-overdue-row-${risk.id}`}
+                        onClick={() => openRiskProfile(risk.id)}
+                      >
+                        <span className="font-mono text-xs text-muted-foreground">{risk.reference}</span>{' '}
+                        {risk.title}
+                      </button>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {formatListDate(risk.next_review_date) ?? t('risk_register.slt.unavailable')}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
       {/* View Toggle */}
       <div className="flex gap-2">
         <Button
@@ -1347,6 +1510,18 @@ export default function RiskRegister() {
                       tip="Named person accountable for managing and reviewing this risk."
                     />
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                    <ColumnHeaderTip
+                      label={t('risk_register.table.trend')}
+                      tip={t('risk_register.table.trend_tip')}
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
+                    <ColumnHeaderTip
+                      label={t('risk_register.table.last_updated')}
+                      tip={t('risk_register.table.last_updated_tip')}
+                    />
+                  </th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
                     <ColumnHeaderTip
                       label="Actions"
@@ -1363,7 +1538,7 @@ export default function RiskRegister() {
                 {visibleRisks.length === 0 && (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={11}
                       className="text-center py-12 text-muted-foreground"
                       data-testid={
                         loadError ? 'risk-register-unavailable' : 'risk-register-empty'
@@ -1514,6 +1689,12 @@ export default function RiskRegister() {
                           {risk.risk_owner_name || 'Unassigned'}
                         </span>
                       </button>
+                    </td>
+                    <td className="px-4 py-4">
+                      <TrendCell trend={risk.trend} />
+                    </td>
+                    <td className="px-4 py-4 text-sm text-muted-foreground" data-testid={`risk-updated-${risk.id}`}>
+                      {formatListDate(risk.updated_at) ?? t('risk_register.slt.unavailable')}
                     </td>
                     <td className="px-4 py-4 text-center">
                       {registerMode === 'import_triage' ? (
