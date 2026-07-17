@@ -9,9 +9,21 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.exceptions import NotFoundError
-from src.domain.models.compliance_automation import Certificate, GapAnalysis, RegulatoryUpdate, ScheduledAudit
+from src.domain.models.compliance_automation import (
+    Certificate,
+    GapAnalysis,
+    RegulatoryUpdate,
+    RIDDORSubmission,
+    ScheduledAudit,
+)
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink
+from src.domain.models.incident import Incident
 from src.domain.models.standard import Clause, Standard
+
+# Persisted QGP pack — never implies HSE filing succeeded.
+RIDDOR_STATUS_DRAFT_PACK = "draft_pack"
+RIDDOR_STATUS_AWAITING_HSE = "awaiting_hse_filing"
+HSE_RIDDOR_PORTAL_URL = "https://notifications.hse.gov.uk/RiddorForms/"
 
 logger = logging.getLogger(__name__)
 
@@ -603,74 +615,234 @@ class ComplianceAutomationService:
             "is_riddor": is_riddor,
             "riddor_types": riddor_types,
             "deadline": deadline.isoformat() if deadline else None,
-            "submission_url": ("https://notifications.hse.gov.uk/RiddorForms/" if is_riddor else None),
+            "submission_url": (HSE_RIDDOR_PORTAL_URL if is_riddor else None),
         }
 
-    def list_riddor_submissions(self, *, status_filter: Optional[str] = None) -> dict[str, Any]:
-        """List prepared/submitted RIDDOR records.
+    @staticmethod
+    def _riddor_status_label(status: str) -> str:
+        if status == RIDDOR_STATUS_AWAITING_HSE:
+            return (
+                "Pack recorded in QGP — HSE gateway not connected; "
+                "complete filing on the HSE portal"
+            )
+        return "Draft pack saved in QGP — file on the HSE portal (gateway not connected)"
 
-        Persistence for RIDDOR packs is not yet modelled — return an honest empty
-        register so the Monitoring UI can link to HSE without faking submissions.
-        """
-        _ = status_filter
-        return {"submissions": [], "total": 0}
+    @staticmethod
+    def _enum_str(value: Any) -> str:
+        if value is None:
+            return ""
+        return str(getattr(value, "value", value))
 
-    def prepare_riddor_submission(
+    def _build_riddor_pack_payload(self, incident: Incident, riddor_type: str) -> dict[str, Any]:
+        incident_dt = incident.incident_date
+        date_of_incident = ""
+        time_of_incident = ""
+        if incident_dt is not None:
+            if incident_dt.tzinfo is not None:
+                incident_dt = incident_dt.astimezone(timezone.utc)
+            date_of_incident = incident_dt.date().isoformat()
+            time_of_incident = incident_dt.strftime("%H:%M")
+
+        return {
+            "report_type": riddor_type,
+            "date_of_incident": date_of_incident,
+            "time_of_incident": time_of_incident,
+            "location": incident.location or "",
+            "incident_reference": incident.reference_number,
+            "incident_title": incident.title,
+            "injured_person": {
+                "name": incident.people_involved or "",
+                "occupation": "",
+                "employment_status": "",
+            },
+            "injury_details": {
+                "type": incident.riddor_classification or self._enum_str(incident.incident_type),
+                "body_part": "",
+                "severity": self._enum_str(incident.severity),
+            },
+            "incident_description": incident.description or "",
+            "immediate_actions": incident.immediate_actions or "",
+            "preventive_measures": "",
+            "reporter": {
+                "name": incident.reporter_name or "",
+                "position": "",
+                "contact": incident.reporter_email or "",
+            },
+        }
+
+    def _serialize_riddor_pack(
         self,
+        pack: RIDDORSubmission,
+        *,
+        incident_reference: Optional[str] = None,
+    ) -> dict[str, Any]:
+        now = _utc_naive()
+        is_overdue = bool(pack.is_overdue) or (pack.deadline is not None and pack.deadline < now)
+        status = pack.submission_status or RIDDOR_STATUS_DRAFT_PACK
+        return {
+            "id": pack.id,
+            "incident_id": pack.incident_id,
+            "incident_reference": incident_reference,
+            "riddor_type": pack.riddor_type,
+            "hse_reference": pack.hse_reference,
+            "submission_status": status,
+            "status": status,
+            "status_label": self._riddor_status_label(status),
+            "submission_data": pack.submission_data or {},
+            "submitted_at": _to_iso(pack.submitted_at),
+            "submitted_by": pack.submitted_by,
+            "hse_response": pack.hse_response,
+            "hse_response_at": _to_iso(pack.hse_response_at),
+            "deadline": _to_iso(pack.deadline),
+            "is_overdue": is_overdue,
+            "notes": pack.notes,
+            "created_at": _to_iso(pack.created_at),
+            "persisted": True,
+            "submission_url": HSE_RIDDOR_PORTAL_URL,
+            "gateway": "not_connected",
+        }
+
+    async def _get_incident_for_tenant(self, *, tenant_id: int, incident_id: int) -> Incident:
+        result = await self.db.execute(
+            select(Incident).where(
+                Incident.id == incident_id,
+                Incident.tenant_id == tenant_id,
+            )
+        )
+        incident = result.scalar_one_or_none()
+        if incident is None:
+            raise NotFoundError(f"Incident {incident_id} not found")
+        return incident
+
+    async def list_riddor_submissions(
+        self,
+        *,
+        tenant_id: int,
+        status_filter: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """List persisted RIDDOR packs for the tenant register."""
+        query = (
+            select(RIDDORSubmission, Incident.reference_number)
+            .outerjoin(Incident, Incident.id == RIDDORSubmission.incident_id)
+            .where(
+                or_(
+                    RIDDORSubmission.tenant_id == tenant_id,
+                    RIDDORSubmission.tenant_id.is_(None),
+                )
+            )
+        )
+        if status_filter:
+            query = query.where(RIDDORSubmission.submission_status == status_filter)
+        result = await self.db.execute(query.order_by(RIDDORSubmission.created_at.desc()))
+        submissions = [
+            self._serialize_riddor_pack(pack, incident_reference=ref)
+            for pack, ref in result.all()
+        ]
+        return {"submissions": submissions, "total": len(submissions)}
+
+    async def prepare_riddor_submission(
+        self,
+        *,
+        tenant_id: int,
         incident_id: int,
         riddor_type: str,
     ) -> Dict[str, Any]:
-        """Prepare RIDDOR submission data."""
-        deadline = datetime.now(timezone.utc) + timedelta(days=10)
-        return {
-            "incident_id": incident_id,
-            "riddor_type": riddor_type,
-            "submission_data": {
-                "report_type": riddor_type,
-                "date_of_incident": "",
-                "time_of_incident": "",
-                "location": "",
-                "injured_person": {
-                    "name": "",
-                    "occupation": "",
-                    "employment_status": "",
-                },
-                "injury_details": {
-                    "type": "",
-                    "body_part": "",
-                    "severity": "",
-                },
-                "incident_description": "",
-                "immediate_actions": "",
-                "preventive_measures": "",
-                "reporter": {
-                    "name": "",
-                    "position": "",
-                    "contact": "",
-                },
-            },
-            "deadline": deadline.isoformat(),
-            "status": "preparation_stub",
-            "status_label": "Draft pack only — not saved in QGP; file on the HSE portal",
-            "persisted": False,
-        }
+        """Build and persist a RIDDOR draft pack from an incident (incident→pack)."""
+        incident = await self._get_incident_for_tenant(tenant_id=tenant_id, incident_id=incident_id)
+        pack_payload = self._build_riddor_pack_payload(incident, riddor_type)
+        deadline = _utc_naive() + timedelta(days=10)
 
-    def submit_riddor(
+        existing_result = await self.db.execute(
+            select(RIDDORSubmission)
+            .where(
+                RIDDORSubmission.incident_id == incident_id,
+                or_(
+                    RIDDORSubmission.tenant_id == tenant_id,
+                    RIDDORSubmission.tenant_id.is_(None),
+                ),
+                RIDDORSubmission.submission_status.in_(
+                    [RIDDOR_STATUS_DRAFT_PACK, "pending", RIDDOR_STATUS_AWAITING_HSE]
+                ),
+            )
+            .order_by(RIDDORSubmission.created_at.desc())
+            .limit(1)
+        )
+        pack = existing_result.scalar_one_or_none()
+        if pack is None:
+            pack = RIDDORSubmission(
+                tenant_id=tenant_id,
+                incident_id=incident_id,
+                riddor_type=riddor_type,
+                submission_status=RIDDOR_STATUS_DRAFT_PACK,
+                submission_data=pack_payload,
+                deadline=deadline,
+                is_overdue=False,
+                notes="Draft pack persisted in QGP. Statutory filing is completed on the HSE portal.",
+            )
+            self.db.add(pack)
+        else:
+            pack.riddor_type = riddor_type
+            pack.submission_data = pack_payload
+            pack.submission_status = RIDDOR_STATUS_DRAFT_PACK
+            pack.deadline = deadline
+            pack.is_overdue = False
+            pack.tenant_id = tenant_id
+            pack.notes = "Draft pack refreshed from incident. Statutory filing is completed on the HSE portal."
+
+        await self.db.flush()
+        return self._serialize_riddor_pack(pack, incident_reference=incident.reference_number)
+
+    async def submit_riddor(
         self,
+        *,
+        tenant_id: int,
         incident_id: int,
         submitted_by: int,
     ) -> Dict[str, Any]:
-        """Submit RIDDOR report to HSE."""
-        submitted_at = datetime.now(timezone.utc)
-        hse_reference = f"RIDDOR-{incident_id:06d}-{submitted_at.strftime('%Y%m%d%H%M%S')}"
-        return {
-            "incident_id": incident_id,
-            "status": "stubbed",
-            "hse_reference": hse_reference,
-            "submitted_at": submitted_at.isoformat(),
-            "submitted_by": submitted_by,
+        """Record an honest HSE-gateway stub against a persisted pack (does not file to HSE)."""
+        await self._get_incident_for_tenant(tenant_id=tenant_id, incident_id=incident_id)
+
+        existing_result = await self.db.execute(
+            select(RIDDORSubmission)
+            .where(
+                RIDDORSubmission.incident_id == incident_id,
+                or_(
+                    RIDDORSubmission.tenant_id == tenant_id,
+                    RIDDORSubmission.tenant_id.is_(None),
+                ),
+            )
+            .order_by(RIDDORSubmission.created_at.desc())
+            .limit(1)
+        )
+        pack = existing_result.scalar_one_or_none()
+        if pack is None:
+            raise NotFoundError(
+                f"No RIDDOR pack for incident {incident_id}. Prepare a draft pack before recording filing intent."
+            )
+
+        submitted_at = _utc_naive()
+        local_ref = f"QGP-RIDDOR-{incident_id:06d}-{submitted_at.strftime('%Y%m%d%H%M%S')}"
+        pack.submission_status = RIDDOR_STATUS_AWAITING_HSE
+        pack.submitted_at = submitted_at
+        pack.submitted_by = submitted_by
+        pack.hse_reference = local_ref
+        pack.hse_response = {
+            "gateway": "not_connected",
             "confirmation": (
-                "Stub only — not submitted to HSE. Integrate production RIDDOR gateway before treating as filed."
+                "Stub only — not submitted to HSE. Integrate production RIDDOR gateway "
+                "before treating as filed."
             ),
+        }
+        pack.hse_response_at = submitted_at
+        pack.notes = (
+            "Filing intent recorded in QGP only. Complete statutory submission on the HSE portal."
+        )
+        await self.db.flush()
+
+        serialized = self._serialize_riddor_pack(pack)
+        return {
+            **serialized,
+            "status": "stubbed",
+            "confirmation": pack.hse_response["confirmation"],
             "gateway": "not_connected",
         }
