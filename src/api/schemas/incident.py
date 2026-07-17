@@ -103,7 +103,8 @@ class IncidentResponse(BaseModel):
     department: Optional[str] = None
     reported_date: datetime
     created_at: datetime
-    updated_at: datetime
+    # Optional: legacy/sample rows may lack updated_at; required field caused list 500s.
+    updated_at: Optional[datetime] = None
     reporter_id: Optional[int] = None
     reporter_email: Optional[str] = None
     reporter_name: Optional[str] = None
