@@ -1839,7 +1839,13 @@ async def extract_year_ocr_readings(
     if not contents:
         raise HTTPException(status_code=422, detail="Uploaded file is empty")
 
-    service = PlanetMarkPdfOcrService()
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise HTTPException(status_code=403, detail="Tenant context required")
+
+    from src.infrastructure.external.azure_document_intelligence import AzureDocumentIntelligenceClient
+
+    service = PlanetMarkPdfOcrService(azure_client=AzureDocumentIntelligenceClient())
     extraction = await service.extract(
         content=contents,
         filename=filename,
@@ -1847,7 +1853,7 @@ async def extract_year_ocr_readings(
         document_kind=document_kind,
     )
 
-    xlsx_ingested = await _year_has_ms_xlsx_ingest(db, year_id, current_user.tenant_id)
+    xlsx_ingested = await _year_has_ms_xlsx_ingest(db, year_id, tenant_id)
     period_mismatch: Optional[str] = None
     period_value = extraction.reporting_period_label.value
     if period_value and period_value.upper().startswith("YE") and period_value.upper() != year.year_label.upper():
@@ -1911,12 +1917,16 @@ async def apply_year_ocr_readings(
     requested = body.get("fields")
     requested_set = set(requested) if isinstance(requested, list) else None
 
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise HTTPException(status_code=403, detail="Tenant context required")
+
     extraction = _ocr_extraction_from_preview(
         preview,
         filename=str(preview.get("source_filename") or "upload.pdf"),
         document_kind=document_kind,
     )
-    xlsx_ingested = await _year_has_ms_xlsx_ingest(db, year_id, current_user.tenant_id)
+    xlsx_ingested = await _year_has_ms_xlsx_ingest(db, year_id, tenant_id)
     plans = build_apply_plan(
         extraction,
         xlsx_ingested=xlsx_ingested,

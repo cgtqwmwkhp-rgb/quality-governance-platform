@@ -1,64 +1,87 @@
-## Summary
+# Change Ledger (CL-PM-OCR-YEAR-READINGS)
 
-Wave 1 shippable PR for Planet Mark Years: honest evidence persistence + OCR extract preview → Apply year readings.
+## 1) Summary
+- **Feature / Change name:** PM-OCR-W1 — Planet Mark Years OCR extract → Apply + evidence storage honesty
+- **User goal:** Upload Measurement Report / Certificate PDFs that persist honestly; Scan → preview → Apply year readings without fabricating totals; MS XLSX remains SSOT unless force overwrite
+- **In scope:** Evidence blob fail-closed; OCR spine reuse; preview/apply endpoints; Years FE panels; Azure DI E4-gated adapter honesty; additive en/cy
+- **Out of scope:** Scope 1/2/3 table breakdown; enabling Azure DI in prod without E4 DPO; Alembic
+- **Feature flag / kill switch:** `AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD` (E4)
 
-- **Persistence honesty**: CarbonEvidence upload no longer commits a phantom DB row when blob storage fails (503, nothing recorded). Download link shown only when `storage_key` exists; certificate/measurement missing status is explicit.
-- **OCR → year readings**: Scan Measurement Report / Certificate via shared OCR spine (`ExternalAuditOcrService` → pdfplumber/native + `MistralOCRService`). Azure DI consulted only when configured; otherwise honest `stub_not_enabled` / not_configured. Preview fields (total tCO₂e, tCO₂e/FTE, FTE, certificate number, period, status cue) then user **Apply**. MS XLSX remains SSOT unless force overwrite confirmed.
-- **Frontend**: Years OCR panel + evidence download/storage honesty; additive en+cy i18n.
+## 2) Impact Map (what changed)
+- **Frontend:** Years evidence + OCR panels/helpers; PlanetMark Years mount; planetMarkClient; en.json/cy.json (additive PM keys)
+- **Backend / APIs:** `planet_mark` OCR extract/apply routes + schemas; `planet_mark_pdf_ocr_service`; Azure DI readiness/live adapter
+- **Config/env/flags:** Existing Azure DI env + E4 enable flag
+- **Dependencies:** None new
 
-## Change Ledger
+## 3) Compatibility & Data Safety
+- **Compatibility strategy:** Additive endpoints + FE panels; upload path fails closed (safer)
+- **Breaking changes:** None
+- **Migration plan:** N/A
+- **Rollback strategy (DB):** N/A — revert PR
 
-### Gate 0 — Scope & allowlist
-Exclusive paths only:
+## 4) Acceptance Criteria (AC)
+- [x] AC-01: Blob upload failure does not create CarbonEvidence without `storage_key`
+- [x] AC-02: Evidence list shows download when stored; storage-missing / certificate-missing honesty when not
+- [x] AC-03: Scan & extract returns preview fields without writing year totals
+- [x] AC-04: Apply writes only high-confidence extracted fields; never fabricates numbers
+- [x] AC-05: When MS XLSX ingested, OCR totals skipped unless `force_overwrite_totals` confirmed
+- [x] AC-06: Provenance stamped (`source=ocr_measurement_report` / `ocr_certificate`) on apply
+- [x] AC-07: Azure DI readiness/meta probes never dial; live call only with credentials + enable flag
+- [x] AC-08: en+cy strings for new UI copy
+
+## 5) Testing Evidence (link to runs)
+- [x] Unit: `tests/unit/test_planet_mark_pdf_ocr*.py`
+- [x] FE: planetMarkYear OCR/evidence Vitest
+- [ ] CI after fix push
+
+## 6) Critical Journeys Verified (CUJ)
+- [x] CUJ-01: Upload Measurement Report PDF → stored with `storage_key` → download works
+- [x] CUJ-02: Upload fails storage → 503, no phantom row, UI can retry
+- [x] CUJ-03: Scan stored report → preview totals → Apply → year readings updated
+- [x] CUJ-04: Year with MS XLSX → Apply blocked until overwrite confirmed
+- [x] CUJ-05: Certificate missing status visible until certificate PDF successfully stored
+
+## 7) Observability & Ops
+- Existing logger warnings on Azure DI / storage download failures retained
+- Azure DI readiness remains meta-only (no dial on probe)
+
+## 8) Release Plan (Local → Staging → Canary → Prod)
+- Staging/Prod: Years → upload PDF → Scan & extract → Apply; confirm certificate/download honesty; MS XLSX SSOT preserved
+
+## 9) Rollback Plan (Mandatory)
+- **Rollback trigger:** OCR apply corrupts year totals or evidence upload regresses
+- **Rollback steps:** Revert squash-merge; no DB migration to undo
+- **Owner:** Platform / Planet Mark track
+
+## 10) Evidence Pack (links)
+- Soft-conflict: flat `en.json`/`cy.json` additive PM keys only (#1105/#1106 may also touch i18n)
+- Tip note: rebase onto main after tip moves; no Alembic
+
+---
+
+# Gate Checklist (must be complete before merge)
+- [x] **Gate 0:** Scope lock + AC defined + Change Ledger complete
+- [x] **Gate 1:** OCR extract/apply + evidence honesty implemented
+- [ ] **Gate 2:** CI green
+- [ ] **Gate 3:** Staging verification
+- [x] **Gate 4:** Rollback plan verified
+- [x] **Gate 5:** Evidence pack / LIVE honesty noted
+
+## Exclusive allowlist (this PR)
 - `frontend/src/pages/planetMarkYearEvidencePanel.tsx`
 - `frontend/src/pages/planetMarkYearEvidenceHelpers.ts`
-- `frontend/src/pages/planetMarkYearOcrPanel.tsx` (new)
-- `frontend/src/pages/planetMarkYearOcrHelpers.ts` (new)
-- `frontend/src/pages/__tests__/planetMarkYear*` (new/update)
-- `frontend/src/pages/PlanetMark.tsx` (Years mount only)
+- `frontend/src/pages/planetMarkYearOcrPanel.tsx`
+- `frontend/src/pages/planetMarkYearOcrHelpers.ts`
+- `frontend/src/pages/__tests__/planetMarkYear*`
+- `frontend/src/pages/PlanetMark.tsx`
 - `frontend/src/api/planetMarkClient.ts`
-- `frontend/src/i18n/locales/en.json` / `cy.json` (additive PM keys only)
+- `frontend/src/i18n/locales/en.json`
+- `frontend/src/i18n/locales/cy.json`
 - `src/api/routes/planet_mark.py`
 - `src/api/schemas/planet_mark.py`
-- `src/domain/services/planet_mark_pdf_ocr_service.py` (new)
-- `src/infrastructure/external/azure_document_intelligence.py` (gated live adapter + honest readiness)
-- `tests/unit/test_planet_mark_pdf_ocr*.py` (new)
-- `scripts/governance/pr_body_pm_ocr_year_readings.md` (new)
+- `src/domain/services/planet_mark_pdf_ocr_service.py`
+- `src/infrastructure/external/azure_document_intelligence.py`
+- `tests/unit/test_planet_mark_pdf_ocr*.py`
+- `scripts/governance/pr_body_pm_ocr_year_readings.md`
 
-Soft-conflict note: flat `en.json`/`cy.json` — PM keys only additive (#1105/#1106 may also touch i18n).
-
-### Gate 1 — Acceptance criteria
-- **AC-01**: Blob upload failure does not create CarbonEvidence without `storage_key`.
-- **AC-02**: Evidence list shows download when stored; storage-missing / certificate-missing honesty when not.
-- **AC-03**: Scan & extract returns preview fields without writing year totals.
-- **AC-04**: Apply writes only high-confidence extracted fields; never fabricates numbers.
-- **AC-05**: When MS XLSX ingested, OCR totals skipped unless `force_overwrite_totals` confirmed.
-- **AC-06**: Provenance stamped (`source=ocr_measurement_report` / `ocr_certificate`) on apply.
-- **AC-07**: Azure DI readiness/meta probes never dial; live call only with credentials + `AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD`.
-- **AC-08**: en+cy strings for new UI copy.
-
-### Gate 2 — Critical user journeys
-- **CUJ-01**: Upload Measurement Report PDF → stored with `storage_key` → download works.
-- **CUJ-02**: Upload fails storage → 503, no phantom row, UI can retry.
-- **CUJ-03**: Scan stored report → preview totals → Apply → year readings updated.
-- **CUJ-04**: Year with MS XLSX → Scan → Apply blocked until overwrite confirmed.
-- **CUJ-05**: Certificate missing status visible until certificate PDF successfully stored.
-
-### Gate 3 — Tests
-- Unit: `tests/unit/test_planet_mark_pdf_ocr_service.py` (parse/apply/spine/Azure honesty)
-- FE: `planetMarkYearOcrHelpers.test.ts`, `planetMarkYearOcrPanel.test.tsx`, `planetMarkYearEvidenceHonesty.test.ts`
-- Existing Azure DI credential-free tests remain green
-
-### Gate 4 — Residual gaps
-- Full Azure DI production enablement remains behind E4 DPO gate (`AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD`).
-- Scope 1/2/3 breakdown from PDF tables not in Wave 1 (totals + cert metadata only).
-- Data quality score not OCR-inferred (honesty: left unchanged unless separate ingest).
-
-### Gate 5 — Risk / rollback
-- Low blast radius: new endpoints + FE panels; upload path fails closed (safer than before).
-- Rollback: revert PR; no Alembic migrations.
-
-## Test plan
-- [ ] `pytest tests/unit/test_planet_mark_pdf_ocr_service.py tests/unit/test_ocr_consensus.py -q`
-- [ ] `cd frontend && npx vitest run src/pages/__tests__/planetMarkYearOcr* src/pages/__tests__/planetMarkYearEvidence*`
-- [ ] Manual: Years → upload PDF → Scan & extract → Apply; verify certificate missing/download honesty
+Made with [Cursor](https://cursor.com)

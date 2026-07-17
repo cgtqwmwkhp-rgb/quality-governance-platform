@@ -16,12 +16,20 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import asdict, dataclass, field
-from typing import Any, Optional
+from typing import Any, Optional, Protocol
 
 from src.domain.services.external_audit_ocr_service import ExternalAuditOcrService
-from src.infrastructure.external.azure_document_intelligence import AzureDocumentIntelligenceClient
 
 logger = logging.getLogger(__name__)
+
+
+class _AzureDiEnrichmentClient(Protocol):
+    """Injected adapter — domain must not import infrastructure clients."""
+
+    @property
+    def is_configured(self) -> bool: ...
+
+    async def analyze_document(self, content: bytes, filename: str, content_type: str) -> Any: ...
 
 PROVENANCE_MEASUREMENT_REPORT = "ocr_measurement_report"
 PROVENANCE_CERTIFICATE = "ocr_certificate"
@@ -256,10 +264,11 @@ class PlanetMarkPdfOcrService:
     def __init__(
         self,
         ocr_pipeline: ExternalAuditOcrService | None = None,
-        azure_client: AzureDocumentIntelligenceClient | None = None,
+        azure_client: _AzureDiEnrichmentClient | None = None,
     ) -> None:
         self._ocr = ocr_pipeline or ExternalAuditOcrService()
-        self._azure = azure_client or AzureDocumentIntelligenceClient()
+        # Azure DI is optional enrichment; API layer injects the infra client.
+        self._azure = azure_client
 
     async def extract(
         self,
@@ -285,7 +294,7 @@ class PlanetMarkPdfOcrService:
             warnings.append("OCR provider is not configured; native PDF text was empty.")
 
         # Optional Azure DI enrichment — never fabricates; honest status only.
-        if self._azure.is_configured:
+        if self._azure is not None and self._azure.is_configured:
             try:
                 azure_result = await self._azure.analyze_document(content, filename, content_type)
             except Exception as exc:  # noqa: BLE001
