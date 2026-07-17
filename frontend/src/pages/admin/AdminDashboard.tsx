@@ -125,113 +125,121 @@ export default function AdminDashboard() {
     setLoadError(null)
     setActivityUnavailable(false)
 
-    const [formsRes, contractsRes, trailRes] = await Promise.allSettled([
-      formConfigApi.listTemplates({ page_size: 1, is_active: true }),
-      contractsApi.list(true),
-      auditTrailApi.list({ page: 1, per_page: 5 }),
-    ])
+    try {
+      const [formsRes, contractsRes, trailRes] = await Promise.allSettled([
+        formConfigApi.listTemplates({ page_size: 1, is_active: true }),
+        contractsApi.list(true),
+        auditTrailApi.list({ page: 1, per_page: 5 }),
+      ])
 
-    const formsTotal =
-      formsRes.status === 'fulfilled'
-        ? formsRes.value.total ?? formsRes.value.items?.length ?? 0
-        : null
-    const contractsTotal =
-      contractsRes.status === 'fulfilled'
-        ? contractsRes.value.total ?? contractsRes.value.items?.length ?? 0
-        : null
+      const formsTotal =
+        formsRes.status === 'fulfilled'
+          ? formsRes.value.total ?? formsRes.value.items?.length ?? 0
+          : null
+      const contractsTotal =
+        contractsRes.status === 'fulfilled'
+          ? contractsRes.value.total ?? contractsRes.value.items?.length ?? 0
+          : null
 
-    if (formsRes.status === 'rejected') {
-      captureAdminLoadError(formsRes.reason, { component: 'AdminDashboard', action: 'loadForms' }, '')
+      if (formsRes.status === 'rejected') {
+        captureAdminLoadError(
+          formsRes.reason,
+          { component: 'AdminDashboard', action: 'loadForms' },
+          '',
+        )
+      }
+      if (contractsRes.status === 'rejected') {
+        captureAdminLoadError(
+          contractsRes.reason,
+          { component: 'AdminDashboard', action: 'loadContracts' },
+          '',
+        )
+      }
+      if (trailRes.status === 'rejected') {
+        captureAdminLoadError(
+          trailRes.reason,
+          { component: 'AdminDashboard', action: 'loadActivity' },
+          '',
+        )
+      }
+
+      setStats([
+        {
+          label: t('admin.dashboard.stat_active_forms', 'Active Forms'),
+          value: formsTotal === null ? '—' : String(formsTotal),
+          change:
+            formsTotal === null
+              ? t('admin.dashboard.stat_unavailable', 'Count unavailable')
+              : t('admin.dashboard.stat_live', 'Live from API'),
+          trend: 'neutral',
+          icon: <FileText className="w-5 h-5" />,
+          unavailable: formsTotal === null,
+        },
+        {
+          label: t('admin.dashboard.stat_active_contracts', 'Active Contracts'),
+          value: contractsTotal === null ? '—' : String(contractsTotal),
+          change:
+            contractsTotal === null
+              ? t('admin.dashboard.stat_unavailable', 'Count unavailable')
+              : t('admin.dashboard.stat_live', 'Live from API'),
+          trend: 'neutral',
+          icon: <Building className="w-5 h-5" />,
+          unavailable: contractsTotal === null,
+        },
+        {
+          label: t('admin.dashboard.stat_submissions_today', 'Submissions Today'),
+          value: '—',
+          change: t('admin.dashboard.stat_not_wired', 'Not wired yet'),
+          trend: 'neutral',
+          icon: <Activity className="w-5 h-5" />,
+        },
+        {
+          label: t('admin.dashboard.stat_pending_actions', 'Pending Actions'),
+          value: '—',
+          change: t('admin.dashboard.stat_not_wired', 'Not wired yet'),
+          trend: 'neutral',
+          icon: <Clock className="w-5 h-5" />,
+        },
+      ])
+
+      if (trailRes.status === 'fulfilled') {
+        const entries = trailRes.value.data?.items ?? []
+        setRecentActivity(
+          entries.slice(0, 5).map((entry) => {
+            const actionType =
+              entry.action === 'create'
+                ? 'add'
+                : entry.action === 'update'
+                  ? 'edit'
+                  : entry.action === 'delete'
+                    ? 'settings'
+                    : 'publish'
+            return {
+              action:
+                entry.entity_name ||
+                `${entry.action} on ${entry.entity_type} ${entry.entity_id}`,
+              user: entry.user_name || 'System',
+              time: formatTimeAgo(entry.timestamp || ''),
+              type: actionType,
+            }
+          }),
+        )
+      } else {
+        setRecentActivity([])
+        setActivityUnavailable(true)
+      }
+
+      if (formsTotal === null || contractsTotal === null) {
+        setLoadError(
+          t(
+            'admin.dashboard.load_unavailable',
+            'Admin summary data could not be loaded. Quick actions remain available below.',
+          ),
+        )
+      }
+    } finally {
+      setLoading(false)
     }
-    if (contractsRes.status === 'rejected') {
-      captureAdminLoadError(
-        contractsRes.reason,
-        { component: 'AdminDashboard', action: 'loadContracts' },
-        '',
-      )
-    }
-    if (trailRes.status === 'rejected') {
-      captureAdminLoadError(
-        trailRes.reason,
-        { component: 'AdminDashboard', action: 'loadActivity' },
-        '',
-      )
-    }
-
-    setStats([
-      {
-        label: t('admin.dashboard.stat_active_forms', 'Active Forms'),
-        value: formsTotal === null ? '—' : String(formsTotal),
-        change:
-          formsTotal === null
-            ? t('admin.dashboard.stat_unavailable', 'Count unavailable')
-            : t('admin.dashboard.stat_live', 'Live from API'),
-        trend: 'neutral',
-        icon: <FileText className="w-5 h-5" />,
-        unavailable: formsTotal === null,
-      },
-      {
-        label: t('admin.dashboard.stat_active_contracts', 'Active Contracts'),
-        value: contractsTotal === null ? '—' : String(contractsTotal),
-        change:
-          contractsTotal === null
-            ? t('admin.dashboard.stat_unavailable', 'Count unavailable')
-            : t('admin.dashboard.stat_live', 'Live from API'),
-        trend: 'neutral',
-        icon: <Building className="w-5 h-5" />,
-        unavailable: contractsTotal === null,
-      },
-      {
-        label: t('admin.dashboard.stat_submissions_today', 'Submissions Today'),
-        value: '—',
-        change: t('admin.dashboard.stat_not_wired', 'Not wired yet'),
-        trend: 'neutral',
-        icon: <Activity className="w-5 h-5" />,
-      },
-      {
-        label: t('admin.dashboard.stat_pending_actions', 'Pending Actions'),
-        value: '—',
-        change: t('admin.dashboard.stat_not_wired', 'Not wired yet'),
-        trend: 'neutral',
-        icon: <Clock className="w-5 h-5" />,
-      },
-    ])
-
-    if (trailRes.status === 'fulfilled') {
-      const entries = trailRes.value.data?.items ?? []
-      setRecentActivity(
-        entries.slice(0, 5).map((entry) => {
-          const actionType =
-            entry.action === 'create'
-              ? 'add'
-              : entry.action === 'update'
-                ? 'edit'
-                : entry.action === 'delete'
-                  ? 'settings'
-                  : 'publish'
-          return {
-            action: entry.entity_name || `${entry.action} on ${entry.entity_type} ${entry.entity_id}`,
-            user: entry.user_name || 'System',
-            time: formatTimeAgo(entry.timestamp || ''),
-            type: actionType,
-          }
-        }),
-      )
-    } else {
-      setRecentActivity([])
-      setActivityUnavailable(true)
-    }
-
-    if (formsTotal === null || contractsTotal === null) {
-      setLoadError(
-        t(
-          'admin.dashboard.load_unavailable',
-          'Admin summary data could not be loaded. Quick actions remain available below.',
-        ),
-      )
-    }
-
-    setLoading(false)
   }, [t])
 
   useEffect(() => {

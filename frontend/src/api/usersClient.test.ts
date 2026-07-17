@@ -22,6 +22,7 @@ describe('createUsersApi', () => {
     createUsersApi(api as never).list(2, 25, { search: 'x', department: 'ops', is_active: true })
     expect(api.get).toHaveBeenCalledWith(
       '/api/v1/users/?page=2&page_size=25&search=x&department=ops&is_active=true',
+      undefined,
     )
   })
 
@@ -43,7 +44,7 @@ describe('createUsersApi', () => {
     })
     expect(api.patch).toHaveBeenCalledWith('/api/v1/users/9', { first_name: 'C' })
     expect(api.delete).toHaveBeenCalledWith('/api/v1/users/9')
-    expect(api.get).toHaveBeenCalledWith('/api/v1/users/roles/')
+    expect(api.get).toHaveBeenCalledWith('/api/v1/users/roles/', undefined)
     expect(api.post).toHaveBeenCalledWith('/api/v1/users/roles/', { name: 'r', permissions: ['p'] })
     expect(api.patch).toHaveBeenCalledWith('/api/v1/users/roles/3', { name: 'r2' })
   })

@@ -32,12 +32,15 @@ vi.mock('react-router-dom', async () => {
   }
 })
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (_key: string, fallback?: string) => fallback ?? _key,
-  }),
-  initReactI18next: { type: '3rdParty', init: () => {} },
-}))
+vi.mock('react-i18next', () => {
+  const mockT = (_key: string, fallback?: string) => fallback ?? _key
+  return {
+    useTranslation: () => ({
+      t: mockT,
+    }),
+    initReactI18next: { type: '3rdParty', init: () => {} },
+  }
+})
 
 import AdminDashboard from '../AdminDashboard'
 
