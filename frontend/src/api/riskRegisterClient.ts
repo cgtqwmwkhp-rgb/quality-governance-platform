@@ -205,6 +205,52 @@ export interface RiskTrendsResponse {
   }>
 }
 
+export interface RiskRegisterImportRowError {
+  row: number
+  code: string
+  message: string
+  field?: string | null
+}
+
+export interface RiskRegisterImportPreviewRow {
+  row: number
+  action: 'create' | 'update'
+  reference: string
+  title: string
+  category: string
+  inherent_score: number
+  residual_score: number
+  risk_owner_name?: string | null
+  status: string
+}
+
+export interface RiskRegisterImportReport {
+  dry_run: boolean
+  total_rows: number
+  valid_rows: number
+  error_rows: number
+  creates: number
+  updates: number
+  ok: boolean
+  errors: RiskRegisterImportRowError[]
+  preview: RiskRegisterImportPreviewRow[]
+  action_plan_skipped?: boolean
+}
+
+export interface RiskRegisterImportCommitResult {
+  created_count: number
+  updated_count: number
+  created_risk_ids: number[]
+  updated_risk_ids: number[]
+  report: RiskRegisterImportReport
+}
+
+function riskRegisterImportForm(file: File): FormData {
+  const form = new FormData()
+  form.append('file', file)
+  return form
+}
+
 export function createRiskRegisterApi(api: AxiosInstance) {
   return {
     list: (params?: {
@@ -306,5 +352,17 @@ export function createRiskRegisterApi(api: AxiosInstance) {
       api.put<unknown>(riskRegisterKriValuePath(id), { value }),
     getKRIHistory: (id: number) => api.get<unknown>(`/api/v1/risk-register/kris/${id}/history`),
     getAppetiteStatements: () => api.get<unknown[]>('/api/v1/risk-register/appetite/statements'),
+    importDryRun: (file: File) =>
+      api.post<RiskRegisterImportReport>(
+        '/api/v1/risk-register/import/dry-run',
+        riskRegisterImportForm(file),
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      ),
+    importCommit: (file: File) =>
+      api.post<RiskRegisterImportCommitResult>(
+        '/api/v1/risk-register/import/commit',
+        riskRegisterImportForm(file),
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      ),
   }
 }
