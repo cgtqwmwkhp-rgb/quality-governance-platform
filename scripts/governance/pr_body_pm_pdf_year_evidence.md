@@ -69,11 +69,25 @@
 
 - **Playwright hooks:** `planet-mark-years-evidence-panel`, `planet-mark-years-evidence-upload-measurement-report`, `planet-mark-years-evidence-upload-certificate`, `planet-mark-years-evidence-list-empty`, `planet-mark-years-evidence-list-error`, `planet-mark-years-evidence-list-retry`
 
-## 8) Checklist id
+## 8) Release Plan
 
-**PM-PDF-YEAR-EVIDENCE** (living tracker)
+1. Draft PR → CI green
+2. Squash-merge after review (human — **do not merge from this lane**)
+3. Staging smoke Planet Mark → Years → select YE2024 → upload Measurement Report + Certificate PDFs
 
-## Gate 0–5
+## 9) Rollback Plan
+
+1. Revert squash commit on `main`
+2. Redeploy previous SHA
+
+## 10) Evidence Pack (links)
+
+- CI run(s): https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/actions (PR #1097)
+- Local vitest: `planetMarkYearEvidenceHelpers`, `planetMarkYearEvidencePanel`, `PlanetMark` shell (28 tests pass)
+
+---
+
+# Gate Checklist (must be complete before merge)
 
 - [x] **Gate 0:** Scope lock + AC defined + Change Ledger complete
 - [x] **Gate 1:** API client `listEvidence` / `uploadEvidence` typed + exported
@@ -81,3 +95,9 @@
 - [x] **Gate 3:** Vitest empty/list/error states
 - [x] **Gate 4:** en/cy i18n union
 - [ ] **Gate 5:** CI green (babysit)
+
+## Test plan
+
+- [x] `cd frontend && npx vitest run src/pages/__tests__/planetMarkYearEvidenceHelpers.test.ts src/pages/__tests__/planetMarkYearEvidencePanel.test.tsx src/pages/__tests__/PlanetMark.test.tsx`
+- [ ] Manual: Years → YE2024 → upload sample Measurement Report PDF → list refreshes
+- [ ] Manual: Years with no carbon → MS XLSX placeholder still visible alongside evidence card
