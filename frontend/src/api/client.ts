@@ -916,6 +916,7 @@ export type {
   PlanetMarkDataQualityResponse,
   PlanetMarkEvidenceRecord,
   PlanetMarkEvidenceListResponse,
+  PlanetMarkMsXlsxIngestResponse,
 } from './planetMarkClient'
 export const planetMarkApi = createPlanetMarkApi(api)
 

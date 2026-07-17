@@ -343,6 +343,9 @@ export interface PlanetMarkYearIngestRow {
 
 export interface PlanetMarkYearsViewModel {
   selectedHasIngestedCarbon: boolean
+  /** Always show MS XLSX ingest panel when a reporting year is selected (PM-W1b). */
+  showMsXlsxIngestPanel: boolean
+  /** @deprecated Use showMsXlsxIngestPanel — kept for soft migration of callers. */
   showMsXlsxIngestPlaceholder: boolean
   priorYearsWithoutIngest: PlanetMarkYearIngestRow[]
   allYearRows: PlanetMarkYearIngestRow[]
@@ -380,9 +383,12 @@ export function buildPlanetMarkYearsViewModel(input: {
     (row) => row.id !== selectedYearId && !row.hasIngestedCarbon,
   )
 
+  const showPanel = selectedRow != null
   return {
     selectedHasIngestedCarbon: selectedRow?.hasIngestedCarbon ?? false,
-    showMsXlsxIngestPlaceholder: selectedRow != null && !selectedRow.hasIngestedCarbon,
+    showMsXlsxIngestPanel: showPanel,
+    // Placeholder flag now means "panel visible" so Years always offers upload.
+    showMsXlsxIngestPlaceholder: showPanel,
     priorYearsWithoutIngest,
     allYearRows,
   }

@@ -2300,6 +2300,69 @@ def _calc_avg_quality(sources: list) -> int:
     return min(16, round(avg * 4))  # Scale to 0-16, cap at 16
 
 
+# ============ MS XLSX year ingest (PM-W1b) ============
+
+
+@router.post(
+    "/years/{year_id}/ingest-xlsx",
+    summary="Ingest Planet Mark MS XLSX year carbon totals",
+)
+async def ingest_ms_xlsx_year_totals(
+    year_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+    request: Request,
+) -> dict[str, Any]:
+    """Upload a Planet Mark MS output XLSX and upsert year-level carbon totals.
+
+    Expects the Member Copy workbook sheets ``Scope (Market Based)`` and ``Total CF``.
+    Filename should include the year label (e.g. YE2024) matching the selected year.
+    """
+    from fastapi import UploadFile
+
+    from src.api.schemas.planet_mark import MsXlsxYearIngestResponse
+    from src.domain.exceptions import BadRequestError, NotFoundError
+    from src.domain.services.planet_mark_xlsx_ingest_service import PlanetMarkXlsxIngestService
+
+    form = await request.form()
+    file_raw = form.get("file")
+    if file_raw is None:
+        raise BadRequestError("XLSX file is required (multipart field 'file')")
+    upload: UploadFile = cast(Any, file_raw)
+
+    filename = (getattr(upload, "filename", None) or "").strip()
+    if not filename.lower().endswith(".xlsx"):
+        raise BadRequestError("File must be an Excel workbook (.xlsx extension)")
+
+    content = await upload.read()
+    service = PlanetMarkXlsxIngestService(db)
+    try:
+        result = await service.ingest(
+            year_id=year_id,
+            tenant_id=current_user.tenant_id,
+            content=content,
+            filename=filename,
+        )
+        await db.commit()
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except BadRequestError:
+        raise
+    except Exception as exc:
+        logger.error("ingest-xlsx failed for year %s: %s", year_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"MS XLSX ingest failed: {str(exc)[:200]}") from exc
+
+    _audit(
+        "ingest_ms_xlsx",
+        current_user.tenant_id,
+        current_user.id,
+        year_id=result.year_id,
+        filename=filename,
+        total_emissions=result.totals.total_market,
+    )
+    return MsXlsxYearIngestResponse.model_validate(result.to_dict()).model_dump()
+
+
 # ============ Import Sync ============
 
 

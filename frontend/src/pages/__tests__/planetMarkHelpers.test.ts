@@ -217,7 +217,7 @@ describe('planetMarkHelpers', () => {
     expect(PLANET_MARK_SECTION_IDS).toEqual(['years', 'trends', 'monthly', 'improve', 'export'])
   })
 
-  it('builds years view model with MS XLSX ingest placeholder when selected year lacks carbon', () => {
+  it('builds years view model with MS XLSX ingest panel when selected year lacks carbon', () => {
     const vm = buildPlanetMarkYearsViewModel({
       years: [
         {
@@ -240,19 +240,20 @@ describe('planetMarkHelpers', () => {
       selectedYearId: 1,
     })
 
+    expect(vm.showMsXlsxIngestPanel).toBe(true)
     expect(vm.showMsXlsxIngestPlaceholder).toBe(true)
     expect(vm.selectedHasIngestedCarbon).toBe(false)
     expect(vm.priorYearsWithoutIngest).toHaveLength(1)
     expect(vm.allYearRows.every((row) => !row.hasIngestedCarbon)).toBe(true)
   })
 
-  it('hides ingest placeholder when selected year has recorded carbon totals', () => {
+  it('keeps MS XLSX ingest panel when selected year already has recorded carbon totals', () => {
     const vm = buildPlanetMarkYearsViewModel({
       years: [{ ...baseYear, id: 1, year_label: 'YE2026', year_number: 2026 }],
       selectedYearId: 1,
     })
 
-    expect(vm.showMsXlsxIngestPlaceholder).toBe(false)
+    expect(vm.showMsXlsxIngestPanel).toBe(true)
     expect(vm.selectedHasIngestedCarbon).toBe(true)
     expect(vm.allYearRows[0]?.total).toBe(10)
   })
