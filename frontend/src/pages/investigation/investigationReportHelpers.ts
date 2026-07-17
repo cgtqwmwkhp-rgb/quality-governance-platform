@@ -39,7 +39,6 @@ export function buildPackManifestStubDownload(
   investigationReference: string,
 ): PackDownloadPayload {
   const ref = investigationReference.replace(/[^\w-]+/g, '_')
-  const stamp = pack.generated_at.slice(0, 10)
   return {
     filename: `investigation-report-${ref}-${pack.pack_uuid.slice(0, 8)}-manifest.json`,
     body: JSON.stringify(
