@@ -24,6 +24,7 @@ export interface Investigation {
   assigned_entity_type: 'road_traffic_collision' | 'reporting_incident' | 'complaint' | 'near_miss'
   assigned_entity_id: number
   status: 'draft' | 'in_progress' | 'under_review' | 'completed' | 'closed'
+  level?: 'minimal' | 'low' | 'medium' | 'high' | null
   title: string
   description?: string
   data: Record<string, unknown>

@@ -1,6 +1,11 @@
 import { toApiQuestionType, fromApiQuestionType } from '../audit-builder/questionTypeRegistry'
 import type { InvestigationTemplate } from '../../api/investigationsClient'
-import type { InvestigationField, InvestigationSection, InvestigationTemplateDraft } from './types'
+import type {
+  InvestigationField,
+  InvestigationLevel,
+  InvestigationSection,
+  InvestigationTemplateDraft,
+} from './types'
 import { createEmptyDraft, generateId } from './types'
 
 interface ApiStructureField {
@@ -17,6 +22,7 @@ interface ApiStructureField {
 interface ApiStructureSection {
   id?: string
   name?: string
+  min_level?: InvestigationLevel
   fields?: ApiStructureField[]
 }
 
@@ -42,6 +48,7 @@ function mapApiSection(section: ApiStructureSection, index: number): Investigati
   return {
     id: section.id ?? generateId(),
     name: section.name ?? `Section ${index + 1}`,
+    min_level: section.min_level ?? 'minimal',
     fields: (section.fields ?? []).map(mapApiField),
   }
 }
@@ -69,6 +76,7 @@ export function buildStructurePayload(draft: InvestigationTemplateDraft): ApiStr
     sections: draft.sections.map((section) => ({
       id: section.id,
       name: section.name,
+      min_level: section.min_level,
       fields: section.fields.map((field) => {
         const spec = toApiQuestionType(field.type)
         return {

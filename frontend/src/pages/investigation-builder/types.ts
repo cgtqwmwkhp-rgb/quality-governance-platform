@@ -7,6 +7,8 @@ export type ApplicableEntityType =
   | 'complaint'
   | 'near_miss'
 
+export type InvestigationLevel = 'minimal' | 'low' | 'medium' | 'high'
+
 export interface InvestigationField {
   id: string
   label: string
@@ -17,6 +19,7 @@ export interface InvestigationField {
 export interface InvestigationSection {
   id: string
   name: string
+  min_level: InvestigationLevel
   fields: InvestigationField[]
 }
 
@@ -48,6 +51,7 @@ export const createNewField = (): InvestigationField => ({
 export const createNewSection = (order: number): InvestigationSection => ({
   id: generateId(),
   name: `Section ${order}`,
+  min_level: 'minimal',
   fields: [],
 })
 
