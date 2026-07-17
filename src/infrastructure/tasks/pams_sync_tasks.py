@@ -9,9 +9,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from src.infrastructure.tasks.celery_app import celery_app
-
 from src.core.config import settings
+from src.infrastructure.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -445,7 +444,8 @@ def sync_pams_checklists(self) -> dict[str, Any]:  # type: ignore[override]
 )
 def sync_pams_technicians(self) -> dict[str, Any]:  # type: ignore[override]
     """Celery task: sync PAMS technicians_store into engineers."""
-    from src.domain.services.pams_technician_sync_service import resolve_tenant_id, sync_pams_technicians as run_sync
+    from src.domain.services.pams_technician_sync_service import resolve_tenant_id
+    from src.domain.services.pams_technician_sync_service import sync_pams_technicians as run_sync
     from src.infrastructure.database import SessionLocal
 
     if not settings.pams_database_url:

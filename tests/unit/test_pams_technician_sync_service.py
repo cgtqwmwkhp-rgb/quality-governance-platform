@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from src.domain.exceptions import BadRequestError
 from src.domain.models.engineer import Engineer
 from src.domain.models.user import User
-from src.domain.exceptions import BadRequestError
 from src.domain.services.pams_technician_sync_service import (
     map_pams_technician_row,
     pams_technician_external_id,
