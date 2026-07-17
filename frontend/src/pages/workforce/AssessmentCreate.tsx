@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import {
   workforceApi,
@@ -12,6 +12,11 @@ import {
 } from '../../api/client'
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
+import {
+  ACTIVE_EMPLOYEES_LIST_PARAMS,
+  employeePickerOptionLabel,
+  sortEmployeesForPicker,
+} from './employeePickerUtils'
 
 export default function AssessmentCreate() {
   const { t } = useTranslation()
@@ -36,11 +41,11 @@ export default function AssessmentCreate() {
       try {
         const [tRes, eRes, aRes] = await Promise.all([
           auditsApi.listTemplates(1, 100, { is_published: true }),
-          workforceApi.listEngineers({ page_size: 200 }),
+          workforceApi.listEngineers({ ...ACTIVE_EMPLOYEES_LIST_PARAMS }),
           workforceApi.listAssetTypes(),
         ])
         setTemplates(tRes.data.items || [])
-        setEngineers(eRes.data.items || [])
+        setEngineers(sortEmployeesForPicker(eRes.data.items || []))
         setAssetTypes(aRes.data.items || [])
       } catch {
         setError('Failed to load form data')
@@ -76,6 +81,8 @@ export default function AssessmentCreate() {
       setSubmitting(false)
     }
   }
+
+  const rosterEmpty = !loading && engineers.length === 0
 
   if (loading) {
     return (
@@ -147,16 +154,32 @@ export default function AssessmentCreate() {
                 value={engineerId}
                 onChange={(e) => setEngineerId(e.target.value)}
                 required
-                className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                disabled={rosterEmpty}
+                aria-describedby={rosterEmpty ? 'assessmentcreate-employees-empty' : undefined}
+                className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
               >
                 <option value="">{t('workforce.common.select_engineer')}</option>
                 {engineers.map((eng) => (
                   <option key={eng.id} value={eng.id}>
-                    {eng.employee_number || `#${eng.id}`} — {eng.job_title || 'Engineer'} (
-                    {eng.department || 'N/A'})
+                    {employeePickerOptionLabel(eng)}
                   </option>
                 ))}
               </select>
+              {rosterEmpty && (
+                <p
+                  id="assessmentcreate-employees-empty"
+                  className="mt-2 text-sm text-muted-foreground"
+                  data-testid="assessment-create-employees-empty"
+                >
+                  {t('workforce.assessments.employees_empty')}{' '}
+                  <Link
+                    to="/workforce/engineers"
+                    className="text-primary underline underline-offset-2"
+                  >
+                    {t('workforce.assessments.employees_empty_link')}
+                  </Link>
+                </p>
+              )}
             </div>
 
             <div>
@@ -253,7 +276,11 @@ export default function AssessmentCreate() {
               </div>
             )}
 
-            <Button type="submit" disabled={submitting} className="w-full min-h-[48px] text-base">
+            <Button
+              type="submit"
+              disabled={submitting || rosterEmpty}
+              className="w-full min-h-[48px] text-base"
+            >
               {submitting
                 ? t('workforce.common.creating')
                 : t('workforce.assessments.create_start')}
