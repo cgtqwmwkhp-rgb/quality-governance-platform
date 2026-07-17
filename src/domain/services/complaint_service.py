@@ -16,6 +16,8 @@ from src.core.pagination import PaginationInput, paginate
 from src.core.update import apply_updates
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.complaint import Complaint, ComplaintStatus
+from src.domain.models.form_config import Contract
+from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
@@ -67,6 +69,19 @@ class ComplaintService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _assert_tenant_contract(self, contract_id: int, tenant_id: int) -> None:
+        result = await self.db.execute(
+            select(Contract.id).where(Contract.id == contract_id, Contract.tenant_id == tenant_id)
+        )
+        if result.scalar_one_or_none() is None:
+            raise ValueError(f"Contract with ID {contract_id} not found")
+
+    async def _assert_tenant_subject_user(self, subject_user_id: int, tenant_id: int) -> None:
+        result = await self.db.execute(select(User).where(User.id == subject_user_id))
+        user = result.scalar_one_or_none()
+        if user is None or not user.is_active or user.tenant_id != tenant_id:
+            raise ValueError(f"User with ID {subject_user_id} not found")
+
     async def create_complaint(
         self,
         *,
@@ -88,6 +103,14 @@ class ComplaintService:
             existing = existing_result.scalar_one_or_none()
             if existing:
                 raise ValueError(f"DUPLICATE_EXTERNAL_REF:{existing.id}:{existing.reference_number}")
+
+        if tenant_id is not None:
+            contract_id = data.get("contract_id")
+            if contract_id is not None:
+                await self._assert_tenant_contract(int(contract_id), tenant_id)
+            subject_user_id = data.get("subject_user_id")
+            if subject_user_id is not None:
+                await self._assert_tenant_subject_user(int(subject_user_id), tenant_id)
 
         ref_num = await ReferenceNumberService.generate(self.db, "complaint", Complaint)
 

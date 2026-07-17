@@ -13,6 +13,15 @@ logger = logging.getLogger(__name__)
 
 EVENT_TYPES = frozenset({"audit", "deadline", "review", "training", "meeting"})
 
+CALENDAR_FEED_SOURCES = (
+    "audit_runs",
+    "scheduled_audits",
+    "capa_actions",
+    "certificates",
+    "assessments",
+    "inductions",
+)
+
 
 def _as_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None:
@@ -70,6 +79,18 @@ class CalendarFeedService:
 
         start_dt, end_dt = _day_bounds(start, end)
         today = datetime.now(timezone.utc).date()
+
+        if self.tenant_id is None:
+            return {
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "total": 0,
+                "events": [],
+                "sources_ok": [],
+                "sources_failed": list(CALENDAR_FEED_SOURCES),
+            }
+
         events: list[dict[str, Any]] = []
         sources_ok: list[str] = []
         sources_failed: list[str] = []
@@ -214,7 +235,7 @@ class CalendarFeedService:
                     "owner": None,
                     "source_module": "capa_action",
                     "source_id": str(row.id),
-                    "href": f"/actions?source_type=capa&q={row.reference_number or row.id}",
+                    "href": f"/actions?sourceType=capa&sourceId={row.id}",
                     "description": row.reference_number,
                 }
             )

@@ -170,7 +170,10 @@ export type FailEvidenceQuestion = {
 
 export type FailEvidenceResponse = {
   response: ResponseType
+  /** Preview URLs only — gate must not treat these as persisted evidence. */
   photos?: string[]
+  /** Persisted evidence-asset IDs (upload ACK). */
+  evidenceAssetIds?: number[]
 }
 
 export const FAIL_EVIDENCE_ERROR_MESSAGE =
@@ -203,7 +206,7 @@ export function isFailEvidenceGateActive(
   if (!response || response.response == null) return false
   if (!questionCanRequireFailEvidence(question)) return false
   if (!isQuestionFinding(question, response.response)) return false
-  return (response.photos?.length ?? 0) < 1
+  return (response.evidenceAssetIds?.length ?? 0) < 1
 }
 
 export function canAdvancePastFailEvidenceGate(
@@ -1357,7 +1360,7 @@ export default function AuditExecution() {
 
     const gateActive = isFailEvidenceGateActive(currentQuestion, {
       response: value as ResponseType,
-      photos: currentResponse?.photos,
+      evidenceAssetIds: currentResponse?.evidenceAssetIds,
     })
 
     if (gateActive) {
@@ -2031,12 +2034,12 @@ export default function AuditExecution() {
                     }}
                     onRemove={(idx) => {
                       const existing = responsesRef.current[currentQuestion.id]
-                      const nextPhotos = (existing?.photos || []).filter((_, i) => i !== idx)
                       removePhotoFromCurrentQuestion(idx, { markCaptured: false })
+                      const nextIds = (existing?.evidenceAssetIds || []).filter((_, i) => i !== idx)
                       if (
                         isFailEvidenceGateActive(currentQuestion, {
                           response: currentResponse?.response ?? null,
-                          photos: nextPhotos,
+                          evidenceAssetIds: nextIds,
                         })
                       ) {
                         setFailEvidenceGateError(true)

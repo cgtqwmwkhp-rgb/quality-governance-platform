@@ -135,12 +135,15 @@ describe('fail evidence gate helpers', () => {
     ).toBe(true)
   })
 
-  it('activates gate only when finding lacks photos and policy requires evidence', () => {
+  it('activates gate only when finding lacks persisted evidence asset ids', () => {
     expect(
-      isFailEvidenceGateActive(baseQuestion, { response: 'fail', photos: [] }),
+      isFailEvidenceGateActive(baseQuestion, { response: 'fail', evidenceAssetIds: [] }),
     ).toBe(true)
     expect(
       isFailEvidenceGateActive(baseQuestion, { response: 'fail', photos: ['data:image/png;base64,x'] }),
+    ).toBe(true)
+    expect(
+      isFailEvidenceGateActive(baseQuestion, { response: 'fail', evidenceAssetIds: [99] }),
     ).toBe(false)
     expect(
       isFailEvidenceGateActive(
@@ -201,6 +204,19 @@ describe('AuditExecution fail evidence gate', () => {
 
     await waitFor(() => {
       expect(screen.getByAltText('Evidence 1')).toBeInTheDocument()
+    })
+
+    await waitFor(() => {
+      expect(
+        canAdvancePastFailEvidenceGate(
+          {
+            type: 'pass_fail',
+            evidenceRequired: false,
+            failureTriggersAction: true,
+          },
+          { response: 'fail', evidenceAssetIds: [99] },
+        ),
+      ).toBe(true)
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }))
