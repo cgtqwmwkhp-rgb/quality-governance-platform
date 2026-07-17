@@ -359,7 +359,11 @@ export default function Complaints() {
             toast.error(
               t(
                 'complaints.attachments_partial',
-                `${failed} attachment(s) failed to upload — open the complaint to retry.`,
+                {
+                  count: failed,
+                  defaultValue:
+                    '{{count}} attachment(s) failed to upload — open the complaint to retry.',
+                },
               ),
             )
           }
