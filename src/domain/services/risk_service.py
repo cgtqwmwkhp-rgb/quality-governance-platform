@@ -345,10 +345,7 @@ class RiskService:
         """Build an assess activity row (caller adds + commits)."""
         if actor_id is None:
             raise ValueError("actor_id is required for assessment activity events")
-        summary = (
-            f"Assessment saved — net score {risk.residual_score} "
-            f"(trend {score_trend})"
-        )
+        summary = f"Assessment saved — net score {risk.residual_score} " f"(trend {score_trend})"
         payload: dict[str, Any] = {
             "inherent_score": risk.inherent_score,
             "residual_score": risk.residual_score,
