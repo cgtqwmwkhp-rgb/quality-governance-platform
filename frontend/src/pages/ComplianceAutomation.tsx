@@ -37,12 +37,26 @@ import {
   Zap,
   BookOpen,
 } from 'lucide-react'
-import { complianceAutomationApi, getApiErrorMessage, knowledgeBankApi, type RegulatoryImpact } from '../api/client'
+import {
+  auditsApi,
+  complianceAutomationApi,
+  getApiErrorMessage,
+  knowledgeBankApi,
+  type AuditRun,
+  type RegulatoryImpact,
+} from '../api/client'
 import { cn } from '../helpers/utils'
 import { Button } from '../components/ui/Button'
 import { EmptyState } from '../components/ui/EmptyState'
 import { toast } from '../contexts/ToastContext'
-import { formatStandardCode, scoreBarColor } from './complianceAutomationHelpers'
+import {
+  countOverdueMonitoringRuns,
+  formatStandardCode,
+  mapRunsToMonitoringRows,
+  MONITORING_AUDITS_HANDOFF_PATH,
+  scoreBarColor,
+  type MonitoringAuditRunRow,
+} from './complianceAutomationHelpers'
 
 interface RegulatoryUpdate {
   id: number
@@ -69,16 +83,6 @@ interface Certificate {
   expiry_date: string
   status: string
   is_critical: boolean
-}
-
-interface ScheduledAudit {
-  id: number
-  name: string
-  audit_type: string
-  frequency: string
-  next_due_date: string
-  status: string
-  standards: string[]
 }
 
 const impactColors: Record<string, string> = {
@@ -108,7 +112,7 @@ export default function ComplianceAutomation() {
   >('regulatory')
   const [updates, setUpdates] = useState<RegulatoryUpdate[]>([])
   const [certificates, setCertificates] = useState<Certificate[]>([])
-  const [audits, setAudits] = useState<ScheduledAudit[]>([])
+  const [auditRuns, setAuditRuns] = useState<MonitoringAuditRunRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [complianceScore, setComplianceScore] = useState({
@@ -136,10 +140,10 @@ export default function ComplianceAutomation() {
     try {
       setLoading(true)
       setError(null)
-      const [updatesRes, certificatesRes, auditsRes, scoreRes, trendRes] = await Promise.all([
+      const [updatesRes, certificatesRes, auditRunsRes, scoreRes, trendRes] = await Promise.all([
         complianceAutomationApi.listRegulatoryUpdates(),
         complianceAutomationApi.listCertificates(),
-        complianceAutomationApi.listScheduledAudits(),
+        auditsApi.listRuns(1, 100),
         complianceAutomationApi.getComplianceScore({ scope_type: 'organization' }),
         complianceAutomationApi.getComplianceTrend({ scope_type: 'organization', months: 12 }),
       ])
@@ -158,15 +162,8 @@ export default function ComplianceAutomation() {
       })
       setCertificates(certs)
 
-      const scheduledAudits = ((auditsRes.data.audits as ScheduledAudit[]) || []).map((audit) => {
-        const dueDate = audit.next_due_date ? new Date(audit.next_due_date) : null
-        return {
-          ...audit,
-          status: dueDate && dueDate < now ? 'overdue' : 'scheduled',
-          standards: (audit.standards || (audit as { standard_ids?: string[] }).standard_ids || []) as string[],
-        }
-      })
-      setAudits(scheduledAudits)
+      const runs = (auditRunsRes.data.items as AuditRun[]) || []
+      setAuditRuns(mapRunsToMonitoringRows(runs, now))
 
       const trend = ((trendRes.data.trend as Array<{ score: number }>) || []).filter(
         (entry) => typeof entry.score === 'number',
@@ -195,7 +192,7 @@ export default function ComplianceAutomation() {
       setError(getApiErrorMessage(err))
       setUpdates([])
       setCertificates([])
-      setAudits([])
+      setAuditRuns([])
       setComplianceScore({ overall: 0, previous: 0, change: 0 })
       setScoreBreakdown([])
       setScoreGaps([])
@@ -301,7 +298,7 @@ export default function ComplianceAutomation() {
       id: 'audits',
       label: 'Scheduled Audits',
       icon: Calendar,
-      count: audits.filter((a) => a.status === 'overdue').length,
+      count: countOverdueMonitoringRuns(auditRuns),
     },
     { id: 'scoring', label: 'Compliance Score', icon: BarChart3 },
     { id: 'riddor', label: 'RIDDOR', icon: FileText },
@@ -397,7 +394,7 @@ export default function ComplianceAutomation() {
             <span className="text-muted-foreground text-sm">Overdue Audits</span>
           </div>
           <div className="text-2xl font-bold text-foreground">
-            {audits.filter((a) => a.status === 'overdue').length}
+            {countOverdueMonitoringRuns(auditRuns)}
           </div>
           <div className="text-sm text-muted-foreground">Require attention</div>
         </div>
@@ -601,54 +598,83 @@ export default function ComplianceAutomation() {
           className="bg-card/50 border border-border rounded-xl overflow-hidden"
           data-testid="monitoring-audits-tab"
         >
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <h3 className="font-medium text-foreground">
-              {t('compliance.automation.scheduled_inspections', 'Scheduled Audits & Inspections')}
-            </h3>
-            <button className="flex items-center gap-2 px-3 py-1.5 bg-success hover:bg-success/90 text-success-foreground rounded-lg text-sm transition-colors">
-              <Calendar className="w-4 h-4" />
-              {t('compliance.automation.schedule_audit', 'Schedule Audit')}
-            </button>
+          <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h3 className="font-medium text-foreground">
+                {t('compliance.automation.scheduled_inspections', 'Scheduled Audits & Inspections')}
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {t(
+                  'compliance.automation.audits.handoff_note',
+                  'Reads scheduled and in-progress runs from Audits — not the legacy compliance schedule feed.',
+                )}
+              </p>
+            </div>
+            <Button variant="outline" asChild>
+              <Link to={MONITORING_AUDITS_HANDOFF_PATH} data-testid="monitoring-audits-schedule-link">
+                <Calendar className="w-4 h-4 mr-2" />
+                {t('compliance.automation.open_audits', 'Open Audits')}
+              </Link>
+            </Button>
           </div>
-          {audits.length === 0 ? (
+          {auditRuns.length === 0 ? (
             <div data-testid="monitoring-audits-empty">
               <EmptyState
                 icon={<Calendar className="w-8 h-8 text-muted-foreground" />}
-                title={t('compliance.automation.empty.audits.title', 'No scheduled audits yet')}
+                title={t('compliance.automation.empty.audits.title', 'No upcoming audit runs')}
                 description={t(
                   'compliance.automation.empty.audits.description',
-                  'Scheduled audits appear here when configured. Use Audits for live audit runs — not demo placeholders.',
+                  'Scheduled and in-progress audit runs from the Audits module appear here. Schedule new runs in Audits — empty means none queued, not demo data.',
                 )}
+                action={
+                  <Button asChild>
+                    <Link to={MONITORING_AUDITS_HANDOFF_PATH} data-testid="monitoring-audits-empty-cta">
+                      {t('compliance.automation.schedule_in_audits', 'Schedule in Audits')}
+                    </Link>
+                  </Button>
+                }
               />
             </div>
           ) : (
           <div className="divide-y divide-border">
-            {audits.map((audit) => (
-              <div key={audit.id} className="p-4 hover:bg-accent/50 transition-colors">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-medium text-foreground">{audit.name}</h4>
+            {auditRuns.map((run) => (
+              <div key={run.id} className="p-4 hover:bg-accent/50 transition-colors">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <h4 className="font-medium text-foreground">{run.title}</h4>
                       <span
-                        className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[audit.status]}`}
+                        className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[run.status] ?? statusColors.scheduled}`}
                       >
-                        {audit.status.toUpperCase()}
+                        {run.status.replace('_', ' ').toUpperCase()}
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {audit.frequency} • {audit.standards.join(', ')}
+                      {run.referenceNumber}
+                      {run.assuranceScheme ? ` • ${run.assuranceScheme}` : ''}
+                      {run.location ? ` • ${run.location}` : ''}
                     </p>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-sm text-foreground">
-                        Due: {new Date(audit.next_due_date).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <button className="flex items-center gap-2 px-3 py-1.5 bg-success hover:bg-success/90 text-success-foreground rounded-lg text-sm transition-colors">
-                      <Play className="w-4 h-4" />
-                      Start
-                    </button>
+                  <div className="flex items-center gap-4 shrink-0">
+                    {run.dueDate ? (
+                      <div className="text-right">
+                        <p className="text-sm text-foreground">
+                          {t('compliance.automation.audits.due', 'Due')}:{' '}
+                          {new Date(run.dueDate).toLocaleDateString()}
+                        </p>
+                      </div>
+                    ) : null}
+                    <Button variant="outline" size="sm" asChild>
+                      <Link
+                        to={run.workspacePath}
+                        data-testid={`monitoring-audit-run-${run.id}`}
+                      >
+                        <Play className="w-4 h-4 mr-1.5" />
+                        {run.status === 'in_progress'
+                          ? t('compliance.automation.audits.continue', 'Continue')
+                          : t('compliance.automation.audits.open', 'Open')}
+                      </Link>
+                    </Button>
                   </div>
                 </div>
               </div>
