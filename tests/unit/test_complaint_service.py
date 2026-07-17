@@ -179,6 +179,47 @@ class TestCreateComplaint:
         with pytest.raises(ValueError, match="DUPLICATE_EXTERNAL_REF"):
             await svc.create_complaint(complaint_data=data, user_id=5, tenant_id=10)
 
+    @pytest.mark.asyncio
+    async def test_create_complaint_rejects_cross_tenant_contract_id(self):
+        db = AsyncMock()
+        missing = MagicMock()
+        missing.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(return_value=missing)
+
+        data = MagicMock()
+        data.model_dump.return_value = {"title": "Issue", "external_ref": None, "contract_id": 99}
+
+        svc = _make_service(db)
+        with pytest.raises(ValueError, match="Contract with ID 99 not found"):
+            await svc.create_complaint(complaint_data=data, user_id=5, tenant_id=10)
+
+        db.flush.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_create_complaint_rejects_cross_tenant_subject_user_id(self):
+        db = AsyncMock()
+        wrong_tenant_user = MagicMock(is_active=True, tenant_id=99)
+
+        async def execute_side_effect(stmt):
+            result = MagicMock()
+            sql = str(stmt)
+            if "users" in sql.lower():
+                result.scalar_one_or_none.return_value = wrong_tenant_user
+            else:
+                result.scalar_one_or_none.return_value = None
+            return result
+
+        db.execute = AsyncMock(side_effect=execute_side_effect)
+
+        data = MagicMock()
+        data.model_dump.return_value = {"title": "Issue", "external_ref": None, "subject_user_id": 7}
+
+        svc = _make_service(db)
+        with pytest.raises(ValueError, match="User with ID 7 not found"):
+            await svc.create_complaint(complaint_data=data, user_id=5, tenant_id=10)
+
+        db.flush.assert_not_awaited()
+
 
 class TestUpdateComplaint:
     @pytest.mark.asyncio

@@ -17,7 +17,7 @@ describe('MobileAuditExecution fail evidence parity', () => {
   it('shares desktop gate rules for inverted NO findings', () => {
     expect(isQuestionFinding(actionQuestion, 'no')).toBe(true)
     expect(
-      isFailEvidenceGateActive(actionQuestion, { response: 'no', photos: [] }),
+      isFailEvidenceGateActive(actionQuestion, { response: 'no', evidenceAssetIds: [] }),
     ).toBe(true)
     expect(
       shouldShowFailEvidencePanel(actionQuestion, { response: 'no' }),
@@ -25,7 +25,7 @@ describe('MobileAuditExecution fail evidence parity', () => {
     expect(
       canAdvancePastFailEvidenceGate(actionQuestion, {
         response: 'no',
-        photos: ['data:image/png;base64,abc'],
+        evidenceAssetIds: [12],
       }),
     ).toBe(true)
   })
