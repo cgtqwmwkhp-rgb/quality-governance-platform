@@ -5,6 +5,7 @@ import {
   buildHistoricalRowsWithDeltas,
   buildPlanetMarkExportUrl,
   buildPlanetMarkTrendsViewModel,
+  buildPlanetMarkYearsViewModel,
   buildScopeDeltas,
   buildTrendRowsFromDashboard,
   computePercentChange,
@@ -211,5 +212,45 @@ describe('planetMarkHelpers', () => {
 
   it('exposes five shell section ids', () => {
     expect(PLANET_MARK_SECTION_IDS).toEqual(['years', 'trends', 'monthly', 'improve', 'export'])
+  })
+
+  it('builds years view model with MS XLSX ingest placeholder when selected year lacks carbon', () => {
+    const vm = buildPlanetMarkYearsViewModel({
+      years: [
+        {
+          ...baseYear,
+          id: 1,
+          year_label: 'YE2026',
+          year_number: 2026,
+          total_emissions: 0,
+          emissions_per_fte: 0,
+        },
+        {
+          ...baseYear,
+          id: 2,
+          year_label: 'YE2025',
+          year_number: 2025,
+          total_emissions: 0,
+          emissions_per_fte: 0,
+        },
+      ],
+      selectedYearId: 1,
+    })
+
+    expect(vm.showMsXlsxIngestPlaceholder).toBe(true)
+    expect(vm.selectedHasIngestedCarbon).toBe(false)
+    expect(vm.priorYearsWithoutIngest).toHaveLength(1)
+    expect(vm.allYearRows.every((row) => !row.hasIngestedCarbon)).toBe(true)
+  })
+
+  it('hides ingest placeholder when selected year has recorded carbon totals', () => {
+    const vm = buildPlanetMarkYearsViewModel({
+      years: [{ ...baseYear, id: 1, year_label: 'YE2026', year_number: 2026 }],
+      selectedYearId: 1,
+    })
+
+    expect(vm.showMsXlsxIngestPlaceholder).toBe(false)
+    expect(vm.selectedHasIngestedCarbon).toBe(true)
+    expect(vm.allYearRows[0]?.total).toBe(10)
   })
 })

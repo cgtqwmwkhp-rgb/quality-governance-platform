@@ -427,4 +427,67 @@ describe('PlanetMark shell', () => {
       )
     })
   })
+
+  it('shows MS XLSX ingest placeholder when selected year has no carbon totals', async () => {
+    mockListYears.mockResolvedValue({
+      data: {
+        total: 1,
+        years: [
+          {
+            ...yearRecord,
+            total_emissions: 0,
+            emissions_per_fte: 0,
+            scope_1: 0,
+            scope_2_market: 0,
+            scope_3: 0,
+          },
+        ],
+      },
+    })
+
+    renderPlanetMark('/planet-mark?year=1')
+
+    const section = await screen.findByTestId('planet-mark-section-years')
+    expect(section).toBeInTheDocument()
+    expect(screen.getByTestId('planet-mark-years-ingest-placeholder')).toBeInTheDocument()
+    expect(screen.getByText('planet_mark.shell.years.ingest_empty')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'planet_mark.shell.years.ingest_cta' }),
+    ).toBeDisabled()
+    expect(section.querySelector('.text-2xl')?.textContent).not.toContain('0.0')
+  })
+
+  it('lists prior years awaiting ingest without fabricating tCO2e', async () => {
+    mockListYears.mockResolvedValue({
+      data: {
+        total: 2,
+        years: [
+          {
+            ...yearRecord,
+            total_emissions: 0,
+            emissions_per_fte: 0,
+            scope_1: 0,
+            scope_2_market: 0,
+            scope_3: 0,
+          },
+          {
+            ...yearRecord2025,
+            total_emissions: 0,
+            emissions_per_fte: 0,
+            scope_1: 0,
+            scope_2_market: 0,
+            scope_3: 0,
+          },
+        ],
+      },
+    })
+
+    renderPlanetMark('/planet-mark?year=1')
+
+    const priorEmpty = await screen.findByTestId('planet-mark-years-prior-empty')
+    expect(priorEmpty).toBeInTheDocument()
+    expect(within(priorEmpty).getByText('YE2025')).toBeInTheDocument()
+    expect(within(priorEmpty).getAllByText('planet_mark.shell.no_emissions_recorded').length).toBeGreaterThan(0)
+    expect(within(priorEmpty).queryByText('0.0')).not.toBeInTheDocument()
+  })
 })
