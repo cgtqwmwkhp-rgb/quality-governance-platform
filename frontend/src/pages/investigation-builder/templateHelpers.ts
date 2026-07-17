@@ -30,6 +30,21 @@ export interface ApiStructure extends Record<string, unknown> {
   sections: ApiStructureSection[]
 }
 
+// Backward-compatible gates for the locked named report sections. New template
+// sections persist their own min_level metadata in structure JSON.
+const DEFAULT_SECTION_MIN_LEVEL: Record<string, InvestigationLevel> = {
+  section_1_details: 'minimal',
+  section_2_immediate_actions: 'minimal',
+  section_3_investigation_findings: 'low',
+  section_4_root_cause: 'medium',
+  section_4b_hsg245_analysis: 'high',
+  section_5_corrective_actions: 'high',
+  section_6_fishbone: 'high',
+  section_7_management_system_review: 'high',
+  section_signoff: 'minimal',
+  rca: 'medium',
+}
+
 function mapApiField(field: ApiStructureField): InvestigationField {
   const apiType = field.question_type ?? field.type ?? 'text'
   return {
@@ -45,10 +60,11 @@ function mapApiField(field: ApiStructureField): InvestigationField {
 }
 
 function mapApiSection(section: ApiStructureSection, index: number): InvestigationSection {
+  const sectionId = section.id ?? generateId()
   return {
-    id: section.id ?? generateId(),
+    id: sectionId,
     name: section.name ?? `Section ${index + 1}`,
-    min_level: section.min_level ?? 'minimal',
+    min_level: section.min_level ?? DEFAULT_SECTION_MIN_LEVEL[sectionId] ?? 'high',
     fields: (section.fields ?? []).map(mapApiField),
   }
 }

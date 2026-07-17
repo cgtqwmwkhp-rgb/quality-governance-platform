@@ -68,12 +68,15 @@ def test_hsg245_section_gating_is_named_and_level_aware():
     high_analysis = {"id": "section_4b_hsg245_analysis"}
     low_findings = {"id": "section_3_investigation_findings"}
     custom_high = {"id": "custom", "min_level": "high"}
+    unknown_section = {"id": "unknown_custom_section"}
 
     assert section_is_in_scope(low_findings, "low") is True
     assert section_is_in_scope(high_analysis, "medium") is False
     assert section_is_in_scope(high_analysis, "high") is True
     assert section_is_in_scope(custom_high, "medium") is False
     assert section_is_in_scope(custom_high, "high") is True
+    assert section_is_in_scope(unknown_section, "medium") is False
+    assert section_is_in_scope(unknown_section, "high") is True
 
 
 def test_customer_pack_redaction_external():

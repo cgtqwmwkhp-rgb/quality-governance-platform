@@ -205,8 +205,7 @@ DEFAULT_SECTION_MIN_LEVEL = {
 def section_is_in_scope(section: Dict[str, Any], level: Optional[str]) -> bool:
     """Return whether a template section applies at an investigation level."""
     min_level = str(
-        section.get("min_level")
-        or DEFAULT_SECTION_MIN_LEVEL.get(str(section.get("id")), InvestigationLevel.MINIMAL.value)
+        section.get("min_level") or DEFAULT_SECTION_MIN_LEVEL.get(str(section.get("id")), InvestigationLevel.HIGH.value)
     ).lower()
     return INVESTIGATION_LEVEL_ORDER.get(level or "", -1) >= INVESTIGATION_LEVEL_ORDER.get(min_level, 0)
 
@@ -1054,6 +1053,11 @@ class InvestigationService:
         Raises NotFoundError if investigation or parent comment not found.
         """
         investigation = await cls.get_investigation(db, investigation_id, tenant_id)
+        if investigation.tenant_id is None:
+            raise ValidationError(
+                "tenant_id is required to create an investigation comment",
+                details={"investigation_id": investigation.id},
+            )
 
         if parent_comment_id:
             parent_query = select(InvestigationComment).where(
@@ -1404,6 +1408,7 @@ class InvestigationService:
 
         query = select(InvestigationComment).where(
             InvestigationComment.investigation_id == investigation_id,
+            InvestigationComment.tenant_id == tenant_id,
         )
 
         if not include_deleted:
