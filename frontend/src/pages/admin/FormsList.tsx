@@ -29,6 +29,7 @@ import {
 } from '../../components/ui/Dialog'
 import { cn } from '../../helpers/utils'
 import { formConfigApi, type FormTemplateListItem } from '../../api/formConfigClient'
+import { captureAdminLoadError } from './adminLoadHelpers'
 
 const FORM_TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   incident: {
@@ -80,8 +81,14 @@ export default function FormsList() {
     try {
       const response = await formConfigApi.listTemplates({ page_size: 100 })
       setForms(response.items)
-    } catch {
-      setLoadError('Unable to load forms. Please try again.')
+    } catch (err) {
+      setLoadError(
+        captureAdminLoadError(
+          err,
+          { component: 'FormsList', action: 'load' },
+          'Unable to load forms. Please try again.',
+        ),
+      )
       setForms([])
     } finally {
       setIsLoading(false)

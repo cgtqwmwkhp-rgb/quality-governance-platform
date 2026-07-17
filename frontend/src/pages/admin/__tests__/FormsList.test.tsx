@@ -70,8 +70,8 @@ describe('FormsList API wiring', () => {
     mockListTemplates.mockRejectedValue(new Error('network'))
     render(<FormsList />)
 
-    expect(await screen.findByText('Unable to load forms. Please try again.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(screen.getByText('network')).toBeInTheDocument()
   })
 
   it('publishes draft templates via API', async () => {

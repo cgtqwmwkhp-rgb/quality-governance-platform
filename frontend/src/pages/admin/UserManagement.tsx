@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '../../components/ui/Input'
 import { TableSkeleton } from '../../components/ui/SkeletonLoader'
 import { Button } from '../../components/ui/Button'
+import { AdminLoadUnavailable, captureAdminLoadError } from './adminLoadHelpers'
 
 type ModalMode = 'create' | 'edit'
 
@@ -48,7 +49,8 @@ function formatUserName(user: UserDetail): string {
 }
 
 function getRoleNames(user: UserDetail): string[] {
-  const names = user.roles.map((role) => role.name)
+  const roles = user.roles ?? []
+  const names = roles.map((role) => role.name)
   if (user.is_superuser && !names.includes('admin')) {
     names.unshift('admin')
   }
@@ -73,13 +75,21 @@ export default function UserManagement() {
       setLoading(true)
       setError(null)
       const [usersResponse, rolesResponse] = await Promise.all([
-        usersApi.list(1, 100),
-        usersApi.listRoles(),
+        usersApi.list(1, 100, undefined, { suppressErrorToast: true }),
+        usersApi.listRoles({ suppressErrorToast: true }),
       ])
-      setUsers(usersResponse.data.items ?? [])
-      setRoles(rolesResponse.data ?? [])
+      setUsers(usersResponse.data?.items ?? [])
+      setRoles(Array.isArray(rolesResponse.data) ? rolesResponse.data : [])
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      setUsers([])
+      setRoles([])
+      setError(
+        captureAdminLoadError(
+          err,
+          { component: 'UserManagement', action: 'load' },
+          getApiErrorMessage(err),
+        ),
+      )
     } finally {
       setLoading(false)
     }
@@ -231,7 +241,18 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {error && <div className="rounded-lg bg-destructive/10 p-4 text-destructive">{error}</div>}
+      {error && (
+        <AdminLoadUnavailable
+          testId="user-management-unavailable"
+          title={t('admin.users.unavailable_title', 'User list unavailable')}
+          description={t(
+            'admin.users.unavailable_description',
+            'Users and roles could not be loaded — this is not an empty directory.',
+          )}
+          message={error}
+          onRetry={() => void loadData()}
+        />
+      )}
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -244,7 +265,7 @@ export default function UserManagement() {
         />
       </div>
 
-      {filteredUsers.length === 0 ? (
+      {filteredUsers.length === 0 && !error ? (
         <Card>
           <CardHeader className="py-12 text-center text-muted-foreground">
             {users.length === 0

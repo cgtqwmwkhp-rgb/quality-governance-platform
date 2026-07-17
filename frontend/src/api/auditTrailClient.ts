@@ -36,6 +36,7 @@ export interface AuditVerification {
 }
 
 export function createAuditTrailApi(api: AxiosInstance) {
+  const silent = { suppressErrorToast: true } as const
   return {
     list: (params?: {
       entity_type?: string
@@ -59,7 +60,7 @@ export function createAuditTrailApi(api: AxiosInstance) {
         total: number
         page: number
         per_page: number
-      }>(`/api/v1/audit-trail/?${sp}`)
+      }>(`/api/v1/audit-trail/?${sp}`, silent)
     },
     getEntry: (id: number) => api.get<AuditLogEntry>(`/api/v1/audit-trail/${id}`),
     getByEntity: (entityType: string, entityId: string) =>

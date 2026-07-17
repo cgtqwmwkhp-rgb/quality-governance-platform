@@ -44,7 +44,26 @@ import {
 declare module 'axios' {
   export interface AxiosRequestConfig {
     globalLoading?: boolean
+    /** When true, the response interceptor will not emit a global error toast (page handles inline). */
+    suppressErrorToast?: boolean
   }
+}
+
+const ERROR_TOAST_DEDUPE_MS = 5000
+let lastErrorToastMessage = ''
+let lastErrorToastAt = 0
+
+function maybeShowErrorToast(message: string, config?: InternalAxiosRequestConfig): void {
+  if (config?.suppressErrorToast) {
+    return
+  }
+  const now = Date.now()
+  if (message === lastErrorToastMessage && now - lastErrorToastAt < ERROR_TOAST_DEDUPE_MS) {
+    return
+  }
+  lastErrorToastMessage = message
+  lastErrorToastAt = now
+  toast.error(message)
 }
 
 // Use centralized API base URL from config (environment-aware)
@@ -594,7 +613,7 @@ api.interceptors.response.use(
 
     const msg = (error as ClassifiedAxiosError).classifiedMessage
     if (msg && status !== 401) {
-      toast.error(msg)
+      maybeShowErrorToast(msg, error.config)
     }
 
     return Promise.reject(error)
@@ -2208,6 +2227,8 @@ export interface Contract {
   code: string
   description?: string
   client_name?: string
+  client_contact?: string
+  client_email?: string
   is_active: boolean
   display_order: number
 }
@@ -2254,23 +2275,34 @@ export const formTemplatesApi = {
     api.delete<void>(`/api/v1/admin/config/templates/${id}`).then((r) => r.data),
 }
 
+const ADMIN_CONFIG_SILENT = { suppressErrorToast: true } as const
+
 export const contractsApi = {
   list: (activeOnly = true) =>
     api
       .get<{
         items: Contract[]
         total: number
-      }>(`/api/v1/admin/config/contracts${activeOnly ? '?is_active=true' : ''}`)
+      }>(
+        `/api/v1/admin/config/contracts${activeOnly ? '?is_active=true' : ''}`,
+        ADMIN_CONFIG_SILENT,
+      )
       .then((r) => r.data),
 
   create: (data: Partial<Contract>) =>
-    api.post<Contract>('/api/v1/admin/config/contracts', data).then((r) => r.data),
+    api
+      .post<Contract>('/api/v1/admin/config/contracts', data, ADMIN_CONFIG_SILENT)
+      .then((r) => r.data),
 
   update: (id: number, data: Partial<Contract>) =>
-    api.patch<Contract>(`/api/v1/admin/config/contracts/${id}`, data).then((r) => r.data),
+    api
+      .patch<Contract>(`/api/v1/admin/config/contracts/${id}`, data, ADMIN_CONFIG_SILENT)
+      .then((r) => r.data),
 
   delete: (id: number) =>
-    api.delete<void>(`/api/v1/admin/config/contracts/${id}`).then((r) => r.data),
+    api
+      .delete<void>(`/api/v1/admin/config/contracts/${id}`, ADMIN_CONFIG_SILENT)
+      .then((r) => r.data),
 }
 
 // ============ Lookups API (extracted: lookupsClient.ts) ============

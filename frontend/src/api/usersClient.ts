@@ -2,7 +2,7 @@
  * Users / roles API client extracted from `client.ts` (Path-to-10 FE lane).
  * Instantiated from `client.ts` with the shared axios instance to avoid cycles.
  */
-import type { AxiosInstance } from 'axios'
+import type { AxiosInstance, AxiosRequestConfig } from 'axios'
 
 /** Minimal paginated shape used by users list responses. */
 export interface PaginatedResponse<T> {
@@ -99,6 +99,7 @@ export function createUsersApi(api: AxiosInstance) {
     page = 1,
     size = 50,
     params?: { search?: string; department?: string; is_active?: boolean },
+    config?: AxiosRequestConfig,
   ) => {
     const sp = new URLSearchParams({
       page: String(page),
@@ -107,14 +108,15 @@ export function createUsersApi(api: AxiosInstance) {
     if (params?.search) sp.set('search', params.search)
     if (params?.department) sp.set('department', params.department)
     if (params?.is_active !== undefined) sp.set('is_active', String(params.is_active))
-    return api.get<PaginatedResponse<UserDetail>>(`/api/v1/users/?${sp}`)
+    return api.get<PaginatedResponse<UserDetail>>(`/api/v1/users/?${sp}`, config)
   },
   get: (id: number) => api.get<UserDetail>(`/api/v1/users/${id}`),
   create: (data: UserCreatePayload) => api.post<UserDetail>('/api/v1/users/', data),
   update: (id: number, data: UserUpdatePayload) =>
     api.patch<UserDetail>(`/api/v1/users/${id}`, data),
   delete: (id: number) => api.delete<void>(`/api/v1/users/${id}`),
-  listRoles: () => api.get<RoleDetail[]>('/api/v1/users/roles/'),
+  listRoles: (config?: AxiosRequestConfig) =>
+    api.get<RoleDetail[]>('/api/v1/users/roles/', config),
   createRole: (data: RoleCreatePayload) => api.post<RoleDetail>('/api/v1/users/roles/', data),
   updateRole: (id: number, data: RoleUpdatePayload) =>
     api.patch<RoleDetail>(`/api/v1/users/roles/${id}`, data),
