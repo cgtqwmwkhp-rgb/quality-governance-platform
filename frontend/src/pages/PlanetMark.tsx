@@ -50,6 +50,7 @@ import {
   triggerPlanetMarkPackDownload,
   type PlanetMarkHotspotInitiative,
 } from './planetMarkHelpers'
+import { buildMonthlyEvidenceHonestyViewModel } from './planetMarkMonthlyEvidenceHonesty'
 
 type LoadState = 'idle' | 'loading' | 'success' | 'error' | 'setup_required'
 
@@ -893,15 +894,66 @@ export default function PlanetMark() {
           )}
 
           {section === 'monthly' && (
-            <div data-testid="planet-mark-section-monthly">
-              <Card>
-                <CardContent>
-                  <EmptyState
-                    title={t('planet_mark.shell.empty.monthly')}
-                    description={t('planet_mark.shell.empty.monthly_desc')}
-                  />
-                </CardContent>
-              </Card>
+            <div className="space-y-4" data-testid="planet-mark-section-monthly">
+              {(() => {
+                const monthlyHonesty = buildMonthlyEvidenceHonestyViewModel({
+                  hasSelectedYear: Boolean(selectedYear),
+                })
+                return (
+                  <>
+                    <Card data-testid="planet-mark-monthly-e4-panel">
+                      <CardHeader>
+                        <CardTitle>{t('planet_mark.shell.monthly_e4.title')}</CardTitle>
+                        <p
+                          className="text-sm text-muted-foreground"
+                          data-testid="planet-mark-monthly-e4-honesty"
+                        >
+                          {t('planet_mark.shell.monthly_e4.honesty')}
+                        </p>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <ul className="space-y-2" data-testid="planet-mark-monthly-e4-capabilities">
+                          {monthlyHonesty.capabilities.map((row) => (
+                            <li
+                              key={row.id}
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm"
+                              data-testid={`planet-mark-monthly-e4-cap-${row.id}`}
+                            >
+                              <span className="text-foreground">
+                                {t(`planet_mark.shell.monthly_e4.cap.${row.id}`)}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {t(`planet_mark.shell.monthly_e4.status.${row.status}`)}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                        <p
+                          className="text-xs text-muted-foreground"
+                          data-testid="planet-mark-monthly-e4-forecast"
+                        >
+                          {t('planet_mark.shell.monthly_e4.forecast_followon')}
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent>
+                        {monthlyHonesty.showSelectYearPrompt ? (
+                          <EmptyState
+                            title={t('planet_mark.shell.monthly_e4.select_year_title')}
+                            description={t('planet_mark.shell.monthly_e4.select_year_desc')}
+                          />
+                        ) : (
+                          <EmptyState
+                            title={t('planet_mark.shell.empty.monthly')}
+                            description={t('planet_mark.shell.empty.monthly_desc')}
+                          />
+                        )}
+                      </CardContent>
+                    </Card>
+                  </>
+                )
+              })()}
             </div>
           )}
 
