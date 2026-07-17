@@ -136,6 +136,8 @@ export default function InvestigationDetail() {
   const [closureValidation, setClosureValidation] = useState<ClosureValidation | null>(null)
   const [closureLoading, setClosureLoading] = useState(false)
   const [closureLoadFailed, setClosureLoadFailed] = useState(false)
+  const [closingInvestigation, setClosingInvestigation] = useState(false)
+  const [closeError, setCloseError] = useState<string | null>(null)
 
   const [actions, setActions] = useState<Action[]>([])
   const [actionsLoading, setActionsLoading] = useState(false)
@@ -203,8 +205,11 @@ export default function InvestigationDetail() {
     try {
       const response = await investigationsApi.getPacks(investigationId, { page: 1, page_size: 50 })
       setPacks(response.data.items)
+      setPackError(null)
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'loadPacks' })
+      setPacks([])
+      setPackError(getApiErrorMessage(err))
     } finally {
       setPacksLoading(false)
     }
@@ -366,6 +371,7 @@ export default function InvestigationDetail() {
       await loadComments()
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'addComment' })
+      toast.error(getApiErrorMessage(err))
     } finally {
       setAddingComment(false)
     }
@@ -399,25 +405,26 @@ export default function InvestigationDetail() {
     } catch (err: unknown) {
       trackError(err, { component: 'InvestigationDetail', action: 'generatePack' })
       const apiErr = err as { response?: { status?: number } }
+      let message = getApiErrorMessage(err)
       if (apiErr.response?.status === 404) {
-        setPackError('Pack generation endpoint not available in this environment')
+        message = 'Pack generation endpoint not available in this environment'
         setPackCapability({
           canGenerate: false,
           reason: 'Not available',
           lastError: 'Endpoint returned 404',
         })
       } else if (apiErr.response?.status === 501) {
-        setPackError('Pack generation is not implemented')
+        message = 'Pack generation is not implemented'
         setPackCapability({
           canGenerate: false,
           reason: 'Not implemented',
           lastError: 'Endpoint returned 501',
         })
       } else if (apiErr.response?.status === 403) {
-        setPackError('You do not have permission to generate packs')
-      } else {
-        setPackError(getApiErrorMessage(err))
+        message = 'You do not have permission to generate packs'
       }
+      setPackError(message)
+      toast.error(message)
     } finally {
       setGeneratingPack(false)
     }
@@ -434,21 +441,55 @@ export default function InvestigationDetail() {
       assignee_email: form.assigned_to || undefined,
     })
     await loadActions()
+    await loadClosureValidation()
+  }
+
+  /** Resolve unified update source_type from action_key (capa:N vs investigation_action:N). */
+  const resolveActionUpdateSourceType = (action: Action): string => {
+    const key = (action.action_key || '').toLowerCase()
+    if (key.startsWith('capa:') || key.startsWith('capa_item:')) {
+      // CAPA rows linked to investigations still use API source_type=investigation.
+      return action.source_type || 'investigation'
+    }
+    if (key.startsWith('investigation_action:')) return 'investigation'
+    return action.source_type || 'investigation'
   }
 
   const handleUpdateActionStatus = async (
-    actionId: number,
+    action: Action,
     newStatus: string,
     completionNotes?: string,
   ) => {
     try {
-      await actionsApi.update(actionId, 'investigation', {
+      const sourceType = resolveActionUpdateSourceType(action)
+      await actionsApi.update(action.id, sourceType, {
         status: newStatus,
         completion_notes: newStatus === 'completed' ? completionNotes : undefined,
       })
       await loadActions()
+      await loadClosureValidation()
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'updateAction' })
+      toast.error(getApiErrorMessage(err))
+    }
+  }
+
+  const handleCloseInvestigation = async () => {
+    if (!investigationId || !closureValidation?.can_close) return
+    setClosingInvestigation(true)
+    setCloseError(null)
+    try {
+      await investigationsApi.update(investigationId, { status: 'closed' })
+      toast.success(t('investigations.closure.closed_success', 'Investigation closed'))
+      await loadInvestigation()
+      await loadClosureValidation()
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'closeInvestigation' })
+      const message = getApiErrorMessage(err)
+      setCloseError(message)
+      toast.error(message)
+    } finally {
+      setClosingInvestigation(false)
     }
   }
 
@@ -827,6 +868,39 @@ export default function InvestigationDetail() {
                           : 'Cannot Close Yet'}
                       </span>
                     </div>
+                    {closureValidation.can_close && investigation.status !== 'closed' ? (
+                      <div className="space-y-2">
+                        <Button
+                          onClick={() => void handleCloseInvestigation()}
+                          disabled={closingInvestigation}
+                          data-testid="investigation-close-cta"
+                        >
+                          {closingInvestigation ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                          )}
+                          {t('investigations.closure.close_cta', 'Close investigation')}
+                        </Button>
+                        {closeError ? (
+                          <p
+                            className="text-xs text-destructive"
+                            role="alert"
+                            data-testid="investigation-close-error"
+                          >
+                            {closeError}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {investigation.status === 'closed' ? (
+                      <p
+                        className="text-sm text-muted-foreground"
+                        data-testid="investigation-already-closed"
+                      >
+                        {t('investigations.closure.already_closed', 'This investigation is closed.')}
+                      </p>
+                    ) : null}
                     {closureValidation.reasons.length > 0 && (
                       <div className="space-y-1">
                         <p className="text-xs font-medium text-muted-foreground">Issues:</p>

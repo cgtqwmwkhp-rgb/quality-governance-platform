@@ -1069,7 +1069,15 @@ class InvestigationService:
                     code="PARENT_COMMENT_NOT_FOUND",
                 )
 
+        # tenant_id is NOT NULL — inherit from parent investigation (never invent a default).
+        if investigation.tenant_id is None:
+            raise ValidationError(
+                "tenant_id is required to create an investigation comment",
+                details={"investigation_id": investigation.id},
+            )
+
         comment = InvestigationComment(
+            tenant_id=investigation.tenant_id,
             investigation_id=investigation_id,
             content=body,
             section_id=section_id,

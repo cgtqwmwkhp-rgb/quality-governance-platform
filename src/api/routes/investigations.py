@@ -1046,8 +1046,12 @@ async def add_comment(
         if not parent_comment:
             raise NotFoundError(f"Parent comment {payload.parent_comment_id} not found")
 
-    # Create comment
+    # tenant_id is NOT NULL — inherit from parent investigation (never invent a default).
+    if investigation.tenant_id is None:
+        raise BadRequestError("Investigation is missing tenant_id; cannot create comment")
+
     comment = InvestigationComment(
+        tenant_id=investigation.tenant_id,
         investigation_id=investigation_id,
         content=payload.content,
         section_id=payload.section_id,

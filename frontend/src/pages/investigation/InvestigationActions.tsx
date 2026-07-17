@@ -64,11 +64,16 @@ interface InvestigationActionsProps {
   actionStatusFilter: string
   onActionStatusFilterChange: (value: string) => void
   onCreateAction: (form: ActionFormData) => Promise<void>
-  onUpdateActionStatus: (actionId: number, newStatus: string, completionNotes?: string) => void
+  onUpdateActionStatus: (action: Action, newStatus: string, completionNotes?: string) => void
   /** Increment to open the create dialog (handoff CTA → Actions tab). */
   openCreateToken?: number
   /** Investigation reference shown as locked parent in the create dialog. */
   parentLabel?: string
+}
+
+/** Prefer normalized display_status (CAPA closed → completed) for honest status UI. */
+function actionStatusKey(action: Action): string {
+  return (action.display_status || action.status || 'open').toLowerCase()
 }
 
 const INITIAL_FORM: ActionFormData = {
@@ -98,7 +103,7 @@ export default function InvestigationActions({
 
   const [showCompletionDialog, setShowCompletionDialog] = useState(false)
   const [completionNotes, setCompletionNotes] = useState('')
-  const [completionActionId, setCompletionActionId] = useState<number | null>(null)
+  const [completionAction, setCompletionAction] = useState<Action | null>(null)
 
   useEffect(() => {
     if (openCreateToken > 0) {
@@ -165,19 +170,31 @@ export default function InvestigationActions({
           </Card>
         ) : (
           <div className="space-y-3">
-            {actions.map((action) => (
-              <Card key={action.id} className="p-4">
+            {actions.map((action) => {
+              const statusKey = actionStatusKey(action)
+              return (
+              <Card
+                key={action.action_key || action.id}
+                className="p-4"
+                data-testid={`investigation-action-${action.action_key || action.id}`}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h4 className="font-medium text-foreground">{action.title}</h4>
                       <Badge
                         className={
-                          ACTION_STATUS_OPTIONS.find((o) => o.value === action.status)?.className
+                          ACTION_STATUS_OPTIONS.find((o) => o.value === statusKey)?.className
                         }
+                        data-testid={`investigation-action-status-${action.action_key || action.id}`}
                       >
-                        {action.status.replace(/_/g, ' ')}
+                        {statusKey.replace(/_/g, ' ')}
                       </Badge>
+                      {action.action_key ? (
+                        <span className="text-[10px] font-mono text-muted-foreground">
+                          {action.action_key}
+                        </span>
+                      ) : null}
                     </div>
                     <p className="text-sm text-muted-foreground line-clamp-2">
                       {action.description}
@@ -205,14 +222,14 @@ export default function InvestigationActions({
                       </span>
                     )}
                     <Select
-                      value={action.status}
+                      value={statusKey}
                       onValueChange={(newStatus) => {
                         if (newStatus === 'completed') {
-                          setCompletionActionId(action.id)
+                          setCompletionAction(action)
                           setCompletionNotes('')
                           setShowCompletionDialog(true)
                         } else {
-                          onUpdateActionStatus(action.id, newStatus)
+                          onUpdateActionStatus(action, newStatus)
                         }
                       }}
                     >
@@ -230,7 +247,8 @@ export default function InvestigationActions({
                   </div>
                 </div>
               </Card>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -368,13 +386,14 @@ export default function InvestigationActions({
             </Button>
             <Button
               onClick={() => {
-                if (completionActionId !== null) {
+                if (completionAction) {
                   onUpdateActionStatus(
-                    completionActionId,
+                    completionAction,
                     'completed',
                     completionNotes || undefined,
                   )
                 }
+                setCompletionAction(null)
                 setShowCompletionDialog(false)
               }}
             >
