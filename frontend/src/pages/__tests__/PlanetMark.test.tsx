@@ -11,6 +11,7 @@ const mockGetScope3 = vi.fn()
 const mockCreateReportingYear = vi.fn()
 const mockCreateAction = vi.fn()
 const mockListEvidence = vi.fn()
+const mockIngestMsXlsx = vi.fn()
 const mockCreateApiError = vi.fn()
 
 vi.mock('react-i18next', () => ({
@@ -38,6 +39,7 @@ vi.mock('../../api/client', () => ({
     getScope3: (...args: unknown[]) => mockGetScope3(...args),
     createAction: (...args: unknown[]) => mockCreateAction(...args),
     listEvidence: (...args: unknown[]) => mockListEvidence(...args),
+    ingestMsXlsx: (...args: unknown[]) => mockIngestMsXlsx(...args),
   },
   getApiErrorMessage: (_err: unknown, fallback = 'failed') => fallback,
   ErrorClass: {
@@ -112,6 +114,7 @@ describe('PlanetMark shell', () => {
     mockGetScope3.mockReset()
     mockCreateReportingYear.mockReset()
     mockListEvidence.mockReset()
+    mockIngestMsXlsx.mockReset()
     mockCreateApiError.mockReset()
     mockGetDashboard.mockResolvedValue({
       data: {
@@ -173,7 +176,8 @@ describe('PlanetMark shell', () => {
     )
     expect(screen.getByLabelText('planet_mark.shell.year_switcher_label')).toHaveValue('1')
     expect(await screen.findByTestId('planet-mark-section-years')).toBeInTheDocument()
-    expect(screen.getByText('22.1')).toBeInTheDocument()
+    expect(screen.getAllByText('22.1').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByTestId('planet-mark-years-xlsx-ingest')).toBeInTheDocument()
   })
 
   it('shows PM-E4 monthly evidence honesty shell + empty ingest state', async () => {
@@ -491,7 +495,7 @@ describe('PlanetMark shell', () => {
     expect(mockListEvidence).toHaveBeenCalledWith(1)
   })
 
-  it('shows MS XLSX ingest placeholder when selected year has no carbon totals', async () => {
+  it('shows MS XLSX ingest upload when selected year has no carbon totals', async () => {
     mockListYears.mockResolvedValue({
       data: {
         total: 1,
@@ -512,11 +516,12 @@ describe('PlanetMark shell', () => {
 
     const section = await screen.findByTestId('planet-mark-section-years')
     expect(section).toBeInTheDocument()
-    expect(screen.getByTestId('planet-mark-years-ingest-placeholder')).toBeInTheDocument()
+    expect(screen.getByTestId('planet-mark-years-evidence-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('planet-mark-years-xlsx-ingest')).toBeInTheDocument()
     expect(screen.getByText('planet_mark.shell.years.ingest_empty')).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'planet_mark.shell.years.ingest_cta' }),
-    ).toBeDisabled()
+    ).toBeEnabled()
     expect(section.querySelector('.text-2xl')?.textContent).not.toContain('0.0')
   })
 

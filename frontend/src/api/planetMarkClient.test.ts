@@ -93,6 +93,7 @@ describe('createPlanetMarkApi', () => {
     pm.confirmActionImport(3, 'sess-1', [0, 1])
     pm.applyImport(99, 3)
     pm.getImportSyncStatus(99)
+    pm.ingestMsXlsx(3, fd)
     expect(api.get).toHaveBeenCalledWith('/api/v1/planet-mark/years/3/evidence')
     expect(api.get).toHaveBeenCalledWith(
       '/api/v1/planet-mark/years/3/evidence?document_type=invoice&linked_action_id=8',
@@ -103,6 +104,11 @@ describe('createPlanetMarkApi', () => {
       { timeout: 120_000 },
     )
     expect(api.delete).toHaveBeenCalled()
+    expect(api.post).toHaveBeenCalledWith(
+      '/api/v1/planet-mark/years/3/ingest-xlsx',
+      fd,
+      { timeout: 120_000 },
+    )
     expect(api.patch).toHaveBeenCalled()
   })
 })

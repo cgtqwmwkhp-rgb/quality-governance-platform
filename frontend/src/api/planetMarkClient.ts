@@ -501,5 +501,31 @@ export function createPlanetMarkApi(api: AxiosInstance) {
       has_carbon_data: boolean
       retry_available: boolean
     }>(`/api/v1/planet-mark/import-status/${importJobId}`),
+
+  /**
+   * Ingest Planet Mark MS XLSX year carbon totals into a reporting year (PM-W1b).
+   */
+  ingestMsXlsx: (yearId: number, formData: FormData) =>
+    api.post<PlanetMarkMsXlsxIngestResponse>(
+      `/api/v1/planet-mark/years/${yearId}/ingest-xlsx`,
+      formData,
+      { timeout: 120_000 },
+    ),
   }
+}
+
+export interface PlanetMarkMsXlsxIngestResponse {
+  year_id: number
+  year_label: string
+  scope_1: number
+  scope_2_market: number
+  scope_2_location: number | null
+  scope_3: number
+  total_emissions: number
+  average_fte: number | null
+  emissions_per_fte: number | null
+  workbook_year_label: string | null
+  source_filename: string
+  sources_upserted: number
+  message: string
 }

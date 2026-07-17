@@ -6,7 +6,6 @@ import {
   XCircle,
   Plus,
   Download,
-  Upload,
   Award,
   Loader2,
 } from 'lucide-react'
@@ -52,6 +51,7 @@ import {
 } from './planetMarkHelpers'
 import { buildMonthlyEvidenceHonestyViewModel } from './planetMarkMonthlyEvidenceHonesty'
 import { PlanetMarkYearEvidencePanel } from './planetMarkYearEvidencePanel'
+import { PlanetMarkYearXlsxIngestPanel } from './planetMarkYearXlsxIngestPanel'
 
 type LoadState = 'idle' | 'loading' | 'success' | 'error' | 'setup_required'
 
@@ -607,27 +607,25 @@ export default function PlanetMark() {
                 yearLabel={selectedYear.year_label}
               />
 
-              {yearsVm.showMsXlsxIngestPlaceholder && (
-                <Card data-testid="planet-mark-years-ingest-placeholder">
-                  <CardHeader>
-                    <CardTitle>{t('planet_mark.shell.years.ingest_title')}</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      {t('planet_mark.shell.years.ingest_hint')}
-                    </p>
-                  </CardHeader>
-                  <CardContent>
-                    <EmptyState
-                      title={t('planet_mark.shell.years.ingest_empty')}
-                      description={t('planet_mark.shell.years.ingest_empty_desc')}
-                      action={
-                        <Button variant="outline" disabled aria-disabled="true">
-                          <Upload className="w-4 h-4" />
-                          {t('planet_mark.shell.years.ingest_cta')}
-                        </Button>
-                      }
-                    />
-                  </CardContent>
-                </Card>
+              {yearsVm.showMsXlsxIngestPanel && (
+                <PlanetMarkYearXlsxIngestPanel
+                  yearId={selectedYear.id}
+                  yearLabel={selectedYear.year_label}
+                  hasIngestedCarbon={yearsVm.selectedHasIngestedCarbon}
+                  currentTotal={
+                    hasPositiveCarbonTotal(selectedYear.total_emissions)
+                      ? selectedYear.total_emissions
+                      : null
+                  }
+                  currentPerFte={
+                    hasPositiveCarbonTotal(selectedYear.emissions_per_fte)
+                      ? selectedYear.emissions_per_fte
+                      : null
+                  }
+                  onIngested={async () => {
+                    await loadData()
+                  }}
+                />
               )}
 
               <Card>

@@ -383,3 +383,24 @@ class ISO14001MappingItem(BaseModel):
 class ISO14001MappingResponse(BaseModel):
     description: str
     mappings: list[ISO14001MappingItem] = []
+
+
+# ============================================================================
+# MS XLSX year ingest (PM-W1b)
+# ============================================================================
+
+
+class MsXlsxYearIngestResponse(BaseModel):
+    year_id: int
+    year_label: str
+    scope_1: float
+    scope_2_market: float
+    scope_2_location: Optional[float] = None
+    scope_3: float
+    total_emissions: float
+    average_fte: Optional[float] = None
+    emissions_per_fte: Optional[float] = None
+    workbook_year_label: Optional[str] = None
+    source_filename: str
+    sources_upserted: int = 0
+    message: str
