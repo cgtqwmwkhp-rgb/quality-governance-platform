@@ -48,6 +48,8 @@ const translations: Record<string, string> = {
     'Scores come from evidence coverage in your standards library — not demo placeholders.',
   'compliance.automation.empty.score.gaps.description':
     'No automated gap list yet. Run gap analysis or link evidence to standards to populate this view.',
+  'compliance.automation.empty.score.overview': 'No live score yet',
+  'compliance.automation.overall_score': 'Overall Compliance Score',
   'compliance.automation.certificates': 'Certificates',
   'compliance.automation.scheduled_audits': 'Scheduled Audits',
   'compliance.automation.compliance_score': 'Compliance Score',
@@ -135,6 +137,18 @@ describe('ComplianceAutomation monitoring honesty', () => {
         'Regulatory watch, certificate expiry, compliance scoring, and RIDDOR readiness',
       ),
     ).toBeInTheDocument()
+  })
+
+  it('shows honest score overview when API returns empty categories (CA-W1c)', async () => {
+    render(<ComplianceAutomation />, { wrapper: Wrapper })
+    await screen.findByRole('heading', { name: 'Monitoring' })
+
+    expect(screen.getByTestId('monitoring-score-overview-empty')).toHaveTextContent(
+      'No live score yet',
+    )
+    expect(screen.getByTestId('monitoring-score-overview')).toHaveTextContent('—')
+    expect(screen.queryByText('+0%')).not.toBeInTheDocument()
+    expect(screen.queryByText('0%')).not.toBeInTheDocument()
   })
 
   it('shows unified Changes inbox empty state when feed and impacts are empty', async () => {

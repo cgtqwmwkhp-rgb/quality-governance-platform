@@ -105,6 +105,15 @@ export function scoreBarColor(score: number): string {
   return 'bg-primary'
 }
 
+/** True when Monitoring has real score categories or a non-zero overall — not an empty API shell. */
+export function hasLiveComplianceScore(
+  overall: number,
+  categories: Record<string, number> | undefined,
+): boolean {
+  if (Object.keys(categories ?? {}).length > 0) return true
+  return overall > 0
+}
+
 /** Open regulatory-watch impact rows eligible for the Changes inbox badge. */
 export function isOpenWatchImpact(impact: { status: string }): boolean {
   return impact.status !== 'resolved' && impact.status !== 'dismissed'

@@ -891,6 +891,8 @@
   "compliance.automation.empty.score.breakdown.description": "Scores come from evidence coverage in your standards library — not demo placeholders.",
   "compliance.automation.empty.score.breakdown.title": "No live standard scores yet",
   "compliance.automation.empty.score.gaps.description": "No automated gap list yet. Run gap analysis or link evidence to standards to populate this view.",
+  "compliance.automation.empty.score.overview": "No live score yet",
+  "compliance.automation.overall_score": "Overall Compliance Score",
   "compliance.automation.score_breakdown": "Score Breakdown by Standard",
   "compliance.automation.subtitle": "Regulatory watch, certificate expiry, compliance scoring, and RIDDOR readiness",
   "compliance.automation.title": "Monitoring",
