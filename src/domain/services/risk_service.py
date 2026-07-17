@@ -44,6 +44,8 @@ SCORE_TREND_TAG_KEY = "score_trend"
 
 RISK_EVENT_ASSESSED = "assessed"
 RISK_EVENT_NOTE_ADDED = "note_added"
+RISK_EVENT_ACTION_CREATED = "action_created"
+RISK_EVENT_OWNER_CHANGED = "owner_changed"
 
 
 def compute_net_score_trend(previous: Optional[int], current: int) -> ScoreTrend:
@@ -396,6 +398,217 @@ class RiskService:
         await self.db.commit()
         await self.db.refresh(note)
         return note
+
+    async def list_capa_actions_for_risk(
+        self,
+        *,
+        tenant_id: int,
+        risk_id: int,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> tuple[list[Any], int]:
+        """List CAPA actions bound via source_type=risk & source_id (SSOT, not JSONB)."""
+        from src.domain.models.capa import CAPAAction, CAPASource
+
+        filters = [
+            CAPAAction.tenant_id == tenant_id,
+            CAPAAction.source_type == CAPASource.RISK,
+            CAPAAction.source_id == risk_id,
+        ]
+        total = await self.db.scalar(select(func.count(CAPAAction.id)).where(*filters)) or 0
+        result = await self.db.execute(
+            select(CAPAAction)
+            .where(*filters)
+            .order_by(CAPAAction.created_at.desc(), CAPAAction.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return list(result.scalars().all()), int(total)
+
+    async def create_capa_action_for_risk(
+        self,
+        risk: EnterpriseRisk,
+        *,
+        title: str,
+        description: str,
+        created_by_id: int,
+        priority: str = "medium",
+        due_date: Optional[datetime] = None,
+        assigned_to_id: Optional[int] = None,
+    ) -> Any:
+        """Create a CAPA bound to this risk and emit an activity event."""
+        from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
+        from src.domain.services.reference_number import ReferenceNumberService
+
+        normalized = (priority or "medium").lower()
+        if normalized == "critical":
+            capa_priority = CAPAPriority.CRITICAL
+        elif normalized == "high":
+            capa_priority = CAPAPriority.HIGH
+        elif normalized == "low":
+            capa_priority = CAPAPriority.LOW
+        else:
+            capa_priority = CAPAPriority.MEDIUM
+
+        ref = await ReferenceNumberService.generate(self.db, "capa", CAPAAction)
+        action = CAPAAction(
+            reference_number=ref,
+            title=title,
+            description=description,
+            capa_type=CAPAType.CORRECTIVE,
+            status=CAPAStatus.OPEN,
+            source_type=CAPASource.RISK,
+            source_id=risk.id,
+            priority=capa_priority,
+            tenant_id=risk.tenant_id,
+            assigned_to_id=assigned_to_id,
+            created_by_id=created_by_id,
+            due_date=due_date,
+        )
+        self.db.add(action)
+        await self.db.flush()
+        activity = RiskActivityEvent(
+            tenant_id=risk.tenant_id,
+            risk_id=risk.id,
+            event_type=RISK_EVENT_ACTION_CREATED,
+            summary=f"Action created: {action.reference_number} — {title[:80]}",
+            payload={
+                "capa_id": action.id,
+                "reference_number": action.reference_number,
+                "title": title,
+            },
+            actor_id=created_by_id,
+            created_at=naive_utc_now(),
+        )
+        self.db.add(activity)
+        await self.db.commit()
+        await self.db.refresh(action)
+        return action
+
+    async def update_risk_owner(
+        self,
+        risk: EnterpriseRisk,
+        *,
+        risk_owner_id: Optional[int],
+        risk_owner_name: Optional[str],
+        actor_id: int,
+    ) -> EnterpriseRisk:
+        """Set owner id + denormalized name; emit activity when values change."""
+        from src.domain.models.user import User
+
+        previous_id = risk.risk_owner_id
+        previous_name = risk.risk_owner_name
+        resolved_name = risk_owner_name
+        if risk_owner_id is not None:
+            user_result = await self.db.execute(
+                select(User).where(User.id == risk_owner_id, User.tenant_id == risk.tenant_id)
+            )
+            owner = user_result.scalar_one_or_none()
+            if owner is None:
+                raise ValueError("Risk owner user not found in tenant")
+            if not resolved_name:
+                resolved_name = owner.full_name or owner.email
+        if previous_id == risk_owner_id and (previous_name or None) == (resolved_name or None):
+            return risk
+        risk.risk_owner_id = risk_owner_id
+        risk.risk_owner_name = resolved_name
+        risk.updated_at = naive_utc_now()
+        summary_to = resolved_name or (f"#{risk_owner_id}" if risk_owner_id else "Unassigned")
+        summary_from = previous_name or (f"#{previous_id}" if previous_id else "Unassigned")
+        activity = RiskActivityEvent(
+            tenant_id=risk.tenant_id,
+            risk_id=risk.id,
+            event_type=RISK_EVENT_OWNER_CHANGED,
+            summary=f"Owner changed: {summary_from} → {summary_to}",
+            payload={
+                "previous_owner_id": previous_id,
+                "previous_owner_name": previous_name,
+                "risk_owner_id": risk_owner_id,
+                "risk_owner_name": resolved_name,
+            },
+            actor_id=actor_id,
+            created_at=naive_utc_now(),
+        )
+        self.db.add(activity)
+        await self.db.commit()
+        await self.db.refresh(risk)
+        return risk
+
+    async def list_upstream_for_risk(
+        self,
+        *,
+        tenant_id: int,
+        risk_id: int,
+    ) -> list[dict[str, Any]]:
+        """Reverse links: case_risk_links + audit finding refs with deep-link hrefs."""
+        from src.domain.models.audit import AuditFinding, audit_finding_risks
+        from src.domain.models.complaint import Complaint
+        from src.domain.models.incident import Incident
+        from src.domain.models.near_miss import NearMiss
+        from src.domain.models.rta import RoadTrafficCollision
+        from src.domain.services.case_risk_links import case_type_href, list_case_links_for_risk
+
+        items: list[dict[str, Any]] = []
+        links = await list_case_links_for_risk(self.db, tenant_id=tenant_id, risk_id=risk_id)
+        case_ids_by_type: dict[str, list[int]] = {}
+        for link in links:
+            case_ids_by_type.setdefault(link.case_type, []).append(link.case_id)
+        title_maps: dict[str, dict[int, tuple[Optional[str], Optional[str]]]] = {}
+        model_by_type = {
+            "incident": Incident,
+            "near_miss": NearMiss,
+            "rta": RoadTrafficCollision,
+            "complaint": Complaint,
+        }
+        for case_type, ids in case_ids_by_type.items():
+            model = model_by_type.get(case_type)
+            if not model or not ids:
+                continue
+            result = await self.db.execute(select(model).where(model.id.in_(ids), model.tenant_id == tenant_id))
+            rows = result.scalars().all()
+            mapped: dict[int, tuple[Optional[str], Optional[str]]] = {}
+            for row in rows:
+                title = getattr(row, "title", None)
+                if not title and case_type == "near_miss":
+                    desc = getattr(row, "description", None) or ""
+                    title = (desc[:80] + "…") if len(desc) > 80 else (desc or None)
+                mapped[row.id] = (title, getattr(row, "reference_number", None))
+            title_maps[case_type] = mapped
+        for link in links:
+            title, reference = title_maps.get(link.case_type, {}).get(link.case_id, (None, None))
+            items.append(
+                {
+                    "source_type": link.case_type,
+                    "source_id": link.case_id,
+                    "title": title,
+                    "reference": reference,
+                    "href": case_type_href(link.case_type, link.case_id),
+                }
+            )
+        finding_result = await self.db.execute(
+            select(AuditFinding)
+            .join(
+                audit_finding_risks,
+                audit_finding_risks.c.audit_finding_id == AuditFinding.id,
+            )
+            .where(
+                audit_finding_risks.c.risk_id == risk_id,
+                AuditFinding.tenant_id == tenant_id,
+            )
+            .order_by(AuditFinding.id.desc())
+        )
+        for finding in finding_result.scalars().all():
+            items.append(
+                {
+                    "source_type": "audit_finding",
+                    "source_id": finding.id,
+                    "title": finding.title,
+                    "reference": finding.reference_number,
+                    "href": f"/audits/{finding.run_id}/execute",
+                    "audit_run_id": finding.run_id,
+                }
+            )
+        return items
 
     async def _record_assessment(
         self,

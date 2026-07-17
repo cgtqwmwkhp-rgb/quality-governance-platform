@@ -20,6 +20,7 @@ from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPASta
 from src.domain.models.incident import Incident
 from src.domain.models.investigation import InvestigationRun
 from src.domain.models.near_miss import NearMiss
+from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.rta import RoadTrafficCollision
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
@@ -36,6 +37,7 @@ _GT_SOURCE_MODELS: dict[CAPASource, type[Any]] = {
     CAPASource.NEAR_MISS: NearMiss,
     CAPASource.RTA: RoadTrafficCollision,
     CAPASource.INCIDENT: Incident,
+    CAPASource.RISK: EnterpriseRisk,
 }
 
 

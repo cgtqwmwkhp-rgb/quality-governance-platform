@@ -207,6 +207,79 @@ class RiskActivityListResponse(BaseModel):
 
 
 # ============================================================================
+# Risk Actions (CAPA SSOT) + Upstream 360 (RR-W3)
+# ============================================================================
+
+
+class RiskActionCreate(BaseModel):
+    title: str = Field(..., min_length=3, max_length=255)
+    description: Optional[str] = Field(None, max_length=16000)
+    priority: Optional[str] = Field(default="medium")
+    due_date: Optional[str] = Field(None, description="ISO date YYYY-MM-DD")
+    assigned_to_id: Optional[int] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def strip_text(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        for key in ("title", "description"):
+            if isinstance(out.get(key), str):
+                out[key] = out[key].strip()
+        return out
+
+
+class RiskActionItem(BaseModel):
+    id: int
+    reference_number: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    source_type: str = "risk"
+    source_id: int
+    due_date: Optional[str] = None
+    assigned_to_id: Optional[int] = None
+    created_at: Optional[str] = None
+    href: Optional[str] = None
+
+
+class RiskActionListResponse(BaseModel):
+    items: list[RiskActionItem] = []
+    total: int = 0
+    page: int = 1
+    page_size: int = 50
+    pages: int = 1
+
+
+class RiskUpstreamItem(BaseModel):
+    source_type: str
+    source_id: int
+    title: Optional[str] = None
+    reference: Optional[str] = None
+    href: str
+    audit_run_id: Optional[int] = None
+
+
+class RiskUpstreamResponse(BaseModel):
+    items: list[RiskUpstreamItem] = []
+    total: int = 0
+
+
+class RiskOwnerUpdate(BaseModel):
+    risk_owner_id: Optional[int] = None
+    risk_owner_name: Optional[str] = Field(None, max_length=255)
+
+
+class RiskOwnerResponse(BaseModel):
+    id: int
+    risk_owner_id: Optional[int] = None
+    risk_owner_name: Optional[str] = None
+    message: str = "Owner updated"
+
+
+# ============================================================================
 # Heat Map & Matrix Schemas
 # ============================================================================
 

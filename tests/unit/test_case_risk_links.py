@@ -42,3 +42,10 @@ def test_parse_linked_risk_ids_in_case_risk_links_module():
 
     assert parse_linked_risk_ids("1, 2,2,x,3") == [1, 2, 3]
     assert sync_case_risk_links_from_csv is not None
+
+
+def test_case_type_href_and_list_helper_exported():
+    from src.domain.services.case_risk_links import case_type_href, list_case_links_for_risk
+
+    assert case_type_href("incident", 1) == "/incidents/1"
+    assert list_case_links_for_risk is not None

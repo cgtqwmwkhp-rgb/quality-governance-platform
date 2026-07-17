@@ -1143,6 +1143,24 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         )
         if not result.scalar_one_or_none():
             raise NotFoundError("Audit finding not found")
+    elif src_type == "near_miss":
+        from src.domain.models.near_miss import NearMiss
+
+        result = await db.execute(
+            select(NearMiss).where(NearMiss.id == src_id, NearMiss.tenant_id == current_user.tenant_id)
+        )
+        if not result.scalar_one_or_none():
+            raise NotFoundError("Near miss not found")
+    elif src_type == "risk":
+        from src.domain.models.risk_register import EnterpriseRisk
+
+        result = await db.execute(
+            select(EnterpriseRisk).where(
+                EnterpriseRisk.id == src_id, EnterpriseRisk.tenant_id == current_user.tenant_id
+            )
+        )
+        if not result.scalar_one_or_none():
+            raise NotFoundError("EnterpriseRisk not found")
     else:
         raise BadRequestError("Invalid source_type")
 
@@ -1162,7 +1180,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         ref_number = f"CMA-{year}-{unique_suffix}"
     elif src_type == "investigation":
         ref_number = f"INVACT-{year}-{unique_suffix}"
-    elif src_type in ("assessment", "induction", "audit_finding", "near_miss"):
+    elif src_type in ("assessment", "induction", "audit_finding", "near_miss", "risk"):
         from src.domain.services.reference_number import ReferenceNumberService
 
         ref_number = await ReferenceNumberService.generate(db, "capa", CAPAAction)
@@ -1311,6 +1329,22 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             created_by_id=current_user.id,
             due_date=parsed_due_date,
         )
+    elif src_type == "risk":
+        action = CAPAAction(
+            reference_number=ref_number,
+            title=action_data.title,
+            description=action_data.description,
+            capa_type=CAPAType.CORRECTIVE,
+            status=CAPAStatus.OPEN,
+            source_type=CAPASource.RISK,
+            source_id=src_id,
+            source_reference=None,
+            priority=_parse_capa_priority(action_data.priority),
+            tenant_id=current_user.tenant_id,
+            assigned_to_id=owner_id,
+            created_by_id=current_user.id,
+            due_date=parsed_due_date,
+        )
     else:
         raise BadRequestError("Invalid source_type")
 
@@ -1345,6 +1379,27 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         )
 
     track_metric("actions.created")
+
+    if src_type == "risk" and isinstance(action, CAPAAction):
+        from src.domain.models.risk_register import RiskActivityEvent
+        from src.domain.services.risk_service import RISK_EVENT_ACTION_CREATED, naive_utc_now
+
+        db.add(
+            RiskActivityEvent(
+                tenant_id=current_user.tenant_id,
+                risk_id=src_id,
+                event_type=RISK_EVENT_ACTION_CREATED,
+                summary=f"Action created: {action.reference_number} — {action_data.title[:80]}",
+                payload={
+                    "capa_id": action.id,
+                    "reference_number": action.reference_number,
+                    "title": action_data.title,
+                },
+                actor_id=current_user.id,
+                created_at=naive_utc_now(),
+            )
+        )
+        await db.commit()
 
     if owner_id:
         await notify_action_assignment(

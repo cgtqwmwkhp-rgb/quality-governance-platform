@@ -4,26 +4,33 @@ import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   AlertTriangle,
+  ClipboardList,
+  GitBranch,
   History,
   Loader2,
   MessageSquare,
+  Plus,
   TrendingDown,
   TrendingUp,
   Minus,
 } from 'lucide-react'
-import { getApiErrorMessage, riskRegisterApi } from '../api/client'
+import { getApiErrorMessage, riskRegisterApi, UserSearchResult } from '../api/client'
 import type {
+  RiskActionItem,
   RiskActivityEvent,
   RiskAssessPayload,
   RiskNote,
   RiskProfile,
   RiskTrendPoint,
+  RiskUpstreamItem,
 } from '../api/riskRegisterClient'
+import { buildRiskCreateActionHref } from '../api/riskRegisterClient'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Card, CardContent } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
+import { UserEmailSearch } from '../components/UserEmailSearch'
 import { trackError } from '../utils/errorTracker'
 
 const MAX_NOTE_BODY_CHARS = 16000
@@ -137,9 +144,14 @@ export default function RiskProfile() {
   })
   const [notes, setNotes] = useState<RiskNote[]>([])
   const [activity, setActivity] = useState<RiskActivityEvent[]>([])
+  const [actions, setActions] = useState<RiskActionItem[]>([])
+  const [upstream, setUpstream] = useState<RiskUpstreamItem[]>([])
   const [noteDraft, setNoteDraft] = useState('')
   const [postingNote, setPostingNote] = useState(false)
   const [noteError, setNoteError] = useState<string | null>(null)
+  const [ownerSearch, setOwnerSearch] = useState('')
+  const [savingOwner, setSavingOwner] = useState(false)
+  const [ownerError, setOwnerError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const id = Number(riskId)
@@ -151,6 +163,8 @@ export default function RiskProfile() {
       setTrendSeries([])
       setNotes([])
       setActivity([])
+      setActions([])
+      setUpstream([])
       return
     }
 
@@ -158,17 +172,23 @@ export default function RiskProfile() {
     setError(null)
     setNotFound(false)
     try {
-      const [profileRes, trendsRes, notesRes, activityRes] = await Promise.all([
-        riskRegisterApi.getProfile(id),
-        riskRegisterApi.getTrends(365, false, id),
-        riskRegisterApi.listNotes(id, { page_size: 50 }),
-        riskRegisterApi.listActivity(id, { page_size: 50 }),
-      ])
+      const [profileRes, trendsRes, notesRes, activityRes, actionsRes, upstreamRes] =
+        await Promise.all([
+          riskRegisterApi.getProfile(id),
+          riskRegisterApi.getTrends(365, false, id),
+          riskRegisterApi.listNotes(id, { page_size: 50 }),
+          riskRegisterApi.listActivity(id, { page_size: 50 }),
+          riskRegisterApi.listActions(id, { page_size: 50 }),
+          riskRegisterApi.listUpstream(id),
+        ])
       const nextProfile = profileRes.data
       setProfile(nextProfile)
+      setOwnerSearch(nextProfile.risk_owner_name || '')
       setTrendSeries(normalizeTrendSeries(trendsRes.data))
       setNotes(notesRes.data.items ?? [])
       setActivity(activityRes.data.items ?? [])
+      setActions(actionsRes.data.items ?? [])
+      setUpstream(upstreamRes.data.items ?? [])
       setAssessForm({
         inherent_likelihood: nextProfile.inherent_likelihood ?? 3,
         inherent_impact: nextProfile.inherent_impact ?? 3,
@@ -187,12 +207,16 @@ export default function RiskProfile() {
         setTrendSeries([])
         setNotes([])
         setActivity([])
+        setActions([])
+        setUpstream([])
       } else {
         setError(getApiErrorMessage(err, t('risk_register.profile.error')))
         setProfile(null)
         setTrendSeries([])
         setNotes([])
         setActivity([])
+        setActions([])
+        setUpstream([])
       }
     } finally {
       setLoading(false)
@@ -261,6 +285,50 @@ export default function RiskProfile() {
       setPostingNote(false)
     }
   }
+
+
+  const saveOwner = async (email: string, user?: UserSearchResult) => {
+    const id = Number(riskId)
+    if (!Number.isInteger(id) || id <= 0 || !user) {
+      setOwnerSearch(email)
+      return
+    }
+
+    setSavingOwner(true)
+    setOwnerError(null)
+    try {
+      const res = await riskRegisterApi.updateOwner(id, {
+        risk_owner_id: user.id,
+        risk_owner_name: user.full_name || user.email,
+      })
+      setProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              risk_owner_id: res.data.risk_owner_id,
+              risk_owner_name: res.data.risk_owner_name,
+            }
+          : prev,
+      )
+      setOwnerSearch(res.data.risk_owner_name || user.full_name || user.email)
+      const activityRes = await riskRegisterApi.listActivity(id, { page_size: 50 })
+      setActivity(activityRes.data.items ?? [])
+    } catch (err: unknown) {
+      trackError(err, { component: 'RiskProfile', action: 'updateOwner', extra: { riskId } })
+      setOwnerError(getApiErrorMessage(err, t('risk_register.profile.owner_error')))
+    } finally {
+      setSavingOwner(false)
+    }
+  }
+
+  const createActionHref = useMemo(() => {
+    if (!profile) return '/actions'
+    return buildRiskCreateActionHref({
+      riskId: profile.id,
+      reference: profile.reference,
+      title: profile.title,
+    })
+  }, [profile])
 
   if (loading) {
     return (
@@ -420,13 +488,31 @@ export default function RiskProfile() {
               </Badge>
             ) : null}
           </div>
-          <div className="rounded-lg border border-border p-4" data-testid="risk-profile-owner">
+          <div className="rounded-lg border border-border p-4 space-y-2" data-testid="risk-profile-owner">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">
               {t('risk_register.profile.owner')}
             </p>
-            <p className="mt-2 text-base font-medium text-foreground">
+            <p className="text-base font-medium text-foreground" data-testid="risk-profile-owner-name">
               {profile.risk_owner_name || t('risk_register.profile.unassigned')}
             </p>
+            <div data-testid="risk-profile-owner-picker">
+              <UserEmailSearch
+                value={ownerSearch}
+                onChange={(email, user) => void saveOwner(email, user)}
+                placeholder={t('risk_register.profile.owner_search')}
+                label={t('risk_register.profile.owner_change')}
+              />
+              {savingOwner ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t('risk_register.profile.owner_saving')}
+                </p>
+              ) : null}
+              {ownerError ? (
+                <p className="mt-1 text-xs text-destructive" data-testid="risk-profile-owner-error">
+                  {ownerError}
+                </p>
+              ) : null}
+            </div>
           </div>
           <div className="rounded-lg border border-border p-4 space-y-2">
             <div data-testid="risk-profile-updated">
@@ -582,6 +668,102 @@ export default function RiskProfile() {
           </form>
         </CardContent>
       </Card>
+
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card data-testid="risk-profile-actions">
+          <CardContent className="space-y-4 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+                  <ClipboardList className="h-4 w-4" aria-hidden />
+                  {t('risk_register.profile.actions_title')}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {t('risk_register.profile.actions_hint')}
+                </p>
+              </div>
+              <Button asChild size="sm" data-testid="risk-profile-create-action">
+                <Link to={createActionHref}>
+                  <Plus className="mr-1 h-4 w-4" aria-hidden />
+                  {t('risk_register.profile.actions_create')}
+                </Link>
+              </Button>
+            </div>
+            {actions.length === 0 ? (
+              <p className="text-sm text-muted-foreground" data-testid="risk-profile-actions-empty">
+                {t('risk_register.profile.actions_empty')}
+              </p>
+            ) : (
+              <ul className="space-y-3" data-testid="risk-profile-actions-list">
+                {actions.map((action) => (
+                  <li
+                    key={action.id}
+                    className="rounded-md border border-border bg-muted/30 p-3 text-sm"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        to={action.href || `/actions?sourceType=risk&sourceId=${profile.id}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {action.reference_number || `CAPA-${action.id}`}
+                      </Link>
+                      {action.status ? <Badge variant="outline">{action.status}</Badge> : null}
+                      {action.priority ? <Badge variant="secondary">{action.priority}</Badge> : null}
+                    </div>
+                    <p className="mt-1 text-foreground">{action.title}</p>
+                    {action.due_date ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {t('risk_register.profile.actions_due')}: {formatDate(action.due_date)}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card data-testid="risk-profile-upstream">
+          <CardContent className="space-y-4 p-4">
+            <div>
+              <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+                <GitBranch className="h-4 w-4" aria-hidden />
+                {t('risk_register.profile.upstream_title')}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {t('risk_register.profile.upstream_hint')}
+              </p>
+            </div>
+            {upstream.length === 0 ? (
+              <p className="text-sm text-muted-foreground" data-testid="risk-profile-upstream-empty">
+                {t('risk_register.profile.upstream_empty')}
+              </p>
+            ) : (
+              <ul className="space-y-3" data-testid="risk-profile-upstream-list">
+                {upstream.map((item) => (
+                  <li
+                    key={`${item.source_type}-${item.source_id}`}
+                    className="rounded-md border border-border p-3 text-sm"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{item.source_type}</Badge>
+                      <Link
+                        to={item.href}
+                        className="font-medium text-primary hover:underline"
+                        data-testid={`risk-profile-upstream-link-${item.source_type}-${item.source_id}`}
+                      >
+                        {item.reference || `#${item.source_id}`}
+                      </Link>
+                    </div>
+                    {item.title ? <p className="mt-1 text-foreground">{item.title}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card data-testid="risk-profile-notes">

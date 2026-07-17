@@ -150,6 +150,86 @@ export interface RiskActivityListResponse {
   pages: number
 }
 
+export interface RiskActionItem {
+  id: number
+  reference_number?: string | null
+  title: string
+  description?: string | null
+  status?: string | null
+  priority?: string | null
+  source_type: string
+  source_id: number
+  due_date?: string | null
+  assigned_to_id?: number | null
+  created_at?: string | null
+  href?: string | null
+}
+
+export interface RiskActionListResponse {
+  items: RiskActionItem[]
+  total: number
+  page: number
+  page_size: number
+  pages: number
+}
+
+export interface RiskActionCreatePayload {
+  title: string
+  description?: string
+  priority?: string
+  due_date?: string
+  assigned_to_id?: number
+}
+
+export interface RiskUpstreamItem {
+  source_type: string
+  source_id: number
+  title?: string | null
+  reference?: string | null
+  href: string
+  audit_run_id?: number | null
+}
+
+export interface RiskUpstreamResponse {
+  items: RiskUpstreamItem[]
+  total: number
+}
+
+export interface RiskOwnerUpdatePayload {
+  risk_owner_id?: number | null
+  risk_owner_name?: string | null
+}
+
+export interface RiskOwnerResponse {
+  id: number
+  risk_owner_id?: number | null
+  risk_owner_name?: string | null
+  message?: string
+}
+
+/** Build Actions create deep-link bound to a risk with returnTo profile. */
+export function buildRiskCreateActionHref(opts: {
+  riskId: number
+  reference?: string | null
+  title?: string | null
+}): string {
+  const sp = new URLSearchParams()
+  sp.set('create', '1')
+  sp.set('sourceType', 'risk')
+  sp.set('sourceId', String(opts.riskId))
+  const ref = (opts.reference || `RISK-${opts.riskId}`).trim()
+  sp.set('title', `Follow-up from ${ref}`)
+  const riskTitle = (opts.title || '').trim()
+  sp.set(
+    'description',
+    riskTitle
+      ? `Follow-up action from risk ${ref}: ${riskTitle}`
+      : `Follow-up action from risk ${ref}.`,
+  )
+  sp.set('returnTo', `/risk-register/${opts.riskId}`)
+  return `/actions?${sp.toString()}`
+}
+
 export interface RiskTrendPoint {
   month: string
   avg_inherent?: number
@@ -355,6 +435,21 @@ export function createRiskRegisterApi(api: AxiosInstance) {
         `/api/v1/risk-register/${id}/activity${q ? `?${q}` : ''}`,
       )
     },
+    listActions: (id: number, params?: { page?: number; page_size?: number }) => {
+      const sp = new URLSearchParams()
+      if (params?.page != null) sp.set('page', String(params.page))
+      if (params?.page_size != null) sp.set('page_size', String(params.page_size))
+      const q = sp.toString()
+      return api.get<RiskActionListResponse>(
+        `/api/v1/risk-register/${id}/actions${q ? `?${q}` : ''}`,
+      )
+    },
+    createAction: (id: number, data: RiskActionCreatePayload) =>
+      api.post<RiskActionItem>(`/api/v1/risk-register/${id}/actions`, data),
+    listUpstream: (id: number) =>
+      api.get<RiskUpstreamResponse>(`/api/v1/risk-register/${id}/upstream`),
+    updateOwner: (id: number, data: RiskOwnerUpdatePayload) =>
+      api.put<RiskOwnerResponse>(`/api/v1/risk-register/${id}/owner`, data),
     resolveSuggestionTriage: (
       id: number,
       body: { decision: 'accept' | 'reject'; notes?: string },

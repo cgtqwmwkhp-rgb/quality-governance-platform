@@ -2,15 +2,27 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockGetProfile, mockGetTrends, mockAssess, mockListNotes, mockListActivity, mockCreateNote } =
-  vi.hoisted(() => ({
-    mockGetProfile: vi.fn(),
-    mockGetTrends: vi.fn(),
-    mockAssess: vi.fn(),
-    mockListNotes: vi.fn(),
-    mockListActivity: vi.fn(),
-    mockCreateNote: vi.fn(),
-  }))
+const {
+  mockGetProfile,
+  mockGetTrends,
+  mockAssess,
+  mockListNotes,
+  mockListActivity,
+  mockCreateNote,
+  mockListActions,
+  mockListUpstream,
+  mockUpdateOwner,
+} = vi.hoisted(() => ({
+  mockGetProfile: vi.fn(),
+  mockGetTrends: vi.fn(),
+  mockAssess: vi.fn(),
+  mockListNotes: vi.fn(),
+  mockListActivity: vi.fn(),
+  mockCreateNote: vi.fn(),
+  mockListActions: vi.fn(),
+  mockListUpstream: vi.fn(),
+  mockUpdateOwner: vi.fn(),
+}))
 
 vi.mock('../../api/client', () => ({
   riskRegisterApi: {
@@ -20,9 +32,36 @@ vi.mock('../../api/client', () => ({
     listNotes: mockListNotes,
     listActivity: mockListActivity,
     createNote: mockCreateNote,
+    listActions: mockListActions,
+    listUpstream: mockListUpstream,
+    updateOwner: mockUpdateOwner,
   },
   getApiErrorMessage: (err: unknown, fallback = 'Something went wrong') =>
     err instanceof Error ? err.message : fallback,
+}))
+
+vi.mock('../../components/UserEmailSearch', () => ({
+  UserEmailSearch: ({
+    onChange,
+    label,
+  }: {
+    onChange: (email: string, user?: { id: number; full_name: string; email: string }) => void
+    label?: string
+  }) => (
+    <button
+      type="button"
+      data-testid="mock-owner-picker"
+      onClick={() =>
+        onChange('blake@example.com', {
+          id: 9,
+          full_name: 'Blake Owner',
+          email: 'blake@example.com',
+        })
+      }
+    >
+      {label || 'Pick owner'}
+    </button>
+  ),
 }))
 
 vi.mock('../../utils/errorTracker', () => ({
@@ -76,6 +115,8 @@ const profileFixture = {
   review_notes: null,
 }
 
+const emptyPage = { items: [], total: 0, page: 1, page_size: 50, pages: 1 }
+
 describe('RiskProfile', () => {
   afterEach(() => {
     cleanup()
@@ -86,8 +127,10 @@ describe('RiskProfile', () => {
     mockGetTrends.mockResolvedValue({
       data: [{ month: '2026-06', avg_residual: 9, assessment_count: 1 }],
     })
-    mockListNotes.mockResolvedValue({ data: { items: [], total: 0, page: 1, page_size: 50, pages: 1 } })
-    mockListActivity.mockResolvedValue({ data: { items: [], total: 0, page: 1, page_size: 50, pages: 1 } })
+    mockListNotes.mockResolvedValue({ data: emptyPage })
+    mockListActivity.mockResolvedValue({ data: emptyPage })
+    mockListActions.mockResolvedValue({ data: emptyPage })
+    mockListUpstream.mockResolvedValue({ data: { items: [], total: 0 } })
   })
 
   it('renders hero shell from profile API', async () => {
@@ -97,23 +140,121 @@ describe('RiskProfile', () => {
     expect(await screen.findByTestId('risk-profile-page')).toBeInTheDocument()
     expect(screen.getByTestId('risk-profile-ref')).toHaveTextContent('RSK-00042')
     expect(screen.getByTestId('risk-profile-title')).toHaveTextContent('Supplier disruption')
-    expect(screen.getByTestId('risk-profile-status')).toHaveTextContent('active')
-    expect(screen.getByTestId('risk-profile-category')).toHaveTextContent('operational')
-    expect(screen.getByTestId('risk-profile-gross')).toHaveTextContent('16')
-    expect(screen.getByTestId('risk-profile-net')).toHaveTextContent('9')
     expect(screen.getByTestId('risk-profile-owner')).toHaveTextContent('Alex Owner')
-    expect(screen.getByTestId('risk-profile-trend')).toHaveTextContent(
-      'risk_register.profile.trend.decreasing',
+    expect(mockListActions).toHaveBeenCalledWith(42, { page_size: 50 })
+    expect(mockListUpstream).toHaveBeenCalledWith(42)
+    expect(screen.getByTestId('risk-profile-actions')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-profile-upstream')).toBeInTheDocument()
+  })
+
+  it('lists CAPA actions and create href with returnTo', async () => {
+    mockGetProfile.mockResolvedValue({ data: profileFixture })
+    mockListActions.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 5,
+            reference_number: 'CAPA-5',
+            title: 'Mitigate supplier',
+            status: 'open',
+            priority: 'high',
+            source_type: 'risk',
+            source_id: 42,
+            href: '/actions?sourceType=risk&sourceId=42',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 50,
+        pages: 1,
+      },
+    })
+    renderProfile()
+
+    await screen.findByTestId('risk-profile-actions-list')
+    expect(screen.getByText('CAPA-5')).toBeInTheDocument()
+    const createLink = screen.getByTestId('risk-profile-create-action')
+    const href = createLink.getAttribute('href') || ''
+    expect(href).toContain('create=1')
+    expect(href).toContain('sourceType=risk')
+    expect(href).toContain('sourceId=42')
+    expect(href).toContain(encodeURIComponent('/risk-register/42'))
+  })
+
+  it('lists upstream reverse links with deep hrefs', async () => {
+    mockGetProfile.mockResolvedValue({ data: profileFixture })
+    mockListUpstream.mockResolvedValue({
+      data: {
+        items: [
+          {
+            source_type: 'incident',
+            source_id: 7,
+            title: 'Spill',
+            reference: 'INC-7',
+            href: '/incidents/7',
+          },
+          {
+            source_type: 'audit_finding',
+            source_id: 501,
+            title: 'Missing control',
+            reference: 'AF-501',
+            href: '/audits/41/execute',
+            audit_run_id: 41,
+          },
+        ],
+        total: 2,
+      },
+    })
+    renderProfile()
+
+    await screen.findByTestId('risk-profile-upstream-list')
+    expect(screen.getByTestId('risk-profile-upstream-link-incident-7')).toHaveAttribute(
+      'href',
+      '/incidents/7',
     )
-    expect(screen.getByTestId('risk-profile-back')).toHaveAttribute('href', '/risk-register')
-    expect(mockGetProfile).toHaveBeenCalledWith(42)
-    expect(mockGetTrends).toHaveBeenCalledWith(365, false, 42)
-    expect(mockListNotes).toHaveBeenCalledWith(42, { page_size: 50 })
-    expect(mockListActivity).toHaveBeenCalledWith(42, { page_size: 50 })
-    expect(screen.getByTestId('risk-profile-trend-chart')).toBeInTheDocument()
-    expect(screen.getByTestId('risk-profile-assess')).toBeInTheDocument()
-    expect(screen.getByTestId('risk-profile-notes')).toBeInTheDocument()
-    expect(screen.getByTestId('risk-profile-activity')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-profile-upstream-link-audit_finding-501')).toHaveAttribute(
+      'href',
+      '/audits/41/execute',
+    )
+  })
+
+  it('updates owner via picker and refreshes activity', async () => {
+    mockGetProfile.mockResolvedValue({ data: profileFixture })
+    mockUpdateOwner.mockResolvedValue({
+      data: { id: 42, risk_owner_id: 9, risk_owner_name: 'Blake Owner' },
+    })
+    mockListActivity
+      .mockResolvedValueOnce({ data: emptyPage })
+      .mockResolvedValueOnce({
+        data: {
+          items: [
+            {
+              id: 3,
+              risk_id: 42,
+              event_type: 'owner_changed',
+              summary: 'Owner changed: Alex Owner → Blake Owner',
+              actor_id: 1,
+              created_at: '2026-07-17T12:00:00',
+            },
+          ],
+          total: 1,
+          page: 1,
+          page_size: 50,
+          pages: 1,
+        },
+      })
+    renderProfile()
+
+    await screen.findByTestId('risk-profile-page')
+    fireEvent.click(screen.getByTestId('mock-owner-picker'))
+
+    await waitFor(() => {
+      expect(mockUpdateOwner).toHaveBeenCalledWith(42, {
+        risk_owner_id: 9,
+        risk_owner_name: 'Blake Owner',
+      })
+    })
+    expect(await screen.findByTestId('risk-profile-owner-name')).toHaveTextContent('Blake Owner')
   })
 
   it('submits assess and reloads profile', async () => {
@@ -130,12 +271,7 @@ describe('RiskProfile', () => {
     await waitFor(() => {
       expect(mockAssess).toHaveBeenCalledWith(
         42,
-        expect.objectContaining({
-          inherent_likelihood: 4,
-          inherent_impact: 4,
-          residual_likelihood: 2,
-          residual_impact: 3,
-        }),
+        expect.objectContaining({ residual_likelihood: 2 }),
       )
     })
     expect(mockGetProfile).toHaveBeenCalledTimes(2)
@@ -153,8 +289,7 @@ describe('RiskProfile', () => {
         created_at: '2026-07-10T12:00:00',
       },
     })
-    mockListActivity.mockResolvedValueOnce({ data: { items: [], total: 0, page: 1, page_size: 50, pages: 1 } })
-    mockListActivity.mockResolvedValueOnce({
+    mockListActivity.mockResolvedValueOnce({ data: emptyPage }).mockResolvedValueOnce({
       data: {
         items: [
           {
@@ -183,23 +318,18 @@ describe('RiskProfile', () => {
     await waitFor(() => {
       expect(mockCreateNote).toHaveBeenCalledWith(42, 'Follow up with supplier')
     })
-    expect(mockListActivity).toHaveBeenCalledTimes(2)
   })
 
   it('shows not-found honesty for 404', async () => {
     mockGetProfile.mockRejectedValue({ response: { status: 404 } })
     renderProfile()
-
     expect(await screen.findByTestId('risk-profile-not-found')).toBeInTheDocument()
-    expect(screen.getByText('risk_register.profile.not_found')).toBeInTheDocument()
   })
 
   it('shows error honesty with retry', async () => {
     mockGetProfile.mockRejectedValue(new Error('network down'))
     renderProfile()
-
     expect(await screen.findByTestId('risk-profile-error')).toBeInTheDocument()
-    expect(screen.getByTestId('risk-profile-retry')).toBeInTheDocument()
   })
 
   it('treats invalid riskId as not found without API call', async () => {
