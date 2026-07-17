@@ -3,6 +3,8 @@ import {
   PLANET_MARK_SECTION_IDS,
   buildCategoryDeltas,
   buildHistoricalRowsWithDeltas,
+  buildHotspotInitiatives,
+  buildPlanetMarkExportPack,
   buildPlanetMarkExportUrl,
   buildPlanetMarkTrendsViewModel,
   buildPlanetMarkYearsViewModel,
@@ -14,6 +16,7 @@ import {
   formatEmissions,
   hasRecordedCarbonValue,
   hasTrendData,
+  initiativeToCreateActionPayload,
   parsePlanetMarkSection,
   resolveSelectedYearId,
   sortReportingYearsDesc,
@@ -252,5 +255,94 @@ describe('planetMarkHelpers', () => {
     expect(vm.showMsXlsxIngestPlaceholder).toBe(false)
     expect(vm.selectedHasIngestedCarbon).toBe(true)
     expect(vm.allYearRows[0]?.total).toBe(10)
+  })
+})
+
+describe('planetMarkHelpers PM-W3 export + initiatives', () => {
+  it('ranks hotspot initiatives by footprint share', () => {
+    const initiatives = buildHotspotInitiatives({
+      year_id: 1,
+      measured_count: 2,
+      total_co2e: 100,
+      categories: [
+        {
+          number: 3,
+          name: 'Fuel',
+          is_measured: true,
+          total_co2e: 60,
+          percentage: 60,
+        },
+        {
+          number: 1,
+          name: 'Purchased goods',
+          is_measured: true,
+          total_co2e: 15,
+          percentage: 15,
+        },
+        {
+          number: 2,
+          name: 'Empty',
+          is_measured: true,
+          total_co2e: 0,
+          percentage: 0,
+        },
+      ],
+    })
+    expect(initiatives).toHaveLength(2)
+    expect(initiatives[0]?.categoryName).toBe('Fuel')
+    expect(initiatives[0]?.suggestedReductionPercent).toBe(10)
+    expect(initiatives[1]?.suggestedReductionPercent).toBe(5)
+  })
+
+  it('builds JSON export pack with honesty notes', () => {
+    const pack = buildPlanetMarkExportPack({
+      year: {
+        ...{
+          id: 1,
+          year_label: 'YE2026',
+          year_number: 2026,
+          period: '2026',
+          average_fte: 10,
+          total_emissions: 22,
+          emissions_per_fte: 2.2,
+          scope_1: 10,
+          scope_2_market: 5,
+          scope_3: 7,
+          data_quality: 12,
+          certification_status: 'in_progress',
+          is_baseline: false,
+        },
+      },
+      scope3: null,
+      actions: [],
+      initiatives: [],
+    })
+    expect(pack.filename).toContain('planet-mark-export-YE2026')
+    const body = JSON.parse(pack.body)
+    expect(body.export_kind).toBe('json_pack')
+    expect(body.pdf_note).toMatch(/PDF/)
+    expect(body.xlsx_note).toMatch(/XLSX/)
+  })
+
+  it('maps initiative to createAction payload', () => {
+    const payload = initiativeToCreateActionPayload({
+      id: 'cat-3',
+      title: 'Reduce Fuel',
+      categoryNumber: 3,
+      categoryName: 'Fuel',
+      footprintPercent: 60,
+      currentCo2e: 60,
+      suggestedReductionPercent: 10,
+      expectedReductionCo2e: 6,
+      specific: 'specific',
+      measurable: 'measurable',
+    })
+    expect(payload.action_title).toBe('Reduce Fuel')
+    expect(payload.expected_reduction_pct).toBe(10)
+    expect(payload.achievable_owner).toBe('Unassigned')
+  })
+
+  it('keeps legacy export URL helper for reference', () => {
+    expect(buildPlanetMarkExportUrl(42)).toBe('/api/v1/planet-mark/years/42/export')
   })
 })

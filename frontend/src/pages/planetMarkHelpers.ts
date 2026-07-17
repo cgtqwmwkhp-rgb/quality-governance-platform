@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import { BarChart3, CalendarDays, Download, LineChart, Target } from 'lucide-react'
 import type {
+  PlanetMarkActionRecord,
   PlanetMarkDashboardResponse,
   PlanetMarkReportingYearRecord,
   PlanetMarkScope3Response,
@@ -384,5 +385,150 @@ export function buildPlanetMarkYearsViewModel(input: {
     showMsXlsxIngestPlaceholder: selectedRow != null && !selectedRow.hasIngestedCarbon,
     priorYearsWithoutIngest,
     allYearRows,
+  }
+}
+
+export interface PlanetMarkHotspotInitiative {
+  id: string
+  title: string
+  categoryNumber: number
+  categoryName: string
+  footprintPercent: number
+  currentCo2e: number
+  suggestedReductionPercent: number
+  expectedReductionCo2e: number
+  specific: string
+  measurable: string
+}
+
+/** Rank measured Scope 3 categories by footprint share into SMART-ish initiative drafts. */
+export function buildHotspotInitiatives(
+  scope3: PlanetMarkScope3Response | null,
+  limit = 5,
+): PlanetMarkHotspotInitiative[] {
+  if (!scope3?.categories?.length) return []
+
+  const total = hasPositiveCarbonTotal(scope3.total_co2e) ? scope3.total_co2e : null
+
+  const ranked = scope3.categories
+    .filter((category) => category.is_measured && hasPositiveCarbonTotal(category.total_co2e))
+    .map((category) => {
+      const footprintPercent = hasPositiveCarbonTotal(category.percentage)
+        ? category.percentage
+        : total
+          ? (category.total_co2e / total) * 100
+          : 0
+      return { category, footprintPercent }
+    })
+    .sort((a, b) => b.footprintPercent - a.footprintPercent)
+    .slice(0, limit)
+
+  return ranked.map(({ category, footprintPercent }) => {
+    const suggestedReductionPercent = footprintPercent >= 20 ? 10 : 5
+    const expectedReductionCo2e = (category.total_co2e * suggestedReductionPercent) / 100
+    return {
+      id: `cat-${category.number}`,
+      title: `Reduce ${category.name} emissions by ${suggestedReductionPercent}%`,
+      categoryNumber: category.number,
+      categoryName: category.name,
+      footprintPercent,
+      currentCo2e: category.total_co2e,
+      suggestedReductionPercent,
+      expectedReductionCo2e,
+      specific: `Target Scope 3 category ${category.number} (${category.name}) hotspot ranked by footprint share.`,
+      measurable: `Cut category emissions by ~${suggestedReductionPercent}% (~${expectedReductionCo2e.toFixed(2)} tCO₂e) vs current ${category.total_co2e.toFixed(2)} tCO₂e.`,
+    }
+  })
+}
+
+export interface PlanetMarkExportPackPayload {
+  filename: string
+  body: string
+}
+
+/** Client-side JSON export pack — PDF/XLSX are not wired (dead window.open URL removed). */
+export function buildPlanetMarkExportPack(input: {
+  year: PlanetMarkReportingYearRecord
+  scope3: PlanetMarkScope3Response | null
+  actions: PlanetMarkActionRecord[]
+  initiatives: PlanetMarkHotspotInitiative[]
+}): PlanetMarkExportPackPayload {
+  const { year, scope3, actions, initiatives } = input
+  const stamp = new Date().toISOString().slice(0, 10)
+  const pack = {
+    export_kind: 'json_pack',
+    pdf_note:
+      'Branded PDF pack is not wired yet — this JSON pack is the authoritative Planet Mark export today.',
+    xlsx_note: 'XLSX pack export is a follow-on.',
+    generated_at: new Date().toISOString(),
+    reporting_year: {
+      id: year.id,
+      year_label: year.year_label,
+      year_number: year.year_number,
+      period: year.period,
+      average_fte: year.average_fte,
+      total_emissions: year.total_emissions,
+      emissions_per_fte: year.emissions_per_fte,
+      scope_1: year.scope_1,
+      scope_2_market: year.scope_2_market,
+      scope_3: year.scope_3,
+      data_quality: year.data_quality,
+      certification_status: year.certification_status,
+      is_baseline: year.is_baseline,
+    },
+    scope3_categories: (scope3?.categories ?? []).map((category) => ({
+      number: category.number,
+      name: category.name,
+      is_measured: category.is_measured,
+      total_co2e: category.total_co2e,
+      percentage: category.percentage,
+    })),
+    improvement_actions: actions.map((action) => ({
+      id: action.id,
+      action_id: action.action_id,
+      action_title: action.action_title,
+      owner: action.owner,
+      deadline: action.deadline,
+      status: action.status,
+      progress_percent: action.progress_percent,
+      expected_reduction_pct: action.expected_reduction_pct ?? null,
+      is_overdue: action.is_overdue,
+    })),
+    hotspot_initiatives: initiatives,
+  }
+
+  const safeLabel = year.year_label.replace(/[^\w-]+/g, '_')
+  return {
+    filename: `planet-mark-export-${safeLabel}-${stamp}.json`,
+    body: JSON.stringify(pack, null, 2),
+  }
+}
+
+export function triggerPlanetMarkPackDownload(payload: PlanetMarkExportPackPayload): void {
+  const blob = new Blob([payload.body], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = payload.filename
+  anchor.rel = 'noopener'
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+export function initiativeToCreateActionPayload(
+  initiative: PlanetMarkHotspotInitiative,
+  owner = 'Unassigned',
+  timeBound?: string,
+) {
+  const deadline =
+    timeBound ??
+    new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  return {
+    action_title: initiative.title,
+    specific: initiative.specific,
+    measurable: initiative.measurable,
+    achievable_owner: owner,
+    time_bound: deadline,
+    expected_reduction_pct: initiative.suggestedReductionPercent,
   }
 }

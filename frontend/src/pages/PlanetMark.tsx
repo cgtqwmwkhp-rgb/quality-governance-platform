@@ -15,6 +15,7 @@ import {
   planetMarkApi,
   ErrorClass,
   createApiError,
+  getApiErrorMessage,
   isSetupRequired,
   type SetupRequiredResponse,
 } from '../api/client'
@@ -34,16 +35,20 @@ import { ActionSummaryKPIs } from '../components/planet-mark/ActionSummaryKPIs'
 import { cn } from '../helpers/utils'
 import {
   PLANET_MARK_SECTIONS,
-  buildPlanetMarkExportUrl,
+  buildHotspotInitiatives,
+  buildPlanetMarkExportPack,
   buildPlanetMarkTrendsViewModel,
   buildPlanetMarkYearsViewModel,
   findPriorReportingYear,
   formatDeltaPercent,
   formatEmissions,
   hasPositiveCarbonTotal,
+  initiativeToCreateActionPayload,
   parsePlanetMarkSection,
   resolveSelectedYearId,
   sortReportingYearsDesc,
+  triggerPlanetMarkPackDownload,
+  type PlanetMarkHotspotInitiative,
 } from './planetMarkHelpers'
 
 type LoadState = 'idle' | 'loading' | 'success' | 'error' | 'setup_required'
@@ -93,6 +98,8 @@ export default function PlanetMark() {
   const [scope3Current, setScope3Current] = useState<PlanetMarkScope3Response | null>(null)
   const [scope3Prior, setScope3Prior] = useState<PlanetMarkScope3Response | null>(null)
   const [trendsLoading, setTrendsLoading] = useState(false)
+  const [creatingInitiativeId, setCreatingInitiativeId] = useState<string | null>(null)
+  const [initiativeError, setInitiativeError] = useState<string | null>(null)
   const [isCreatingYear, setIsCreatingYear] = useState(false)
   const [setupYearForm, setSetupYearForm] = useState({
     year_label: `YE${defaultYear}`,
@@ -127,6 +134,10 @@ export default function PlanetMark() {
   const yearsVm = useMemo(
     () => buildPlanetMarkYearsViewModel({ years, selectedYearId }),
     [years, selectedYearId],
+  )
+  const initiatives = useMemo(
+    () => buildHotspotInitiatives(scope3Current),
+    [scope3Current],
   )
 
   const setQuery = useCallback(
@@ -212,17 +223,20 @@ export default function PlanetMark() {
   }, [loadData])
 
   useEffect(() => {
-    if (!selectedYearId || section !== 'trends') {
-      setScope3Current(null)
-      setScope3Prior(null)
+    const needsScope3 = section === 'trends' || section === 'improve' || section === 'export'
+    if (!selectedYearId || !needsScope3) {
+      if (section !== 'trends' && section !== 'improve' && section !== 'export') {
+        setScope3Current(null)
+        setScope3Prior(null)
+      }
       return
     }
 
-    const priorYear = findPriorReportingYear(years, selectedYearId)
+    const priorYear = section === 'trends' ? findPriorReportingYear(years, selectedYearId) : null
 
     let cancelled = false
     const run = async () => {
-      setTrendsLoading(true)
+      if (section === 'trends') setTrendsLoading(true)
       try {
         const [currentRes, priorRes] = await Promise.allSettled([
           planetMarkApi.getScope3(selectedYearId),
@@ -234,7 +248,7 @@ export default function PlanetMark() {
           priorRes.status === 'fulfilled' && priorRes.value ? priorRes.value.data : null,
         )
       } finally {
-        if (!cancelled) setTrendsLoading(false)
+        if (!cancelled && section === 'trends') setTrendsLoading(false)
       }
     }
     void run()
@@ -244,18 +258,20 @@ export default function PlanetMark() {
   }, [selectedYearId, section, years])
 
   useEffect(() => {
-    if (!selectedYearId || section !== 'improve') {
-      setActions([])
-      setActionsSummary(null)
+    if (!selectedYearId || (section !== 'improve' && section !== 'export')) {
+      if (section !== 'improve' && section !== 'export') {
+        setActions([])
+        setActionsSummary(null)
+      }
       return
     }
     let cancelled = false
     const run = async () => {
-      setSectionLoading(true)
+      if (section === 'improve') setSectionLoading(true)
       try {
         await loadImproveData(selectedYearId)
       } finally {
-        if (!cancelled) setSectionLoading(false)
+        if (!cancelled && section === 'improve') setSectionLoading(false)
       }
     }
     void run()
@@ -271,6 +287,36 @@ export default function PlanetMark() {
       setQuery({ year: String(defaultId) })
     }
   }, [years, yearParam, setQuery])
+
+
+  const handleExportPack = () => {
+    if (!selectedYear) return
+    const payload = buildPlanetMarkExportPack({
+      year: selectedYear,
+      scope3: scope3Current,
+      actions,
+      initiatives,
+    })
+    triggerPlanetMarkPackDownload(payload)
+  }
+
+  const handleAddInitiative = async (initiative: PlanetMarkHotspotInitiative) => {
+    if (!selectedYear) return
+    setCreatingInitiativeId(initiative.id)
+    setInitiativeError(null)
+    try {
+      await planetMarkApi.createAction(
+        selectedYear.id,
+        initiativeToCreateActionPayload(initiative),
+      )
+      await loadImproveData(selectedYear.id)
+    } catch (err) {
+      setInitiativeError(getApiErrorMessage(err, t('planet_mark.shell.initiatives.add_failed')))
+    } finally {
+      setCreatingInitiativeId(null)
+    }
+  }
+
 
   const handleCreateReportingYear = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -866,30 +912,93 @@ export default function PlanetMark() {
                   <Loader2 className="w-5 h-5 animate-spin" />
                   {t('planet_mark.loading')}
                 </div>
-              ) : actions.length === 0 ? (
-                <Card>
-                  <CardContent>
-                    <EmptyState
-                      title={t('planet_mark.shell.empty.improve')}
-                      description={t('planet_mark.shell.empty.improve_desc')}
-                    />
-                  </CardContent>
-                </Card>
               ) : (
                 <>
-                  {actionsSummary && <ActionSummaryKPIs summary={actionsSummary} />}
-                  <div className="space-y-2">
-                    {actions.map((action) => (
-                      <ActionCard
-                        key={action.id}
-                        yearId={selectedYear.id}
-                        action={toActionItem(action)}
-                        selected={false}
-                        onSelect={() => {}}
-                        onUpdated={() => void loadImproveData(selectedYear.id)}
-                      />
-                    ))}
-                  </div>
+                  <Card data-testid="planet-mark-initiatives">
+                    <CardHeader>
+                      <CardTitle>{t('planet_mark.shell.initiatives.title')}</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        {t('planet_mark.shell.initiatives.hint')}
+                      </p>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {initiatives.length === 0 ? (
+                        <EmptyState
+                          title={t('planet_mark.shell.initiatives.empty')}
+                          description={t('planet_mark.shell.initiatives.empty_desc')}
+                        />
+                      ) : (
+                        <>
+                          {initiativeError ? (
+                            <p className="text-sm text-destructive" role="alert" data-testid="planet-mark-initiative-error">
+                              {initiativeError}
+                            </p>
+                          ) : null}
+                          <ul className="space-y-3">
+                            {initiatives.map((initiative) => (
+                              <li
+                                key={initiative.id}
+                                className="rounded-lg border border-border p-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
+                                data-testid={`planet-mark-initiative-${initiative.id}`}
+                              >
+                                <div className="min-w-0 space-y-1">
+                                  <p className="font-medium text-foreground">{initiative.title}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {t('planet_mark.shell.initiatives.footprint', {
+                                      percent: initiative.footprintPercent.toFixed(1),
+                                      tonnes: formatEmissions(initiative.currentCo2e),
+                                    })}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">{initiative.measurable}</p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={creatingInitiativeId === initiative.id}
+                                  data-testid={`planet-mark-initiative-add-${initiative.id}`}
+                                  onClick={() => void handleAddInitiative(initiative)}
+                                >
+                                  {creatingInitiativeId === initiative.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Plus className="w-4 h-4" />
+                                  )}
+                                  {t('planet_mark.shell.initiatives.add_action')}
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {actions.length === 0 ? (
+                    <Card>
+                      <CardContent>
+                        <EmptyState
+                          title={t('planet_mark.shell.empty.improve')}
+                          description={t('planet_mark.shell.empty.improve_desc')}
+                        />
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <>
+                      {actionsSummary && <ActionSummaryKPIs summary={actionsSummary} />}
+                      <div className="space-y-2">
+                        {actions.map((action) => (
+                          <ActionCard
+                            key={action.id}
+                            yearId={selectedYear.id}
+                            action={toActionItem(action)}
+                            selected={false}
+                            onSelect={() => {}}
+                            onUpdated={() => void loadImproveData(selectedYear.id)}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -906,19 +1015,23 @@ export default function PlanetMark() {
                 </CardHeader>
                 <CardContent>
                   {selectedYear ? (
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                      <p className="text-sm text-muted-foreground flex-1">
-                        {t('planet_mark.shell.export_ready', { year: selectedYear.year_label })}
+                    <div className="flex flex-col gap-4">
+                      <p className="text-sm text-muted-foreground" data-testid="planet-mark-export-honesty">
+                        {t('planet_mark.shell.export_honesty')}
                       </p>
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          window.open(buildPlanetMarkExportUrl(selectedYear.id), '_blank')
-                        }
-                      >
-                        <Download className="w-4 h-4" />
-                        {t('planet_mark.export_report')}
-                      </Button>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                        <p className="text-sm text-muted-foreground flex-1">
+                          {t('planet_mark.shell.export_ready', { year: selectedYear.year_label })}
+                        </p>
+                        <Button
+                          variant="outline"
+                          data-testid="planet-mark-export-json"
+                          onClick={handleExportPack}
+                        >
+                          <Download className="w-4 h-4" />
+                          {t('planet_mark.export_report')}
+                        </Button>
+                      </div>
                     </div>
                   ) : (
                     <EmptyState
