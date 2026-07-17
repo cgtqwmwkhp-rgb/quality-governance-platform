@@ -954,7 +954,7 @@ export default function Analytics() {
                         Open/closed mix estimated from the first 100 runs — use Audits for authoritative counts.
                       </p>
                     )}
-                    {auditsAvgResolutionDays == null && auditsLoadState !== 'unavailable' && (
+                    {auditsAvgResolutionDays == null && (
                       <p className="mt-3 text-xs text-muted-foreground">
                         Avg resolution unavailable — no completed runs with completion timestamps in the loaded page.
                       </p>
