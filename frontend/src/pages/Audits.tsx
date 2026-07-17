@@ -99,7 +99,9 @@ const KANBAN_COLUMNS = [
     variant: 'success' as const,
     icon: CheckCircle2,
   },
-]
+] as const
+
+const KANBAN_STATUS_IDS = new Set<string>(KANBAN_COLUMNS.map((column) => column.id))
 
 const EXTERNAL_AUDIT_TYPE_OPTIONS: Array<{
   value: ExternalAuditType
@@ -806,6 +808,29 @@ export default function Audits() {
     return filteredAudits.filter((a) => a.status === status)
   }
 
+  const isGlobalAuditEmpty = scopedAudits.length === 0
+  const isFilteredAuditEmpty = !isGlobalAuditEmpty && filteredAudits.length === 0
+  const boardVisibleAudits = filteredAudits.filter((audit) => KANBAN_STATUS_IDS.has(audit.status))
+  const isBoardLaneEmpty = filteredAudits.length > 0 && boardVisibleAudits.length === 0
+
+  const auditListEmptyTitle = loadError
+    ? t('audits.unavailable.title', 'Audits unavailable')
+    : isFilteredAuditEmpty
+      ? t('audits.empty.filter_title', 'No audits match filters')
+      : t('audits.empty.title', 'No audits found')
+
+  const auditListEmptyDescription = loadError
+    ? t(
+        'audits.unavailable.description',
+        'The audit list could not be loaded. This is not an empty workspace — retry when the service recovers.',
+      )
+    : isFilteredAuditEmpty
+      ? t(
+          'audits.empty.filter_subtitle',
+          'Try clearing search or KPI filters, or switch to List view.',
+        )
+      : t('audits.empty.subtitle', 'Schedule your first audit to get started')
+
   const applyHeroFilter = (next: HeroFilter) => {
     const resolved: HeroFilter = heroFilter === next ? 'all' : next
     setHeroFilter(resolved)
@@ -1066,7 +1091,35 @@ export default function Audits() {
       </div>
 
       {/* Kanban View */}
-      {viewMode === 'kanban' && (
+      {viewMode === 'kanban' && isGlobalAuditEmpty ? (
+        <div data-testid="audits-board-empty">
+          <EmptyState
+            icon={<ClipboardCheck className="w-8 h-8 text-muted-foreground" />}
+            title={auditListEmptyTitle}
+            description={auditListEmptyDescription}
+          />
+        </div>
+      ) : viewMode === 'kanban' && isFilteredAuditEmpty ? (
+        <div data-testid="audits-board-filter-empty">
+          <EmptyState
+            icon={<ClipboardCheck className="w-8 h-8 text-muted-foreground" />}
+            title={auditListEmptyTitle}
+            description={auditListEmptyDescription}
+          />
+        </div>
+      ) : viewMode === 'kanban' && isBoardLaneEmpty ? (
+        <div data-testid="audits-board-lane-empty">
+          <EmptyState
+            icon={<ClipboardCheck className="w-8 h-8 text-muted-foreground" />}
+            title={t('audits.board.lane_empty.title', 'No board-visible audits')}
+            description={t(
+              'audits.board.lane_empty.description',
+              'Audits exist outside the board lanes (for example draft or cancelled). Switch to List view or adjust filters.',
+            )}
+          />
+        </div>
+      ) : (
+        viewMode === 'kanban' && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           {KANBAN_COLUMNS.map((column) => {
             const columnAudits = getAuditsByStatus(column.id)
@@ -1095,7 +1148,13 @@ export default function Audits() {
                 <div className="space-y-3 min-h-[200px] bg-surface rounded-2xl p-3 border border-border">
                   {columnAudits.length === 0 ? (
                     <div className="flex items-center justify-center h-32 text-muted-foreground">
-                      <p className="text-sm">{t('audits.empty.title')}</p>
+                      <p className="text-sm text-center px-2">
+                        {t(
+                          'audits.board.column_empty',
+                          `No ${column.label.toLowerCase()} audits`,
+                          { column: column.label },
+                        )}
+                      </p>
                     </div>
                   ) : (
                     columnAudits.map((audit) => (
@@ -1198,6 +1257,7 @@ export default function Audits() {
             )
           })}
         </div>
+        )
       )}
 
       {/* List View */}
@@ -1238,14 +1298,21 @@ export default function Audits() {
                   {filteredAudits.length === 0 ? (
                     <tr>
                       <td colSpan={8}>
-                        <EmptyState
-                          icon={<ClipboardCheck className="w-8 h-8 text-muted-foreground" />}
-                          title={t('audits.empty.title')}
-                          description={t(
-                            'audits.empty.subtitle',
-                            'No audits match your current filters.',
-                          )}
-                        />
+                        <div
+                          data-testid={
+                            loadError
+                              ? 'audits-list-unavailable'
+                              : isFilteredAuditEmpty
+                                ? 'audits-list-filter-empty'
+                                : 'audits-list-empty'
+                          }
+                        >
+                          <EmptyState
+                            icon={<ClipboardCheck className="w-8 h-8 text-muted-foreground" />}
+                            title={auditListEmptyTitle}
+                            description={auditListEmptyDescription}
+                          />
+                        </div>
                       </td>
                     </tr>
                   ) : (

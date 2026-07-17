@@ -37,6 +37,15 @@ vi.mock('react-i18next', () => ({
         'audits.findings.deep_link_miss.description':
           'Finding {{id}} is unavailable or outside the loaded results.',
         'audits.findings.deep_link_miss.action': 'View all findings',
+        'audits.empty.title': 'No audits found',
+        'audits.empty.subtitle': 'Schedule your first audit to get started',
+        'audits.empty.filter_title': 'No audits match filters',
+        'audits.empty.filter_subtitle': 'Try clearing search or KPI filters, or switch to List view.',
+        'audits.stats.total': 'Total Audits',
+        'status.in_progress': 'In Progress',
+      }
+      if (typeof options === 'string') {
+        return translations[key] ?? options
       }
       const value = translations[key] ?? key
       return options?.id ? value.replace('{{id}}', options.id) : value
@@ -486,6 +495,124 @@ describe('Audits external import flow', () => {
 
     expect(await screen.findByText('Visible Internal Audit')).toBeInTheDocument()
     expect(screen.getByText('Imported Achilles Intake')).toBeInTheDocument()
+  })
+})
+
+describe('Audits board empty-state honesty', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
+    mockListFindings.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+  })
+
+  it('shows global empty copy when there are no audits', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-board-empty')).toBeInTheDocument()
+    expect(screen.getByText('No audits found')).toBeInTheDocument()
+    expect(screen.queryByText('No audits match filters')).not.toBeInTheDocument()
+  })
+
+  it('does not show global empty copy on the board when KPI total is positive', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 1,
+            reference_number: 'AUD-00001',
+            template_id: 21,
+            template_version: 1,
+            title: 'Scheduled safety audit',
+            status: 'scheduled',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByText('Scheduled safety audit')).toBeInTheDocument()
+    const filterToolbar = screen.getByRole('toolbar', { name: 'Audit filters' })
+    expect(within(filterToolbar).getByText('Total Audits')).toBeInTheDocument()
+    expect(within(filterToolbar).getByText('1')).toBeInTheDocument()
+    expect(screen.queryByText('No audits found')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('audits-board-empty')).not.toBeInTheDocument()
+  })
+
+  it('shows filter-empty copy on list when hero filter hides all rows but totals stay positive', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 2,
+            reference_number: 'AUD-00002',
+            template_id: 21,
+            template_version: 1,
+            title: 'Completed audit',
+            status: 'completed',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+    await screen.findByText('Completed audit')
+
+    const filterToolbar = screen.getByRole('toolbar', { name: 'Audit filters' })
+    fireEvent.click(within(filterToolbar).getByRole('button', { name: /In Progress/i }))
+
+    expect(await screen.findByTestId('audits-list-filter-empty')).toBeInTheDocument()
+    expect(screen.getByText('No audits match filters')).toBeInTheDocument()
+    expect(screen.queryByText('No audits found')).not.toBeInTheDocument()
+    expect(within(filterToolbar).getByText('Total Audits')).toBeInTheDocument()
+  })
+
+  it('shows lane-empty copy when audits exist outside board columns', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 3,
+            reference_number: 'AUD-00003',
+            template_id: 21,
+            template_version: 1,
+            title: 'Draft audit',
+            status: 'draft',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-board-lane-empty')).toBeInTheDocument()
+    expect(screen.getByText('No board-visible audits')).toBeInTheDocument()
+    expect(screen.queryByText('No audits found')).not.toBeInTheDocument()
+    expect(screen.getByRole('toolbar', { name: 'Audit filters' })).toHaveTextContent('Total Audits')
   })
 })
 
