@@ -268,7 +268,9 @@ def fetch_pams_technicians() -> list[dict[str, Any]]:
 
 def _load_pams_rows(rows: Sequence[Mapping[str, Any]] | None) -> list[Mapping[str, Any]]:
     try:
-        return list(rows) if rows is not None else fetch_pams_technicians()
+        if rows is not None:
+            return [dict(row) for row in rows]
+        return list(fetch_pams_technicians())
     except (BadRequestError, ExternalServiceError):
         raise
     except Exception as exc:
