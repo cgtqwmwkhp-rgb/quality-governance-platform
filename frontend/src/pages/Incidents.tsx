@@ -42,6 +42,29 @@ type OwnerFilter = 'all' | 'unassigned'
 const ALL_FILTER = 'all'
 const PAGE_SIZE = 50
 
+/** Display helper — never throw on null/undefined API fields (ErrorBoundary killers). */
+function humanizeToken(value: unknown): string {
+  if (value == null || value === '') return '—'
+  return String(value).replace(/_/g, ' ')
+}
+
+function formatIncidentDate(value: unknown): string {
+  if (value == null || value === '') return '—'
+  const d = new Date(String(value))
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
+}
+
+/** Coerce list payloads so a shape mismatch cannot crash `.filter` / `.map`. */
+function normalizeIncidentItems(payload: unknown): Incident[] {
+  if (!payload || typeof payload !== 'object') return []
+  const items = (payload as { items?: unknown }).items
+  if (!Array.isArray(items)) return []
+  return items.filter(
+    (row): row is Incident =>
+      !!row && typeof row === 'object' && typeof (row as Incident).id === 'number',
+  )
+}
+
 function parseListPage(raw: string | null): number {
   const n = parseInt(raw || '1', 10)
   return Number.isFinite(n) && n >= 1 ? n : 1
@@ -159,11 +182,26 @@ export default function Incidents() {
           PAGE_SIZE,
           ownerFilter === 'unassigned' ? { owner: 'unassigned' } : undefined,
         )
-        if (!cancelled) setIncidents(response.data.items ?? [])
+        if (!cancelled) {
+          const rows = normalizeIncidentItems(response.data)
+          setIncidents(rows)
+          if (
+            response.data &&
+            typeof response.data === 'object' &&
+            'items' in response.data &&
+            !Array.isArray((response.data as { items?: unknown }).items)
+          ) {
+            // Static copy — avoid useEffect → t() hook-deps lint; still honest UX.
+            setLoadError(
+              'Incident list returned an unexpected shape. Showing an empty list.',
+            )
+          }
+        }
       } catch (err) {
         if (!cancelled) {
           trackError(err, { component: 'Incidents', action: 'load' })
           setLoadError(getApiErrorMessage(err))
+          setIncidents([])
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -252,8 +290,8 @@ export default function Incidents() {
     }
   }
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
+  const getTypeIcon = (type: unknown) => {
+    switch (String(type ?? '')) {
       case 'injury':
         return '🩹'
       case 'near_miss':
@@ -271,8 +309,8 @@ export default function Incidents() {
     }
   }
 
-  const getSeverityVariant = (severity: string) => {
-    switch (severity) {
+  const getSeverityVariant = (severity: unknown) => {
+    switch (String(severity ?? '')) {
       case 'critical':
         return 'critical'
       case 'high':
@@ -286,8 +324,8 @@ export default function Incidents() {
     }
   }
 
-  const getStatusVariant = (status: string) => {
-    switch (status) {
+  const getStatusVariant = (status: unknown) => {
+    switch (String(status ?? '')) {
       case 'closed':
         return 'resolved'
       case 'reported':
@@ -490,21 +528,21 @@ export default function Incidents() {
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
                           <span>{getTypeIcon(incident.incident_type)}</span>
-                          {incident.incident_type.replace('_', ' ')}
+                          {humanizeToken(incident.incident_type)}
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         <Badge variant={getSeverityVariant(incident.severity) as any}>
-                          {incident.severity}
+                          {humanizeToken(incident.severity)}
                         </Badge>
                       </td>
                       <td className="px-6 py-4">
                         <Badge variant={getStatusVariant(incident.status) as any}>
-                          {incident.status.replace('_', ' ')}
+                          {humanizeToken(incident.status)}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">
-                        {new Date(incident.incident_date).toLocaleDateString()}
+                        {formatIncidentDate(incident.incident_date)}
                       </td>
                       {ownerFilter === 'unassigned' ? (
                         <td

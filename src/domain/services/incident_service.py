@@ -11,7 +11,6 @@ from typing import Optional
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from src.core.pagination import PaginationInput, paginate
 from src.core.update import apply_updates
@@ -174,9 +173,9 @@ class IncidentService:
         skip_tenant_check: bool = False,
     ):
         """List incidents with pagination and optional filters."""
-        query = select(Incident).options(
-            selectinload(Incident.actions),
-        )
+        # Do not selectinload actions here — list response does not include them, and a
+        # poison action row must not take down the entire incidents index.
+        query = select(Incident)
 
         if not skip_tenant_check:
             query = query.where(Incident.tenant_id == tenant_id)

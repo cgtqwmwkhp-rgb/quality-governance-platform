@@ -257,4 +257,68 @@ describe('Incidents', () => {
     expect(screen.queryByText('Chemical spill in lab')).not.toBeInTheDocument()
     expect(mockList).toHaveBeenCalledWith(1, 50, undefined)
   })
+
+  it('renders rows with null type/status/date without crashing (ErrorBoundary honesty)', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 9,
+            reference_number: 'INC-NULL',
+            title: 'Sparse row',
+            description: 'Missing enums',
+            incident_type: null,
+            severity: null,
+            status: null,
+            incident_date: null,
+            reported_date: '2026-02-15T11:00:00Z',
+            created_at: '2026-02-15T11:00:00Z',
+          },
+          null,
+          { id: 'bad' },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 50,
+        total_pages: 1,
+      },
+    })
+
+    // Clean MemoryRouter — BrowserRouter inherits ?q= from earlier list tests.
+    render(
+      <MemoryRouter initialEntries={['/incidents']}>
+        <Routes>
+          <Route path="/incidents" element={<Incidents />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('INC-NULL')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Sparse row')).toBeInTheDocument()
+    // humanizeToken / formatIncidentDate fall back to em dash — at least one cell
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0)
+  })
+
+  it('treats non-array items as empty list with honesty banner', async () => {
+    mockList.mockResolvedValue({
+      data: { items: { unexpected: true }, total: 0, page: 1, page_size: 50 },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/incidents']}>
+        <Routes>
+          <Route path="/incidents" element={<Incidents />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Incident list returned an unexpected shape/i),
+      ).toBeInTheDocument()
+    })
+    expect(screen.getByText('incidents.empty.title')).toBeInTheDocument()
+  })
 })
