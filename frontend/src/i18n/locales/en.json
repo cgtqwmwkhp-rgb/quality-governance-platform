@@ -2901,5 +2901,14 @@
   "workforce.induction.employees_empty_link": "Open employees",
   "workforce.competency.skills_matrix_honesty": "Matrix cells are competency status by asset type — not role_key allocation. Role-scoped requirements live on the employee profile (job_title ≈ role_key).",
   "workforce.engineers.requirements.role_key_honesty": "Mandatory coverage allocates by site and role_key ≈ job_title (case-insensitive contains), matching backend ILIKE-style rules. Requirements that do not match this employee are hidden.",
-  "workforce.engineers.requirements.role_key_label": "role {{role}}"
+  "workforce.engineers.requirements.role_key_label": "role {{role}}",
+  "ims.map_w1.title": "Cross-standard & multi-scheme map",
+  "ims.map_w1.honesty": "Live clause mappings are database-backed. ISO / Planet Mark / UVDB chips show which schemes appear in rows today — AI suggest/accept chips on Audit Builder are a follow-on (propose-only, never silent auto-confirm).",
+  "ims.map_w1.scheme_live": "in map",
+  "ims.map_w1.scheme_awaiting": "no rows yet",
+  "ims.map_w1.builder_followon": "Audit Builder AI multi-scheme accept chips land after this honesty spine (MAP-W2).",
+  "ims.map_w1.empty_title": "No cross-standard mappings",
+  "ims.map_w1.empty_desc": "Create clause mappings between standards in ISO Compliance. Planet Mark / UVDB scheme links appear here when rows exist — not as faux Complete badges.",
+  "ims.map_w1.demo_status": "Not live",
+  "ims.map_w1.demo_source_hint": "static placeholder — not a live feed"
 }

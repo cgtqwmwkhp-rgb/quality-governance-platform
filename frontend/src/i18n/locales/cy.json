@@ -2762,5 +2762,14 @@
   "workforce.induction.employees_empty_link": "Agor gweithwyr",
   "workforce.competency.skills_matrix_honesty": "Celloedd y matrics yw statws cymhwysedd yn ôl math ased — nid dyraniad role_key. Mae gofynion wedi'u cwmpasu gan rôl ar broffil y gweithiwr (job_title ≈ role_key).",
   "workforce.engineers.requirements.role_key_honesty": "Mae cwmpas gorfodol yn dyrannu yn ôl safle a role_key ≈ job_title (cynnwys digyswllt i lythrennau mawr/bach), gan gyd-fynd â rheolau arddull ILIKE y cefn. Mae gofynion nad ydynt yn cyd-fynd â'r gweithiwr hwn wedi'u cuddio.",
-  "workforce.engineers.requirements.role_key_label": "rôl {{role}}"
+  "workforce.engineers.requirements.role_key_label": "rôl {{role}}",
+  "ims.map_w1.title": "Map traws-safon a chynllun aml",
+  "ims.map_w1.honesty": "Mae mapiau cymalau byw wedi'u cefnogi gan y gronfa ddata. Mae sglodion ISO / Planet Mark / UVDB yn dangos pa gynlluniau sy'n ymddangos mewn rhesi heddiw — mae sglodion awgrymu/derbyn AI ar Adeiladydd Archwiliadau yn dilyn (cynnig yn unig, byth cadarnhau awtomatig tawel).",
+  "ims.map_w1.scheme_live": "yn y map",
+  "ims.map_w1.scheme_awaiting": "dim rhesi eto",
+  "ims.map_w1.builder_followon": "Bydd sglodion derbyn AI aml-gynllun Adeiladydd Archwiliadau yn glanio ar ôl yr asgwrn gonest hwn (MAP-W2).",
+  "ims.map_w1.empty_title": "Dim mapiau traws-safon",
+  "ims.map_w1.empty_desc": "Crëwch fapiau cymalau rhwng safonau yn Cydymffurfiaeth ISO. Mae dolenni cynllun Planet Mark / UVDB yn ymddangos yma pan fydd rhesi — nid fel bathodynnau Cwblhawyd ffug.",
+  "ims.map_w1.demo_status": "Ddim yn fyw",
+  "ims.map_w1.demo_source_hint": "dalfan statig — nid porthiant byw"
 }

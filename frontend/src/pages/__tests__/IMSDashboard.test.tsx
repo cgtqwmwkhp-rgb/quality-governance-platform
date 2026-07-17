@@ -217,4 +217,26 @@ describe('IMSDashboard IA W2 compliance hub', () => {
     expect(screen.queryByTestId('ims-metric-evidence-coverage')).not.toBeInTheDocument()
     expect(screen.getByText(/Control implementation — live from management system controls/i)).toBeInTheDocument()
   })
+
+  it('shows MAP-W1 multi-scheme honesty on Cross-Standard Mapping tab', async () => {
+    const { default: IMSDashboard } = await import('../IMSDashboard')
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter initialEntries={['/ims']}>
+        <Routes>
+          <Route path="/ims" element={<IMSDashboard />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('tab', { name: /Cross-Standard Mapping/i }))
+
+    expect(await screen.findByTestId('ims-map-w1-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('ims-map-w1-honesty')).toBeInTheDocument()
+    expect(screen.getByTestId('ims-map-w1-scheme-chips')).toBeInTheDocument()
+    expect(screen.getByTestId('ims-map-w1-scheme-iso')).toBeInTheDocument()
+    expect(screen.getByTestId('ims-map-w1-scheme-planet-mark')).toBeInTheDocument()
+    expect(screen.getByTestId('ims-map-w1-scheme-uvdb')).toBeInTheDocument()
+  })
 })
