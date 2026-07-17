@@ -1345,7 +1345,7 @@ export default function RiskRegister() {
                         type="button"
                         className="min-w-0 flex-1 truncate text-left text-primary hover:underline"
                         data-testid={`risk-slt-top10-row-${risk.id}`}
-                        onClick={() => openRiskDetail(risk, 'view')}
+                        onClick={() => openRiskProfile(risk.id)}
                       >
                         <span className="mr-2 font-mono text-muted-foreground">{index + 1}.</span>
                         <span className="font-mono text-xs text-muted-foreground">{risk.reference}</span>{' '}
@@ -1411,7 +1411,7 @@ export default function RiskRegister() {
                         type="button"
                         className="min-w-0 flex-1 truncate text-left text-primary hover:underline"
                         data-testid={`risk-slt-overdue-row-${risk.id}`}
-                        onClick={() => openRiskDetail(risk, 'view')}
+                        onClick={() => openRiskProfile(risk.id)}
                       >
                         <span className="font-mono text-xs text-muted-foreground">{risk.reference}</span>{' '}
                         {risk.title}
