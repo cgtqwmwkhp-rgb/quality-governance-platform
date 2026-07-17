@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, time, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -168,7 +168,7 @@ class CalendarFeedService:
                     "title": row.name,
                     "type": "audit",
                     "date": _iso_date(when),
-                    "status": _status_for(when, row.status, today=today),
+                    "status": _status_for(when, None, today=today),
                     "priority": "medium",
                     "owner": None,
                     "source_module": "scheduled_audit",
@@ -195,9 +195,9 @@ class CalendarFeedService:
         rows = list(result.scalars().all())
         out: list[dict[str, Any]] = []
         for row in rows:
-            when = row.due_date
-            if when is None:
+            if row.due_date is None:
                 continue
+            when = cast(datetime, row.due_date)
             status_val = row.status.value if hasattr(row.status, "value") else str(row.status)
             out.append(
                 {
