@@ -230,9 +230,7 @@ def sync_pams_technicians(
     users_by_email = {user.email.strip().lower(): user for user in users if user.email}
 
     existing_engineers = db.query(Engineer).filter(Engineer.tenant_id == resolved_tenant_id).all()
-    by_pams_id = {
-        eng.pams_technician_id: eng for eng in existing_engineers if eng.pams_technician_id is not None
-    }
+    by_pams_id = {eng.pams_technician_id: eng for eng in existing_engineers if eng.pams_technician_id is not None}
     by_external_id = {eng.external_id: eng for eng in existing_engineers}
     user_ids_taken = {eng.user_id for eng in existing_engineers if eng.user_id is not None}
     seen_pams_ids: set[int] = set()

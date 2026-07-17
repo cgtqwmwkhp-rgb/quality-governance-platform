@@ -45,9 +45,7 @@ def test_map_pams_technician_row_uses_display_name_and_role():
 
 
 def test_map_pams_technician_row_falls_back_to_first_last_name():
-    mapped = map_pams_technician_row(
-        {"id": 7, "firstname": "Sam", "surname": "Taylor", "active_technician": 0}
-    )
+    mapped = map_pams_technician_row({"id": 7, "firstname": "Sam", "surname": "Taylor", "active_technician": 0})
     assert mapped is not None
     assert mapped.display_name == "Sam Taylor"
     assert mapped.is_active is False

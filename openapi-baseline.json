@@ -10538,6 +10538,19 @@
       "ComplaintCreate": {
         "description": "Schema for creating a complaint.\n\nOptional external_ref field enables idempotent imports:\n- If external_ref is provided and already exists, API returns 409 Conflict\n- If external_ref is None, complaint is created without idempotency check",
         "properties": {
+          "alleged_event_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the alleged event occurred (may differ from received_date)",
+            "title": "Alleged Event At"
+          },
           "complainant_company": {
             "anyOf": [
               {
@@ -10584,6 +10597,19 @@
             "$ref": "#/components/schemas/ComplaintType",
             "default": "other"
           },
+          "contract_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Customer/contract FK",
+            "title": "Contract Id"
+          },
           "description": {
             "minLength": 1,
             "title": "Description",
@@ -10622,6 +10648,45 @@
               }
             ],
             "title": "Related Reference"
+          },
+          "source_type": {
+            "default": "manual",
+            "enum": [
+              "manual",
+              "email",
+              "api",
+              "phone",
+              "portal",
+              "in_person"
+            ],
+            "title": "Source Type",
+            "type": "string"
+          },
+          "subject_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Free-text subject name",
+            "title": "Subject Name"
+          },
+          "subject_user_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Staff user the complaint is about",
+            "title": "Subject User Id"
           },
           "title": {
             "maxLength": 300,
@@ -10691,6 +10756,18 @@
       "ComplaintResponse": {
         "description": "Response schema for complaints.\n\nDoes NOT inherit from ComplaintBase to prevent input validators\n(min_length, max_length, field_validator) from running on DB output\nand causing 500 errors.",
         "properties": {
+          "alleged_event_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alleged Event At"
+          },
           "closed_at": {
             "anyOf": [
               {
@@ -10753,6 +10830,17 @@
           },
           "complaint_type": {
             "$ref": "#/components/schemas/ComplaintType"
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id"
           },
           "created_at": {
             "format": "date-time",
@@ -10879,8 +10967,35 @@
             ],
             "title": "Root Cause"
           },
+          "source_type": {
+            "default": "manual",
+            "title": "Source Type",
+            "type": "string"
+          },
           "status": {
             "$ref": "#/components/schemas/ComplaintStatus"
+          },
+          "subject_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Name"
+          },
+          "subject_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject User Id"
           },
           "target_resolution_date": {
             "anyOf": [
@@ -10983,6 +11098,67 @@
       "ComplaintUpdate": {
         "description": "Schema for updating a complaint.",
         "properties": {
+          "alleged_event_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alleged Event At"
+          },
+          "complainant_company": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complainant Company"
+          },
+          "complainant_email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complainant Email"
+          },
+          "complainant_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complainant Name"
+          },
+          "complainant_phone": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complainant Phone"
+          },
           "complaint_type": {
             "anyOf": [
               {
@@ -10992,6 +11168,18 @@
                 "type": "null"
               }
             ]
+          },
+          "contract_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Id"
           },
           "customer_satisfied": {
             "anyOf": [
@@ -11049,6 +11237,30 @@
               }
             ]
           },
+          "received_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received Date"
+          },
+          "related_reference": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Reference"
+          },
           "resolution_summary": {
             "anyOf": [
               {
@@ -11071,6 +11283,25 @@
             ],
             "title": "Root Cause"
           },
+          "source_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "manual",
+                  "email",
+                  "api",
+                  "phone",
+                  "portal",
+                  "in_person"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
           "status": {
             "anyOf": [
               {
@@ -11080,6 +11311,30 @@
                 "type": "null"
               }
             ]
+          },
+          "subject_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Name"
+          },
+          "subject_user_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject User Id"
           },
           "title": {
             "anyOf": [
@@ -14481,6 +14736,18 @@
             ],
             "title": "Department"
           },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
           "employee_number": {
             "anyOf": [
               {
@@ -14542,13 +14809,17 @@
             "title": "Start Date"
           },
           "user_id": {
-            "title": "User Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
           }
         },
-        "required": [
-          "user_id"
-        ],
         "title": "EngineerCreate",
         "type": "object"
       },
@@ -14804,6 +15075,17 @@
             ],
             "title": "Department"
           },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
           "employee_number": {
             "anyOf": [
               {
@@ -14848,6 +15130,17 @@
               }
             ],
             "title": "Notes"
+          },
+          "pams_technician_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pams Technician Id"
           },
           "site": {
             "anyOf": [
@@ -14901,14 +15194,20 @@
             "type": "string"
           },
           "user_id": {
-            "title": "User Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
           }
         },
         "required": [
           "id",
           "external_id",
-          "user_id",
           "is_active",
           "created_at",
           "updated_at"
@@ -25676,6 +25975,40 @@
           "obsolete_reason"
         ],
         "title": "ObsoleteRequest",
+        "type": "object"
+      },
+      "PamsTechnicianSyncResponse": {
+        "description": "Result counts from PAMS technicians_store sync.",
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "deactivated": {
+            "title": "Deactivated",
+            "type": "integer"
+          },
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created",
+          "updated",
+          "deactivated",
+          "skipped",
+          "errors"
+        ],
+        "title": "PamsTechnicianSyncResponse",
         "type": "object"
       },
       "PartnerApiTokenCreate": {
@@ -45395,7 +45728,7 @@
     },
     "/api/v1/analytics/kpis": {
       "get": {
-        "description": "Get summary KPIs across all modules.",
+        "description": "Get summary KPIs across all modules from live executive dashboard aggregates.",
         "operationId": "get_kpi_summary_api_v1_analytics_kpis_get",
         "parameters": [
           {
@@ -51835,6 +52168,99 @@
         ]
       }
     },
+    "/api/v1/calendar/feed": {
+      "get": {
+        "description": "Aggregate governance deadlines and schedules for the Insights calendar.",
+        "operationId": "get_calendar_feed_api_v1_calendar_feed_get",
+        "parameters": [
+          {
+            "description": "Inclusive start date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive start date (YYYY-MM-DD)",
+              "title": "Start"
+            }
+          },
+          {
+            "description": "Inclusive end date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Inclusive end date (YYYY-MM-DD)",
+              "title": "End"
+            }
+          },
+          {
+            "description": "Comma-separated types: audit,deadline,review,training,meeting",
+            "in": "query",
+            "name": "types",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated types: audit,deadline,review,training,meeting",
+              "title": "Types"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Calendar Feed",
+        "tags": [
+          "Governance Calendar"
+        ]
+      }
+    },
     "/api/v1/capa": {
       "get": {
         "operationId": "list_capa_actions_api_v1_capa_get",
@@ -53617,6 +54043,59 @@
           }
         ],
         "summary": "Prepare Riddor Submission",
+        "tags": [
+          "Compliance Automation"
+        ]
+      }
+    },
+    "/api/v1/compliance-automation/riddor/submissions": {
+      "get": {
+        "description": "List RIDDOR submission register (honest empty until incident pack persistence ships).",
+        "operationId": "list_riddor_submissions_api_v1_compliance_automation_riddor_submissions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status_filter",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status Filter"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Riddor Submissions",
         "tags": [
           "Compliance Automation"
         ]
@@ -56418,6 +56897,56 @@
         ]
       }
     },
+    "/api/v1/document-control/{document_id}/golden-thread": {
+      "get": {
+        "description": "Read the controlled-document \u2192 GKB evidence chain without inventing a FK.\n\n``controlled_documents`` has no library-document FK. This endpoint exposes\none unambiguous same-tenant candidate only, and labels it as unverified so\nstaff can inspect its real GKB evidence links without treating a title or\nreference-number match as a governed relationship.",
+        "operationId": "get_document_golden_thread_api_v1_document_control__document_id__golden_thread_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "title": "Document Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Document Golden Thread Api V1 Document Control  Document Id  Golden Thread Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Document Golden Thread",
+        "tags": [
+          "Document Control System"
+        ]
+      }
+    },
     "/api/v1/document-control/{document_id}/obsolete": {
       "post": {
         "description": "Mark document as obsolete",
@@ -58017,6 +58546,63 @@
           }
         ],
         "summary": "Get Engineer By User Me",
+        "tags": [
+          "Engineers"
+        ]
+      }
+    },
+    "/api/v1/engineers/sync-from-pams": {
+      "post": {
+        "description": "Sync active PAMS technicians_store rows into engineer profiles (manager only).",
+        "operationId": "sync_engineers_from_pams_api_v1_engineers_sync_from_pams_post",
+        "parameters": [
+          {
+            "description": "Override tenant; defaults to DEFAULT_TENANT_ID",
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Override tenant; defaults to DEFAULT_TENANT_ID",
+              "title": "Tenant Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PamsTechnicianSyncResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sync Engineers From Pams",
         "tags": [
           "Engineers"
         ]
@@ -73159,6 +73745,78 @@
             }
           },
           {
+            "in": "query",
+            "name": "residual_likelihood",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Residual Likelihood"
+            }
+          },
+          {
+            "in": "query",
+            "name": "residual_impact",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Residual Impact"
+            }
+          },
+          {
+            "in": "query",
+            "name": "inherent_likelihood",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Inherent Likelihood"
+            }
+          },
+          {
+            "in": "query",
+            "name": "inherent_impact",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Inherent Impact"
+            }
+          },
+          {
             "description": "pending=triage queue only; all=no triage filter; default=hide pending suggestions",
             "in": "query",
             "name": "suggestion_triage",
@@ -73193,7 +73851,7 @@
             "required": false,
             "schema": {
               "default": 50,
-              "maximum": 100,
+              "maximum": 200,
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
@@ -73442,7 +74100,7 @@
     },
     "/api/v1/risk-register/heatmap": {
       "get": {
-        "description": "Get risk heat map data",
+        "description": "Get interactive risk heat map data (residual / inherent / delta).",
         "operationId": "get_risk_heat_map_api_v1_risk_register_heatmap_get",
         "parameters": [
           {
@@ -73475,6 +74133,37 @@
                 }
               ],
               "title": "Department"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "score_type",
+            "required": false,
+            "schema": {
+              "default": "residual",
+              "enum": [
+                "residual",
+                "inherent",
+                "delta"
+              ],
+              "title": "Score Type",
+              "type": "string"
             }
           }
         ],
@@ -73732,8 +74421,58 @@
     },
     "/api/v1/risk-register/summary": {
       "get": {
-        "description": "Get overall risk register summary",
+        "description": "Get overall risk register summary (canonical bands aligned with RiskScoringEngine).",
         "operationId": "get_risk_summary_api_v1_risk_register_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "in": "query",
+            "name": "department",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Department"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -73746,6 +74485,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -73761,7 +74510,7 @@
     },
     "/api/v1/risk-register/trends": {
       "get": {
-        "description": "Get risk score trends over time",
+        "description": "Get risk score trends over time.\n\nDefault: list of monthly points (backward compatible).\ninclude_movers=true: {series, top_movers} for executive sparklines.",
         "operationId": "get_risk_trends_api_v1_risk_register_trends_get",
         "parameters": [
           {
@@ -73791,6 +74540,16 @@
               "title": "Days",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "include_movers",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Movers",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -73798,9 +74557,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {},
-                  "title": "Response Get Risk Trends Api V1 Risk Register Trends Get",
-                  "type": "array"
+                  "title": "Response Get Risk Trends Api V1 Risk Register Trends Get"
                 }
               }
             },
