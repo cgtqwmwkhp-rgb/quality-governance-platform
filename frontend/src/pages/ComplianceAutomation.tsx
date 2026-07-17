@@ -95,6 +95,10 @@ const statusColors: Record<string, string> = {
   overdue: 'bg-destructive/10 text-destructive',
 }
 
+/** Official HSE RIDDOR online reporting portal + guidance. */
+const HSE_RIDDOR_PORTAL_URL = 'https://notifications.hse.gov.uk/RiddorForms/'
+const HSE_RIDDOR_GUIDE_URL = 'https://www.hse.gov.uk/riddor/reporting/how-to-make-riddor-report.htm'
+
 export default function ComplianceAutomation() {
   const [activeTab, setActiveTab] = useState<
     'regulatory' | 'certificates' | 'audits' | 'scoring' | 'riddor' | 'watch'
@@ -112,6 +116,10 @@ export default function ComplianceAutomation() {
   const [watchImpacts, setWatchImpacts] = useState<RegulatoryImpact[]>([])
   const [runningWatch, setRunningWatch] = useState(false)
   const [actionBusyId, setActionBusyId] = useState<number | null>(null)
+  const [riddorSubmissions, setRiddorSubmissions] = useState<unknown[]>([])
+  const [riddorLoading, setRiddorLoading] = useState(false)
+  const [riddorError, setRiddorError] = useState<string | null>(null)
+  const [watchError, setWatchError] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -177,11 +185,28 @@ export default function ComplianceAutomation() {
 
   const loadWatchImpacts = async () => {
     try {
+      setWatchError(null)
       const response = await knowledgeBankApi.listImpacts()
       setWatchImpacts(response.data)
     } catch (err) {
-      toast.error(getApiErrorMessage(err))
+      const message = getApiErrorMessage(err)
+      setWatchError(message)
+      toast.error(message)
       setWatchImpacts([])
+    }
+  }
+
+  const loadRiddorSubmissions = async () => {
+    setRiddorLoading(true)
+    setRiddorError(null)
+    try {
+      const response = await complianceAutomationApi.listRiddorSubmissions()
+      setRiddorSubmissions(response.data.submissions ?? [])
+    } catch (err) {
+      setRiddorError(getApiErrorMessage(err))
+      setRiddorSubmissions([])
+    } finally {
+      setRiddorLoading(false)
     }
   }
 
@@ -232,6 +257,9 @@ export default function ComplianceAutomation() {
   useEffect(() => {
     if (activeTab === 'watch') {
       void loadWatchImpacts()
+    }
+    if (activeTab === 'riddor') {
+      void loadRiddorSubmissions()
     }
   }, [activeTab])
 
@@ -624,36 +652,73 @@ export default function ComplianceAutomation() {
                 <FileText className="w-6 h-6 text-destructive" />
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-foreground mb-2">RIDDOR Automation</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-2">RIDDOR reporting</h3>
                 <p className="text-muted-foreground mb-4">
-                  Automatically detect reportable incidents and prepare RIDDOR submissions to the
-                  Health & Safety Executive.
+                  Open the official HSE RIDDOR portal to submit reportable incidents. QGP flags
+                  candidates from Incidents; statutory filing is completed on HSE.gov.uk.
                 </p>
-                <div className="flex items-center gap-4">
-                  <button className="flex items-center gap-2 px-4 py-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-lg transition-colors">
+                <div className="flex flex-wrap items-center gap-3">
+                  <a
+                    href={HSE_RIDDOR_PORTAL_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-lg transition-colors"
+                    data-testid="riddor-hse-portal-link"
+                  >
                     <ExternalLink className="w-4 h-4" />
                     HSE RIDDOR Portal
-                  </button>
-                  <button className="flex items-center gap-2 px-4 py-2 bg-muted hover:bg-accent text-foreground rounded-lg transition-colors">
+                  </a>
+                  <a
+                    href={HSE_RIDDOR_GUIDE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-muted hover:bg-accent text-foreground rounded-lg transition-colors"
+                    data-testid="riddor-hse-guide-link"
+                  >
                     <BookOpen className="w-4 h-4" />
-                    View Guide
-                  </button>
+                    HSE reporting guide
+                  </a>
+                  <Button variant="outline" asChild>
+                    <Link to="/incidents">Open Incidents</Link>
+                  </Button>
                 </div>
               </div>
             </div>
           </div>
 
           <div className="bg-card/50 border border-border rounded-xl overflow-hidden">
-            <div className="p-4 border-b border-border">
-              <h3 className="font-medium text-foreground">Pending RIDDOR Submissions</h3>
+            <div className="p-4 border-b border-border flex items-center justify-between gap-3">
+              <h3 className="font-medium text-foreground">RIDDOR register</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void loadRiddorSubmissions()}
+                disabled={riddorLoading}
+              >
+                <RefreshCw className={cn('w-4 h-4 mr-2', riddorLoading && 'animate-spin')} />
+                Refresh
+              </Button>
             </div>
-            <div className="p-8 text-center">
-              <CheckCircle className="w-12 h-12 text-success mx-auto mb-4" />
-              <p className="text-foreground font-medium">No pending RIDDOR submissions</p>
-              <p className="text-muted-foreground text-sm mt-1">
-                All reportable incidents have been submitted
-              </p>
-            </div>
+            {riddorError ? (
+              <div className="p-6 text-sm text-destructive" role="alert">
+                {riddorError}
+              </div>
+            ) : riddorLoading ? (
+              <div className="p-8 text-center text-muted-foreground text-sm">Loading register…</div>
+            ) : riddorSubmissions.length === 0 ? (
+              <div className="p-8 text-center">
+                <CheckCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-foreground font-medium">No RIDDOR packs in QGP yet</p>
+                <p className="text-muted-foreground text-sm mt-1 max-w-md mx-auto">
+                  When an incident is reportable, prepare the pack here and complete filing on the
+                  HSE portal. Empty means none queued — not that HSE was already notified.
+                </p>
+              </div>
+            ) : (
+              <div className="p-4 text-sm text-muted-foreground">
+                {riddorSubmissions.length} submission(s) recorded.
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -665,26 +730,46 @@ export default function ComplianceAutomation() {
             <div>
               <h3 className="font-medium text-foreground">Regulatory Watch</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                Poll regulatory updates, create Actions with owner and due date, and resolve closed-loop
+                Poll curated UK feeds, match impacts to your knowledge base, create Actions with
+                owner and due date, then resolve closed-loop.
               </p>
             </div>
-            <Button onClick={() => void handleRunWatch()} disabled={runningWatch}>
-              {runningWatch ? (
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Play className="w-4 h-4 mr-2" />
-              )}
-              Run watch
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => void loadWatchImpacts()} disabled={runningWatch}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh
+              </Button>
+              <Button onClick={() => void handleRunWatch()} disabled={runningWatch}>
+                {runningWatch ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Play className="w-4 h-4 mr-2" />
+                )}
+                Run watch
+              </Button>
+            </div>
           </div>
+
+          {watchError ? (
+            <div
+              className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              role="alert"
+            >
+              {watchError}
+            </div>
+          ) : null}
 
           <div className="bg-card/50 border border-border rounded-xl overflow-hidden">
             <div className="p-4 border-b border-border">
               <h3 className="font-medium text-foreground">Impacts ({watchImpacts.length})</h3>
             </div>
             {watchImpacts.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground text-sm">
-                No regulatory impacts recorded yet. Run watch to start a poll cycle.
+              <div className="p-8 text-center text-muted-foreground text-sm space-y-2">
+                <p>No open impacts yet.</p>
+                <p>
+                  Click <strong>Run watch</strong> to poll feeds and create matched impacts. Create
+                  Action turns an impact into a real CAPA with owner and due date.
+                </p>
               </div>
             ) : (
               <div className="divide-y divide-border">
