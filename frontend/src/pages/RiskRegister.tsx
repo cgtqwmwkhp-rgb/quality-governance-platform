@@ -619,7 +619,7 @@ export default function RiskRegister() {
     } finally {
       setLoading(false)
     }
-  }, [registerMode, focusRiskId, workspaceFilters, cellFilter, scoreType])
+  }, [registerMode, workspaceFilters, cellFilter, scoreType])
 
   useEffect(() => {
     void loadRisks()
