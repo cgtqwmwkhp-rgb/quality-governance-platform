@@ -172,23 +172,33 @@ export default function RiskProfile() {
     setError(null)
     setNotFound(false)
     try {
-      const [profileRes, trendsRes, notesRes, activityRes, actionsRes, upstreamRes] =
-        await Promise.all([
-          riskRegisterApi.getProfile(id),
-          riskRegisterApi.getTrends(365, false, id),
-          riskRegisterApi.listNotes(id, { page_size: 50 }),
-          riskRegisterApi.listActivity(id, { page_size: 50 }),
-          riskRegisterApi.listActions(id, { page_size: 50 }),
-          riskRegisterApi.listUpstream(id),
-        ])
+      // Profile is SSOT for existence. Secondary panels must not 404 the whole page
+      // (Promise.all previously treated notes/actions/upstream 404 as "Risk not found").
+      let profileRes
+      try {
+        profileRes = await riskRegisterApi.getProfile(id)
+      } catch (err: unknown) {
+        trackError(err, { component: 'RiskProfile', action: 'loadProfile', extra: { riskId } })
+        const status = (err as { response?: { status?: number } })?.response?.status
+        if (status === 404) {
+          setNotFound(true)
+          setProfile(null)
+          setError(null)
+        } else {
+          setError(getApiErrorMessage(err, t('risk_register.profile.error')))
+          setProfile(null)
+        }
+        setTrendSeries([])
+        setNotes([])
+        setActivity([])
+        setActions([])
+        setUpstream([])
+        return
+      }
+
       const nextProfile = profileRes.data
       setProfile(nextProfile)
       setOwnerSearch(nextProfile.risk_owner_name || '')
-      setTrendSeries(normalizeTrendSeries(trendsRes.data))
-      setNotes(notesRes.data.items ?? [])
-      setActivity(activityRes.data.items ?? [])
-      setActions(actionsRes.data.items ?? [])
-      setUpstream(upstreamRes.data.items ?? [])
       setAssessForm({
         inherent_likelihood: nextProfile.inherent_likelihood ?? 3,
         inherent_impact: nextProfile.inherent_impact ?? 3,
@@ -197,27 +207,50 @@ export default function RiskProfile() {
         assessment_notes: '',
         review_notes: nextProfile.review_notes ?? '',
       })
+
+      const settled = await Promise.allSettled([
+        riskRegisterApi.getTrends(365, false, id),
+        riskRegisterApi.listNotes(id, { page_size: 50 }),
+        riskRegisterApi.listActivity(id, { page_size: 50 }),
+        riskRegisterApi.listActions(id, { page_size: 50 }),
+        riskRegisterApi.listUpstream(id),
+      ])
+      const [trendsRes, notesRes, activityRes, actionsRes, upstreamRes] = settled
+
+      setTrendSeries(
+        trendsRes.status === 'fulfilled' ? normalizeTrendSeries(trendsRes.value.data) : [],
+      )
+      setNotes(
+        notesRes.status === 'fulfilled' ? (notesRes.value.data.items ?? []) : [],
+      )
+      setActivity(
+        activityRes.status === 'fulfilled' ? (activityRes.value.data.items ?? []) : [],
+      )
+      setActions(
+        actionsRes.status === 'fulfilled' ? (actionsRes.value.data.items ?? []) : [],
+      )
+      setUpstream(
+        upstreamRes.status === 'fulfilled' ? (upstreamRes.value.data.items ?? []) : [],
+      )
+
+      for (const part of settled) {
+        if (part.status === 'rejected') {
+          trackError(part.reason, {
+            component: 'RiskProfile',
+            action: 'loadSecondary',
+            extra: { riskId },
+          })
+        }
+      }
     } catch (err: unknown) {
       trackError(err, { component: 'RiskProfile', action: 'load', extra: { riskId } })
-      const status = (err as { response?: { status?: number } })?.response?.status
-      if (status === 404) {
-        setNotFound(true)
-        setProfile(null)
-        setError(null)
-        setTrendSeries([])
-        setNotes([])
-        setActivity([])
-        setActions([])
-        setUpstream([])
-      } else {
-        setError(getApiErrorMessage(err, t('risk_register.profile.error')))
-        setProfile(null)
-        setTrendSeries([])
-        setNotes([])
-        setActivity([])
-        setActions([])
-        setUpstream([])
-      }
+      setError(getApiErrorMessage(err, t('risk_register.profile.error')))
+      setProfile(null)
+      setTrendSeries([])
+      setNotes([])
+      setActivity([])
+      setActions([])
+      setUpstream([])
     } finally {
       setLoading(false)
     }
