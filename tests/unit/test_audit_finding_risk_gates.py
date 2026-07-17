@@ -119,6 +119,7 @@ async def test_nonconformity_still_auto_creates_when_severity_eligible(monkeypat
 
     existing = SimpleNamespace(
         id=99,
+        title="Audit escalation: AUD-1 / AF-11",
         linked_audits=[],
         linked_actions=[],
     )
@@ -139,6 +140,7 @@ async def test_nonconformity_still_auto_creates_when_severity_eligible(monkeypat
         actor_user_id=1,
     )
     assert risk is existing
+    assert risk.title.startswith("Failed")
     assert finding.risk_ids_json == [99]
 
 
@@ -164,7 +166,7 @@ async def test_force_flag_allows_positive_finding_risk(monkeypatch: pytest.Monke
         corrective_action_required=False,
     )
 
-    existing = SimpleNamespace(id=77, linked_audits=[], linked_actions=[])
+    existing = SimpleNamespace(id=77, title="Audit escalation: AUD-1 / AF-12", linked_audits=[], linked_actions=[])
 
     class _Result:
         def scalars(self):

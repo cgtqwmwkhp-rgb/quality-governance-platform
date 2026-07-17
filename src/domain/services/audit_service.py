@@ -38,6 +38,10 @@ from src.domain.models.audit_log import AuditEvent
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.user import User
+from src.domain.services.audit_escalation_risk_title import (
+    build_audit_escalation_risk_title,
+    upgrade_generic_escalation_title,
+)
 from src.domain.services.audit_log_service import AuditLogService
 from src.domain.services.audit_risk_gate import AUDIT_RISK_SEVERITIES, should_create_risk
 from src.domain.services.audit_scoring_service import AuditScoringService
@@ -1387,7 +1391,11 @@ class AuditService:
         if not force_flag and not self._should_create_risk(finding):
             return None
 
-        title = (suggested_title or f"Audit escalation: {run.reference_number} / {finding.reference_number}")[:255]
+        title = build_audit_escalation_risk_title(
+            finding=finding,
+            run_reference_number=run.reference_number,
+            suggested_title=suggested_title,
+        )
         source_result = await self.db.execute(
             select(EnterpriseRisk).where(
                 EnterpriseRisk.tenant_id == run.tenant_id,
@@ -1411,6 +1419,14 @@ class AuditService:
                 linked_actions = set(existing.linked_actions or [])
                 linked_actions.add(action.reference_number)
                 existing.linked_actions = sorted(linked_actions)
+            upgraded_title = upgrade_generic_escalation_title(
+                existing.title,
+                finding=finding,
+                run_reference_number=run.reference_number,
+                suggested_title=suggested_title,
+            )
+            if upgraded_title is not None:
+                existing.title = upgraded_title
             await self._link_risk_to_finding(finding, existing)
             return existing
 
