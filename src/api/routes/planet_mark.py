@@ -1523,18 +1523,31 @@ async def upload_evidence(
             "duplicate": True,
         }
 
-    # Store file
-    storage_key: Optional[str] = None
-    stored_path: Optional[str] = None
-    try:
-        from src.infrastructure.storage import storage_service as _storage_service_fn
+    # Persistence honesty: never commit a CarbonEvidence row without a real
+    # blob (storage_key). Soft-swallowing upload failures previously created
+    # phantom rows that appeared as "uploaded" but had no downloadable file.
+    from src.infrastructure.storage import storage_service as _storage_service_fn
 
-        storage = _storage_service_fn()
-        safe_name = os.path.basename(file.filename or document_name or "upload")
-        storage_key = f"planet-mark/tenant-{current_user.tenant_id}/year-{year_id}/{file_hash[:8]}-{safe_name}"
+    storage = _storage_service_fn()
+    safe_name = os.path.basename(file.filename or document_name or "upload")
+    storage_key = f"planet-mark/tenant-{current_user.tenant_id}/year-{year_id}/{file_hash[:8]}-{safe_name}"
+    try:
         stored_path = await storage.upload(storage_key, contents, file.content_type)
     except Exception as exc:
-        logger.warning("Storage upload failed, continuing without blob URL: %s", exc)
+        logger.error(
+            "Evidence storage upload failed year_id=%s doc_type=%s tenant=%s: %s",
+            year_id,
+            document_type,
+            current_user.tenant_id,
+            exc,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "File storage is unavailable — the document was not saved. "
+                "Nothing was recorded; please try uploading again shortly."
+            ),
+        ) from exc
 
     doc = CarbonEvidence(
         tenant_id=current_user.tenant_id,
@@ -1679,6 +1692,305 @@ async def get_evidence_download_url(
         "url": url,
         "expires_in_seconds": 3600,
     }
+
+
+# ============ PDF OCR → year readings (path11/pm-ocr-year-readings) ============
+
+
+async def _year_has_ms_xlsx_ingest(db: AsyncSession, year_id: int, tenant_id: int) -> bool:
+    """True when MS XLSX aggregate sources already exist for this year (SSOT)."""
+    result = await db.execute(
+        select(EmissionSource.id)
+        .where(
+            EmissionSource.reporting_year_id == year_id,
+            EmissionSource.tenant_id == tenant_id,
+            EmissionSource.is_imported_aggregate == True,  # noqa: E712
+            EmissionSource.activity_type == "ms_xlsx_aggregate",
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
+def _ocr_extraction_from_preview(preview: dict[str, Any], *, filename: str, document_kind: str):
+    from src.domain.services.planet_mark_pdf_ocr_service import ExtractedField, PlanetMarkOcrExtraction
+
+    def _field(key: str) -> ExtractedField:
+        raw = preview.get(key) or {}
+        if not isinstance(raw, dict):
+            return ExtractedField()
+        return ExtractedField(
+            value=raw.get("value"),
+            confidence=str(raw.get("confidence") or "none"),
+            raw_snippet=raw.get("raw_snippet"),
+        )
+
+    return PlanetMarkOcrExtraction(
+        source_filename=str(preview.get("source_filename") or filename),
+        document_kind=str(preview.get("document_kind") or document_kind),
+        extraction_method=str(preview.get("extraction_method") or "preview"),
+        total_co2e_tonnes=_field("total_co2e_tonnes"),
+        co2e_per_fte=_field("co2e_per_fte"),
+        average_fte=_field("average_fte"),
+        certificate_number=_field("certificate_number"),
+        reporting_period_label=_field("reporting_period_label"),
+        certification_status_cue=_field("certification_status_cue"),
+        warnings=list(preview.get("warnings") or []),
+        text_excerpt=str(preview.get("text_excerpt") or ""),
+    )
+
+
+@router.post(
+    "/years/{year_id}/ocr/extract",
+    summary="Scan Measurement Report / Certificate PDF and preview year readings",
+)
+async def extract_year_ocr_readings(
+    year_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+    request: Request,
+    evidence_id: Optional[int] = Query(None, description="Scan an already-uploaded evidence PDF"),
+) -> dict[str, Any]:
+    """Extract candidate year readings from a Measurement Report or Certificate.
+
+    Prefer multipart ``file`` upload, or pass ``evidence_id`` of a stored PDF
+    with a real ``storage_key``. Returns a preview only — nothing is written
+    until ``POST .../ocr/apply``.
+    """
+    from src.api.schemas.planet_mark import PlanetMarkOcrExtractResponse
+    from src.domain.services.planet_mark_pdf_ocr_service import (
+        DOCUMENT_KIND_CERTIFICATE,
+        DOCUMENT_KIND_MEASUREMENT_REPORT,
+        VALID_DOCUMENT_KINDS,
+        PlanetMarkPdfOcrService,
+    )
+
+    year = (
+        await db.execute(
+            select(CarbonReportingYear).where(
+                CarbonReportingYear.id == year_id,
+                CarbonReportingYear.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not year:
+        raise HTTPException(status_code=404, detail="Reporting year not found")
+
+    contents: Optional[bytes] = None
+    filename = "upload.pdf"
+    content_type = "application/pdf"
+    resolved_evidence_id: Optional[int] = evidence_id
+    document_kind = DOCUMENT_KIND_MEASUREMENT_REPORT
+
+    content_type_header = (request.headers.get("content-type") or "").lower()
+    form: Any = {}
+    if "multipart/form-data" in content_type_header:
+        form = await request.form()
+        document_kind = str(form.get("document_kind") or document_kind)
+
+    if document_kind not in VALID_DOCUMENT_KINDS:
+        document_kind = DOCUMENT_KIND_MEASUREMENT_REPORT
+
+    file_raw = form.get("file") if form else None
+    if file_raw is not None and hasattr(file_raw, "read"):
+        contents = await file_raw.read()
+        filename = getattr(file_raw, "filename", None) or filename
+        content_type = getattr(file_raw, "content_type", None) or content_type
+    elif evidence_id is not None:
+        doc = (
+            await db.execute(
+                select(CarbonEvidence).where(
+                    CarbonEvidence.id == evidence_id,
+                    CarbonEvidence.reporting_year_id == year_id,
+                    CarbonEvidence.tenant_id == current_user.tenant_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if not doc:
+            raise HTTPException(status_code=404, detail="Evidence document not found")
+        if not doc.storage_key:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "This evidence row has no stored file (missing storage_key). "
+                    "Re-upload the PDF — phantom rows without blob storage are not scannable."
+                ),
+            )
+        if doc.document_type in VALID_DOCUMENT_KINDS:
+            document_kind = doc.document_type
+        elif doc.document_type == "planet_mark_certificate":
+            document_kind = DOCUMENT_KIND_CERTIFICATE
+        try:
+            from src.infrastructure.storage import storage_service as _storage_service_fn
+
+            contents = await _storage_service_fn().download(doc.storage_key)
+        except Exception as exc:
+            logger.error("OCR evidence download failed evidence_id=%s: %s", evidence_id, exc)
+            raise HTTPException(status_code=503, detail="Could not download stored evidence for OCR") from exc
+        filename = doc.document_name or filename
+        content_type = doc.mime_type or content_type
+        resolved_evidence_id = doc.id
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail="Provide a multipart PDF (field 'file') or an evidence_id query parameter",
+        )
+
+    if not contents:
+        raise HTTPException(status_code=422, detail="Uploaded file is empty")
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise HTTPException(status_code=403, detail="Tenant context required")
+
+    from src.infrastructure.external.azure_document_intelligence import AzureDocumentIntelligenceClient
+
+    service = PlanetMarkPdfOcrService(azure_client=AzureDocumentIntelligenceClient())
+    extraction = await service.extract(
+        content=contents,
+        filename=filename,
+        content_type=content_type,
+        document_kind=document_kind,
+    )
+
+    xlsx_ingested = await _year_has_ms_xlsx_ingest(db, year_id, tenant_id)
+    period_mismatch: Optional[str] = None
+    period_value = extraction.reporting_period_label.value
+    if period_value and period_value.upper().startswith("YE") and period_value.upper() != year.year_label.upper():
+        period_mismatch = f"Extracted period {period_value} does not match selected reporting year {year.year_label}."
+
+    payload = {
+        **extraction.to_dict(),
+        "year_label": year.year_label,
+        "xlsx_ingested": xlsx_ingested,
+        "period_mismatch_warning": period_mismatch,
+        "evidence_id": resolved_evidence_id,
+    }
+    return PlanetMarkOcrExtractResponse.model_validate(payload).model_dump()
+
+
+@router.post(
+    "/years/{year_id}/ocr/apply",
+    summary="Apply OCR-extracted year readings (preview → confirm)",
+)
+async def apply_year_ocr_readings(
+    year_id: int,
+    body: dict[str, Any],
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+) -> dict[str, Any]:
+    """Apply a prior OCR extract preview onto CarbonReportingYear.
+
+    Never overwrites MS XLSX totals unless ``force_overwrite_totals`` is true.
+    Certificate number may always apply when extracted with confidence.
+    """
+    from src.api.schemas.planet_mark import (
+        PlanetMarkOcrAppliedTotals,
+        PlanetMarkOcrApplyFieldResult,
+        PlanetMarkOcrApplyResponse,
+    )
+    from src.domain.services.planet_mark_pdf_ocr_service import (
+        APPLY_ACTION_APPLY,
+        DOCUMENT_KIND_CERTIFICATE,
+        PROVENANCE_CERTIFICATE,
+        PROVENANCE_MEASUREMENT_REPORT,
+        build_apply_plan,
+    )
+
+    year = (
+        await db.execute(
+            select(CarbonReportingYear).where(
+                CarbonReportingYear.id == year_id,
+                CarbonReportingYear.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not year:
+        raise HTTPException(status_code=404, detail="Reporting year not found")
+
+    preview = body.get("preview")
+    if not isinstance(preview, dict) or not preview:
+        raise HTTPException(status_code=422, detail="preview payload from /ocr/extract is required")
+
+    document_kind = str(body.get("document_kind") or preview.get("document_kind") or "measurement_report")
+    force = bool(body.get("force_overwrite_totals", False))
+    requested = body.get("fields")
+    requested_set = set(requested) if isinstance(requested, list) else None
+
+    tenant_id = current_user.tenant_id
+    if tenant_id is None:
+        raise HTTPException(status_code=403, detail="Tenant context required")
+
+    extraction = _ocr_extraction_from_preview(
+        preview,
+        filename=str(preview.get("source_filename") or "upload.pdf"),
+        document_kind=document_kind,
+    )
+    xlsx_ingested = await _year_has_ms_xlsx_ingest(db, year_id, tenant_id)
+    plans = build_apply_plan(
+        extraction,
+        xlsx_ingested=xlsx_ingested,
+        force_overwrite_totals=force,
+        requested_fields=requested_set,
+    )
+
+    applied: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for plan in plans:
+        entry = plan.to_dict()
+        if plan.action != APPLY_ACTION_APPLY:
+            skipped.append(entry)
+            continue
+        if plan.field_name == "total_co2e_tonnes" and plan.value is not None:
+            year.total_emissions = float(plan.value)
+            applied.append(entry)
+        elif plan.field_name == "co2e_per_fte" and plan.value is not None:
+            year.emissions_per_fte = float(plan.value)
+            applied.append(entry)
+        elif plan.field_name == "average_fte" and plan.value is not None:
+            year.average_fte = float(plan.value)
+            if year.total_emissions and year.average_fte > 0 and year.emissions_per_fte in (None, 0):
+                year.emissions_per_fte = year.total_emissions / year.average_fte
+            applied.append(entry)
+        elif plan.field_name == "certificate_number" and plan.value is not None:
+            year.certificate_number = plan.value
+            applied.append(entry)
+        else:
+            skipped.append(entry)
+
+    provenance = PROVENANCE_CERTIFICATE if document_kind == DOCUMENT_KIND_CERTIFICATE else PROVENANCE_MEASUREMENT_REPORT
+    stamp = f"[source={provenance} file={extraction.source_filename}]"
+    existing_notes = (year.assessment_notes or "").strip()
+    if stamp not in existing_notes:
+        year.assessment_notes = f"{existing_notes}\n{stamp}".strip() if existing_notes else stamp
+    year.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    _audit(
+        "ocr_apply_year_readings",
+        current_user.tenant_id,
+        current_user.id,
+        year_id=year_id,
+        applied=len(applied),
+        skipped=len(skipped),
+        force=force,
+    )
+
+    return PlanetMarkOcrApplyResponse(
+        year_id=year.id,
+        year_label=year.year_label,
+        applied=[PlanetMarkOcrApplyFieldResult(**a) for a in applied],
+        skipped=[PlanetMarkOcrApplyFieldResult(**s) for s in skipped],
+        message=(
+            f"Applied {len(applied)} field(s) from OCR preview" + (f"; skipped {len(skipped)}" if skipped else "")
+        ),
+        updated=PlanetMarkOcrAppliedTotals(
+            total_emissions=year.total_emissions,
+            average_fte=year.average_fte,
+            emissions_per_fte=year.emissions_per_fte,
+            certificate_number=year.certificate_number,
+        ),
+    ).model_dump()
 
 
 # ============ AI Action Plan Import ============

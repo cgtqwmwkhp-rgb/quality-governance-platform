@@ -404,3 +404,66 @@ class MsXlsxYearIngestResponse(BaseModel):
     source_filename: str
     sources_upserted: int = 0
     message: str
+
+
+# ============================================================================
+# PDF OCR year-reading extraction (path11/pm-ocr-year-readings)
+# ============================================================================
+
+
+class OcrExtractedFieldSchema(BaseModel):
+    """OCR candidate field. value is None when confidence is none."""
+
+    value: Optional[str] = None
+    confidence: str = "none"
+    raw_snippet: Optional[str] = None
+
+
+class PlanetMarkOcrExtractResponse(BaseModel):
+    source_filename: str
+    document_kind: str
+    extraction_method: str
+    total_co2e_tonnes: OcrExtractedFieldSchema = OcrExtractedFieldSchema()
+    co2e_per_fte: OcrExtractedFieldSchema = OcrExtractedFieldSchema()
+    average_fte: OcrExtractedFieldSchema = OcrExtractedFieldSchema()
+    certificate_number: OcrExtractedFieldSchema = OcrExtractedFieldSchema()
+    reporting_period_label: OcrExtractedFieldSchema = OcrExtractedFieldSchema()
+    certification_status_cue: OcrExtractedFieldSchema = OcrExtractedFieldSchema()
+    warnings: list[str] = []
+    text_excerpt: str = ""
+    year_label: str
+    xlsx_ingested: bool = False
+    period_mismatch_warning: Optional[str] = None
+    evidence_id: Optional[int] = None
+
+
+class PlanetMarkOcrApplyFieldResult(BaseModel):
+    field: str
+    action: str
+    value: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class PlanetMarkOcrAppliedTotals(BaseModel):
+    total_emissions: Optional[float] = None
+    average_fte: Optional[float] = None
+    emissions_per_fte: Optional[float] = None
+    certificate_number: Optional[str] = None
+
+
+class PlanetMarkOcrApplyRequest(BaseModel):
+    evidence_id: Optional[int] = None
+    document_kind: str = "measurement_report"
+    force_overwrite_totals: bool = False
+    fields: Optional[list[str]] = None
+    # Dry-run preview payload from a prior extract (optional when evidence_id set)
+    preview: Optional[dict[str, Any]] = None
+
+
+class PlanetMarkOcrApplyResponse(BaseModel):
+    year_id: int
+    year_label: str
+    applied: list[PlanetMarkOcrApplyFieldResult] = []
+    skipped: list[PlanetMarkOcrApplyFieldResult] = []
+    message: str
+    updated: PlanetMarkOcrAppliedTotals = PlanetMarkOcrAppliedTotals()
