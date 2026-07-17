@@ -1,4 +1,6 @@
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   FileText,
   Building,
@@ -15,9 +17,13 @@ import {
   CheckCircle,
   Clock,
   Webhook,
+  Loader2,
 } from 'lucide-react'
+import { auditTrailApi, contractsApi } from '../../api/client'
+import { formConfigApi } from '../../api/formConfigClient'
 import { Card } from '../../components/ui/Card'
 import { cn } from '../../helpers/utils'
+import { AdminLoadUnavailable, captureAdminLoadError } from './adminLoadHelpers'
 
 interface QuickAction {
   title: string
@@ -33,6 +39,7 @@ interface StatCard {
   change: string
   trend: 'up' | 'down' | 'neutral'
   icon: React.ReactNode
+  unavailable?: boolean
 }
 
 const QUICK_ACTIONS: QuickAction[] = [
@@ -87,68 +94,219 @@ const QUICK_ACTIONS: QuickAction[] = [
   },
 ]
 
-const STATS: StatCard[] = [
-  {
-    label: 'Active Forms',
-    value: '0',
-    change: 'No data yet',
-    trend: 'neutral',
-    icon: <FileText className="w-5 h-5" />,
-  },
-  {
-    label: 'Active Contracts',
-    value: '0',
-    change: 'No data yet',
-    trend: 'neutral',
-    icon: <Building className="w-5 h-5" />,
-  },
-  {
-    label: 'Submissions Today',
-    value: '0',
-    change: 'No data yet',
-    trend: 'neutral',
-    icon: <Activity className="w-5 h-5" />,
-  },
-  {
-    label: 'Pending Actions',
-    value: '0',
-    change: 'No data yet',
-    trend: 'neutral',
-    icon: <Clock className="w-5 h-5" />,
-  },
-]
-
-const RECENT_ACTIVITY: { action: string; user: string; time: string; type: string }[] = []
+function formatTimeAgo(dateStr: string): string {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+  if (diffMins < 1) return 'Just now'
+  if (diffMins < 60) return `${diffMins} min${diffMins === 1 ? '' : 's'} ago`
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`
+  if (diffDays === 1) return 'Yesterday'
+  return `${diffDays} days ago`
+}
 
 export default function AdminDashboard() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [stats, setStats] = useState<StatCard[]>([])
+  const [recentActivity, setRecentActivity] = useState<
+    { action: string; user: string; time: string; type: string }[]
+  >([])
+  const [activityUnavailable, setActivityUnavailable] = useState(false)
+
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    setLoadError(null)
+    setActivityUnavailable(false)
+
+    try {
+      const [formsRes, contractsRes, trailRes] = await Promise.allSettled([
+        formConfigApi.listTemplates({ page_size: 1, is_active: true }),
+        contractsApi.list(true),
+        auditTrailApi.list({ page: 1, per_page: 5 }),
+      ])
+
+      const formsTotal =
+        formsRes.status === 'fulfilled'
+          ? formsRes.value.total ?? formsRes.value.items?.length ?? 0
+          : null
+      const contractsTotal =
+        contractsRes.status === 'fulfilled'
+          ? contractsRes.value.total ?? contractsRes.value.items?.length ?? 0
+          : null
+
+      if (formsRes.status === 'rejected') {
+        captureAdminLoadError(
+          formsRes.reason,
+          { component: 'AdminDashboard', action: 'loadForms' },
+          '',
+        )
+      }
+      if (contractsRes.status === 'rejected') {
+        captureAdminLoadError(
+          contractsRes.reason,
+          { component: 'AdminDashboard', action: 'loadContracts' },
+          '',
+        )
+      }
+      if (trailRes.status === 'rejected') {
+        captureAdminLoadError(
+          trailRes.reason,
+          { component: 'AdminDashboard', action: 'loadActivity' },
+          '',
+        )
+      }
+
+      setStats([
+        {
+          label: t('admin.dashboard.stat_active_forms', 'Active Forms'),
+          value: formsTotal === null ? '—' : String(formsTotal),
+          change:
+            formsTotal === null
+              ? t('admin.dashboard.stat_unavailable', 'Count unavailable')
+              : t('admin.dashboard.stat_live', 'Live from API'),
+          trend: 'neutral',
+          icon: <FileText className="w-5 h-5" />,
+          unavailable: formsTotal === null,
+        },
+        {
+          label: t('admin.dashboard.stat_active_contracts', 'Active Contracts'),
+          value: contractsTotal === null ? '—' : String(contractsTotal),
+          change:
+            contractsTotal === null
+              ? t('admin.dashboard.stat_unavailable', 'Count unavailable')
+              : t('admin.dashboard.stat_live', 'Live from API'),
+          trend: 'neutral',
+          icon: <Building className="w-5 h-5" />,
+          unavailable: contractsTotal === null,
+        },
+        {
+          label: t('admin.dashboard.stat_submissions_today', 'Submissions Today'),
+          value: '—',
+          change: t('admin.dashboard.stat_not_wired', 'Not wired yet'),
+          trend: 'neutral',
+          icon: <Activity className="w-5 h-5" />,
+        },
+        {
+          label: t('admin.dashboard.stat_pending_actions', 'Pending Actions'),
+          value: '—',
+          change: t('admin.dashboard.stat_not_wired', 'Not wired yet'),
+          trend: 'neutral',
+          icon: <Clock className="w-5 h-5" />,
+        },
+      ])
+
+      if (trailRes.status === 'fulfilled') {
+        const entries = trailRes.value.data?.items ?? []
+        setRecentActivity(
+          entries.slice(0, 5).map((entry) => {
+            const actionType =
+              entry.action === 'create'
+                ? 'add'
+                : entry.action === 'update'
+                  ? 'edit'
+                  : entry.action === 'delete'
+                    ? 'settings'
+                    : 'publish'
+            return {
+              action:
+                entry.entity_name ||
+                `${entry.action} on ${entry.entity_type} ${entry.entity_id}`,
+              user: entry.user_name || 'System',
+              time: formatTimeAgo(entry.timestamp || ''),
+              type: actionType,
+            }
+          }),
+        )
+      } else {
+        setRecentActivity([])
+        setActivityUnavailable(true)
+      }
+
+      if (formsTotal === null || contractsTotal === null) {
+        setLoadError(
+          t(
+            'admin.dashboard.load_unavailable',
+            'Admin summary data could not be loaded. Quick actions remain available below.',
+          ),
+        )
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [t])
+
+  useEffect(() => {
+    void loadData()
+  }, [loadData])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-surface">
-      {/* Header */}
       <header className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
+              <h1 className="text-3xl font-bold text-foreground">
+                {t('admin.dashboard.title', 'Admin Dashboard')}
+              </h1>
               <p className="text-muted-foreground mt-2">
-                Manage forms, contracts, settings, and system configuration
+                {t(
+                  'admin.dashboard.subtitle',
+                  'Manage forms, contracts, settings, and system configuration',
+                )}
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg">
-                <CheckCircle className="w-4 h-4" />
-                <span className="text-sm font-medium">System Healthy</span>
+              <div
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 rounded-lg',
+                  loadError
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-green-100 text-green-700',
+                )}
+              >
+                {loadError ? (
+                  <AlertTriangle className="w-4 h-4" />
+                ) : (
+                  <CheckCircle className="w-4 h-4" />
+                )}
+                <span className="text-sm font-medium">
+                  {loadError
+                    ? t('admin.dashboard.partial_status', 'Partial data')
+                    : t('admin.dashboard.system_healthy', 'System Healthy')}
+                </span>
               </div>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {STATS.map((stat) => (
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        {loadError && (
+          <AdminLoadUnavailable
+            testId="admin-dashboard-unavailable"
+            title={t('admin.dashboard.unavailable_title', 'Admin summary unavailable')}
+            description={loadError}
+            onRetry={() => void loadData()}
+          />
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {stats.map((stat) => (
             <Card key={stat.label} className="p-5">
               <div className="flex items-start justify-between">
                 <div>
@@ -157,9 +315,10 @@ export default function AdminDashboard() {
                   <p
                     className={cn(
                       'text-xs mt-1 flex items-center gap-1',
+                      stat.unavailable && 'text-warning',
                       stat.trend === 'up' && 'text-green-600',
                       stat.trend === 'down' && 'text-destructive',
-                      stat.trend === 'neutral' && 'text-muted-foreground',
+                      stat.trend === 'neutral' && !stat.unavailable && 'text-muted-foreground',
                     )}
                   >
                     {stat.trend === 'up' && <TrendingUp className="w-3 h-3" />}
@@ -173,9 +332,10 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* Quick Actions */}
-        <div className="mb-8">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Quick Actions</h2>
+        <div>
+          <h2 className="text-lg font-semibold text-foreground mb-4">
+            {t('admin.dashboard.quick_actions', 'Quick Actions')}
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {QUICK_ACTIONS.map((action) => (
               <Card
@@ -198,61 +358,67 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Recent Activity & System Status */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Activity */}
           <Card className="p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">Recent Activity</h2>
-            <div className="space-y-4">
-              {RECENT_ACTIVITY.length === 0 && (
-                <div className="text-center py-8">
-                  <Activity className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-                  <p className="text-muted-foreground">No recent activity</p>
-                </div>
-              )}
-              {RECENT_ACTIVITY.map((activity, index) => (
-                <div
-                  key={index}
-                  className="flex items-start gap-3 pb-4 border-b border-border last:border-0 last:pb-0"
-                >
+            <h2 className="text-lg font-semibold text-foreground mb-4">
+              {t('admin.dashboard.recent_activity', 'Recent Activity')}
+            </h2>
+            {activityUnavailable ? (
+              <AdminLoadUnavailable
+                testId="admin-dashboard-activity-unavailable"
+                title={t('admin.dashboard.activity_unavailable', 'Recent activity unavailable')}
+                description={t(
+                  'admin.dashboard.activity_unavailable_description',
+                  'Audit trail feed could not be loaded — this is not an empty activity log.',
+                )}
+                onRetry={() => void loadData()}
+              />
+            ) : recentActivity.length === 0 ? (
+              <div className="text-center py-8">
+                <Activity className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+                <p className="text-muted-foreground">
+                  {t('admin.dashboard.no_recent_activity', 'No recent activity')}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {recentActivity.map((activity, index) => (
                   <div
-                    className={cn(
-                      'w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0',
-                      activity.type === 'edit' && 'bg-blue-100 text-blue-600',
-                      activity.type === 'add' && 'bg-green-100 text-green-600',
-                      activity.type === 'settings' && 'bg-purple-100 text-purple-600',
-                      activity.type === 'publish' && 'bg-primary/10 text-primary',
-                    )}
+                    key={`${activity.action}-${index}`}
+                    className="flex items-start gap-3 pb-4 border-b border-border last:border-0 last:pb-0"
                   >
-                    {activity.type === 'edit' && <FileText className="w-4 h-4" />}
-                    {activity.type === 'add' && <Building className="w-4 h-4" />}
-                    {activity.type === 'settings' && <Settings className="w-4 h-4" />}
-                    {activity.type === 'publish' && <CheckCircle className="w-4 h-4" />}
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-primary/10 text-primary">
+                      <Activity className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-foreground">{activity.action}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {activity.user} • {activity.time}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-foreground">{activity.action}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {activity.user} • {activity.time}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </Card>
 
-          {/* System Status */}
           <Card className="p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">System Status</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-4">
+              {t('admin.dashboard.system_status', 'System Status')}
+            </h2>
             <div className="space-y-4">
               <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
                 <div className="flex items-center gap-3">
                   <CheckCircle className="w-5 h-5 text-green-600" />
                   <div>
                     <p className="text-sm font-medium text-green-800">API Server</p>
-                    <p className="text-xs text-green-600">Healthy • 99.9% uptime</p>
+                    <p className="text-xs text-green-600">
+                      {loadError
+                        ? t('admin.dashboard.api_degraded', 'Some admin APIs unavailable')
+                        : t('admin.dashboard.api_ok', 'Admin APIs responding')}
+                    </p>
                   </div>
                 </div>
-                <span className="text-xs text-green-600">23ms latency</span>
               </div>
 
               <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
@@ -260,10 +426,9 @@ export default function AdminDashboard() {
                   <Database className="w-5 h-5 text-green-600" />
                   <div>
                     <p className="text-sm font-medium text-green-800">Database</p>
-                    <p className="text-xs text-green-600">Connected • Azure SQL</p>
+                    <p className="text-xs text-green-600">Connected</p>
                   </div>
                 </div>
-                <span className="text-xs text-green-600">5ms query time</span>
               </div>
 
               <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
@@ -271,21 +436,9 @@ export default function AdminDashboard() {
                   <Shield className="w-5 h-5 text-green-600" />
                   <div>
                     <p className="text-sm font-medium text-green-800">Authentication</p>
-                    <p className="text-xs text-green-600">Azure AD Connected</p>
+                    <p className="text-xs text-green-600">Session active</p>
                   </div>
                 </div>
-                <span className="text-xs text-green-600">Active</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <AlertTriangle className="w-5 h-5 text-yellow-600" />
-                  <div>
-                    <p className="text-sm font-medium text-yellow-800">Background Jobs</p>
-                    <p className="text-xs text-yellow-600">2 jobs pending</p>
-                  </div>
-                </div>
-                <span className="text-xs text-yellow-600">Processing</span>
               </div>
             </div>
           </Card>

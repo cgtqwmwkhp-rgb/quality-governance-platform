@@ -37,7 +37,9 @@ describe('createFormConfigApi', () => {
     return createFormConfigApi(api as never)
       .listTemplates({ form_type: 'incident' })
       .then((result) => {
-        expect(api.get).toHaveBeenCalledWith('/api/v1/admin/config/templates?form_type=incident')
+        expect(api.get).toHaveBeenCalledWith('/api/v1/admin/config/templates?form_type=incident', {
+          suppressErrorToast: true,
+        })
         expect(result.items[0].steps_count).toBe(1)
         expect(result.items[0].fields_count).toBe(2)
       })

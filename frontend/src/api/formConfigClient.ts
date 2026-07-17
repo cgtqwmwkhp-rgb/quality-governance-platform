@@ -115,6 +115,7 @@ export interface FormTemplateListItem {
 }
 
 const BASE = '/api/v1/admin/config'
+const ADMIN_CONFIG_SILENT = { suppressErrorToast: true } as const
 
 function toListItem(template: FormTemplateResponse): FormTemplateListItem {
   const steps = template.steps ?? []
@@ -143,7 +144,7 @@ export function createFormConfigApi(axios: AxiosInstance) {
       if (params?.page_size) search.set('page_size', String(params.page_size))
       const qs = search.toString()
       return axios
-        .get<FormTemplateListResponse>(`${BASE}/templates${qs ? `?${qs}` : ''}`)
+        .get<FormTemplateListResponse>(`${BASE}/templates${qs ? `?${qs}` : ''}`, ADMIN_CONFIG_SILENT)
         .then((r) => ({
           ...r.data,
           items: r.data.items.map(toListItem),

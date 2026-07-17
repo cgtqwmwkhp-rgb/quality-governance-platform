@@ -4,7 +4,7 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, Base, TimestampMixin
@@ -185,6 +185,7 @@ class Contract(Base, TimestampMixin, AuditTrailMixin):
     """Contract configuration for dropdown options."""
 
     __tablename__ = "contracts"
+    __table_args__ = (Index("ix_contracts_tenant_active_order", "tenant_id", "is_active", "display_order"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 

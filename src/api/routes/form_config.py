@@ -1,12 +1,14 @@
 """Form configuration API routes for admin form builder."""
 
+import logging
 from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import delete
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
@@ -41,6 +43,7 @@ from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ==================== Form Template Routes ====================
@@ -586,19 +589,30 @@ async def list_contracts(
     is_active: Optional[bool] = Query(None),
 ) -> ContractListResponse:
     """List all contracts."""
-    query = select(Contract).where(Contract.tenant_id == current_user.tenant_id)
+    try:
+        query = select(Contract).where(Contract.tenant_id == current_user.tenant_id)
 
-    if is_active is not None:
-        query = query.where(Contract.is_active == is_active)
+        if is_active is not None:
+            query = query.where(Contract.is_active == is_active)
 
-    query = query.order_by(Contract.display_order, Contract.name)
-    result = await db.execute(query)
-    contracts = result.scalars().all()
+        query = query.order_by(Contract.display_order, Contract.name)
+        result = await db.execute(query)
+        contracts = result.scalars().all()
 
-    return ContractListResponse(
-        items=[ContractResponse.model_validate(c) for c in contracts],
-        total=len(contracts),
-    )
+        return ContractListResponse(
+            items=[ContractResponse.model_validate(c) for c in contracts],
+            total=len(contracts),
+        )
+    except SQLAlchemyError:
+        logger.exception(
+            "Error listing contracts for tenant_id=%s is_active=%s",
+            current_user.tenant_id,
+            is_active,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to list contracts at this time.",
+        )
 
 
 @router.post("/contracts", response_model=ContractResponse, status_code=status.HTTP_201_CREATED)

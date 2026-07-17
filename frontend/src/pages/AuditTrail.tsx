@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   History,
   Search,
@@ -17,6 +17,8 @@ import {
   ArrowRight,
   RefreshCw,
 } from 'lucide-react'
+import { auditTrailApi, type AuditLogEntry } from '../api/client'
+import { AdminLoadUnavailable, captureAdminLoadError } from './admin/adminLoadHelpers'
 
 interface AuditEntry {
   id: string
@@ -55,8 +57,61 @@ export default function AuditTrail() {
   const [dateRange, setDateRange] = useState<string>('today')
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([])
 
-  const auditEntries: AuditEntry[] = []
+  const mapApiEntry = (entry: AuditLogEntry): AuditEntry => ({
+    id: String(entry.id),
+    timestamp: entry.timestamp,
+    user: { name: entry.user_name || 'System', email: entry.user_email || '' },
+    action: (entry.action || 'view') as AuditEntry['action'],
+    module:
+      (entry.entity_type || 'system').charAt(0).toUpperCase() +
+      (entry.entity_type || 'system').slice(1),
+    resource: entry.entity_type || '',
+    resourceId: entry.entity_id || '',
+    details: entry.entity_name || `${entry.action} on ${entry.entity_type} ${entry.entity_id}`,
+    ipAddress: entry.ip_address || '',
+    changes: entry.changed_fields?.map((field) => ({
+      field: String(field),
+      oldValue:
+        entry.old_values?.[String(field)] != null ? String(entry.old_values[String(field)]) : '',
+      newValue:
+        entry.new_values?.[String(field)] != null ? String(entry.new_values[String(field)]) : '',
+    })),
+  })
+
+  const loadEntries = useCallback(async () => {
+    setIsLoading(true)
+    setLoadError(null)
+    try {
+      const actionParam = selectedAction !== 'all' ? selectedAction : undefined
+      const entityParam = selectedModule !== 'all' ? selectedModule.toLowerCase() : undefined
+      const response = await auditTrailApi.list({
+        action: actionParam,
+        entity_type: entityParam,
+        page: 1,
+        per_page: 50,
+      })
+      const items = response.data?.items ?? []
+      setAuditEntries(items.map(mapApiEntry))
+    } catch (err) {
+      setAuditEntries([])
+      setLoadError(
+        captureAdminLoadError(
+          err,
+          { component: 'AuditTrail', action: 'load' },
+          'Audit trail could not be loaded — this is not an empty log.',
+        ),
+      )
+    } finally {
+      setIsLoading(false)
+    }
+  }, [selectedAction, selectedModule])
+
+  useEffect(() => {
+    void loadEntries()
+  }, [loadEntries])
 
   const actionIcons: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
     create: { icon: <Plus className="w-4 h-4" />, color: 'text-success', bg: 'bg-success/20' },
@@ -124,8 +179,7 @@ export default function AuditTrail() {
   })
 
   const handleRefresh = () => {
-    setIsLoading(true)
-    setTimeout(() => setIsLoading(false), 1000)
+    void loadEntries()
   }
 
   return (
@@ -158,6 +212,16 @@ export default function AuditTrail() {
           </button>
         </div>
       </div>
+
+      {loadError && (
+        <AdminLoadUnavailable
+          testId="audit-trail-unavailable"
+          title="Audit trail unavailable"
+          description="The activity log could not be loaded. Retry or check connectivity — this is not an empty log."
+          message={loadError}
+          onRetry={() => void loadEntries()}
+        />
+      )}
 
       {/* Filters */}
       <div className="bg-card/50 backdrop-blur-sm rounded-xl border border-border p-4">
@@ -350,7 +414,7 @@ export default function AuditTrail() {
       </div>
 
       {/* Empty State */}
-      {filteredEntries.length === 0 && (
+      {!loadError && filteredEntries.length === 0 && !isLoading && (
         <div className="text-center py-12">
           <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
             <History className="w-10 h-10 text-slate-600" />

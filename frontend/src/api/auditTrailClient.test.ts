@@ -22,10 +22,13 @@ describe('createAuditTrailApi', () => {
     })
     expect(api.get).toHaveBeenCalledWith(
       '/api/v1/audit-trail/?entity_type=incident&action=create&user_id=1&date_from=2026-01-01&date_to=2026-12-31&page=2&per_page=10',
+      { suppressErrorToast: true },
     )
 
     createAuditTrailApi(api as never).list()
-    expect(api.get).toHaveBeenCalledWith('/api/v1/audit-trail/?page=1&per_page=50')
+    expect(api.get).toHaveBeenCalledWith('/api/v1/audit-trail/?page=1&per_page=50', {
+      suppressErrorToast: true,
+    })
   })
 
   it('entry/entity/user/stats paths match OpenAPI', () => {
