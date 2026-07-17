@@ -98,3 +98,20 @@ export function isRetryableYearEvidenceError(error: unknown): boolean {
   const status = axiosLike.response?.status
   return status === 502 || status === 503 || status === 504
 }
+
+/** True when the evidence row has a real blob (downloadable). */
+export function evidenceHasStorageKey(storageKey: string | null | undefined): boolean {
+  return Boolean(storageKey && String(storageKey).trim().length > 0)
+}
+
+export function latestEvidenceIdForType(
+  evidence: PlanetMarkEvidenceRecord[],
+  documentType: PlanetMarkYearCertDocType,
+): number | null {
+  const match = evidence
+    .filter((item) => item.document_type === documentType && evidenceHasStorageKey(item.storage_key))
+    .sort(
+      (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime(),
+    )[0]
+  return match?.id ?? null
+}

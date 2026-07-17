@@ -68,6 +68,15 @@ const translations: Record<string, string> = {
   'compliance.automation.pending_review': 'Pending review',
   'compliance.automation.run_gap_analysis': 'Run Gap Analysis',
   'compliance.automation.mark_reviewed': 'Mark Reviewed',
+  'compliance.automation.riddor': 'RIDDOR',
+  'compliance.automation.riddor_register': 'RIDDOR register',
+  'compliance.automation.riddor_register_note':
+    'Draft packs persisted from Incidents. Filing stays on the HSE portal — QGP does not claim HSE submission.',
+  'compliance.automation.empty.riddor.title': 'No RIDDOR packs in QGP yet',
+  'compliance.automation.empty.riddor.description':
+    'When an incident is reportable, prepare the pack from Incidents; it appears here. Empty means none queued — not that HSE was already notified.',
+  'compliance.automation.open_incident': 'Open incident',
+  'compliance.automation.hse_portal': 'HSE RIDDOR Portal',
 }
 
 vi.mock('react-i18next', () => ({
@@ -366,5 +375,59 @@ describe('ComplianceAutomation monitoring honesty', () => {
     expect(screen.queryByRole('button', { name: /Compliance Score/i })).not.toBeInTheDocument()
     expect(screen.queryByText('Missing clause 8.2 evidence')).not.toBeInTheDocument()
   })
+
+
+  it('shows honest RIDDOR register empty state when no packs persisted (CA-W1e)', async () => {
+    render(<ComplianceAutomation />, { wrapper: Wrapper })
+    await screen.findByRole('heading', { name: 'Monitoring' })
+
+    fireEvent.click(screen.getByRole('button', { name: /^RIDDOR$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('monitoring-riddor-empty')).toBeInTheDocument()
+    })
+    expect(screen.getByText('No RIDDOR packs in QGP yet')).toBeInTheDocument()
+    expect(mockListRiddorSubmissions).toHaveBeenCalled()
+  })
+
+  it('renders persisted RIDDOR packs with incident and HSE links (CA-W1e)', async () => {
+    mockListRiddorSubmissions.mockResolvedValue({
+      data: {
+        submissions: [
+          {
+            id: 11,
+            incident_id: 42,
+            incident_reference: 'INC-0042',
+            riddor_type: 'specified_injury',
+            submission_status: 'draft_pack',
+            status_label: 'Draft pack saved in QGP — file on the HSE portal',
+            deadline: '2026-07-20T00:00:00Z',
+            is_overdue: false,
+            persisted: true,
+          },
+        ],
+        total: 1,
+      },
+    })
+
+    render(<ComplianceAutomation />, { wrapper: Wrapper })
+    await screen.findByRole('heading', { name: 'Monitoring' })
+
+    fireEvent.click(screen.getByRole('button', { name: /^RIDDOR$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('monitoring-riddor-pack-11')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/INC-0042/)).toBeInTheDocument()
+    expect(screen.getByTestId('monitoring-riddor-incident-11')).toHaveAttribute(
+      'href',
+      '/incidents/42',
+    )
+    expect(screen.getByTestId('monitoring-riddor-hse-11')).toHaveAttribute(
+      'href',
+      'https://notifications.hse.gov.uk/RiddorForms/',
+    )
+  })
+
 
 })

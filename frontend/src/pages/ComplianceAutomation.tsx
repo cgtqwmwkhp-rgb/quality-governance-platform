@@ -54,11 +54,13 @@ import {
   countUnreviewedRegulatoryUpdates,
   hasLiveComplianceScore,
   isOpenWatchImpact,
+  mapRiddorSubmissionsToPacks,
   mapRunsToMonitoringRows,
   MONITORING_AUDITS_HANDOFF_PATH,
   MONITORING_SCORE_HANDOFF_EVIDENCE,
   MONITORING_SCORE_HANDOFF_IMS,
   type MonitoringAuditRunRow,
+  type MonitoringRiddorPack,
 } from './complianceAutomationHelpers'
 
 interface RegulatoryUpdate {
@@ -127,7 +129,7 @@ export default function ComplianceAutomation() {
   const [watchImpacts, setWatchImpacts] = useState<RegulatoryImpact[]>([])
   const [runningWatch, setRunningWatch] = useState(false)
   const [actionBusyId, setActionBusyId] = useState<number | null>(null)
-  const [riddorSubmissions, setRiddorSubmissions] = useState<unknown[]>([])
+  const [riddorPacks, setRiddorPacks] = useState<MonitoringRiddorPack[]>([])
   const [riddorLoading, setRiddorLoading] = useState(false)
   const [riddorError, setRiddorError] = useState<string | null>(null)
   const [watchError, setWatchError] = useState<string | null>(null)
@@ -233,10 +235,10 @@ export default function ComplianceAutomation() {
     setRiddorError(null)
     try {
       const response = await complianceAutomationApi.listRiddorSubmissions()
-      setRiddorSubmissions(response.data.submissions ?? [])
+      setRiddorPacks(mapRiddorSubmissionsToPacks(response.data.submissions ?? []))
     } catch (err) {
       setRiddorError(getApiErrorMessage(err))
-      setRiddorSubmissions([])
+      setRiddorPacks([])
     } finally {
       setRiddorLoading(false)
     }
@@ -244,12 +246,16 @@ export default function ComplianceAutomation() {
 
   const handleRunWatch = async () => {
     setRunningWatch(true)
+    setWatchError(null)
     try {
       const response = await knowledgeBankApi.runRegulatoryWatch()
       toast.success(response.data.message ?? 'Regulatory watch completed')
-      await loadWatchImpacts()
+      // Refresh full Changes inbox (feed + impacts) so Run watch stays honest with Refresh.
+      await loadChangesInbox()
     } catch (err) {
-      toast.error(getApiErrorMessage(err))
+      const message = getApiErrorMessage(err)
+      setWatchError(message)
+      toast.error(message)
     } finally {
       setRunningWatch(false)
     }
@@ -979,17 +985,31 @@ export default function ComplianceAutomation() {
             </div>
           </div>
 
-          <div className="bg-card/50 border border-border rounded-xl overflow-hidden">
+          <div
+            className="bg-card/50 border border-border rounded-xl overflow-hidden"
+            data-testid="monitoring-riddor-register"
+          >
             <div className="p-4 border-b border-border flex items-center justify-between gap-3">
-              <h3 className="font-medium text-foreground">RIDDOR register</h3>
+              <div>
+                <h3 className="font-medium text-foreground">
+                  {t('compliance.automation.riddor_register', 'RIDDOR register')}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t(
+                    'compliance.automation.riddor_register_note',
+                    'Draft packs persisted from Incidents. Filing stays on the HSE portal — QGP does not claim HSE submission.',
+                  )}
+                </p>
+              </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => void loadRiddorSubmissions()}
                 disabled={riddorLoading}
+                data-testid="monitoring-riddor-refresh"
               >
                 <RefreshCw className={cn('w-4 h-4 mr-2', riddorLoading && 'animate-spin')} />
-                Refresh
+                {t('compliance.automation.changes.refresh', 'Refresh inbox')}
               </Button>
             </div>
             {riddorError ? (
@@ -997,19 +1017,74 @@ export default function ComplianceAutomation() {
                 {riddorError}
               </div>
             ) : riddorLoading ? (
-              <div className="p-8 text-center text-muted-foreground text-sm">Loading register…</div>
-            ) : riddorSubmissions.length === 0 ? (
-              <div className="p-8 text-center">
+              <div className="p-8 text-center text-muted-foreground text-sm">
+                {t('compliance.automation.riddor_loading', 'Loading register…')}
+              </div>
+            ) : riddorPacks.length === 0 ? (
+              <div className="p-8 text-center" data-testid="monitoring-riddor-empty">
                 <CheckCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-foreground font-medium">No RIDDOR packs in QGP yet</p>
+                <p className="text-foreground font-medium">
+                  {t(
+                    'compliance.automation.empty.riddor.title',
+                    'No RIDDOR packs in QGP yet',
+                  )}
+                </p>
                 <p className="text-muted-foreground text-sm mt-1 max-w-md mx-auto">
-                  When an incident is reportable, prepare the pack here and complete filing on the
-                  HSE portal. Empty means none queued — not that HSE was already notified.
+                  {t(
+                    'compliance.automation.empty.riddor.description',
+                    'When an incident is reportable, prepare the pack from Incidents; it appears here. Empty means none queued — not that HSE was already notified.',
+                  )}
                 </p>
               </div>
             ) : (
-              <div className="p-4 text-sm text-muted-foreground">
-                {riddorSubmissions.length} submission(s) recorded.
+              <div className="divide-y divide-border" data-testid="monitoring-riddor-packs">
+                {riddorPacks.map((pack) => (
+                  <div
+                    key={pack.id}
+                    className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                    data-testid={`monitoring-riddor-pack-${pack.id}`}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground truncate">
+                        {pack.incidentReference || `Incident #${pack.incidentId}`}
+                        <span className="text-muted-foreground font-normal">
+                          {' '}
+                          · {pack.riddorType}
+                        </span>
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">{pack.statusLabel}</p>
+                      {pack.deadline ? (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {t('compliance.automation.audits.due', 'Due')}{' '}
+                          {new Date(pack.deadline).toLocaleDateString()}
+                          {pack.isOverdue
+                            ? ` · ${t('compliance.automation.riddor_overdue', 'Overdue')}`
+                            : ''}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap gap-2 shrink-0">
+                      <Button variant="outline" size="sm" asChild>
+                        <Link
+                          to={`/incidents/${pack.incidentId}`}
+                          data-testid={`monitoring-riddor-incident-${pack.id}`}
+                        >
+                          {t('compliance.automation.open_incident', 'Open incident')}
+                        </Link>
+                      </Button>
+                      <a
+                        href={HSE_RIDDOR_PORTAL_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-border rounded-md hover:bg-accent"
+                        data-testid={`monitoring-riddor-hse-${pack.id}`}
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        {t('compliance.automation.hse_portal', 'HSE RIDDOR Portal')}
+                      </a>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

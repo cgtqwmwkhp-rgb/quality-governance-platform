@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, FileText, Loader2, RefreshCw, Upload } from 'lucide-react'
+import { AlertTriangle, Download, FileText, Loader2, RefreshCw, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import i18n from 'i18next'
 import { getApiErrorMessage, planetMarkApi } from '../api/client'
@@ -12,6 +12,7 @@ import {
   PLANET_MARK_YEAR_CERT_DOC_TYPES,
   PLANET_MARK_YEAR_EVIDENCE_ACCEPT,
   buildYearEvidenceUploadFormData,
+  evidenceHasStorageKey,
   filterYearReportEvidence,
   formatEvidenceFileSizeKb,
   formatEvidenceUploadedAt,
@@ -33,6 +34,8 @@ interface UploadSlotState {
 interface PlanetMarkYearEvidencePanelProps {
   yearId: number
   yearLabel: string
+  /** Optional callback when the filtered evidence list refreshes (for OCR panel). */
+  onEvidenceChange?: (evidence: PlanetMarkEvidenceRecord[]) => void
 }
 
 const UPLOAD_SLOTS: Array<{
@@ -72,13 +75,18 @@ function initialUploadSlots(): Record<PlanetMarkYearCertDocType, UploadSlotState
   }
 }
 
-export function PlanetMarkYearEvidencePanel({ yearId, yearLabel }: PlanetMarkYearEvidencePanelProps) {
+export function PlanetMarkYearEvidencePanel({
+  yearId,
+  yearLabel,
+  onEvidenceChange,
+}: PlanetMarkYearEvidencePanelProps) {
   const { t } = useTranslation()
   const [evidence, setEvidence] = useState<PlanetMarkEvidenceRecord[]>([])
   const [listState, setListState] = useState<ListLoadState>('idle')
   const [listError, setListError] = useState<string | null>(null)
   const [listRetryable, setListRetryable] = useState(false)
   const [uploadSlots, setUploadSlots] = useState(initialUploadSlots)
+  const [downloadBusyId, setDownloadBusyId] = useState<number | null>(null)
   const fileInputRefs = useRef<Partial<Record<PlanetMarkYearCertDocType, HTMLInputElement | null>>>({})
 
   const loadEvidence = useCallback(async () => {
@@ -87,7 +95,9 @@ export function PlanetMarkYearEvidencePanel({ yearId, yearLabel }: PlanetMarkYea
     setListRetryable(false)
     try {
       const response = await planetMarkApi.listEvidence(yearId)
-      setEvidence(filterYearReportEvidence(response.data.evidence ?? []))
+      const filtered = filterYearReportEvidence(response.data.evidence ?? [])
+      setEvidence(filtered)
+      onEvidenceChange?.(filtered)
       setListState('success')
     } catch (err: unknown) {
       setListState('error')
@@ -96,7 +106,7 @@ export function PlanetMarkYearEvidencePanel({ yearId, yearLabel }: PlanetMarkYea
       )
       setListRetryable(isRetryableYearEvidenceError(err))
     }
-  }, [yearId])
+  }, [yearId, onEvidenceChange])
 
   useEffect(() => {
     void loadEvidence()
@@ -163,8 +173,35 @@ export function PlanetMarkYearEvidencePanel({ yearId, yearLabel }: PlanetMarkYea
     void uploadFile(documentType, pendingFile)
   }
 
+  const downloadEvidence = async (item: PlanetMarkEvidenceRecord) => {
+    if (!evidenceHasStorageKey(item.storage_key)) return
+    setDownloadBusyId(item.id)
+    try {
+      const response = await planetMarkApi.getEvidenceDownloadUrl(yearId, item.id)
+      const url = response.data.url
+      if (url) window.open(url, '_blank', 'noopener,noreferrer')
+    } catch (err: unknown) {
+      setListError(
+        getApiErrorMessage(err, i18n.t('planet_mark.shell.years.evidence.download_error')),
+      )
+    } finally {
+      setDownloadBusyId(null)
+    }
+  }
+
   const sortedEvidence = [...evidence].sort(
     (left, right) => new Date(right.uploaded_at).getTime() - new Date(left.uploaded_at).getTime(),
+  )
+
+  const hasCertificate = evidence.some(
+    (item) =>
+      item.document_type === PLANET_MARK_YEAR_CERT_DOC_TYPES.certificate &&
+      evidenceHasStorageKey(item.storage_key),
+  )
+  const hasMeasurement = evidence.some(
+    (item) =>
+      item.document_type === PLANET_MARK_YEAR_CERT_DOC_TYPES.measurementReport &&
+      evidenceHasStorageKey(item.storage_key),
   )
 
   return (
@@ -257,6 +294,24 @@ export function PlanetMarkYearEvidencePanel({ yearId, yearLabel }: PlanetMarkYea
           })}
         </div>
 
+        {listState === 'success' && (
+          <div
+            className="flex flex-wrap gap-3 text-xs text-muted-foreground"
+            data-testid="planet-mark-years-evidence-status"
+          >
+            <span data-testid="planet-mark-years-evidence-measurement-status">
+              {hasMeasurement
+                ? t('planet_mark.shell.years.evidence.status.measurement_ok')
+                : t('planet_mark.shell.years.evidence.status.measurement_missing')}
+            </span>
+            <span data-testid="planet-mark-years-evidence-certificate-status">
+              {hasCertificate
+                ? t('planet_mark.shell.years.evidence.status.certificate_ok')
+                : t('planet_mark.shell.years.evidence.status.certificate_missing')}
+            </span>
+          </div>
+        )}
+
         <div data-testid="planet-mark-years-evidence-list">
           <p className="mb-3 text-sm font-medium text-foreground">
             {t('planet_mark.shell.years.evidence.list_title')}
@@ -326,13 +381,39 @@ export function PlanetMarkYearEvidencePanel({ yearId, yearLabel }: PlanetMarkYea
                       </p>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground sm:text-right">
-                    <span data-testid={`planet-mark-years-evidence-size-${item.id}`}>
-                      {formatEvidenceFileSizeKb(item.file_size_kb)}
-                    </span>
-                    <span data-testid={`planet-mark-years-evidence-uploaded-${item.id}`}>
-                      {formatEvidenceUploadedAt(item.uploaded_at)}
-                    </span>
+                  <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground sm:text-right">
+                      <span data-testid={`planet-mark-years-evidence-size-${item.id}`}>
+                        {formatEvidenceFileSizeKb(item.file_size_kb)}
+                      </span>
+                      <span data-testid={`planet-mark-years-evidence-uploaded-${item.id}`}>
+                        {formatEvidenceUploadedAt(item.uploaded_at)}
+                      </span>
+                    </div>
+                    {evidenceHasStorageKey(item.storage_key) ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={downloadBusyId === item.id}
+                        onClick={() => void downloadEvidence(item)}
+                        data-testid={`planet-mark-years-evidence-download-${item.id}`}
+                      >
+                        {downloadBusyId === item.id ? (
+                          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" aria-hidden />
+                        ) : (
+                          <Download className="mr-2 h-3.5 w-3.5" aria-hidden />
+                        )}
+                        {t('planet_mark.shell.years.evidence.download')}
+                      </Button>
+                    ) : (
+                      <p
+                        className="text-xs text-destructive"
+                        data-testid={`planet-mark-years-evidence-storage-missing-${item.id}`}
+                      >
+                        {t('planet_mark.shell.years.evidence.storage_missing')}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}

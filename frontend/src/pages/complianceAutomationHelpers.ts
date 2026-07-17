@@ -142,3 +142,53 @@ export function countPendingChangesInbox(
 ): number {
   return countUnreviewedRegulatoryUpdates(updates) + countOpenWatchImpacts(impacts)
 }
+
+/** Persisted RIDDOR pack row from compliance-automation register (CA-W1e). */
+export interface MonitoringRiddorPack {
+  id: number
+  incidentId: number
+  incidentReference: string | null
+  riddorType: string
+  submissionStatus: string
+  statusLabel: string
+  deadline: string | null
+  isOverdue: boolean
+  persisted: boolean
+}
+
+export function mapRiddorSubmissionToPack(raw: Record<string, unknown>): MonitoringRiddorPack | null {
+  const id = Number(raw.id)
+  const incidentId = Number(raw.incident_id)
+  if (!Number.isFinite(id) || !Number.isFinite(incidentId)) return null
+
+  const status =
+    typeof raw.submission_status === 'string'
+      ? raw.submission_status
+      : typeof raw.status === 'string'
+        ? raw.status
+        : 'draft_pack'
+
+  return {
+    id,
+    incidentId,
+    incidentReference: typeof raw.incident_reference === 'string' ? raw.incident_reference : null,
+    riddorType: typeof raw.riddor_type === 'string' ? raw.riddor_type : 'unknown',
+    submissionStatus: status,
+    statusLabel:
+      typeof raw.status_label === 'string'
+        ? raw.status_label
+        : 'Draft pack saved in QGP — file on the HSE portal',
+    deadline: typeof raw.deadline === 'string' ? raw.deadline : null,
+    isOverdue: raw.is_overdue === true,
+    persisted: raw.persisted !== false,
+  }
+}
+
+export function mapRiddorSubmissionsToPacks(raw: unknown): MonitoringRiddorPack[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((row) => {
+    if (!row || typeof row !== 'object') return []
+    const pack = mapRiddorSubmissionToPack(row as Record<string, unknown>)
+    return pack ? [pack] : []
+  })
+}
