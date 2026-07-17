@@ -38,7 +38,8 @@
 - [ ] CI — linked after push
 
 ## 6) Critical Journeys Verified (CUJ)
-- [x] **CUJ-1:** Profile loads → trend chart + badge → assess submit → profile reload with updated scores/reviews
+- [x] **CUJ-01:** Profile loads → net trend chart + trend badge from `/trends?risk_id=` and profile DTO
+- [x] **CUJ-02:** Assess form submit → atomic score/history update → profile reload with updated scores and review dates
 
 ## 7) Observability & Ops
 - **Logs:** `trackError` on load/assess failure
@@ -48,8 +49,9 @@
 - **Staging:** Open profile → submit assess → confirm chart + trend badge update
 
 ## 9) Rollback Plan
-- **Trigger:** Assess 500 / profile blank / history drift
-- **Steps:** Revert PR
+- **Rollback trigger:** Assess 500 / profile blank / history drift
+- **Rollback steps:** Revert PR
+- **Owner:** Platform / Risk Register track
 
 ## 10) Evidence Pack
 - CI run(s): linked after PR creation
@@ -57,10 +59,12 @@
 ---
 
 # Gate Checklist
-- [x] Gate 0: Scope lock + Change Ledger
-- [x] Gate 1: Implementation + local tests
-- [ ] Gate 2: CI green
-- [ ] Gate 3: Staging verification
+- [x] **Gate 0:** Scope lock + Change Ledger
+- [x] **Gate 1:** Implementation + local tests
+- [ ] **Gate 2:** CI green
+- [ ] **Gate 3:** Staging verification
+- [ ] **Gate 4:** Rollback plan verified
+- [ ] **Gate 5:** Evidence pack linked
 
 ## Exclusive allowlist (this PR)
 - `src/domain/services/risk_service.py`
