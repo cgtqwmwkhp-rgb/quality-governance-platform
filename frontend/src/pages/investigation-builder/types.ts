@@ -1,4 +1,5 @@
 import type { QuestionType } from '../audit-builder/types'
+import { createInc043ScaffoldSections } from './contractSections'
 
 export type ApplicableEntityType =
   | 'road_traffic_collision'
@@ -56,5 +57,5 @@ export const createEmptyDraft = (): InvestigationTemplateDraft => ({
   version: '1.0',
   is_active: true,
   applicable_entity_types: ['reporting_incident'],
-  sections: [createNewSection(1)],
+  sections: createInc043ScaffoldSections(),
 })
