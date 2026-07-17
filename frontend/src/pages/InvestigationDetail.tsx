@@ -68,6 +68,11 @@ import {
   getCapaLink,
   getInvestigationSourceLink,
 } from '../components/investigations/handoffLinks'
+import {
+  buildGeneratedPackDownload,
+  buildPackManifestStubDownload,
+  triggerPackDownload,
+} from './investigation/investigationReportHelpers'
 
 const TABS = [
   { id: 'summary', label: 'Summary', icon: FileText },
@@ -109,6 +114,7 @@ export default function InvestigationDetail() {
   const [packs, setPacks] = useState<CustomerPackSummary[]>([])
   const [packsLoading, setPacksLoading] = useState(false)
   const [generatingPack, setGeneratingPack] = useState(false)
+  const [downloadingPackId, setDownloadingPackId] = useState<number | null>(null)
   const [packCapability, setPackCapability] = useState<PackCapability>({ canGenerate: true })
   const [packError, setPackError] = useState<string | null>(null)
 
@@ -358,12 +364,30 @@ export default function InvestigationDetail() {
     }
   }
 
+  const handleDownloadPack = async (pack: CustomerPackSummary) => {
+    if (!investigation) return
+    setDownloadingPackId(pack.id)
+    setPackError(null)
+    try {
+      const payload = buildPackManifestStubDownload(pack, investigation.reference_number)
+      triggerPackDownload(payload)
+      toast.success(t('investigations.report.download_stub_success'))
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'downloadPack' })
+      setPackError(getApiErrorMessage(err))
+    } finally {
+      setDownloadingPackId(null)
+    }
+  }
+
   const handleGeneratePack = async (audience: string) => {
     if (!investigationId) return
     setGeneratingPack(true)
     setPackError(null)
     try {
-      await investigationsApi.generatePack(investigationId, audience)
+      const response = await investigationsApi.generatePack(investigationId, audience)
+      triggerPackDownload(buildGeneratedPackDownload(response.data))
+      toast.success(t('investigations.report.generate_download_success'))
       await loadPacks()
     } catch (err: unknown) {
       trackError(err, { component: 'InvestigationDetail', action: 'generatePack' })
@@ -1070,8 +1094,7 @@ export default function InvestigationDetail() {
                 </TooltipProvider>
               </div>
               <p className="text-sm text-muted-foreground mt-4">
-                Generate customer-facing reports for internal review or external distribution.
-                Reports include a secure checksum for verification.
+                {t('investigations.report.generate_hint')}
               </p>
             </Card>
             <Card className="p-6">
@@ -1131,11 +1154,23 @@ export default function InvestigationDetail() {
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button variant="outline" size="sm">
-                                <Download className="w-4 h-4" />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                data-testid={`investigation-pack-download-${pack.id}`}
+                                disabled={downloadingPackId === pack.id}
+                                onClick={() => void handleDownloadPack(pack)}
+                              >
+                                {downloadingPackId === pack.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Download className="w-4 h-4" />
+                                )}
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Download Report</TooltipContent>
+                            <TooltipContent>
+                              {t('investigations.report.download_manifest_tooltip')}
+                            </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       </div>
