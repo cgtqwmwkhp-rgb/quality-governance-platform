@@ -1,13 +1,17 @@
-import { useEffect, useState, useDeferredValue } from 'react'
+import { useEffect, useState, useDeferredValue, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
-import { Plus, MessageSquare, Search, Loader2, MailWarning } from 'lucide-react'
+import { Plus, MessageSquare, Search, Loader2, MailWarning, Paperclip } from 'lucide-react'
 import {
   complaintsApi,
   Complaint,
   ComplaintCreate,
+  Contract,
+  contractsApi,
+  evidenceAssetsApi,
   getApiErrorMessage,
+  lookupsApi,
   notificationsApi,
   UserSearchResult,
 } from '../api/client'
@@ -21,6 +25,7 @@ import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import { UserEmailSearch } from '../components/UserEmailSearch'
+import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
 import {
   Dialog,
   DialogContent,
@@ -36,6 +41,44 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+
+const COMPLAINT_TYPE_VALUES = [
+  'product',
+  'service',
+  'delivery',
+  'communication',
+  'billing',
+  'staff',
+  'environmental',
+  'safety',
+  'other',
+] as const
+
+const CHANNEL_OPTIONS = [
+  { value: 'phone', label: 'Phone' },
+  { value: 'email', label: 'Email' },
+  { value: 'in_person', label: 'In person' },
+  { value: 'portal', label: 'Portal' },
+  { value: 'api', label: 'API' },
+  { value: 'manual', label: 'Manual / other' },
+] as const
+
+const EMPTY_FORM: ComplaintCreate = {
+  title: '',
+  description: '',
+  complaint_type: 'other',
+  priority: 'medium',
+  received_date: new Date().toISOString().slice(0, 16),
+  complainant_name: '',
+  complainant_email: '',
+  complainant_phone: '',
+  complainant_company: '',
+  source_type: 'manual',
+  contract_id: null,
+  subject_user_id: null,
+  subject_name: '',
+  alleged_event_at: null,
+}
 
 type OwnerFilter = 'all' | 'unassigned'
 
@@ -95,15 +138,13 @@ export default function Complaints() {
     Record<number, { email: string; user?: UserSearchResult }>
   >({})
   const [formData, setFormData] = useState<ComplaintCreate>({
-    title: '',
-    description: '',
-    complaint_type: 'other',
-    priority: 'medium',
+    ...EMPTY_FORM,
     received_date: new Date().toISOString().slice(0, 16),
-    complainant_name: '',
-    complainant_email: '',
-    complainant_phone: '',
   })
+  const [contracts, setContracts] = useState<Contract[]>([])
+  const [topicOptions, setTopicOptions] = useState<{ value: string; label: string }[]>([])
+  const [subjectEmail, setSubjectEmail] = useState('')
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -119,6 +160,54 @@ export default function Complaints() {
       cancelled = true
     }
   }, [])
+
+  // Load customer contracts + topic labels when create dialog opens.
+  useEffect(() => {
+    if (!showModal) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [contractRes, lookupRes] = await Promise.all([
+          contractsApi.list(true),
+          lookupsApi.list('complaint_types', true).catch(() => ({ items: [], total: 0 })),
+        ])
+        if (cancelled) return
+        setContracts(contractRes.items || [])
+        const lookupByCode = new Map(
+          (lookupRes.items || []).map((item) => [item.code.toLowerCase(), item.label]),
+        )
+        setTopicOptions(
+          COMPLAINT_TYPE_VALUES.map((code) => ({
+            value: code,
+            label: lookupByCode.get(code) || t(`complaints.type.${code}`, code),
+          })),
+        )
+      } catch (err) {
+        if (!cancelled) {
+          trackError(err, { component: 'Complaints', action: 'loadCreateLookups' })
+          setTopicOptions(
+            COMPLAINT_TYPE_VALUES.map((code) => ({
+              value: code,
+              label: t(`complaints.type.${code}`, code),
+            })),
+          )
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [showModal, t])
+
+  const contractOptions = useMemo(
+    () =>
+      contracts.map((c) => ({
+        value: String(c.id),
+        label: c.client_name ? `${c.client_name} (${c.code})` : `${c.name} (${c.code})`,
+        sublabel: c.name !== c.client_name ? c.name : c.code,
+      })),
+    [contracts],
+  )
 
   // Hydrate list filters from shareable URL (back/forward + deep links).
   useEffect(() => {
@@ -219,35 +308,31 @@ export default function Complaints() {
     }
   }
 
-  useEffect(() => {
-    let cancelled = false
-    notificationsApi
-      .getDeliveryStatus()
-      .then((response) => {
-        if (!cancelled) setEmailConfigured(response.data.email_configured)
-      })
-      .catch(() => {
-        // Optional honesty signal — omit banner when readiness cannot be read.
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData.title.trim() || !formData.description.trim()) {
+    if (!formData.title.trim() || !formData.description.trim() || !formData.complainant_name.trim()) {
       setFormError(t('complaints.form.required_error'))
+      return
+    }
+    if (!formData.contract_id) {
+      setFormError(t('complaints.form.customer_required', 'Select which customer this complaint is from.'))
       return
     }
     setFormError(null)
     setCreating(true)
 
+    const payload: ComplaintCreate = {
+      ...formData,
+      received_date: new Date(formData.received_date).toISOString(),
+      alleged_event_at: formData.alleged_event_at
+        ? new Date(formData.alleged_event_at).toISOString()
+        : null,
+      subject_name: formData.subject_name?.trim() || null,
+      complainant_company: formData.complainant_company?.trim() || undefined,
+      source_type: formData.source_type || 'manual',
+    }
+
     if (!navigator.onLine) {
-      const payload = {
-        ...formData,
-        received_date: new Date(formData.received_date).toISOString(),
-      }
       await queueForSync('/api/v1/complaints', 'POST', payload)
       toast.success(t('complaints.saved_offline', 'Saved for sync when back online'))
       setShowModal(false)
@@ -256,26 +341,40 @@ export default function Complaints() {
     }
 
     try {
-      const response = await complaintsApi.create({
-        ...formData,
-        received_date: new Date(formData.received_date).toISOString(),
-      })
+      const response = await complaintsApi.create(payload)
       if (response.data) {
-        setComplaints((prev) => [response.data, ...prev])
+        const created = response.data
+        if (pendingFiles.length > 0) {
+          const uploadResults = await Promise.allSettled(
+            pendingFiles.map((file) =>
+              evidenceAssetsApi.upload(file, {
+                source_module: 'complaint',
+                source_id: created.id,
+                title: file.name,
+              }),
+            ),
+          )
+          const failed = uploadResults.filter((r) => r.status === 'rejected').length
+          if (failed > 0) {
+            toast.error(
+              t(
+                'complaints.attachments_partial',
+                {
+                  count: failed,
+                  defaultValue:
+                    '{{count}} attachment(s) failed to upload — open the complaint to retry.',
+                },
+              ),
+            )
+          }
+        }
+        setComplaints((prev) => [created, ...prev])
         setShowModal(false)
-        setFormData({
-          title: '',
-          description: '',
-          complaint_type: 'other',
-          priority: 'medium',
-          received_date: new Date().toISOString().slice(0, 16),
-          complainant_name: '',
-          complainant_email: '',
-          complainant_phone: '',
-        })
-        toast.success(`Complaint ${response.data.reference_number} recorded`)
-        // Prove create → list → detail: land on the new record after it is in local list state.
-        navigate(`/complaints/${response.data.id}`)
+        setFormData({ ...EMPTY_FORM, received_date: new Date().toISOString().slice(0, 16) })
+        setSubjectEmail('')
+        setPendingFiles([])
+        toast.success(`Complaint ${created.reference_number} recorded`)
+        navigate(`/complaints/${created.id}`)
       }
     } catch (err) {
       trackError(err, { component: 'Complaints', action: 'create' })
@@ -660,81 +759,190 @@ export default function Complaints() {
         </CardContent>
       </Card>
 
-      {/* Create Modal */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+      {/* Create Modal — Wave 1 intake (customer, parties, channel, topic, times, attachments) */}
+      <Dialog
+        open={showModal}
+        onOpenChange={(open) => {
+          setShowModal(open)
+          if (!open) {
+            setPendingFiles([])
+            setSubjectEmail('')
+            setFormError(null)
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{t('complaints.dialog.title')}</DialogTitle>
-            <DialogDescription>{t('complaints.subtitle')}</DialogDescription>
+            <DialogDescription>
+              {t(
+                'complaints.dialog.intake_hint',
+                'Capture who, which customer, channel, topic, and when — then attach evidence.',
+              )}
+            </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-5">
-            <div>
-              <label
-                htmlFor="complaints-field-0"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('complaints.form.title')} <span className="text-destructive">*</span>
-              </label>
-              <Input
-                id="complaints-field-0"
-                type="text"
+          <form onSubmit={handleCreate} className="space-y-5" data-testid="complaints-create-form">
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {t('complaints.form.group_customer', 'Customer')}
+              </p>
+              <FuzzySearchDropdown
+                label={`${t('complaints.form.customer', 'Which customer')} *`}
                 required
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder={t('complaints.form.title_placeholder')}
+                options={contractOptions}
+                value={formData.contract_id ? String(formData.contract_id) : ''}
+                onChange={(value) =>
+                  setFormData({
+                    ...formData,
+                    contract_id: value ? Number(value) : null,
+                  })
+                }
+                placeholder={t('complaints.form.customer_search', 'Search customer / contract…')}
               />
             </div>
 
-            <div>
-              <label
-                htmlFor="complaints-field-1"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('complaints.form.description')} <span className="text-destructive">*</span>
-              </label>
-              <Textarea
-                id="complaints-field-1"
-                required
-                rows={3}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder={t('complaints.form.description_placeholder')}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {t('complaints.form.group_parties', 'Parties')}
+              </p>
               <div>
                 <label
-                  htmlFor="complaints-field-2"
+                  htmlFor="complaints-field-4"
                   className="block text-sm font-medium text-foreground mb-2"
                 >
-                  {t('complaints.form.type')}
+                  {t('complaints.form.complainant_name')} <span className="text-destructive">*</span>
+                </label>
+                <Input
+                  id="complaints-field-4"
+                  type="text"
+                  required
+                  value={formData.complainant_name}
+                  onChange={(e) => setFormData({ ...formData, complainant_name: e.target.value })}
+                  placeholder={t('complaints.form.name_placeholder')}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label
+                    htmlFor="complaints-field-5"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
+                    {t('complaints.form.email')}
+                  </label>
+                  <Input
+                    id="complaints-field-5"
+                    type="email"
+                    value={formData.complainant_email || ''}
+                    onChange={(e) => setFormData({ ...formData, complainant_email: e.target.value })}
+                    placeholder={t('complaints.form.email_placeholder')}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="complaints-field-6"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
+                    {t('complaints.form.phone')}
+                  </label>
+                  <Input
+                    id="complaints-field-6"
+                    type="tel"
+                    value={formData.complainant_phone || ''}
+                    onChange={(e) => setFormData({ ...formData, complainant_phone: e.target.value })}
+                    placeholder={t('complaints.form.phone_placeholder')}
+                  />
+                </div>
+              </div>
+              <div>
+                <label
+                  htmlFor="complaints-company"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('complaints.form.company', 'Complainant company')}
+                </label>
+                <Input
+                  id="complaints-company"
+                  type="text"
+                  value={formData.complainant_company || ''}
+                  onChange={(e) =>
+                    setFormData({ ...formData, complainant_company: e.target.value })
+                  }
+                  placeholder={t('complaints.form.company_placeholder', 'Organisation (optional)')}
+                />
+              </div>
+              <UserEmailSearch
+                label={t('complaints.form.about_staff', 'Who is the complaint about (staff)')}
+                value={subjectEmail}
+                onChange={(email, user) => {
+                  setSubjectEmail(email)
+                  setFormData({
+                    ...formData,
+                    subject_user_id: user?.id ?? null,
+                    subject_name: user?.full_name || formData.subject_name || email || '',
+                  })
+                }}
+                placeholder={t('complaints.form.about_staff_placeholder', 'Search staff by email…')}
+              />
+              <div>
+                <label
+                  htmlFor="complaints-subject-name"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('complaints.form.about_name', 'About (name if not a staff user)')}
+                </label>
+                <Input
+                  id="complaints-subject-name"
+                  type="text"
+                  value={formData.subject_name || ''}
+                  onChange={(e) => setFormData({ ...formData, subject_name: e.target.value })}
+                  placeholder={t(
+                    'complaints.form.about_name_placeholder',
+                    'Person or team the complaint concerns',
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {t('complaints.form.group_channel_topic', 'Channel & topic')}
+              </p>
+              <div>
+                <label
+                  htmlFor="complaints-channel"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('complaints.form.channel', 'How did it come in')}{' '}
+                  <span className="text-destructive">*</span>
                 </label>
                 <Select
-                  value={formData.complaint_type}
-                  onValueChange={(value) => setFormData({ ...formData, complaint_type: value })}
+                  value={formData.source_type || 'manual'}
+                  onValueChange={(value) =>
+                    setFormData({
+                      ...formData,
+                      source_type: value as ComplaintCreate['source_type'],
+                    })
+                  }
                 >
-                  <SelectTrigger id="complaints-field-2">
-                    <SelectValue placeholder={t('complaints.form.select_type')} />
+                  <SelectTrigger id="complaints-channel">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="product">{t('complaints.type.product')}</SelectItem>
-                    <SelectItem value="service">{t('complaints.type.service')}</SelectItem>
-                    <SelectItem value="delivery">{t('complaints.type.delivery')}</SelectItem>
-                    <SelectItem value="communication">
-                      {t('complaints.type.communication')}
-                    </SelectItem>
-                    <SelectItem value="billing">{t('complaints.type.billing')}</SelectItem>
-                    <SelectItem value="staff">{t('complaints.type.staff')}</SelectItem>
-                    <SelectItem value="environmental">
-                      {t('complaints.type.environmental')}
-                    </SelectItem>
-                    <SelectItem value="safety">{t('complaints.type.safety')}</SelectItem>
-                    <SelectItem value="other">{t('complaints.type.other')}</SelectItem>
+                    {CHANNEL_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-
+              <FuzzySearchDropdown
+                label={t('complaints.form.type')}
+                options={topicOptions}
+                value={formData.complaint_type}
+                onChange={(value) => setFormData({ ...formData, complaint_type: value })}
+                placeholder={t('complaints.form.topic_search', 'Search topic / reason…')}
+              />
               <div>
                 <label
                   htmlFor="complaints-field-3"
@@ -759,70 +967,134 @@ export default function Complaints() {
               </div>
             </div>
 
-            <div>
-              <label
-                htmlFor="complaints-field-4"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('complaints.form.complainant_name')} <span className="text-destructive">*</span>
-              </label>
-              <Input
-                id="complaints-field-4"
-                type="text"
-                required
-                value={formData.complainant_name}
-                onChange={(e) => setFormData({ ...formData, complainant_name: e.target.value })}
-                placeholder={t('complaints.form.name_placeholder')}
-              />
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {t('complaints.form.group_when', 'When')}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label
+                    htmlFor="complaints-field-7"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
+                    {t('complaints.form.received_date')} <span className="text-destructive">*</span>
+                  </label>
+                  <Input
+                    id="complaints-field-7"
+                    type="datetime-local"
+                    required
+                    value={formData.received_date}
+                    onChange={(e) => setFormData({ ...formData, received_date: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="complaints-alleged"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
+                    {t('complaints.form.alleged_event', 'Alleged event date/time')}
+                  </label>
+                  <Input
+                    id="complaints-alleged"
+                    type="datetime-local"
+                    value={formData.alleged_event_at || ''}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        alleged_event_at: e.target.value || null,
+                      })
+                    }
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {t('complaints.form.group_narrative', 'What happened')}
+              </p>
               <div>
                 <label
-                  htmlFor="complaints-field-5"
+                  htmlFor="complaints-field-0"
                   className="block text-sm font-medium text-foreground mb-2"
                 >
-                  {t('complaints.form.email')}
+                  {t('complaints.form.title')} <span className="text-destructive">*</span>
                 </label>
                 <Input
-                  id="complaints-field-5"
-                  type="email"
-                  value={formData.complainant_email || ''}
-                  onChange={(e) => setFormData({ ...formData, complainant_email: e.target.value })}
-                  placeholder={t('complaints.form.email_placeholder')}
+                  id="complaints-field-0"
+                  type="text"
+                  required
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder={t('complaints.form.title_placeholder')}
                 />
               </div>
               <div>
                 <label
-                  htmlFor="complaints-field-6"
+                  htmlFor="complaints-field-1"
                   className="block text-sm font-medium text-foreground mb-2"
                 >
-                  {t('complaints.form.phone')}
+                  {t('complaints.form.description')} <span className="text-destructive">*</span>
                 </label>
-                <Input
-                  id="complaints-field-6"
-                  type="tel"
-                  value={formData.complainant_phone || ''}
-                  onChange={(e) => setFormData({ ...formData, complainant_phone: e.target.value })}
-                  placeholder={t('complaints.form.phone_placeholder')}
+                <Textarea
+                  id="complaints-field-1"
+                  required
+                  rows={3}
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder={t('complaints.form.description_placeholder')}
                 />
               </div>
             </div>
 
-            <div>
-              <label
-                htmlFor="complaints-field-7"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('complaints.form.received_date')} <span className="text-destructive">*</span>
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {t('complaints.form.group_attachments', 'Documents')}
+              </p>
+              <label className="inline-flex">
+                <Button type="button" variant="outline" size="sm" asChild>
+                  <span>
+                    <Paperclip className="w-4 h-4 mr-1.5" />
+                    {t('complaints.form.attach', 'Attach files')}
+                  </span>
+                </Button>
+                <input
+                  type="file"
+                  className="sr-only"
+                  multiple
+                  data-testid="complaints-attach-input"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || [])
+                    if (files.length) setPendingFiles((prev) => [...prev, ...files])
+                    e.target.value = ''
+                  }}
+                />
               </label>
-              <Input
-                id="complaints-field-7"
-                type="datetime-local"
-                required
-                value={formData.received_date}
-                onChange={(e) => setFormData({ ...formData, received_date: e.target.value })}
-              />
+              {pendingFiles.length > 0 ? (
+                <ul className="text-xs text-muted-foreground space-y-1" data-testid="complaints-attach-list">
+                  {pendingFiles.map((file, idx) => (
+                    <li key={`${file.name}-${idx}`} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{file.name}</span>
+                      <button
+                        type="button"
+                        className="text-destructive hover:underline shrink-0"
+                        onClick={() =>
+                          setPendingFiles((prev) => prev.filter((_, i) => i !== idx))
+                        }
+                      >
+                        {t('common.remove', 'Remove')}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'complaints.form.attach_hint',
+                    'Optional — uploaded to the shared evidence store after create.',
+                  )}
+                </p>
+              )}
             </div>
 
             <DialogFooter className="gap-3 pt-4">

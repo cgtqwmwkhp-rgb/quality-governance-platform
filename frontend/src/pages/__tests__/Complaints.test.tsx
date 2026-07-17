@@ -7,6 +7,17 @@ import Complaints from '../Complaints'
 const mockNavigate = vi.fn()
 const mockToastError = vi.fn()
 const mockToastSuccess = vi.fn()
+const mockT = (key: string, fallbackOrOptions?: string | Record<string, unknown>) => {
+  if (typeof fallbackOrOptions === 'string') return fallbackOrOptions
+  if (
+    fallbackOrOptions &&
+    typeof fallbackOrOptions === 'object' &&
+    'defaultValue' in fallbackOrOptions
+  ) {
+    return String(fallbackOrOptions.defaultValue)
+  }
+  return key
+}
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
@@ -15,17 +26,7 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, fallbackOrOptions?: string | Record<string, unknown>) => {
-      if (typeof fallbackOrOptions === 'string') return fallbackOrOptions
-      if (
-        fallbackOrOptions &&
-        typeof fallbackOrOptions === 'object' &&
-        'defaultValue' in fallbackOrOptions
-      ) {
-        return String(fallbackOrOptions.defaultValue)
-      }
-      return key
-    },
+    t: mockT,
     i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
@@ -41,6 +42,9 @@ vi.mock('../../contexts/ToastContext', () => ({
 const mockList = vi.fn()
 const mockCreate = vi.fn()
 const mockGetDeliveryStatus = vi.fn()
+const mockContractsList = vi.fn()
+const mockLookupsList = vi.fn()
+const mockEvidenceUpload = vi.fn()
 
 vi.mock('../../api/client', () => ({
   complaintsApi: {
@@ -50,8 +54,61 @@ vi.mock('../../api/client', () => ({
   notificationsApi: {
     getDeliveryStatus: (...args: unknown[]) => mockGetDeliveryStatus(...args),
   },
+  contractsApi: {
+    list: (...args: unknown[]) => mockContractsList(...args),
+  },
+  lookupsApi: {
+    list: (...args: unknown[]) => mockLookupsList(...args),
+  },
+  evidenceAssetsApi: {
+    upload: (...args: unknown[]) => mockEvidenceUpload(...args),
+  },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Something went wrong',
+}))
+
+vi.mock('../../components/UserEmailSearch', () => ({
+  UserEmailSearch: ({
+    value,
+    onChange,
+    label,
+  }: {
+    value: string
+    onChange: (v: string) => void
+    label?: string
+  }) => (
+    <label>
+      {label}
+      <input
+        data-testid="user-email-search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  ),
+}))
+
+vi.mock('../../components/FuzzySearchDropdown', () => ({
+  default: ({
+    value,
+    onChange,
+    label,
+    placeholder,
+  }: {
+    value: string
+    onChange: (v: string) => void
+    label?: string
+    placeholder?: string
+  }) => (
+    <label>
+      {label}
+      <input
+        data-testid={`fuzzy-${placeholder || label || 'search'}`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  ),
 }))
 
 vi.mock('../../utils/errorTracker', () => ({
@@ -106,6 +163,20 @@ describe('Complaints', () => {
     vi.clearAllMocks()
     mockList.mockResolvedValue(paginatedResponse)
     mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: true } })
+    mockContractsList.mockResolvedValue({
+      items: [
+        {
+          id: 10,
+          code: 'ACME',
+          name: 'Acme Facilities',
+          client_name: 'Acme Corp',
+          is_active: true,
+        },
+      ],
+      total: 1,
+    })
+    mockLookupsList.mockResolvedValue({ items: [], total: 0 })
+    mockEvidenceUpload.mockResolvedValue({ data: { id: 1 } })
     mockCreate.mockResolvedValue({
       data: {
         id: 3,
@@ -119,9 +190,26 @@ describe('Complaints', () => {
         complainant_name: 'Jane Doe',
         complainant_email: '',
         complainant_phone: '',
+        contract_id: 10,
+        source_type: 'phone',
       },
     })
   })
+
+  async function fillRequiredCreateFields() {
+    fireEvent.change(screen.getByTestId('fuzzy-Search customer / contract…'), {
+      target: { value: '10' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('complaints.form.title_placeholder'), {
+      target: { value: 'New complaint' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('complaints.form.description_placeholder'), {
+      target: { value: 'Detailed description' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('complaints.form.name_placeholder'), {
+      target: { value: 'Jane Doe' },
+    })
+  }
 
   it('renders loading state initially', () => {
     mockList.mockReturnValue(new Promise(() => {}))
@@ -206,19 +294,13 @@ describe('Complaints', () => {
     fireEvent.click(screen.getByText('complaints.new'))
 
     await waitFor(() => {
-      expect(screen.getByText('complaints.dialog.title')).toBeInTheDocument()
+      expect(screen.getByTestId('complaints-create-form')).toBeInTheDocument()
+    })
+    await waitFor(() => {
+      expect(mockContractsList).toHaveBeenCalled()
     })
 
-    fireEvent.change(screen.getByPlaceholderText('complaints.form.title_placeholder'), {
-      target: { value: 'New complaint' },
-    })
-    fireEvent.change(screen.getByPlaceholderText('complaints.form.description_placeholder'), {
-      target: { value: 'Detailed description' },
-    })
-    fireEvent.change(screen.getByPlaceholderText('complaints.form.name_placeholder'), {
-      target: { value: 'Jane Doe' },
-    })
-
+    await fillRequiredCreateFields()
     fireEvent.click(screen.getByText('complaints.create'))
 
     await waitFor(() => {
@@ -228,6 +310,8 @@ describe('Complaints', () => {
     const callArgs = mockCreate.mock.calls[0][0]
     expect(callArgs.title).toBe('New complaint')
     expect(callArgs.description).toBe('Detailed description')
+    expect(callArgs.contract_id).toBe(10)
+    expect(callArgs.source_type).toBe('manual')
     expect(mockToastSuccess).toHaveBeenCalled()
     expect(mockNavigate).toHaveBeenCalledWith('/complaints/3')
   })
@@ -244,17 +328,15 @@ describe('Complaints', () => {
     fireEvent.click(screen.getByText('complaints.new'))
 
     await waitFor(() => {
-      expect(screen.getByText('complaints.dialog.title')).toBeInTheDocument()
+      expect(screen.getByTestId('complaints-create-form')).toBeInTheDocument()
+    })
+    await waitFor(() => {
+      expect(mockContractsList).toHaveBeenCalled()
     })
 
+    await fillRequiredCreateFields()
     fireEvent.change(screen.getByPlaceholderText('complaints.form.title_placeholder'), {
       target: { value: 'Bad complaint' },
-    })
-    fireEvent.change(screen.getByPlaceholderText('complaints.form.description_placeholder'), {
-      target: { value: 'Some description' },
-    })
-    fireEvent.change(screen.getByPlaceholderText('complaints.form.name_placeholder'), {
-      target: { value: 'Jane Doe' },
     })
 
     fireEvent.click(screen.getByText('complaints.create'))
