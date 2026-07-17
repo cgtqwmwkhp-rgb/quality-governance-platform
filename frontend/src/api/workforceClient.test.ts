@@ -24,6 +24,23 @@ describe('createWorkforceApi', () => {
     expect(api.post).toHaveBeenCalledWith('/api/v1/assessments/run-1/complete')
   })
 
+  it('engineer list/create/sync paths', () => {
+    const api = mockApi()
+    const workforce = createWorkforceApi(api as never)
+    workforce.listEngineers({ page: 1, is_active: true })
+    workforce.createEngineer({ display_name: 'Alex Technician' })
+    workforce.syncFromPams({ tenant_id: 1 })
+    expect(api.get).toHaveBeenCalledWith('/api/v1/engineers/', {
+      params: { page: 1, is_active: true },
+    })
+    expect(api.post).toHaveBeenCalledWith('/api/v1/engineers/', {
+      display_name: 'Alex Technician',
+    })
+    expect(api.post).toHaveBeenCalledWith('/api/v1/engineers/sync-from-pams', undefined, {
+      params: { tenant_id: 1 },
+    })
+  })
+
   it('induction list and engineer competencies paths', () => {
     const api = mockApi()
     const workforce = createWorkforceApi(api as never)
