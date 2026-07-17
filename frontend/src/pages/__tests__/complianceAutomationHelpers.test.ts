@@ -12,6 +12,8 @@ import {
   isOpenWatchImpact,
   mapRunsToMonitoringRows,
   MONITORING_AUDITS_HANDOFF_PATH,
+  MONITORING_SCORE_HANDOFF_EVIDENCE,
+  MONITORING_SCORE_HANDOFF_IMS,
   scoreBarColor,
 } from '../complianceAutomationHelpers'
 
@@ -149,4 +151,12 @@ describe('complianceAutomationHelpers', () => {
       ).toBe(2)
     })
   })
+  describe('score handoff paths', () => {
+    it('points Score KPI chip to IMS and Compliance Evidence', () => {
+      expect(MONITORING_SCORE_HANDOFF_IMS).toBe('/ims')
+      expect(MONITORING_SCORE_HANDOFF_EVIDENCE).toBe('/compliance')
+      expect(MONITORING_AUDITS_HANDOFF_PATH).toBe('/audits?view=kanban')
+    })
+  })
+
 })

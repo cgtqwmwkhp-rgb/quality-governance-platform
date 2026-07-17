@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import ComplianceAutomation from '../ComplianceAutomation'
@@ -17,7 +17,7 @@ const mockRunRegulatoryWatch = vi.fn()
 const translations: Record<string, string> = {
   'compliance.automation.title': 'Monitoring',
   'compliance.automation.subtitle':
-    'Regulatory watch, certificate expiry, compliance scoring, and RIDDOR readiness',
+    'Regulatory watch, certificate expiry, audit handoff, and RIDDOR readiness — live scores live in IMS / Compliance Evidence',
   'compliance.automation.changes': 'Changes',
   'compliance.automation.changes.description':
     'Regulatory feed items and watch-matched impacts in one inbox. Feed rows are ingested updates; impacts come from Run watch and can become real Actions with owner and due date.',
@@ -134,7 +134,7 @@ describe('ComplianceAutomation monitoring honesty', () => {
     expect(await screen.findByRole('heading', { name: 'Monitoring' })).toBeInTheDocument()
     expect(
       screen.getByText(
-        'Regulatory watch, certificate expiry, compliance scoring, and RIDDOR readiness',
+        'Regulatory watch, certificate expiry, audit handoff, and RIDDOR readiness — live scores live in IMS / Compliance Evidence',
       ),
     ).toBeInTheDocument()
   })
@@ -331,22 +331,21 @@ describe('ComplianceAutomation monitoring honesty', () => {
     )
   })
 
-  it('shows honest score empty states without demo ISO placeholders', async () => {
+  it('retires Score tab and hands off KPI chip to IMS / Compliance Evidence (CA-W1b)', async () => {
     render(<ComplianceAutomation />, { wrapper: Wrapper })
     await screen.findByRole('heading', { name: 'Monitoring' })
 
-    fireEvent.click(screen.getByRole('button', { name: /Compliance Score/i }))
-
-    await waitFor(() => {
-      expect(screen.getByTestId('monitoring-score-breakdown-empty')).toBeInTheDocument()
-    })
-    expect(screen.getByText('No live standard scores yet')).toBeInTheDocument()
-    expect(screen.getByTestId('monitoring-score-gaps-empty')).toBeInTheDocument()
-    expect(screen.queryByText('92%')).not.toBeInTheDocument()
-    expect(screen.queryByText('First aid training gaps')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Compliance Score/i })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('monitoring-scoring-tab')).not.toBeInTheDocument()
+    expect(screen.getByTestId('monitoring-score-tab-retired')).toBeInTheDocument()
+    expect(screen.getByTestId('monitoring-score-handoff-ims')).toHaveAttribute('href', '/ims')
+    expect(screen.getByTestId('monitoring-score-handoff-evidence')).toHaveAttribute(
+      'href',
+      '/compliance',
+    )
   })
 
-  it('renders live score breakdown from API categories', async () => {
+  it('keeps live score KPI chip when categories exist without Score tab bars', async () => {
     mockGetComplianceScore.mockResolvedValue({
       data: {
         overall_score: 72,
@@ -361,14 +360,11 @@ describe('ComplianceAutomation monitoring honesty', () => {
     render(<ComplianceAutomation />, { wrapper: Wrapper })
     await screen.findByRole('heading', { name: 'Monitoring' })
 
-    fireEvent.click(screen.getByRole('button', { name: /Compliance Score/i }))
-
     await waitFor(() => {
-      expect(screen.getByText('ISO 9001')).toBeInTheDocument()
+      expect(screen.getByTestId('monitoring-score-overview')).toHaveTextContent('72%')
     })
-    const scoringTab = screen.getByTestId('monitoring-scoring-tab')
-    expect(within(scoringTab).getByText('72%')).toBeInTheDocument()
-    expect(screen.getByText('Missing clause 8.2 evidence')).toBeInTheDocument()
-    expect(screen.queryByTestId('monitoring-score-breakdown-empty')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Compliance Score/i })).not.toBeInTheDocument()
+    expect(screen.queryByText('Missing clause 8.2 evidence')).not.toBeInTheDocument()
   })
+
 })

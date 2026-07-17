@@ -18,6 +18,12 @@ export interface MonitoringAuditRunRow {
 /** Authoritative Audits module entry for schedule / board handoff (CA-W1b). */
 export const MONITORING_AUDITS_HANDOFF_PATH = '/audits?view=kanban'
 
+/** Authoritative IMS multi-scheme score surface (CA-W1b Score-tab kill). */
+export const MONITORING_SCORE_HANDOFF_IMS = '/ims'
+
+/** Evidence coverage / Compliance Evidence hub (CA-W1b Score-tab kill). */
+export const MONITORING_SCORE_HANDOFF_EVIDENCE = '/compliance'
+
 export function isExternalAuditImportRun(run: {
   is_external_audit_import?: boolean
   is_external_import_intake?: boolean
