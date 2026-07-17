@@ -1906,6 +1906,7 @@
   "portal.person_involved_name": "Name of Person Involved",
   "portal.phone_email_placeholder": "Phone or email...",
   "portal.photos": "Photos",
+  "portal.photos.evidence.honesty": "Photo filenames are recorded with this report. Binary files are not uploaded to the shared evidence store from the portal yet — staff can attach evidence after triage.",
   "portal.photos_optional": "Photos (optional)",
   "portal.point_of_impact": "Point of Impact",
   "portal.policy_placeholder": "Policy #...",
