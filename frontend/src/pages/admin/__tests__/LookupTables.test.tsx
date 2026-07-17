@@ -31,7 +31,7 @@ describe('LookupTables configure CTA', () => {
     mockList.mockReset()
     mockCreate.mockReset()
     mockList.mockImplementation(async (category: string) => {
-      if (category === 'departments' || category === 'locations') {
+      if (category === 'departments' || category === 'locations' || category === 'workforce_roles') {
         return { items: [], total: 0 }
       }
       return {
@@ -71,5 +71,34 @@ describe('LookupTables configure CTA', () => {
       'Count unavailable',
     )
     expect(screen.queryByTestId('lookup-empty-departments')).not.toBeInTheDocument()
+  })
+
+  it('shows workforce_roles catalog card with documented code hints', async () => {
+    render(<LookupTables />)
+
+    expect(await screen.findByTestId('lookup-card-workforce_roles')).toBeInTheDocument()
+    expect(screen.getByTestId('lookup-count-workforce_roles')).toHaveTextContent('Not configured')
+    expect(screen.getByTestId('lookup-workforce-roles-hints')).toHaveTextContent(
+      'engineer, field_engineer, supervisor, process_scheduler',
+    )
+  })
+
+  it('opens workforce_roles editor and shows standard code hints when empty', async () => {
+    const user = userEvent.setup()
+    render(<LookupTables />)
+
+    await screen.findByTestId('lookup-configure-workforce_roles')
+    await user.click(screen.getByTestId('lookup-configure-workforce_roles'))
+
+    expect(await screen.findByTestId('lookup-editor-dialog')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalledWith('workforce_roles', false)
+    })
+    expect(screen.getByTestId('lookup-editor-workforce-role-hints')).toHaveTextContent(
+      'field_engineer',
+    )
+    expect(screen.getByTestId('lookup-editor-workforce-role-hints')).toHaveTextContent(
+      'process_scheduler',
+    )
   })
 })
