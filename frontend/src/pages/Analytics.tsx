@@ -25,10 +25,12 @@ import {
   executiveDashboardApi,
   getApiErrorMessage,
   riskRegisterApi,
+  rtasApi,
   type ActionsSummary,
   type ExecutiveDashboardData,
 } from '../api/client'
 import type { AuditRun } from '../api/auditsClient'
+import type { RTA } from '../api/rtasClient'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { cn } from '../helpers/utils'
@@ -69,16 +71,66 @@ const SECTIONS: { id: SectionId; label: string; href: string }[] = [
   { id: 'actions', label: 'Actions', href: '/actions' },
 ]
 
+type MetricValue = number | null
+type ModuleLoadState = 'live' | 'unavailable' | 'estimated' | 'partial'
+
 interface ModuleRow {
   id: SectionId
   module: string
-  total: number
-  open: number
-  closed: number
+  total: MetricValue
+  open: MetricValue
+  closed: MetricValue
   avgResolutionDays: number | null
   trend: number | null
   href: string
   hrefOpen: string
+  loadState?: ModuleLoadState
+}
+
+function formatMetric(value: MetricValue): string {
+  return value == null ? '—' : String(value)
+}
+
+function formatResolutionDays(value: number | null): string {
+  return value == null ? '—' : `${value.toFixed(1)}d`
+}
+
+function avgResolutionDaysFromCompleted<T extends { created_at: string; completed_at?: string | null }>(
+  items: T[],
+): number | null {
+  const durations = items
+    .map((item) => {
+      if (!item.completed_at) return null
+      const start = new Date(item.created_at).getTime()
+      const end = new Date(item.completed_at).getTime()
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null
+      return (end - start) / (1000 * 60 * 60 * 24)
+    })
+    .filter((days): days is number => days != null)
+  if (durations.length === 0) return null
+  return Math.round((durations.reduce((sum, days) => sum + days, 0) / durations.length) * 10) / 10
+}
+
+function avgResolutionDaysFromRtas(items: RTA[]): number | null {
+  const durations = items
+    .filter((rta) => rta.status === 'closed')
+    .map((rta) => {
+      const endSource = rta.updated_at ?? rta.reported_date
+      if (!endSource) return null
+      const start = new Date(rta.created_at).getTime()
+      const end = new Date(endSource).getTime()
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return null
+      return (end - start) / (1000 * 60 * 60 * 24)
+    })
+    .filter((days): days is number => days != null)
+  if (durations.length === 0) return null
+  return Math.round((durations.reduce((sum, days) => sum + days, 0) / durations.length) * 10) / 10
+}
+
+function sumMetrics(rows: ModuleRow[], key: 'total' | 'open' | 'closed'): number | null {
+  const values = rows.map((row) => row[key]).filter((value): value is number => value != null)
+  if (values.length === 0) return null
+  return values.reduce((sum, value) => sum + value, 0)
 }
 
 function periodLabel(range: TimeRange) {
@@ -152,9 +204,15 @@ export default function Analytics() {
   const [actionsOverdue, setActionsOverdue] = useState(0)
   const [riskTotal, setRiskTotal] = useState(0)
   const [riskClosed, setRiskClosed] = useState(0)
-  const [auditsTotal, setAuditsTotal] = useState(0)
-  const [auditsOpen, setAuditsOpen] = useState(0)
-  const [auditsClosed, setAuditsClosed] = useState(0)
+  const [auditsTotal, setAuditsTotal] = useState<number | null>(null)
+  const [auditsOpen, setAuditsOpen] = useState<number | null>(null)
+  const [auditsClosed, setAuditsClosed] = useState<number | null>(null)
+  const [auditsAvgResolutionDays, setAuditsAvgResolutionDays] = useState<number | null>(null)
+  const [auditsLoadState, setAuditsLoadState] = useState<ModuleLoadState>('unavailable')
+  const [rtasOpen, setRtasOpen] = useState<number | null>(null)
+  const [rtasClosed, setRtasClosed] = useState<number | null>(null)
+  const [rtasAvgResolutionDays, setRtasAvgResolutionDays] = useState<number | null>(null)
+  const [rtasLoadState, setRtasLoadState] = useState<ModuleLoadState>('unavailable')
   const [complianceScore, setComplianceScore] = useState<number | null>(null)
   const [partialNotes, setPartialNotes] = useState<string[]>([])
 
@@ -181,7 +239,7 @@ export default function Analytics() {
     const notes: string[] = []
     try {
       setError(null)
-      const [dashRes, actionsRes, viewCountsRes, riskRes, riskClosedRes, auditsRes, scoreRes] =
+      const [dashRes, actionsRes, viewCountsRes, riskRes, riskClosedRes, auditsRes, rtasRes, scoreRes] =
         await Promise.allSettled([
           executiveDashboardApi.getDashboard(days),
           actionsApi.summary(),
@@ -189,6 +247,7 @@ export default function Analytics() {
           riskRegisterApi.getSummary(),
           riskRegisterApi.getSummary({ status: 'closed' }),
           auditsApi.listRuns(1, 100),
+          rtasApi.list(1, 100),
           complianceAutomationApi.getComplianceScore({ scope_type: 'organization' }),
         ])
 
@@ -227,28 +286,58 @@ export default function Analytics() {
 
       if (auditsRes.status === 'fulfilled') {
         const total = auditsRes.value.data.total ?? 0
-        setAuditsTotal(total)
         const runs: AuditRun[] = auditsRes.value.data.items ?? []
         const openOnPage = runs.filter(
           (r: AuditRun) => r.status !== 'completed' && r.status !== 'cancelled',
         ).length
         const closedOnPage = runs.filter((r: AuditRun) => r.status === 'completed').length
+        setAuditsTotal(total)
+        setAuditsAvgResolutionDays(avgResolutionDaysFromCompleted(runs))
         if (total <= runs.length) {
           setAuditsOpen(openOnPage)
           setAuditsClosed(closedOnPage)
+          setAuditsLoadState('live')
         } else {
-          // Scale page mix to total when more runs exist than the page window.
           const ratioOpen = runs.length ? openOnPage / runs.length : 0
           const ratioClosed = runs.length ? closedOnPage / runs.length : 0
           setAuditsOpen(Math.round(total * ratioOpen))
           setAuditsClosed(Math.round(total * ratioClosed))
+          setAuditsLoadState('estimated')
           notes.push('Audit open/closed mix estimated from first 100 runs')
         }
       } else {
-        setAuditsTotal(0)
-        setAuditsOpen(0)
-        setAuditsClosed(0)
+        setAuditsTotal(null)
+        setAuditsOpen(null)
+        setAuditsClosed(null)
+        setAuditsAvgResolutionDays(null)
+        setAuditsLoadState('unavailable')
         notes.push('Audits list unavailable')
+      }
+
+      if (rtasRes.status === 'fulfilled') {
+        const rtas: RTA[] = rtasRes.value.data.items ?? []
+        const total = rtasRes.value.data.total ?? rtas.length
+        const openOnPage = rtas.filter((rta) => rta.status !== 'closed').length
+        const closedOnPage = rtas.filter((rta) => rta.status === 'closed').length
+        setRtasAvgResolutionDays(avgResolutionDaysFromRtas(rtas))
+        if (total <= rtas.length) {
+          setRtasOpen(openOnPage)
+          setRtasClosed(closedOnPage)
+          setRtasLoadState('live')
+        } else {
+          const ratioOpen = rtas.length ? openOnPage / rtas.length : 0
+          const ratioClosed = rtas.length ? closedOnPage / rtas.length : 0
+          setRtasOpen(Math.round(total * ratioOpen))
+          setRtasClosed(Math.round(total * ratioClosed))
+          setRtasLoadState('estimated')
+          notes.push('RTA open/closed mix estimated from first 100 records')
+        }
+      } else {
+        setRtasOpen(null)
+        setRtasClosed(null)
+        setRtasAvgResolutionDays(null)
+        setRtasLoadState('unavailable')
+        notes.push('RTA list unavailable')
       }
 
       if (scoreRes.status === 'fulfilled') {
@@ -278,17 +367,20 @@ export default function Analytics() {
   }, [load])
 
   const moduleRows: ModuleRow[] = useMemo(() => {
-    const incidentsTotal = dash?.incidents.total_in_period ?? 0
-    const incidentsOpen = dash?.incidents.open ?? 0
-    const complaintsTotal = dash?.complaints.total_in_period ?? 0
-    const complaintsOpen = dash?.complaints.open ?? 0
-    const complaintsClosed = dash?.complaints.closed_in_period ?? 0
-    const rtasTotal = dash?.rtas.total_in_period ?? 0
-    const actionsTotal = actionsSummary?.total ?? 0
-    const actionsOpen = openFromActions(actionsSummary)
-    const actionsClosed = completedFromActions(actionsSummary)
-    const riskOpen = Math.max(0, riskTotal)
+    const incidentsTotal = dash?.incidents.total_in_period ?? null
+    const incidentsOpen = dash?.incidents.open ?? null
+    const complaintsTotal = dash?.complaints.total_in_period ?? null
+    const complaintsOpen = dash?.complaints.open ?? null
+    const complaintsClosed = dash?.complaints.closed_in_period ?? null
+    const rtasTotal = dash?.rtas.total_in_period ?? null
+    const actionsTotal = actionsSummary?.total ?? null
+    const actionsOpen = actionsSummary ? openFromActions(actionsSummary) : null
+    const actionsClosed = actionsSummary ? completedFromActions(actionsSummary) : null
     const nearMissTrend = dash?.near_misses.trend_percent ?? null
+    const incidentsClosed =
+      incidentsTotal != null && incidentsOpen != null
+        ? Math.max(0, incidentsTotal - Math.min(incidentsOpen, incidentsTotal))
+        : null
 
     return [
       {
@@ -296,22 +388,24 @@ export default function Analytics() {
         module: 'Incidents',
         total: incidentsTotal,
         open: incidentsOpen,
-        closed: Math.max(0, incidentsTotal - Math.min(incidentsOpen, incidentsTotal)),
+        closed: incidentsClosed,
         avgResolutionDays: null,
         trend: nearMissTrend,
         href: '/incidents',
         hrefOpen: '/incidents?status=open',
+        loadState: dash ? 'live' : 'unavailable',
       },
       {
         id: 'rtas',
         module: 'RTAs',
         total: rtasTotal,
-        open: 0,
-        closed: 0,
-        avgResolutionDays: null,
+        open: rtasOpen,
+        closed: rtasClosed,
+        avgResolutionDays: rtasAvgResolutionDays,
         trend: null,
         href: '/rtas',
         hrefOpen: '/rtas',
+        loadState: rtasLoadState,
       },
       {
         id: 'complaints',
@@ -323,17 +417,19 @@ export default function Analytics() {
         trend: dash?.complaints.resolution_rate != null ? null : null,
         href: '/complaints',
         hrefOpen: '/complaints?status=open',
+        loadState: dash ? 'live' : 'unavailable',
       },
       {
         id: 'risks',
         module: 'Risks',
-        total: riskOpen + riskClosed,
-        open: riskOpen,
+        total: riskTotal + riskClosed,
+        open: riskTotal,
         closed: riskClosed,
         avgResolutionDays: null,
         trend: null,
         href: '/risk-register',
         hrefOpen: '/risk-register?status=active',
+        loadState: 'live',
       },
       {
         id: 'audits',
@@ -341,10 +437,11 @@ export default function Analytics() {
         total: auditsTotal,
         open: auditsOpen,
         closed: auditsClosed,
-        avgResolutionDays: null,
+        avgResolutionDays: auditsAvgResolutionDays,
         trend: null,
         href: '/audits',
         hrefOpen: '/audits?view=board',
+        loadState: auditsLoadState,
       },
       {
         id: 'actions',
@@ -356,9 +453,24 @@ export default function Analytics() {
         trend: null,
         href: '/actions',
         hrefOpen: '/actions?view=overdue',
+        loadState: actionsSummary ? 'live' : 'unavailable',
       },
     ]
-  }, [dash, actionsSummary, riskTotal, riskClosed, auditsTotal, auditsOpen, auditsClosed])
+  }, [
+    dash,
+    actionsSummary,
+    riskTotal,
+    riskClosed,
+    auditsTotal,
+    auditsOpen,
+    auditsClosed,
+    auditsAvgResolutionDays,
+    auditsLoadState,
+    rtasOpen,
+    rtasClosed,
+    rtasAvgResolutionDays,
+    rtasLoadState,
+  ])
 
   const filteredRows = useMemo(() => {
     let rows = moduleRows
@@ -366,7 +478,7 @@ export default function Analytics() {
       rows = rows.filter((r) => r.id === section)
     }
     if (heroFilter === 'open') {
-      rows = rows.map((r) => ({ ...r })).filter((r) => r.open > 0 || section !== 'home')
+      rows = rows.map((r) => ({ ...r })).filter((r) => (r.open ?? 0) > 0 || section !== 'home')
     }
     if (heroFilter === 'high_priority') {
       // Keep all modules but section detail highlights priority metrics
@@ -376,10 +488,13 @@ export default function Analytics() {
   }, [moduleRows, section, heroFilter])
 
   const totals = useMemo(() => {
-    const total = moduleRows.reduce((a, b) => a + b.total, 0)
-    const open = moduleRows.reduce((a, b) => a + b.open, 0)
-    const closed = moduleRows.reduce((a, b) => a + b.closed, 0)
-    const resolutionRate = total > 0 ? Math.round((closed / total) * 1000) / 10 : 0
+    const total = sumMetrics(moduleRows, 'total')
+    const open = sumMetrics(moduleRows, 'open')
+    const closed = sumMetrics(moduleRows, 'closed')
+    const resolutionRate =
+      total != null && closed != null && total > 0
+        ? Math.round((closed / total) * 1000) / 10
+        : null
     const highPriority =
       (dash?.incidents.critical_high ?? 0) +
       (dash?.risks.high_critical ?? 0) +
@@ -393,7 +508,7 @@ export default function Analytics() {
   const insights = useMemo(() => {
     const lines: string[] = []
     if (!dash && !actionsSummary) return lines
-    if (totals.open > 0) {
+    if (totals.open != null && totals.open > 0) {
       lines.push(`${totals.open} open items across modules need attention in this ${periodLabel(timeRange)} view.`)
     }
     if ((dash?.incidents.critical_high ?? 0) > 0) {
@@ -412,11 +527,30 @@ export default function Analytics() {
     if ((dash?.complaints.resolution_rate ?? 0) > 0) {
       lines.push(`Complaint resolution rate this period: ${dash!.complaints.resolution_rate}%.`)
     }
+    if (auditsLoadState === 'unavailable') {
+      lines.push('Audit summary unavailable — open/closed counts are not shown as zero.')
+    } else if (auditsLoadState === 'estimated') {
+      lines.push('Audit open/closed mix is estimated from the first page of runs.')
+    }
+    if (rtasLoadState === 'unavailable') {
+      lines.push('RTA open/closed unavailable — not shown as zero in the module table.')
+    } else if (rtasLoadState === 'estimated') {
+      lines.push('RTA open/closed mix is estimated from the first page of records.')
+    }
     if (lines.length === 0) {
       lines.push('No material hotspots in the loaded live metrics for this period.')
     }
     return lines
-  }, [dash, actionsSummary, totals.open, timeRange, actionsOverdue, complianceScore])
+  }, [
+    dash,
+    actionsSummary,
+    totals.open,
+    timeRange,
+    actionsOverdue,
+    complianceScore,
+    auditsLoadState,
+    rtasLoadState,
+  ])
 
   const sectionMeta = SECTIONS.find((s) => s.id === section)!
 
@@ -533,21 +667,21 @@ export default function Analytics() {
           {
             id: 'total' as HeroFilter,
             title: 'Total records',
-            value: String(totals.total),
+            value: formatMetric(totals.total),
             icon: <FileText className="w-6 h-6" />,
             variant: 'info' as const,
           },
           {
             id: 'open' as HeroFilter,
             title: 'Open items',
-            value: String(totals.open),
+            value: formatMetric(totals.open),
             icon: <Clock className="w-6 h-6" />,
             variant: 'warning' as const,
           },
           {
             id: 'resolution' as HeroFilter,
             title: 'Resolution rate',
-            value: `${totals.resolutionRate}%`,
+            value: totals.resolutionRate != null ? `${totals.resolutionRate}%` : '—',
             icon: <CheckCircle2 className="w-6 h-6" />,
             variant: 'success' as const,
           },
@@ -649,7 +783,10 @@ export default function Analytics() {
           </h2>
           <div className="space-y-4">
             {moduleRows.map((stat) => {
-              const percentage = totals.total > 0 ? (stat.total / totals.total) * 100 : 0
+              const percentage =
+                totals.total != null && stat.total != null && totals.total > 0
+                  ? (stat.total / totals.total) * 100
+                  : 0
               return (
                 <button
                   key={stat.module}
@@ -659,7 +796,7 @@ export default function Analytics() {
                 >
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-foreground">{stat.module}</span>
-                    <span className="text-foreground font-medium">{stat.total}</span>
+                    <span className="text-foreground font-medium">{formatMetric(stat.total)}</span>
                   </div>
                   <div className="h-2 bg-surface rounded-full overflow-hidden">
                     <div
@@ -692,6 +829,7 @@ export default function Analytics() {
                 <th className="text-center p-4 text-sm font-medium text-muted-foreground">Total</th>
                 <th className="text-center p-4 text-sm font-medium text-muted-foreground">Open</th>
                 <th className="text-center p-4 text-sm font-medium text-muted-foreground">Closed</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Avg resolution</th>
                 <th className="text-center p-4 text-sm font-medium text-muted-foreground">Trend</th>
                 <th className="text-right p-4 text-sm font-medium text-muted-foreground">Source</th>
               </tr>
@@ -707,16 +845,33 @@ export default function Analytics() {
                   onClick={() => setQuery({ section: stat.id })}
                 >
                   <td className="p-4 font-medium text-foreground">{stat.module}</td>
-                  <td className="p-4 text-center text-foreground">{stat.total}</td>
+                  <td className="p-4 text-center text-foreground">{formatMetric(stat.total)}</td>
                   <td className="p-4 text-center">
-                    <span className="px-2 py-1 bg-warning/20 text-warning rounded-full text-sm">
-                      {stat.open}
+                    <span
+                      className={cn(
+                        'px-2 py-1 rounded-full text-sm',
+                        stat.open == null
+                          ? 'bg-muted text-muted-foreground'
+                          : 'bg-warning/20 text-warning',
+                      )}
+                    >
+                      {formatMetric(stat.open)}
                     </span>
                   </td>
                   <td className="p-4 text-center">
-                    <span className="px-2 py-1 bg-success/20 text-success rounded-full text-sm">
-                      {stat.closed}
+                    <span
+                      className={cn(
+                        'px-2 py-1 rounded-full text-sm',
+                        stat.closed == null
+                          ? 'bg-muted text-muted-foreground'
+                          : 'bg-success/20 text-success',
+                      )}
+                    >
+                      {formatMetric(stat.closed)}
                     </span>
+                  </td>
+                  <td className="p-4 text-center text-muted-foreground">
+                    {formatResolutionDays(stat.avgResolutionDays)}
                   </td>
                   <td className="p-4 text-center">
                     <TrendIndicator change={stat.trend} invertGood />
@@ -764,6 +919,94 @@ export default function Analytics() {
               <Button variant="outline" asChild>
                 <Link to="/risk-register">High/critical risks: {dash?.risks.high_critical ?? 0}</Link>
               </Button>
+            )}
+            {section === 'audits' && (
+              <Card className="w-full p-4 border-warning/30 bg-warning/5" data-testid="analytics-audit-summary">
+                <h4 className="font-semibold text-foreground mb-2">Audit summary</h4>
+                {auditsLoadState === 'unavailable' ? (
+                  <p className="text-sm text-muted-foreground">
+                    Audit metrics unavailable — counts are not shown as zero.
+                  </p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <p className="text-muted-foreground">Total</p>
+                        <p className="text-lg font-semibold text-foreground">{formatMetric(auditsTotal)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Open</p>
+                        <p className="text-lg font-semibold text-foreground">{formatMetric(auditsOpen)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Closed</p>
+                        <p className="text-lg font-semibold text-foreground">{formatMetric(auditsClosed)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Avg resolution</p>
+                        <p className="text-lg font-semibold text-foreground">
+                          {formatResolutionDays(auditsAvgResolutionDays)}
+                        </p>
+                      </div>
+                    </div>
+                    {auditsLoadState === 'estimated' && (
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Open/closed mix estimated from the first 100 runs — use Audits for authoritative counts.
+                      </p>
+                    )}
+                    {auditsAvgResolutionDays == null && (
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Avg resolution unavailable — no completed runs with completion timestamps in the loaded page.
+                      </p>
+                    )}
+                  </>
+                )}
+              </Card>
+            )}
+            {section === 'rtas' && (
+              <Card className="w-full p-4 border-warning/30 bg-warning/5" data-testid="analytics-rta-summary">
+                <h4 className="font-semibold text-foreground mb-2">RTA summary</h4>
+                {rtasLoadState === 'unavailable' ? (
+                  <p className="text-sm text-muted-foreground">
+                    RTA open/closed unavailable — not shown as zero.
+                  </p>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div>
+                        <p className="text-muted-foreground">Total in period</p>
+                        <p className="text-lg font-semibold text-foreground">
+                          {formatMetric(moduleRows.find((row) => row.id === 'rtas')?.total ?? null)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Open</p>
+                        <p className="text-lg font-semibold text-foreground">{formatMetric(rtasOpen)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Closed</p>
+                        <p className="text-lg font-semibold text-foreground">{formatMetric(rtasClosed)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Avg resolution</p>
+                        <p className="text-lg font-semibold text-foreground">
+                          {formatResolutionDays(rtasAvgResolutionDays)}
+                        </p>
+                      </div>
+                    </div>
+                    {rtasLoadState === 'estimated' && (
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Open/closed mix estimated from the first 100 records — use RTAs for authoritative counts.
+                      </p>
+                    )}
+                    {rtasAvgResolutionDays == null && (
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Avg resolution unavailable — no closed RTAs with usable timestamps in the loaded page.
+                      </p>
+                    )}
+                  </>
+                )}
+              </Card>
             )}
             {heroFilter === 'compliance' && (
               <Button variant="outline" asChild>
