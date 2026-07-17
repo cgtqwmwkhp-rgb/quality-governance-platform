@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
   Plus,
@@ -221,6 +221,7 @@ const TREATMENT_STRATEGIES = [
 
 export default function RiskRegister() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const bowtieEnabled = useFeatureFlag('risk_bowtie')
   const [view, setView] = useState<'register' | 'heatmap' | 'bowtie'>('register')
@@ -1497,11 +1498,11 @@ export default function RiskRegister() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            aria-label={`View ${risk.reference}`}
-                            data-testid={`risk-view-${risk.id}`}
+                            aria-label={`Open ${risk.reference}`}
+                            data-testid={`risk-open-${risk.id}`}
                             onClick={(e) => {
                               e.stopPropagation()
-                              openRiskDetail(risk, 'view')
+                              navigate(`/risk-register/${risk.id}`)
                             }}
                           >
                             <Eye className="h-4 w-4" />
@@ -1537,11 +1538,11 @@ export default function RiskRegister() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            aria-label={`View ${risk.reference}`}
-                            data-testid={`risk-view-${risk.id}`}
+                            aria-label={`Open ${risk.reference}`}
+                            data-testid={`risk-open-${risk.id}`}
                             onClick={(e) => {
                               e.stopPropagation()
-                              openRiskDetail(risk, 'view')
+                              navigate(`/risk-register/${risk.id}`)
                             }}
                           >
                             <Eye className="h-4 w-4" />
@@ -1599,13 +1600,7 @@ export default function RiskRegister() {
               trends={trends}
               topMovers={topMovers}
               onOpenRisk={(id) => {
-                const found = risks.find((r) => r.id === id)
-                if (found) setSelectedRisk(found)
-                setSearchParams((prev) => {
-                  const next = new URLSearchParams(prev)
-                  next.set('riskId', String(id))
-                  return next
-                })
+                navigate(`/risk-register/${id}`)
               }}
               onCellSelect={(cell) => {
                 if (cell.risk_count === 0) return

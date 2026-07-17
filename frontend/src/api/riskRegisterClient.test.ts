@@ -31,6 +31,7 @@ describe('createRiskRegisterApi', () => {
     const rr = createRiskRegisterApi(api as never)
     rr.create({ title: 'r' })
     rr.get(2)
+    rr.getProfile(2)
     rr.update(2, { title: 'r2' })
     rr.delete(2)
     rr.assess(2, { likelihood: 3, impact: 4 })
@@ -40,6 +41,7 @@ describe('createRiskRegisterApi', () => {
     rr.getTrends(30)
     expect(api.post).toHaveBeenCalledWith('/api/v1/risk-register/', { title: 'r' })
     expect(api.get).toHaveBeenCalledWith('/api/v1/risk-register/2')
+    expect(api.get).toHaveBeenCalledWith('/api/v1/risk-register/2/profile')
     expect(api.put).toHaveBeenCalledWith('/api/v1/risk-register/2', { title: 'r2' })
     expect(api.delete).toHaveBeenCalledWith('/api/v1/risk-register/2')
     expect(api.post).toHaveBeenCalledWith('/api/v1/risk-register/2/assess', {

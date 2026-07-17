@@ -121,6 +121,31 @@ class RiskDetailResponse(BaseModel):
     assessment_history: list[AssessmentHistoryItem] = []
 
 
+class RiskProfileResponse(BaseModel):
+    """Typed Excel Risk Card / profile shell payload (RR-P0)."""
+
+    id: int
+    reference: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    status: Optional[str] = None
+    treatment: Optional[str] = None
+    inherent_score: Optional[int] = None
+    inherent_level: Optional[str] = None
+    residual_score: Optional[int] = None
+    residual_level: Optional[str] = None
+    risk_owner_id: Optional[int] = None
+    risk_owner_name: Optional[str] = None
+    last_review_date: Optional[str] = None
+    next_review_date: Optional[str] = None
+    updated_at: Optional[str] = None
+    created_at: Optional[str] = None
+    assessment_history: list[AssessmentHistoryItem] = []
+    linked_actions: list[Any] = []
+    review_notes: Optional[str] = None
+
+
 # ============================================================================
 # Heat Map & Matrix Schemas
 # ============================================================================
