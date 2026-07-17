@@ -383,6 +383,12 @@ export default function CompetencyDashboard() {
           <p className="text-sm text-muted-foreground">
             {t('workforce.competency.skills_matrix_subtitle')}
           </p>
+          <p
+            className="text-xs text-muted-foreground mt-2"
+            data-testid="competency-skills-matrix-honesty"
+          >
+            {t('workforce.competency.skills_matrix_honesty')}
+          </p>
         </CardHeader>
         <CardContent>
           {matrixUnavailable ? (

@@ -60,6 +60,7 @@ vi.mock('../../../utils/errorTracker', () => ({
 import EngineerProfile, {
   competenceGapsEngineerHref,
   computeRequirementsMatch,
+  roleKeyMatchesJobTitle,
 } from '../EngineerProfile'
 
 type CompetencyRequirement = {
@@ -72,6 +73,8 @@ type CompetencyRequirement = {
   tenant_id: number
   created_at: string
   updated_at: string
+  role_key?: string | null
+  site?: string | null
 }
 
 type CompetencyRecord = {
@@ -348,5 +351,26 @@ describe('EngineerProfile', () => {
 
     const link = await screen.findByTestId('engineer-competence-gaps-link')
     expect(link).toHaveAttribute('href', '/workforce/competence-gaps?engineer_id=7')
+  })
+})
+
+describe('EMP-07 role_key allocate honesty', () => {
+  it('matches role_key to job_title with case-insensitive contains', () => {
+    expect(roleKeyMatchesJobTitle('Engineer', 'Field Engineer')).toBe(true)
+    expect(roleKeyMatchesJobTitle('FIELD ENGINEER', 'field engineer')).toBe(true)
+    expect(roleKeyMatchesJobTitle('Supervisor', 'Field Engineer')).toBe(false)
+    expect(roleKeyMatchesJobTitle(null, 'Field Engineer')).toBe(true)
+  })
+
+  it('excludes non-matching role_key requirements from coverage math', () => {
+    const requirements = [
+      req({ id: 1, asset_type_id: 10, role_key: 'Engineer', name: 'Match' }),
+      req({ id: 2, asset_type_id: 11, role_key: 'Supervisor', name: 'Skip' }),
+    ]
+    const competencies = [comp({ id: 1, asset_type_id: 10, state: 'active' })]
+    const match = computeRequirementsMatch(requirements, competencies, engineer)
+    expect(match.mandatoryTotal).toBe(1)
+    expect(match.mandatoryMet).toBe(1)
+    expect(match.percent).toBe(100)
   })
 })

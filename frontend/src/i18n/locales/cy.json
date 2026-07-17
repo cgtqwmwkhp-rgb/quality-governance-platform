@@ -2757,5 +2757,10 @@
   "planet_mark.shell.initiatives.empty_desc": "Mae mentrau'n ymddangos pan fydd gan gategorïau Cwmpas 3 tCO₂e positif wedi'i fesur ar gyfer y flwyddyn hon.",
   "planet_mark.shell.initiatives.footprint": "{{percent}}% o Gwmpas 3 · {{tonnes}} tCO₂e",
   "planet_mark.shell.initiatives.add_action": "Ychwanegu fel cam Gwella",
-  "planet_mark.shell.initiatives.add_failed": "Methwyd creu cam gwella o'r fenter."
+  "planet_mark.shell.initiatives.add_failed": "Methwyd creu cam gwella o'r fenter.",
+  "workforce.induction.employees_empty": "Dim gweithwyr gweithredol yn y dewiswr. Ychwanegwch neu actifadwch weithiwr yn gyntaf.",
+  "workforce.induction.employees_empty_link": "Agor gweithwyr",
+  "workforce.competency.skills_matrix_honesty": "Celloedd y matrics yw statws cymhwysedd yn ôl math ased — nid dyraniad role_key. Mae gofynion wedi'u cwmpasu gan rôl ar broffil y gweithiwr (job_title ≈ role_key).",
+  "workforce.engineers.requirements.role_key_honesty": "Mae cwmpas gorfodol yn dyrannu yn ôl safle a role_key ≈ job_title (cynnwys digyswllt i lythrennau mawr/bach), gan gyd-fynd â rheolau arddull ILIKE y cefn. Mae gofynion nad ydynt yn cyd-fynd â'r gweithiwr hwn wedi'u cuddio.",
+  "workforce.engineers.requirements.role_key_label": "rôl {{role}}"
 }

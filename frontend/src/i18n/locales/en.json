@@ -2896,5 +2896,10 @@
   "planet_mark.shell.initiatives.empty_desc": "Initiatives appear when Scope 3 categories have positive measured tCO₂e for this year.",
   "planet_mark.shell.initiatives.footprint": "{{percent}}% of Scope 3 · {{tonnes}} tCO₂e",
   "planet_mark.shell.initiatives.add_action": "Add as Improve action",
-  "planet_mark.shell.initiatives.add_failed": "Could not create improvement action from initiative."
+  "planet_mark.shell.initiatives.add_failed": "Could not create improvement action from initiative.",
+  "workforce.induction.employees_empty": "No active employees in the roster picker. Add or activate an employee first.",
+  "workforce.induction.employees_empty_link": "Open employees",
+  "workforce.competency.skills_matrix_honesty": "Matrix cells are competency status by asset type — not role_key allocation. Role-scoped requirements live on the employee profile (job_title ≈ role_key).",
+  "workforce.engineers.requirements.role_key_honesty": "Mandatory coverage allocates by site and role_key ≈ job_title (case-insensitive contains), matching backend ILIKE-style rules. Requirements that do not match this employee are hidden.",
+  "workforce.engineers.requirements.role_key_label": "role {{role}}"
 }

@@ -77,6 +77,7 @@ describe('CompetencyDashboard', () => {
     )
 
     expect(await screen.findByTestId('competency-matrix-grid')).toBeInTheDocument()
+    expect(screen.getByTestId('competency-skills-matrix-honesty')).toBeInTheDocument()
     expect(screen.getByText('Transformer')).toBeInTheDocument()
     expect(screen.getByText('Switchgear')).toBeInTheDocument()
     expect(screen.getByTestId('competency-cell-10-7')).toHaveAttribute('data-status', 'active')
