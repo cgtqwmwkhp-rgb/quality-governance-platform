@@ -330,3 +330,59 @@ export function hasTrendData(rows: PlanetMarkTrendRow[]): boolean {
     (row) => hasPositiveCarbonTotal(row.total) || hasPositiveCarbonTotal(row.perFte),
   )
 }
+
+export interface PlanetMarkYearIngestRow {
+  id: number
+  label: string
+  period: string
+  total: number | null
+  perFte: number | null
+  hasIngestedCarbon: boolean
+}
+
+export interface PlanetMarkYearsViewModel {
+  selectedHasIngestedCarbon: boolean
+  showMsXlsxIngestPlaceholder: boolean
+  priorYearsWithoutIngest: PlanetMarkYearIngestRow[]
+  allYearRows: PlanetMarkYearIngestRow[]
+}
+
+export function yearHasIngestedCarbon(year: PlanetMarkReportingYearRecord): boolean {
+  return (
+    hasPositiveCarbonTotal(year.total_emissions) ||
+    hasPositiveCarbonTotal(year.emissions_per_fte)
+  )
+}
+
+export function buildPlanetMarkYearIngestRow(
+  year: PlanetMarkReportingYearRecord,
+): PlanetMarkYearIngestRow {
+  const hasIngestedCarbon = yearHasIngestedCarbon(year)
+  return {
+    id: year.id,
+    label: year.year_label,
+    period: year.period,
+    total: hasPositiveCarbonTotal(year.total_emissions) ? year.total_emissions : null,
+    perFte: hasPositiveCarbonTotal(year.emissions_per_fte) ? year.emissions_per_fte : null,
+    hasIngestedCarbon,
+  }
+}
+
+export function buildPlanetMarkYearsViewModel(input: {
+  years: PlanetMarkReportingYearRecord[]
+  selectedYearId: number | null
+}): PlanetMarkYearsViewModel {
+  const { years, selectedYearId } = input
+  const allYearRows = sortReportingYearsDesc(years).map(buildPlanetMarkYearIngestRow)
+  const selectedRow = allYearRows.find((row) => row.id === selectedYearId) ?? null
+  const priorYearsWithoutIngest = allYearRows.filter(
+    (row) => row.id !== selectedYearId && !row.hasIngestedCarbon,
+  )
+
+  return {
+    selectedHasIngestedCarbon: selectedRow?.hasIngestedCarbon ?? false,
+    showMsXlsxIngestPlaceholder: selectedRow != null && !selectedRow.hasIngestedCarbon,
+    priorYearsWithoutIngest,
+    allYearRows,
+  }
+}

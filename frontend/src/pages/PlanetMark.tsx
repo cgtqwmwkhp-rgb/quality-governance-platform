@@ -6,6 +6,7 @@ import {
   XCircle,
   Plus,
   Download,
+  Upload,
   Award,
   Loader2,
 } from 'lucide-react'
@@ -35,6 +36,7 @@ import {
   PLANET_MARK_SECTIONS,
   buildPlanetMarkExportUrl,
   buildPlanetMarkTrendsViewModel,
+  buildPlanetMarkYearsViewModel,
   findPriorReportingYear,
   formatDeltaPercent,
   formatEmissions,
@@ -121,6 +123,10 @@ export default function PlanetMark() {
         scope3Prior,
       }),
     [dashboard, years, selectedYearId, scope3Current, scope3Prior],
+  )
+  const yearsVm = useMemo(
+    () => buildPlanetMarkYearsViewModel({ years, selectedYearId }),
+    [years, selectedYearId],
   )
 
   const setQuery = useCallback(
@@ -509,17 +515,22 @@ export default function PlanetMark() {
                     <div className="rounded-lg border border-border bg-surface/50 p-4">
                       <p className="text-xs text-muted-foreground">{t('planet_mark.tco2e_total')}</p>
                       <p className="text-2xl font-bold text-foreground">
-                        {selectedYear.total_emissions != null
-                          ? selectedYear.total_emissions.toFixed(1)
-                          : '—'}
+                        {formatEmissions(
+                          hasPositiveCarbonTotal(selectedYear.total_emissions)
+                            ? selectedYear.total_emissions
+                            : null,
+                        )}
                       </p>
                     </div>
                     <div className="rounded-lg border border-border bg-surface/50 p-4">
                       <p className="text-xs text-muted-foreground">{t('planet_mark.tco2e_fte')}</p>
                       <p className="text-2xl font-bold text-foreground">
-                        {selectedYear.emissions_per_fte != null
-                          ? selectedYear.emissions_per_fte.toFixed(2)
-                          : '—'}
+                        {formatEmissions(
+                          hasPositiveCarbonTotal(selectedYear.emissions_per_fte)
+                            ? selectedYear.emissions_per_fte
+                            : null,
+                          2,
+                        )}
                       </p>
                     </div>
                     <div className="rounded-lg border border-border bg-surface/50 p-4">
@@ -543,12 +554,38 @@ export default function PlanetMark() {
                 </CardContent>
               </Card>
 
+              {yearsVm.showMsXlsxIngestPlaceholder && (
+                <Card data-testid="planet-mark-years-ingest-placeholder">
+                  <CardHeader>
+                    <CardTitle>{t('planet_mark.shell.years.ingest_title')}</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      {t('planet_mark.shell.years.ingest_hint')}
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <EmptyState
+                      title={t('planet_mark.shell.years.ingest_empty')}
+                      description={t('planet_mark.shell.years.ingest_empty_desc')}
+                      action={
+                        <Button variant="outline" disabled aria-disabled="true">
+                          <Upload className="w-4 h-4" />
+                          {t('planet_mark.shell.years.ingest_cta')}
+                        </Button>
+                      }
+                    />
+                  </CardContent>
+                </Card>
+              )}
+
               <Card>
                 <CardHeader>
                   <CardTitle>{t('planet_mark.shell.all_years_title')}</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    {t('planet_mark.shell.years.all_years_hint')}
+                  </p>
                 </CardHeader>
                 <CardContent className="divide-y divide-border">
-                  {years.map((year) => (
+                  {yearsVm.allYearRows.map((year) => (
                     <button
                       key={year.id}
                       type="button"
@@ -559,18 +596,45 @@ export default function PlanetMark() {
                       )}
                     >
                       <div>
-                        <p className="font-medium text-foreground">{year.year_label}</p>
+                        <p className="font-medium text-foreground">{year.label}</p>
                         <p className="text-sm text-muted-foreground">{year.period}</p>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {year.total_emissions != null
-                          ? `${year.total_emissions.toFixed(1)} tCO₂e`
+                        {year.hasIngestedCarbon && year.total != null
+                          ? `${formatEmissions(year.total)} tCO₂e`
                           : t('planet_mark.shell.no_emissions_recorded')}
                       </p>
                     </button>
                   ))}
                 </CardContent>
               </Card>
+
+              {yearsVm.priorYearsWithoutIngest.length > 0 && (
+                <Card data-testid="planet-mark-years-prior-empty">
+                  <CardHeader>
+                    <CardTitle>{t('planet_mark.shell.years.prior_empty_title')}</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      {t('planet_mark.shell.years.prior_empty_hint')}
+                    </p>
+                  </CardHeader>
+                  <CardContent className="divide-y divide-border">
+                    {yearsVm.priorYearsWithoutIngest.map((year) => (
+                      <div
+                        key={year.id}
+                        className="flex items-center justify-between py-3 text-sm"
+                      >
+                        <div>
+                          <p className="font-medium text-foreground">{year.label}</p>
+                          <p className="text-muted-foreground">{year.period}</p>
+                        </div>
+                        <span className="text-muted-foreground">
+                          {t('planet_mark.shell.no_emissions_recorded')}
+                        </span>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
 
