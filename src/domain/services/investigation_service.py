@@ -37,6 +37,8 @@ from src.domain.models.investigation import (
 from src.domain.services.investigation_structure_normalize import (
     build_run_data_json_from_rows,
     build_structure_json_from_rows,
+    iter_run_section_values,
+    parse_structure_json,
     sync_run_field_responses_from_json,
     sync_template_structure_from_json,
 )
@@ -1431,7 +1433,11 @@ class InvestigationService:
         if not investigation.level:
             reason_codes.append(ClosureReasonCode.LEVEL_NOT_SET)
 
-        data: dict = dict(investigation.data) if investigation.data else {}
+        # Harden against non-mapping JSON blobs (list / scalar / null).
+        raw_data = investigation.data if isinstance(investigation.data, dict) else {}
+        section_values: Dict[str, Dict[str, Any]] = {}
+        for section_key, field_key, value in iter_run_section_values(raw_data):
+            section_values.setdefault(section_key, {})[field_key] = value
 
         level_section_counts = {
             "low": 3,
@@ -1440,33 +1446,27 @@ class InvestigationService:
         }
         max_sections = level_section_counts.get(level_str or "high", 6)
 
-        structure: dict = dict(template.structure) if template.structure else {}
-        sections = structure.get("sections", [])
+        # Mirror parse_structure_json: skip malformed sections/fields instead of 500.
+        structure = template.structure if isinstance(template.structure, dict) else {}
+        sections = parse_structure_json(structure)
 
         for i, section in enumerate(sections):
             if i >= max_sections:
                 break
 
-            section_id = section.get("id", f"section_{i}")
-            section_data = data.get(section_id, {})
+            section_id = section.section_key
+            section_data = section_values.get(section_id)
+            required_fields = [f for f in section.fields if f.required]
 
-            if section_id not in data:
-                fields = section.get("fields", [])
-                has_required = any(f.get("required", False) for f in fields)
-                if has_required:
+            if section_data is None:
+                if required_fields:
                     reason_codes.append(ClosureReasonCode.MISSING_REQUIRED_SECTION)
                     missing_fields.append(section_id)
                 continue
 
-            fields = section.get("fields", [])
-            for field in fields:
-                field_id = field.get("id")
-                is_required = field.get("required", False)
-                field_type = field.get("type", "text")
-
-                if not is_required:
-                    continue
-
+            for field in required_fields:
+                field_id = field.field_key
+                field_type = field.field_type or "text"
                 field_path = f"{section_id}.{field_id}"
                 field_value = section_data.get(field_id)
 

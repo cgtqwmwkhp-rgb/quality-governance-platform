@@ -1,5 +1,6 @@
 """Investigation Run API routes."""
 
+import logging
 import math
 from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
@@ -40,6 +41,8 @@ from src.domain.models.investigation import (
     InvestigationTemplate,
 )
 from src.domain.models.user import User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -413,26 +416,45 @@ async def get_closure_validation(
         reasons.append(ClosureReasonCode.STATUS_NOT_COMPLETE)
 
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
-    open_work = await fetch_open_work_for_investigation(
-        db,
-        investigation_id=investigation_id,
-        tenant_id=tenant_id,
-    )
-    if open_work:
-        reasons.append(CLOSURE_REASON_OPEN_ACTIONS_REMAIN)
+
+    # Readiness probe must never 500 for "not ready" — fail soft on open-work / template checks.
+    open_work: list = []
+    try:
+        open_work = await fetch_open_work_for_investigation(
+            db,
+            investigation_id=investigation_id,
+            tenant_id=tenant_id,
+        )
+        if open_work:
+            reasons.append(CLOSURE_REASON_OPEN_ACTIONS_REMAIN)
+    except Exception:  # noqa: BLE001 — probe honesty over hard failure
+        logger.exception(
+            "closure_validation_open_work_failed",
+            extra={"investigation_id": investigation_id, "tenant_id": tenant_id},
+        )
+        if CLOSURE_REASON_OPEN_ACTIONS_REMAIN not in reasons:
+            reasons.append(CLOSURE_REASON_OPEN_ACTIONS_REMAIN)
 
     # Emit MISSING_REQUIRED_FIELD / MISSING_REQUIRED_SECTION from template validation.
     from src.domain.services.investigation_service import InvestigationService
 
-    template_validation = await InvestigationService.validate_closure(
-        db,
-        investigation_id=investigation_id,
-        tenant_id=tenant_id,
-    )
-    for code in getattr(template_validation, "reason_codes", None) or []:
-        code_str = code.value if hasattr(code, "value") else str(code)
-        if code_str not in reasons:
-            reasons.append(code_str)
+    try:
+        template_validation = await InvestigationService.validate_closure(
+            db,
+            investigation_id=investigation_id,
+            tenant_id=tenant_id,
+        )
+        for code in getattr(template_validation, "reason_codes", None) or []:
+            code_str = code.value if hasattr(code, "value") else str(code)
+            if code_str not in reasons:
+                reasons.append(code_str)
+    except Exception:  # noqa: BLE001 — never turn template parse errors into HTTP 500
+        logger.exception(
+            "closure_validation_template_failed",
+            extra={"investigation_id": investigation_id, "tenant_id": tenant_id},
+        )
+        if ClosureReasonCode.MISSING_REQUIRED_SECTION not in reasons:
+            reasons.append(ClosureReasonCode.MISSING_REQUIRED_SECTION)
 
     return {
         "can_close": len(reasons) == 0,
