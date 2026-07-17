@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -38,6 +38,11 @@ import {
   AlertOctagon,
 } from 'lucide-react'
 import { cn } from '../helpers/utils'
+import {
+  MAP_W1_SCHEME_CHIPS,
+  detectSchemesInMappings,
+  isDemoSchemeReviewSource,
+} from './imsMapHonesty'
 import {
   Button,
   Card,
@@ -191,12 +196,14 @@ export default function IMSDashboard() {
     { category: 'Environmental Performance', status: 'Complete', source: 'ISO 14001', trend: 'improving' },
     { category: 'OH&S Performance', status: 'Complete', source: 'ISO 45001', trend: 'stable' },
     { category: 'Information Security', status: 'Complete', source: 'ISO 27001', trend: 'improving' },
-    { category: 'Carbon Footprint', status: 'Complete', source: 'Planet Mark', trend: 'improving' },
-    { category: 'UVDB Qualification', status: 'Complete', source: 'UVDB Achilles', trend: 'stable' },
+    { category: 'Carbon Footprint', status: 'Pending', source: 'Planet Mark', trend: 'stable' },
+    { category: 'UVDB Qualification', status: 'Pending', source: 'UVDB Achilles', trend: 'stable' },
     { category: 'Objectives Achievement', status: 'Pending', source: 'All Standards', trend: 'stable' },
     { category: 'Risks & Opportunities', status: 'In Progress', source: 'All Standards', trend: 'stable' },
     { category: 'Resource Adequacy', status: 'Pending', source: 'All Standards', trend: 'stable' },
   ]
+
+  const detectedSchemes = useMemo(() => detectSchemesInMappings(mappings), [mappings])
 
   const reviewComplete = managementReviewInputs.filter((i) => i.status === 'Complete').length
   const reviewReadiness = Math.round((reviewComplete / managementReviewInputs.length) * 100)
@@ -458,10 +465,30 @@ export default function IMSDashboard() {
 
       {/* ── Cross-Standard Mapping Tab ── */}
       {activeTab === 'mapping' && (
-        <Card>
+        <Card data-testid="ims-map-w1-panel">
           <CardHeader>
-            <CardTitle>Cross-Standard Clause Mappings</CardTitle>
-            <p className="text-sm text-muted-foreground">Live from cross-standard mappings database</p>
+            <CardTitle>{t('ims.map_w1.title')}</CardTitle>
+            <p className="text-sm text-muted-foreground" data-testid="ims-map-w1-honesty">
+              {t('ims.map_w1.honesty')}
+            </p>
+            <div className="flex flex-wrap gap-2 mt-3" data-testid="ims-map-w1-scheme-chips">
+              {MAP_W1_SCHEME_CHIPS.map((scheme) => {
+                const live = detectedSchemes.includes(scheme)
+                return (
+                  <Badge
+                    key={scheme}
+                    variant={live ? 'success' : 'secondary'}
+                    data-testid={`ims-map-w1-scheme-${scheme.replace(/\s+/g, '-').toLowerCase()}`}
+                  >
+                    {scheme}
+                    {live
+                      ? ` · ${t('ims.map_w1.scheme_live')}`
+                      : ` · ${t('ims.map_w1.scheme_awaiting')}`}
+                  </Badge>
+                )
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">{t('ims.map_w1.builder_followon')}</p>
           </CardHeader>
           <CardContent className="p-0">
             {mappingsLoading ? (
@@ -478,8 +505,8 @@ export default function IMSDashboard() {
               <div className="p-6">
                 <EmptyState
                   icon={<Link2 className="w-8 h-8 text-muted-foreground" />}
-                  title="No cross-standard mappings"
-                  description="Create clause mappings between standards in the ISO Compliance module."
+                  title={t('ims.map_w1.empty_title')}
+                  description={t('ims.map_w1.empty_desc')}
                   action={
                     <Button variant="outline" onClick={() => navigate('/compliance')}>
                       Open ISO Compliance <ChevronRight className="w-4 h-4 ml-1" aria-hidden="true" />
@@ -620,13 +647,19 @@ export default function IMSDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {managementReviewInputs.map((input, i) => (
+                {managementReviewInputs.map((input, i) => {
+                  const demoScheme = isDemoSchemeReviewSource(input.source)
+                  const statusLabel = demoScheme ? t('ims.map_w1.demo_status') : input.status
+                  return (
                   <div
                     key={i}
                     className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border"
+                    data-testid={demoScheme ? 'ims-map-w1-demo-review-row' : undefined}
                   >
                     <div className="flex items-center gap-3">
-                      {input.status === 'Complete' ? (
+                      {demoScheme ? (
+                        <AlertTriangle className="w-5 h-5 text-warning" aria-hidden="true" />
+                      ) : input.status === 'Complete' ? (
                         <CheckCircle2 className="w-5 h-5 text-success" aria-hidden="true" />
                       ) : input.status === 'In Progress' ? (
                         <Clock className="w-5 h-5 text-warning" aria-hidden="true" />
@@ -635,12 +668,15 @@ export default function IMSDashboard() {
                       )}
                       <div>
                         <div className="font-medium text-foreground text-sm">{input.category}</div>
-                        <div className="text-xs text-muted-foreground">{input.source}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {input.source}
+                          {demoScheme ? ` · ${t('ims.map_w1.demo_source_hint')}` : ''}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className={cn('flex items-center gap-1 text-sm', input.trend === 'improving' ? 'text-success' : 'text-muted-foreground')}>
-                        {input.trend === 'improving' ? (
+                      <div className={cn('flex items-center gap-1 text-sm', !demoScheme && input.trend === 'improving' ? 'text-success' : 'text-muted-foreground')}>
+                        {!demoScheme && input.trend === 'improving' ? (
                           <TrendingUp className="w-4 h-4" aria-label="Improving trend" />
                         ) : (
                           <span aria-label="Stable trend">—</span>
@@ -648,18 +684,21 @@ export default function IMSDashboard() {
                       </div>
                       <Badge
                         variant={
-                          input.status === 'Complete'
+                          demoScheme
+                            ? 'warning'
+                            : input.status === 'Complete'
                             ? 'default'
                             : input.status === 'In Progress'
                               ? 'secondary'
                               : 'outline'
                         }
                       >
-                        {input.status}
+                        {statusLabel}
                       </Badge>
                     </div>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </CardContent>
           </Card>
