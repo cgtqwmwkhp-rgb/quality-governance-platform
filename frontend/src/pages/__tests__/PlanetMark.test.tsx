@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import PlanetMark from '../PlanetMark'
 
@@ -7,14 +7,18 @@ const mockGetDashboard = vi.fn()
 const mockListYears = vi.fn()
 const mockListActions = vi.fn()
 const mockGetActionsSummary = vi.fn()
+const mockGetScope3 = vi.fn()
 const mockCreateReportingYear = vi.fn()
 const mockCreateApiError = vi.fn()
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, opts?: { year?: string }) => {
+    t: (key: string, opts?: { year?: string; total?: string; perFte?: string }) => {
       if (key === 'planet_mark.shell.export_ready' && opts?.year) {
         return `Export ready for ${opts.year}`
+      }
+      if (key === 'planet_mark.shell.trends.prior_year_summary' && opts) {
+        return `${opts.total} tCO₂e total · ${opts.perFte} per FTE`
       }
       return key
     },
@@ -29,6 +33,7 @@ vi.mock('../../api/client', () => ({
     createReportingYear: (...args: unknown[]) => mockCreateReportingYear(...args),
     listActions: (...args: unknown[]) => mockListActions(...args),
     getActionsSummary: (...args: unknown[]) => mockGetActionsSummary(...args),
+    getScope3: (...args: unknown[]) => mockGetScope3(...args),
   },
   ErrorClass: {
     NETWORK_ERROR: 'NETWORK_ERROR',
@@ -52,6 +57,22 @@ vi.mock('../../components/planet-mark/ActionCard', () => ({
 vi.mock('../../components/planet-mark/ActionSummaryKPIs', () => ({
   ActionSummaryKPIs: () => <div data-testid="action-summary-kpis" />,
 }))
+
+const yearRecord2025 = {
+  id: 2,
+  year_label: 'YE2025',
+  year_number: 2025,
+  period: '01 Jan 2025 - 31 Dec 2025',
+  average_fte: 20,
+  total_emissions: 24,
+  emissions_per_fte: 1.2,
+  scope_1: 12,
+  scope_2_market: 6,
+  scope_3: 6,
+  data_quality: 10,
+  certification_status: 'certified',
+  is_baseline: false,
+}
 
 const yearRecord = {
   id: 1,
@@ -79,7 +100,13 @@ function renderPlanetMark(initialEntry = '/planet-mark') {
 
 describe('PlanetMark shell', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    mockGetDashboard.mockReset()
+    mockListYears.mockReset()
+    mockListActions.mockReset()
+    mockGetActionsSummary.mockReset()
+    mockGetScope3.mockReset()
+    mockCreateReportingYear.mockReset()
+    mockCreateApiError.mockReset()
     mockGetDashboard.mockResolvedValue({
       data: {
         current_year: {
@@ -115,6 +142,14 @@ describe('PlanetMark shell', () => {
         not_started: 0,
         completion_rate_percent: 0,
         avg_progress_percent: 0,
+      },
+    })
+    mockGetScope3.mockResolvedValue({
+      data: {
+        year_id: 1,
+        measured_count: 0,
+        total_co2e: 0,
+        categories: [],
       },
     })
     mockCreateReportingYear.mockResolvedValue({ data: { id: 2, year_label: 'YE2026', message: 'ok' } })
@@ -179,15 +214,116 @@ describe('PlanetMark shell', () => {
     expect(screen.getByTestId('action-summary-kpis')).toBeInTheDocument()
   })
 
-  it('shows trends table when dashboard historical years exist', async () => {
+  it('shows trends table with YoY columns when dashboard historical years exist', async () => {
     renderPlanetMark('/planet-mark?year=1&section=trends')
 
     const section = await screen.findByTestId('planet-mark-section-trends')
     expect(section).toBeInTheDocument()
+    expect(await screen.findByTestId('planet-mark-trends-historical')).toBeInTheDocument()
     expect(section.querySelector('tbody')?.textContent).toContain('YE2026')
+    expect(screen.getByText('planet_mark.shell.trends.yoy_total')).toBeInTheDocument()
+  })
+
+  it('shows YoY and scope delta panels when comparative API data exists', async () => {
+    mockListYears.mockResolvedValue({ data: { total: 2, years: [yearRecord, yearRecord2025] } })
+    mockGetDashboard.mockResolvedValue({
+      data: {
+        current_year: {
+          id: 1,
+          label: 'YE2026',
+          total_emissions: 22.1,
+          emissions_per_fte: 1.1,
+          fte: 20,
+          yoy_change_percent: -8.3,
+          on_track: true,
+        },
+        emissions_breakdown: {
+          scope_1: { value: 10, label: 'Direct' },
+          scope_2: { value: 5, label: 'Indirect' },
+          scope_3: { value: 7.1, label: 'Value Chain' },
+        },
+        data_quality: { scope_1_2: 12, scope_3: 10, target: 12 },
+        certification: { status: 'in_progress', expiry_date: null },
+        actions: { total: 0, completed: 0, overdue: 0 },
+        targets: { reduction_percent: 5, target_per_fte: 1.0 },
+        historical_years: [
+          { label: 'YE2026', total: 22.1, per_fte: 1.1 },
+          { label: 'YE2025', total: 24, per_fte: 1.2 },
+        ],
+      },
+    })
+
+    renderPlanetMark('/planet-mark?year=1&section=trends')
+
+    const yoyCard = await screen.findByTestId('planet-mark-trends-yoy')
+    expect(yoyCard).toBeInTheDocument()
+    expect(within(yoyCard).getByText('-8.3%')).toBeInTheDocument()
+    expect(screen.getByTestId('planet-mark-trends-scope')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(mockGetScope3).toHaveBeenCalledWith(1)
+      expect(mockGetScope3).toHaveBeenCalledWith(2)
+    })
+  })
+
+  it('shows thin prior-year list instead of fake totals when years exist without emissions', async () => {
+    mockListYears.mockResolvedValue({
+      data: {
+        total: 2,
+        years: [
+          { ...yearRecord, total_emissions: 0, emissions_per_fte: 0, scope_1: 0, scope_2_market: 0, scope_3: 0 },
+          { ...yearRecord2025, total_emissions: 0, emissions_per_fte: 0, scope_1: 0, scope_2_market: 0, scope_3: 0 },
+        ],
+      },
+    })
+    mockGetDashboard.mockResolvedValue({
+      data: {
+        current_year: {
+          id: 1,
+          label: 'YE2026',
+          total_emissions: 0,
+          emissions_per_fte: 0,
+          fte: 20,
+          yoy_change_percent: null,
+          on_track: false,
+        },
+        emissions_breakdown: {
+          scope_1: { value: 0, label: 'Direct' },
+          scope_2: { value: 0, label: 'Indirect' },
+          scope_3: { value: 0, label: 'Value Chain' },
+        },
+        data_quality: { scope_1_2: 0, scope_3: 0, target: 12 },
+        certification: { status: 'draft', expiry_date: null },
+        actions: { total: 0, completed: 0, overdue: 0 },
+        targets: { reduction_percent: null, target_per_fte: null },
+        historical_years: [],
+      },
+    })
+
+    renderPlanetMark('/planet-mark?year=1&section=trends')
+
+    const thinPrior = await screen.findByTestId('planet-mark-trends-thin-prior')
+    expect(thinPrior).toBeInTheDocument()
+    expect(within(thinPrior).getByText('YE2025')).toBeInTheDocument()
+    expect(within(thinPrior).getByText('planet_mark.shell.no_emissions_recorded')).toBeInTheDocument()
+    expect(within(thinPrior).queryByText('0.0')).not.toBeInTheDocument()
   })
 
   it('shows honest trends empty when no historical years', async () => {
+    mockListYears.mockResolvedValue({
+      data: {
+        total: 1,
+        years: [
+          {
+            ...yearRecord,
+            total_emissions: 0,
+            emissions_per_fte: 0,
+            scope_1: 0,
+            scope_2_market: 0,
+            scope_3: 0,
+          },
+        ],
+      },
+    })
     mockGetDashboard.mockResolvedValue({
       data: {
         current_year: {
@@ -214,7 +350,12 @@ describe('PlanetMark shell', () => {
 
     renderPlanetMark('/planet-mark?year=1&section=trends')
 
-    expect(await screen.findByText('planet_mark.shell.empty.trends')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(mockGetScope3).toHaveBeenCalledWith(1)
+    })
+    expect(screen.queryByTestId('planet-mark-trends-thin-prior')).not.toBeInTheDocument()
+    expect(screen.getByText('planet_mark.shell.empty.trends')).toBeInTheDocument()
+    expect(screen.getByText('planet_mark.shell.empty.trends_desc')).toBeInTheDocument()
   })
 
   it('exposes export section for selected year', async () => {
