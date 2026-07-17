@@ -53,8 +53,10 @@ type ActiveTab = 'overview' | 'mapping' | 'audit' | 'review' | 'isms'
 
 type ComplianceHubDestination = {
   id: string
-  title: string
-  description: string
+  title?: string
+  description?: string
+  titleKey?: string
+  descriptionKey?: string
   icon: React.ElementType
   colorBg: string
   path?: string
@@ -88,8 +90,8 @@ const complianceHubDestinations: ComplianceHubDestination[] = [
   },
   {
     id: 'monitoring',
-    title: 'Monitoring & Certificates',
-    description: 'Regulatory updates, certificate renewals, and scheduled compliance audits.',
+    titleKey: 'ims.hub.monitoring.title',
+    descriptionKey: 'ims.hub.monitoring.description',
     icon: ShieldCheck,
     colorBg: 'bg-orange-500',
     path: '/compliance-automation',
@@ -336,8 +338,16 @@ export default function IMSDashboard() {
                         <Icon className="w-6 h-6 text-white" aria-hidden="true" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-base font-bold text-foreground mb-1">{destination.title}</h3>
-                        <p className="text-sm text-muted-foreground">{destination.description}</p>
+                        <h3 className="text-base font-bold text-foreground mb-1">
+                          {destination.titleKey
+                            ? t(destination.titleKey, destination.title ?? '')
+                            : destination.title}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {destination.descriptionKey
+                            ? t(destination.descriptionKey, destination.description ?? '')
+                            : destination.description}
+                        </p>
                       </div>
                       <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-1" aria-hidden="true" />
                     </div>
