@@ -315,7 +315,9 @@ describe('Incidents', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('incidents.load_shape_error')).toBeInTheDocument()
+      expect(
+        screen.getByText(/Incident list returned an unexpected shape/i),
+      ).toBeInTheDocument()
     })
     expect(screen.getByText('incidents.empty.title')).toBeInTheDocument()
   })
