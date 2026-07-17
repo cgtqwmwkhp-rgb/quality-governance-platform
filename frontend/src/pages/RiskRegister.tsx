@@ -55,7 +55,8 @@ type HeroFilter =
   | 'outside_appetite'
   | 'overdue'
 
-type DetailMode = 'view' | 'edit' | 'create' | null
+/** Create-only dialog on the list. View/edit detail popup was removed — open `/risk-register/:id`. */
+type DetailMode = 'create' | null
 
 function ColumnHeaderTip({ label, tip }: { label: string; tip: string }) {
   return (
@@ -231,7 +232,6 @@ export default function RiskRegister() {
   const [view, setView] = useState<'register' | 'heatmap' | 'bowtie'>('register')
   const [risks, setRisks] = useState<Risk[]>([])
   const [heatMapData, setHeatMapData] = useState<HeatMapData | null>(null)
-  const [selectedRisk, setSelectedRisk] = useState<Risk | null>(null)
   const [detailMode, setDetailMode] = useState<DetailMode>(null)
   const [ownerDraft, setOwnerDraft] = useState('')
   const [titleDraft, setTitleDraft] = useState('')
@@ -430,41 +430,6 @@ export default function RiskRegister() {
       })
       setRisks(mappedRisks)
 
-      if (Number.isInteger(focusRiskId) && focusRiskId > 0) {
-        const focused = mappedRisks.find((risk) => risk.id === focusRiskId)
-        if (focused) {
-          setSelectedRisk(focused)
-        } else {
-          // Deep-linked risk may be outside first page — fetch detail as selection stub.
-          try {
-            const detail = await riskRegisterApi.get(focusRiskId)
-            const d = detail.data
-            setSelectedRisk({
-              id: d.id,
-              reference: d.reference ?? `RISK-${d.id}`,
-              title: d.title,
-              category: d.category ?? 'operational',
-              department: d.department ?? '',
-              inherent_score: d.inherent_score ?? d.risk_score ?? 0,
-              residual_score: d.residual_score ?? d.risk_score ?? 0,
-              risk_level: 'medium',
-              risk_color: 'hsl(var(--info))',
-              treatment_strategy: d.treatment_strategy ?? 'treat',
-              status: d.status ?? 'open',
-              is_within_appetite: d.is_within_appetite ?? true,
-              risk_owner_name: d.risk_owner_name ?? d.risk_owner ?? '',
-              next_review_date: d.next_review_date ?? null,
-              linked_audits: d.linked_audits ?? [],
-              linked_actions: d.linked_actions ?? [],
-              linked_incidents: d.linked_incidents ?? [],
-              suggestion_triage_status: d.suggestion_triage_status ?? null,
-            })
-          } catch {
-            /* leave selection empty — list still usable */
-          }
-        }
-      }
-
       if (pendingResult.status === 'fulfilled') {
         const pendingTotal = pendingResult.value.data?.total
         setPendingTriageCount(typeof pendingTotal === 'number' ? pendingTotal : 0)
@@ -654,7 +619,7 @@ export default function RiskRegister() {
     } finally {
       setLoading(false)
     }
-  }, [registerMode, focusRiskId, workspaceFilters, cellFilter, scoreType])
+  }, [registerMode, workspaceFilters, cellFilter, scoreType])
 
   useEffect(() => {
     void loadRisks()
@@ -723,32 +688,16 @@ export default function RiskRegister() {
     closeRejectDialog()
   }
 
-  const openRiskDetail = (risk: Risk, mode: 'view' | 'edit') => {
-    setSelectedRisk(risk)
-    setDetailMode(mode)
-    setOwnerDraft(risk.risk_owner_name || '')
-    setTitleDraft(risk.title)
-    setDescriptionDraft('')
-    setCategoryDraft(risk.category || 'operational')
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev)
-      next.set('riskId', String(risk.id))
-      return next
-    })
+  const openRiskProfile = (riskId: number) => {
+    navigate(`/risk-register/${riskId}`)
   }
 
-  const closeRiskDetail = () => {
+  const closeCreateDialog = () => {
+    if (detailSaving) return
     setDetailMode(null)
-    setSelectedRisk(null)
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev)
-      next.delete('riskId')
-      return next
-    })
   }
 
   const openCreateRisk = () => {
-    setSelectedRisk(null)
     setDetailMode('create')
     setOwnerDraft('')
     setTitleDraft('')
@@ -756,77 +705,49 @@ export default function RiskRegister() {
     setCategoryDraft('operational')
   }
 
-  const saveRiskDetail = async () => {
-    if (detailMode === 'create') {
-      if (titleDraft.trim().length < 5) {
-        toast.error('Title must be at least 5 characters')
-        return
-      }
-      if (descriptionDraft.trim().length < 10) {
-        toast.error('Description must be at least 10 characters')
-        return
-      }
-      setDetailSaving(true)
-      try {
-        await riskRegisterApi.create({
-          title: titleDraft.trim(),
-          description: descriptionDraft.trim(),
-          category: categoryDraft,
-          risk_owner_name: ownerDraft.trim() || undefined,
-          inherent_likelihood: 2,
-          inherent_impact: 2,
-          residual_likelihood: 1,
-          residual_impact: 2,
-          treatment_strategy: 'treat',
-        })
-        toast.success('Risk created')
-        setDetailMode(null)
-        await loadRisks()
-      } catch (error) {
-        toast.error(getApiErrorMessage(error, 'Could not create risk'))
-      } finally {
-        setDetailSaving(false)
-      }
+  const saveCreateRisk = async () => {
+    if (titleDraft.trim().length < 5) {
+      toast.error('Title must be at least 5 characters')
       return
     }
-    if (!selectedRisk) return
+    if (descriptionDraft.trim().length < 10) {
+      toast.error('Description must be at least 10 characters')
+      return
+    }
     setDetailSaving(true)
     try {
-      await riskRegisterApi.update(selectedRisk.id, {
-        title: titleDraft.trim() || selectedRisk.title,
+      const created = await riskRegisterApi.create({
+        title: titleDraft.trim(),
+        description: descriptionDraft.trim(),
         category: categoryDraft,
-        risk_owner_name: ownerDraft.trim(),
+        risk_owner_name: ownerDraft.trim() || undefined,
+        inherent_likelihood: 2,
+        inherent_impact: 2,
+        residual_likelihood: 1,
+        residual_impact: 2,
+        treatment_strategy: 'treat',
       })
-      setRisks((prev) =>
-        prev.map((r) =>
-          r.id === selectedRisk.id
-            ? {
-                ...r,
-                title: titleDraft.trim() || r.title,
-                category: categoryDraft,
-                risk_owner_name: ownerDraft.trim(),
-              }
-            : r,
-        ),
-      )
-      setSelectedRisk((prev) =>
-        prev
-          ? {
-              ...prev,
-              title: titleDraft.trim() || prev.title,
-              category: categoryDraft,
-              risk_owner_name: ownerDraft.trim(),
-            }
-          : prev,
-      )
-      toast.success('Risk updated')
-      setDetailMode('view')
+      toast.success('Risk created')
+      setDetailMode(null)
+      const newId = created.data?.id
+      if (typeof newId === 'number' && newId > 0) {
+        navigate(`/risk-register/${newId}`)
+        return
+      }
+      await loadRisks()
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Could not update risk'))
+      toast.error(getApiErrorMessage(error, 'Could not create risk'))
     } finally {
       setDetailSaving(false)
     }
   }
+
+  // Legacy list deep-link `?riskId=` → full Risk Profile page (no detail popup).
+  useEffect(() => {
+    if (Number.isInteger(focusRiskId) && focusRiskId > 0) {
+      navigate(`/risk-register/${focusRiskId}`, { replace: true })
+    }
+  }, [focusRiskId, navigate])
 
   const exportRegisterCsv = () => {
     const rows = visibleRisks.map((r) => [
@@ -1432,7 +1353,7 @@ export default function RiskRegister() {
                       tip={
                         registerMode === 'import_triage'
                           ? 'Accept into the live register or reject the import suggestion.'
-                          : 'View risk detail or edit fields such as owner and title.'
+                          : 'Open the Risk Profile page (view or edit).'
                       }
                     />
                   </th>
@@ -1461,24 +1382,23 @@ export default function RiskRegister() {
                 {visibleRisks.map((risk) => (
                   <tr
                     key={risk.id}
-                    className={`hover:bg-muted/30 transition-colors cursor-pointer ${
-                      focusRiskId === risk.id || selectedRisk?.id === risk.id
-                        ? 'bg-primary/5 ring-1 ring-inset ring-primary/30'
-                        : ''
-                    }`}
-                    data-testid={focusRiskId === risk.id ? 'risk-register-focused-row' : undefined}
+                    className="hover:bg-muted/30 transition-colors cursor-pointer"
                     role="button"
                     tabIndex={0}
+                    aria-label={`Open profile for ${risk.reference}`}
+                    data-testid={`risk-row-${risk.id}`}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault()
-                        openRiskDetail(risk, 'view')
+                        openRiskProfile(risk.id)
                       }
                     }}
-                    onClick={() => openRiskDetail(risk, 'view')}
+                    onClick={() => openRiskProfile(risk.id)}
                   >
                     <td className="px-4 py-4">
-                      <span className="font-mono text-primary">{risk.reference}</span>
+                      <span className="font-mono text-primary underline-offset-2 hover:underline">
+                        {risk.reference}
+                      </span>
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
@@ -1576,9 +1496,10 @@ export default function RiskRegister() {
                         type="button"
                         className="flex items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-muted"
                         data-testid={`risk-owner-edit-${risk.id}`}
+                        aria-label={`Open profile to edit owner for ${risk.reference}`}
                         onClick={(e) => {
                           e.stopPropagation()
-                          openRiskDetail(risk, 'edit')
+                          openRiskProfile(risk.id)
                         }}
                       >
                         <User className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -1604,7 +1525,7 @@ export default function RiskRegister() {
                             data-testid={`risk-open-${risk.id}`}
                             onClick={(e) => {
                               e.stopPropagation()
-                              navigate(`/risk-register/${risk.id}`)
+                              openRiskProfile(risk.id)
                             }}
                           >
                             <Eye className="h-4 w-4" />
@@ -1644,7 +1565,7 @@ export default function RiskRegister() {
                             data-testid={`risk-open-${risk.id}`}
                             onClick={(e) => {
                               e.stopPropagation()
-                              navigate(`/risk-register/${risk.id}`)
+                              openRiskProfile(risk.id)
                             }}
                           >
                             <Eye className="h-4 w-4" />
@@ -1652,11 +1573,11 @@ export default function RiskRegister() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            aria-label={`Edit ${risk.reference}`}
+                            aria-label={`Edit ${risk.reference} on profile`}
                             data-testid={`risk-edit-${risk.id}`}
                             onClick={(e) => {
                               e.stopPropagation()
-                              openRiskDetail(risk, 'edit')
+                              openRiskProfile(risk.id)
                             }}
                           >
                             <Edit2 className="h-4 w-4" />
@@ -1730,159 +1651,101 @@ export default function RiskRegister() {
         <Card>
           <CardContent className="p-6">
             <h2 className="text-xl font-bold mb-6 text-foreground">Bow-Tie Analysis</h2>
-
-            {selectedRisk ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <GitBranch className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p className="text-foreground font-medium mb-2">{selectedRisk.title}</p>
-                <p>Bow-tie analysis is not available yet for this risk</p>
-                <p className="text-sm mt-2">
-                  Structured causes, consequences, and controls will appear here when this feature is ready.
-                </p>
-                <Button onClick={() => setView('register')} className="mt-4">
-                  Back to Risk Register
-                </Button>
-              </div>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">
-                <GitBranch className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p>Select a risk from the register to view its Bow-Tie analysis</p>
-                <Button onClick={() => setView('register')} className="mt-4">
-                  Go to Risk Register
-                </Button>
-              </div>
-            )}
+            <div className="text-center py-12 text-muted-foreground">
+              <GitBranch className="w-16 h-16 mx-auto mb-4 opacity-50" />
+              <p>Bow-tie analysis is not available yet</p>
+              <p className="text-sm mt-2">
+                Open a risk from the register to use its full Risk Profile. Structured causes,
+                consequences, and controls will appear here when this feature is ready.
+              </p>
+              <Button onClick={() => setView('register')} className="mt-4">
+                Back to Risk Register
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
 
       <Dialog
-        open={detailMode != null}
+        open={detailMode === 'create'}
         onOpenChange={(open) => {
-          if (!open && !detailSaving) closeRiskDetail()
+          if (!open) closeCreateDialog()
         }}
       >
-        <DialogContent className="sm:max-w-lg" data-testid="risk-detail-dialog">
+        <DialogContent className="sm:max-w-lg" data-testid="risk-create-dialog">
           <DialogHeader>
-            <DialogTitle>
-              {detailMode === 'create'
-                ? 'Add risk'
-                : detailMode === 'edit'
-                  ? 'Edit risk'
-                  : selectedRisk?.reference || 'Risk detail'}
-            </DialogTitle>
+            <DialogTitle>Add risk</DialogTitle>
             <DialogDescription>
-              {detailMode === 'create'
-                ? 'Create a register entry. Inherent is the gross score before controls; residual is the net score after controls.'
-                : 'Inherent (gross) and residual (net) scores summarise likelihood × impact before and after controls.'}
+              Create a register entry. After create you open the full Risk Profile. Inherent is the
+              gross score before controls; residual is the net score after controls.
             </DialogDescription>
           </DialogHeader>
 
-          {detailMode === 'view' && selectedRisk ? (
-            <div className="space-y-3 text-sm">
-              <div>
-                <p className="text-xs text-muted-foreground">Title</p>
-                <p className="font-medium text-foreground">{selectedRisk.title}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">Inherent (gross)</p>
-                  <p className="text-lg font-bold text-foreground">{selectedRisk.inherent_score}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Residual (net)</p>
-                  <p className="text-lg font-bold text-primary">{selectedRisk.residual_score}</p>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Owner</p>
-                <p className="text-foreground">
-                  {selectedRisk.risk_owner_name || 'Unassigned'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Category / Level / Treatment</p>
-                <p className="text-foreground">
-                  {selectedRisk.category} · {selectedRisk.risk_level} ·{' '}
-                  {selectedRisk.treatment_strategy}
-                </p>
-              </div>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="risk-detail-title">Title</Label>
+              <Input
+                id="risk-detail-title"
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                disabled={detailSaving}
+                data-testid="risk-detail-title"
+              />
             </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="risk-detail-title">Title</Label>
-                <Input
-                  id="risk-detail-title"
-                  value={titleDraft}
-                  onChange={(e) => setTitleDraft(e.target.value)}
-                  disabled={detailSaving}
-                  data-testid="risk-detail-title"
-                />
-              </div>
-              {detailMode === 'create' && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="risk-detail-description">Description</Label>
-                  <textarea
-                    id="risk-detail-description"
-                    value={descriptionDraft}
-                    onChange={(e) => setDescriptionDraft(e.target.value)}
-                    rows={3}
-                    disabled={detailSaving}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    data-testid="risk-detail-description"
-                  />
-                </div>
-              )}
-              <div className="space-y-1.5">
-                <Label htmlFor="risk-detail-owner">Owner name</Label>
-                <Input
-                  id="risk-detail-owner"
-                  value={ownerDraft}
-                  onChange={(e) => setOwnerDraft(e.target.value)}
-                  placeholder="e.g. Jane Smith"
-                  disabled={detailSaving}
-                  data-testid="risk-detail-owner"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="risk-detail-category">Category</Label>
-                <select
-                  id="risk-detail-category"
-                  value={categoryDraft}
-                  onChange={(e) => setCategoryDraft(e.target.value)}
-                  disabled={detailSaving}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  data-testid="risk-detail-category"
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="risk-detail-description">Description</Label>
+              <textarea
+                id="risk-detail-description"
+                value={descriptionDraft}
+                onChange={(e) => setDescriptionDraft(e.target.value)}
+                rows={3}
+                disabled={detailSaving}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                data-testid="risk-detail-description"
+              />
             </div>
-          )}
+            <div className="space-y-1.5">
+              <Label htmlFor="risk-detail-owner">Owner name</Label>
+              <Input
+                id="risk-detail-owner"
+                value={ownerDraft}
+                onChange={(e) => setOwnerDraft(e.target.value)}
+                placeholder="e.g. Jane Smith"
+                disabled={detailSaving}
+                data-testid="risk-detail-owner"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="risk-detail-category">Category</Label>
+              <select
+                id="risk-detail-category"
+                value={categoryDraft}
+                onChange={(e) => setCategoryDraft(e.target.value)}
+                disabled={detailSaving}
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                data-testid="risk-detail-category"
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="secondary" onClick={closeRiskDetail} disabled={detailSaving}>
-              {detailMode === 'view' ? 'Close' : 'Cancel'}
+            <Button type="button" variant="secondary" onClick={closeCreateDialog} disabled={detailSaving}>
+              Cancel
             </Button>
-            {detailMode === 'view' && selectedRisk ? (
-              <Button type="button" onClick={() => setDetailMode('edit')}>
-                Edit
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                onClick={() => void saveRiskDetail()}
-                disabled={detailSaving}
-                data-testid="risk-detail-save"
-              >
-                {detailSaving ? 'Saving…' : detailMode === 'create' ? 'Create risk' : 'Save'}
-              </Button>
-            )}
+            <Button
+              type="button"
+              onClick={() => void saveCreateRisk()}
+              disabled={detailSaving}
+              data-testid="risk-detail-save"
+            >
+              {detailSaving ? 'Saving…' : 'Create risk'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
