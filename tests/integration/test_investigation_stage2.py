@@ -36,7 +36,7 @@ class TestInvestigationMappingContract:
         from src.services.investigation_service import InvestigationService
 
         # near_miss → LOW
-        assert InvestigationService.RTA_SEVERITY_MAP["near_miss"] == InvestigationLevel.LOW
+        assert InvestigationService.RTA_SEVERITY_MAP["near_miss"] == InvestigationLevel.MINIMAL
         # damage_only → MEDIUM
         assert InvestigationService.RTA_SEVERITY_MAP["damage_only"] == InvestigationLevel.MEDIUM
         # minor_injury → MEDIUM

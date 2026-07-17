@@ -1,4 +1,4 @@
-import type { InvestigationSection } from './types'
+import type { InvestigationLevel, InvestigationSection } from './types'
 import { generateId } from './types'
 
 /** INC043 worked-example section contract (Plantexpand investigation report). */
@@ -6,6 +6,7 @@ export interface Inc043ContractSectionSpec {
   key: string
   title: string
   summary: string
+  minLevel: InvestigationLevel
   matchKeywords: string[]
 }
 
@@ -14,42 +15,49 @@ export const INC043_CONTRACT_SECTIONS: Inc043ContractSectionSpec[] = [
     key: 'section_1_basic_info',
     title: '1. Basic Information',
     summary: 'Date/time, site, people, witnesses, reporter, risk category, brief description',
+    minLevel: 'minimal',
     matchKeywords: ['basic', 'information', 'details', 'incident event'],
   },
   {
     key: 'section_2_immediate_consequences',
     title: '2. Immediate Consequences',
     summary: 'Injuries, property or equipment damage, immediate actions taken',
+    minLevel: 'minimal',
     matchKeywords: ['immediate', 'consequence', 'injur', 'damage'],
   },
   {
     key: 'section_3_evidence',
     title: '3. Evidence & Information',
     summary: 'Photos, emails, RAMS, DRA, toolbox talks, qualifications, method statements',
+    minLevel: 'low',
     matchKeywords: ['evidence', 'information', 'document', 'appendix'],
   },
   {
     key: 'section_4_timeline',
     title: '4. Timeline of Events',
     summary: 'Chronology with actors and timestamps',
+    minLevel: 'medium',
     matchKeywords: ['timeline', 'chronolog', 'events'],
   },
   {
     key: 'section_5_root_cause',
     title: '5. Root Cause Analysis',
     summary: 'Immediate, underlying, and contributing causes (5-Why style)',
+    minLevel: 'medium',
     matchKeywords: ['root cause', 'rca', 'why', 'contributing'],
   },
   {
     key: 'section_6_capa',
     title: '6. Corrective & Preventive Actions',
     summary: 'Actions, responsible persons, due dates',
+    minLevel: 'high',
     matchKeywords: ['corrective', 'preventive', 'capa', 'action'],
   },
   {
     key: 'section_7_lessons',
     title: '7. Lessons Learned',
     summary: 'Key takeaways and systemic improvements',
+    minLevel: 'high',
     matchKeywords: ['lesson', 'learned', 'takeaway', 'conclusion', 'finding'],
   },
 ]
@@ -144,6 +152,7 @@ export function createInc043ScaffoldSections(): InvestigationSection[] {
   return INC043_CONTRACT_SECTIONS.map((spec) => ({
     id: spec.key,
     name: spec.title,
+    min_level: spec.minLevel,
     fields: [],
   }))
 }
@@ -153,6 +162,7 @@ export function createInc043ScaffoldSectionsWithPlaceholders(): InvestigationSec
   return INC043_CONTRACT_SECTIONS.map((spec) => ({
     id: spec.key,
     name: spec.title,
+    min_level: spec.minLevel,
     fields: [
       {
         id: generateId(),

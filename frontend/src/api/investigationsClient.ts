@@ -25,7 +25,7 @@ export interface Investigation {
   assigned_entity_id: number
   status: 'draft' | 'in_progress' | 'under_review' | 'completed' | 'closed'
   /** HSG245-aligned investigation depth from source severity. */
-  level?: 'minimal' | 'low' | 'medium' | 'high' | string | null
+  level?: 'minimal' | 'low' | 'medium' | 'high' | null
   title: string
   description?: string
   data: Record<string, unknown>

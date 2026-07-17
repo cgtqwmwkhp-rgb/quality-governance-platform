@@ -19,6 +19,7 @@ describe('investigation-builder templateHelpers', () => {
         {
           id: 'sec-1',
           name: 'Overview',
+          min_level: 'low',
           fields: [
             { id: 'f-1', label: 'Summary', type: 'text_long', required: true },
             { id: 'f-2', label: 'Severity', type: 'scale_1_5', required: false },
@@ -66,6 +67,7 @@ describe('investigation-builder templateHelpers', () => {
         {
           id: 's1',
           name: 'Check',
+          min_level: 'minimal',
           fields: [{ id: 'q1', label: 'Applicable?', type: 'yes_no_na', required: true }],
         },
       ],
@@ -77,5 +79,28 @@ describe('investigation-builder templateHelpers', () => {
 
     const feType = fromApiQuestionType(String(field.question_type), { allowNa: field.allow_na })
     expect(feType).toBe('yes_no_na')
+  })
+
+  it('round-trips each section minimum investigation level', () => {
+    const payload = buildStructurePayload({
+      name: 'HSG245',
+      description: '',
+      version: '1.0',
+      is_active: true,
+      applicable_entity_types: ['reporting_incident'],
+      sections: [{ id: 'fishbone', name: 'Fishbone', min_level: 'high', fields: [] }],
+    })
+
+    expect(payload.sections[0].min_level).toBe('high')
+    expect(mapApiToDraft({
+      id: 1,
+      name: 'HSG245',
+      version: '1.0',
+      is_active: true,
+      applicable_entity_types: ['reporting_incident'],
+      structure: payload,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }).sections[0].min_level).toBe('high')
   })
 })

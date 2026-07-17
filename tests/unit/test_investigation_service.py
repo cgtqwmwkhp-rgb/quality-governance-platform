@@ -35,6 +35,7 @@ def test_severity_level_mapping():
 
     # Near Miss mapping
     nm = InvestigationService.NEAR_MISS_SEVERITY_MAP
+    assert nm["negligible"] == InvestigationLevel.MINIMAL
     assert nm["low"] == InvestigationLevel.LOW
     assert nm["medium"] == InvestigationLevel.MEDIUM
     assert nm["high"] == InvestigationLevel.HIGH
@@ -43,7 +44,7 @@ def test_severity_level_mapping():
 
     # RTA mapping
     rta = InvestigationService.RTA_SEVERITY_MAP
-    assert rta["near_miss"] == InvestigationLevel.LOW
+    assert rta["near_miss"] == InvestigationLevel.MINIMAL
     assert rta["damage_only"] == InvestigationLevel.MEDIUM
     assert rta["serious_injury"] == InvestigationLevel.HIGH
     assert rta["fatal"] == InvestigationLevel.HIGH
@@ -58,6 +59,21 @@ def test_severity_level_mapping():
     print("✓ Complaint priority mapping correct")
 
     print("\n✅ All severity/level mappings are deterministic")
+
+
+def test_hsg245_section_gating_is_named_and_level_aware():
+    """Named HSG245 sections must not rely on their position in a template."""
+    from src.domain.services.investigation_service import section_is_in_scope
+
+    high_analysis = {"id": "section_4b_hsg245_analysis"}
+    low_findings = {"id": "section_3_investigation_findings"}
+    custom_high = {"id": "custom", "min_level": "high"}
+
+    assert section_is_in_scope(low_findings, "low") is True
+    assert section_is_in_scope(high_analysis, "medium") is False
+    assert section_is_in_scope(high_analysis, "high") is True
+    assert section_is_in_scope(custom_high, "medium") is False
+    assert section_is_in_scope(custom_high, "high") is True
 
 
 def test_customer_pack_redaction_external():

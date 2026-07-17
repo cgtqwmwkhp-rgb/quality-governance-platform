@@ -207,13 +207,31 @@ class TestIntegrationSmoke:
         result = check_resp.json()
         assert result["is_riddor"] is True
 
+        incident_resp = client.post(
+            "/api/v1/incidents/",
+            json={
+                "title": "Smoke RIDDOR pack incident",
+                "description": "Fracture for RIDDOR prepare persistence smoke",
+                "incident_type": "injury",
+                "severity": "high",
+                "incident_date": "2026-07-12T10:00:00Z",
+                "location": "Site",
+            },
+            headers=admin_headers,
+        )
+        assert incident_resp.status_code in (200, 201), incident_resp.text
+        incident_id = incident_resp.json()["id"]
+
         prep_resp = client.post(
-            "/api/v1/compliance-automation/riddor/prepare/1",
+            f"/api/v1/compliance-automation/riddor/prepare/{incident_id}",
             params={"riddor_type": "specified_injury"},
             headers=admin_headers,
         )
-        assert prep_resp.status_code == 200
-        assert "submission_data" in prep_resp.json()
+        assert prep_resp.status_code == 200, prep_resp.text
+        prep_body = prep_resp.json()
+        assert "submission_data" in prep_body
+        assert prep_body.get("persisted") is True
+        assert prep_body.get("status") == "draft_pack"
 
 
 class TestDataIntegritySmoke:

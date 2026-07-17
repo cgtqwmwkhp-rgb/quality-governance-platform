@@ -33,6 +33,7 @@ import {
   createNewSection,
   createEmptyDraft,
   type ApplicableEntityType,
+  type InvestigationLevel,
   type InvestigationTemplateDraft,
 } from './types'
 import {
@@ -52,6 +53,13 @@ import {
 const QUESTION_TYPE_LABELS = Object.fromEntries(
   QUESTION_TYPES.map((entry) => [entry.type, entry.label]),
 ) as Record<string, string>
+
+const INVESTIGATION_LEVEL_OPTIONS: { value: InvestigationLevel; label: string }[] = [
+  { value: 'minimal', label: 'Minimal — event facts and immediate actions' },
+  { value: 'low', label: 'Low — findings and local lessons' },
+  { value: 'medium', label: 'Medium — concise root-cause analysis' },
+  { value: 'high', label: 'High — full HSG245 report' },
+]
 
 function TemplateListView() {
   const navigate = useNavigate()
@@ -397,6 +405,30 @@ function TemplateEditorView({ templateId }: { templateId?: string }) {
                 }
                 className="font-semibold"
               />
+              <Select
+                value={section.min_level}
+                onValueChange={(value) =>
+                  setDraft((current) => ({
+                    ...current,
+                    sections: current.sections.map((item, index) =>
+                      index === sectionIndex
+                        ? { ...item, min_level: value as InvestigationLevel }
+                        : item,
+                    ),
+                  }))
+                }
+              >
+                <SelectTrigger className="w-[230px]" aria-label={`${section.name} minimum investigation level`}>
+                  <SelectValue placeholder="Minimum level" />
+                </SelectTrigger>
+                <SelectContent>
+                  {INVESTIGATION_LEVEL_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 variant="ghost"
                 size="icon"

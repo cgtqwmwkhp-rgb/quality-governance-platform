@@ -232,10 +232,14 @@ async def list_riddor_submissions(
     current_user: CurrentUser,
     status_filter: Optional[str] = None,
 ):
-    """List RIDDOR submission register (honest empty until incident pack persistence ships)."""
+    """List persisted RIDDOR packs for the Monitoring register."""
     service = ComplianceAutomationService(db)
-    _ = current_user
-    return service.list_riddor_submissions(status_filter=status_filter)
+    tenant_id = current_user.tenant_id
+    assert tenant_id is not None
+    return await service.list_riddor_submissions(
+        tenant_id=tenant_id,
+        status_filter=status_filter,
+    )
 
 
 @router.post("/riddor/check")
@@ -246,6 +250,7 @@ async def check_riddor_required(
 ):
     """Check if incident requires RIDDOR reporting."""
     service = ComplianceAutomationService(db)
+    _ = current_user
     return service.check_riddor_required(incident_data)
 
 
@@ -256,12 +261,20 @@ async def prepare_riddor_submission(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ):
-    """Prepare RIDDOR submission data."""
+    """Prepare and persist a RIDDOR draft pack from an incident."""
     service = ComplianceAutomationService(db)
-    return service.prepare_riddor_submission(
-        incident_id=incident_id,
-        riddor_type=riddor_type,
-    )
+    tenant_id = current_user.tenant_id
+    assert tenant_id is not None
+    try:
+        response = await service.prepare_riddor_submission(
+            tenant_id=tenant_id,
+            incident_id=incident_id,
+            riddor_type=riddor_type,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await db.commit()
+    return response
 
 
 @router.post("/riddor/submit/{incident_id}")
@@ -270,9 +283,17 @@ async def submit_riddor(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ):
-    """Submit RIDDOR report to HSE."""
+    """Record HSE filing intent against a persisted pack (gateway stub — does not file)."""
     service = ComplianceAutomationService(db)
-    return service.submit_riddor(
-        incident_id=incident_id,
-        submitted_by=current_user.id,
-    )
+    tenant_id = current_user.tenant_id
+    assert tenant_id is not None
+    try:
+        response = await service.submit_riddor(
+            tenant_id=tenant_id,
+            incident_id=incident_id,
+            submitted_by=current_user.id,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await db.commit()
+    return response
