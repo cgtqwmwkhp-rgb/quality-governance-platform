@@ -653,10 +653,15 @@ export default function Investigations() {
     setUpdatingAction(true)
     setActionUpdateError(null)
     try {
-      await actionsApi.update(selectedAction.id, 'investigation', {
-        status: newStatus,
-        completion_notes: newStatus === 'completed' ? completionNotes : undefined,
-      })
+      await actionsApi.update(
+        selectedAction.id,
+        'investigation',
+        {
+          status: newStatus,
+          completion_notes: newStatus === 'completed' ? completionNotes : undefined,
+        },
+        selectedAction.action_key,
+      )
       // Reload actions to show updated status
       await loadActionsForInvestigation(selectedInvestigation)
       // Update selected action locally

@@ -371,11 +371,14 @@ class CAPAService:
         # can add multiple corrective actions against one investigation.
         if not (title and title.strip()):
             prior = await self.db.execute(
-                select(CAPAAction).where(
+                select(CAPAAction)
+                .where(
                     CAPAAction.tenant_id == tenant_id,
                     CAPAAction.source_type == CAPASource.INVESTIGATION,
                     CAPAAction.source_id == investigation_id,
                 )
+                .order_by(CAPAAction.id.asc())
+                .limit(1)
             )
             existing_capa = prior.scalar_one_or_none()
             if existing_capa is not None:

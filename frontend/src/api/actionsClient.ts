@@ -150,11 +150,14 @@ export function createActionsApi(api: AxiosInstance) {
     api.get<Action>(`/api/v1/actions/by-key?key=${encodeURIComponent(key)}`),
   /**
    * Update an action with partial data. Requires source_type.
+   * Pass action_key when available to disambiguate storage tables that share numeric IDs.
    * Returns 404 if not found, 400 for validation errors.
    */
-  update: (id: number, source_type: string, data: ActionUpdate) =>
+  update: (id: number, source_type: string, data: ActionUpdate, action_key?: string) =>
     api.patch<Action>(
-      `/api/v1/actions/${id}?source_type=${encodeURIComponent(source_type)}`,
+      `/api/v1/actions/${id}?source_type=${encodeURIComponent(source_type)}${
+        action_key ? `&action_key=${encodeURIComponent(action_key)}` : ''
+      }`,
       data,
     ),
   /** Owner commentary for an action; newest first. */

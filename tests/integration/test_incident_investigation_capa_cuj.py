@@ -9,6 +9,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.models.capa import CAPAAction, CAPAStatus
 from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
 
@@ -97,6 +98,37 @@ async def test_incident_investigation_capa_chain(
     assert scoped_list.status_code == 200, scoped_list.text
     scoped_items = scoped_list.json()["items"]
     assert any(item["id"] == action["id"] for item in scoped_items)
+
+    formal_capa_response = await client.post(
+        f"/api/v1/investigations/{investigation_id}/capa",
+        json={
+            "title": "Formal investigation CAPA",
+            "description": "Verify exact-store status updates",
+            "priority": "high",
+        },
+        headers=auth_headers,
+    )
+    assert formal_capa_response.status_code == 201, formal_capa_response.text
+    formal_capa = formal_capa_response.json()
+
+    formal_update_response = await client.patch(
+        f"/api/v1/actions/{formal_capa['id']}",
+        params={
+            "source_type": "investigation",
+            "action_key": f"capa:{formal_capa['id']}",
+        },
+        json={"status": "in_progress"},
+        headers=auth_headers,
+    )
+    assert formal_update_response.status_code == 200, formal_update_response.text
+    assert formal_update_response.json()["status"] == "in_progress"
+
+    test_session.expire_all()
+    persisted_capa = await test_session.scalar(
+        select(CAPAAction).where(CAPAAction.id == formal_capa["id"]),
+    )
+    assert persisted_capa is not None
+    assert persisted_capa.status == CAPAStatus.IN_PROGRESS
 
     incident_action_payload = {
         "title": "Barrier cordon while matting installed",

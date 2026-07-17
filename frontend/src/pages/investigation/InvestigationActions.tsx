@@ -64,7 +64,7 @@ interface InvestigationActionsProps {
   actionStatusFilter: string
   onActionStatusFilterChange: (value: string) => void
   onCreateAction: (form: ActionFormData) => Promise<void>
-  onUpdateActionStatus: (actionId: number, newStatus: string, completionNotes?: string) => void
+  onUpdateActionStatus: (action: Action, newStatus: string, completionNotes?: string) => void
   /** Increment to open the create dialog (handoff CTA → Actions tab). */
   openCreateToken?: number
   /** Investigation reference shown as locked parent in the create dialog. */
@@ -98,7 +98,7 @@ export default function InvestigationActions({
 
   const [showCompletionDialog, setShowCompletionDialog] = useState(false)
   const [completionNotes, setCompletionNotes] = useState('')
-  const [completionActionId, setCompletionActionId] = useState<number | null>(null)
+  const [completionAction, setCompletionAction] = useState<Action | null>(null)
 
   useEffect(() => {
     if (openCreateToken > 0) {
@@ -166,7 +166,7 @@ export default function InvestigationActions({
         ) : (
           <div className="space-y-3">
             {actions.map((action) => (
-              <Card key={action.id} className="p-4">
+              <Card key={action.action_key || action.id} className="p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -208,11 +208,11 @@ export default function InvestigationActions({
                       value={action.status}
                       onValueChange={(newStatus) => {
                         if (newStatus === 'completed') {
-                          setCompletionActionId(action.id)
+                          setCompletionAction(action)
                           setCompletionNotes('')
                           setShowCompletionDialog(true)
                         } else {
-                          onUpdateActionStatus(action.id, newStatus)
+                          onUpdateActionStatus(action, newStatus)
                         }
                       }}
                     >
@@ -368,9 +368,9 @@ export default function InvestigationActions({
             </Button>
             <Button
               onClick={() => {
-                if (completionActionId !== null) {
+                if (completionAction !== null) {
                   onUpdateActionStatus(
-                    completionActionId,
+                    completionAction,
                     'completed',
                     completionNotes || undefined,
                   )

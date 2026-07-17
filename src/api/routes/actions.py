@@ -1884,6 +1884,10 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         ...,
         description="Source discriminator (incident, rta, … or CAPA API type such as audit_finding, ncr, capa_incident)",
     ),
+    action_key: Optional[str] = Query(
+        None,
+        description="Stable storage key from list responses; disambiguates rows sharing a numeric ID",
+    ),
 ) -> ActionResponse:
     """Update an existing action by ID.
 
@@ -1891,6 +1895,14 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     Returns 404 if action not found, 400 for validation errors.
     """
     src_type = source_type.lower()
+    storage_kind: Optional[str] = None
+    if action_key:
+        try:
+            storage_kind, keyed_id = parse_action_key(action_key)
+        except ValueError as exc:
+            raise BadRequestError(str(exc)) from exc
+        if keyed_id != action_id:
+            raise BadRequestError("action_key does not match action_id")
 
     if not _valid_unified_source_type(src_type):
         raise BadRequestError("Invalid source_type")
@@ -1945,14 +1957,36 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         if action:
             source_id = action.complaint_id
     elif src_type == "investigation":
-        result = await db.execute(
-            select(InvestigationAction).where(
-                InvestigationAction.id == action_id, InvestigationAction.tenant_id == current_user.tenant_id
+        if storage_kind == STORAGE_CAPA:
+            capa_row = await _load_capa_by_api_source_type(
+                db, action_id, current_user.tenant_id, src_type
             )
-        )
-        action = cast(Optional[InvestigationAction], result.scalar_one_or_none())
-        if action:
-            source_id = action.investigation_id
+            if capa_row is not None:
+                action = capa_row
+                source_id = capa_row.source_id or 0
+        elif storage_kind in (None, STORAGE_INVESTIGATION_ACTION):
+            result = await db.execute(
+                select(InvestigationAction).where(
+                    InvestigationAction.id == action_id,
+                    InvestigationAction.tenant_id == current_user.tenant_id,
+                )
+            )
+            action = cast(Optional[InvestigationAction], result.scalar_one_or_none())
+            if action:
+                source_id = action.investigation_id
+            elif storage_kind is None:
+                # Formal investigation actions are CAPAAction rows. Legacy callers
+                # may not send action_key, so retain a safe no-collision fallback.
+                capa_row = await _load_capa_by_api_source_type(
+                    db, action_id, current_user.tenant_id, src_type
+                )
+                if capa_row is not None:
+                    action = capa_row
+                    source_id = capa_row.source_id or 0
+        else:
+            raise BadRequestError(
+                "action_key must identify an investigation_action or capa row"
+            )
     else:
         capa_row = await _load_capa_by_api_source_type(db, action_id, current_user.tenant_id, src_type)
         if capa_row is not None:

@@ -437,15 +437,20 @@ export default function InvestigationDetail() {
   }
 
   const handleUpdateActionStatus = async (
-    actionId: number,
+    action: Action,
     newStatus: string,
     completionNotes?: string,
   ) => {
     try {
-      await actionsApi.update(actionId, 'investigation', {
-        status: newStatus,
-        completion_notes: newStatus === 'completed' ? completionNotes : undefined,
-      })
+      await actionsApi.update(
+        action.id,
+        'investigation',
+        {
+          status: newStatus,
+          completion_notes: newStatus === 'completed' ? completionNotes : undefined,
+        },
+        action.action_key,
+      )
       await loadActions()
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'updateAction' })
