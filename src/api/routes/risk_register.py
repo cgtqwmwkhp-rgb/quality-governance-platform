@@ -100,6 +100,12 @@ class RiskAssessmentUpdate(BaseModel):
     residual_impact: Optional[int] = Field(None, ge=1, le=5)
     review_notes: Optional[str] = None
     assessment_notes: Optional[str] = None
+    last_review_date: Optional[datetime] = None
+    next_review_date: Optional[datetime] = None
+    trend: Optional[Literal["increasing", "stable", "decreasing"]] = Field(
+        None,
+        description="Manual net-score trend override; auto-derived from last two scores when omitted",
+    )
 
 
 class ControlCreate(BaseModel):
@@ -828,6 +834,9 @@ async def get_risk_profile(
     )
     history = history_result.scalars().all()
 
+    service = RiskService(db)
+    score_trend = service.resolve_score_trend(risk, list(history))
+
     return RiskProfileResponse(
         id=risk.id,
         reference=risk.reference,
@@ -836,10 +845,15 @@ async def get_risk_profile(
         category=risk.category,
         status=risk.status,
         treatment=risk.treatment_strategy,
+        inherent_likelihood=risk.inherent_likelihood,
+        inherent_impact=risk.inherent_impact,
         inherent_score=risk.inherent_score,
         inherent_level=_optional_risk_level(risk.inherent_score),
+        residual_likelihood=risk.residual_likelihood,
+        residual_impact=risk.residual_impact,
         residual_score=risk.residual_score,
         residual_level=_optional_risk_level(risk.residual_score),
+        trend=score_trend,
         risk_owner_id=risk.risk_owner_id,
         risk_owner_name=risk.risk_owner_name,
         last_review_date=(risk.last_review_date.isoformat() if risk.last_review_date else None),
@@ -1005,7 +1019,7 @@ async def assess_risk(
     assessment: RiskAssessmentUpdate,
     db: DbSession,
 ) -> dict[str, Any]:
-    """Update risk assessment scores"""
+    """Update risk assessment scores (SSOT: history + scores in one transaction)."""
     result = await db.execute(
         select(EnterpriseRisk).where(
             EnterpriseRisk.id == risk_id,
@@ -1017,13 +1031,35 @@ async def assess_risk(
         raise NotFoundError("EnterpriseRisk not found")
     service = RiskService(db)
     try:
-        risk = await service.update_risk_assessment(risk_id, assessment.model_dump(exclude_unset=True))
+        payload = assessment.model_dump(exclude_unset=True)
+        for key in ("last_review_date", "next_review_date"):
+            if key in payload and payload[key] is not None:
+                dt_val = payload[key]
+                if isinstance(dt_val, datetime) and dt_val.tzinfo is not None:
+                    payload[key] = dt_val.astimezone(timezone.utc).replace(tzinfo=None)
+                elif isinstance(dt_val, datetime):
+                    payload[key] = dt_val.replace(tzinfo=None)
+
+        risk = await service.update_risk_assessment(
+            risk_id,
+            payload,
+            assessed_by=current_user.id,
+        )
+        from src.domain.services.risk_service import read_score_trend_from_tags
+
+        trend = read_score_trend_from_tags(risk.tags) or "stable"
+        if current_user.tenant_id is not None:
+            await invalidate_tenant_cache(current_user.tenant_id, "risk-register")
+            await invalidate_tenant_cache(current_user.tenant_id, "risks")
         return {
             "message": "EnterpriseRisk assessment updated",
             "inherent_score": risk.inherent_score,
             "residual_score": risk.residual_score,
             "risk_level": RiskScoringEngine.get_risk_level(risk.residual_score),
             "is_within_appetite": risk.is_within_appetite,
+            "trend": trend,
+            "last_review_date": (risk.last_review_date.isoformat() if risk.last_review_date else None),
+            "next_review_date": (risk.next_review_date.isoformat() if risk.next_review_date else None),
         }
     except ValueError as e:
         raise NotFoundError(str(e))
