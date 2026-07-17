@@ -71,18 +71,26 @@ async def _trigger_operational_standards_assess(
     current_user: User,
 ) -> None:
     """Fire-and-forget standards assessment; never breaks complaint save."""
+    tenant_id = complaint.tenant_id or current_user.tenant_id
+    if tenant_id is None:
+        logger.warning(
+            "Skipping operational standards assess for complaint %s; no tenant_id",
+            complaint.id,
+        )
+        return
     try:
         from src.domain.services.governed_knowledge_service import governed_knowledge_service
 
         content = f"{complaint.title}\n\n{complaint.description}"
-        await governed_knowledge_service.assess_operational_entity(
-            db,
-            entity_type="complaint",
-            entity_id=str(complaint.id),
-            content=content,
-            tenant_id=complaint.tenant_id,
-            user=current_user,
-        )
+        async with db.begin_nested():
+            await governed_knowledge_service.assess_operational_entity(
+                db,
+                entity_type="complaint",
+                entity_id=str(complaint.id),
+                content=content,
+                tenant_id=tenant_id,
+                user=current_user,
+            )
     except Exception:
         logger.warning(
             "Operational standards assess failed for complaint %s; save continues",
@@ -322,8 +330,19 @@ async def update_complaint(
                 assigned_by_user_id=current_user.id,
                 reference=complaint.reference_number,
             )
-            # NotificationService.create_assignment commits; reattach for response serialization
-            await db.refresh(complaint)
+            try:
+                await db.refresh(complaint)
+            except Exception:
+                logger.warning(
+                    "Refresh after owner assign failed for complaint %s; re-fetching",
+                    complaint_id,
+                    exc_info=True,
+                )
+                complaint = await svc.get_complaint(
+                    complaint_id,
+                    current_user.tenant_id,
+                    skip_tenant_check=current_user.is_superuser,
+                )
         return complaint
     except LookupError:
         raise NotFoundError(f"Complaint {complaint_id} not found")
