@@ -267,10 +267,29 @@ describe('EngineerProfile', () => {
     await waitFor(() => {
       expect(screen.getByTestId('engineer-identity')).toBeInTheDocument()
     })
+    expect(screen.getByTestId('engineer-user-link-linked')).toHaveTextContent(
+      'workforce.engineers.user_link.linked:{"id":1}',
+    )
     expect(await screen.findByTestId('requirements-match-percent')).toHaveTextContent('100%')
     expect(
       screen.getByText('workforce.engineers.requirements.match_detail:{"met":1,"total":1}'),
     ).toBeInTheDocument()
+  })
+
+  it('shows honest unlinked user state when engineer has no user_id (EMP-06)', async () => {
+    getEngineer.mockResolvedValue({ data: { ...engineer, user_id: null } })
+    render(
+      <MemoryRouter initialEntries={['/workforce/engineers/7']}>
+        <Routes>
+          <Route path="/workforce/engineers/:id" element={<EngineerProfile />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('engineer-user-link-unlinked')).toBeInTheDocument()
+    expect(screen.getByText('workforce.engineers.user_link.unlinked')).toBeInTheDocument()
+    expect(screen.getByText('workforce.engineers.user_link.unlinked_hint')).toBeInTheDocument()
+    expect(screen.queryByTestId('engineer-user-link-linked')).not.toBeInTheDocument()
   })
 
   it('shows empty match state when there are no mandatory requirements', async () => {

@@ -295,6 +295,18 @@ export default function Engineers() {
                         <Badge variant={eng.is_active ? 'success' : 'secondary'}>
                           {eng.is_active ? t('common.active') : t('common.inactive')}
                         </Badge>
+                        {eng.user_id != null ? (
+                          <Badge variant="outline" data-testid={`engineer-user-linked-${eng.id}`}>
+                            {t('workforce.engineers.user_link.roster_linked', { id: eng.user_id })}
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="secondary"
+                            data-testid={`engineer-user-unlinked-${eng.id}`}
+                          >
+                            {t('workforce.engineers.user_link.roster_unlinked')}
+                          </Badge>
+                        )}
                       </div>
                     </div>
                     <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
