@@ -20,6 +20,7 @@ CALENDAR_FEED_SOURCES = (
     "certificates",
     "assessments",
     "inductions",
+    "enterprise_risks",
 )
 
 
@@ -102,6 +103,7 @@ class CalendarFeedService:
             ("certificates", self._load_certificates),
             ("assessments", self._load_assessments),
             ("inductions", self._load_inductions),
+            ("enterprise_risks", self._load_enterprise_risks),
         ]
         for name, loader in loaders:
             try:
@@ -341,6 +343,43 @@ class CalendarFeedService:
                     "source_id": str(row.id),
                     "href": f"/workforce/training/{row.id}/execute",
                     "description": None,
+                }
+            )
+        return out
+
+    async def _load_enterprise_risks(self, start_dt: datetime, end_dt: datetime, today: date) -> list[dict[str, Any]]:
+        from src.domain.models.risk_register import EnterpriseRisk
+
+        start_naive = start_dt.replace(tzinfo=None)
+        end_naive = end_dt.replace(tzinfo=None)
+        stmt = select(EnterpriseRisk).where(
+            EnterpriseRisk.next_review_date.is_not(None),
+            EnterpriseRisk.next_review_date >= start_naive,
+            EnterpriseRisk.next_review_date <= end_naive,
+        )
+        if self.tenant_id is not None:
+            stmt = stmt.where(EnterpriseRisk.tenant_id == self.tenant_id)
+        result = await self.db.execute(stmt.limit(500))
+        rows = list(result.scalars().all())
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            when = row.next_review_date
+            if when is None:
+                continue
+            status_val = row.status.value if hasattr(row.status, "value") else str(row.status)
+            out.append(
+                {
+                    "id": f"enterprise_risk:{row.id}",
+                    "title": row.title or row.reference or f"Risk #{row.id}",
+                    "type": "review",
+                    "date": _iso_date(when),
+                    "status": _status_for(when, status_val, today=today),
+                    "priority": "high" if row.is_escalated or (row.residual_score or 0) >= 15 else "medium",
+                    "owner": row.risk_owner_name,
+                    "source_module": "enterprise_risk",
+                    "source_id": str(row.id),
+                    "href": f"/risk-register/{row.id}",
+                    "description": row.reference,
                 }
             )
         return out
