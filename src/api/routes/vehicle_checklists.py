@@ -45,15 +45,25 @@ CACHE_MODEL_MAP = {
 }
 
 
-def _service_unavailable(message: str) -> NoReturn:
-    exc = DomainError(message, code="SERVICE_UNAVAILABLE")
+PAMS_UNAVAILABLE_MESSAGE = (
+    "PAMS unavailable — van checklist data cannot be loaded right now. Please try again shortly."
+)
+
+
+def _service_unavailable(message: str = PAMS_UNAVAILABLE_MESSAGE, *, reason: str = "unavailable") -> NoReturn:
+    """Raise a structured 503 so clients can show an honest PAMS-down state."""
+    exc = DomainError(
+        message,
+        code="SERVICE_UNAVAILABLE",
+        details={"service": "pams", "reason": reason},
+    )
     exc.http_status = 503
     raise exc
 
 
 def _require_pams() -> None:
     if not is_pams_available():
-        _service_unavailable("PAMS database connection is not configured or unavailable.")
+        _service_unavailable(reason="not_configured")
 
 
 def _defect_to_response(d: VehicleDefect) -> DefectResponse:
@@ -158,11 +168,13 @@ async def _list_from_live_pams(
             )
     except HTTPException:
         raise
+    except DomainError:
+        raise
     except Exception:
         logger.exception("PAMS live query failed for %s", table_name)
-        _service_unavailable("PAMS database is temporarily unavailable. Please try again shortly.")
+        _service_unavailable(reason="live_query_failed")
 
-    _service_unavailable("Could not obtain PAMS session")
+    _service_unavailable(reason="session_unavailable")
 
 
 def _serialise_value(v: Any) -> Any:
@@ -182,13 +194,23 @@ async def list_daily(
     page_size: int = Query(25, ge=1, le=100),
     search: Optional[str] = Query(None),
 ) -> ChecklistListResponse:
-    """List daily van checklists (cached or live)."""
-    cache_count = (await db.execute(select(func.count()).select_from(PAMSVanChecklistCache))).scalar() or 0
+    """List daily van checklists (cached or live).
 
-    if cache_count > 0:
-        return await _list_from_cache(db, PAMSVanChecklistCache, page, page_size, search)
+    Fail-soft: when the local cache is empty and PAMS cannot be queried, returns
+    a structured 503 with code SERVICE_UNAVAILABLE (not an opaque 500).
+    """
+    try:
+        cache_count = (await db.execute(select(func.count()).select_from(PAMSVanChecklistCache))).scalar() or 0
 
-    return await _list_from_live_pams("vanchecklist", page, page_size)
+        if cache_count > 0:
+            return await _list_from_cache(db, PAMSVanChecklistCache, page, page_size, search)
+
+        return await _list_from_live_pams("vanchecklist", page, page_size)
+    except DomainError:
+        raise
+    except Exception:
+        logger.exception("Daily checklist list failed while resolving cache/PAMS source")
+        _service_unavailable(reason="list_failed")
 
 
 @router.get("/monthly")
@@ -199,13 +221,24 @@ async def list_monthly(
     page_size: int = Query(25, ge=1, le=100),
     search: Optional[str] = Query(None),
 ) -> ChecklistListResponse:
-    """List monthly van checklists (cached or live)."""
-    cache_count = (await db.execute(select(func.count()).select_from(PAMSVanChecklistMonthlyCache))).scalar() or 0
+    """List monthly van checklists (cached or live).
 
-    if cache_count > 0:
-        return await _list_from_cache(db, PAMSVanChecklistMonthlyCache, page, page_size, search)
+    Fail-soft: structured 503 when cache is empty and PAMS is unavailable.
+    """
+    try:
+        cache_count = (
+            await db.execute(select(func.count()).select_from(PAMSVanChecklistMonthlyCache))
+        ).scalar() or 0
 
-    return await _list_from_live_pams("vanchecklistmonthly", page, page_size)
+        if cache_count > 0:
+            return await _list_from_cache(db, PAMSVanChecklistMonthlyCache, page, page_size, search)
+
+        return await _list_from_live_pams("vanchecklistmonthly", page, page_size)
+    except DomainError:
+        raise
+    except Exception:
+        logger.exception("Monthly checklist list failed while resolving cache/PAMS source")
+        _service_unavailable(reason="list_failed")
 
 
 # ─── Single record detail ───────────────────────────────────────────
@@ -240,7 +273,7 @@ async def get_daily_record(
             raise NotFoundError("Record not found")
         return {k: _serialise_value(v) for k, v in dict(row).items()}
 
-    _service_unavailable("Could not obtain PAMS session")
+    _service_unavailable(reason="session_unavailable")
 
 
 @router.get("/monthly/{record_id}")
@@ -272,7 +305,7 @@ async def get_monthly_record(
             raise NotFoundError("Record not found")
         return {k: _serialise_value(v) for k, v in dict(row).items()}
 
-    _service_unavailable("Could not obtain PAMS session")
+    _service_unavailable(reason="session_unavailable")
 
 
 # ─── Defect CRUD ─────────────────────────────────────────────────────
