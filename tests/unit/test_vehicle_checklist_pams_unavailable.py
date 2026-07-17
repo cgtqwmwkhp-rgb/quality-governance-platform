@@ -7,11 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.api.routes.vehicle_checklists import (
-    PAMS_UNAVAILABLE_MESSAGE,
-    list_daily,
-    list_monthly,
-)
+from src.api.routes.vehicle_checklists import PAMS_UNAVAILABLE_MESSAGE, list_daily, list_monthly
 from src.domain.exceptions import DomainError
 
 
