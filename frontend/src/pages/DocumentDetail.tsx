@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   ExternalLink,
@@ -12,6 +13,7 @@ import {
   Eye,
   Download,
   AlertTriangle,
+  Brain,
 } from 'lucide-react'
 import api, {
   getApiErrorMessage,
@@ -37,6 +39,11 @@ import {
   resolveDocumentDetailTab,
   shouldScrollToProposedEvidence,
 } from './documentEvidenceTab'
+import {
+  buildDocumentDownstreamView,
+  buildDocumentsExceptionsHref,
+  DOCUMENT_CONTROL_GOLDEN_THREAD_PATH,
+} from './documentsDownstreamHelpers'
 
 interface LibraryDocument {
   id: number
@@ -109,6 +116,7 @@ const evidenceStatusBadge = (link: KnowledgeEvidenceLink) => {
 }
 
 export default function DocumentDetail() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -489,6 +497,46 @@ export default function DocumentDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-4 space-y-4">
+          {(() => {
+            const downstream = buildDocumentDownstreamView(document)
+            return (
+              <Card data-testid="documents-downstream-thread">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Brain className="w-4 h-4 text-primary" />
+                    {t('documents.downstream.panel.title')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="font-medium text-foreground">{t(downstream.titleKey)}</p>
+                  <p className="text-sm text-muted-foreground">{t(downstream.descriptionKey)}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {downstream.showExceptionsLink ? (
+                      <Button variant="outline" size="sm" asChild>
+                        <Link
+                          to={buildDocumentsExceptionsHref(document.id)}
+                          data-testid="documents-detail-exceptions-link"
+                        >
+                          {t('documents.downstream.open_exceptions')}
+                        </Link>
+                      </Button>
+                    ) : null}
+                    {downstream.showDocumentControlNote ? (
+                      <Button variant="ghost" size="sm" asChild>
+                        <Link
+                          to={DOCUMENT_CONTROL_GOLDEN_THREAD_PATH}
+                          data-testid="documents-detail-control-link"
+                        >
+                          {t('documents.downstream.open_document_control')}
+                        </Link>
+                      </Button>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })()}
+
           {document.ai_summary && (
             <Card>
               <CardHeader>
@@ -573,7 +621,23 @@ export default function DocumentDetail() {
             <EmptyState
               icon={<Sparkles className="w-8 h-8 text-muted-foreground" />}
               title="No evidence links"
-              description="Run AI mapping to link this document to compliance standards."
+              description={
+                document.status === 'processing'
+                  ? 'Indexing is still running — evidence links and AI Exceptions populate after indexing completes.'
+                  : 'Run AI mapping to link this document to compliance standards, or review matches in AI Exceptions.'
+              }
+              action={
+                document.status === 'indexed' ? (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link
+                      to={buildDocumentsExceptionsHref(document.id)}
+                      data-testid="documents-evidence-exceptions-link"
+                    >
+                      {t('documents.downstream.open_exceptions')}
+                    </Link>
+                  </Button>
+                ) : undefined
+              }
             />
           ) : (
             <div className="space-y-3">
