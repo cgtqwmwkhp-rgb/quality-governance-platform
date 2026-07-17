@@ -91,18 +91,29 @@ async def _trigger_operational_standards_assess(
     current_user: User,
 ) -> None:
     """Fire-and-forget standards assessment; never breaks incident save."""
+    tenant_id = incident.tenant_id or current_user.tenant_id
+    if tenant_id is None:
+        logger.warning(
+            "Skipping operational standards assess for incident %s; no tenant_id",
+            incident.id,
+        )
+        return
     try:
         from src.domain.services.governed_knowledge_service import governed_knowledge_service
 
         content = f"{incident.title}\n\n{incident.description}"
-        await governed_knowledge_service.assess_operational_entity(
-            db,
-            entity_type="incident",
-            entity_id=str(incident.id),
-            content=content,
-            tenant_id=incident.tenant_id,
-            user=current_user,
-        )
+        # Nested savepoint: ai_decision_logs / mapping failures must not poison
+        # the outer incident update transaction (staging SAMPLE rows historically
+        # had null tenant_id and aborted the session → assign-owner 500).
+        async with db.begin_nested():
+            await governed_knowledge_service.assess_operational_entity(
+                db,
+                entity_type="incident",
+                entity_id=str(incident.id),
+                content=content,
+                tenant_id=tenant_id,
+                user=current_user,
+            )
     except Exception:
         logger.warning(
             "Operational standards assess failed for incident %s; save continues",
@@ -683,8 +694,20 @@ async def update_incident(
                 assigned_by_user_id=current_user.id,
                 reference=incident.reference_number,
             )
-            # NotificationService.create_assignment commits; reattach for response serialization
-            await db.refresh(incident)
+            # NotificationService.create_assignment may commit or abort; re-load safely
+            try:
+                await db.refresh(incident)
+            except Exception:
+                logger.warning(
+                    "Refresh after owner assign failed for incident %s; re-fetching",
+                    incident_id,
+                    exc_info=True,
+                )
+                incident = await svc.get_incident(
+                    incident_id,
+                    current_user.tenant_id,
+                    skip_tenant_check=current_user.is_superuser,
+                )
         return incident
     except LookupError:
         raise NotFoundError(f"Incident {incident_id} not found")

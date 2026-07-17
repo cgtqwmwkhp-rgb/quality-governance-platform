@@ -2,10 +2,22 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+@asynccontextmanager
+async def _nested_ok():
+    yield
+
+
+def _db_with_nested() -> MagicMock:
+    db = MagicMock()
+    db.begin_nested = lambda: _nested_ok()
+    return db
 
 
 @pytest.mark.asyncio
@@ -14,7 +26,7 @@ async def test_complaint_assess_hook_invokes_service() -> None:
 
     complaint = SimpleNamespace(id=11, title="Late delivery", description="Missed SLA", tenant_id=7)
     user = SimpleNamespace(id=1)
-    db = AsyncMock()
+    db = _db_with_nested()
     assess = AsyncMock()
 
     with patch(
@@ -40,7 +52,7 @@ async def test_complaint_assess_hook_swallows_errors() -> None:
         "src.domain.services.governed_knowledge_service.governed_knowledge_service.assess_operational_entity",
         AsyncMock(side_effect=RuntimeError("boom")),
     ):
-        await _trigger_operational_standards_assess(AsyncMock(), complaint, SimpleNamespace(id=1))
+        await _trigger_operational_standards_assess(_db_with_nested(), complaint, SimpleNamespace(id=1))
 
 
 @pytest.mark.asyncio

@@ -180,7 +180,7 @@ class GovernedKnowledgeService:
         self,
         db: AsyncSession,
         *,
-        tenant_id: int,
+        tenant_id: Optional[int],
         action: str,
         entity_type: str,
         entity_id: str,
@@ -188,6 +188,16 @@ class GovernedKnowledgeService:
         auto_applied: bool,
         payload: Optional[dict[str, Any]] = None,
     ) -> None:
+        # ai_decision_logs.tenant_id is NOT NULL — never enqueue a null-tenant row
+        # (poisons the request session and can 500 unrelated PATCH flows).
+        if tenant_id is None:
+            logger.warning(
+                "Skipping ai_decision_log action=%s entity=%s:%s; tenant_id is null",
+                action,
+                entity_type,
+                entity_id,
+            )
+            return
         db.add(
             AiDecisionLog(
                 tenant_id=tenant_id,
