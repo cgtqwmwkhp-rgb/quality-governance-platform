@@ -40,6 +40,8 @@ import {
   getApiErrorMessage,
   CreateFromRecordError,
   notificationsApi,
+  evidenceAssetsApi,
+  type EvidenceAsset,
 } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
@@ -70,6 +72,12 @@ import {
   getSubmissionPhotoSummary,
   getSubmissionSnapshot,
 } from '../helpers/caseSubmission'
+import {
+  complaintDownstreamActionsHonesty,
+  complaintDownstreamInvestigationHonesty,
+  formatComplaintEvidenceRailSummary,
+  readReporterPhotoCount,
+} from './complaintEvidenceHonesty'
 import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
 
@@ -101,6 +109,9 @@ export default function ComplaintDetail() {
 
   const [investigationTitle, setInvestigationTitle] = useState('')
   const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
+  const [evidenceAssets, setEvidenceAssets] = useState<EvidenceAsset[]>([])
+  const [evidenceLoading, setEvidenceLoading] = useState(false)
+  const [evidenceLoadFailed, setEvidenceLoadFailed] = useState(false)
 
   // Action form
   const [actionForm, setActionForm] = useState({
@@ -160,6 +171,7 @@ export default function ComplaintDetail() {
       loadActions()
       loadInvestigations(complaintId)
       loadRunningSheet(complaintId)
+      void loadEvidence(complaintId)
     } catch (err) {
       trackError(err, { component: 'ComplaintDetail', action: 'loadComplaint' })
       setError(t('complaints.detail.load_error'))
@@ -195,6 +207,25 @@ export default function ComplaintDetail() {
       setRunningSheet(response.data)
     } catch (err) {
       trackError(err, { component: 'ComplaintDetail', action: 'loadRunningSheet' })
+    }
+  }
+
+  const loadEvidence = async (complaintId: number) => {
+    setEvidenceLoading(true)
+    setEvidenceLoadFailed(false)
+    try {
+      const response = await evidenceAssetsApi.list({
+        source_module: 'complaint',
+        source_id: complaintId,
+        page_size: 50,
+      })
+      setEvidenceAssets(response.data.items || [])
+    } catch (err) {
+      trackError(err, { component: 'ComplaintDetail', action: 'loadEvidence' })
+      setEvidenceAssets([])
+      setEvidenceLoadFailed(true)
+    } finally {
+      setEvidenceLoading(false)
     }
   }
 
@@ -513,12 +544,21 @@ export default function ComplaintDetail() {
   const locationLabel =
     (typeof complaintSubmission?.location === 'string' && complaintSubmission.location) ||
     'Not provided'
-  const evidenceSummary = getSubmissionPhotoSummary(complaintSubmission)
+  const reporterPhotoCount = readReporterPhotoCount(complaintSubmission)
+  const evidenceSummary = formatComplaintEvidenceRailSummary({
+    assetCount: evidenceAssets.length,
+    reporterPhotoCount,
+    assetsLoading: evidenceLoading,
+    assetsFailed: evidenceLoadFailed,
+  })
+  const reporterMetadataSummary = getSubmissionPhotoSummary(complaintSubmission)
   const latestInvestigation = investigations[0]
   const investigationSummary = latestInvestigation
     ? `${latestInvestigation.reference_number || latestInvestigation.title || 'Linked investigation'}`
     : 'Not started'
   const openActions = actions.filter((action) => action.status !== 'completed' && action.status !== 'cancelled')
+  const investigationHonesty = complaintDownstreamInvestigationHonesty(Boolean(latestInvestigation))
+  const actionsHonesty = complaintDownstreamActionsHonesty(openActions.length)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -1111,10 +1151,16 @@ export default function ComplaintDetail() {
               <div>
                 <p className="text-sm text-muted-foreground">Linked investigation</p>
                 <p className="font-medium text-foreground">{investigationSummary}</p>
+                <p className="text-xs text-muted-foreground mt-1" data-testid="complaint-downstream-inv-honesty">
+                  {investigationHonesty}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Open actions</p>
                 <p className="font-medium text-foreground">{openActions.length}</p>
+                <p className="text-xs text-muted-foreground mt-1" data-testid="complaint-downstream-actions-honesty">
+                  {actionsHonesty}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Resolution summary</p>
@@ -1124,8 +1170,48 @@ export default function ComplaintDetail() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Evidence captured</p>
-                <p className="font-medium text-foreground">{evidenceSummary}</p>
+                <p className="font-medium text-foreground" data-testid="complaint-evidence-summary">
+                  {evidenceSummary}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Reporter submission metadata: {reporterMetadataSummary}
+                </p>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card data-testid="complaint-evidence-assets-card">
+            <CardHeader>
+              <CardTitle className="text-base">
+                {t('complaints.detail.evidence_assets', 'Evidence assets')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {evidenceLoading ? (
+                <p className="text-sm text-muted-foreground">Loading evidence…</p>
+              ) : evidenceLoadFailed ? (
+                <p className="text-sm text-muted-foreground">
+                  Evidence assets could not be loaded. Reporter-submission filenames are shown separately.
+                </p>
+              ) : evidenceAssets.length === 0 ? (
+                <p className="text-sm text-muted-foreground" data-testid="complaint-evidence-assets-empty">
+                  {t(
+                    'complaints.detail.evidence_assets_empty',
+                    'No evidence assets are linked to this complaint. Portal uploads record filenames only until staff attach files here.',
+                  )}
+                </p>
+              ) : (
+                <ul className="space-y-2" data-testid="complaint-evidence-assets">
+                  {evidenceAssets.map((asset) => (
+                    <li key={asset.id} className="rounded-lg border border-border p-3">
+                      <p className="font-medium text-foreground">
+                        {asset.title || asset.original_filename || `Evidence #${asset.id}`}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{asset.content_type}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </CardContent>
           </Card>
 

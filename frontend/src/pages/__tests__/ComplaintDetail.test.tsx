@@ -93,6 +93,9 @@ vi.mock('../../api/client', () => ({
   notificationsApi: {
     getDeliveryStatus: vi.fn(),
   },
+  evidenceAssetsApi: {
+    list: vi.fn(),
+  },
   getApiErrorMessage: (err: Error) => err.message,
 }))
 
@@ -150,6 +153,7 @@ describe('ComplaintDetail', () => {
     client.notificationsApi.getDeliveryStatus.mockResolvedValue({
       data: { email_configured: true },
     })
+    client.evidenceAssetsApi.list.mockResolvedValue({ data: { items: [] } })
   })
 
   it('shows complainant briefing fields and preserved submission data', async () => {
@@ -298,4 +302,37 @@ describe('ComplaintDetail', () => {
     })
     expect(screen.getByTestId('standards-assessment-panel-mock')).toHaveTextContent('complaint:15')
   })
+  it('surfaces complaint evidence assets and downstream honesty (CMP-08)', async () => {
+    client.evidenceAssetsApi.list.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 9,
+            title: 'Staff-attached photo',
+            original_filename: 'scene.jpg',
+            content_type: 'image/jpeg',
+          },
+        ],
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByTestId('complaint-evidence-assets')).toHaveTextContent(
+      'Staff-attached photo',
+    )
+    expect(screen.getByTestId('complaint-evidence-summary')).toHaveTextContent('1 evidence asset')
+    expect(screen.getByTestId('complaint-downstream-inv-honesty')).toHaveTextContent(
+      /downstream workspace/i,
+    )
+    expect(screen.getByTestId('complaint-downstream-actions-honesty')).toHaveTextContent(
+      /open action/i,
+    )
+    expect(client.evidenceAssetsApi.list).toHaveBeenCalledWith({
+      source_module: 'complaint',
+      source_id: 15,
+      page_size: 50,
+    })
+  })
+
 })
