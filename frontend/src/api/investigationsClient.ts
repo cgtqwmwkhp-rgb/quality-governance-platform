@@ -24,12 +24,15 @@ export interface Investigation {
   assigned_entity_type: 'road_traffic_collision' | 'reporting_incident' | 'complaint' | 'near_miss'
   assigned_entity_id: number
   status: 'draft' | 'in_progress' | 'under_review' | 'completed' | 'closed'
+  /** HSG245-aligned investigation depth from source severity. */
+  level?: 'minimal' | 'low' | 'medium' | 'high' | string | null
   title: string
   description?: string
   data: Record<string, unknown>
   started_at?: string
   completed_at?: string
   created_at: string
+  updated_at?: string
 }
 
 export interface InvestigationCreate {
@@ -331,9 +334,12 @@ export function createInvestigationsApi(api: AxiosInstance) {
 
   /**
    * Get closure validation status for an investigation.
+   * Inline honesty UI on InvestigationDetail — do not global-toast on probe failure.
    */
   getClosureValidation: (id: number) =>
-    api.get<ClosureValidation>(`/api/v1/investigations/${id}/closure-validation`),
+    api.get<ClosureValidation>(`/api/v1/investigations/${id}/closure-validation`, {
+      suppressErrorToast: true,
+    }),
 
   // ============ Investigation Template Endpoints ============
 
