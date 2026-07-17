@@ -55,9 +55,14 @@ import { cn, decodeHtmlEntities } from '../helpers/utils'
 import {
   ASSURANCE_SOURCE_CUSTOMER,
   filterAuditsByAssuranceSource,
-  isAchillesUvdbAssuranceAudit,
-  isCustomerAssuranceAudit,
 } from '../components/assuranceHubHelpers'
+import {
+  BOARD_STATUS_IDS,
+  BOARD_WORK_LANES as BOARD_WORK_LANE_DEFS,
+  PROGRAM_FILTER_CHIPS,
+  classifyAuditProgram,
+  type AuditProgram,
+} from './auditsBoardModel'
 
 type ViewMode = 'kanban' | 'list' | 'findings'
 type AuditModalMode = 'schedule' | 'import'
@@ -76,60 +81,16 @@ interface CreateAuditForm {
   external_reference: string
 }
 
-type AuditProgram = 'internal' | 'uvdb' | 'planet_mark' | 'customer'
+const BOARD_LANE_ICONS = {
+  do_now: Play,
+  review: Target,
+  closed: CheckCircle2,
+} as const
 
-const BOARD_WORK_LANES = [
-  {
-    id: 'do_now',
-    label: 'Do now',
-    labelKey: 'audits.board.lane.do_now',
-    statuses: ['scheduled', 'in_progress'] as const,
-    variant: 'warning' as const,
-    icon: Play,
-  },
-  {
-    id: 'review',
-    label: 'Needs review',
-    labelKey: 'audits.board.lane.review',
-    statuses: ['pending_review'] as const,
-    variant: 'default' as const,
-    icon: Target,
-  },
-  {
-    id: 'closed',
-    label: 'Closed',
-    labelKey: 'audits.board.lane.closed',
-    statuses: ['completed'] as const,
-    variant: 'success' as const,
-    icon: CheckCircle2,
-  },
-] as const
-
-const BOARD_STATUS_IDS = new Set<string>(
-  BOARD_WORK_LANES.flatMap((lane) => lane.statuses),
-)
-
-const PROGRAM_FILTER_CHIPS: Array<{
-  id: AuditProgram
-  label: string
-  labelKey: string
-}> = [
-  { id: 'internal', label: 'Internal', labelKey: 'audits.board.program.internal' },
-  { id: 'uvdb', label: 'Achilles UVDB', labelKey: 'audits.board.program.uvdb' },
-  { id: 'planet_mark', label: 'Planet Mark', labelKey: 'audits.board.program.planet_mark' },
-  { id: 'customer', label: 'Customer', labelKey: 'audits.board.program.customer' },
-]
-
-function classifyAuditProgram(audit: AuditRun): AuditProgram {
-  if (isCustomerAssuranceAudit(audit)) return 'customer'
-  if (isAchillesUvdbAssuranceAudit(audit)) return 'uvdb'
-  const extType = (
-    (audit as AuditRun & { external_audit_type?: string }).external_audit_type || ''
-  ).toLowerCase()
-  const scheme = (audit.assurance_scheme || '').trim().toLowerCase()
-  if (extType === 'planet_mark' || scheme.includes('planet mark')) return 'planet_mark'
-  return 'internal'
-}
+const BOARD_WORK_LANES = BOARD_WORK_LANE_DEFS.map((lane) => ({
+  ...lane,
+  icon: BOARD_LANE_ICONS[lane.id],
+}))
 
 const EXTERNAL_AUDIT_TYPE_OPTIONS: Array<{
   value: ExternalAuditType
@@ -1178,6 +1139,7 @@ export default function Audits() {
           {programFilter !== 'all' && (
             <button
               type="button"
+              data-testid="audits-program-clear"
               onClick={() => setProgramFilter('all')}
               className="text-sm font-medium text-primary hover:underline px-1"
             >

@@ -638,6 +638,141 @@ describe('Audits board work lanes (AUD-W-W1)', () => {
   })
 })
 
+describe('Audits board AUD-W-01 Round 3 verify', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
+    mockListFindings.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+  })
+
+  it('renders exactly three work lanes and never four equal status columns', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 1,
+            reference_number: 'AUD-00001',
+            template_id: 21,
+            template_version: 1,
+            title: 'Scheduled lane item',
+            status: 'scheduled',
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+          {
+            id: 2,
+            reference_number: 'AUD-00002',
+            template_id: 21,
+            template_version: 1,
+            title: 'In-progress lane item',
+            status: 'in_progress',
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:05:00Z',
+          },
+        ],
+        total: 2,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-board-lane-do_now')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-board-lane-review')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-board-lane-closed')).toBeInTheDocument()
+    expect(screen.queryByTestId('audits-board-lane-scheduled')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('audits-board-lane-in_progress')).not.toBeInTheDocument()
+
+    const doNow = screen.getByTestId('audits-board-lane-do_now')
+    expect(within(doNow).getByText('Scheduled lane item')).toBeInTheDocument()
+    expect(within(doNow).getByText('In-progress lane item')).toBeInTheDocument()
+    expect(within(doNow).getByText('Do now')).toBeInTheDocument()
+  })
+
+  it('shows all program chips when mixed programs load and clear restores the board', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 20,
+            reference_number: 'AUD-00020',
+            template_id: 21,
+            template_version: 1,
+            title: 'Internal walk',
+            status: 'scheduled',
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+          {
+            id: 21,
+            reference_number: 'AUD-00021',
+            template_id: 11,
+            template_version: 1,
+            title: 'UVDB intake',
+            status: 'pending_review',
+            source_origin: 'third_party',
+            assurance_scheme: 'Achilles UVDB',
+            is_external_audit_import: true,
+            created_at: '2026-07-12T11:00:00Z',
+          },
+          {
+            id: 22,
+            reference_number: 'AUD-00022',
+            template_id: 12,
+            template_version: 1,
+            title: 'Planet Mark intake',
+            status: 'completed',
+            assurance_scheme: 'Planet Mark',
+            external_audit_type: 'planet_mark',
+            created_at: '2026-07-12T12:00:00Z',
+          },
+          {
+            id: 23,
+            reference_number: 'AUD-00023',
+            template_id: 13,
+            template_version: 1,
+            title: 'Customer site',
+            status: 'in_progress',
+            source_origin: 'customer',
+            assurance_scheme: 'Customer Audit',
+            created_at: '2026-07-12T13:00:00Z',
+          },
+        ],
+        total: 4,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-program-filters')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-program-chip-internal')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-program-chip-uvdb')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-program-chip-planet_mark')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-program-chip-customer')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('audits-program-chip-uvdb'))
+    expect(screen.getByText('UVDB intake')).toBeInTheDocument()
+    expect(screen.queryByText('Internal walk')).not.toBeInTheDocument()
+    expect(screen.queryByText('Customer site')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('audits-program-clear'))
+    expect(screen.getByText('Internal walk')).toBeInTheDocument()
+    expect(screen.getByText('UVDB intake')).toBeInTheDocument()
+    expect(screen.getByText('Planet Mark intake')).toBeInTheDocument()
+    expect(screen.getByText('Customer site')).toBeInTheDocument()
+  })
+})
+
 describe('Audits board empty-state honesty', () => {
   beforeEach(() => {
     vi.clearAllMocks()
