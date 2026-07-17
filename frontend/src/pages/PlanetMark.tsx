@@ -21,6 +21,7 @@ import type {
   PlanetMarkDashboardResponse,
   PlanetMarkReportingYearRecord,
   PlanetMarkActionRecord,
+  PlanetMarkScope3Response,
 } from '../api/planetMarkClient'
 import { SetupRequiredPanel } from '../components/ui/SetupRequiredPanel'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -33,8 +34,11 @@ import { cn } from '../helpers/utils'
 import {
   PLANET_MARK_SECTIONS,
   buildPlanetMarkExportUrl,
-  buildTrendRowsFromDashboard,
-  hasTrendData,
+  buildPlanetMarkTrendsViewModel,
+  findPriorReportingYear,
+  formatDeltaPercent,
+  formatEmissions,
+  hasPositiveCarbonTotal,
   parsePlanetMarkSection,
   resolveSelectedYearId,
   sortReportingYearsDesc,
@@ -84,6 +88,9 @@ export default function PlanetMark() {
   const [errorClass, setErrorClass] = useState<ErrorClass | null>(null)
   const [setupRequired, setSetupRequired] = useState<SetupRequiredResponse | null>(null)
   const [setupActionError, setSetupActionError] = useState<string | null>(null)
+  const [scope3Current, setScope3Current] = useState<PlanetMarkScope3Response | null>(null)
+  const [scope3Prior, setScope3Prior] = useState<PlanetMarkScope3Response | null>(null)
+  const [trendsLoading, setTrendsLoading] = useState(false)
   const [isCreatingYear, setIsCreatingYear] = useState(false)
   const [setupYearForm, setSetupYearForm] = useState({
     year_label: `YE${defaultYear}`,
@@ -104,9 +111,16 @@ export default function PlanetMark() {
     () => years.find((y) => y.id === selectedYearId) ?? null,
     [years, selectedYearId],
   )
-  const trendRows = useMemo(
-    () => buildTrendRowsFromDashboard(dashboard?.historical_years),
-    [dashboard],
+  const trendsVm = useMemo(
+    () =>
+      buildPlanetMarkTrendsViewModel({
+        dashboard,
+        years,
+        selectedYearId,
+        scope3Current,
+        scope3Prior,
+      }),
+    [dashboard, years, selectedYearId, scope3Current, scope3Prior],
   )
 
   const setQuery = useCallback(
@@ -190,6 +204,38 @@ export default function PlanetMark() {
   useEffect(() => {
     void loadData()
   }, [loadData])
+
+  useEffect(() => {
+    if (!selectedYearId || section !== 'trends') {
+      setScope3Current(null)
+      setScope3Prior(null)
+      return
+    }
+
+    const priorYear = findPriorReportingYear(years, selectedYearId)
+
+    let cancelled = false
+    const run = async () => {
+      setTrendsLoading(true)
+      try {
+        const [currentRes, priorRes] = await Promise.allSettled([
+          planetMarkApi.getScope3(selectedYearId),
+          priorYear ? planetMarkApi.getScope3(priorYear.id) : Promise.resolve(null),
+        ])
+        if (cancelled) return
+        setScope3Current(currentRes.status === 'fulfilled' ? currentRes.value.data : null)
+        setScope3Prior(
+          priorRes.status === 'fulfilled' && priorRes.value ? priorRes.value.data : null,
+        )
+      } finally {
+        if (!cancelled) setTrendsLoading(false)
+      }
+    }
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedYearId, section, years])
 
   useEffect(() => {
     if (!selectedYearId || section !== 'improve') {
@@ -529,41 +575,13 @@ export default function PlanetMark() {
           )}
 
           {section === 'trends' && (
-            <div data-testid="planet-mark-section-trends">
-              {hasTrendData(trendRows) ? (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('planet_mark.shell.section.trends')}</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      {t('planet_mark.shell.trends_live_hint')}
-                    </p>
-                  </CardHeader>
-                  <CardContent className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border text-left text-muted-foreground">
-                          <th className="py-2 pr-4">{t('planet_mark.shell.trends.year')}</th>
-                          <th className="py-2 pr-4">{t('planet_mark.tco2e_total')}</th>
-                          <th className="py-2">{t('planet_mark.tco2e_fte')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {trendRows.map((row) => (
-                          <tr key={row.label} className="border-b border-border/60">
-                            <td className="py-3 font-medium text-foreground">{row.label}</td>
-                            <td className="py-3 text-foreground">
-                              {row.total != null ? row.total.toFixed(1) : '—'}
-                            </td>
-                            <td className="py-3 text-foreground">
-                              {row.perFte != null ? row.perFte.toFixed(2) : '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </CardContent>
-                </Card>
-              ) : (
+            <div className="space-y-4" data-testid="planet-mark-section-trends">
+              {trendsLoading && trendsVm.isEmpty ? (
+                <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  {t('planet_mark.loading')}
+                </div>
+              ) : trendsVm.isEmpty ? (
                 <Card>
                   <CardContent>
                     <EmptyState
@@ -572,6 +590,194 @@ export default function PlanetMark() {
                     />
                   </CardContent>
                 </Card>
+              ) : (
+                <>
+                  {trendsVm.showComparativePanels && trendsVm.yoyPerFtePercent != null && (
+                    <Card data-testid="planet-mark-trends-yoy">
+                      <CardHeader>
+                        <CardTitle>{t('planet_mark.shell.trends.yoy_title')}</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                          {t('planet_mark.shell.trends.yoy_hint')}
+                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        <p
+                          className={cn(
+                            'text-3xl font-bold',
+                            trendsVm.yoyPerFtePercent <= 0 ? 'text-success' : 'text-destructive',
+                          )}
+                        >
+                          {formatDeltaPercent(trendsVm.yoyPerFtePercent)}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {t('planet_mark.shell.trends.yoy_per_fte')}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {trendsVm.showHistoricalTable && (
+                    <Card data-testid="planet-mark-trends-historical">
+                      <CardHeader>
+                        <CardTitle>{t('planet_mark.shell.section.trends')}</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                          {t('planet_mark.shell.trends_live_hint')}
+                        </p>
+                      </CardHeader>
+                      <CardContent className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border text-left text-muted-foreground">
+                              <th className="py-2 pr-4">{t('planet_mark.shell.trends.year')}</th>
+                              <th className="py-2 pr-4">{t('planet_mark.tco2e_total')}</th>
+                              <th className="py-2 pr-4">{t('planet_mark.tco2e_fte')}</th>
+                              <th className="py-2 pr-4">{t('planet_mark.shell.trends.yoy_total')}</th>
+                              <th className="py-2">{t('planet_mark.shell.trends.yoy_per_fte_col')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {trendsVm.historicalRows.map((row) => (
+                              <tr key={row.label} className="border-b border-border/60">
+                                <td className="py-3 font-medium text-foreground">{row.label}</td>
+                                <td className="py-3 text-foreground">
+                                  {formatEmissions(row.total)}
+                                </td>
+                                <td className="py-3 text-foreground">
+                                  {formatEmissions(row.perFte, 2)}
+                                </td>
+                                <td className="py-3 text-foreground">
+                                  {formatDeltaPercent(row.yoyTotalPercent)}
+                                </td>
+                                <td className="py-3 text-foreground">
+                                  {formatDeltaPercent(row.yoyPerFtePercent)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {trendsVm.showComparativePanels &&
+                    trendsVm.scopeDeltas.some(
+                      (delta) =>
+                        hasPositiveCarbonTotal(delta.current) &&
+                        hasPositiveCarbonTotal(delta.prior),
+                    ) && (
+                      <Card data-testid="planet-mark-trends-scope">
+                        <CardHeader>
+                          <CardTitle>{t('planet_mark.shell.trends.scope_title')}</CardTitle>
+                          <p className="text-sm text-muted-foreground">
+                            {t('planet_mark.shell.trends.scope_hint')}
+                          </p>
+                        </CardHeader>
+                        <CardContent className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-border text-left text-muted-foreground">
+                                <th className="py-2 pr-4">{t('planet_mark.shell.trends.scope')}</th>
+                                <th className="py-2 pr-4">{t('planet_mark.shell.trends.current')}</th>
+                                <th className="py-2 pr-4">{t('planet_mark.shell.trends.prior')}</th>
+                                <th className="py-2">{t('planet_mark.shell.trends.delta')}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {trendsVm.scopeDeltas.map((delta) => (
+                                <tr key={delta.scopeKey} className="border-b border-border/60">
+                                  <td className="py-3 font-medium text-foreground">
+                                    {t(delta.labelKey)}
+                                  </td>
+                                  <td className="py-3 text-foreground">
+                                    {formatEmissions(delta.current)}
+                                  </td>
+                                  <td className="py-3 text-foreground">
+                                    {formatEmissions(delta.prior)}
+                                  </td>
+                                  <td className="py-3 text-foreground">
+                                    {formatDeltaPercent(delta.deltaPercent)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                  {trendsVm.showComparativePanels && trendsVm.categoryDeltas.length > 0 && (
+                    <Card data-testid="planet-mark-trends-category">
+                      <CardHeader>
+                        <CardTitle>{t('planet_mark.shell.trends.category_title')}</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                          {t('planet_mark.shell.trends.category_hint')}
+                        </p>
+                      </CardHeader>
+                      <CardContent className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border text-left text-muted-foreground">
+                              <th className="py-2 pr-4">{t('planet_mark.shell.trends.category')}</th>
+                              <th className="py-2 pr-4">{t('planet_mark.shell.trends.current')}</th>
+                              <th className="py-2 pr-4">{t('planet_mark.shell.trends.prior')}</th>
+                              <th className="py-2">{t('planet_mark.shell.trends.delta')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {trendsVm.categoryDeltas.map((delta) => (
+                              <tr
+                                key={`${delta.number}-${delta.name}`}
+                                className="border-b border-border/60"
+                              >
+                                <td className="py-3 font-medium text-foreground">
+                                  {delta.number}. {delta.name}
+                                </td>
+                                <td className="py-3 text-foreground">
+                                  {formatEmissions(delta.current)}
+                                </td>
+                                <td className="py-3 text-foreground">
+                                  {formatEmissions(delta.prior)}
+                                </td>
+                                <td className="py-3 text-foreground">
+                                  {formatDeltaPercent(delta.deltaPercent)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {trendsVm.showThinPriorYear && (
+                    <Card data-testid="planet-mark-trends-thin-prior">
+                      <CardHeader>
+                        <CardTitle>{t('planet_mark.shell.trends.prior_years_title')}</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                          {t('planet_mark.shell.trends.prior_years_hint')}
+                        </p>
+                      </CardHeader>
+                      <CardContent className="divide-y divide-border">
+                        {trendsVm.thinPriorYears.map((year) => (
+                          <div
+                            key={year.label}
+                            className="flex items-center justify-between py-3 text-sm"
+                          >
+                            <span className="font-medium text-foreground">{year.label}</span>
+                            <span className="text-muted-foreground">
+                              {year.total != null || year.perFte != null
+                                ? t('planet_mark.shell.trends.prior_year_summary', {
+                                    total: formatEmissions(year.total),
+                                    perFte: formatEmissions(year.perFte, 2),
+                                  })
+                                : t('planet_mark.shell.no_emissions_recorded')}
+                            </span>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
               )}
             </div>
           )}
