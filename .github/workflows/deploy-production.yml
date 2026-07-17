@@ -167,10 +167,20 @@ jobs:
           elif [[ "${{ github.event.inputs.staging_verified }}" == "true" ]]; then
             RELEASE_SHA="${{ github.event.inputs.release_sha }}"
             if [[ -z "$RELEASE_SHA" ]]; then
-              RELEASE_SHA="$SIGNED_RELEASE_SHA"
-            fi
-            if [[ -z "$RELEASE_SHA" ]]; then
               RELEASE_SHA="${{ github.sha }}"
+            fi
+            if [[ -n "$SIGNED_RELEASE_SHA" ]]; then
+              if [[ "$RELEASE_SHA" == "$SIGNED_RELEASE_SHA" ]]; then
+                echo "✅ Dispatch SHA matches signed release_sha exactly"
+              elif git merge-base --is-ancestor "$SIGNED_RELEASE_SHA" "$RELEASE_SHA"; then
+                echo "✅ Dispatch SHA $RELEASE_SHA is a descendant of signed release_sha $SIGNED_RELEASE_SHA"
+              else
+                echo "❌ Dispatch SHA $RELEASE_SHA is not equal to nor a descendant of signed release_sha $SIGNED_RELEASE_SHA"
+                echo "approved=false" >> "$GITHUB_OUTPUT"
+                echo "release_sha=" >> "$GITHUB_OUTPUT"
+                echo "skip_reason=signed_sha_mismatch" >> "$GITHUB_OUTPUT"
+                exit 1
+              fi
             fi
             echo "✅ Manual deployment with staging verification confirmed"
             echo "Reason: ${{ github.event.inputs.reason }}"
