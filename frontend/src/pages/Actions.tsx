@@ -66,6 +66,7 @@ import {
   parseActionsViewParam,
   type ActionsViewMode,
 } from './actionsViewScope'
+import { getActionSourceLink } from '../components/investigations/handoffLinks'
 import { buildActionDetailPath } from './actionLinks'
 
 function startOfDay(d: Date): number {
@@ -125,7 +126,24 @@ function classifyError(error: unknown): ApiError {
 // Local UI type extending API type with computed fields
 interface Action extends Omit<ApiAction, 'owner_email'> {
   source_ref: string
-  owner?: string
+  assignee?: string
+}
+
+function isTerminalActionStatus(status: string | undefined): boolean {
+  return ['completed', 'closed', 'verified'].includes(String(status || '').toLowerCase())
+}
+
+function getComplaintSourceLink(sourceType: string, sourceId: number) {
+  if (!Number.isFinite(sourceId) || sourceId <= 0) return null
+  const kind = sourceType.toLowerCase()
+  if (kind === 'complaint' || kind === 'capa_complaint') {
+    return {
+      href: `/complaints/${sourceId}`,
+      labelKey: 'actions.view_complaint',
+      labelFallback: 'View complaint',
+    }
+  }
+  return null
 }
 
 type ViewMode = ActionsViewMode
@@ -306,7 +324,7 @@ export default function Actions() {
       apiAction.source_reference ||
       apiAction.source_title ||
       `${apiAction.source_type.toUpperCase()}-${apiAction.source_id}`,
-    owner: apiAction.owner_email || undefined,
+    assignee: apiAction.assigned_to_email || apiAction.owner_email || undefined,
   })
 
   // Fetch actions from API with stable ordering (server returns created_at desc).
@@ -1045,6 +1063,37 @@ export default function Actions() {
         </Card>
       ) : null}
 
+      {sourceTypeFilter === 'complaint' &&
+      Number.isFinite(sourceIdFilter) &&
+      sourceIdFilter > 0 ? (
+        <Card className="border-info/30 bg-info/5" data-testid="actions-complaint-playbook">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-start gap-3">
+            <div className="p-2 rounded-lg bg-info/15 text-info shrink-0">
+              <Info className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="font-semibold text-foreground">
+                {t('actions.complaint_playbook.title', 'Complaint-sourced corrective actions')}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'actions.complaint_playbook.body',
+                  'CAPA items here track complaint resolution. Return to the complaint record for intake context and running-sheet history.',
+                )}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={`/complaints/${sourceIdFilter}`}>
+                    {t('actions.complaint_playbook.open_complaint', 'Open complaint record')}
+                    <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* Actions List — dense single-column rows */}
       <div>
         {sortedActions.length === 0 ? (
@@ -1065,24 +1114,22 @@ export default function Actions() {
             {sortedActions.map((action) => {
               const overdue = isOverdue(action.due_date, action.display_status)
               const isOpen = expandedKey === action.action_key
-              const hasFindingLink =
-                action.source_type === 'audit_finding' &&
-                Number.isFinite(action.source_id) &&
-                action.source_id > 0
-              const hasIncidentLink =
-                action.source_type === 'incident' &&
-                Number.isFinite(action.source_id) &&
-                action.source_id > 0
-              const hasInvestigationLink =
-                action.source_type === 'investigation' &&
-                Number.isFinite(action.source_id) &&
-                action.source_id > 0
+              const sourceLink =
+                getActionSourceLink(action.source_type, action.source_id) ||
+                getComplaintSourceLink(action.source_type, action.source_id)
               const hasAuditLinks =
                 action.source_type === 'audit_finding' &&
                 action.audit_run_id != null &&
                 action.audit_run_id > 0
               const moreCount = hasAuditLinks ? 2 : 0
               const detailPanelId = `actions-detail-${action.action_key}`
+              const assigneeLabel =
+                action.assignee || t('actions.list.unassigned', 'Unassigned')
+              const showFindingLoopCta =
+                action.source_type === 'audit_finding' &&
+                Number.isFinite(action.source_id) &&
+                action.source_id > 0 &&
+                isTerminalActionStatus(action.display_status || action.status)
 
               return (
                 <div
@@ -1145,15 +1192,17 @@ export default function Actions() {
                             </span>
                           </>
                         ) : null}
-                        {action.owner ? (
-                          <>
-                            <span aria-hidden="true">·</span>
-                            <span className="inline-flex items-center gap-1 truncate">
-                              <User className="h-3 w-3 shrink-0" aria-hidden="true" />
-                              {action.owner}
-                            </span>
-                          </>
-                        ) : null}
+                        <span aria-hidden="true">·</span>
+                        <span
+                          className={cn(
+                            'inline-flex items-center gap-1 truncate',
+                            !action.assignee && 'italic opacity-80',
+                          )}
+                          data-testid={`actions-row-assignee-${action.action_key}`}
+                        >
+                          <User className="h-3 w-3 shrink-0" aria-hidden="true" />
+                          {assigneeLabel}
+                        </span>
                         {action.source_scheme ? (
                           <>
                             <span aria-hidden="true">·</span>
@@ -1181,26 +1230,13 @@ export default function Actions() {
                     )}
 
                     <div className="flex shrink-0 items-center gap-1.5">
-                      {hasFindingLink ? (
+                      {sourceLink ? (
                         <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" asChild>
-                          <Link to={`/audits?view=findings&findingId=${action.source_id}`}>
-                            {t('actions.view_finding')}
-                            <ArrowUpRight className="ml-1 h-3 w-3" aria-hidden="true" />
-                          </Link>
-                        </Button>
-                      ) : null}
-                      {hasIncidentLink ? (
-                        <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" asChild>
-                          <Link to={`/incidents/${action.source_id}`}>
-                            {t('actions.view_incident', 'View incident')}
-                            <ArrowUpRight className="ml-1 h-3 w-3" aria-hidden="true" />
-                          </Link>
-                        </Button>
-                      ) : null}
-                      {hasInvestigationLink ? (
-                        <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" asChild>
-                          <Link to={`/investigations/${action.source_id}`}>
-                            {t('actions.view_investigation', 'View investigation')}
+                          <Link
+                            to={sourceLink.href}
+                            data-testid={`actions-source-link-${action.action_key}`}
+                          >
+                            {t(sourceLink.labelKey, sourceLink.labelFallback)}
                             <ArrowUpRight className="ml-1 h-3 w-3" aria-hidden="true" />
                           </Link>
                         </Button>
@@ -1295,11 +1331,30 @@ export default function Actions() {
                           {t('actions.detail.type', 'Type')}:{' '}
                           <span className="font-medium text-foreground">{action.action_type}</span>
                         </span>
+                        <span data-testid={`actions-detail-assignee-${action.action_key}`}>
+                          {t('actions.detail.assignee', 'Assignee')}:{' '}
+                          <span
+                            className={cn(
+                              'font-medium',
+                              action.assignee ? 'text-foreground' : 'italic text-muted-foreground',
+                            )}
+                          >
+                            {assigneeLabel}
+                          </span>
+                        </span>
                         {action.created_at ? (
                           <span>
                             {t('actions.detail.created', 'Created')}:{' '}
                             <span className="font-medium text-foreground">
                               {new Date(action.created_at).toLocaleDateString()}
+                            </span>
+                          </span>
+                        ) : null}
+                        {action.completed_at ? (
+                          <span>
+                            {t('actions.detail.completed', 'Completed')}:{' '}
+                            <span className="font-medium text-foreground">
+                              {new Date(action.completed_at).toLocaleDateString()}
                             </span>
                           </span>
                         ) : null}
@@ -1322,6 +1377,35 @@ export default function Actions() {
                           {action.source_title ? <span>{action.source_title}</span> : null}
                         </div>
                       )}
+                      {sourceLink ? (
+                        <div data-testid={`actions-detail-source-${action.action_key}`}>
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            {t('actions.detail.source', 'Source record')}
+                          </p>
+                          <Button variant="outline" size="sm" className="mt-1 h-8" asChild>
+                            <Link to={sourceLink.href}>
+                              {t(sourceLink.labelKey, sourceLink.labelFallback)}
+                              <ArrowUpRight className="ml-1 h-3 w-3" aria-hidden="true" />
+                            </Link>
+                          </Button>
+                        </div>
+                      ) : null}
+                      {showFindingLoopCta ? (
+                        <div
+                          className="rounded-lg border border-emerald-300/60 bg-emerald-50/80 p-3 text-sm text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-100"
+                          role="status"
+                          data-testid={`actions-finding-loop-${action.action_key}`}
+                        >
+                          <p className="font-medium">{t('actions.finding_loop_cta.title')}</p>
+                          <p className="mt-1 text-xs opacity-90">{t('actions.finding_loop_cta.body')}</p>
+                          <Button variant="secondary" size="sm" className="mt-2" asChild>
+                            <Link to={`/audits?view=findings&findingId=${action.source_id}`}>
+                              {t('actions.finding_loop_cta.action')}
+                              <ArrowUpRight className="ml-1 h-3 w-3" aria-hidden="true" />
+                            </Link>
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -1360,6 +1444,17 @@ export default function Actions() {
               </div>
               <p className="text-lg font-semibold text-foreground mb-2">{t('actions.created')}</p>
               <p className="text-muted-foreground">{t('actions.created_message')}</p>
+              <p className="mt-3 text-sm text-muted-foreground" data-testid="actions-created-next-steps">
+                {createReturnTo
+                  ? t(
+                      'actions.created_return_hint',
+                      'Saved — you return to the case shortly. Assign and complete on the action profile anytime.',
+                    )
+                  : t(
+                      'actions.created_next_steps',
+                      'Open the action profile to assign an owner and mark completion when work is done.',
+                    )}
+              </p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -1497,6 +1592,16 @@ export default function Actions() {
                   </div>
                 </div>
               )}
+
+              <p
+                className="text-xs text-muted-foreground"
+                data-testid="actions-create-next-steps"
+              >
+                {t(
+                  'actions.create.assign_on_profile',
+                  'Assignee and completion are saved on the action profile after create — not in this dialog.',
+                )}
+              </p>
 
               <DialogFooter className="gap-3 pt-4">
                 <Button

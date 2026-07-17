@@ -64,6 +64,18 @@ const { tMock } = vi.hoisted(() => {
     'actions.detail.panel': 'Action details',
     'actions.detail.type': 'Type',
     'actions.detail.created': 'Created',
+    'actions.detail.assignee': 'Assignee',
+    'actions.detail.completed': 'Completed',
+    'actions.list.unassigned': 'Unassigned',
+    'actions.view_near_miss': 'View near miss',
+    'actions.view_rta': 'View RTA',
+    'actions.view_complaint': 'View complaint',
+    'actions.finding_loop_cta.title': 'Close the finding loop',
+    'actions.finding_loop_cta.body':
+      'CAPA is complete. Close the linked finding on the Audits findings console to finish the inspection loop.',
+    'actions.finding_loop_cta.action': 'Return to finding loop',
+    'actions.create.assign_on_profile':
+      'Assignee and completion are saved on the action profile after create — not in this dialog.',
     'actions.detail.description': 'Full description',
     'cancel': 'Cancel',
   }
@@ -220,8 +232,7 @@ describe('Actions finding deep-link', () => {
     expect(screen.queryByText('OVERDUE')).not.toBeInTheDocument()
   })
 
-  it.skip('warns that CAPA assignment does not imply email delivery', async () => {
-    // Flaky under TableSkeleton race / delivery-status timing; covered by CUJ honesty docs.
+  it('warns that CAPA assignment does not imply email delivery', async () => {
     mockList.mockResolvedValue({ data: { items: [action({})] } })
     mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: false } })
 
@@ -232,12 +243,8 @@ describe('Actions finding deep-link', () => {
     )
 
     expect(await screen.findByText('Correct audit finding')).toBeInTheDocument()
-    expect(await screen.findByText('Email alerts unavailable')).toBeInTheDocument()
-    expect(
-      screen.getByText(
-        'The assignee is saved, but email alerts are unavailable while outbound email is not configured.',
-      ),
-    ).toBeInTheDocument()
+    expect(await screen.findByTestId('actions-email-unavailable')).toBeInTheDocument()
+    expect(screen.getByText('Email alerts unavailable')).toBeInTheDocument()
   })
 })
 
@@ -558,5 +565,169 @@ describe('Actions Round 2 polish — honesty & a11y', () => {
     expect(panel).toHaveTextContent('Type')
     expect(panel).toHaveTextContent('preventive')
     expect(panel).toHaveTextContent('Created')
+  })
+})
+
+describe('Actions Round 3 polish — CUJ honesty & upstream links', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSummary.mockResolvedValue({ data: { total: 1, by_display_status: { open: 1 } } })
+    mockViewCounts.mockResolvedValue({
+      data: { all: 1, my: 0, overdue: 0, my_overdue: 0 },
+    })
+    mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: true } })
+  })
+
+  it('shows Unassigned when no assignee email is on the row', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [action({ action_key: 'capa:10', assigned_to_email: undefined, owner_email: undefined })],
+      },
+    })
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('actions-row-assignee-capa:10')).toHaveTextContent('Unassigned')
+  })
+
+  it('prefers assigned_to_email over owner_email in row metadata', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [
+          action({
+            action_key: 'capa:11',
+            assigned_to_email: 'assignee@example.com',
+            owner_email: 'owner@example.com',
+          }),
+        ],
+      },
+    })
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('actions-row-assignee-capa:11')).toHaveTextContent(
+      'assignee@example.com',
+    )
+  })
+
+  it('links RTA-sourced rows to the RTA detail route', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [
+          action({
+            action_key: 'rta:5',
+            source_type: 'rta',
+            source_id: 55,
+            title: 'RTA follow-up',
+          }),
+        ],
+      },
+    })
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    const link = await screen.findByTestId('actions-source-link-rta:5')
+    expect(link).toHaveAttribute('href', '/rtas/55')
+    expect(link).toHaveTextContent('View RTA')
+  })
+
+  it('shows finding-loop CTA when a completed audit finding row is expanded', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [
+          action({
+            action_key: 'capa:done',
+            display_status: 'completed',
+            status: 'completed',
+            source_id: 88,
+          }),
+        ],
+      },
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Details' }))
+    expect(await screen.findByTestId('actions-finding-loop-capa:done')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Return to finding loop' })).toHaveAttribute(
+      'href',
+      '/audits?view=findings&findingId=88',
+    )
+  })
+
+  it('states assign/complete honesty in the create dialog', async () => {
+    mockList.mockResolvedValue({ data: { items: [] } })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'New Action' }))
+    expect(await screen.findByTestId('actions-create-next-steps')).toHaveTextContent(
+      'Assignee and completion are saved on the action profile',
+    )
+  })
+
+  it('shows upstream source link inside expanded detail panel', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [
+          action({
+            action_key: 'incident_action:9',
+            source_type: 'incident',
+            source_id: 9,
+            title: 'Incident CAPA',
+          }),
+        ],
+      },
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Details' }))
+    const detailLink = await screen.findByTestId('actions-detail-source-incident_action:9')
+    expect(detailLink).toBeInTheDocument()
+    expect(detailLink.querySelector('a')).toHaveAttribute('href', '/incidents/9')
+  })
+
+  it('shows complaint playbook when filtered by complaint source and id', async () => {
+    mockList.mockResolvedValue({ data: { items: [] } })
+
+    render(
+      <MemoryRouter initialEntries={['/actions?sourceType=complaint&sourceId=12']}>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('actions-complaint-playbook')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Open complaint record/i })).toHaveAttribute(
+      'href',
+      '/complaints/12',
+    )
   })
 })
