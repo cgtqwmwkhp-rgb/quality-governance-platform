@@ -242,6 +242,22 @@ function getWeekDateRange(weekValue: string): { start: string; end: string } | n
   }
 }
 
+
+/** Normalise checklist load failures into an honest PAMS-unavailable message. */
+export function formatChecklistLoadError(message: string): string {
+  const trimmed = message.trim()
+  if (!trimmed) {
+    return 'PAMS unavailable — van checklist data cannot be loaded right now.'
+  }
+  if (/pams unavailable/i.test(trimmed)) {
+    return trimmed.replace(/^Server error:\s*/i, '')
+  }
+  if (/pams/i.test(trimmed) || /service[_ ]?unavailable/i.test(trimmed) || /unavailable/i.test(trimmed)) {
+    return 'PAMS unavailable — van checklist data cannot be loaded right now.'
+  }
+  return trimmed
+}
+
 export default function VehicleChecklists() {
   useTranslation()
 
@@ -352,10 +368,12 @@ export default function VehicleChecklists() {
         const fetcher = tab === 'daily' ? vehicleChecklistsApi.listDaily : vehicleChecklistsApi.listMonthly
         const res = await fetcher(page, pageSize)
         const data = res.data
-        setChecklistItems(data.items)
+        setChecklistItems(Array.isArray(data.items) ? data.items : [])
         setChecklistPages(data.pages)
       } catch (err) {
-        const msg = getApiErrorMessage(err)
+        const msg = formatChecklistLoadError(getApiErrorMessage(err))
+        setChecklistItems([])
+        setChecklistPages(1)
         setLoadError(msg)
         console.error('Checklist load error:', msg)
       } finally {
@@ -1037,8 +1055,34 @@ export default function VehicleChecklists() {
         </>
       )}
 
-      {/* Error Banner */}
-      {loadError && (
+      {/* Error Banner — honest PAMS / load failure (not a silent empty dash) */}
+      {loadError && activeTab !== 'defects' && (
+        <div
+          className="rounded-lg border border-destructive/30 bg-destructive/5 p-4"
+          data-testid="vehicle-checklists-pams-unavailable"
+          role="alert"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold">PAMS unavailable</p>
+                <p className="text-sm mt-0.5">{loadError}</p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="vehicle-checklists-pams-retry"
+              onClick={() => loadChecklists(activeTab, checklistPage)}
+            >
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Retry
+            </Button>
+          </div>
+        </div>
+      )}
+      {loadError && activeTab === 'defects' && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
           <div className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-4 w-4" />
@@ -1050,6 +1094,17 @@ export default function VehicleChecklists() {
       {/* Content */}
       {loading ? (
         <TableSkeleton rows={8} />
+      ) : activeTab !== 'defects' && loadError ? (
+        <Card>
+          <CardContent className="p-12 text-center" data-testid="vehicle-checklists-pams-empty">
+            <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-3" />
+            <h3 className="text-lg font-semibold text-foreground">PAMS unavailable</h3>
+            <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+              Daily and monthly van checklists come from PAMS. Until the connection is restored,
+              checklist records cannot be shown here.
+            </p>
+          </CardContent>
+        </Card>
       ) : activeTab === 'defects' ? (
         /* Defects Table */
         <Card>
