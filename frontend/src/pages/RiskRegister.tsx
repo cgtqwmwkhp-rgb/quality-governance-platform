@@ -1113,6 +1113,7 @@ export default function RiskRegister() {
                 type="file"
                 accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="sr-only"
+                aria-label={t('risk_register.excel_import.button')}
                 data-testid="risk-import-xlsx-input"
                 onChange={handleImportFileSelected}
               />
