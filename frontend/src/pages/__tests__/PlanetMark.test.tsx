@@ -9,6 +9,7 @@ const mockListActions = vi.fn()
 const mockGetActionsSummary = vi.fn()
 const mockGetScope3 = vi.fn()
 const mockCreateReportingYear = vi.fn()
+const mockCreateAction = vi.fn()
 const mockCreateApiError = vi.fn()
 
 vi.mock('react-i18next', () => ({
@@ -34,7 +35,9 @@ vi.mock('../../api/client', () => ({
     listActions: (...args: unknown[]) => mockListActions(...args),
     getActionsSummary: (...args: unknown[]) => mockGetActionsSummary(...args),
     getScope3: (...args: unknown[]) => mockGetScope3(...args),
+    createAction: (...args: unknown[]) => mockCreateAction(...args),
   },
+  getApiErrorMessage: (_err: unknown, fallback = 'failed') => fallback,
   ErrorClass: {
     NETWORK_ERROR: 'NETWORK_ERROR',
     SERVER_ERROR: 'SERVER_ERROR',
@@ -358,12 +361,53 @@ describe('PlanetMark shell', () => {
     expect(screen.getByText('planet_mark.shell.empty.trends_desc')).toBeInTheDocument()
   })
 
-  it('exposes export section for selected year', async () => {
+  it('exposes export section and downloads JSON pack (not dead window.open)', async () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const createObjectURL = vi.fn(() => 'blob:planet-mark-pack')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL })
+
     renderPlanetMark('/planet-mark?year=1&section=export')
 
     expect(await screen.findByTestId('planet-mark-section-export')).toBeInTheDocument()
-    expect(screen.getByText('Export ready for YE2026')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /planet_mark.export_report/i })).toBeInTheDocument()
+    expect(screen.getByTestId('planet-mark-export-honesty')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('planet-mark-export-json'))
+    expect(createObjectURL).toHaveBeenCalled()
+    expect(clickSpy).toHaveBeenCalled()
+    clickSpy.mockRestore()
+    vi.unstubAllGlobals()
+  })
+
+  it('shows hotspot initiatives and wires Add as Improve action', async () => {
+    mockGetScope3.mockResolvedValue({
+      data: {
+        year_id: 1,
+        measured_count: 1,
+        total_co2e: 50,
+        categories: [
+          {
+            number: 3,
+            name: 'Fuel',
+            is_measured: true,
+            total_co2e: 50,
+            percentage: 100,
+          },
+        ],
+      },
+    })
+    mockCreateAction.mockResolvedValue({ data: { id: 9, action_id: 'ACT-9', message: 'ok' } })
+
+    renderPlanetMark('/planet-mark?year=1&section=improve')
+
+    expect(await screen.findByTestId('planet-mark-initiatives')).toBeInTheDocument()
+    expect(await screen.findByTestId('planet-mark-initiative-cat-3')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('planet-mark-initiative-add-cat-3'))
+    await waitFor(() => {
+      expect(mockCreateAction).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ action_title: expect.stringContaining('Fuel') }),
+      )
+    })
   })
 
   it('allows first-time setup by creating a reporting year', async () => {
