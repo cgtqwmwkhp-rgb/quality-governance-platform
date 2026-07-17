@@ -621,10 +621,7 @@ class ComplianceAutomationService:
     @staticmethod
     def _riddor_status_label(status: str) -> str:
         if status == RIDDOR_STATUS_AWAITING_HSE:
-            return (
-                "Pack recorded in QGP — HSE gateway not connected; "
-                "complete filing on the HSE portal"
-            )
+            return "Pack recorded in QGP — HSE gateway not connected; " "complete filing on the HSE portal"
         return "Draft pack saved in QGP — file on the HSE portal (gateway not connected)"
 
     @staticmethod
@@ -734,10 +731,7 @@ class ComplianceAutomationService:
         if status_filter:
             query = query.where(RIDDORSubmission.submission_status == status_filter)
         result = await self.db.execute(query.order_by(RIDDORSubmission.created_at.desc()))
-        submissions = [
-            self._serialize_riddor_pack(pack, incident_reference=ref)
-            for pack, ref in result.all()
-        ]
+        submissions = [self._serialize_riddor_pack(pack, incident_reference=ref) for pack, ref in result.all()]
         return {"submissions": submissions, "total": len(submissions)}
 
     async def prepare_riddor_submission(
@@ -829,14 +823,11 @@ class ComplianceAutomationService:
         pack.hse_response = {
             "gateway": "not_connected",
             "confirmation": (
-                "Stub only — not submitted to HSE. Integrate production RIDDOR gateway "
-                "before treating as filed."
+                "Stub only — not submitted to HSE. Integrate production RIDDOR gateway " "before treating as filed."
             ),
         }
         pack.hse_response_at = submitted_at
-        pack.notes = (
-            "Filing intent recorded in QGP only. Complete statutory submission on the HSE portal."
-        )
+        pack.notes = "Filing intent recorded in QGP only. Complete statutory submission on the HSE portal."
         await self.db.flush()
 
         serialized = self._serialize_riddor_pack(pack)
