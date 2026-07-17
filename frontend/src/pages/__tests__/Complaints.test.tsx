@@ -7,6 +7,17 @@ import Complaints from '../Complaints'
 const mockNavigate = vi.fn()
 const mockToastError = vi.fn()
 const mockToastSuccess = vi.fn()
+const mockT = (key: string, fallbackOrOptions?: string | Record<string, unknown>) => {
+  if (typeof fallbackOrOptions === 'string') return fallbackOrOptions
+  if (
+    fallbackOrOptions &&
+    typeof fallbackOrOptions === 'object' &&
+    'defaultValue' in fallbackOrOptions
+  ) {
+    return String(fallbackOrOptions.defaultValue)
+  }
+  return key
+}
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
@@ -15,17 +26,7 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, fallbackOrOptions?: string | Record<string, unknown>) => {
-      if (typeof fallbackOrOptions === 'string') return fallbackOrOptions
-      if (
-        fallbackOrOptions &&
-        typeof fallbackOrOptions === 'object' &&
-        'defaultValue' in fallbackOrOptions
-      ) {
-        return String(fallbackOrOptions.defaultValue)
-      }
-      return key
-    },
+    t: mockT,
     i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
