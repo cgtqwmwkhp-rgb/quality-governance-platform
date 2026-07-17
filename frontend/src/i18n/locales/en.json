@@ -2938,5 +2938,15 @@
   "planet_mark.shell.monthly_e4.status.follow_on": "Follow-on",
   "planet_mark.shell.monthly_e4.forecast_followon": "Forecast against the 5% annual Scope 1 and 2 cut will appear after monthly ingest lands — this tab does not invent a trajectory.",
   "planet_mark.shell.monthly_e4.select_year_title": "Select a reporting year",
-  "planet_mark.shell.monthly_e4.select_year_desc": "Choose a reporting year above to see Monthly evidence honesty for that year. Upload still happens via year evidence APIs — not a fabricated monthly grid."
+  "planet_mark.shell.monthly_e4.select_year_desc": "Choose a reporting year above to see Monthly evidence honesty for that year. Upload still happens via year evidence APIs — not a fabricated monthly grid.",
+  "calendar.personal_honesty.title": "Governance calendar — personal product not live",
+  "calendar.personal_honesty.body": "This Insights calendar shows the live governance feed (audits, action due dates, training, reviews). Creating personal events, ICS sync, and rooms is Option C follow-on — not wired here.",
+  "calendar.personal_honesty.cap.governance_feed": "Governance feed",
+  "calendar.personal_honesty.cap.source_create": "Create via Audits / Actions",
+  "calendar.personal_honesty.cap.personal_events": "Personal events",
+  "calendar.personal_honesty.cap.ics_sync": "ICS sync",
+  "calendar.personal_honesty.cap.rooms": "Rooms",
+  "calendar.personal_honesty.status_live": "live",
+  "calendar.personal_honesty.status_awaiting": "awaiting",
+  "calendar.personal_honesty.option_c_followon": "Full personal calendar product (create/edit + ICS + rooms) stays out of this shell."
 }

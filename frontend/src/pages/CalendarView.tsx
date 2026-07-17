@@ -27,6 +27,7 @@ import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { cn } from '../helpers/utils'
 import { toast } from '../contexts/ToastContext'
+import { buildCalendarPersonalHonestyViewModel } from './calendarPersonalHonesty'
 
 type ViewMode = 'month' | 'week' | 'agenda'
 type EventType = CalendarEventType
@@ -329,6 +330,44 @@ export default function CalendarView() {
             {t('calendar.title')}
           </h1>
           <p className="text-muted-foreground mt-1">{t('calendar.subtitle')}</p>
+          {(() => {
+            const personalHonesty = buildCalendarPersonalHonestyViewModel()
+            return (
+              <div
+                className="mt-3 rounded-xl border border-border bg-card/60 px-3 py-2 max-w-2xl"
+                data-testid="calendar-personal-honesty"
+              >
+                <p className="text-sm text-foreground" data-testid="calendar-personal-honesty-copy">
+                  {t('calendar.personal_honesty.title')}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t('calendar.personal_honesty.body')}
+                </p>
+                <div
+                  className="flex flex-wrap gap-2 mt-2"
+                  data-testid="calendar-personal-capability-chips"
+                >
+                  {personalHonesty.capabilities.map((row) => (
+                    <Badge
+                      key={row.id}
+                      variant={row.status === 'live' ? 'success' : 'secondary'}
+                      data-testid={`calendar-personal-cap-${row.id}`}
+                    >
+                      {t(`calendar.personal_honesty.cap.${row.id}`)}
+                      {row.status === 'live'
+                        ? ` · ${t('calendar.personal_honesty.status_live')}`
+                        : ` · ${t('calendar.personal_honesty.status_awaiting')}`}
+                    </Badge>
+                  ))}
+                </div>
+                {!personalHonesty.personalProductLive && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {t('calendar.personal_honesty.option_c_followon')}
+                  </p>
+                )}
+              </div>
+            )
+          })()}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

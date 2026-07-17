@@ -2799,5 +2799,15 @@
   "planet_mark.shell.monthly_e4.status.follow_on": "Dilyniant",
   "planet_mark.shell.monthly_e4.forecast_followon": "Bydd rhagolwg yn erbyn y toriad Scope 1 a 2 blynyddol o 5% yn ymddangos ar ôl i fewnbwn misol gyrraedd — nid yw'r tab hwn yn dyfeisio trywydd.",
   "planet_mark.shell.monthly_e4.select_year_title": "Dewiswch flwyddyn adrodd",
-  "planet_mark.shell.monthly_e4.select_year_desc": "Dewiswch flwyddyn adrodd uchod i weld onest tystiolaeth Misol ar gyfer y flwyddyn honno. Mae uwchlwytho'n dal i ddigwydd drwy APIs tystiolaeth blwyddyn — nid grid misol ffug."
+  "planet_mark.shell.monthly_e4.select_year_desc": "Dewiswch flwyddyn adrodd uchod i weld onest tystiolaeth Misol ar gyfer y flwyddyn honno. Mae uwchlwytho'n dal i ddigwydd drwy APIs tystiolaeth blwyddyn — nid grid misol ffug.",
+  "calendar.personal_honesty.title": "Calendr llywodraethu — dim cynnyrch personol byw",
+  "calendar.personal_honesty.body": "Mae'r calendr Mewnwelediadau hwn yn dangos y porthiant llywodraethu byw (archwiliadau, dyddiadau cau gweithredoedd, hyfforddiant, adolygiadau). Mae creu digwyddiadau personol, cysoni ICS, ac ystafelloedd yn ddilyniant Opsiwn C — heb eu cysylltu yma.",
+  "calendar.personal_honesty.cap.governance_feed": "Porthiant llywodraethu",
+  "calendar.personal_honesty.cap.source_create": "Creu drwy Archwiliadau / Gweithredoedd",
+  "calendar.personal_honesty.cap.personal_events": "Digwyddiadau personol",
+  "calendar.personal_honesty.cap.ics_sync": "Cysoni ICS",
+  "calendar.personal_honesty.cap.rooms": "Ystafelloedd",
+  "calendar.personal_honesty.status_live": "byw",
+  "calendar.personal_honesty.status_awaiting": "yn aros",
+  "calendar.personal_honesty.option_c_followon": "Mae cynnyrch calendr personol llawn (creu/golygu + ICS + ystafelloedd) yn aros allan o'r gragen hon."
 }
