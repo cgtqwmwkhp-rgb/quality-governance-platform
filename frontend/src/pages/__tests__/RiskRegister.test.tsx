@@ -242,6 +242,28 @@ describe('RiskRegister linked audit references', () => {
     })
   })
 
+  it('row click opens Risk Profile — no detail popup', async () => {
+    renderRegister()
+
+    const row = await screen.findByTestId('risk-row-88')
+    fireEvent.click(row)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location-probe')).toHaveTextContent('/risk-register/88')
+    })
+    expect(screen.queryByTestId('risk-detail-dialog')).not.toBeInTheDocument()
+  })
+
+  it('Edit and owner controls open Risk Profile — no detail popup', async () => {
+    renderRegister()
+
+    fireEvent.click(await screen.findByTestId('risk-edit-88'))
+    await waitFor(() => {
+      expect(screen.getByTestId('location-probe')).toHaveTextContent('/risk-register/88')
+    })
+    expect(screen.queryByTestId('risk-detail-dialog')).not.toBeInTheDocument()
+  })
+
   it('reads nested by_level and overdue_review from summary API (no faux zeros)', async () => {
     renderRegister()
 
