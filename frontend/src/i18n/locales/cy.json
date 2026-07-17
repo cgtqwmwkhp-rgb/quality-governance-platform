@@ -663,6 +663,8 @@
   "complaints.detail.created": "Crëwyd",
   "complaints.detail.due": "Dyledus",
   "complaints.detail.email": "E-bost",
+  "complaints.detail.evidence_assets": "Asedau tystiolaeth",
+  "complaints.detail.evidence_assets_empty": "Nid oes asedau tystiolaeth wedi'u cysylltu â'r gŵyn hon. Mae uwchlwythiadau porth yn cofnodi enwau ffeiliau yn unig nes i staff atodi ffeiliau yma.",
   "complaints.detail.initial_notes": "Nodiadau Cychwynnol",
   "complaints.detail.initial_notes_placeholder": "Rhowch nodiadau ymchwiliad cychwynnol…",
   "complaints.detail.investigation_api_contract": "Yn creu ymchwiliad wedi'i gysylltu â'r gŵyn hon. Dim ond y teitl a anfonir i'r API; ffurfweddwch y math, y prif ymchwilydd a'r nodiadau ar gofnod yr ymchwiliad ar ôl ei greu.",

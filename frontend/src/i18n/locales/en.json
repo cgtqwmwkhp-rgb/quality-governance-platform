@@ -714,6 +714,8 @@
   "complaints.detail.created": "Created",
   "complaints.detail.due": "Due",
   "complaints.detail.email": "Email",
+  "complaints.detail.evidence_assets": "Evidence assets",
+  "complaints.detail.evidence_assets_empty": "No evidence assets are linked to this complaint. Portal uploads record filenames only until staff attach files here.",
   "complaints.detail.initial_notes": "Initial Notes",
   "complaints.detail.initial_notes_placeholder": "Enter initial investigation notes…",
   "complaints.detail.investigation_api_contract": "Creates an investigation linked to this complaint. Only the title is sent to the API; configure type, lead, and notes on the investigation record after creation.",
