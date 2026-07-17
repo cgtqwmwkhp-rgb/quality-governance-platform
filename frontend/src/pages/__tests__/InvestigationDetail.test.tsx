@@ -40,15 +40,46 @@ vi.mock('../../utils/investigationStatusFilter', () => ({
 }))
 
 vi.mock('../investigation/InvestigationHeader', () => ({
-  default: ({ investigation }: { investigation: { title: string } }) => (
-    <div>
+  default: ({
+    investigation,
+    sourceLink,
+  }: {
+    investigation: { title: string; reference_number: string }
+    sourceLink?: { href: string; label: string } | null
+  }) => (
+    <div data-testid="investigation-identity-chrome">
+      <p data-testid="investigation-role-eyebrow">investigations.identity.eyebrow</p>
+      <span data-testid="investigation-primary-ref">{investigation.reference_number}</span>
       <h1>{investigation.title}</h1>
+      <p data-testid="investigation-purpose">investigations.identity.purpose</p>
+      {sourceLink ? (
+        <span data-testid="investigation-source-chip">
+          Source: {sourceLink.label} #{investigation.reference_number}
+        </span>
+      ) : null}
     </div>
   ),
 }))
 
 vi.mock('../investigation/InvestigationTimeline', () => ({
-  default: () => <div>Timeline</div>,
+  default: ({
+    timelineFilter,
+    onTimelineFilterChange,
+  }: {
+    timelineFilter: string
+    onTimelineFilterChange: (value: string) => void
+  }) => (
+    <div data-testid="investigation-timeline-panel">
+      <span data-testid="investigation-timeline-current-filter">{timelineFilter}</span>
+      <button
+        type="button"
+        data-testid="investigation-timeline-set-status"
+        onClick={() => onTimelineFilterChange('STATUS_CHANGED')}
+      >
+        Filter status
+      </button>
+    </div>
+  ),
 }))
 
 vi.mock('../investigation/InvestigationComments', () => ({
@@ -213,7 +244,7 @@ describe('InvestigationDetail', () => {
     })
 
     fireEvent.click(
-      screen.getAllByRole('button', { name: 'investigations.handoff.back_to_source' })[0],
+      screen.getAllByRole('button', { name: 'investigations.handoff.open_source_report' })[0],
     )
     expect(mockNavigate).toHaveBeenCalledWith('/rtas/42')
 
@@ -222,6 +253,84 @@ describe('InvestigationDetail', () => {
       expect.stringContaining('/actions?sourceType=investigation'),
     )
     expect(screen.getByTestId('investigation-actions-panel')).toBeInTheDocument()
+  })
+
+  it('shows Investigation workspace identity chrome (C1)', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-identity-chrome')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('investigation-role-eyebrow')).toHaveTextContent(
+      'investigations.identity.eyebrow',
+    )
+    expect(screen.getByTestId('investigation-primary-ref')).toHaveTextContent('INV-7')
+    expect(screen.getByTestId('investigation-purpose')).toHaveTextContent(
+      'investigations.identity.purpose',
+    )
+  })
+
+  it('surfaces Summary status/level/assignee and editable findings (C2)', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-meta-controls')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('investigation-status-select')).toBeInTheDocument()
+    expect(screen.getByTestId('investigation-level-display')).toBeInTheDocument()
+    expect(screen.getByTestId('investigation-assignee-input')).toBeInTheDocument()
+    expect(screen.getByTestId('investigation-findings-input')).toBeInTheDocument()
+    expect(screen.getByTestId('investigation-notes-section')).toBeInTheDocument()
+  })
+
+  it('applies honest Timeline filter enums to the timeline API (C2)', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Timeline' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-timeline-panel')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('investigation-timeline-set-status'))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.getTimeline).toHaveBeenCalledWith(7, {
+        page: 1,
+        page_size: 50,
+        type: 'STATUS_CHANGED',
+      })
+    })
+  })
+
+  it('shows Internal/External Report buttons and permission honesty (C3)', async () => {
+    client.checkPackCapability.mockResolvedValue({
+      canGenerate: false,
+      reason: 'You do not have permission to generate packs',
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-report-internal')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('investigation-report-external')).toBeInTheDocument()
+    expect(screen.getByTestId('investigation-report-gated')).toBeInTheDocument()
+    expect(screen.getByTestId('investigation-report-internal')).toBeDisabled()
+    expect(screen.getByTestId('investigation-report-external')).toBeDisabled()
   })
 
   it('navigates to Actions list when CAPA already exists (open mode)', async () => {
