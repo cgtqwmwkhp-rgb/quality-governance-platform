@@ -63,6 +63,7 @@ from src.api.routes import (
     rca_tools,
     realtime,
     risk_register,
+    risk_register_import,
     risks,
     rtas,
     signatures,
@@ -134,6 +135,11 @@ router.include_router(
 )
 # Enterprise Risk Register & AI Intelligence (Tier 1 & 2)
 router.include_router(risk_register.router, prefix="/risk-register", tags=["Enterprise Risk Register"])
+router.include_router(
+    risk_register_import.router,
+    prefix="/risk-register/import",
+    tags=["Enterprise Risk Register Import"],
+)
 router.include_router(ai_intelligence.router, prefix="/ai", tags=["AI Intelligence"])
 router.include_router(
     document_control.router,

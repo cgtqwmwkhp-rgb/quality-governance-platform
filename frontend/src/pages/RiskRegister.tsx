@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Filter,
   Download,
+  Upload,
   GitBranch,
   Clock,
   User,
@@ -32,6 +33,7 @@ import { Input } from '../components/ui/Input'
 import { Label } from '../components/ui/Label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/Tooltip'
 import { auditsApi, getApiErrorMessage, riskRegisterApi } from '../api/client'
+import type { RiskRegisterImportReport } from '../api/riskRegisterClient'
 import { toast } from '../contexts/ToastContext'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { cn } from '../helpers/utils'
@@ -273,6 +275,11 @@ export default function RiskRegister() {
   })
   const [trends, setTrends] = useState<TrendPoint[]>([])
   const [topMovers, setTopMovers] = useState<TopMover[]>([])
+  const importFileInputRef = useRef<HTMLInputElement>(null)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importReport, setImportReport] = useState<RiskRegisterImportReport | null>(null)
+  const [importBusy, setImportBusy] = useState(false)
 
   useEffect(() => {
     if (searchParams.get('triage') === 'import') {
@@ -858,6 +865,57 @@ export default function RiskRegister() {
     toast.success(`Exported ${visibleRisks.length} risk${visibleRisks.length === 1 ? '' : 's'}`)
   }
 
+  const resetImportDialog = () => {
+    setImportDialogOpen(false)
+    setImportFile(null)
+    setImportReport(null)
+    setImportBusy(false)
+    if (importFileInputRef.current) {
+      importFileInputRef.current.value = ''
+    }
+  }
+
+  const runImportDryRun = async (file: File) => {
+    setImportBusy(true)
+    setImportReport(null)
+    try {
+      const { data } = await riskRegisterApi.importDryRun(file)
+      setImportReport(data)
+      setImportDialogOpen(true)
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, t('risk_register.excel_import.error_dry_run')))
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
+  const handleImportFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setImportFile(file)
+    void runImportDryRun(file)
+  }
+
+  const commitExcelImport = async () => {
+    if (!importFile || !importReport?.ok) return
+    setImportBusy(true)
+    try {
+      const { data } = await riskRegisterApi.importCommit(importFile)
+      toast.success(
+        t('risk_register.excel_import.toast_commit', {
+          created: data.created_count,
+          updated: data.updated_count,
+        }),
+      )
+      resetImportDialog()
+      await loadRisks()
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, t('risk_register.excel_import.error_commit')))
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
   const toggleHeroFilter = (next: HeroFilter) => {
     setView('register')
     setHeroFilter((prev) => (prev === next ? 'all' : next))
@@ -1048,6 +1106,27 @@ export default function RiskRegister() {
             <Download className="w-4 h-4" />
             Export
           </Button>
+          {registerMode === 'active' ? (
+            <>
+              <input
+                ref={importFileInputRef}
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="sr-only"
+                data-testid="risk-import-xlsx-input"
+                onChange={handleImportFileSelected}
+              />
+              <Button
+                variant="secondary"
+                disabled={importBusy}
+                onClick={() => importFileInputRef.current?.click()}
+                data-testid="risk-import-xlsx-button"
+              >
+                <Upload className="w-4 h-4" />
+                {importBusy ? t('risk_register.excel_import.validating') : t('risk_register.excel_import.button')}
+              </Button>
+            </>
+          ) : null}
           <Button onClick={openCreateRisk} data-testid="risk-add-button">
             <Plus className="w-4 h-4" />
             Add Risk
@@ -1849,6 +1928,74 @@ export default function RiskRegister() {
               disabled={triageSubmitting}
             >
               {triageSubmitting ? 'Rejecting…' : 'Confirm reject'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={importDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !importBusy) resetImportDialog()
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-lg"
+          data-testid="risk-import-dialog"
+          onEscapeKeyDown={(e) => importBusy && e.preventDefault()}
+          onPointerDownOutside={(e) => importBusy && e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>{t('risk_register.excel_import.dialog_title')}</DialogTitle>
+            <DialogDescription>{t('risk_register.excel_import.dialog_desc')}</DialogDescription>
+          </DialogHeader>
+          {importReport ? (
+            <div className="space-y-3 text-sm">
+              <p data-testid="risk-import-summary">
+                {t('risk_register.excel_import.summary', {
+                  total: importReport.total_rows,
+                  creates: importReport.creates,
+                  updates: importReport.updates,
+                  errors: importReport.error_rows,
+                })}
+              </p>
+              {importReport.action_plan_skipped ? (
+                <p className="text-muted-foreground">{t('risk_register.excel_import.action_plan_skipped')}</p>
+              ) : null}
+              {importReport.errors.length > 0 ? (
+                <ul
+                  className="max-h-40 overflow-y-auto rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive"
+                  data-testid="risk-import-errors"
+                >
+                  {importReport.errors.slice(0, 20).map((err) => (
+                    <li key={`${err.row}-${err.code}`}>
+                      Row {err.row}: {err.message}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {importReport.preview.length > 0 ? (
+                <ul className="max-h-40 overflow-y-auto rounded-md border border-input p-3" data-testid="risk-import-preview">
+                  {importReport.preview.slice(0, 10).map((row) => (
+                    <li key={`${row.row}-${row.reference}`}>
+                      {row.action === 'create' ? '+' : '~'} {row.reference} — {row.title}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="secondary" onClick={resetImportDialog} disabled={importBusy}>
+              {t('risk_register.excel_import.cancel')}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void commitExcelImport()}
+              disabled={importBusy || !importReport?.ok}
+              data-testid="risk-import-commit"
+            >
+              {importBusy ? t('risk_register.excel_import.committing') : t('risk_register.excel_import.commit')}
             </Button>
           </DialogFooter>
         </DialogContent>
