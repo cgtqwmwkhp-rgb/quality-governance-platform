@@ -2778,7 +2778,6 @@
   "ims.map_w1.empty_desc": "Crëwch fapiau cymalau rhwng safonau yn Cydymffurfiaeth ISO. Mae dolenni cynllun Planet Mark / UVDB yn ymddangos yma pan fydd rhesi — nid fel bathodynnau Cwblhawyd ffug.",
   "ims.map_w1.demo_status": "Ddim yn fyw",
   "ims.map_w1.demo_source_hint": "dalfan statig — nid porthiant byw",
-<<<<<<< HEAD
   "audit_builder.map_w2.title": "Cynorthwywr map safonau",
   "audit_builder.map_w2.honesty": "Mae adeiladwr arolygu yn dangos cwmpas cymal ISO â llaw yn Ystadegau Templed. Nid yw sglodion derbyn Cynorthwywr aml-gynllun (ISO / Planet Mark / UVDB) yn fyw eto — dilyniant cynnig yn unig ar ôl y asgwrn onest hwn.",
   "audit_builder.map_w2.iso_coverage": "Cwmpas cymal ISO",
@@ -2800,8 +2799,7 @@
   "planet_mark.shell.monthly_e4.status.follow_on": "Dilyniant",
   "planet_mark.shell.monthly_e4.forecast_followon": "Bydd rhagolwg yn erbyn y toriad Scope 1 a 2 blynyddol o 5% yn ymddangos ar ôl i fewnbwn misol gyrraedd — nid yw'r tab hwn yn dyfeisio trywydd.",
   "planet_mark.shell.monthly_e4.select_year_title": "Dewiswch flwyddyn adrodd",
-  "planet_mark.shell.monthly_e4.select_year_desc": "Dewiswch flwyddyn adrodd uchod i weld onest tystiolaeth Misol ar gyfer y flwyddyn honno. Mae uwchlwytho'n dal i ddigwydd drwy APIs tystiolaeth blwyddyn — nid grid misol ffug."
-=======
+  "planet_mark.shell.monthly_e4.select_year_desc": "Dewiswch flwyddyn adrodd uchod i weld onest tystiolaeth Misol ar gyfer y flwyddyn honno. Mae uwchlwytho'n dal i ddigwydd drwy APIs tystiolaeth blwyddyn — nid grid misol ffug.",
   "calendar.personal_honesty.title": "Calendr llywodraethu — dim cynnyrch personol byw",
   "calendar.personal_honesty.body": "Mae'r calendr Mewnwelediadau hwn yn dangos y porthiant llywodraethu byw (archwiliadau, dyddiadau cau gweithredoedd, hyfforddiant, adolygiadau). Mae creu digwyddiadau personol, cysoni ICS, ac ystafelloedd yn ddilyniant Opsiwn C — heb eu cysylltu yma.",
   "calendar.personal_honesty.cap.governance_feed": "Porthiant llywodraethu",
@@ -2812,5 +2810,4 @@
   "calendar.personal_honesty.status_live": "byw",
   "calendar.personal_honesty.status_awaiting": "yn aros",
   "calendar.personal_honesty.option_c_followon": "Mae cynnyrch calendr personol llawn (creu/golygu + ICS + ystafelloedd) yn aros allan o'r gragen hon."
->>>>>>> ed129bc3 (feat(calendar): personal-product honesty shell (Option C deferred))
 }
