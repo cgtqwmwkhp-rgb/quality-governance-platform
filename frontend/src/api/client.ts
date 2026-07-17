@@ -416,6 +416,19 @@ api.interceptors.request.use(async (config) => {
     )
   }
 
+  // FormData must set its own multipart boundary — never force application/json
+  // or a bare multipart/form-data header (breaks Library + evidence uploads).
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    if (config.headers && typeof config.headers === 'object') {
+      if (typeof (config.headers as { delete?: (k: string) => void }).delete === 'function') {
+        ;(config.headers as { delete: (k: string) => void }).delete('Content-Type')
+      } else {
+        delete (config.headers as Record<string, unknown>)['Content-Type']
+        delete (config.headers as Record<string, unknown>)['content-type']
+      }
+    }
+  }
+
   if (token && !isAuthEndpointUrl) {
     // If the access token is expired (or about to expire), try to silently
     // refresh BEFORE clearing anything. The previous behaviour was to call
@@ -967,6 +980,45 @@ export const aiApi = {
       standard,
       scope_clauses: scopeClauses,
     }),
+}
+
+// ============ Governance Calendar API ============
+
+export type CalendarEventType = 'audit' | 'deadline' | 'review' | 'training' | 'meeting'
+
+export interface CalendarFeedEvent {
+  id: string
+  title: string
+  type: CalendarEventType
+  date: string
+  status: 'upcoming' | 'today' | 'overdue' | 'completed' | string
+  priority?: 'high' | 'medium' | 'low' | string
+  owner?: string | null
+  source_module: string
+  source_id: string
+  href?: string | null
+  description?: string | null
+}
+
+export interface CalendarFeedResponse {
+  start: string
+  end: string
+  generated_at: string
+  total: number
+  events: CalendarFeedEvent[]
+  sources_ok: string[]
+  sources_failed: string[]
+}
+
+export const calendarApi = {
+  getFeed: (params?: { start?: string; end?: string; types?: string[] }) => {
+    const sp = new URLSearchParams()
+    if (params?.start) sp.set('start', params.start)
+    if (params?.end) sp.set('end', params.end)
+    if (params?.types?.length) sp.set('types', params.types.join(','))
+    const q = sp.toString()
+    return api.get<CalendarFeedResponse>(`/api/v1/calendar/feed${q ? `?${q}` : ''}`)
+  },
 }
 
 // ============ Analytics API ============
@@ -1895,7 +1947,6 @@ export const evidenceAssetsApi = {
       formData.append('redaction_required', String(data.redaction_required))
 
     return api.post<EvidenceAssetUploadResponse>('/api/v1/evidence-assets/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       timeout: UPLOAD_TIMEOUT_MS, // Extended timeout for file uploads to Azure Blob Storage
     })
   },

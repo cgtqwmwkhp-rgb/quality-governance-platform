@@ -398,8 +398,8 @@ export default function Documents() {
         setUploadProgress((prev) => Math.min(prev + 10, 90))
       }, 200)
 
+      // Do not set Content-Type — axios + FormData must include the multipart boundary.
       await api.post('/api/v1/documents/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
         timeout: UPLOAD_TIMEOUT_MS,
       })
 
@@ -462,22 +462,23 @@ export default function Documents() {
 
   const getFileIcon = (type: string) => FILE_ICONS[type] || File
 
+  const matchesLibrarySearch = (doc: { title?: string | null; reference_number?: string | null }) => {
+    const q = searchTerm.trim().toLowerCase()
+    if (!q) return true
+    const title = (doc.title ?? '').toLowerCase()
+    const ref = (doc.reference_number ?? '').toLowerCase()
+    return title.includes(q) || ref.includes(q)
+  }
+
   const filteredDocuments = documents.filter((doc) => {
     if (searchTerm && !searchResults) {
-      return (
-        doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        doc.reference_number.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+      return matchesLibrarySearch(doc)
     }
     return true
   })
 
   const keywordMatchCount = searchTerm.trim()
-    ? documents.filter(
-        (doc) =>
-          doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          doc.reference_number.toLowerCase().includes(searchTerm.toLowerCase()),
-      ).length
+    ? documents.filter((doc) => matchesLibrarySearch(doc)).length
     : null
 
   if (loading) {
@@ -1003,6 +1004,15 @@ export default function Documents() {
           </DialogHeader>
 
           <div className="py-4">
+            {uploadError && !uploading ? (
+              <div
+                role="alert"
+                className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                data-testid="documents-upload-error"
+              >
+                {uploadError}
+              </div>
+            ) : null}
             {uploading ? (
               <div className="text-center py-8">
                 <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
@@ -1014,7 +1024,7 @@ export default function Documents() {
                   />
                 </div>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Extracting metadata, generating embeddings...
+                  Storing file, then extracting metadata and indexing…
                 </p>
               </div>
             ) : (
@@ -1029,7 +1039,7 @@ export default function Documents() {
                 <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-foreground mb-2">{t('documents.drag_drop')}</p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  PDF, Word, Excel, Markdown, or Text files
+                  PDF, Word, Excel, CSV, Markdown, Text, or images (max 50 MB)
                 </p>
                 <label>
                   <Button asChild>
