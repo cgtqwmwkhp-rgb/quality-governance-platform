@@ -83,4 +83,3 @@ def test_add_comment_route_stamps_tenant_from_investigation_and_never_invents():
     assert "InvestigationComment(" in snippet
     assert "tenant_id=1" not in snippet
     assert "SET tenant_id = 1" not in snippet.upper()
-
