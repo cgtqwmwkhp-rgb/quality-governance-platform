@@ -57,27 +57,26 @@ export function mapRunsToMonitoringRows(
   runs: AuditRun[],
   now: Date = new Date(),
 ): MonitoringAuditRunRow[] {
-  return runs
-    .map((run) => {
-      const status = deriveMonitoringAuditRunStatus(run, now)
-      if (!status) return null
-      return {
-        id: run.id,
-        title: run.title?.trim() || run.reference_number,
-        referenceNumber: run.reference_number,
-        dueDate: run.scheduled_date ?? run.due_date ?? null,
-        status,
-        assuranceScheme: run.assurance_scheme,
-        location: run.location,
-        workspacePath: buildAuditRunWorkspacePath(run),
-      }
+  const rows: MonitoringAuditRunRow[] = []
+  for (const run of runs) {
+    const status = deriveMonitoringAuditRunStatus(run, now)
+    if (!status) continue
+    rows.push({
+      id: run.id,
+      title: run.title?.trim() || run.reference_number,
+      referenceNumber: run.reference_number,
+      dueDate: run.scheduled_date ?? run.due_date ?? null,
+      status,
+      assuranceScheme: run.assurance_scheme,
+      location: run.location,
+      workspacePath: buildAuditRunWorkspacePath(run),
     })
-    .filter((row): row is MonitoringAuditRunRow => row !== null)
-    .sort((a, b) => {
-      const aTime = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY
-      const bTime = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY
-      return aTime - bTime
-    })
+  }
+  return rows.sort((a, b) => {
+    const aTime = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY
+    const bTime = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY
+    return aTime - bTime
+  })
 }
 
 export function countOverdueMonitoringRuns(rows: MonitoringAuditRunRow[]): number {
