@@ -205,8 +205,7 @@ DEFAULT_SECTION_MIN_LEVEL = {
 def section_is_in_scope(section: Dict[str, Any], level: Optional[str]) -> bool:
     """Return whether a template section applies at an investigation level."""
     min_level = str(
-        section.get("min_level")
-        or DEFAULT_SECTION_MIN_LEVEL.get(str(section.get("id")), InvestigationLevel.MINIMAL.value)
+        section.get("min_level") or DEFAULT_SECTION_MIN_LEVEL.get(str(section.get("id")), InvestigationLevel.HIGH.value)
     ).lower()
     return INVESTIGATION_LEVEL_ORDER.get(level or "", -1) >= INVESTIGATION_LEVEL_ORDER.get(min_level, 0)
 
