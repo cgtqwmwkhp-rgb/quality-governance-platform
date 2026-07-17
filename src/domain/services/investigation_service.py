@@ -37,6 +37,8 @@ from src.domain.models.investigation import (
 from src.domain.services.investigation_structure_normalize import (
     build_run_data_json_from_rows,
     build_structure_json_from_rows,
+    iter_run_section_values,
+    parse_structure_json,
     sync_run_field_responses_from_json,
     sync_template_structure_from_json,
 )
@@ -1469,36 +1471,41 @@ class InvestigationService:
         if not investigation.level:
             reason_codes.append(ClosureReasonCode.LEVEL_NOT_SET)
 
-        data: dict = dict(investigation.data) if investigation.data else {}
+        # Harden against non-mapping JSON blobs (list / scalar / null).
+        raw_data: Dict[str, Any] = investigation.data if isinstance(investigation.data, dict) else {}
+        section_values: Dict[str, Dict[str, Any]] = {}
+        for section_key, field_key, value in iter_run_section_values(raw_data):
+            section_values.setdefault(section_key, {})[field_key] = value
 
-        structure: dict = dict(template.structure) if template.structure else {}
-        sections = structure.get("sections", [])
+        # Mirror parse_structure_json: skip malformed sections/fields instead of 500.
+        structure: Dict[str, Any] = template.structure if isinstance(template.structure, dict) else {}
+        sections = parse_structure_json(structure)
+        raw_section_lookup: Dict[str, Dict[str, Any]] = {}
+        for raw_section in structure.get("sections") or []:
+            if isinstance(raw_section, dict) and raw_section.get("id") is not None:
+                raw_section_lookup[str(raw_section["id"])] = raw_section
 
-        for i, section in enumerate(sections):
-            if not section_is_in_scope(section, level_str):
+        for section in sections:
+            scope_payload: Dict[str, Any] = {"id": section.section_key}
+            raw_meta = raw_section_lookup.get(section.section_key)
+            if isinstance(raw_meta, dict) and raw_meta.get("min_level") is not None:
+                scope_payload["min_level"] = raw_meta["min_level"]
+            if not section_is_in_scope(scope_payload, level_str):
                 continue
 
-            section_id = section.get("id", f"section_{i}")
-            sections_data = data.get("sections", data)
-            section_data = sections_data.get(section_id, {}) if isinstance(sections_data, dict) else {}
+            section_id = section.section_key
+            section_data = section_values.get(section_id)
+            required_fields = [f for f in section.fields if f.required]
 
-            if not isinstance(sections_data, dict) or section_id not in sections_data:
-                fields = section.get("fields", [])
-                has_required = any(f.get("required", False) for f in fields)
-                if has_required:
+            if section_data is None:
+                if required_fields:
                     reason_codes.append(ClosureReasonCode.MISSING_REQUIRED_SECTION)
                     missing_fields.append(section_id)
                 continue
 
-            fields = section.get("fields", [])
-            for field in fields:
-                field_id = field.get("id")
-                is_required = field.get("required", False)
-                field_type = field.get("type", "text")
-
-                if not is_required:
-                    continue
-
+            for field in required_fields:
+                field_id = field.field_key
+                field_type = field.field_type or "text"
                 field_path = f"{section_id}.{field_id}"
                 field_value = section_data.get(field_id)
 

@@ -134,6 +134,7 @@ export default function InvestigationDetail() {
 
   const [closureValidation, setClosureValidation] = useState<ClosureValidation | null>(null)
   const [closureLoading, setClosureLoading] = useState(false)
+  const [closureLoadFailed, setClosureLoadFailed] = useState(false)
 
   const [actions, setActions] = useState<Action[]>([])
   const [actionsLoading, setActionsLoading] = useState(false)
@@ -210,11 +211,14 @@ export default function InvestigationDetail() {
   const loadClosureValidation = useCallback(async () => {
     if (!investigationId) return
     setClosureLoading(true)
+    setClosureLoadFailed(false)
     try {
       const response = await investigationsApi.getClosureValidation(investigationId)
       setClosureValidation(response.data)
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'loadClosureValidation' })
+      setClosureValidation(null)
+      setClosureLoadFailed(true)
     } finally {
       setClosureLoading(false)
     }
@@ -836,7 +840,9 @@ export default function InvestigationDetail() {
                               <span className="font-mono text-foreground">{item.reference_number}</span>
                               {' — '}
                               {item.title}
-                              <span className="ml-1 capitalize">({item.status.replace(/_/g, ' ')})</span>
+                              <span className="ml-1 capitalize">
+                                ({String(item.status || 'unknown').replace(/_/g, ' ')})
+                              </span>
                             </li>
                           ))}
                         </ul>
@@ -859,9 +865,44 @@ export default function InvestigationDetail() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground text-sm">
-                    Unable to load closure validation.
-                  </p>
+                  <div
+                    className="space-y-3"
+                    data-testid="investigation-closure-unavailable"
+                    role="status"
+                  >
+                    <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">
+                          {t(
+                            'investigations.closure.unavailable_title',
+                            'Closure checklist unavailable',
+                          )}
+                        </p>
+                        <p className="mt-1 text-xs opacity-90">
+                          {closureLoadFailed
+                            ? t(
+                                'investigations.closure.unavailable_body',
+                                'We could not verify closure readiness. Counts are not shown as zero.',
+                              )
+                            : t(
+                                'investigations.closure.unavailable_idle',
+                                'Closure readiness has not been checked yet.',
+                              )}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void loadClosureValidation()}
+                      data-testid="investigation-closure-retry"
+                    >
+                      <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                      {t('common.retry', 'Retry')}
+                    </Button>
+                  </div>
                 )}
               </Card>
             </div>

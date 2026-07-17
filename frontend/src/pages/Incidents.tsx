@@ -346,8 +346,8 @@ export default function Incidents() {
     const needle = deferredSearch.trim().toLowerCase()
     if (!needle) return true
     return (
-      i.title.toLowerCase().includes(needle) ||
-      i.reference_number.toLowerCase().includes(needle)
+      (i.title || '').toLowerCase().includes(needle) ||
+      (i.reference_number || '').toLowerCase().includes(needle)
     )
   })
 

@@ -57,11 +57,12 @@ export function UserEmailSearch({
       // Fallback: try to list users and filter
       try {
         const listResponse = await usersApi.list(1, 50)
-        const filtered = (listResponse.data.items || []).filter(
-          (u) =>
-            u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            u.full_name.toLowerCase().includes(searchQuery.toLowerCase()),
-        )
+        const needle = searchQuery.toLowerCase()
+        const filtered = (listResponse.data.items || []).filter((u) => {
+          const email = (u.email || '').toLowerCase()
+          const name = (u.full_name || '').toLowerCase()
+          return email.includes(needle) || name.includes(needle)
+        })
         setResults(filtered)
       } catch {
         setResults([])

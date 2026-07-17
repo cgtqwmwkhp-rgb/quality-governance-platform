@@ -334,9 +334,12 @@ export function createInvestigationsApi(api: AxiosInstance) {
 
   /**
    * Get closure validation status for an investigation.
+   * Inline honesty UI on InvestigationDetail — do not global-toast on probe failure.
    */
   getClosureValidation: (id: number) =>
-    api.get<ClosureValidation>(`/api/v1/investigations/${id}/closure-validation`),
+    api.get<ClosureValidation>(`/api/v1/investigations/${id}/closure-validation`, {
+      suppressErrorToast: true,
+    }),
 
   // ============ Investigation Template Endpoints ============
 
