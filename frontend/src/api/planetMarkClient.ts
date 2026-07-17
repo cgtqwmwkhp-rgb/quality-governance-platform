@@ -511,6 +511,81 @@ export function createPlanetMarkApi(api: AxiosInstance) {
       formData,
       { timeout: 120_000 },
     ),
+
+  /**
+   * OCR extract preview for Measurement Report / Certificate → year readings.
+   */
+  extractYearOcr: (
+    yearId: number,
+    opts: { evidenceId?: number; documentKind?: string; formData?: FormData },
+  ) => {
+    const sp = new URLSearchParams()
+    if (opts.evidenceId != null) sp.set('evidence_id', String(opts.evidenceId))
+    const query = sp.toString()
+    const url = `/api/v1/planet-mark/years/${yearId}/ocr/extract${query ? `?${query}` : ''}`
+    if (opts.formData) {
+      if (opts.documentKind) opts.formData.append('document_kind', opts.documentKind)
+      return api.post<PlanetMarkOcrExtractResponse>(url, opts.formData, { timeout: 180_000 })
+    }
+    // evidence_id path — no multipart body required
+    return api.post<PlanetMarkOcrExtractResponse>(url, null, { timeout: 180_000 })
+  },
+
+  /**
+   * Apply a prior OCR extract preview onto CarbonReportingYear.
+   */
+  applyYearOcr: (
+    yearId: number,
+    body: {
+      document_kind?: string
+      force_overwrite_totals?: boolean
+      fields?: string[]
+      preview: PlanetMarkOcrExtractResponse
+    },
+  ) =>
+    api.post<PlanetMarkOcrApplyResponse>(
+      `/api/v1/planet-mark/years/${yearId}/ocr/apply`,
+      body,
+      { timeout: 60_000 },
+    ),
+  }
+}
+
+export interface PlanetMarkOcrField {
+  value: string | null
+  confidence: string
+  raw_snippet: string | null
+}
+
+export interface PlanetMarkOcrExtractResponse {
+  source_filename: string
+  document_kind: string
+  extraction_method: string
+  total_co2e_tonnes: PlanetMarkOcrField
+  co2e_per_fte: PlanetMarkOcrField
+  average_fte: PlanetMarkOcrField
+  certificate_number: PlanetMarkOcrField
+  reporting_period_label: PlanetMarkOcrField
+  certification_status_cue: PlanetMarkOcrField
+  warnings: string[]
+  text_excerpt: string
+  year_label: string
+  xlsx_ingested: boolean
+  period_mismatch_warning: string | null
+  evidence_id: number | null
+}
+
+export interface PlanetMarkOcrApplyResponse {
+  year_id: number
+  year_label: string
+  applied: Array<{ field: string; action: string; value: string | null; reason: string | null }>
+  skipped: Array<{ field: string; action: string; value: string | null; reason: string | null }>
+  message: string
+  updated: {
+    total_emissions: number | null
+    average_fte: number | null
+    emissions_per_fte: number | null
+    certificate_number: string | null
   }
 }
 

@@ -51,7 +51,13 @@ import {
 } from './planetMarkHelpers'
 import { buildMonthlyEvidenceHonestyViewModel } from './planetMarkMonthlyEvidenceHonesty'
 import { PlanetMarkYearEvidencePanel } from './planetMarkYearEvidencePanel'
+import { PlanetMarkYearOcrPanel } from './planetMarkYearOcrPanel'
 import { PlanetMarkYearXlsxIngestPanel } from './planetMarkYearXlsxIngestPanel'
+import {
+  PLANET_MARK_YEAR_CERT_DOC_TYPES,
+  latestEvidenceIdForType,
+} from './planetMarkYearEvidenceHelpers'
+import type { PlanetMarkEvidenceRecord } from '../api/planetMarkClient'
 
 type LoadState = 'idle' | 'loading' | 'success' | 'error' | 'setup_required'
 
@@ -103,6 +109,7 @@ export default function PlanetMark() {
   const [creatingInitiativeId, setCreatingInitiativeId] = useState<string | null>(null)
   const [initiativeError, setInitiativeError] = useState<string | null>(null)
   const [isCreatingYear, setIsCreatingYear] = useState(false)
+  const [yearEvidence, setYearEvidence] = useState<PlanetMarkEvidenceRecord[]>([])
   const [setupYearForm, setSetupYearForm] = useState({
     year_label: `YE${defaultYear}`,
     year_number: defaultYear,
@@ -605,6 +612,23 @@ export default function PlanetMark() {
               <PlanetMarkYearEvidencePanel
                 yearId={selectedYear.id}
                 yearLabel={selectedYear.year_label}
+                onEvidenceChange={setYearEvidence}
+              />
+
+              <PlanetMarkYearOcrPanel
+                yearId={selectedYear.id}
+                yearLabel={selectedYear.year_label}
+                measurementReportEvidenceId={latestEvidenceIdForType(
+                  yearEvidence,
+                  PLANET_MARK_YEAR_CERT_DOC_TYPES.measurementReport,
+                )}
+                certificateEvidenceId={latestEvidenceIdForType(
+                  yearEvidence,
+                  PLANET_MARK_YEAR_CERT_DOC_TYPES.certificate,
+                )}
+                onApplied={async () => {
+                  await loadData()
+                }}
               />
 
               {yearsVm.showMsXlsxIngestPanel && (
