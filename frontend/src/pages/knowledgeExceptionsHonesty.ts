@@ -182,7 +182,9 @@ function buildSectionPath(clause: ISOClause | null, schemeKey: string | null): s
 }
 
 /** Resolve display identity for a standard + clause pair (KE-01, KE-02). */
-export function resolveClauseIdentity(link: Pick<ExceptionLinkLike, 'scheme' | 'clause_id'>): ClauseIdentity {
+export function resolveClauseIdentity(
+  link: Pick<ExceptionLinkLike, 'scheme' | 'clause_id' | 'title'>,
+): ClauseIdentity {
   const rawClauseId = link.clause_id?.trim() || '—'
   const schemeKey =
     normalizeSchemeKey(link.scheme) ?? inferSchemeKeyFromClauseId(rawClauseId)
