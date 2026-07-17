@@ -43,6 +43,7 @@
   "actions.finding_loop_cta.body": "CAPA is complete. Close the linked finding on the Audits findings console to finish the inspection loop.",
   "actions.finding_loop_cta.title": "Close the finding loop",
   "actions.form.source_type": "Source Type",
+  "actions.hero_filters": "Filter by status",
   "actions.incident_playbook.body": "CAPA items here close the loop on the originating incident. Continue the linked investigation before marking the incident resolved.",
   "actions.incident_playbook.open_incident": "Open incident record",
   "actions.incident_playbook.title": "Incident-sourced corrective actions",

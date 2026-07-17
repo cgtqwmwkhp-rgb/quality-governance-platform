@@ -40,6 +40,7 @@
   "actions.finding_loop_cta.body": "Mae'r CAPA wedi'i gwblhau. Caewch y canfyddiad cysylltiedig ar gonsol canfyddiadau Archwiliadau i orffen dolen yr archwiliad.",
   "actions.finding_loop_cta.title": "Cau dolen y canfyddiad",
   "actions.form.source_type": "Math o Ffynhonnell",
+  "actions.hero_filters": "Hidlo yn ôl statws",
   "actions.incident_playbook.body": "Mae eitemau CAPA yma'n cau'r ddolen ar y digwyddiad gwreiddiol. Parhewch â'r ymchwiliad cysylltiedig cyn marcio'r digwyddiad wedi'i ddatrys.",
   "actions.incident_playbook.open_incident": "Agor cofnod digwyddiad",
   "actions.incident_playbook.title": "Camau cywiro o ddigwyddiad",
