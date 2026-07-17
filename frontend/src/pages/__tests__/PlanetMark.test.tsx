@@ -100,7 +100,13 @@ function renderPlanetMark(initialEntry = '/planet-mark') {
 
 describe('PlanetMark shell', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    mockGetDashboard.mockReset()
+    mockListYears.mockReset()
+    mockListActions.mockReset()
+    mockGetActionsSummary.mockReset()
+    mockGetScope3.mockReset()
+    mockCreateReportingYear.mockReset()
+    mockCreateApiError.mockReset()
     mockGetDashboard.mockResolvedValue({
       data: {
         current_year: {
@@ -303,6 +309,21 @@ describe('PlanetMark shell', () => {
   })
 
   it('shows honest trends empty when no historical years', async () => {
+    mockListYears.mockResolvedValue({
+      data: {
+        total: 1,
+        years: [
+          {
+            ...yearRecord,
+            total_emissions: 0,
+            emissions_per_fte: 0,
+            scope_1: 0,
+            scope_2_market: 0,
+            scope_3: 0,
+          },
+        ],
+      },
+    })
     mockGetDashboard.mockResolvedValue({
       data: {
         current_year: {
@@ -329,7 +350,12 @@ describe('PlanetMark shell', () => {
 
     renderPlanetMark('/planet-mark?year=1&section=trends')
 
-    expect(await screen.findByText('planet_mark.shell.empty.trends')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(mockGetScope3).toHaveBeenCalledWith(1)
+    })
+    expect(screen.queryByTestId('planet-mark-trends-thin-prior')).not.toBeInTheDocument()
+    expect(screen.getByText('planet_mark.shell.empty.trends')).toBeInTheDocument()
+    expect(screen.getByText('planet_mark.shell.empty.trends_desc')).toBeInTheDocument()
   })
 
   it('exposes export section for selected year', async () => {
