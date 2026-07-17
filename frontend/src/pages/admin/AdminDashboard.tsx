@@ -232,7 +232,7 @@ export default function AdminDashboard() {
     }
 
     setLoading(false)
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void loadData()

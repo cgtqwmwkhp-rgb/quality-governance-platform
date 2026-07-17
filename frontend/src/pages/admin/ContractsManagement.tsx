@@ -382,10 +382,14 @@ export default function ContractsManagement() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
+                      <label
+                        htmlFor="contract-description"
+                        className="block text-sm font-medium text-foreground mb-2"
+                      >
                         Description
                       </label>
                       <Textarea
+                        id="contract-description"
                         value={formData.description || ''}
                         onChange={(e) =>
                           setFormData((prev) => ({ ...prev, description: e.target.value }))
