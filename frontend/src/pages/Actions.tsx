@@ -509,6 +509,7 @@ export default function Actions() {
         })
         setSubmitSuccess(true)
         await loadActions()
+        // STATIC_UI_CONFIG_OK - UX delay to show success state before closing modal
         setTimeout(() => {
           setShowModal(false)
           setFormData(INITIAL_FORM)
