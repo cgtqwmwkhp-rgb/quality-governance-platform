@@ -110,6 +110,7 @@ async def test_create_capa_for_investigation_idempotent_without_title():
 
     assert capa is existing
     db.add.assert_not_called()
+    # Untitled idempotency must select one deterministic row when multiple CAPAs exist.
     prior_query = db.execute.await_args_list[1].args[0]
     compiled_query = str(prior_query.compile(compile_kwargs={"literal_binds": True}))
     assert "ORDER BY capa_actions.id ASC" in compiled_query
