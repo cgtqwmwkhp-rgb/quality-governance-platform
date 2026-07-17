@@ -9,6 +9,7 @@
 - **Exclusive file allowlist:**
   - `src/domain/services/investigation_service.py`
   - `tests/unit/test_investigation_service.py`
+  - `tests/unit/test_investigation_closure_validate.py`
   - `frontend/src/pages/investigation-builder/templateHelpers.ts`
   - `frontend/src/pages/investigation-builder/__tests__/templateHelpers.test.ts`
   - `scripts/governance/pr_body_bugbot_unknown_sections_high.md`

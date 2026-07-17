@@ -58,7 +58,18 @@ class TestValidateClosureHardening:
     async def test_none_section_skipped(self):
         result = await _run_validate(
             _inv(),
-            _tmpl({"sections": [None, {"id": "s1", "fields": [{"id": "f1", "required": True}]}]}),
+            _tmpl(
+                {
+                    "sections": [
+                        None,
+                        {
+                            "id": "s1",
+                            "min_level": "minimal",
+                            "fields": [{"id": "f1", "required": True}],
+                        },
+                    ]
+                }
+            ),
         )
         codes = [c.value if hasattr(c, "value") else c for c in result.reason_codes]
         assert ClosureReasonCode.MISSING_REQUIRED_SECTION in codes
@@ -86,7 +97,17 @@ class TestValidateClosureHardening:
     async def test_non_dict_data_treated_as_empty(self):
         result = await _run_validate(
             _inv(data=["not", "a", "dict"]),  # type: ignore[arg-type]
-            _tmpl({"sections": [{"id": "s1", "fields": [{"id": "f1", "type": "text", "required": True}]}]}),
+            _tmpl(
+                {
+                    "sections": [
+                        {
+                            "id": "s1",
+                            "min_level": "minimal",
+                            "fields": [{"id": "f1", "type": "text", "required": True}],
+                        }
+                    ]
+                }
+            ),
         )
         codes = [c.value if hasattr(c, "value") else c for c in result.reason_codes]
         assert ClosureReasonCode.MISSING_REQUIRED_SECTION in codes
@@ -97,7 +118,17 @@ class TestValidateClosureHardening:
     async def test_section_data_scalar_does_not_raise(self):
         result = await _run_validate(
             _inv(data={"s1": "oops"}),
-            _tmpl({"sections": [{"id": "s1", "fields": [{"id": "f1", "type": "text", "required": True}]}]}),
+            _tmpl(
+                {
+                    "sections": [
+                        {
+                            "id": "s1",
+                            "min_level": "minimal",
+                            "fields": [{"id": "f1", "type": "text", "required": True}],
+                        }
+                    ]
+                }
+            ),
         )
         codes = [c.value if hasattr(c, "value") else c for c in result.reason_codes]
         assert ClosureReasonCode.MISSING_REQUIRED_SECTION in codes
