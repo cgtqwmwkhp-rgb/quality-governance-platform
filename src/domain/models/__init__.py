@@ -208,9 +208,9 @@ from src.domain.models.risk_register import (
     EnterpriseKeyRiskIndicator,
     EnterpriseRisk,
     EnterpriseRiskControl,
+    RiskActivityEvent,
     RiskAppetiteStatement,
     RiskAssessmentHistory,
-    RiskActivityEvent,
     RiskControlMapping,
     RiskNote,
 )

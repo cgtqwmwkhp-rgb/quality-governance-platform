@@ -9,8 +9,8 @@ Provides endpoints for:
 - Key EnterpriseRisk Indicators (KRIs)
 """
 
-from datetime import datetime, timezone
 import math
+from datetime import datetime, timezone
 from typing import Annotated, Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -33,9 +33,9 @@ from src.domain.models.risk_register import (
     EnterpriseKeyRiskIndicator,
     EnterpriseRisk,
     EnterpriseRiskControl,
+    RiskActivityEvent,
     RiskAppetiteStatement,
     RiskAssessmentHistory,
-    RiskActivityEvent,
     RiskControlMapping,
     RiskNote,
 )
