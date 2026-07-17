@@ -63,6 +63,16 @@ vi.mock('../investigation/InvestigationEvidence', () => ({
   default: () => <div>Evidence</div>,
 }))
 
+vi.mock('../investigation/investigationReportHelpers', () => ({
+  buildGeneratedPackDownload: vi.fn(),
+  buildPackManifestStubDownload: vi.fn(() => ({
+    filename: 'stub.json',
+    body: '{}',
+    exportKind: 'manifest_stub',
+  })),
+  triggerPackDownload: vi.fn(),
+}))
+
 vi.mock('../../api/client', () => ({
   investigationsApi: {
     get: vi.fn(),
@@ -149,6 +159,31 @@ describe('InvestigationDetail', () => {
     client.actionsApi.list.mockResolvedValue({ data: { items: [] } })
     client.evidenceAssetsApi.list.mockResolvedValue({ data: { items: [] } })
     client.checkPackCapability.mockResolvedValue({ canGenerate: true })
+  })
+
+  it('downloads a manifest stub when Report history download is clicked', async () => {
+    const helpers = await import('../investigation/investigationReportHelpers')
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-pack-download-1')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('investigation-pack-download-1'))
+
+    await waitFor(() => {
+      expect(helpers.triggerPackDownload).toHaveBeenCalled()
+    })
+
+    const { toast } = await import('../../contexts/ToastContext')
+    expect(toast.success).toHaveBeenCalledWith('investigations.report.download_stub_success')
   })
 
   it('renders generated pack checksums from the aligned API contract', async () => {
