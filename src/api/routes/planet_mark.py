@@ -1227,6 +1227,18 @@ async def get_certification_status(
             "description": "Improvement plan evidence",
             "required": True,
         },
+        {
+            "type": "measurement_report",
+            "category": "certification",
+            "description": "Planet Mark Measurement Report (PDF)",
+            "required": True,
+        },
+        {
+            "type": "planet_mark_certificate",
+            "category": "certification",
+            "description": "Planet Mark Certificate (PDF)",
+            "required": True,
+        },
     ]
 
     for req in required_evidence:

@@ -10,6 +10,7 @@ const mockGetActionsSummary = vi.fn()
 const mockGetScope3 = vi.fn()
 const mockCreateReportingYear = vi.fn()
 const mockCreateAction = vi.fn()
+const mockListEvidence = vi.fn()
 const mockCreateApiError = vi.fn()
 
 vi.mock('react-i18next', () => ({
@@ -36,6 +37,7 @@ vi.mock('../../api/client', () => ({
     getActionsSummary: (...args: unknown[]) => mockGetActionsSummary(...args),
     getScope3: (...args: unknown[]) => mockGetScope3(...args),
     createAction: (...args: unknown[]) => mockCreateAction(...args),
+    listEvidence: (...args: unknown[]) => mockListEvidence(...args),
   },
   getApiErrorMessage: (_err: unknown, fallback = 'failed') => fallback,
   ErrorClass: {
@@ -109,6 +111,7 @@ describe('PlanetMark shell', () => {
     mockGetActionsSummary.mockReset()
     mockGetScope3.mockReset()
     mockCreateReportingYear.mockReset()
+    mockListEvidence.mockReset()
     mockCreateApiError.mockReset()
     mockGetDashboard.mockResolvedValue({
       data: {
@@ -155,6 +158,7 @@ describe('PlanetMark shell', () => {
         categories: [],
       },
     })
+    mockListEvidence.mockResolvedValue({ data: { total: 0, evidence: [] } })
     mockCreateReportingYear.mockResolvedValue({ data: { id: 2, year_label: 'YE2026', message: 'ok' } })
     mockCreateApiError.mockReturnValue({ error_class: 'UNKNOWN' })
   })
@@ -478,6 +482,13 @@ describe('PlanetMark shell', () => {
         }),
       )
     })
+  })
+
+  it('shows year evidence panel when a reporting year is selected', async () => {
+    renderPlanetMark('/planet-mark?year=1')
+
+    expect(await screen.findByTestId('planet-mark-years-evidence-panel')).toBeInTheDocument()
+    expect(mockListEvidence).toHaveBeenCalledWith(1)
   })
 
   it('shows MS XLSX ingest placeholder when selected year has no carbon totals', async () => {

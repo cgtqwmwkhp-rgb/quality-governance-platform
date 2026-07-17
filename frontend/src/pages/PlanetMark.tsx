@@ -51,6 +51,7 @@ import {
   type PlanetMarkHotspotInitiative,
 } from './planetMarkHelpers'
 import { buildMonthlyEvidenceHonestyViewModel } from './planetMarkMonthlyEvidenceHonesty'
+import { PlanetMarkYearEvidencePanel } from './planetMarkYearEvidencePanel'
 
 type LoadState = 'idle' | 'loading' | 'success' | 'error' | 'setup_required'
 
@@ -600,6 +601,11 @@ export default function PlanetMark() {
                   </div>
                 </CardContent>
               </Card>
+
+              <PlanetMarkYearEvidencePanel
+                yearId={selectedYear.id}
+                yearLabel={selectedYear.year_label}
+              />
 
               {yearsVm.showMsXlsxIngestPlaceholder && (
                 <Card data-testid="planet-mark-years-ingest-placeholder">

@@ -177,6 +177,28 @@ export interface PlanetMarkDataQualityResponse {
   target_scores: Record<string, string>
 }
 
+export interface PlanetMarkEvidenceRecord {
+  id: number
+  document_name: string
+  document_type: string
+  evidence_category: string
+  period_covered: string | null
+  file_size_kb: number | null
+  mime_type: string | null
+  is_verified: boolean
+  verified_by: string | null
+  linked_action_id: number | null
+  notes: string | null
+  uploaded_by: string | null
+  uploaded_at: string
+  storage_key: string | null
+}
+
+export interface PlanetMarkEvidenceListResponse {
+  total: number
+  evidence: PlanetMarkEvidenceRecord[]
+}
+
 /**
  * Planet Mark Carbon Management API client.
  * Endpoints: /api/v1/planet-mark/*
@@ -360,25 +382,9 @@ export function createPlanetMarkApi(api: AxiosInstance) {
     if (params?.document_type) sp.set('document_type', params.document_type)
     if (params?.linked_action_id) sp.set('linked_action_id', String(params.linked_action_id))
     const query = sp.toString()
-    return api.get<{
-      total: number
-      evidence: Array<{
-        id: number
-        document_name: string
-        document_type: string
-        evidence_category: string
-        period_covered: string | null
-        file_size_kb: number | null
-        mime_type: string | null
-        is_verified: boolean
-        verified_by: string | null
-        linked_action_id: number | null
-        notes: string | null
-        uploaded_by: string | null
-        uploaded_at: string
-        storage_key: string | null
-      }>
-    }>(`/api/v1/planet-mark/years/${yearId}/evidence${query ? `?${query}` : ''}`)
+    return api.get<PlanetMarkEvidenceListResponse>(
+      `/api/v1/planet-mark/years/${yearId}/evidence${query ? `?${query}` : ''}`,
+    )
   },
 
   /**
@@ -392,7 +398,9 @@ export function createPlanetMarkApi(api: AxiosInstance) {
       file_hash: string
       message: string
       duplicate: boolean
-    }>(`/api/v1/planet-mark/years/${yearId}/evidence/upload`, formData),
+    }>(`/api/v1/planet-mark/years/${yearId}/evidence/upload`, formData, {
+      timeout: 120_000,
+    }),
 
   /**
    * Verify or annotate an evidence document.
