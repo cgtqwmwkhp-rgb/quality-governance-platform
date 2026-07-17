@@ -24,12 +24,15 @@ export interface Investigation {
   assigned_entity_type: 'road_traffic_collision' | 'reporting_incident' | 'complaint' | 'near_miss'
   assigned_entity_id: number
   status: 'draft' | 'in_progress' | 'under_review' | 'completed' | 'closed'
+  /** HSG245-aligned investigation depth from source severity. */
+  level?: 'minimal' | 'low' | 'medium' | 'high' | string | null
   title: string
   description?: string
   data: Record<string, unknown>
   started_at?: string
   completed_at?: string
   created_at: string
+  updated_at?: string
 }
 
 export interface InvestigationCreate {

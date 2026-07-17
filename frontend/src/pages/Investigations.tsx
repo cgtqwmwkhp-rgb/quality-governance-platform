@@ -6,10 +6,8 @@ import {
   Search,
   FlaskConical,
   ArrowRight,
-  FileQuestion,
   GitBranch,
   CheckCircle,
-  Clock,
   AlertTriangle,
   Car,
   MessageSquare,
@@ -50,13 +48,6 @@ import {
 } from '../components/ui/Dialog'
 import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
-
-const STATUS_STEPS = [
-  { id: 'draft', label: 'Draft', icon: FileQuestion },
-  { id: 'in_progress', label: 'In Progress', icon: Clock },
-  { id: 'under_review', label: 'Under Review', icon: GitBranch },
-  { id: 'completed', label: 'Completed', icon: CheckCircle },
-]
 
 const ENTITY_ICONS: Record<string, typeof AlertTriangle> = {
   road_traffic_collision: Car,
@@ -102,12 +93,31 @@ const SOURCE_TYPES = [
   { value: 'reporting_incident', label: 'Incident', icon: AlertTriangle },
 ]
 
-// Investigation level badges - will be used in future level indicator UI
-// Exported to satisfy noUnusedLocals while preserving scaffolding
 export const LEVEL_BADGES: Record<string, { label: string; className: string }> = {
-  low: { label: 'LOW', className: 'bg-green-100 text-green-800' },
-  medium: { label: 'MEDIUM', className: 'bg-yellow-100 text-yellow-800' },
-  high: { label: 'HIGH', className: 'bg-red-100 text-red-800' },
+  minimal: {
+    label: 'MINIMAL',
+    className: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200',
+  },
+  low: { label: 'LOW', className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
+  medium: {
+    label: 'MEDIUM',
+    className: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  },
+  high: { label: 'HIGH', className: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' },
+}
+
+const STATUS_BADGES: Record<string, { label: string; className: string }> = {
+  draft: { label: 'Draft', className: 'bg-muted text-muted-foreground' },
+  in_progress: { label: 'In progress', className: 'bg-warning/10 text-warning' },
+  under_review: { label: 'Under review', className: 'bg-info/10 text-info' },
+  completed: { label: 'Completed', className: 'bg-success/10 text-success' },
+  closed: { label: 'Closed', className: 'bg-muted text-muted-foreground' },
+}
+
+function countSeededSections(data: Record<string, unknown> | undefined): number {
+  const sections = data?.sections
+  if (!sections || typeof sections !== 'object' || Array.isArray(sections)) return 0
+  return Object.keys(sections as Record<string, unknown>).length
 }
 
 // Create Investigation Modal Component with Dropdown Selector
@@ -583,10 +593,6 @@ export default function Investigations() {
     }
   }
 
-  const getStatusIndex = (status: string) => {
-    return STATUS_STEPS.findIndex((s) => s.id === status)
-  }
-
   const handleCreateAction = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedInvestigation) return
@@ -699,11 +705,14 @@ export default function Investigations() {
     return ENTITY_ICONS[type] || AlertTriangle
   }
 
-  const filteredInvestigations = investigations.filter(
-    (i) =>
-      i.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      i.reference_number.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  const filteredInvestigations = investigations.filter((i) => {
+    const needle = searchTerm.trim().toLowerCase()
+    if (!needle) return true
+    return (
+      (i.title || '').toLowerCase().includes(needle) ||
+      (i.reference_number || '').toLowerCase().includes(needle)
+    )
+  })
 
   const stats = {
     total: investigations.length,
@@ -732,10 +741,10 @@ export default function Investigations() {
           <Button
             variant="outline"
             onClick={() => navigate('/investigations/templates/builder')}
-            title="INC043 seven-section investigation template builder"
+            title="Investigation report template builder"
           >
             <Layers size={20} aria-hidden="true" />
-            Template Builder (INC043)
+            Template Builder
           </Button>
           <Button onClick={() => setShowModal(true)}>
             <Plus size={20} aria-hidden="true" />
@@ -799,124 +808,84 @@ export default function Investigations() {
         />
       </div>
 
-      {/* Investigation Cards */}
-      <div className="space-y-4">
+      {/* Compact investigation work queue — report opens on the detail route */}
+      <div className="space-y-2" data-testid="investigations-list">
         {filteredInvestigations.length === 0 ? (
           <EmptyState
             icon={<FlaskConical className="w-8 h-8 text-muted-foreground" />}
             title={t('investigations.empty.title')}
-            description="Start a root cause investigation to analyze incidents, RTAs, or complaints."
+            description="Start an investigation report from an incident, RTA, near miss, or complaint."
           />
         ) : (
           filteredInvestigations.map((investigation) => {
             const EntityIcon = getEntityIcon(investigation.assigned_entity_type)
-            const statusIndex = getStatusIndex(investigation.status)
+            const levelKey = String(investigation.level || '').toLowerCase()
+            const levelBadge = LEVEL_BADGES[levelKey]
+            const statusBadge =
+              STATUS_BADGES[investigation.status] || STATUS_BADGES.draft
+            const sectionCount = countSeededSections(
+              investigation.data as Record<string, unknown> | undefined,
+            )
 
             return (
               <Card
                 key={investigation.id}
                 hoverable
-                onClick={() => setSelectedInvestigation(investigation)}
+                data-testid="investigation-row"
+                onClick={() => navigate(`/investigations/${investigation.id}`)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
-                    setSelectedInvestigation(investigation)
+                    navigate(`/investigations/${investigation.id}`)
                   }
                 }}
-                className="p-6 cursor-pointer"
+                className="px-4 py-3 cursor-pointer"
               >
-                <div className="flex flex-col lg:flex-row lg:items-center gap-6">
-                  {/* Entity Icon */}
-                  <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <EntityIcon className="w-8 h-8 text-primary" />
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <EntityIcon className="w-4 h-4 text-primary" aria-hidden="true" />
                   </div>
-
-                  {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="font-mono text-sm text-primary">
+                    <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                      <span className="font-mono text-xs text-primary">
                         {investigation.reference_number}
                       </span>
-                      <span className="px-2 py-0.5 text-xs font-medium rounded bg-surface text-muted-foreground capitalize">
+                      <span className="px-1.5 py-0.5 text-[11px] font-medium rounded bg-surface text-muted-foreground capitalize">
                         {investigation.assigned_entity_type.replace(/_/g, ' ')}
                       </span>
-                    </div>
-                    <h2 className="text-lg font-semibold text-foreground mb-1">
-                      {investigation.title}
-                    </h2>
-                    {investigation.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {investigation.description}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Status Timeline */}
-                  <div className="flex items-center gap-2 lg:w-80">
-                    {STATUS_STEPS.map((step, stepIndex) => {
-                      const isActive = stepIndex <= statusIndex
-                      const isCurrent = stepIndex === statusIndex
-                      return (
-                        <div key={step.id} className="flex items-center">
-                          <div
-                            className={cn(
-                              'relative flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300',
-                              isCurrent
-                                ? 'bg-primary shadow-lg'
-                                : isActive
-                                  ? 'bg-primary/20'
-                                  : 'bg-surface',
-                            )}
-                          >
-                            <step.icon
-                              className={cn(
-                                'w-5 h-5',
-                                isActive ? 'text-primary-foreground' : 'text-muted-foreground',
-                              )}
-                            />
-                            {isCurrent && (
-                              <div className="absolute inset-0 rounded-xl animate-pulse bg-primary/30" />
-                            )}
-                          </div>
-                          {stepIndex < STATUS_STEPS.length - 1 && (
-                            <ArrowRight
-                              className={cn(
-                                'w-4 h-4 mx-1',
-                                isActive ? 'text-primary' : 'text-muted-foreground/30',
-                              )}
-                            />
+                      {levelBadge ? (
+                        <span
+                          className={cn(
+                            'px-1.5 py-0.5 text-[11px] font-semibold rounded',
+                            levelBadge.className,
                           )}
-                        </div>
-                      )
-                    })}
+                          data-testid="investigation-level-badge"
+                        >
+                          {levelBadge.label}
+                        </span>
+                      ) : null}
+                      <span
+                        className={cn(
+                          'px-1.5 py-0.5 text-[11px] font-medium rounded',
+                          statusBadge.className,
+                        )}
+                      >
+                        {statusBadge.label}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {investigation.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {sectionCount > 0
+                        ? `${sectionCount} report section${sectionCount === 1 ? '' : 's'} seeded`
+                        : 'Open report to continue investigation'}
+                    </p>
                   </div>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground flex-shrink-0" aria-hidden="true" />
                 </div>
-
-                {/* RCA Preview */}
-                {investigation.data && Object.keys(investigation.data).length > 0 && (
-                  <div className="mt-6 pt-6 border-t border-border">
-                    <div className="flex items-center gap-2 mb-3">
-                      <GitBranch className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-medium text-primary">Root Cause Analysis</span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {['Why 1', 'Why 2', 'Why 3'].map((why, i) => (
-                        <Card key={i} className="p-3">
-                          <span className="text-xs text-muted-foreground">{why}</span>
-                          <p className="text-sm text-foreground mt-1">
-                            {(typeof investigation.data === 'object' &&
-                              ((investigation.data as Record<string, unknown>)[
-                                `why_${i + 1}`
-                              ] as string)) ||
-                              'Not documented'}
-                          </p>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </Card>
             )
           })
