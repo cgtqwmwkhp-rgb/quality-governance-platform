@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createRiskRegisterApi } from './riskRegisterClient'
+import { buildRiskCreateActionHref, createRiskRegisterApi } from './riskRegisterClient'
 
 function mockApi() {
   return {
@@ -43,6 +43,10 @@ describe('createRiskRegisterApi', () => {
     rr.listNotes(2, { page_size: 25 })
     rr.createNote(2, 'hello')
     rr.listActivity(2, { event_type: 'assessed' })
+    rr.listActions(2, { page_size: 25 })
+    rr.createAction(2, { title: 'Follow-up', description: 'From profile' })
+    rr.listUpstream(2)
+    rr.updateOwner(2, { risk_owner_id: 7, risk_owner_name: 'Alex' })
     rr.resolveSuggestionTriage(2, { decision: 'accept', notes: 'ok' })
     rr.getHeatmap()
     rr.getSummary()
@@ -61,6 +65,16 @@ describe('createRiskRegisterApi', () => {
     expect(api.get).toHaveBeenCalledWith('/api/v1/risk-register/2/notes?page_size=25')
     expect(api.post).toHaveBeenCalledWith('/api/v1/risk-register/2/notes', { body: 'hello' })
     expect(api.get).toHaveBeenCalledWith('/api/v1/risk-register/2/activity?event_type=assessed')
+    expect(api.get).toHaveBeenCalledWith('/api/v1/risk-register/2/actions?page_size=25')
+    expect(api.post).toHaveBeenCalledWith('/api/v1/risk-register/2/actions', {
+      title: 'Follow-up',
+      description: 'From profile',
+    })
+    expect(api.get).toHaveBeenCalledWith('/api/v1/risk-register/2/upstream')
+    expect(api.put).toHaveBeenCalledWith('/api/v1/risk-register/2/owner', {
+      risk_owner_id: 7,
+      risk_owner_name: 'Alex',
+    })
     expect(api.post).toHaveBeenCalledWith('/api/v1/risk-register/2/suggestion-triage', {
       decision: 'accept',
       notes: 'ok',
@@ -103,5 +117,18 @@ describe('createRiskRegisterApi', () => {
     expect(api.put).toHaveBeenCalledWith('/api/v1/risk-register/kris/4/value', { value: 12 })
     expect(api.get).toHaveBeenCalledWith('/api/v1/risk-register/kris/4/history')
     expect(api.get).toHaveBeenCalledWith('/api/v1/risk-register/appetite/statements')
+  })
+
+  it('buildRiskCreateActionHref prefills risk source and returnTo', () => {
+    const href = buildRiskCreateActionHref({
+      riskId: 42,
+      reference: 'RSK-00042',
+      title: 'Supplier disruption',
+    })
+    expect(href.startsWith('/actions?')).toBe(true)
+    expect(href).toContain('create=1')
+    expect(href).toContain('sourceType=risk')
+    expect(href).toContain('sourceId=42')
+    expect(href).toContain(encodeURIComponent('/risk-register/42'))
   })
 })

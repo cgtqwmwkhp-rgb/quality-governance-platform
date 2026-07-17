@@ -20,12 +20,19 @@ from sqlalchemy import func, or_, select
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.risk_register import (
     AssessmentHistoryItem,
+    RiskActionCreate,
+    RiskActionItem,
+    RiskActionListResponse,
     RiskActivityEventItem,
     RiskActivityListResponse,
     RiskNoteCreate,
     RiskNoteItem,
     RiskNoteListResponse,
+    RiskOwnerResponse,
+    RiskOwnerUpdate,
     RiskProfileResponse,
+    RiskUpstreamItem,
+    RiskUpstreamResponse,
 )
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.risk_register import (
@@ -1067,6 +1074,153 @@ async def list_risk_activity(
     )
 
 
+def _capa_status_value(status: Any) -> Optional[str]:
+    if status is None:
+        return None
+    return status.value if hasattr(status, "value") else str(status)
+
+
+def _capa_priority_value(priority: Any) -> Optional[str]:
+    if priority is None:
+        return None
+    return priority.value if hasattr(priority, "value") else str(priority)
+
+
+@router.get("/{risk_id}/actions", response_model=RiskActionListResponse)
+async def list_risk_actions(
+    current_user: CurrentUser,
+    risk_id: int,
+    db: DbSession,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> RiskActionListResponse:
+    """List CAPA actions linked via source_type=risk & source_id (SSOT join)."""
+    await _get_tenant_risk_or_404(db, current_user.tenant_id, risk_id)
+    service = RiskService(db)
+    rows, total = await service.list_capa_actions_for_risk(
+        tenant_id=current_user.tenant_id,
+        risk_id=risk_id,
+        page=page,
+        page_size=page_size,
+    )
+    return RiskActionListResponse(
+        items=[
+            RiskActionItem(
+                id=a.id,
+                reference_number=a.reference_number,
+                title=a.title,
+                description=a.description,
+                status=_capa_status_value(a.status),
+                priority=_capa_priority_value(a.priority),
+                source_type="risk",
+                source_id=risk_id,
+                due_date=a.due_date.isoformat() if a.due_date else None,
+                assigned_to_id=a.assigned_to_id,
+                created_at=a.created_at.isoformat() if a.created_at else None,
+                href=f"/actions?sourceType=risk&sourceId={risk_id}",
+            )
+            for a in rows
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=math.ceil(total / page_size) if total else 1,
+    )
+
+
+@router.post(
+    "/{risk_id}/actions",
+    response_model=RiskActionItem,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_risk_action(
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
+    risk_id: int,
+    body: RiskActionCreate,
+    db: DbSession,
+) -> RiskActionItem:
+    """Create a CAPA bound to this risk and emit a risk activity event."""
+    risk = await _get_tenant_risk_or_404(db, current_user.tenant_id, risk_id)
+    parsed_due: Optional[datetime] = None
+    if body.due_date:
+        try:
+            parsed_due = datetime.fromisoformat(body.due_date.replace("Z", "+00:00"))
+            if parsed_due.tzinfo is not None:
+                parsed_due = parsed_due.astimezone(timezone.utc).replace(tzinfo=None)
+        except ValueError as exc:
+            raise BadRequestError("Invalid due_date; use YYYY-MM-DD") from exc
+
+    service = RiskService(db)
+    action = await service.create_capa_action_for_risk(
+        risk,
+        title=body.title,
+        description=body.description or "",
+        created_by_id=current_user.id,
+        priority=body.priority or "medium",
+        due_date=parsed_due,
+        assigned_to_id=body.assigned_to_id,
+    )
+    if current_user.tenant_id is not None:
+        await invalidate_tenant_cache(current_user.tenant_id, "risk-register")
+        await invalidate_tenant_cache(current_user.tenant_id, "capa")
+    return RiskActionItem(
+        id=action.id,
+        reference_number=action.reference_number,
+        title=action.title,
+        description=action.description,
+        status=_capa_status_value(action.status),
+        priority=_capa_priority_value(action.priority),
+        source_type="risk",
+        source_id=risk_id,
+        due_date=action.due_date.isoformat() if action.due_date else None,
+        assigned_to_id=action.assigned_to_id,
+        created_at=action.created_at.isoformat() if action.created_at else None,
+        href=f"/actions?sourceType=risk&sourceId={risk_id}",
+    )
+
+
+@router.get("/{risk_id}/upstream", response_model=RiskUpstreamResponse)
+async def list_risk_upstream(
+    current_user: CurrentUser,
+    risk_id: int,
+    db: DbSession,
+) -> RiskUpstreamResponse:
+    """Upstream 360: cases + audit findings linked to this risk (reverse joins)."""
+    await _get_tenant_risk_or_404(db, current_user.tenant_id, risk_id)
+    service = RiskService(db)
+    raw = await service.list_upstream_for_risk(tenant_id=current_user.tenant_id, risk_id=risk_id)
+    items = [RiskUpstreamItem(**row) for row in raw]
+    return RiskUpstreamResponse(items=items, total=len(items))
+
+
+@router.put("/{risk_id}/owner", response_model=RiskOwnerResponse)
+async def update_risk_owner(
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
+    risk_id: int,
+    body: RiskOwnerUpdate,
+    db: DbSession,
+) -> RiskOwnerResponse:
+    """Set risk_owner_id + denormalized name; emit owner_changed activity."""
+    risk = await _get_tenant_risk_or_404(db, current_user.tenant_id, risk_id)
+    service = RiskService(db)
+    try:
+        risk = await service.update_risk_owner(
+            risk,
+            risk_owner_id=body.risk_owner_id,
+            risk_owner_name=body.risk_owner_name,
+            actor_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise NotFoundError(str(exc)) from exc
+    if current_user.tenant_id is not None:
+        await invalidate_tenant_cache(current_user.tenant_id, "risk-register")
+    return RiskOwnerResponse(
+        id=risk.id,
+        risk_owner_id=risk.risk_owner_id,
+        risk_owner_name=risk.risk_owner_name,
+    )
+
+
 @router.get("/{risk_id}", response_model=dict)
 async def get_risk(
     current_user: CurrentUser,
@@ -1183,7 +1337,7 @@ async def update_risk(
     risk_data: RiskUpdate,
     db: DbSession,
 ) -> dict[str, Any]:
-    """Update risk details (not scores)"""
+    """Update risk details (not scores). Owner changes emit activity events."""
     result = await db.execute(
         select(EnterpriseRisk).where(
             EnterpriseRisk.id == risk_id,
@@ -1195,12 +1349,29 @@ async def update_risk(
         raise NotFoundError("EnterpriseRisk not found")
 
     update_data = risk_data.model_dump(exclude_unset=True)
+    owner_touched = "risk_owner_id" in update_data or "risk_owner_name" in update_data
+    if owner_touched:
+        service = RiskService(db)
+        try:
+            risk = await service.update_risk_owner(
+                risk,
+                risk_owner_id=update_data.pop("risk_owner_id", risk.risk_owner_id),
+                risk_owner_name=update_data.pop("risk_owner_name", risk.risk_owner_name),
+                actor_id=current_user.id,
+            )
+        except ValueError as exc:
+            raise NotFoundError(str(exc)) from exc
+
     for key, value in update_data.items():
         setattr(risk, key, value)
 
-    risk.updated_at = _naive_utc_now()
-    await db.commit()
-    await db.refresh(risk)
+    if update_data:
+        risk.updated_at = _naive_utc_now()
+        await db.commit()
+        await db.refresh(risk)
+
+    if current_user.tenant_id is not None and (owner_touched or update_data):
+        await invalidate_tenant_cache(current_user.tenant_id, "risk-register")
 
     return {"message": "EnterpriseRisk updated successfully", "id": risk.id}
 

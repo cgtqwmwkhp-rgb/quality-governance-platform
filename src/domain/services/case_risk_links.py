@@ -123,3 +123,32 @@ async def get_case_linked_risk_ids(
         if ids:
             return ids
     return parse_linked_risk_ids(csv_fallback)
+
+
+async def list_case_links_for_risk(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    risk_id: int,
+) -> list[CaseRiskLink]:
+    """Reverse lookup: cases linked to an enterprise risk (newest first)."""
+    result = await db.execute(
+        select(CaseRiskLink)
+        .where(
+            CaseRiskLink.tenant_id == tenant_id,
+            CaseRiskLink.risk_id == risk_id,
+        )
+        .order_by(CaseRiskLink.created_at.desc(), CaseRiskLink.id.desc())
+    )
+    return list(result.scalars().all())
+
+
+def case_type_href(case_type: str, case_id: int) -> str:
+    """Deep-link path for a case_risk_links case_type."""
+    mapping = {
+        "incident": f"/incidents/{case_id}",
+        "near_miss": f"/near-misses/{case_id}",
+        "rta": f"/rtas/{case_id}",
+        "complaint": f"/complaints/{case_id}",
+    }
+    return mapping.get(case_type, f"/{case_type}/{case_id}")
