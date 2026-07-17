@@ -346,6 +346,10 @@ describe('Documents', () => {
       String(call[0]).includes('/documents/upload'),
     ) as [string, FormData, { headers?: Record<string, string> }]
     expect(config?.headers?.['Content-Type']).toBeUndefined()
+
+    expect(await screen.findByTestId('documents-upload-downstream-notice')).toBeInTheDocument()
+    expect(screen.getByTestId('documents-upload-indexing-note')).toBeInTheDocument()
+    expect(screen.queryByTestId('documents-upload-exceptions-link')).not.toBeInTheDocument()
   })
 
   it('hydrates q/status/type filters from shareable URL', async () => {

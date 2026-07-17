@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
 import {
@@ -41,6 +41,11 @@ import {
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
 import { LibraryShell } from './LibraryShell'
+import {
+  buildDocumentDownstreamView,
+  buildDocumentsExceptionsHref,
+  DOCUMENT_CONTROL_GOLDEN_THREAD_PATH,
+} from './documentsDownstreamHelpers'
 
 /** Surface operator-visible failures (banner + toast). Never silent. */
 const reportFailure = (
@@ -196,6 +201,12 @@ export default function Documents() {
   const [statsUnavailable, setStatsUnavailable] = useState(false)
   const [searchUnavailable, setSearchUnavailable] = useState(false)
   const [partialLoadWarning, setPartialLoadWarning] = useState<string | null>(null)
+  const [uploadDownstreamNotice, setUploadDownstreamNotice] = useState<{
+    id: number
+    reference_number: string
+    title: string
+    status: string
+  } | null>(null)
 
   const loadData = useCallback(async (docType?: string, status?: string, listPage = 1) => {
     setLoadError(null)
@@ -399,12 +410,18 @@ export default function Documents() {
       }, 200)
 
       // Do not set Content-Type — axios + FormData must include the multipart boundary.
-      await api.post('/api/v1/documents/upload', formData, {
+      const response = await api.post('/api/v1/documents/upload', formData, {
         timeout: UPLOAD_TIMEOUT_MS,
       })
 
       setUploadProgress(100)
       toast.success('Document uploaded')
+      setUploadDownstreamNotice({
+        id: response.data.id as number,
+        reference_number: response.data.reference_number as string,
+        title: (response.data.title as string) || file.name.replace(/\.[^/.]+$/, ''),
+        status: (response.data.status as string) || 'processing',
+      })
 
       await loadData(
         filterType === ALL_TYPES_VALUE ? undefined : filterType,
@@ -527,6 +544,53 @@ export default function Documents() {
         <div className="bg-destructive/10 text-destructive p-4 rounded-lg" role="alert">
           {uploadError}
         </div>
+      )}
+      {uploadDownstreamNotice && (
+        <Card
+          className="p-4 border-primary/20 bg-primary/5"
+          data-testid="documents-upload-downstream-notice"
+        >
+          {(() => {
+            const downstream = buildDocumentDownstreamView(uploadDownstreamNotice)
+            return (
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-medium text-primary">
+                    {t('documents.downstream.upload_banner.title', {
+                      reference: uploadDownstreamNotice.reference_number,
+                    })}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {t(downstream.descriptionKey)}
+                  </p>
+                </div>
+                {downstream.showExceptionsLink ? (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link
+                      to={buildDocumentsExceptionsHref(uploadDownstreamNotice.id)}
+                      data-testid="documents-upload-exceptions-link"
+                    >
+                      <Brain className="w-4 h-4 mr-2" />
+                      {t('documents.downstream.open_exceptions')}
+                    </Link>
+                  </Button>
+                ) : (
+                  <p className="text-xs text-muted-foreground" data-testid="documents-upload-indexing-note">
+                    {t('documents.downstream.processing.next_step')}
+                  </p>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-muted-foreground"
+                  onClick={() => setUploadDownstreamNotice(null)}
+                >
+                  {t('documents.downstream.dismiss')}
+                </Button>
+              </div>
+            )
+          })()}
+        </Card>
       )}
 
       {/* Stats */}
@@ -1105,6 +1169,47 @@ export default function Documents() {
               </DialogHeader>
 
               <div className="overflow-y-auto max-h-[calc(90vh-160px)] space-y-6 py-4">
+                {(() => {
+                  const downstream = buildDocumentDownstreamView(selectedDocument)
+                  return (
+                    <Card
+                      className="p-4 border-border bg-surface/50"
+                      data-testid="documents-downstream-thread"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Brain className="w-4 h-4 text-primary" />
+                        <h3 className="text-sm font-medium text-foreground">
+                          {t('documents.downstream.panel.title')}
+                        </h3>
+                      </div>
+                      <p className="text-sm font-medium text-foreground">{t(downstream.titleKey)}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{t(downstream.descriptionKey)}</p>
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {downstream.showExceptionsLink ? (
+                          <Button variant="outline" size="sm" asChild>
+                            <Link
+                              to={buildDocumentsExceptionsHref(selectedDocument.id)}
+                              data-testid="documents-detail-exceptions-link"
+                            >
+                              {t('documents.downstream.open_exceptions')}
+                            </Link>
+                          </Button>
+                        ) : null}
+                        {downstream.showDocumentControlNote ? (
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link
+                              to={DOCUMENT_CONTROL_GOLDEN_THREAD_PATH}
+                              data-testid="documents-detail-control-link"
+                            >
+                              {t('documents.downstream.open_document_control')}
+                            </Link>
+                          </Button>
+                        ) : null}
+                      </div>
+                    </Card>
+                  )
+                })()}
+
                 {selectedDocument.ai_summary && (
                   <Card className="p-4 border-primary/20 bg-primary/5">
                     <div className="flex items-center gap-2 mb-2">
