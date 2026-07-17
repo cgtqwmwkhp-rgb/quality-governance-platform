@@ -30,7 +30,7 @@ from src.api.schemas.investigation import (
     SourceRecordsResponse,
 )
 from src.api.utils.tenant import require_tenant_id
-from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError
+from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError, ValidationError
 from src.domain.models.investigation import (
     AssignedEntityType,
     InvestigationComment,
@@ -295,6 +295,7 @@ async def get_investigation_comments(
     include_deleted: bool = Query(False),
 ):
     """List investigation comments with optional deleted visibility."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
     await _get_investigation_or_404(investigation_id, db, current_user)
 
     if include_deleted:
@@ -314,11 +315,13 @@ async def get_investigation_comments(
         InvestigationComment.field_id,
         InvestigationComment.parent_comment_id,
     ).where(InvestigationComment.investigation_id == investigation_id)
+    query = query.where(InvestigationComment.tenant_id == tenant_id)
     if not include_deleted:
         query = query.where(InvestigationComment.deleted_at.is_(None))
 
     count_query = select(func.count(InvestigationComment.id)).where(
-        InvestigationComment.investigation_id == investigation_id
+        InvestigationComment.investigation_id == investigation_id,
+        InvestigationComment.tenant_id == tenant_id,
     )
     if not include_deleted:
         count_query = count_query.where(InvestigationComment.deleted_at.is_(None))
@@ -1026,12 +1029,15 @@ async def add_comment(
 
     request_id = "N/A"
 
-    # Validate investigation exists
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
+    # Validate investigation exists within the caller's tenant scope.
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    investigation = await _get_investigation_or_404(investigation_id, db, current_user)
+    if investigation.tenant_id is None:
+        raise ValidationError(
+            "tenant_id is required to create an investigation comment",
+            details={"investigation_id": investigation.id},
+        )
+    if investigation.tenant_id != tenant_id:
         raise NotFoundError(f"Investigation {investigation_id} not found")
 
     # Validate parent comment if provided
@@ -1048,6 +1054,7 @@ async def add_comment(
 
     # Create comment
     comment = InvestigationComment(
+        tenant_id=investigation.tenant_id,
         investigation_id=investigation_id,
         content=payload.content,
         section_id=payload.section_id,
