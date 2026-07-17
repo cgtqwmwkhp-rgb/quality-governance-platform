@@ -55,6 +55,8 @@ import { cn, decodeHtmlEntities } from '../helpers/utils'
 import {
   ASSURANCE_SOURCE_CUSTOMER,
   filterAuditsByAssuranceSource,
+  isAchillesUvdbAssuranceAudit,
+  isCustomerAssuranceAudit,
 } from '../components/assuranceHubHelpers'
 
 type ViewMode = 'kanban' | 'list' | 'findings'
@@ -74,34 +76,60 @@ interface CreateAuditForm {
   external_reference: string
 }
 
-const KANBAN_COLUMNS = [
+type AuditProgram = 'internal' | 'uvdb' | 'planet_mark' | 'customer'
+
+const BOARD_WORK_LANES = [
   {
-    id: 'scheduled',
-    label: 'Scheduled',
-    variant: 'info' as const,
-    icon: Calendar,
-  },
-  {
-    id: 'in_progress',
-    label: 'In Progress',
+    id: 'do_now',
+    label: 'Do now',
+    labelKey: 'audits.board.lane.do_now',
+    statuses: ['scheduled', 'in_progress'] as const,
     variant: 'warning' as const,
-    icon: Clock,
+    icon: Play,
   },
   {
-    id: 'pending_review',
-    label: 'Pending Review',
+    id: 'review',
+    label: 'Needs review',
+    labelKey: 'audits.board.lane.review',
+    statuses: ['pending_review'] as const,
     variant: 'default' as const,
     icon: Target,
   },
   {
-    id: 'completed',
-    label: 'Completed',
+    id: 'closed',
+    label: 'Closed',
+    labelKey: 'audits.board.lane.closed',
+    statuses: ['completed'] as const,
     variant: 'success' as const,
     icon: CheckCircle2,
   },
 ] as const
 
-const KANBAN_STATUS_IDS = new Set<string>(KANBAN_COLUMNS.map((column) => column.id))
+const BOARD_STATUS_IDS = new Set<string>(
+  BOARD_WORK_LANES.flatMap((lane) => lane.statuses),
+)
+
+const PROGRAM_FILTER_CHIPS: Array<{
+  id: AuditProgram
+  label: string
+  labelKey: string
+}> = [
+  { id: 'internal', label: 'Internal', labelKey: 'audits.board.program.internal' },
+  { id: 'uvdb', label: 'Achilles UVDB', labelKey: 'audits.board.program.uvdb' },
+  { id: 'planet_mark', label: 'Planet Mark', labelKey: 'audits.board.program.planet_mark' },
+  { id: 'customer', label: 'Customer', labelKey: 'audits.board.program.customer' },
+]
+
+function classifyAuditProgram(audit: AuditRun): AuditProgram {
+  if (isCustomerAssuranceAudit(audit)) return 'customer'
+  if (isAchillesUvdbAssuranceAudit(audit)) return 'uvdb'
+  const extType = (
+    (audit as AuditRun & { external_audit_type?: string }).external_audit_type || ''
+  ).toLowerCase()
+  const scheme = (audit.assurance_scheme || '').trim().toLowerCase()
+  if (extType === 'planet_mark' || scheme.includes('planet mark')) return 'planet_mark'
+  return 'internal'
+}
 
 const EXTERNAL_AUDIT_TYPE_OPTIONS: Array<{
   value: ExternalAuditType
@@ -273,6 +301,7 @@ export default function Audits() {
   /** Hero band as dynamic filter — mirrors Risk Register KPI cards. */
   type HeroFilter = 'all' | 'in_progress' | 'completed' | 'scored' | 'open_findings'
   const [heroFilter, setHeroFilter] = useState<HeroFilter>('all')
+  const [programFilter, setProgramFilter] = useState<AuditProgram | 'all'>('all')
   const [modalMode, setModalMode] = useState<AuditModalMode>('schedule')
   const [showModal, setShowModal] = useState(false)
 
@@ -786,31 +815,53 @@ export default function Audits() {
     )
   }, [scopedAudits, searchTerm])
 
+  const programFilteredAudits = useMemo(() => {
+    if (programFilter === 'all') return searchFilteredAudits
+    return searchFilteredAudits.filter((audit) => classifyAuditProgram(audit) === programFilter)
+  }, [searchFilteredAudits, programFilter])
+
+  const programCounts = useMemo(() => {
+    const counts: Record<AuditProgram, number> = {
+      internal: 0,
+      uvdb: 0,
+      planet_mark: 0,
+      customer: 0,
+    }
+    for (const audit of searchFilteredAudits) {
+      counts[classifyAuditProgram(audit)]++
+    }
+    return counts
+  }, [searchFilteredAudits])
+
+  const visibleProgramChips = useMemo(
+    () => PROGRAM_FILTER_CHIPS.filter((chip) => programCounts[chip.id] > 0),
+    [programCounts],
+  )
+
   const filteredAudits = useMemo(() => {
     switch (heroFilter) {
       case 'in_progress':
-        return searchFilteredAudits.filter((a) => a.status === 'in_progress')
+        return programFilteredAudits.filter((a) => a.status === 'in_progress')
       case 'completed':
-        return searchFilteredAudits.filter((a) => a.status === 'completed')
+        return programFilteredAudits.filter((a) => a.status === 'completed')
       case 'scored':
-        return [...searchFilteredAudits]
+        return [...programFilteredAudits]
           .filter((a) => a.score_percentage != null)
           .sort((a, b) => (a.score_percentage ?? 0) - (b.score_percentage ?? 0))
       case 'open_findings':
-        // Findings view owns this filter; keep audit list unfiltered by status.
-        return searchFilteredAudits
+        return programFilteredAudits
       default:
-        return searchFilteredAudits
+        return programFilteredAudits
     }
-  }, [searchFilteredAudits, heroFilter])
+  }, [programFilteredAudits, heroFilter])
 
-  const getAuditsByStatus = (status: string) => {
-    return filteredAudits.filter((a) => a.status === status)
+  const getAuditsInLane = (statuses: readonly string[]) => {
+    return filteredAudits.filter((audit) => statuses.includes(audit.status))
   }
 
   const isGlobalAuditEmpty = scopedAudits.length === 0
   const isFilteredAuditEmpty = !isGlobalAuditEmpty && filteredAudits.length === 0
-  const boardVisibleAudits = filteredAudits.filter((audit) => KANBAN_STATUS_IDS.has(audit.status))
+  const boardVisibleAudits = filteredAudits.filter((audit) => BOARD_STATUS_IDS.has(audit.status))
   const isBoardLaneEmpty = filteredAudits.length > 0 && boardVisibleAudits.length === 0
 
   const auditListEmptyTitle = loadError
@@ -842,6 +893,10 @@ export default function Audits() {
       // Status/score filters are clearest in List (Board would show empty sibling lanes).
       setViewMode('list')
     }
+  }
+
+  const applyProgramFilter = (next: AuditProgram) => {
+    setProgramFilter((current) => (current === next ? 'all' : next))
   }
 
   const getScoreColor = (percentage?: number) => {
@@ -887,14 +942,14 @@ export default function Audits() {
 
   // Hero counts stay search-aware but not hero-filter-aware (so tiles don't collapse when active).
   const stats = {
-    total: searchFilteredAudits.length,
-    inProgress: searchFilteredAudits.filter((a) => a.status === 'in_progress').length,
-    completed: searchFilteredAudits.filter((a) => a.status === 'completed').length,
+    total: programFilteredAudits.length,
+    inProgress: programFilteredAudits.filter((a) => a.status === 'in_progress').length,
+    completed: programFilteredAudits.filter((a) => a.status === 'completed').length,
     avgScore:
-      searchFilteredAudits
+      programFilteredAudits
         .filter((a) => a.score_percentage != null)
         .reduce((acc, a) => acc + (a.score_percentage ?? 0), 0) /
-      (searchFilteredAudits.filter((a) => a.score_percentage != null).length || 1),
+      (programFilteredAudits.filter((a) => a.score_percentage != null).length || 1),
     openFindings: scopedFindings.filter((f) => f.status === 'open').length,
   }
   const findingsForView =
@@ -1090,6 +1145,48 @@ export default function Audits() {
         />
       </div>
 
+      {!customerAssuranceView && visibleProgramChips.length > 0 && (
+        <div
+          className="flex flex-wrap gap-2"
+          role="toolbar"
+          aria-label={t('audits.board.program_filters', 'Audit program filters')}
+          data-testid="audits-program-filters"
+        >
+          {visibleProgramChips.map((chip) => {
+            const active = programFilter === chip.id
+            return (
+              <button
+                key={chip.id}
+                type="button"
+                data-testid={`audits-program-chip-${chip.id}`}
+                aria-pressed={active}
+                onClick={() => applyProgramFilter(chip.id)}
+                className={cn(
+                  'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  active
+                    ? 'border-primary bg-primary/10 text-primary ring-1 ring-primary/30'
+                    : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground',
+                )}
+              >
+                {t(chip.labelKey, chip.label)}
+                <Badge variant="secondary" className="text-[10px] tabular-nums">
+                  {programCounts[chip.id]}
+                </Badge>
+              </button>
+            )
+          })}
+          {programFilter !== 'all' && (
+            <button
+              type="button"
+              onClick={() => setProgramFilter('all')}
+              className="text-sm font-medium text-primary hover:underline px-1"
+            >
+              {t('audits.board.program_clear', 'Clear program filter')}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Kanban View */}
       {viewMode === 'kanban' && isGlobalAuditEmpty ? (
         <div data-testid="audits-board-empty">
@@ -1120,44 +1217,39 @@ export default function Audits() {
         </div>
       ) : (
         viewMode === 'kanban' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          {KANBAN_COLUMNS.map((column) => {
-            const columnAudits = getAuditsByStatus(column.id)
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {BOARD_WORK_LANES.map((lane) => {
+            const laneAudits = getAuditsInLane(lane.statuses)
             return (
-              <div key={column.id}>
-                {/* Column Header */}
+              <div key={lane.id} data-testid={`audits-board-lane-${lane.id}`}>
                 <div className="flex items-center gap-3 mb-4">
                   <div
                     className={cn(
                       'w-8 h-8 rounded-lg flex items-center justify-center',
-                      column.variant === 'info' && 'bg-info/10 text-info',
-                      column.variant === 'warning' && 'bg-warning/10 text-warning',
-                      column.variant === 'success' && 'bg-success/10 text-success',
-                      column.variant === 'default' && 'bg-primary/10 text-primary',
+                      lane.variant === 'warning' && 'bg-warning/10 text-warning',
+                      lane.variant === 'success' && 'bg-success/10 text-success',
+                      lane.variant === 'default' && 'bg-primary/10 text-primary',
                     )}
                   >
-                    <column.icon className="w-4 h-4" />
+                    <lane.icon className="w-4 h-4" />
                   </div>
-                  <h3 className="font-semibold text-foreground">{column.label}</h3>
+                  <h3 className="font-semibold text-foreground">{t(lane.labelKey, lane.label)}</h3>
                   <Badge variant="secondary" className="ml-auto">
-                    {columnAudits.length}
+                    {laneAudits.length}
                   </Badge>
                 </div>
 
-                {/* Column Content */}
                 <div className="space-y-3 min-h-[200px] bg-surface rounded-2xl p-3 border border-border">
-                  {columnAudits.length === 0 ? (
+                  {laneAudits.length === 0 ? (
                     <div className="flex items-center justify-center h-32 text-muted-foreground">
                       <p className="text-sm text-center px-2">
-                        {t(
-                          'audits.board.column_empty',
-                          `No ${column.label.toLowerCase()} audits`,
-                          { column: column.label },
-                        )}
+                        {t('audits.board.lane_empty_column', `No ${lane.label.toLowerCase()} audits`, {
+                          lane: lane.label,
+                        })}
                       </p>
                     </div>
                   ) : (
-                    columnAudits.map((audit) => (
+                    laneAudits.map((audit) => (
                       <Card
                         key={audit.id}
                         hoverable
@@ -1228,9 +1320,8 @@ export default function Audits() {
                               <span>{new Date(audit.scheduled_date).toLocaleDateString()}</span>
                             </div>
                           )}
-                          {(isExternalAuditImportRun(audit) ||
-                            audit.status === 'scheduled' ||
-                            audit.status === 'in_progress') && (
+                          {lane.id === 'do_now' &&
+                          (audit.status === 'scheduled' || audit.status === 'in_progress') ? (
                             <Button
                               size="sm"
                               variant={audit.status === 'in_progress' ? 'default' : 'outline'}
@@ -1241,13 +1332,35 @@ export default function Audits() {
                               className="text-xs h-7 px-2.5"
                             >
                               <Play size={12} />
-                              {isExternalAuditImportRun(audit)
-                                ? 'Open Review'
-                                : audit.status === 'in_progress'
-                                  ? 'Continue'
-                                  : 'Start'}
+                              {audit.status === 'in_progress' ? 'Continue' : 'Start'}
                             </Button>
-                          )}
+                          ) : lane.id === 'review' &&
+                            (isExternalAuditImportRun(audit) || audit.status === 'pending_review') ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                navigate(getAuditWorkspacePath(audit))
+                              }}
+                              className="text-xs h-7 px-2.5"
+                            >
+                              <Play size={12} />
+                              Open Review
+                            </Button>
+                          ) : lane.id === 'closed' && audit.status === 'completed' ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                navigate(getAuditWorkspacePath(audit))
+                              }}
+                              className="text-xs h-7 px-2.5"
+                            >
+                              View
+                            </Button>
+                          ) : null}
                         </div>
                       </Card>
                     ))
