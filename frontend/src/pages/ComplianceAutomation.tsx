@@ -31,7 +31,6 @@ import {
   Eye,
   Play,
   RefreshCw,
-  ChevronRight,
   AlertCircle,
   BarChart3,
   Zap,
