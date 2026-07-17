@@ -58,6 +58,7 @@ const ENTITY_ICONS: Record<string, typeof AlertTriangle> = {
 // Action type for display
 interface ActionItem {
   id: number
+  action_key?: string
   title: string
   description: string
   priority: string
