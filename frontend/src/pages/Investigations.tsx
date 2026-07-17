@@ -729,9 +729,13 @@ export default function Investigations() {
           <p className="text-muted-foreground mt-1">{t('investigations.subtitle')}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => navigate('/investigations/templates/builder')}>
+          <Button
+            variant="outline"
+            onClick={() => navigate('/investigations/templates/builder')}
+            title="INC043 seven-section investigation template builder"
+          >
             <Layers size={20} aria-hidden="true" />
-            Template Builder
+            Template Builder (INC043)
           </Button>
           <Button onClick={() => setShowModal(true)}>
             <Plus size={20} aria-hidden="true" />

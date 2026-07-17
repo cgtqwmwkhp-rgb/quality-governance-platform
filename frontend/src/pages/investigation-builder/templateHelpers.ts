@@ -46,9 +46,13 @@ function mapApiSection(section: ApiStructureSection, index: number): Investigati
   }
 }
 
+export function mapApiStructureToSections(structure: unknown): InvestigationSection[] {
+  const apiStructure = structure as ApiStructure | null | undefined
+  return (apiStructure?.sections ?? []).map(mapApiSection)
+}
+
 export function mapApiToDraft(template: InvestigationTemplate): InvestigationTemplateDraft {
-  const structure = template.structure as unknown as ApiStructure
-  const sections = (structure.sections ?? []).map(mapApiSection)
+  const sections = mapApiStructureToSections(template.structure)
 
   return {
     name: template.name,

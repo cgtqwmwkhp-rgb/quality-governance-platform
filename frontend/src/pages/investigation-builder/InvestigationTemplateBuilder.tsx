@@ -8,6 +8,7 @@ import {
   Trash2,
   Layers,
   FileText,
+  LayoutTemplate,
 } from 'lucide-react'
 import { FE_BUILDER_QUESTION_TYPES } from '../audit-builder/questionTypeRegistry'
 import { QUESTION_TYPES } from '../audit-builder/QuestionEditor'
@@ -17,6 +18,7 @@ import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Textarea } from '../../components/ui/Textarea'
 import { Card } from '../../components/ui/Card'
+import { EmptyState } from '../../components/ui/EmptyState'
 import {
   Select,
   SelectContent,
@@ -37,7 +39,15 @@ import {
   buildTemplateCreatePayload,
   buildTemplateUpdatePayload,
   mapApiToDraft,
+  mapApiStructureToSections,
 } from './templateHelpers'
+import { ContractSectionChecklist } from './ContractSectionChecklist'
+import {
+  assessContractCompliance,
+  countContractSectionsPresent,
+  createInc043ScaffoldSections,
+  INC043_CONTRACT_SECTIONS,
+} from './contractSections'
 
 const QUESTION_TYPE_LABELS = Object.fromEntries(
   QUESTION_TYPES.map((entry) => [entry.type, entry.label]),
@@ -87,7 +97,8 @@ function TemplateListView() {
           </Link>
           <h1 className="text-3xl font-bold text-foreground">Investigation Templates</h1>
           <p className="text-muted-foreground mt-1">
-            Build RCA templates using the shared question type registry (Wave 1).
+            INC043-grade structure: seven contract sections from the Plantexpand investigation
+            report. Wave 1 question types apply within each section.
           </p>
         </div>
         <Button onClick={() => navigate('/investigations/templates/builder/new')}>
@@ -103,36 +114,47 @@ function TemplateListView() {
       ) : error ? (
         <Card className="p-6 text-destructive">{error}</Card>
       ) : templates.length === 0 ? (
-        <Card className="p-8 text-center">
-          <Layers className="mx-auto mb-3 text-muted-foreground" size={32} aria-hidden="true" />
-          <p className="text-muted-foreground mb-4">No investigation templates yet.</p>
-          <Button onClick={() => navigate('/investigations/templates/builder/new')}>
-            Create your first template
-          </Button>
+        <Card className="p-6">
+          <EmptyState
+            icon={<Layers className="text-muted-foreground" size={28} aria-hidden="true" />}
+            title="No investigation templates yet"
+            description={`New templates start from the INC043 seven-section contract (${INC043_CONTRACT_SECTIONS.map((section) => section.title.replace(/^\d+\.\s*/, '')).join(', ')}). PDF export and customer-pack rendering remain on the Report tab — this builder defines section structure only.`}
+            action={
+              <Button onClick={() => navigate('/investigations/templates/builder/new')}>
+                <LayoutTemplate size={16} aria-hidden="true" />
+                Create INC043 scaffold
+              </Button>
+            }
+          />
         </Card>
       ) : (
         <div className="grid gap-4">
-          {templates.map((template) => (
-            <Card
-              key={template.id}
-              className="p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
-            >
-              <div>
-                <h2 className="font-semibold text-foreground">{template.name}</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  v{template.version} · {(template.structure?.sections as unknown[] | undefined)?.length ?? 0}{' '}
-                  sections
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => navigate(`/investigations/templates/builder/${template.id}/edit`)}
-              >
-                <FileText size={16} aria-hidden="true" />
-                Edit
-              </Button>
-            </Card>
-          ))}
+          {templates.map((template) => {
+            const sections = mapApiStructureToSections(template.structure)
+            const checklist = assessContractCompliance(sections)
+            const mappedCount = countContractSectionsPresent(checklist)
+            return (
+              <Card key={template.id} className="p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                  <div>
+                    <h2 className="font-semibold text-foreground">{template.name}</h2>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      v{template.version} · {sections.length} builder sections · {mappedCount}/
+                      {INC043_CONTRACT_SECTIONS.length} contract sections mapped
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate(`/investigations/templates/builder/${template.id}/edit`)}
+                  >
+                    <FileText size={16} aria-hidden="true" />
+                    Edit
+                  </Button>
+                </div>
+                <ContractSectionChecklist checklist={checklist} compact />
+              </Card>
+            )
+          })}
         </div>
       )}
     </div>
@@ -156,6 +178,12 @@ function TemplateEditorView({ templateId }: { templateId?: string }) {
       })),
     [],
   )
+
+  const contractChecklist = useMemo(
+    () => assessContractCompliance(draft.sections),
+    [draft.sections],
+  )
+  const mappedContractCount = countContractSectionsPresent(contractChecklist)
 
   useEffect(() => {
     if (isNew) {
@@ -255,8 +283,8 @@ function TemplateEditorView({ templateId }: { templateId?: string }) {
             {isNew ? 'New Investigation Template' : 'Edit Investigation Template'}
           </h1>
           <p className="text-muted-foreground mt-1">
-            Question types from the Wave 1 audit registry ({FE_BUILDER_QUESTION_TYPES.length} palette
-            types).
+            INC043 contract: {mappedContractCount}/{INC043_CONTRACT_SECTIONS.length} sections mapped
+            · Wave 1 palette ({FE_BUILDER_QUESTION_TYPES.length} question types).
           </p>
         </div>
         <Button onClick={handleSave} disabled={saving}>
@@ -266,6 +294,31 @@ function TemplateEditorView({ templateId }: { templateId?: string }) {
       </div>
 
       {saveError ? <Card className="p-4 text-destructive text-sm">{saveError}</Card> : null}
+
+      <Card className="p-6 space-y-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <p className="text-sm text-muted-foreground">
+            Templates should cover all seven INC043 sections before investigations can reach
+            closure-grade parity. Branded PDF export is handled separately on the investigation
+            Report tab.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setDraft((current) => ({
+                ...current,
+                sections: createInc043ScaffoldSections(),
+              }))
+            }
+          >
+            <LayoutTemplate size={16} aria-hidden="true" />
+            Apply INC043 scaffold
+          </Button>
+        </div>
+        <ContractSectionChecklist checklist={contractChecklist} />
+      </Card>
 
       <Card className="p-6 space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
