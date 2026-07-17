@@ -36,6 +36,7 @@ from src.domain.services.document_ai_service import DocumentAIService, Embedding
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
 from src.domain.services.document_version_service import document_version_service
+from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.infrastructure.storage import StorageError, storage_service
 
@@ -106,11 +107,22 @@ def _coerce_json_list(value: Any) -> Optional[list]:
     return None
 
 
+def _document_reference_number(document: Document) -> str:
+    """Return a string reference for API responses (legacy rows may have NULL)."""
+    ref = getattr(document, "reference_number", None)
+    if isinstance(ref, str) and ref.strip():
+        return ref
+    doc_id = getattr(document, "id", None)
+    if doc_id is not None:
+        return f"DOC-{doc_id}"
+    return "DOC-UNKNOWN"
+
+
 def _document_to_response(document: Document) -> DocumentResponse:
     """Serialize a document row without failing the whole list on legacy JSON shapes."""
     return DocumentResponse(
         id=document.id,
-        reference_number=document.reference_number,
+        reference_number=_document_reference_number(document),
         title=document.title,
         description=document.description,
         file_name=document.file_name,
@@ -472,6 +484,8 @@ async def upload_document(
     file_path = f"documents/{datetime.now(timezone.utc).strftime('%Y/%m')}/{uuid.uuid4()}/{safe_filename}"
 
     try:
+        reference_number = await ReferenceNumberService.generate(db, "document", Document)
+
         # Create document record
         doc = Document(
             title=title,
@@ -493,6 +507,7 @@ async def upload_document(
             ),
             status=DocumentStatus.PROCESSING,
             version="1.0",
+            reference_number=reference_number,
             created_by_id=current_user.id,
             tenant_id=current_user.tenant_id,
         )
@@ -542,7 +557,7 @@ async def upload_document(
 
         return DocumentUploadResponse(
             id=doc.id,
-            reference_number=doc.reference_number,
+            reference_number=_document_reference_number(doc),
             title=doc.title,
             status=doc.status.value,
             message="Document uploaded and processing started",
@@ -815,7 +830,7 @@ async def semantic_search(
                 results.append(
                     SearchResult(
                         document_id=doc.id,
-                        reference_number=doc.reference_number,
+                        reference_number=_document_reference_number(doc),
                         title=doc.title,
                         score=match.get("score", 0.0),
                         chunk_preview=match.get("metadata", {}).get("content_preview", ""),
