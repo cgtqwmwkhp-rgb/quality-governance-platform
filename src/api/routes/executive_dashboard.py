@@ -40,7 +40,7 @@ async def get_executive_dashboard(
     """
     service = ExecutiveDashboardService(db, tenant_id=current_user.tenant_id)
     dashboard = await service.get_full_dashboard(period_days)
-    return dashboard
+    return ExecutiveDashboardResponse.model_validate(dashboard)
 
 
 @router.get("/summary", response_model=DashboardSummaryResponse)

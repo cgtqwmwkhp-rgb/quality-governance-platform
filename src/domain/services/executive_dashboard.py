@@ -25,6 +25,53 @@ from src.domain.models.workflow_rules import SLATracking
 
 logger = logging.getLogger(__name__)
 
+_EMPTY_INCIDENT_SUMMARY: Dict[str, Any] = {
+    "total_in_period": 0,
+    "open": 0,
+    "by_severity": {},
+    "sif_count": 0,
+    "psif_count": 0,
+    "critical_high": 0,
+}
+_EMPTY_NEAR_MISS_SUMMARY: Dict[str, Any] = {
+    "total_in_period": 0,
+    "previous_period": 0,
+    "trend_percent": 0.0,
+    "reporting_rate": "stable",
+}
+_EMPTY_COMPLAINT_SUMMARY: Dict[str, Any] = {
+    "total_in_period": 0,
+    "open": 0,
+    "closed_in_period": 0,
+    "resolution_rate": 100.0,
+}
+_EMPTY_RTA_SUMMARY: Dict[str, Any] = {"total_in_period": 0}
+_EMPTY_RISK_SUMMARY: Dict[str, Any] = {
+    "total_active": 0,
+    "by_level": {},
+    "high_critical": 0,
+    "average_score": 0.0,
+}
+_EMPTY_KRI_SUMMARY: Dict[str, Any] = {
+    "total_active": 0,
+    "by_status": {"green": 0, "amber": 0, "red": 0, "not_measured": 0},
+    "at_risk": 0,
+    "pending_alerts": 0,
+}
+_EMPTY_COMPLIANCE_SUMMARY: Dict[str, Any] = {
+    "total_assigned": 0,
+    "completed": 0,
+    "overdue": 0,
+    "completion_rate": 100.0,
+}
+_EMPTY_SLA_SUMMARY: Dict[str, Any] = {
+    "total_tracked": 0,
+    "met": 0,
+    "breached": 0,
+    "compliance_rate": 100.0,
+}
+_EMPTY_TRENDS: Dict[str, Any] = {"incidents_weekly": []}
+
 
 class ExecutiveDashboardService:
     """Service for generating executive KPI dashboards."""
@@ -54,43 +101,26 @@ class ExecutiveDashboardService:
         """Get complete executive dashboard with all KPIs."""
         cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
 
-        empty_summary = {"total_in_period": 0, "open": 0, "critical_high": 0}
-        empty_risk = {
-            "total_active": 0,
-            "by_level": {},
-            "high_critical": 0,
-            "average_score": 0,
-        }
-        empty_kri = {
-            "total_active": 0,
-            "by_status": {"green": 0, "amber": 0, "red": 0, "not_measured": 0},
-            "at_risk": 0,
-            "pending_alerts": 0,
-        }
-        empty_compliance = {
-            "total_assigned": 0,
-            "completed": 0,
-            "overdue": 0,
-            "completion_rate": 100,
-        }
-        empty_sla = {
-            "total_tracked": 0,
-            "met": 0,
-            "breached": 0,
-            "compliance_rate": 100,
-        }
-
         incident_summary = await self._safe_call(
             self._get_incident_summary(cutoff),
-            {**empty_summary, "by_severity": {}, "high_severity": 0},
+            dict(_EMPTY_INCIDENT_SUMMARY),
         )
-        near_miss_summary = await self._safe_call(self._get_near_miss_summary(cutoff), empty_summary)
-        complaint_summary = await self._safe_call(self._get_complaint_summary(cutoff), empty_summary)
-        rta_summary = await self._safe_call(self._get_rta_summary(cutoff), empty_summary)
-        risk_summary = await self._safe_call(self._get_risk_summary(), empty_risk)
-        kri_summary = await self._safe_call(self._get_kri_summary(), empty_kri)
-        compliance_summary = await self._safe_call(self._get_compliance_summary(), empty_compliance)
-        sla_summary = await self._safe_call(self._get_sla_summary(), empty_sla)
+        near_miss_summary = await self._safe_call(
+            self._get_near_miss_summary(cutoff),
+            dict(_EMPTY_NEAR_MISS_SUMMARY),
+        )
+        complaint_summary = await self._safe_call(
+            self._get_complaint_summary(cutoff),
+            dict(_EMPTY_COMPLAINT_SUMMARY),
+        )
+        rta_summary = await self._safe_call(self._get_rta_summary(cutoff), dict(_EMPTY_RTA_SUMMARY))
+        risk_summary = await self._safe_call(self._get_risk_summary(), dict(_EMPTY_RISK_SUMMARY))
+        kri_summary = await self._safe_call(self._get_kri_summary(), dict(_EMPTY_KRI_SUMMARY))
+        compliance_summary = await self._safe_call(
+            self._get_compliance_summary(),
+            dict(_EMPTY_COMPLIANCE_SUMMARY),
+        )
+        sla_summary = await self._safe_call(self._get_sla_summary(), dict(_EMPTY_SLA_SUMMARY))
 
         health_score = self._calculate_health_score(
             incident_summary,
@@ -102,8 +132,11 @@ class ExecutiveDashboardService:
             sla_summary,
         )
 
-        trends = await self._safe_call(self._get_trends(period_days), {})
+        trends = await self._safe_call(self._get_trends(period_days), dict(_EMPTY_TRENDS))
         alerts = await self._safe_call(self._get_active_alerts(), [])
+
+        if "incidents_weekly" not in trends:
+            trends = {**dict(_EMPTY_TRENDS), **trends}
 
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -317,7 +350,10 @@ class ExecutiveDashboardService:
         status_counts = {"green": 0, "amber": 0, "red": 0, "not_measured": 0}
         for kri in kris:
             if kri.current_status:
-                status_counts[kri.current_status.value] += 1
+                status_key = kri.current_status.value
+                if status_key not in status_counts:
+                    status_key = "not_measured"
+                status_counts[status_key] += 1
             else:
                 status_counts["not_measured"] += 1
 

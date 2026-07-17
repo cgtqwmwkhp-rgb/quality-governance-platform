@@ -89,6 +89,52 @@ class DocumentListResponse(BaseModel):
     pages: int
 
 
+def _enum_value(value: Any) -> str:
+    if value is None:
+        return ""
+    return value.value if hasattr(value, "value") else str(value)
+
+
+def _coerce_json_list(value: Any) -> Optional[list]:
+    """Coerce JSON metadata to a list; drop invalid shapes instead of 500ing the list."""
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return value
+    if isinstance(value, (tuple, set)):
+        return list(value)
+    return None
+
+
+def _document_to_response(document: Document) -> DocumentResponse:
+    """Serialize a document row without failing the whole list on legacy JSON shapes."""
+    return DocumentResponse(
+        id=document.id,
+        reference_number=document.reference_number,
+        title=document.title,
+        description=document.description,
+        file_name=document.file_name,
+        file_type=_enum_value(document.file_type),
+        file_size=document.file_size,
+        document_type=_enum_value(document.document_type),
+        category=document.category,
+        department=document.department,
+        sensitivity=_enum_value(document.sensitivity),
+        status=_enum_value(document.status),
+        version=document.version,
+        ai_summary=document.ai_summary,
+        ai_tags=_coerce_json_list(document.ai_tags),
+        ai_keywords=_coerce_json_list(document.ai_keywords),
+        page_count=document.page_count,
+        word_count=document.word_count,
+        view_count=document.view_count,
+        download_count=document.download_count,
+        is_public=document.is_public,
+        created_at=document.created_at,
+        indexed_at=document.indexed_at,
+    )
+
+
 class DocumentUploadResponse(BaseModel):
     """Response after document upload."""
 
@@ -568,19 +614,18 @@ async def list_documents(
     count_query = select(func.count()).select_from(query.subquery())
     total = await db.scalar(count_query) or 0
 
-    # Apply pagination
-    query = query.offset((page - 1) * page_size).limit(page_size)
     query = query.order_by(Document.created_at.desc())
+    query = query.offset((page - 1) * page_size).limit(page_size)
 
     result = await db.execute(query)
     documents = result.scalars().all()
 
     return DocumentListResponse(
-        items=[DocumentResponse.model_validate(d) for d in documents],
+        items=[_document_to_response(d) for d in documents],
         total=total,
         page=page,
         page_size=page_size,
-        pages=(total + page_size - 1) // page_size,
+        pages=(total + page_size - 1) // page_size if total else 0,
     )
 
 
@@ -599,7 +644,7 @@ async def get_document(
     document.last_accessed_at = datetime.now(timezone.utc)
     await db.commit()
 
-    return DocumentResponse.model_validate(document)
+    return _document_to_response(document)
 
 
 @router.get("/{document_id}/signed-url", response_model=DocumentSignedUrlResponse)

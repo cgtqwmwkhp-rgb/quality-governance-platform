@@ -650,7 +650,9 @@ class ComplianceAutomationService:
                 },
             },
             "deadline": deadline.isoformat(),
-            "status": "ready_to_submit",
+            "status": "preparation_stub",
+            "status_label": "Draft pack only — not saved in QGP; file on the HSE portal",
+            "persisted": False,
         }
 
     def submit_riddor(
