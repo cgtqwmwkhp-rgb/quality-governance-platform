@@ -152,10 +152,13 @@ export const STATUS_DISPLAY: Record<
 /**
  * Get display configuration for a status
  */
-export function getStatusDisplay(status: string): {
+export function getStatusDisplay(status: string | null | undefined): {
   label: string
   className: string
 } {
+  if (!status) {
+    return { label: 'Unknown', className: 'bg-muted text-muted-foreground' }
+  }
   const display = STATUS_DISPLAY[status as InvestigationStatusValue]
   if (display) return display
   // Fallback for unknown statuses

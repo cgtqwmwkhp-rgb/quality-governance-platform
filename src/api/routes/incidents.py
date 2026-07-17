@@ -408,8 +408,28 @@ async def list_incidents(
             asset_id=asset_id,
             skip_tenant_check=current_user.is_superuser,
         )
+        items: list[IncidentResponse] = []
+        skipped = 0
+        for row in result.items:
+            try:
+                items.append(IncidentResponse.model_validate(row))
+            except Exception as validate_err:
+                skipped += 1
+                logger.error(
+                    "Skipping unserializable incident id=%s during list: %s",
+                    getattr(row, "id", None),
+                    validate_err,
+                    exc_info=True,
+                )
+        if skipped:
+            logger.warning(
+                "Incident list skipped %s unserializable row(s); returning %s of %s",
+                skipped,
+                len(items),
+                result.total,
+            )
         return IncidentListResponse(
-            items=[IncidentResponse.model_validate(i) for i in result.items],
+            items=items,
             total=result.total,
             page=result.page,
             page_size=result.page_size,

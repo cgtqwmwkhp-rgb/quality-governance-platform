@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from src.api.schemas.validators import sanitize_field
 from src.domain.models.incident import IncidentSeverity, IncidentStatus, IncidentType
@@ -125,6 +125,30 @@ class IncidentResponse(BaseModel):
         None,
         description="Comma-separated enterprise risk IDs linked to this incident",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_null_updated_at(cls, data: Any) -> Any:
+        """Legacy/sample rows may lack updated_at — fall back to created_at (keep OpenAPI required)."""
+        if data is None:
+            return data
+        if isinstance(data, dict):
+            if data.get("updated_at") is None and data.get("created_at") is not None:
+                return {**data, "updated_at": data["created_at"]}
+            return data
+        updated = getattr(data, "updated_at", None)
+        created = getattr(data, "created_at", None)
+        if updated is None and created is not None:
+            try:
+                data.updated_at = created
+            except Exception:
+                # Read-only / SimpleNamespace without setattr — rebuild as dict of known fields
+                return {
+                    key: getattr(data, key, None)
+                    for key in cls.model_fields
+                    if hasattr(data, key) or key == "updated_at"
+                } | {"updated_at": created}
+        return data
 
 
 class IncidentListResponse(BaseModel):

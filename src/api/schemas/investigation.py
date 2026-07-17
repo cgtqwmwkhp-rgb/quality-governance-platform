@@ -169,6 +169,8 @@ class InvestigationRunResponse(BaseModel):
     title: str
     description: Optional[str] = None
     status: str = "draft"
+    # HSG245-aligned depth: low | medium | high (minimal arrives in a follow-on wave)
+    level: Optional[str] = None
     data: Dict[str, Any] = Field(default_factory=dict)
     reference_number: str
     started_at: Optional[datetime] = None
