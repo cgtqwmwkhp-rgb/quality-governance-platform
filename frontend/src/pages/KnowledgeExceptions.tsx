@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, ArrowLeft, CheckCircle2, Loader2, XCircle } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Info,
+  Loader2,
+  XCircle,
+} from 'lucide-react'
 import {
   getApiErrorMessage,
   knowledgeBankApi,
@@ -19,6 +28,18 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../components/ui/Tooltip'
+import {
+  buildWhyDetail,
+  dedupeKnowledgeExceptions,
+  resolveClauseIdentity,
+  type DedupedExceptionRow,
+} from './knowledgeExceptionsHonesty'
 import {
   EXCEPTIONS_ENTITY_TYPE_OPTIONS,
   EXCEPTIONS_SIGNAL_TYPE_OPTIONS,
@@ -71,6 +92,221 @@ const ENTITY_LABELS: Record<string, string> = {
   near_miss: 'Near miss',
   rta: 'RTA',
   audit_finding: 'Audit finding',
+}
+
+const allocationBadge = (kind: DedupedExceptionRow['allocationKind'], duplicateCount: number) => {
+  if (kind === 'already_confirmed') {
+    return <Badge variant="success">Already allocated (confirmed)</Badge>
+  }
+  if (kind === 'already_rejected') {
+    return <Badge variant="destructive">Already decided (rejected)</Badge>
+  }
+  if (kind === 'duplicate_proposal' && duplicateCount > 0) {
+    return (
+      <Badge variant="secondary">
+        {duplicateCount + 1} proposals collapsed
+      </Badge>
+    )
+  }
+  return null
+}
+
+const isRowActionable = (kind: DedupedExceptionRow['allocationKind']) =>
+  kind === 'actionable' || kind === 'duplicate_proposal'
+
+function ExceptionRow({
+  row,
+  selected,
+  acting,
+  onToggle,
+  onConfirm,
+  onReject,
+}: {
+  row: DedupedExceptionRow
+  selected: boolean
+  acting: boolean
+  onToggle: () => void
+  onConfirm: () => void
+  onReject: () => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const item = row.primary
+  const href = exceptionEntityHref(item.entity_type, item.entity_id)
+  const entityLabel = ENTITY_LABELS[item.entity_type] ?? item.entity_type
+  const identity = resolveClauseIdentity(item)
+  const why = buildWhyDetail(item)
+  const actionable = isRowActionable(row.allocationKind)
+
+  return (
+    <Card
+      className={cn('p-4', selected && 'border-primary/50')}
+      data-testid={`exception-row-${item.id}`}
+      data-allocation-key={row.allocationKey}
+    >
+      <div className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          checked={selected}
+          disabled={!actionable}
+          onChange={onToggle}
+          aria-label={`Select exception ${item.id}`}
+          className="mt-1 rounded border-border disabled:opacity-40"
+        />
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {statusBadge(item.status)}
+            {signalBadge(item.signal_type)}
+            {allocationBadge(row.allocationKind, row.duplicates.length)}
+          </div>
+
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  className="space-y-1 cursor-help rounded-md border border-border/50 bg-muted/20 px-3 py-2"
+                  data-testid={`exception-identity-${item.id}`}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="font-medium">
+                      {identity.schemeLabel}
+                    </Badge>
+                    <span className="font-semibold text-sm text-foreground">
+                      Clause {identity.clauseNumber}
+                    </span>
+                    {identity.clauseTitle ? (
+                      <span className="text-sm text-foreground">{identity.clauseTitle}</span>
+                    ) : null}
+                  </div>
+                  {identity.sectionPath ? (
+                    <p className="text-xs text-muted-foreground">{identity.sectionPath}</p>
+                  ) : null}
+                  <p className="text-xs text-muted-foreground font-mono">{identity.rawClauseId}</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent
+                side="bottom"
+                align="start"
+                className="max-w-md space-y-1.5 p-3 text-left"
+                data-testid={`exception-why-tooltip-${item.id}`}
+              >
+                <p className="font-medium text-foreground">Why this mapping?</p>
+                {why.lines.map((line) => (
+                  <p key={line} className="text-xs text-muted-foreground">
+                    {line}
+                  </p>
+                ))}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          {item.title && item.title !== identity.clauseTitle ? (
+            <p className="font-medium text-foreground">{item.title}</p>
+          ) : null}
+
+          <p
+            className={cn(
+              'text-sm',
+              why.isGeneric ? 'text-warning' : 'text-muted-foreground',
+            )}
+            data-testid={`exception-why-summary-${item.id}`}
+          >
+            {why.isGeneric ? (
+              <span className="inline-flex items-start gap-1">
+                <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                {why.summary}
+              </span>
+            ) : (
+              why.summary
+            )}
+          </p>
+
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+            aria-expanded={expanded}
+            data-testid={`exception-detail-toggle-${item.id}`}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? (
+              <>
+                <ChevronUp className="w-3.5 h-3.5" /> Hide mapping detail
+              </>
+            ) : (
+              <>
+                <ChevronDown className="w-3.5 h-3.5" /> Show mapping detail
+              </>
+            )}
+          </button>
+
+          {expanded ? (
+            <div
+              className="rounded-md border border-border/60 bg-muted/10 p-3 space-y-2 text-xs text-muted-foreground"
+              data-testid={`exception-detail-panel-${item.id}`}
+            >
+              {why.lines.map((line) => (
+                <p key={`detail-${line}`}>{line}</p>
+              ))}
+              {row.duplicates.length > 0 ? (
+                <p className="text-warning">
+                  Collapsed {row.duplicates.length} duplicate proposal
+                  {row.duplicates.length === 1 ? '' : 's'} for the same allocation (
+                  {row.allocationKey}).
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            {href ? (
+              <Link to={href} className="text-primary hover:underline">
+                Open {entityLabel} #{item.entity_id}
+              </Link>
+            ) : (
+              <span>
+                {entityLabel} #{item.entity_id}
+              </span>
+            )}
+            {item.confidence != null && (
+              <span className="flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                {(item.confidence * 100).toFixed(0)}% confidence
+              </span>
+            )}
+          </div>
+
+          {actionable ? (
+            <div className="flex gap-2 pt-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={acting}
+                data-testid={`exception-confirm-${item.id}`}
+                onClick={onConfirm}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" /> Confirm
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={acting}
+                data-testid={`exception-reject-${item.id}`}
+                onClick={onReject}
+              >
+                <XCircle className="h-3.5 w-3.5" /> Reject
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground pt-1">
+              No confirm/reject — this entity is already allocated to{' '}
+              {identity.schemeLabel} clause {identity.clauseNumber}.
+            </p>
+          )}
+        </div>
+      </div>
+    </Card>
+  )
 }
 
 export default function KnowledgeExceptions() {
@@ -152,12 +388,29 @@ export default function KnowledgeExceptions() {
     void loadExceptions()
   }, [loadExceptions])
 
-  /** Server already filters status/entity/signal; inbox page still capped at 200. */
-  const visibleItems = items
+  /** Server filters status/entity/signal; stable client de-dupe by entity×scheme×clause. */
+  const dedupedRows = useMemo(() => dedupeKnowledgeExceptions(items), [items])
+  const visibleRows = dedupedRows
+  const collapsedDuplicateCount = useMemo(
+    () => dedupedRows.reduce((n, row) => n + row.duplicates.length, 0),
+    [dedupedRows],
+  )
+
+  const actionableRows = useMemo(
+    () =>
+      visibleRows.filter(
+        (row) =>
+          row.allocationKind === 'actionable' || row.allocationKind === 'duplicate_proposal',
+      ),
+    [visibleRows],
+  )
 
   const allSelected = useMemo(
-    () => visibleItems.length > 0 && selectedIds.length === visibleItems.length,
-    [visibleItems, selectedIds.length],
+    () =>
+      actionableRows.length > 0 &&
+      selectedIds.length === actionableRows.length &&
+      actionableRows.every((row) => selectedIds.includes(row.primary.id)),
+    [actionableRows, selectedIds],
   )
 
   const returnToCase = useCallback(() => {
@@ -167,7 +420,9 @@ export default function KnowledgeExceptions() {
   }, [navigate, returnTo])
 
   const toggleAll = () => {
-    setSelectedIds(allSelected ? [] : visibleItems.map((i) => i.id))
+    setSelectedIds(
+      allSelected ? [] : actionableRows.map((row) => row.primary.id),
+    )
   }
 
   const toggleOne = (id: number) => {
@@ -399,7 +654,11 @@ export default function KnowledgeExceptions() {
           </Select>
         </div>
         <p className="text-xs text-muted-foreground sm:pb-2" data-testid="exceptions-filter-honesty">
-          Showing {visibleItems.length}
+          Showing {visibleRows.length} allocation
+          {visibleRows.length === 1 ? '' : 's'}
+          {items.length !== visibleRows.length
+            ? ` (${items.length} server rows; ${collapsedDuplicateCount} duplicate proposal${collapsedDuplicateCount === 1 ? '' : 's'} collapsed)`
+            : ''}
           {statusFilter !== 'inbox' ? ` · status=${statusFilter}` : ''}
           {entityTypeFilter !== 'all' ? ` · entity=${entityTypeFilter}` : ''}
           {signalTypeFilter !== 'all' ? ` · signal=${signalTypeFilter}` : ''}
@@ -413,7 +672,7 @@ export default function KnowledgeExceptions() {
         </div>
       )}
 
-      {error ? null : visibleItems.length === 0 ? (
+      {error ? null : visibleRows.length === 0 ? (
         <EmptyState
           icon={<CheckCircle2 className="w-8 h-8 text-success" />}
           title={
@@ -434,85 +693,22 @@ export default function KnowledgeExceptions() {
               type="checkbox"
               checked={allSelected}
               onChange={toggleAll}
-              className="rounded border-border"
+              disabled={actionableRows.length === 0}
+              className="rounded border-border disabled:opacity-40"
             />
-            Select all visible
+            Select all actionable
           </label>
-          {visibleItems.map((item) => {
-            const href = exceptionEntityHref(item.entity_type, item.entity_id)
-            const entityLabel = ENTITY_LABELS[item.entity_type] ?? item.entity_type
-            return (
-              <Card
-                key={item.id}
-                className={cn('p-4', selectedIds.includes(item.id) && 'border-primary/50')}
-                data-testid={`exception-row-${item.id}`}
-              >
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(item.id)}
-                    onChange={() => toggleOne(item.id)}
-                    aria-label={`Select exception ${item.id}`}
-                    className="mt-1 rounded border-border"
-                  />
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {statusBadge(item.status)}
-                      {signalBadge(item.signal_type)}
-                      {item.scheme && <Badge variant="outline">{item.scheme}</Badge>}
-                      <span className="font-mono text-xs text-muted-foreground">{item.clause_id}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {item.entity_type}:{item.entity_id}
-                      </span>
-                    </div>
-                    {item.title && <p className="font-medium text-foreground">{item.title}</p>}
-                    {item.rationale && (
-                      <p className="text-sm text-muted-foreground">{item.rationale}</p>
-                    )}
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                      {href ? (
-                        <Link to={href} className="text-primary hover:underline">
-                          Open {entityLabel} #{item.entity_id}
-                        </Link>
-                      ) : (
-                        <span>
-                          {entityLabel} #{item.entity_id}
-                        </span>
-                      )}
-                      {item.confidence != null && (
-                        <span className="flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3" />
-                          {(item.confidence * 100).toFixed(0)}% confidence
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={acting}
-                        data-testid={`exception-confirm-${item.id}`}
-                        onClick={() => void handleConfirmOne(item.id)}
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Confirm
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        disabled={acting}
-                        data-testid={`exception-reject-${item.id}`}
-                        onClick={() => void handleRejectOne(item.id)}
-                      >
-                        <XCircle className="h-3.5 w-3.5" /> Reject
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            )
-          })}
+          {visibleRows.map((row) => (
+            <ExceptionRow
+              key={row.primary.id}
+              row={row}
+              selected={selectedIds.includes(row.primary.id)}
+              acting={acting}
+              onToggle={() => toggleOne(row.primary.id)}
+              onConfirm={() => void handleConfirmOne(row.primary.id)}
+              onReject={() => void handleRejectOne(row.primary.id)}
+            />
+          ))}
         </div>
       )}
     </div>
