@@ -128,6 +128,11 @@ async def test_upload_document_persists_blob_and_returns_status(monkeypatch: pyt
 
     upload_mock = AsyncMock(return_value="documents/2026/03/test/governance.md")
     monkeypatch.setattr(documents, "storage_service", lambda: SimpleNamespace(upload=upload_mock))
+    monkeypatch.setattr(
+        documents.ReferenceNumberService,
+        "generate",
+        AsyncMock(return_value="DOC-2026-0001"),
+    )
 
     async def fake_process(*_args, **_kwargs) -> None:
         doc = _args[1]

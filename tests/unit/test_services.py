@@ -68,6 +68,7 @@ class TestReferenceNumberParsing:
             "rta_action",
             "complaint_action",
             "capa",
+            "document",
         }
         assert set(ReferenceNumberService.PREFIXES.keys()) == expected_types
 
