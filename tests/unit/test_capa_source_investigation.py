@@ -78,7 +78,7 @@ async def test_create_capa_for_investigation_creates_linked_capa():
 
 
 @pytest.mark.asyncio
-async def test_create_capa_for_investigation_idempotent():
+async def test_create_capa_for_investigation_idempotent_without_title():
     investigation = _investigation()
     existing = CAPAAction(
         reference_number="CAPA-2026-0001",
@@ -110,6 +110,58 @@ async def test_create_capa_for_investigation_idempotent():
 
     assert capa is existing
     db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_capa_for_investigation_titled_always_creates_new():
+    """Explicit title skips idempotency so multiple CAPAs can attach to one investigation."""
+    investigation = _investigation()
+    existing = CAPAAction(
+        reference_number="CAPA-2026-0001",
+        title="Existing",
+        capa_type=CAPAType.CORRECTIVE,
+        status=CAPAStatus.OPEN,
+        priority=CAPAPriority.MEDIUM,
+        source_type=CAPASource.INVESTIGATION,
+        source_id=investigation.id,
+        created_by_id=2,
+        tenant_id=1,
+    )
+    existing.id = 99
+
+    inv_result = MagicMock()
+    inv_result.scalar_one_or_none.return_value = investigation
+
+    db = AsyncMock()
+    # No prior lookup when title is supplied — only investigation fetch.
+    db.execute = AsyncMock(side_effect=[inv_result])
+    db.add = MagicMock()
+    db.flush = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+
+    svc = CAPAService(db)
+    with (
+        patch(
+            "src.domain.services.capa_service.ReferenceNumberService.generate",
+            new=AsyncMock(return_value="CAPA-2026-0101"),
+        ),
+        patch("src.domain.services.capa_service.record_audit_event", new=AsyncMock()),
+        patch("src.domain.services.capa_service.invalidate_tenant_cache", new=AsyncMock()),
+        patch("src.domain.services.capa_service.track_metric"),
+    ):
+        capa = await svc.create_capa_for_investigation(
+            investigation.id,
+            user_id=2,
+            tenant_id=1,
+            title="Second corrective action",
+        )
+
+    assert capa is not existing
+    assert capa.title == "Second corrective action"
+    assert capa.source_type == CAPASource.INVESTIGATION
+    assert capa.source_id == investigation.id
+    db.add.assert_called_once()
 
 
 @pytest.mark.asyncio

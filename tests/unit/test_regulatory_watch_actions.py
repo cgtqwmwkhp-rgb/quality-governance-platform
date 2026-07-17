@@ -264,3 +264,11 @@ def test_unified_actions_recognises_regulatory_watch_source():
 
     assert "regulatory_watch" in CAPA_ONLY_API_SOURCE_TYPES
     assert capa_enum_from_api_filter("regulatory_watch") == CAPASource.REGULATORY_WATCH
+
+
+def test_unified_actions_recognises_investigation_capa_source():
+    """Formal investigation CAPAAction rows are included in unified Actions filters."""
+    from src.api.routes._action_unified import CAPA_ONLY_API_SOURCE_TYPES, capa_enum_from_api_filter
+
+    assert "investigation" in CAPA_ONLY_API_SOURCE_TYPES
+    assert capa_enum_from_api_filter("investigation") == CAPASource.INVESTIGATION

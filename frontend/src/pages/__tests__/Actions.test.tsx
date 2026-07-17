@@ -33,6 +33,7 @@ const mockViewCounts = vi.fn()
 const mockGetDeliveryStatus = vi.fn()
 const mockToastError = vi.fn()
 const mockCreate = vi.fn()
+const mockCreateCapa = vi.fn()
 
 const { tMock } = vi.hoisted(() => {
   const messages: Record<string, string> = {
@@ -96,8 +97,19 @@ vi.mock('../../api/client', () => ({
     viewCounts: (...args: unknown[]) => mockViewCounts(...args),
     create: (...args: unknown[]) => mockCreate(...args),
   },
+  investigationsApi: {
+    createCapa: (...args: unknown[]) => mockCreateCapa(...args),
+  },
   notificationsApi: {
     getDeliveryStatus: (...args: unknown[]) => mockGetDeliveryStatus(...args),
+  },
+  getApiErrorMessage: (error: unknown, fallback = 'An unexpected error occurred') => {
+    if (error instanceof Error && error.message) return error.message
+    if (typeof error === 'object' && error && 'message' in error) {
+      const msg = (error as { message?: unknown }).message
+      if (typeof msg === 'string' && msg) return msg
+    }
+    return fallback
   },
 }))
 
@@ -398,6 +410,9 @@ describe('Actions Running Sheet create bridge', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSummary.mockResolvedValue({ data: { total: 0, by_display_status: {} } })
+    mockViewCounts.mockResolvedValue({
+      data: { all: 0, my: 0, overdue: 0, my_overdue: 0 },
+    })
     mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: true } })
     mockList.mockResolvedValue({ data: { items: [] } })
   })
@@ -417,6 +432,60 @@ describe('Actions Running Sheet create bridge', () => {
     expect(screen.getByDisplayValue('Follow-up from INC-7')).toBeInTheDocument()
     expect(screen.getByDisplayValue('From running sheet')).toBeInTheDocument()
     expect(screen.getByDisplayValue('7')).toBeInTheDocument()
+  })
+
+  it('locks investigation parent on create deep-link and creates via investigations CAPA API', async () => {
+    mockCreateCapa.mockResolvedValue({
+      data: { id: 55, reference_number: 'CAPA-2026-0055', title: 'Install barrier' },
+    })
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          '/actions?create=1&sourceType=investigation&sourceId=7&title=Install%20barrier&description=From%20investigation&returnTo=%2Finvestigations%2F7',
+        ]}
+      >
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('actions-locked-parent')).toBeInTheDocument()
+    expect(screen.getByText('Investigation #7')).toBeInTheDocument()
+    expect(screen.queryByDisplayValue('7')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Source ID/i)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Create Action' }))
+
+    await waitFor(() => {
+      expect(mockCreateCapa).toHaveBeenCalledWith(7, {
+        title: 'Install barrier',
+        description: 'From investigation',
+        priority: 'medium',
+        due_date: undefined,
+      })
+    })
+    expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  it('surfaces API not-found detail instead of rewriting as Action not found', async () => {
+    mockCreate.mockRejectedValue(new Error('Incident not found'))
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'New Action' }))
+    await user.type(screen.getByPlaceholderText('Action title...'), 'Follow up')
+    await user.type(screen.getByPlaceholderText('Describe the action required...'), 'Details')
+    await user.type(screen.getByPlaceholderText('e.g., 42'), '42')
+    await user.click(screen.getByRole('button', { name: 'Create Action' }))
+
+    expect(await screen.findByText('Incident not found')).toBeInTheDocument()
+    expect(screen.queryByText('Action not found')).not.toBeInTheDocument()
   })
 })
 

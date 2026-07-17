@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Loader2, ListTodo } from 'lucide-react'
 import { type Action, getApiErrorMessage } from '../../api/client'
@@ -65,6 +65,10 @@ interface InvestigationActionsProps {
   onActionStatusFilterChange: (value: string) => void
   onCreateAction: (form: ActionFormData) => Promise<void>
   onUpdateActionStatus: (actionId: number, newStatus: string, completionNotes?: string) => void
+  /** Increment to open the create dialog (handoff CTA → Actions tab). */
+  openCreateToken?: number
+  /** Investigation reference shown as locked parent in the create dialog. */
+  parentLabel?: string
 }
 
 const INITIAL_FORM: ActionFormData = {
@@ -82,6 +86,8 @@ export default function InvestigationActions({
   onActionStatusFilterChange,
   onCreateAction,
   onUpdateActionStatus,
+  openCreateToken = 0,
+  parentLabel,
 }: InvestigationActionsProps) {
   const { t } = useTranslation()
 
@@ -93,6 +99,13 @@ export default function InvestigationActions({
   const [showCompletionDialog, setShowCompletionDialog] = useState(false)
   const [completionNotes, setCompletionNotes] = useState('')
   const [completionActionId, setCompletionActionId] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (openCreateToken > 0) {
+      setShowActionModal(true)
+      setActionError(null)
+    }
+  }, [openCreateToken])
 
   const handleCreateAction = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -227,9 +240,22 @@ export default function InvestigationActions({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Corrective Action</DialogTitle>
-            <DialogDescription>Create a corrective action for this investigation</DialogDescription>
+            <DialogDescription>
+              Create a CAPA linked to this investigation. The parent is set automatically.
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">
+            {parentLabel && (
+              <div
+                className="rounded-lg border border-primary/20 bg-primary/5 p-3"
+                data-testid="investigation-action-locked-parent"
+              >
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Parent investigation
+                </p>
+                <p className="mt-1 text-sm font-semibold text-foreground">{parentLabel}</p>
+              </div>
+            )}
             <div>
               <label
                 htmlFor="action-title"

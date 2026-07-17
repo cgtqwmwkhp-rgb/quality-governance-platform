@@ -341,6 +341,28 @@ export function createInvestigationsApi(api: AxiosInstance) {
       suppressErrorToast: true,
     }),
 
+  /**
+   * Create a formal CAPA linked to this investigation (parent auto-set server-side).
+   */
+  createCapa: (
+    id: number,
+    body?: {
+      title?: string
+      description?: string
+      assignee_id?: number
+      assignee_email?: string
+      due_date?: string
+      priority?: string
+    },
+  ) =>
+    api.post<{
+      id: number
+      reference_number: string
+      title: string
+      source_type?: string
+      source_id?: number
+    }>(`/api/v1/investigations/${id}/capa`, body ?? {}),
+
   // ============ Investigation Template Endpoints ============
 
   listTemplates: (options?: { page?: number; page_size?: number; is_active?: boolean }) => {
