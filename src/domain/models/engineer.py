@@ -52,12 +52,15 @@ class Engineer(Base, TimestampMixin, AuditTrailMixin):
         nullable=False,
         index=True,
     )
-    user_id: Mapped[int] = mapped_column(
+    user_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         unique=True,
         index=True,
     )
+
+    display_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    pams_technician_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
 
     employee_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
     job_title: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
