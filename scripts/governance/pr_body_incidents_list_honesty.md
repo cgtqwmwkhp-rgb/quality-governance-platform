@@ -23,7 +23,7 @@
 - [x] AC-01: Null/missing `incident_type` / `status` / `incident_date` do not throw in list render
 - [x] AC-02: Non-array `items` → empty list + honesty banner (not ErrorBoundary)
 - [x] AC-03: List API skips unserializable rows instead of 500
-- [x] AC-04: `updated_at` may be null on `IncidentResponse`
+- [x] AC-04: Null `updated_at` coerced to `created_at` (OpenAPI field stays required)
 - [x] AC-05: List query does not preload `actions`
 
 ## 5) Testing Evidence (link to runs)

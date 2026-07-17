@@ -187,4 +187,3 @@ async def test_list_incidents_skips_unserializable_rows() -> None:
     assert len(result.items) == 1
     assert result.items[0].reference_number == "INC-OK"
     assert result.total == 2
-

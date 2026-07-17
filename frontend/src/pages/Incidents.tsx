@@ -1,6 +1,7 @@
 import { useEffect, useState, useDeferredValue } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import i18n from 'i18next'
 import { Plus, AlertTriangle, Search, Loader2, MailWarning } from 'lucide-react'
 import {
   incidentsApi,
@@ -192,7 +193,7 @@ export default function Incidents() {
             !Array.isArray((response.data as { items?: unknown }).items)
           ) {
             setLoadError(
-              t(
+              i18n.t(
                 'incidents.load_shape_error',
                 'Incident list returned an unexpected shape. Showing an empty list.',
               ),

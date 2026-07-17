@@ -36,19 +36,21 @@ def test_incident_list_item_preserves_absent_risk_links_as_null() -> None:
     assert payload.model_dump()["items"][0]["linked_risk_ids"] is None
 
 
-def test_incident_response_allows_null_updated_at() -> None:
+def test_incident_response_coerces_null_updated_at_to_created_at() -> None:
     now = datetime.now(timezone.utc)
-    row = IncidentResponse(
-        id=2,
-        reference_number="INC-2026-0002",
-        title="Legacy sample",
-        description="No updated_at",
-        incident_type=IncidentType.OTHER,
-        severity=IncidentSeverity.LOW,
-        status=IncidentStatus.REPORTED,
-        incident_date=now,
-        reported_date=now,
-        created_at=now,
-        updated_at=None,
+    row = IncidentResponse.model_validate(
+        {
+            "id": 2,
+            "reference_number": "INC-2026-0002",
+            "title": "Legacy sample",
+            "description": "No updated_at",
+            "incident_type": IncidentType.OTHER,
+            "severity": IncidentSeverity.LOW,
+            "status": IncidentStatus.REPORTED,
+            "incident_date": now,
+            "reported_date": now,
+            "created_at": now,
+            "updated_at": None,
+        }
     )
-    assert row.updated_at is None
+    assert row.updated_at == now
