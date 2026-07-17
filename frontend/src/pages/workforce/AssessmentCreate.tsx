@@ -111,6 +111,31 @@ export default function AssessmentCreate() {
         </div>
       </div>
 
+      <Card className="bg-card border-border" data-testid="map-w2-competency-assist-panel">
+        <CardHeader>
+          <h2 className="text-lg font-semibold text-foreground">
+            {t('workforce.assessments.map_w2.title')}
+          </h2>
+          <p className="text-sm text-muted-foreground" data-testid="map-w2-competency-assist-honesty">
+            {t('workforce.assessments.map_w2.honesty')}
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="flex flex-wrap gap-2" data-testid="map-w2-competency-scheme-chips">
+            {['ISO', 'Planet Mark', 'UVDB'].map((scheme) => (
+              <span
+                key={scheme}
+                className="inline-flex items-center rounded-md border border-border bg-secondary px-2 py-0.5 text-xs text-muted-foreground"
+                data-testid={`map-w2-competency-scheme-${scheme.replace(/\s+/g, '-').toLowerCase()}`}
+              >
+                {scheme} · {t('workforce.assessments.map_w2.scheme_awaiting')}
+              </span>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">{t('workforce.assessments.map_w2.parity_hint')}</p>
+        </CardContent>
+      </Card>
+
       <Card className="bg-card border-border">
         <CardHeader>
           <h2 className="text-lg font-semibold text-foreground">

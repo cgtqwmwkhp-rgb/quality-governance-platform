@@ -2916,5 +2916,16 @@
   "ims.map_w1.empty_title": "No cross-standard mappings",
   "ims.map_w1.empty_desc": "Create clause mappings between standards in ISO Compliance. Planet Mark / UVDB scheme links appear here when rows exist — not as faux Complete badges.",
   "ims.map_w1.demo_status": "Not live",
-  "ims.map_w1.demo_source_hint": "static placeholder — not a live feed"
+  "ims.map_w1.demo_source_hint": "static placeholder — not a live feed",
+  "audit_builder.map_w2.title": "Standards map Assist",
+  "audit_builder.map_w2.honesty": "Inspection builder shows manual ISO clause coverage in Template Stats. Multi-scheme Assist accept chips (ISO / Planet Mark / UVDB) are not live yet — propose-only follow-on after this honesty spine.",
+  "audit_builder.map_w2.iso_coverage": "ISO clause coverage",
+  "audit_builder.map_w2.coverage_hint": "{{linked}} of {{total}} questions have a manual ISO clause (Advanced Settings). Accepted multi-scheme Assist links: 0.",
+  "audit_builder.map_w2.scheme_manual_iso": "manual clause",
+  "audit_builder.map_w2.scheme_awaiting": "Assist awaiting",
+  "audit_builder.map_w2.assist_followon": "AI Assist still generates sections. Map-to-standards accept / edit / dismiss chips land in a later slice (MAP-W3 rescore trail).",
+  "workforce.assessments.map_w2.title": "Standards map Assist parity",
+  "workforce.assessments.map_w2.honesty": "Competency assessment create reuses published audit/inspection templates. Multi-scheme Assist mapping chips are not wired on this create flow — same honesty as the Inspection builder.",
+  "workforce.assessments.map_w2.scheme_awaiting": "Assist awaiting",
+  "workforce.assessments.map_w2.parity_hint": "ISO / Planet Mark / UVDB suggest→accept chips will mirror Inspection Template Stats coverage when Assist Map mode ships."
 }

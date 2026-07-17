@@ -2777,5 +2777,16 @@
   "ims.map_w1.empty_title": "Dim mapiau traws-safon",
   "ims.map_w1.empty_desc": "Crëwch fapiau cymalau rhwng safonau yn Cydymffurfiaeth ISO. Mae dolenni cynllun Planet Mark / UVDB yn ymddangos yma pan fydd rhesi — nid fel bathodynnau Cwblhawyd ffug.",
   "ims.map_w1.demo_status": "Ddim yn fyw",
-  "ims.map_w1.demo_source_hint": "dalfan statig — nid porthiant byw"
+  "ims.map_w1.demo_source_hint": "dalfan statig — nid porthiant byw",
+  "audit_builder.map_w2.title": "Cynorthwywr map safonau",
+  "audit_builder.map_w2.honesty": "Mae adeiladwr arolygu yn dangos cwmpas cymal ISO â llaw yn Ystadegau Templed. Nid yw sglodion derbyn Cynorthwywr aml-gynllun (ISO / Planet Mark / UVDB) yn fyw eto — dilyniant cynnig yn unig ar ôl y asgwrn onest hwn.",
+  "audit_builder.map_w2.iso_coverage": "Cwmpas cymal ISO",
+  "audit_builder.map_w2.coverage_hint": "Mae gan {{linked}} o {{total}} gwestiwn gymal ISO â llaw (Gosodiadau Uwch). Dolenni Cynorthwywr aml-gynllun a dderbyniwyd: 0.",
+  "audit_builder.map_w2.scheme_manual_iso": "cymal â llaw",
+  "audit_builder.map_w2.scheme_awaiting": "Cynorthwywr yn aros",
+  "audit_builder.map_w2.assist_followon": "Mae AI Assist yn dal i greu adrannau. Bydd sglodion derbyn / golygu / dileu map-i-safonau yn cyrraedd yn nes ymlaen (llwybr ail-sgorio MAP-W3).",
+  "workforce.assessments.map_w2.title": "Parhad Cynorthwywr map safonau",
+  "workforce.assessments.map_w2.honesty": "Mae creu asesiad cymhwysedd yn ailddefnyddio templedi archwilio/arolygu cyhoeddedig. Nid yw sglodion mapio Cynorthwywr aml-gynllun wedi'u cysylltu ar y llif creu hwn — yr un onest â'r adeiladwr Arolygu.",
+  "workforce.assessments.map_w2.scheme_awaiting": "Cynorthwywr yn aros",
+  "workforce.assessments.map_w2.parity_hint": "Bydd sglodion awgrymu→derbyn ISO / Planet Mark / UVDB yn adlewyrchu cwmpas Ystadegau Templed Arolygu pan fydd modd Map Cynorthwywr yn cyrraedd."
 }

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import AITemplateGenerator from '../components/AITemplateGenerator'
 import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
+import { Badge } from '../components/ui/Badge'
 import { auditsApi, getApiErrorMessage } from '../api/client'
 import type { AuditTemplate, Section, Question, ScoringMethod } from './audit-builder/types'
 import { generateId, createNewSection, createNewQuestion } from './audit-builder/types'
@@ -32,6 +33,11 @@ import { QUESTION_TYPES } from './audit-builder/QuestionEditor'
 import SectionEditor from './audit-builder/SectionEditor'
 import TemplateHeader from './audit-builder/TemplateHeader'
 import PublishDialog from './audit-builder/PublishDialog'
+import {
+  MAP_W2_SCHEME_CHIPS,
+  computeIsoClauseCoverage,
+  schemeChipStatus,
+} from './builderMapAssistHonesty'
 
 const CATEGORIES = [
   { id: 'quality', label: 'Quality Management', icon: Award, color: 'blue' },
@@ -432,6 +438,7 @@ export default function AuditTemplateBuilder() {
   const totalWeight = allQuestions.reduce((sum, q) => sum + q.weight, 0)
   const requiredQuestions = allQuestions.filter((q) => q.required).length
   const evidenceQuestions = allQuestions.filter((q) => q.evidenceRequired).length
+  const mapCoverage = computeIsoClauseCoverage(allQuestions)
 
   return (
     <div className="min-h-screen bg-background">
@@ -495,7 +502,56 @@ export default function AuditTemplateBuilder() {
                           {template.passThreshold}%
                         </span>
                       </div>
+                      <div
+                        className="flex justify-between pt-2 border-t border-border"
+                        data-testid="map-w2-iso-coverage"
+                      >
+                        <span className="text-sm text-muted-foreground">
+                          {t('audit_builder.map_w2.iso_coverage')}
+                        </span>
+                        <span className="text-sm font-medium text-foreground">
+                          {mapCoverage.isoCoveragePercent}%
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground" data-testid="map-w2-coverage-hint">
+                        {t('audit_builder.map_w2.coverage_hint', {
+                          linked: mapCoverage.withIsoClause,
+                          total: mapCoverage.totalQuestions,
+                        })}
+                      </p>
                     </div>
+                  </div>
+
+                  <div
+                    className="bg-card/50 border border-border rounded-2xl p-4"
+                    data-testid="map-w2-assist-panel"
+                  >
+                    <h3 className="text-sm font-semibold text-foreground mb-2">
+                      {t('audit_builder.map_w2.title')}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mb-3" data-testid="map-w2-assist-honesty">
+                      {t('audit_builder.map_w2.honesty')}
+                    </p>
+                    <div className="flex flex-wrap gap-2" data-testid="map-w2-scheme-chips">
+                      {MAP_W2_SCHEME_CHIPS.map((scheme) => {
+                        const status = schemeChipStatus(scheme, mapCoverage)
+                        return (
+                          <Badge
+                            key={scheme}
+                            variant={status === 'manual_iso' ? 'success' : 'secondary'}
+                            data-testid={`map-w2-scheme-${scheme.replace(/\s+/g, '-').toLowerCase()}`}
+                          >
+                            {scheme}
+                            {status === 'manual_iso'
+                              ? ` · ${t('audit_builder.map_w2.scheme_manual_iso')}`
+                              : ` · ${t('audit_builder.map_w2.scheme_awaiting')}`}
+                          </Badge>
+                        )
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {t('audit_builder.map_w2.assist_followon')}
+                    </p>
                   </div>
 
                   <div className="bg-card/50 border border-border rounded-2xl p-4">
