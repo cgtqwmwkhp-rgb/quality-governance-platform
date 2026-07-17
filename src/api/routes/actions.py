@@ -1958,9 +1958,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             source_id = action.complaint_id
     elif src_type == "investigation":
         if storage_kind == STORAGE_CAPA:
-            capa_row = await _load_capa_by_api_source_type(
-                db, action_id, current_user.tenant_id, src_type
-            )
+            capa_row = await _load_capa_by_api_source_type(db, action_id, current_user.tenant_id, src_type)
             if capa_row is not None:
                 action = capa_row
                 source_id = capa_row.source_id or 0
@@ -1977,16 +1975,12 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             elif storage_kind is None:
                 # Formal investigation actions are CAPAAction rows. Legacy callers
                 # may not send action_key, so retain a safe no-collision fallback.
-                capa_row = await _load_capa_by_api_source_type(
-                    db, action_id, current_user.tenant_id, src_type
-                )
+                capa_row = await _load_capa_by_api_source_type(db, action_id, current_user.tenant_id, src_type)
                 if capa_row is not None:
                     action = capa_row
                     source_id = capa_row.source_id or 0
         else:
-            raise BadRequestError(
-                "action_key must identify an investigation_action or capa row"
-            )
+            raise BadRequestError("action_key must identify an investigation_action or capa row")
     else:
         capa_row = await _load_capa_by_api_source_type(db, action_id, current_user.tenant_id, src_type)
         if capa_row is not None:
