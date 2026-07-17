@@ -7,14 +7,16 @@ from __future__ import annotations
 
 import logging
 import os
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterator, Mapping, Sequence
 
-from sqlalchemy import MetaData, create_engine
+from sqlalchemy import MetaData, create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from src.core.config import settings
-from src.domain.exceptions import BadRequestError
+from src.domain.exceptions import BadRequestError, ExternalServiceError
 from src.domain.models.engineer import Engineer
 from src.domain.models.user import User
 
@@ -185,6 +187,47 @@ def resolve_tenant_id(explicit_tenant_id: int | None = None) -> int:
     return int(tenant_id)
 
 
+def apply_tenant_guc_sync(db: Session, tenant_id: int) -> None:
+    """Bind ``app.current_tenant_id`` on a sync Session (FORCE RLS on ``users``).
+
+    The HTTP sync path uses ``SessionLocal()`` outside ``get_db``'s async
+    after_begin listener, so without this bind the ``users`` query is empty
+    under FORCE RLS and any later RLS-protected writes fail closed / 500.
+    No-ops on non-PostgreSQL so unit tests keep working.
+    """
+    try:
+        bind = db.get_bind()
+        dialect_name = getattr(getattr(bind, "dialect", None), "name", None)
+        if dialect_name is not None and dialect_name != "postgresql":
+            return
+    except Exception:
+        pass
+    try:
+        db.execute(
+            text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+            {"tid": str(int(tenant_id))},
+        )
+    except Exception:
+        logger.debug(
+            "apply_tenant_guc_sync skipped (non-PostgreSQL or set_config unavailable)",
+            exc_info=True,
+        )
+
+
+@contextmanager
+def _row_savepoint(db: Session) -> Iterator[None]:
+    """Isolate a single upsert so a flush/integrity failure cannot poison the session."""
+    if hasattr(db, "begin_nested"):
+        try:
+            with db.begin_nested():
+                yield
+            return
+        except NotImplementedError:
+            # Some test doubles / dialects lack SAVEPOINT support.
+            pass
+    yield
+
+
 def _build_pams_engine():
     if not settings.pams_database_url:
         raise BadRequestError("PAMS_DATABASE_URL is not configured")
@@ -211,6 +254,14 @@ def fetch_pams_technicians() -> list[dict[str, Any]]:
         with engine.connect() as conn:
             result = conn.execute(tbl.select())
             return [dict(row._mapping) for row in result]
+    except BadRequestError:
+        raise
+    except Exception as exc:
+        logger.exception("PAMS technicians_store read failed")
+        raise ExternalServiceError(
+            "Unable to read PAMS technicians_store — check PAMS_DATABASE_URL / PAMS_SSL_CA connectivity",
+            details={"cause": type(exc).__name__},
+        ) from exc
     finally:
         engine.dispose()
 
@@ -223,15 +274,29 @@ def sync_pams_technicians(
 ) -> SyncCounts:
     """Upsert PAMS technicians into engineers for the given tenant."""
     resolved_tenant_id = resolve_tenant_id(tenant_id)
+    apply_tenant_guc_sync(db, resolved_tenant_id)
     counts = SyncCounts()
-    pams_rows = list(rows) if rows is not None else fetch_pams_technicians()
+    try:
+        pams_rows = list(rows) if rows is not None else fetch_pams_technicians()
+    except (BadRequestError, ExternalServiceError):
+        raise
+    except Exception as exc:
+        logger.exception("PAMS technician fetch failed before upsert")
+        raise ExternalServiceError(
+            "PAMS technician sync failed while fetching source rows",
+            details={"cause": type(exc).__name__},
+        ) from exc
 
     users = db.query(User).filter(User.tenant_id == resolved_tenant_id, User.is_active.is_(True)).all()
-    users_by_email = {user.email.strip().lower(): user for user in users if user.email}
+    users_by_email = {
+        email: user
+        for user in users
+        if (email := (user.email or "").strip().lower())
+    }
 
     existing_engineers = db.query(Engineer).filter(Engineer.tenant_id == resolved_tenant_id).all()
     by_pams_id = {eng.pams_technician_id: eng for eng in existing_engineers if eng.pams_technician_id is not None}
-    by_external_id = {eng.external_id: eng for eng in existing_engineers}
+    by_external_id = {eng.external_id: eng for eng in existing_engineers if eng.external_id}
     user_ids_taken = {eng.user_id for eng in existing_engineers if eng.user_id is not None}
     seen_pams_ids: set[int] = set()
 
@@ -242,48 +307,61 @@ def sync_pams_technicians(
             continue
         seen_pams_ids.add(mapped.pams_id)
 
+        created_this_row = False
+        on_create_path = False
+        linked_user_id: int | None = None
         try:
-            engineer = by_pams_id.get(mapped.pams_id) or by_external_id.get(mapped.external_id)
-            linked_user_id = resolve_user_id_for_email(
-                mapped.email,
-                tenant_id=resolved_tenant_id,
-                users_by_email=users_by_email,
-                user_ids_taken=user_ids_taken,
-            )
-
-            if engineer is None:
-                if linked_user_id is not None:
-                    user_ids_taken.add(linked_user_id)
-                engineer = Engineer(
+            with _row_savepoint(db):
+                engineer = by_pams_id.get(mapped.pams_id) or by_external_id.get(mapped.external_id)
+                linked_user_id = resolve_user_id_for_email(
+                    mapped.email,
                     tenant_id=resolved_tenant_id,
-                    user_id=linked_user_id,
-                    display_name=mapped.display_name,
-                    job_title=mapped.job_title,
-                    site=mapped.site,
-                    employee_number=mapped.employee_number,
-                    is_active=mapped.is_active,
-                    notes=mapped.notes,
-                    pams_technician_id=mapped.pams_id,
-                    external_id=mapped.external_id,
+                    users_by_email=users_by_email,
+                    user_ids_taken=user_ids_taken,
                 )
-                db.add(engineer)
-                by_pams_id[mapped.pams_id] = engineer
-                by_external_id[mapped.external_id] = engineer
-                counts.created += 1
-            else:
-                had_user = engineer.user_id is not None
-                apply_mapped_technician_to_engineer(
-                    engineer,
-                    mapped,
-                    user_id=linked_user_id,
-                    preserve_existing_user=had_user and linked_user_id is None,
-                )
-                if linked_user_id is not None and engineer.user_id == linked_user_id:
-                    user_ids_taken.add(linked_user_id)
-                counts.updated += 1
+
+                if engineer is None:
+                    on_create_path = True
+                    if linked_user_id is not None:
+                        user_ids_taken.add(linked_user_id)
+                    engineer = Engineer(
+                        tenant_id=resolved_tenant_id,
+                        user_id=linked_user_id,
+                        display_name=mapped.display_name,
+                        job_title=mapped.job_title,
+                        site=mapped.site,
+                        employee_number=mapped.employee_number,
+                        is_active=mapped.is_active,
+                        notes=mapped.notes,
+                        pams_technician_id=mapped.pams_id,
+                        external_id=mapped.external_id,
+                    )
+                    db.add(engineer)
+                    by_pams_id[mapped.pams_id] = engineer
+                    by_external_id[mapped.external_id] = engineer
+                    created_this_row = True
+                    counts.created += 1
+                else:
+                    had_user = engineer.user_id is not None
+                    apply_mapped_technician_to_engineer(
+                        engineer,
+                        mapped,
+                        user_id=linked_user_id,
+                        preserve_existing_user=had_user and linked_user_id is None,
+                    )
+                    if linked_user_id is not None and engineer.user_id == linked_user_id:
+                        user_ids_taken.add(linked_user_id)
+                    counts.updated += 1
         except Exception:
             logger.exception("Failed to upsert PAMS technician id=%s", mapped.pams_id)
             counts.errors += 1
+            if on_create_path:
+                if created_this_row:
+                    by_pams_id.pop(mapped.pams_id, None)
+                    by_external_id.pop(mapped.external_id, None)
+                    counts.created = max(0, counts.created - 1)
+                if linked_user_id is not None:
+                    user_ids_taken.discard(linked_user_id)
 
     for engineer in existing_engineers:
         if engineer.pams_technician_id is None:
@@ -294,5 +372,16 @@ def sync_pams_technicians(
             engineer.is_active = False
             counts.deactivated += 1
 
-    db.commit()
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        logger.exception("PAMS technician sync commit failed tenant_id=%s", resolved_tenant_id)
+        try:
+            db.rollback()
+        except Exception:
+            logger.debug("rollback after sync commit failure also failed", exc_info=True)
+        raise BadRequestError(
+            "PAMS technician sync could not be saved — check schema (pams_technician_id migration) and tenant_id",
+            details={"cause": type(exc).__name__, "tenant_id": resolved_tenant_id},
+        ) from exc
     return counts
