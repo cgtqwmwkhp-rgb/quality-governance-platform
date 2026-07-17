@@ -55,6 +55,37 @@ export interface RiskEntry {
   suggestion_triage_status?: string | null
 }
 
+/** Typed Excel Risk Card / profile shell (RR-P0). */
+export interface RiskProfileAssessmentHistoryItem {
+  date?: string | null
+  inherent_score?: number | null
+  residual_score?: number | null
+  status?: string | null
+}
+
+export interface RiskProfile {
+  id: number
+  reference?: string | null
+  title: string
+  description?: string | null
+  category?: string | null
+  status?: string | null
+  treatment?: string | null
+  inherent_score?: number | null
+  inherent_level?: string | null
+  residual_score?: number | null
+  residual_level?: string | null
+  risk_owner_id?: number | null
+  risk_owner_name?: string | null
+  last_review_date?: string | null
+  next_review_date?: string | null
+  updated_at?: string | null
+  created_at?: string | null
+  assessment_history?: RiskProfileAssessmentHistoryItem[]
+  linked_actions?: unknown[]
+  review_notes?: string | null
+}
+
 export interface RiskHeatmapCell {
   likelihood: number
   impact: number
@@ -176,6 +207,8 @@ export function createRiskRegisterApi(api: AxiosInstance) {
     },
     create: (data: Partial<RiskEntry>) => api.post<RiskEntry>('/api/v1/risk-register/', data),
     get: (id: number) => api.get<RiskEntry>(`/api/v1/risk-register/${id}`),
+    getProfile: (id: number) =>
+      api.get<RiskProfile>(`/api/v1/risk-register/${id}/profile`),
     update: (id: number, data: Partial<RiskEntry>) =>
       api.put<RiskEntry>(`/api/v1/risk-register/${id}`, data),
     delete: (id: number) => api.delete<void>(`/api/v1/risk-register/${id}`),

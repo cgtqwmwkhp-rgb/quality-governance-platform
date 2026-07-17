@@ -72,6 +72,7 @@ const ReportGenerator = lazy(() => import('./pages/ReportGenerator'))
 const WorkflowCenter = lazy(() => import('./pages/WorkflowCenter'))
 const ComplianceAutomation = lazy(() => import('./pages/ComplianceAutomation'))
 const RiskRegister = lazy(() => import('./pages/RiskRegister'))
+const RiskProfile = lazy(() => import('./pages/RiskProfile'))
 const IMSDashboard = lazy(() => import('./pages/IMSDashboard'))
 const AIIntelligence = lazy(() => import('./pages/AIIntelligence'))
 const UVDBAudits = lazy(() => import('./pages/UVDBAudits'))
@@ -454,6 +455,7 @@ function App() {
                 <Route path="workflows" element={<WorkflowCenter />} />
                 <Route path="compliance-automation" element={<ComplianceAutomation />} />
                 <Route path="risk-register" element={<RiskRegister />} />
+                <Route path="risk-register/:riskId" element={<RiskProfile />} />
                 <Route path="ims" element={<IMSDashboard />} />
                 <Route path="ai-intelligence" element={<AIIntelligence />} />
                 <Route

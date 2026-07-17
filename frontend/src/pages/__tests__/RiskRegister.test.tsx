@@ -1,15 +1,32 @@
 import type { ReactElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import RiskRegister from '../RiskRegister'
 import { toast } from '../../contexts/ToastContext'
 import { TooltipProvider } from '../../components/ui/Tooltip'
 
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-probe">{location.pathname}</div>
+}
+
 function renderRegister(ui: ReactElement = <RiskRegister />) {
   return render(
     <MemoryRouter>
-      <TooltipProvider>{ui}</TooltipProvider>
+      <TooltipProvider>
+        <Routes>
+          <Route
+            path="*"
+            element={
+              <>
+                {ui}
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </TooltipProvider>
     </MemoryRouter>,
   )
 }
@@ -212,6 +229,17 @@ describe('RiskRegister linked audit references', () => {
       'href',
       '/actions?sourceType=risk&sourceId=88',
     )
+  })
+
+  it('Open navigates to the risk profile route', async () => {
+    renderRegister()
+
+    const openBtn = await screen.findByTestId('risk-open-88')
+    fireEvent.click(openBtn)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location-probe')).toHaveTextContent('/risk-register/88')
+    })
   })
 
   it('reads nested by_level and overdue_review from summary API (no faux zeros)', async () => {

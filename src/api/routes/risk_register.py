@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.api.schemas.risk_register import AssessmentHistoryItem, RiskProfileResponse
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.risk_register import (
     BowTieElement,
@@ -30,6 +31,13 @@ from src.domain.models.risk_register import (
 from src.domain.models.user import User
 from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+
+
+def _optional_risk_level(score: Optional[int]) -> Optional[str]:
+    if score is None:
+        return None
+    return RiskScoringEngine.get_risk_level(score)
+
 
 router = APIRouter()
 
@@ -789,6 +797,67 @@ async def resolve_suggestion_triage(
         "suggestion_triage_status": risk.suggestion_triage_status,
         "status": risk.status,
     }
+
+
+@router.get("/{risk_id}/profile", response_model=RiskProfileResponse)
+async def get_risk_profile(
+    current_user: CurrentUser,
+    risk_id: int,
+    db: DbSession,
+    history_limit: Annotated[int, Query(ge=1, le=50)] = 10,
+) -> RiskProfileResponse:
+    """Typed risk profile (Excel Risk Card shell) — tenant fail-closed."""
+    result = await db.execute(
+        select(EnterpriseRisk).where(
+            EnterpriseRisk.id == risk_id,
+            EnterpriseRisk.tenant_id == current_user.tenant_id,
+        )
+    )
+    risk = result.scalar_one_or_none()
+    if not risk:
+        raise NotFoundError("EnterpriseRisk not found")
+
+    history_result = await db.execute(
+        select(RiskAssessmentHistory)
+        .where(
+            RiskAssessmentHistory.risk_id == risk_id,
+            RiskAssessmentHistory.tenant_id == current_user.tenant_id,
+        )
+        .order_by(RiskAssessmentHistory.assessment_date.desc())
+        .limit(history_limit)
+    )
+    history = history_result.scalars().all()
+
+    return RiskProfileResponse(
+        id=risk.id,
+        reference=risk.reference,
+        title=risk.title,
+        description=risk.description,
+        category=risk.category,
+        status=risk.status,
+        treatment=risk.treatment_strategy,
+        inherent_score=risk.inherent_score,
+        inherent_level=_optional_risk_level(risk.inherent_score),
+        residual_score=risk.residual_score,
+        residual_level=_optional_risk_level(risk.residual_score),
+        risk_owner_id=risk.risk_owner_id,
+        risk_owner_name=risk.risk_owner_name,
+        last_review_date=(risk.last_review_date.isoformat() if risk.last_review_date else None),
+        next_review_date=(risk.next_review_date.isoformat() if risk.next_review_date else None),
+        updated_at=(risk.updated_at.isoformat() if risk.updated_at else None),
+        created_at=(risk.created_at.isoformat() if risk.created_at else None),
+        assessment_history=[
+            AssessmentHistoryItem(
+                date=h.assessment_date.isoformat() if h.assessment_date else None,
+                inherent_score=h.inherent_score,
+                residual_score=h.residual_score,
+                status=h.status,
+            )
+            for h in history
+        ],
+        linked_actions=list(risk.linked_actions or []),
+        review_notes=risk.review_notes,
+    )
 
 
 @router.get("/{risk_id}", response_model=dict)
