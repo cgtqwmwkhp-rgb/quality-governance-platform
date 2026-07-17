@@ -55,6 +55,7 @@ import {
   countPendingChangesInbox,
   countUnreviewedRegulatoryUpdates,
   formatStandardCode,
+  hasLiveComplianceScore,
   isOpenWatchImpact,
   mapRunsToMonitoringRows,
   MONITORING_AUDITS_HANDOFF_PATH,
@@ -128,6 +129,7 @@ export default function ComplianceAutomation() {
     [],
   )
   const [scoreGaps, setScoreGaps] = useState<string[]>([])
+  const [scoreCategories, setScoreCategories] = useState<Record<string, number>>({})
   const [watchImpacts, setWatchImpacts] = useState<RegulatoryImpact[]>([])
   const [runningWatch, setRunningWatch] = useState(false)
   const [actionBusyId, setActionBusyId] = useState<number | null>(null)
@@ -194,6 +196,7 @@ export default function ComplianceAutomation() {
           score,
         })),
       )
+      setScoreCategories(scoreData.categories ?? {})
       setScoreGaps(scoreData.key_gaps ?? [])
     } catch (err) {
       setError(getApiErrorMessage(err))
@@ -203,6 +206,7 @@ export default function ComplianceAutomation() {
       setAuditRuns([])
       setComplianceScore({ overall: 0, previous: 0, change: 0 })
       setScoreBreakdown([])
+      setScoreCategories({})
       setScoreGaps([])
     } finally {
       setLoading(false)
@@ -305,6 +309,7 @@ export default function ComplianceAutomation() {
   }, [activeTab])
 
   const pendingChangesCount = countPendingChangesInbox(updates, watchImpacts)
+  const scoreIsLive = hasLiveComplianceScore(complianceScore.overall, scoreCategories)
 
   const tabs = [
     {
@@ -365,23 +370,36 @@ export default function ComplianceAutomation() {
 
       {/* Score Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-1 bg-gradient-to-br from-primary to-primary-hover rounded-xl p-6 text-primary-foreground">
+        <div
+          className="lg:col-span-1 bg-gradient-to-br from-primary to-primary-hover rounded-xl p-6 text-primary-foreground"
+          data-testid="monitoring-score-overview"
+        >
           <div className="flex items-center justify-between mb-4">
             <Shield className="w-8 h-8 opacity-80" />
-            <span
-              className={`flex items-center gap-1 text-sm ${complianceScore.change >= 0 ? 'text-primary-foreground/80' : 'text-destructive'}`}
-            >
-              {complianceScore.change >= 0 ? (
-                <TrendingUp className="w-4 h-4" />
-              ) : (
-                <TrendingDown className="w-4 h-4" />
-              )}
-              {complianceScore.change >= 0 ? '+' : ''}
-              {complianceScore.change}%
-            </span>
+            {scoreIsLive ? (
+              <span
+                className={`flex items-center gap-1 text-sm ${complianceScore.change >= 0 ? 'text-primary-foreground/80' : 'text-destructive'}`}
+              >
+                {complianceScore.change >= 0 ? (
+                  <TrendingUp className="w-4 h-4" />
+                ) : (
+                  <TrendingDown className="w-4 h-4" />
+                )}
+                {complianceScore.change >= 0 ? '+' : ''}
+                {complianceScore.change}%
+              </span>
+            ) : (
+              <span className="text-sm text-primary-foreground/70" data-testid="monitoring-score-overview-empty">
+                {t('compliance.automation.empty.score.overview', 'No live score yet')}
+              </span>
+            )}
           </div>
-          <div className="text-4xl font-bold mb-1">{complianceScore.overall}%</div>
-          <div className="text-primary-foreground/80 text-sm">Overall Compliance Score</div>
+          <div className="text-4xl font-bold mb-1">
+            {scoreIsLive ? `${complianceScore.overall}%` : '—'}
+          </div>
+          <div className="text-primary-foreground/80 text-sm">
+            {t('compliance.automation.overall_score', 'Overall Compliance Score')}
+          </div>
         </div>
 
         <div className="bg-card/50 border border-border rounded-xl p-4">

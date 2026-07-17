@@ -8,6 +8,7 @@ import {
   countUnreviewedRegulatoryUpdates,
   deriveMonitoringAuditRunStatus,
   formatStandardCode,
+  hasLiveComplianceScore,
   isOpenWatchImpact,
   mapRunsToMonitoringRows,
   MONITORING_AUDITS_HANDOFF_PATH,
@@ -52,6 +53,17 @@ describe('complianceAutomationHelpers', () => {
     it('returns primary for low scores', () => {
       expect(scoreBarColor(59)).toBe('bg-primary')
       expect(scoreBarColor(0)).toBe('bg-primary')
+    })
+  })
+
+  describe('hasLiveComplianceScore', () => {
+    it('is false for empty categories and zero overall', () => {
+      expect(hasLiveComplianceScore(0, {})).toBe(false)
+    })
+
+    it('is true when categories exist or overall is non-zero', () => {
+      expect(hasLiveComplianceScore(0, { ISO9001: 72 })).toBe(true)
+      expect(hasLiveComplianceScore(55, {})).toBe(true)
     })
   })
 
