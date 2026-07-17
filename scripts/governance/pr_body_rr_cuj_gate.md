@@ -37,15 +37,15 @@
 - [ ] Staging UAT — checklist in evidence pack (operator)
 
 ## 6) Critical Journeys Verified (CUJ)
-- [x] CUJ-1: Register → profile, no detail popup (#1102)
-- [x] CUJ-2: Assess → history + trend + activity
-- [x] CUJ-3: Add note → notes timeline
-- [x] CUJ-4: Create CAPA with `returnTo` (#1101)
-- [x] CUJ-5: Upstream links panel
-- [x] CUJ-6: Calendar `next_review` → profile (#1091)
-- [x] CUJ-7: Owner User picker (#1101)
-- [x] CUJ-8: Close / status honesty
-- [x] CUJ-9: Excel Register dry-run/commit (#1093); Action Plan→CAPA deferred
+- [x] CUJ-01: Register → profile, no detail popup (#1102)
+- [x] CUJ-02: Assess → history + trend + activity
+- [x] CUJ-03: Add note → notes timeline
+- [x] CUJ-04: Create CAPA with `returnTo` (#1101)
+- [x] CUJ-05: Upstream links panel
+- [x] CUJ-06: Calendar `next_review` → profile (#1091)
+- [x] CUJ-07: Owner User picker (#1101)
+- [x] CUJ-08: Close / status honesty
+- [x] CUJ-09: Excel Register dry-run/commit (#1093); Action Plan→CAPA deferred
 
 ## 7) Observability & Ops
 - N/A — gate documentation; no runtime change
@@ -78,3 +78,14 @@
 - [x] Local Vitest risk suites (37)
 - [x] Local pytest risk/calendar suites (83)
 - [ ] Optional: operator staging UAT checklist in evidence pack
+
+
+---
+
+# Gate Checklist (must be complete before merge)
+- [x] **Gate 0:** Scope lock + AC defined + Change Ledger complete
+- [x] **Gate 1:** Nine CUJs evaluated with evidence on tip 2077f30e
+- [x] **Gate 2:** Targeted Vitest (37) + pytest (83) green locally
+- [ ] **Gate 3:** Staging UAT checklist (operator — see evidence pack)
+- [x] **Gate 4:** Rollback plan verified (revert docs)
+- [x] **Gate 5:** Evidence pack linked / LIVE honesty noted
