@@ -30,6 +30,7 @@ import {
   Building,
   ExternalLink,
   Eye,
+  Inbox,
   Play,
   RefreshCw,
   AlertCircle,
@@ -51,7 +52,10 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { toast } from '../contexts/ToastContext'
 import {
   countOverdueMonitoringRuns,
+  countPendingChangesInbox,
+  countUnreviewedRegulatoryUpdates,
   formatStandardCode,
+  isOpenWatchImpact,
   mapRunsToMonitoringRows,
   MONITORING_AUDITS_HANDOFF_PATH,
   scoreBarColor,
@@ -108,8 +112,8 @@ const HSE_RIDDOR_GUIDE_URL = 'https://www.hse.gov.uk/riddor/reporting/how-to-mak
 export default function ComplianceAutomation() {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<
-    'regulatory' | 'certificates' | 'audits' | 'scoring' | 'riddor' | 'watch'
-  >('regulatory')
+    'changes' | 'certificates' | 'audits' | 'scoring' | 'riddor'
+  >('changes')
   const [updates, setUpdates] = useState<RegulatoryUpdate[]>([])
   const [certificates, setCertificates] = useState<Certificate[]>([])
   const [auditRuns, setAuditRuns] = useState<MonitoringAuditRunRow[]>([])
@@ -140,15 +144,18 @@ export default function ComplianceAutomation() {
     try {
       setLoading(true)
       setError(null)
-      const [updatesRes, certificatesRes, auditRunsRes, scoreRes, trendRes] = await Promise.all([
+      const [updatesRes, certificatesRes, auditRunsRes, scoreRes, trendRes, impactsRes] =
+        await Promise.all([
         complianceAutomationApi.listRegulatoryUpdates(),
         complianceAutomationApi.listCertificates(),
         auditsApi.listRuns(1, 100),
         complianceAutomationApi.getComplianceScore({ scope_type: 'organization' }),
         complianceAutomationApi.getComplianceTrend({ scope_type: 'organization', months: 12 }),
+        knowledgeBankApi.listImpacts(),
       ])
 
       setUpdates((updatesRes.data.updates as RegulatoryUpdate[]) || [])
+      setWatchImpacts(impactsRes.data)
 
       const now = new Date()
       const certs = ((certificatesRes.data.certificates as Certificate[]) || []).map((certificate) => {
@@ -191,6 +198,7 @@ export default function ComplianceAutomation() {
     } catch (err) {
       setError(getApiErrorMessage(err))
       setUpdates([])
+      setWatchImpacts([])
       setCertificates([])
       setAuditRuns([])
       setComplianceScore({ overall: 0, previous: 0, change: 0 })
@@ -198,6 +206,24 @@ export default function ComplianceAutomation() {
       setScoreGaps([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadChangesInbox = async () => {
+    try {
+      setWatchError(null)
+      const [updatesRes, impactsRes] = await Promise.all([
+        complianceAutomationApi.listRegulatoryUpdates(),
+        knowledgeBankApi.listImpacts(),
+      ])
+      setUpdates((updatesRes.data.updates as RegulatoryUpdate[]) || [])
+      setWatchImpacts(impactsRes.data)
+    } catch (err) {
+      const message = getApiErrorMessage(err)
+      setWatchError(message)
+      toast.error(message)
+      setUpdates([])
+      setWatchImpacts([])
     }
   }
 
@@ -273,20 +299,19 @@ export default function ComplianceAutomation() {
   }
 
   useEffect(() => {
-    if (activeTab === 'watch') {
-      void loadWatchImpacts()
-    }
     if (activeTab === 'riddor') {
       void loadRiddorSubmissions()
     }
   }, [activeTab])
 
+  const pendingChangesCount = countPendingChangesInbox(updates, watchImpacts)
+
   const tabs = [
     {
-      id: 'regulatory',
-      label: 'Regulatory Updates',
-      icon: Bell,
-      count: updates.filter((u) => !u.is_reviewed).length,
+      id: 'changes',
+      label: t('compliance.automation.changes', 'Changes'),
+      icon: Inbox,
+      count: pendingChangesCount,
     },
     {
       id: 'certificates',
@@ -302,7 +327,6 @@ export default function ComplianceAutomation() {
     },
     { id: 'scoring', label: 'Compliance Score', icon: BarChart3 },
     { id: 'riddor', label: 'RIDDOR', icon: FileText },
-    { id: 'watch', label: 'Watch', icon: Eye, count: watchImpacts.length },
   ]
 
   if (loading) {
@@ -365,12 +389,14 @@ export default function ComplianceAutomation() {
             <div className="p-2 rounded-lg bg-destructive/20">
               <AlertTriangle className="w-5 h-5 text-destructive" />
             </div>
-            <span className="text-muted-foreground text-sm">Regulatory Updates</span>
+            <span className="text-muted-foreground text-sm">
+              {t('compliance.automation.changes', 'Changes')}
+            </span>
           </div>
-          <div className="text-2xl font-bold text-foreground">
-            {updates.filter((u) => !u.is_reviewed).length}
+          <div className="text-2xl font-bold text-foreground">{pendingChangesCount}</div>
+          <div className="text-sm text-muted-foreground">
+            {t('compliance.automation.pending_review', 'Pending review')}
           </div>
-          <div className="text-sm text-muted-foreground">Pending review</div>
         </div>
 
         <div className="bg-card/50 border border-border rounded-xl p-4">
@@ -429,79 +455,279 @@ export default function ComplianceAutomation() {
         ))}
       </div>
 
-      {/* Regulatory Updates Tab */}
-      {activeTab === 'regulatory' && (
-        <div className="space-y-4" data-testid="monitoring-regulatory-tab">
-          {updates.length === 0 ? (
-            <div data-testid="monitoring-regulatory-empty">
+      {/* Changes inbox — regulatory feed + watch impacts (CA-W1d) */}
+      {activeTab === 'changes' && (
+        <div className="space-y-4" data-testid="monitoring-changes-tab">
+          <div className="bg-card/50 border border-border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h3 className="font-medium text-foreground">
+                {t('compliance.automation.changes', 'Changes')}
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {t(
+                  'compliance.automation.changes.description',
+                  'Regulatory feed items and watch-matched impacts in one inbox. Feed rows are ingested updates; impacts come from Run watch and can become real Actions with owner and due date.',
+                )}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                onClick={() => void loadChangesInbox()}
+                disabled={runningWatch}
+                data-testid="monitoring-changes-refresh"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                {t('compliance.automation.changes.refresh', 'Refresh inbox')}
+              </Button>
+              <Button
+                onClick={() => void handleRunWatch()}
+                disabled={runningWatch}
+                data-testid="monitoring-changes-run-watch"
+              >
+                {runningWatch ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Play className="w-4 h-4 mr-2" />
+                )}
+                {t('compliance.automation.changes.run_watch', 'Run watch')}
+              </Button>
+            </div>
+          </div>
+
+          {watchError ? (
+            <div
+              className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              role="alert"
+              data-testid="monitoring-changes-error"
+            >
+              {watchError}
+            </div>
+          ) : null}
+
+          {updates.length === 0 && watchImpacts.length === 0 ? (
+            <div data-testid="monitoring-changes-empty">
               <EmptyState
-                icon={<Bell className="w-8 h-8 text-muted-foreground" />}
-                title={t('compliance.automation.empty.regulatory.title', 'No regulatory updates yet')}
+                icon={<Inbox className="w-8 h-8 text-muted-foreground" />}
+                title={t(
+                  'compliance.automation.empty.changes.title',
+                  'No changes in the inbox yet',
+                )}
                 description={t(
-                  'compliance.automation.empty.regulatory.description',
-                  'Regulatory feed items appear here when ingested. Empty means no pending updates — not fabricated alerts.',
+                  'compliance.automation.empty.changes.description',
+                  'Feed items appear when ingested; matched impacts appear after Run watch. Empty means nothing pending — not fabricated alerts.',
                 )}
               />
             </div>
           ) : null}
-          {updates.map((update) => (
-            <div
-              key={update.id}
-              className={cn(
-                'bg-card/50 border rounded-xl p-5 transition-colors',
-                update.is_reviewed ? 'border-border' : 'border-warning/30',
-              )}
-            >
-              <div className="flex items-start justify-between gap-4 mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-medium border ${impactColors[update.impact]}`}
-                    >
-                      {update.impact.toUpperCase()}
-                    </span>
-                    <span className="px-2 py-1 bg-muted rounded text-xs text-muted-foreground">
-                      {update.source.toUpperCase()}
-                    </span>
-                    <span className="text-muted-foreground text-xs">{update.source_reference}</span>
-                    {!update.is_reviewed && (
-                      <span className="px-2 py-1 bg-warning/20 text-warning rounded text-xs">
-                        NEW
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="font-medium text-foreground mb-1">{update.title}</h3>
-                  <p className="text-sm text-muted-foreground">{update.summary}</p>
-                </div>
-              </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4 text-sm">
-                  <span className="text-muted-foreground">
-                    Published: {new Date(update.published_date).toLocaleDateString()}
-                  </span>
-                  <span className="text-muted-foreground">
-                    Effective: {new Date(update.effective_date).toLocaleDateString()}
-                  </span>
-                  <span className="text-muted-foreground">
-                    Affects: {update.affected_standards.join(', ')}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button className="flex items-center gap-2 px-3 py-1.5 bg-info/20 hover:bg-info text-info hover:text-info-foreground rounded-lg text-sm transition-colors">
-                    <Zap className="w-4 h-4" />
-                    Run Gap Analysis
-                  </button>
-                  {!update.is_reviewed && (
-                    <button className="flex items-center gap-2 px-3 py-1.5 bg-success hover:bg-success/90 text-success-foreground rounded-lg text-sm transition-colors">
-                      <CheckCircle className="w-4 h-4" />
-                      Mark Reviewed
-                    </button>
-                  )}
-                </div>
-              </div>
+          <div
+            className="bg-card/50 border border-border rounded-xl overflow-hidden"
+            data-testid="monitoring-changes-feed"
+          >
+            <div className="p-4 border-b border-border flex items-center justify-between gap-3">
+              <h4 className="font-medium text-foreground">
+                {t('compliance.automation.changes.feed_section', 'Regulatory feed')}
+              </h4>
+              <span className="text-xs text-muted-foreground">
+                {countUnreviewedRegulatoryUpdates(updates)} pending review
+              </span>
             </div>
-          ))}
+            {updates.length === 0 ? (
+              <div className="p-6" data-testid="monitoring-changes-feed-empty">
+                <EmptyState
+                  icon={<Bell className="w-6 h-6 text-muted-foreground" />}
+                  title={t(
+                    'compliance.automation.empty.changes.feed.title',
+                    'No feed items yet',
+                  )}
+                  description={t(
+                    'compliance.automation.empty.changes.feed.description',
+                    'Ingested regulatory feed items appear here. Empty means no feed rows yet — not sample headlines.',
+                  )}
+                />
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {updates.map((update) => (
+                  <div
+                    key={update.id}
+                    className={cn(
+                      'p-5 transition-colors',
+                      update.is_reviewed ? 'bg-transparent' : 'bg-warning/5',
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-4 mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2 flex-wrap">
+                          <span
+                            className={`px-2 py-1 rounded text-xs font-medium border ${impactColors[update.impact]}`}
+                          >
+                            {update.impact.toUpperCase()}
+                          </span>
+                          <span className="px-2 py-1 bg-muted rounded text-xs text-muted-foreground">
+                            {update.source.toUpperCase()}
+                          </span>
+                          <span className="text-muted-foreground text-xs">
+                            {update.source_reference}
+                          </span>
+                          {!update.is_reviewed && (
+                            <span className="px-2 py-1 bg-warning/20 text-warning rounded text-xs">
+                              NEW
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-medium text-foreground mb-1">{update.title}</h3>
+                        <p className="text-sm text-muted-foreground">{update.summary}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <div className="flex items-center gap-4 text-sm flex-wrap">
+                        <span className="text-muted-foreground">
+                          Published: {new Date(update.published_date).toLocaleDateString()}
+                        </span>
+                        <span className="text-muted-foreground">
+                          Effective: {new Date(update.effective_date).toLocaleDateString()}
+                        </span>
+                        <span className="text-muted-foreground">
+                          Affects: {update.affected_standards.join(', ')}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button className="flex items-center gap-2 px-3 py-1.5 bg-info/20 hover:bg-info text-info hover:text-info-foreground rounded-lg text-sm transition-colors">
+                          <Zap className="w-4 h-4" />
+                          {t('compliance.automation.run_gap_analysis', 'Run Gap Analysis')}
+                        </button>
+                        {!update.is_reviewed && (
+                          <button className="flex items-center gap-2 px-3 py-1.5 bg-success hover:bg-success/90 text-success-foreground rounded-lg text-sm transition-colors">
+                            <CheckCircle className="w-4 h-4" />
+                            {t('compliance.automation.mark_reviewed', 'Mark Reviewed')}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div
+            className="bg-card/50 border border-border rounded-xl overflow-hidden"
+            data-testid="monitoring-changes-impacts"
+          >
+            <div className="p-4 border-b border-border flex items-center justify-between gap-3">
+              <h4 className="font-medium text-foreground">
+                {t('compliance.automation.changes.impacts_section', 'Matched impacts')}
+              </h4>
+              <span className="text-xs text-muted-foreground">
+                {watchImpacts.filter(isOpenWatchImpact).length} open
+              </span>
+            </div>
+            {watchImpacts.length === 0 ? (
+              <div className="p-6" data-testid="monitoring-changes-impacts-empty">
+                <EmptyState
+                  icon={<Eye className="w-6 h-6 text-muted-foreground" />}
+                  title={t(
+                    'compliance.automation.empty.changes.impacts.title',
+                    'No matched impacts yet',
+                  )}
+                  description={t(
+                    'compliance.automation.empty.changes.impacts.description',
+                    'Run watch to poll curated UK feeds and match impacts to your knowledge base. Create Action turns an open impact into a real CAPA.',
+                  )}
+                />
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {watchImpacts.map((impact) => {
+                  const busy = actionBusyId === impact.id
+                  const open = isOpenWatchImpact(impact)
+                  return (
+                    <div
+                      key={impact.id}
+                      className="p-4 hover:bg-accent/50 transition-colors"
+                      data-testid={`monitoring-changes-impact-${impact.id}`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-foreground">Update {impact.update_id}</p>
+                          {impact.rationale && (
+                            <p className="text-sm text-muted-foreground mt-1">{impact.rationale}</p>
+                          )}
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
+                            {impact.document_id && (
+                              <Link
+                                to={`/documents/${impact.document_id}`}
+                                className="text-primary hover:underline"
+                              >
+                                Document #{impact.document_id}
+                              </Link>
+                            )}
+                            {impact.due_date && (
+                              <span>Due {new Date(impact.due_date).toLocaleDateString()}</span>
+                            )}
+                            {impact.owner_id && <span>Owner #{impact.owner_id}</span>}
+                            {impact.action_key && (
+                              <Link
+                                to={buildActionDetailPath(impact.action_key)}
+                                className="text-primary hover:underline"
+                                data-testid={`monitoring-changes-impact-action-${impact.id}`}
+                              >
+                                {impact.action_reference ?? impact.action_key}
+                              </Link>
+                            )}
+                          </div>
+                          {open && (
+                            <div className="flex flex-wrap gap-2 mt-3">
+                              {!impact.action_id && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => void handleCreateWatchAction(impact.id)}
+                                  disabled={busy}
+                                  data-testid={`monitoring-changes-create-action-${impact.id}`}
+                                >
+                                  {busy ? (
+                                    <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                  ) : (
+                                    <Zap className="w-3.5 h-3.5 mr-1.5" />
+                                  )}
+                                  {t(
+                                    'compliance.automation.changes.create_action',
+                                    'Create Action',
+                                  )}
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void handleResolveWatchImpact(impact.id, false)}
+                                disabled={busy}
+                              >
+                                {t('compliance.automation.changes.resolve', 'Resolve')}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => void handleResolveWatchImpact(impact.id, true)}
+                                disabled={busy}
+                              >
+                                {t('compliance.automation.changes.dismiss', 'Dismiss')}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-muted text-muted-foreground whitespace-nowrap">
+                          {impact.status}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -826,138 +1052,6 @@ export default function ComplianceAutomation() {
             ) : (
               <div className="p-4 text-sm text-muted-foreground">
                 {riddorSubmissions.length} submission(s) recorded.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Regulatory Watch Tab */}
-      {activeTab === 'watch' && (
-        <div className="space-y-4">
-          <div className="bg-card/50 border border-border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h3 className="font-medium text-foreground">Regulatory Watch</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Poll curated UK feeds, match impacts to your knowledge base, create Actions with
-                owner and due date, then resolve closed-loop.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => void loadWatchImpacts()} disabled={runningWatch}>
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Refresh
-              </Button>
-              <Button onClick={() => void handleRunWatch()} disabled={runningWatch}>
-                {runningWatch ? (
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Play className="w-4 h-4 mr-2" />
-                )}
-                Run watch
-              </Button>
-            </div>
-          </div>
-
-          {watchError ? (
-            <div
-              className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-              role="alert"
-            >
-              {watchError}
-            </div>
-          ) : null}
-
-          <div className="bg-card/50 border border-border rounded-xl overflow-hidden">
-            <div className="p-4 border-b border-border">
-              <h3 className="font-medium text-foreground">Impacts ({watchImpacts.length})</h3>
-            </div>
-            {watchImpacts.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground text-sm space-y-2">
-                <p>No open impacts yet.</p>
-                <p>
-                  Click <strong>Run watch</strong> to poll feeds and create matched impacts. Create
-                  Action turns an impact into a real CAPA with owner and due date.
-                </p>
-              </div>
-            ) : (
-              <div className="divide-y divide-border">
-                {watchImpacts.map((impact) => {
-                  const busy = actionBusyId === impact.id
-                  const open =
-                    impact.status !== 'resolved' && impact.status !== 'dismissed'
-                  return (
-                    <div key={impact.id} className="p-4 hover:bg-accent/50 transition-colors">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-foreground">Update {impact.update_id}</p>
-                          {impact.rationale && (
-                            <p className="text-sm text-muted-foreground mt-1">{impact.rationale}</p>
-                          )}
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
-                            {impact.document_id && (
-                              <Link
-                                to={`/documents/${impact.document_id}`}
-                                className="text-primary hover:underline"
-                              >
-                                Document #{impact.document_id}
-                              </Link>
-                            )}
-                            {impact.due_date && (
-                              <span>Due {new Date(impact.due_date).toLocaleDateString()}</span>
-                            )}
-                            {impact.owner_id && <span>Owner #{impact.owner_id}</span>}
-                            {impact.action_key && (
-                              <Link
-                                to={buildActionDetailPath(impact.action_key)}
-                                className="text-primary hover:underline"
-                              >
-                                {impact.action_reference ?? impact.action_key}
-                              </Link>
-                            )}
-                          </div>
-                          {open && (
-                            <div className="flex flex-wrap gap-2 mt-3">
-                              {!impact.action_id && (
-                                <Button
-                                  size="sm"
-                                  onClick={() => void handleCreateWatchAction(impact.id)}
-                                  disabled={busy}
-                                >
-                                  {busy ? (
-                                    <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                                  ) : (
-                                    <Zap className="w-3.5 h-3.5 mr-1.5" />
-                                  )}
-                                  Create Action
-                                </Button>
-                              )}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void handleResolveWatchImpact(impact.id, false)}
-                                disabled={busy}
-                              >
-                                Resolve
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => void handleResolveWatchImpact(impact.id, true)}
-                                disabled={busy}
-                              >
-                                Dismiss
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                        <span className="px-2 py-1 rounded text-xs font-medium bg-muted text-muted-foreground whitespace-nowrap">
-                          {impact.status}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })}
               </div>
             )}
           </div>

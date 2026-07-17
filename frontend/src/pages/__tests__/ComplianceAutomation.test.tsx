@@ -11,14 +11,32 @@ const mockGetComplianceScore = vi.fn()
 const mockGetComplianceTrend = vi.fn()
 const mockListImpacts = vi.fn()
 const mockListRiddorSubmissions = vi.fn()
+const mockCreateImpactAction = vi.fn()
+const mockRunRegulatoryWatch = vi.fn()
 
 const translations: Record<string, string> = {
   'compliance.automation.title': 'Monitoring',
   'compliance.automation.subtitle':
     'Regulatory watch, certificate expiry, compliance scoring, and RIDDOR readiness',
-  'compliance.automation.empty.regulatory.title': 'No regulatory updates yet',
-  'compliance.automation.empty.regulatory.description':
-    'Regulatory feed items appear here when ingested. Empty means no pending updates — not fabricated alerts.',
+  'compliance.automation.changes': 'Changes',
+  'compliance.automation.changes.description':
+    'Regulatory feed items and watch-matched impacts in one inbox. Feed rows are ingested updates; impacts come from Run watch and can become real Actions with owner and due date.',
+  'compliance.automation.changes.refresh': 'Refresh inbox',
+  'compliance.automation.changes.run_watch': 'Run watch',
+  'compliance.automation.changes.feed_section': 'Regulatory feed',
+  'compliance.automation.changes.impacts_section': 'Matched impacts',
+  'compliance.automation.changes.create_action': 'Create Action',
+  'compliance.automation.changes.resolve': 'Resolve',
+  'compliance.automation.changes.dismiss': 'Dismiss',
+  'compliance.automation.empty.changes.title': 'No changes in the inbox yet',
+  'compliance.automation.empty.changes.description':
+    'Feed items appear when ingested; matched impacts appear after Run watch. Empty means nothing pending — not fabricated alerts.',
+  'compliance.automation.empty.changes.feed.title': 'No feed items yet',
+  'compliance.automation.empty.changes.feed.description':
+    'Ingested regulatory feed items appear here. Empty means no feed rows yet — not sample headlines.',
+  'compliance.automation.empty.changes.impacts.title': 'No matched impacts yet',
+  'compliance.automation.empty.changes.impacts.description':
+    'Run watch to poll curated UK feeds and match impacts to your knowledge base. Create Action turns an open impact into a real CAPA.',
   'compliance.automation.empty.certificates.title': 'No certificates tracked yet',
   'compliance.automation.empty.certificates.description':
     'Track training, equipment, and site certificates here once added. Empty means none on record — not sample data.',
@@ -45,6 +63,9 @@ const translations: Record<string, string> = {
   'compliance.automation.add_certificate': 'Add Certificate',
   'compliance.automation.score_breakdown': 'Score Breakdown by Standard',
   'compliance.automation.key_gaps': 'Key Gaps',
+  'compliance.automation.pending_review': 'Pending review',
+  'compliance.automation.run_gap_analysis': 'Run Gap Analysis',
+  'compliance.automation.mark_reviewed': 'Mark Reviewed',
 }
 
 vi.mock('react-i18next', () => ({
@@ -75,8 +96,8 @@ vi.mock('../../api/client', () => ({
   },
   knowledgeBankApi: {
     listImpacts: (...args: unknown[]) => mockListImpacts(...args),
-    runRegulatoryWatch: vi.fn(),
-    createImpactAction: vi.fn(),
+    runRegulatoryWatch: (...args: unknown[]) => mockRunRegulatoryWatch(...args),
+    createImpactAction: (...args: unknown[]) => mockCreateImpactAction(...args),
     resolveImpact: vi.fn(),
   },
   getApiErrorMessage: (err: unknown) =>
@@ -116,12 +137,102 @@ describe('ComplianceAutomation monitoring honesty', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows honest regulatory empty state when API returns no updates', async () => {
+  it('shows unified Changes inbox empty state when feed and impacts are empty', async () => {
     render(<ComplianceAutomation />, { wrapper: Wrapper })
 
-    expect(await screen.findByTestId('monitoring-regulatory-empty')).toBeInTheDocument()
-    expect(screen.getByText('No regulatory updates yet')).toBeInTheDocument()
+    expect(await screen.findByTestId('monitoring-changes-tab')).toBeInTheDocument()
+    expect(screen.getByTestId('monitoring-changes-empty')).toBeInTheDocument()
+    expect(screen.getByText('No changes in the inbox yet')).toBeInTheDocument()
+    expect(screen.getByTestId('monitoring-changes-feed-empty')).toBeInTheDocument()
+    expect(screen.getByTestId('monitoring-changes-impacts-empty')).toBeInTheDocument()
     expect(screen.queryByText('ISO 9001')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Watch$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Regulatory Updates/i })).not.toBeInTheDocument()
+    expect(mockListImpacts).toHaveBeenCalled()
+  })
+
+  it('loads feed and impacts on mount for honest Changes KPI badge', async () => {
+    mockListRegulatoryUpdates.mockResolvedValue({
+      data: {
+        updates: [
+          {
+            id: 1,
+            source: 'hse',
+            source_reference: 'HSE-001',
+            title: 'COSHH amendment',
+            summary: 'Updated exposure limits',
+            category: 'health',
+            impact: 'medium',
+            affected_standards: ['ISO45001'],
+            published_date: '2026-07-01',
+            effective_date: '2026-08-01',
+            is_reviewed: false,
+            requires_action: true,
+          },
+        ],
+        total: 1,
+        unreviewed: 1,
+      },
+    })
+    mockListImpacts.mockResolvedValue({
+      data: [
+        {
+          id: 9,
+          update_id: 'upd-9',
+          document_id: null,
+          confidence: 0.8,
+          rationale: 'Clause 8.1 may need review',
+          status: 'open',
+          created_at: '2026-07-01T00:00:00Z',
+        },
+      ],
+    })
+
+    render(<ComplianceAutomation />, { wrapper: Wrapper })
+    await screen.findByTestId('monitoring-changes-tab')
+
+    expect(screen.getByText('COSHH amendment')).toBeInTheDocument()
+    expect(screen.getByText('Update upd-9')).toBeInTheDocument()
+    expect(screen.getByTestId('monitoring-changes-create-action-9')).toBeInTheDocument()
+    expect(screen.queryByTestId('monitoring-changes-empty')).not.toBeInTheDocument()
+  })
+
+  it('shows Create Action only for open impacts without an action_id', async () => {
+    mockListImpacts.mockResolvedValue({
+      data: [
+        {
+          id: 1,
+          update_id: 'open-no-action',
+          document_id: null,
+          confidence: null,
+          rationale: 'Needs CAPA',
+          status: 'open',
+          created_at: '2026-07-01T00:00:00Z',
+        },
+        {
+          id: 2,
+          update_id: 'linked-action',
+          document_id: null,
+          confidence: null,
+          rationale: 'Already linked',
+          status: 'open',
+          created_at: '2026-07-01T00:00:00Z',
+          action_id: 55,
+          action_key: 'ACT-055',
+          action_reference: 'ACT-055',
+        },
+      ],
+    })
+
+    render(<ComplianceAutomation />, { wrapper: Wrapper })
+    await screen.findByTestId('monitoring-changes-impact-1')
+
+    expect(screen.getByTestId('monitoring-changes-create-action-1')).toBeInTheDocument()
+    expect(screen.queryByTestId('monitoring-changes-create-action-2')).not.toBeInTheDocument()
+    expect(screen.getByTestId('monitoring-changes-impact-action-2')).toHaveAttribute(
+      'href',
+      '/actions/ACT-055',
+    )
   })
 
   it('shows honest certificates empty state when API returns no certificates', async () => {

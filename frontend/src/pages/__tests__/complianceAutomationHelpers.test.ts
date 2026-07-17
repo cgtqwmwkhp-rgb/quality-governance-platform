@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest'
 import type { AuditRun } from '../../api/client'
 import {
   buildAuditRunWorkspacePath,
+  countOpenWatchImpacts,
   countOverdueMonitoringRuns,
+  countPendingChangesInbox,
+  countUnreviewedRegulatoryUpdates,
   deriveMonitoringAuditRunStatus,
   formatStandardCode,
+  isOpenWatchImpact,
   mapRunsToMonitoringRows,
   MONITORING_AUDITS_HANDOFF_PATH,
   scoreBarColor,
@@ -97,6 +101,40 @@ describe('complianceAutomationHelpers', () => {
         now,
       )
       expect(countOverdueMonitoringRuns(rows)).toBe(1)
+    })
+  })
+
+  describe('changes inbox (CA-W1d)', () => {
+    it('counts unreviewed feed rows only', () => {
+      expect(
+        countUnreviewedRegulatoryUpdates([
+          { is_reviewed: false },
+          { is_reviewed: true },
+          { is_reviewed: false },
+        ]),
+      ).toBe(2)
+    })
+
+    it('treats resolved and dismissed impacts as closed', () => {
+      expect(isOpenWatchImpact({ status: 'open' })).toBe(true)
+      expect(isOpenWatchImpact({ status: 'resolved' })).toBe(false)
+      expect(isOpenWatchImpact({ status: 'dismissed' })).toBe(false)
+      expect(
+        countOpenWatchImpacts([
+          { status: 'open' },
+          { status: 'resolved' },
+          { status: 'matched' },
+        ]),
+      ).toBe(2)
+    })
+
+    it('sums pending feed reviews and open impacts for tab badge', () => {
+      expect(
+        countPendingChangesInbox(
+          [{ is_reviewed: false }, { is_reviewed: true }],
+          [{ status: 'open' }, { status: 'resolved' }],
+        ),
+      ).toBe(2)
     })
   })
 })
