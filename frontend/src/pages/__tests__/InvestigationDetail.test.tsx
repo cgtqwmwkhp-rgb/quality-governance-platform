@@ -297,4 +297,26 @@ describe('InvestigationDetail', () => {
       'investigations.handoff.create_action',
     )
   })
+
+  it('shows honest closure unavailable state with retry when probe fails', async () => {
+    client.investigationsApi.getClosureValidation.mockRejectedValue(new Error('closure down'))
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-closure-unavailable')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('investigations.closure.unavailable_title')).toBeInTheDocument()
+    expect(screen.queryByText('Unable to load closure validation.')).not.toBeInTheDocument()
+
+    client.investigationsApi.getClosureValidation.mockResolvedValue({
+      data: { can_close: false, reasons: ['STATUS_NOT_COMPLETE'] },
+    })
+    fireEvent.click(screen.getByTestId('investigation-closure-retry'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-closure-checklist')).toBeInTheDocument()
+    })
+  })
 })

@@ -72,7 +72,9 @@ describe('createInvestigationsApi', () => {
     expect(api.post).toHaveBeenCalledWith(
       '/api/v1/investigations/4/customer-pack?audience=customer',
     )
-    expect(api.get).toHaveBeenCalledWith('/api/v1/investigations/4/closure-validation')
+    expect(api.get).toHaveBeenCalledWith('/api/v1/investigations/4/closure-validation', {
+      suppressErrorToast: true,
+    })
   })
 
   it('investigation template CRUD paths', () => {
