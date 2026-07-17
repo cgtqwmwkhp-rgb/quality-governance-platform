@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
 import { Download, FilterX } from 'lucide-react'
 import { Button } from '../ui/Button'
@@ -50,6 +51,19 @@ export interface HeatMapData {
   impact_labels: Record<number, string>
   appetite_overlay?: { threshold: number; source: string }
   view_mode?: string
+}
+
+export interface HeatMapRiskDetail {
+  id: number
+  title: string
+  reference?: string
+  created_at?: string
+  category?: string
+  owner?: string
+  inherent_score?: number
+  residual_score?: number
+  status?: string
+  next_review_date?: string | null
 }
 
 export interface TrendPoint {
@@ -122,6 +136,7 @@ interface RiskHeatMapProps {
   onShowInRegister: (cell: HeatMapCell) => void
   onClearCellFilter: () => void
   onOpenRisk?: (riskId: number) => void
+  riskDetails?: Map<number, HeatMapRiskDetail>
   trends?: TrendPoint[]
   topMovers?: TopMover[]
   showAppetiteOverlay?: boolean
@@ -130,6 +145,13 @@ interface RiskHeatMapProps {
 
 function cellKey(cell: Pick<HeatMapCell, 'likelihood' | 'impact'>) {
   return `${cell.likelihood}-${cell.impact}`
+}
+
+function formatDisplayDate(value?: string | null) {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return value
+  return parsed.toLocaleDateString()
 }
 
 export function RiskHeatMap({
@@ -143,31 +165,15 @@ export function RiskHeatMap({
   onShowInRegister,
   onClearCellFilter,
   onOpenRisk,
+  riskDetails,
   trends = [],
   topMovers = [],
   showAppetiteOverlay = true,
   auditFilterActive = false,
 }: RiskHeatMapProps) {
+  const { t } = useTranslation()
   const [boardPackBusy, setBoardPackBusy] = useState(false)
   const [hoverKey, setHoverKey] = useState<string | null>(null)
-  const closeTimer = useRef<number | null>(null)
-
-  const keepPopupOpen = () => {
-    if (closeTimer.current != null) {
-      window.clearTimeout(closeTimer.current)
-      closeTimer.current = null
-    }
-  }
-
-  const openPopup = (key: string) => {
-    keepPopupOpen()
-    setHoverKey(key)
-  }
-
-  const scheduleClosePopup = () => {
-    keepPopupOpen()
-    closeTimer.current = window.setTimeout(() => setHoverKey(null), 240)
-  }
 
   const reduction =
     data.summary.average_inherent_score > 0
@@ -178,15 +184,33 @@ export function RiskHeatMap({
         )
       : 0
 
-  const selectedLabel = useMemo(() => {
+  const selectedHeatMapCell = useMemo(() => {
     if (!selectedCell) return null
+    return (
+      data.matrix.flat().find(
+        (c) => c.likelihood === selectedCell.likelihood && c.impact === selectedCell.impact,
+      ) ?? null
+    )
+  }, [selectedCell, data.matrix])
+
+  const selectedLabel = useMemo(() => {
+    if (!selectedCell || !selectedHeatMapCell) return null
     const l = data.likelihood_labels[selectedCell.likelihood] ?? selectedCell.likelihood
     const i = data.impact_labels[selectedCell.impact] ?? selectedCell.impact
-    const cell = data.matrix.flat().find(
-      (c) => c.likelihood === selectedCell.likelihood && c.impact === selectedCell.impact,
-    )
-    return `${l} × ${i}${cell ? ` (${cell.risk_count})` : ''}`
-  }, [selectedCell, data])
+    return `${l} × ${i} (${selectedHeatMapCell.risk_count})`
+  }, [selectedCell, selectedHeatMapCell, data.likelihood_labels, data.impact_labels])
+
+  const railRiskEntries = useMemo(() => {
+    if (!selectedHeatMapCell) return []
+    return selectedHeatMapCell.risk_ids.map((id, index) => {
+      const detail = riskDetails?.get(id)
+      return {
+        id,
+        title: detail?.title ?? selectedHeatMapCell.risk_titles[index] ?? t('risk_register.heatmap.risk_fallback', { id }),
+        detail,
+      }
+    })
+  }, [selectedHeatMapCell, riskDetails, t])
 
   const exportBoardPack = () => {
     setBoardPackBusy(true)
@@ -222,7 +246,7 @@ export function RiskHeatMap({
     }
   }
 
-  const sparkMax = Math.max(1, ...trends.map((t) => t.avg_residual))
+  const sparkMax = Math.max(1, ...trends.map((point) => point.avg_residual))
   const scoreHeading =
     scoreType === 'inherent' ? 'Before controls' : scoreType === 'delta' ? 'Movement' : 'After controls'
 
@@ -347,8 +371,8 @@ export function RiskHeatMap({
         </div>
       )}
 
-      <div className="flex flex-col gap-8 lg:flex-row">
-        <div className="flex-grow overflow-x-auto">
+      <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
+        <div className="shrink-0 overflow-x-auto">
           <div className="flex min-w-[520px]">
             <div className="flex flex-col items-center justify-center pr-4">
               <span
@@ -377,20 +401,16 @@ export function RiskHeatMap({
                     const isSelected =
                       selectedCell?.likelihood === cell.likelihood &&
                       selectedCell?.impact === cell.impact
+                    const isHovered = hoverKey === key && cell.risk_count > 0
                     const dimEmpty = focusMode !== 'none' && cell.risk_count === 0
                     const highlight =
                       (focusMode === 'appetite' && (cell.outside_appetite_count ?? 0) > 0) ||
                       (focusMode === 'overdue' && (cell.overdue_count ?? 0) > 0)
                     const intensity = cell.intensity ?? (cell.risk_count > 0 ? 0.55 : 0.2)
                     const opacity = dimEmpty ? 0.22 : 0.45 + intensity * 0.55
-                    const popupOpen = hoverKey === key && cell.risk_count > 0
-                    const riskEntries = cell.risk_ids.slice(0, 8).map((id, index) => ({
-                      id,
-                      title: cell.risk_titles[index] ?? `Risk ${id}`,
-                    }))
 
                     return (
-                      <div key={key} className="relative">
+                      <div key={key}>
                         <motion.button
                           type="button"
                           layout
@@ -399,6 +419,7 @@ export function RiskHeatMap({
                             'm-0.5 flex h-16 w-20 flex-col items-center justify-center rounded-lg border-2 transition-all',
                             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                             isSelected ? 'border-foreground ring-2 ring-ring' : 'border-transparent',
+                            isHovered && !isSelected && 'ring-2 ring-primary/60',
                             highlight && 'ring-2 ring-warning',
                             showAppetiteOverlay &&
                               cell.above_appetite_band &&
@@ -409,17 +430,16 @@ export function RiskHeatMap({
                             opacity,
                           }}
                           aria-label={`${data.likelihood_labels[cell.likelihood]} by ${data.impact_labels[cell.impact]}, score ${cell.score}, ${cell.risk_count} risks`}
-                          aria-expanded={popupOpen}
-                          aria-haspopup={cell.risk_count > 0 ? 'dialog' : undefined}
+                          aria-pressed={isSelected}
                           data-testid={`risk-heatmap-cell-${cell.likelihood}-${cell.impact}`}
                           onMouseEnter={() => {
-                            if (cell.risk_count > 0) openPopup(key)
+                            if (cell.risk_count > 0) setHoverKey(key)
                           }}
-                          onMouseLeave={scheduleClosePopup}
+                          onMouseLeave={() => setHoverKey(null)}
                           onFocus={() => {
-                            if (cell.risk_count > 0) openPopup(key)
+                            if (cell.risk_count > 0) setHoverKey(key)
                           }}
-                          onBlur={scheduleClosePopup}
+                          onBlur={() => setHoverKey(null)}
                           onClick={() => onCellSelect(cell)}
                         >
                           <span className="text-lg font-bold text-white">{cell.score}</span>
@@ -430,86 +450,6 @@ export function RiskHeatMap({
                             <span className="text-[10px] text-white/90">↓{cell.movers?.length}</span>
                           )}
                         </motion.button>
-
-                        {popupOpen && (
-                          // Hover bridge: keep popup open while pointer moves from cell → panel.
-                          // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- intentional hover affordance
-                          <div
-                            role="dialog"
-                            tabIndex={-1}
-                            aria-label={`Risks in ${data.likelihood_labels[cell.likelihood]} by ${data.impact_labels[cell.impact]}`}
-                            data-testid={`risk-heatmap-cell-popup-${cell.likelihood}-${cell.impact}`}
-                            className="absolute left-1/2 top-[calc(100%-2px)] z-50 w-72 -translate-x-1/2 rounded-lg border border-border bg-card p-3 text-sm text-card-foreground shadow-menu"
-                            onMouseEnter={keepPopupOpen}
-                            onMouseLeave={scheduleClosePopup}
-                          >
-                            <p className="font-semibold text-foreground">
-                              {data.likelihood_labels[cell.likelihood]} ×{' '}
-                              {data.impact_labels[cell.impact]}
-                            </p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              {cell.risk_count} risk{cell.risk_count === 1 ? '' : 's'} · score{' '}
-                              {cell.score}
-                              {(cell.overdue_count ?? 0) > 0
-                                ? ` · ${cell.overdue_count} overdue`
-                                : ''}
-                              {(cell.outside_appetite_count ?? 0) > 0
-                                ? ` · ${cell.outside_appetite_count} outside appetite`
-                                : ''}
-                            </p>
-                            {(cell.owners_sample?.length ?? 0) > 0 && (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                Owners: {cell.owners_sample?.join(', ')}
-                              </p>
-                            )}
-                            <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
-                              {riskEntries.map((entry) => (
-                                <li key={entry.id}>
-                                  <button
-                                    type="button"
-                                    className="w-full truncate rounded px-1.5 py-1 text-left text-primary hover:bg-muted"
-                                    data-testid={`risk-heatmap-popup-risk-${entry.id}`}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      onOpenRisk?.(entry.id)
-                                    }}
-                                  >
-                                    {entry.title}
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                            {(cell.risk_ids_truncated || cell.risk_count > riskEntries.length) && (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                Showing {riskEntries.length} of {cell.risk_count}
-                              </p>
-                            )}
-                            <div className="mt-2 flex gap-2 border-t border-border pt-2">
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="h-7 text-xs"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  onShowInRegister(cell)
-                                }}
-                              >
-                                Show in register
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 text-xs"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  onCellSelect(cell)
-                                }}
-                              >
-                                Filter grid
-                              </Button>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     )
                   })}
@@ -520,7 +460,151 @@ export function RiskHeatMap({
           </div>
         </div>
 
-        <div className="w-full space-y-4 lg:w-64">
+        <aside
+          className="flex min-h-[16rem] min-w-0 flex-1 flex-col rounded-xl border border-border bg-card"
+          data-testid="risk-heatmap-detail-rail"
+          aria-label={t('risk_register.heatmap.detail_rail_label')}
+        >
+          {!selectedHeatMapCell || selectedHeatMapCell.risk_count === 0 ? (
+            <div
+              className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground"
+              data-testid="risk-heatmap-detail-empty"
+            >
+              {t('risk_register.heatmap.select_cell_prompt')}
+            </div>
+          ) : (
+            <>
+              <div
+                className="border-b border-border p-4"
+                data-testid="risk-heatmap-detail-header"
+              >
+                <p className="font-semibold text-foreground">
+                  {data.likelihood_labels[selectedHeatMapCell.likelihood]} ×{' '}
+                  {data.impact_labels[selectedHeatMapCell.impact]}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t('risk_register.n_risks', { count: selectedHeatMapCell.risk_count })}
+                  {' · '}
+                  {t('risk_register.score')} {selectedHeatMapCell.score}
+                  {(selectedHeatMapCell.overdue_count ?? 0) > 0
+                    ? ` · ${selectedHeatMapCell.overdue_count} ${t('risk_register.overdue_review').toLowerCase()}`
+                    : ''}
+                  {(selectedHeatMapCell.outside_appetite_count ?? 0) > 0
+                    ? ` · ${selectedHeatMapCell.outside_appetite_count} ${t('risk_register.outside_appetite').toLowerCase()}`
+                    : ''}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    data-testid="risk-heatmap-detail-show-register"
+                    onClick={() => onShowInRegister(selectedHeatMapCell)}
+                  >
+                    {t('risk_register.heatmap.show_in_register')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    data-testid="risk-heatmap-detail-clear"
+                    onClick={onClearCellFilter}
+                  >
+                    {t('risk_register.heatmap.clear_selection')}
+                  </Button>
+                </div>
+              </div>
+
+              <div
+                className="flex-1 space-y-3 overflow-y-auto p-4"
+                data-testid="risk-heatmap-detail-list"
+              >
+                {railRiskEntries.map(({ id, title, detail }) => {
+                  const identifiedDate = formatDisplayDate(detail?.created_at)
+                  const nextReview = formatDisplayDate(detail?.next_review_date)
+                  return (
+                    <article
+                      key={id}
+                      className="rounded-lg border border-border bg-background p-3"
+                      data-testid={`risk-heatmap-detail-card-${id}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium text-foreground">{title}</p>
+                          {detail?.reference ? (
+                            <p className="mt-0.5 text-xs text-muted-foreground">{detail.reference}</p>
+                          ) : null}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="shrink-0"
+                          data-testid={`risk-heatmap-detail-open-${id}`}
+                          onClick={() => onOpenRisk?.(id)}
+                        >
+                          {t('risk_register.heatmap.open')}
+                        </Button>
+                      </div>
+                      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                        {identifiedDate ? (
+                          <>
+                            <dt className="text-muted-foreground">{t('risk_register.heatmap.identified')}</dt>
+                            <dd className="text-foreground">{identifiedDate}</dd>
+                          </>
+                        ) : null}
+                        {detail?.category ? (
+                          <>
+                            <dt className="text-muted-foreground">{t('risk_register.heatmap.category')}</dt>
+                            <dd className="capitalize text-foreground">{detail.category.replace(/_/g, ' ')}</dd>
+                          </>
+                        ) : null}
+                        {detail?.owner ? (
+                          <>
+                            <dt className="text-muted-foreground">{t('risk_register.table.owner')}</dt>
+                            <dd className="text-foreground">{detail.owner}</dd>
+                          </>
+                        ) : null}
+                        {detail?.inherent_score != null ? (
+                          <>
+                            <dt className="text-muted-foreground">{t('risk_register.profile.gross')}</dt>
+                            <dd className="text-foreground">{detail.inherent_score}</dd>
+                          </>
+                        ) : null}
+                        {detail?.residual_score != null ? (
+                          <>
+                            <dt className="text-muted-foreground">{t('risk_register.profile.net')}</dt>
+                            <dd className="text-foreground">{detail.residual_score}</dd>
+                          </>
+                        ) : null}
+                        {detail?.status ? (
+                          <>
+                            <dt className="text-muted-foreground">{t('risk_register.heatmap.status')}</dt>
+                            <dd className="capitalize text-foreground">{detail.status.replace(/_/g, ' ')}</dd>
+                          </>
+                        ) : null}
+                        {nextReview ? (
+                          <>
+                            <dt className="text-muted-foreground">{t('risk_register.profile.next_review')}</dt>
+                            <dd className="text-foreground">{nextReview}</dd>
+                          </>
+                        ) : null}
+                      </dl>
+                    </article>
+                  )
+                })}
+                {(selectedHeatMapCell.risk_ids_truncated ||
+                  selectedHeatMapCell.risk_count > railRiskEntries.length) && (
+                  <p className="text-xs text-muted-foreground" data-testid="risk-heatmap-detail-truncated">
+                    {t('risk_register.heatmap.truncated_list', {
+                      shown: railRiskEntries.length,
+                      total: selectedHeatMapCell.risk_count,
+                    })}
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+        </aside>
+
+        <div className="w-full shrink-0 space-y-4 lg:w-64">
           <div className="rounded-xl bg-muted p-4">
             <h3 className="mb-3 font-semibold text-foreground">Risk Levels</h3>
             <div className="space-y-2 text-sm">
@@ -584,12 +668,12 @@ export function RiskHeatMap({
             <div className="rounded-xl border border-border p-4" data-testid="risk-heatmap-sparkline">
               <h3 className="mb-2 font-semibold text-foreground">Residual trend</h3>
               <div className="flex h-12 items-end gap-0.5">
-                {trends.map((t) => (
+                {trends.map((point) => (
                   <div
-                    key={t.month}
-                    title={`${t.month}: ${t.avg_residual.toFixed(1)}`}
+                    key={point.month}
+                    title={`${point.month}: ${point.avg_residual.toFixed(1)}`}
                     className="flex-1 rounded-t bg-primary/70"
-                    style={{ height: `${Math.max(8, (t.avg_residual / sparkMax) * 100)}%` }}
+                    style={{ height: `${Math.max(8, (point.avg_residual / sparkMax) * 100)}%` }}
                   />
                 ))}
               </div>

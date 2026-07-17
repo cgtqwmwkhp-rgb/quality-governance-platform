@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { ComponentProps } from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { TooltipProvider } from '../../ui/Tooltip'
-import { RiskHeatMap, type HeatMapData } from '../RiskHeatMap'
+import { RiskHeatMap, type HeatMapData, type HeatMapRiskDetail } from '../RiskHeatMap'
+import '../../../i18n/i18n'
 
 const sample: HeatMapData = {
   matrix: Array.from({ length: 5 }, (_, row) =>
@@ -53,71 +55,124 @@ const sample: HeatMapData = {
   appetite_overlay: { threshold: 12, source: 'default' },
 }
 
+const riskDetails = new Map<number, HeatMapRiskDetail>([
+  [
+    1,
+    {
+      id: 1,
+      title: 'Alpha',
+      reference: 'RISK-0001',
+      created_at: '2024-01-15T00:00:00Z',
+      category: 'operational',
+      owner: 'Alice',
+      inherent_score: 8,
+      residual_score: 4,
+      status: 'monitoring',
+      next_review_date: '2025-06-01',
+    },
+  ],
+  [
+    2,
+    {
+      id: 2,
+      title: 'Beta',
+      reference: 'RISK-0002',
+      category: 'compliance',
+      owner: 'Bob',
+      inherent_score: 6,
+      residual_score: 3,
+      status: 'open',
+    },
+  ],
+])
+
+function renderHeatMap(
+  props: Partial<ComponentProps<typeof RiskHeatMap>> = {},
+) {
+  return render(
+    <TooltipProvider>
+      <RiskHeatMap
+        data={sample}
+        scoreType="residual"
+        focusMode="none"
+        selectedCell={null}
+        onScoreTypeChange={vi.fn()}
+        onFocusModeChange={vi.fn()}
+        onCellSelect={vi.fn()}
+        onShowInRegister={vi.fn()}
+        onClearCellFilter={vi.fn()}
+        {...props}
+      />
+    </TooltipProvider>,
+  )
+}
+
 describe('RiskHeatMap', () => {
   it('renders matrix and fires cell select', () => {
     const onCellSelect = vi.fn()
-    render(
-      <TooltipProvider>
-        <RiskHeatMap
-          data={sample}
-          scoreType="residual"
-          focusMode="none"
-          selectedCell={null}
-          onScoreTypeChange={vi.fn()}
-          onFocusModeChange={vi.fn()}
-          onCellSelect={onCellSelect}
-          onShowInRegister={vi.fn()}
-          onClearCellFilter={vi.fn()}
-        />
-      </TooltipProvider>,
-    )
+    renderHeatMap({ onCellSelect })
     expect(screen.getByTestId('risk-heatmap')).toBeInTheDocument()
     expect(screen.getByTestId('risk-heatmap-summary')).toHaveTextContent('3')
-    expect(screen.queryByTestId('risk-heatmap-cell-sheet')).not.toBeInTheDocument()
+    expect(screen.getByTestId('risk-heatmap-detail-rail')).toBeInTheDocument()
+    expect(screen.queryByTestId('risk-heatmap-cell-popup-2-2')).not.toBeInTheDocument()
     fireEvent.click(screen.getByTestId('risk-heatmap-cell-2-2'))
     expect(onCellSelect).toHaveBeenCalled()
   })
 
-  it('shows interactive cell popup with selectable risks on hover', () => {
-    const onOpenRisk = vi.fn()
-    render(
-      <TooltipProvider>
-        <RiskHeatMap
-          data={sample}
-          scoreType="residual"
-          focusMode="none"
-          selectedCell={null}
-          onScoreTypeChange={vi.fn()}
-          onFocusModeChange={vi.fn()}
-          onCellSelect={vi.fn()}
-          onShowInRegister={vi.fn()}
-          onClearCellFilter={vi.fn()}
-          onOpenRisk={onOpenRisk}
-        />
-      </TooltipProvider>,
+  it('shows empty detail rail prompt until a cell is selected', () => {
+    renderHeatMap()
+    expect(screen.getByTestId('risk-heatmap-detail-empty')).toHaveTextContent(
+      'Select a cell to inspect risks',
     )
-    fireEvent.mouseEnter(screen.getByTestId('risk-heatmap-cell-2-2'))
-    expect(screen.getByTestId('risk-heatmap-cell-popup-2-2')).toBeInTheDocument()
-    fireEvent.click(screen.getByTestId('risk-heatmap-popup-risk-1'))
+  })
+
+  it('shows sticky detail rail with rich risk cards when a cell is selected', () => {
+    const onOpenRisk = vi.fn()
+    renderHeatMap({
+      selectedCell: { likelihood: 2, impact: 2 },
+      riskDetails,
+      onOpenRisk,
+    })
+    expect(screen.getByTestId('risk-heatmap-detail-header')).toHaveTextContent('Unlikely × Minor')
+    expect(screen.getByTestId('risk-heatmap-detail-card-1')).toHaveTextContent('Alpha')
+    expect(screen.getByTestId('risk-heatmap-detail-card-1')).toHaveTextContent('RISK-0001')
+    expect(screen.getByTestId('risk-heatmap-detail-card-1')).toHaveTextContent('Alice')
+    expect(screen.queryByTestId('risk-heatmap-cell-popup-2-2')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('risk-heatmap-detail-open-1'))
     expect(onOpenRisk).toHaveBeenCalledWith(1)
   })
 
-  it('renders labeled placement and highlight controls', () => {
-    render(
-      <TooltipProvider>
-        <RiskHeatMap
-          data={sample}
-          scoreType="residual"
-          focusMode="none"
-          selectedCell={null}
-          onScoreTypeChange={vi.fn()}
-          onFocusModeChange={vi.fn()}
-          onCellSelect={vi.fn()}
-          onShowInRegister={vi.fn()}
-          onClearCellFilter={vi.fn()}
-        />
-      </TooltipProvider>,
+  it('falls back to cell titles when risk details are missing', () => {
+    renderHeatMap({
+      selectedCell: { likelihood: 2, impact: 2 },
+    })
+    expect(screen.getByTestId('risk-heatmap-detail-card-3')).toHaveTextContent('Gamma')
+  })
+
+  it('detail rail clear and show-in-register actions call handlers', () => {
+    const onShowInRegister = vi.fn()
+    const onClearCellFilter = vi.fn()
+    renderHeatMap({
+      selectedCell: { likelihood: 2, impact: 2 },
+      onShowInRegister,
+      onClearCellFilter,
+    })
+    fireEvent.click(screen.getByTestId('risk-heatmap-detail-show-register'))
+    expect(onShowInRegister).toHaveBeenCalledWith(
+      expect.objectContaining({ likelihood: 2, impact: 2, risk_count: 3 }),
     )
+    fireEvent.click(screen.getByTestId('risk-heatmap-detail-clear'))
+    expect(onClearCellFilter).toHaveBeenCalled()
+  })
+
+  it('does not render hover popup on mouse enter', () => {
+    renderHeatMap({ selectedCell: null })
+    fireEvent.mouseEnter(screen.getByTestId('risk-heatmap-cell-2-2'))
+    expect(screen.queryByTestId('risk-heatmap-cell-popup-2-2')).not.toBeInTheDocument()
+  })
+
+  it('renders labeled placement and highlight controls', () => {
+    renderHeatMap()
     expect(screen.getByText('Place on grid')).toBeInTheDocument()
     expect(screen.getByTestId('risk-heatmap-score-residual')).toHaveTextContent('After controls')
     expect(screen.getByTestId('risk-heatmap-score-inherent')).toHaveTextContent('Before controls')

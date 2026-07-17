@@ -39,6 +39,7 @@ import {
   RiskHeatMap,
   type HeatMapData as InteractiveHeatMapData,
   type HeatMapFocusMode,
+  type HeatMapRiskDetail,
   type HeatMapScoreType,
   type TopMover,
   type TrendPoint,
@@ -189,6 +190,7 @@ interface Risk {
   linked_actions?: string[]
   linked_incidents?: string[]
   suggestion_triage_status?: string | null
+  created_at?: string
 }
 
 type HeatMapData = InteractiveHeatMapData
@@ -416,6 +418,7 @@ export default function RiskRegister() {
           linked_actions: r.linked_actions ?? [],
           linked_incidents: r.linked_incidents ?? [],
           suggestion_triage_status: r.suggestion_triage_status ?? null,
+          created_at: r.created_at,
         }
       })
       setRisks(mappedRisks)
@@ -649,6 +652,25 @@ export default function RiskRegister() {
   useEffect(() => {
     void loadRisks()
   }, [loadRisks])
+
+  const heatmapRiskDetails = useMemo(() => {
+    const map = new Map<number, HeatMapRiskDetail>()
+    for (const risk of risks) {
+      map.set(risk.id, {
+        id: risk.id,
+        title: risk.title,
+        reference: risk.reference,
+        created_at: risk.created_at,
+        category: risk.category,
+        owner: risk.risk_owner_name || undefined,
+        inherent_score: risk.inherent_score,
+        residual_score: risk.residual_score,
+        status: risk.status,
+        next_review_date: risk.next_review_date,
+      })
+    }
+    return map
+  }, [risks])
 
   const resolveImportTriage = async (
     riskId: number,
@@ -1594,6 +1616,7 @@ export default function RiskRegister() {
               scoreType={scoreType}
               focusMode={focusMode}
               selectedCell={cellFilter}
+              riskDetails={heatmapRiskDetails}
               onScoreTypeChange={setScoreType}
               onFocusModeChange={setFocusMode}
               auditFilterActive={auditOnly || Boolean(auditRefFilter)}
@@ -1604,7 +1627,11 @@ export default function RiskRegister() {
               }}
               onCellSelect={(cell) => {
                 if (cell.risk_count === 0) return
-                setCellFilter({ likelihood: cell.likelihood, impact: cell.impact })
+                setCellFilter((prev) =>
+                  prev?.likelihood === cell.likelihood && prev?.impact === cell.impact
+                    ? null
+                    : { likelihood: cell.likelihood, impact: cell.impact },
+                )
               }}
               onShowInRegister={(cell) => {
                 setCellFilter({ likelihood: cell.likelihood, impact: cell.impact })
