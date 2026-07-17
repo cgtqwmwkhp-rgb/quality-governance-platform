@@ -40,6 +40,7 @@ from src.domain.models.risk_register import (
     RiskNote,
 )
 from src.domain.models.user import User
+from src.domain.services.audit_escalation_risk_title import backfill_descriptive_escalation_titles
 from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 
@@ -304,6 +305,29 @@ async def create_risk(
         "reference": risk.reference,
         "message": "EnterpriseRisk created successfully",
     }
+
+
+@router.post("/backfill-descriptive-titles", response_model=dict)
+async def backfill_descriptive_titles(
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
+    db: DbSession,
+    commit: bool = Query(
+        False,
+        description="When false (default), dry-run only. When true, persist title upgrades.",
+    ),
+) -> dict[str, Any]:
+    """Rewrite legacy audit-escalation risk titles using linked finding titles."""
+    if current_user.tenant_id is None:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+    result = await backfill_descriptive_escalation_titles(
+        db,
+        current_user.tenant_id,
+        commit=commit,
+    )
+    if commit and result.get("updated_count", 0):
+        await invalidate_tenant_cache(current_user.tenant_id, "risk_register")
+        await invalidate_tenant_cache(current_user.tenant_id, "risk-register")
+    return result
 
 
 # ============ Heat Map & Matrix Endpoints ============
