@@ -688,6 +688,33 @@ describe('Actions Round 3 polish — CUJ honesty & upstream links', () => {
     )
   })
 
+  it('shows upstream source link inside expanded detail panel', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [
+          action({
+            action_key: 'incident_action:9',
+            source_type: 'incident',
+            source_id: 9,
+            title: 'Incident CAPA',
+          }),
+        ],
+      },
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Details' }))
+    const detailLink = await screen.findByTestId('actions-detail-source-incident_action:9')
+    expect(detailLink).toBeInTheDocument()
+    expect(detailLink.querySelector('a')).toHaveAttribute('href', '/incidents/9')
+  })
+
   it('shows complaint playbook when filtered by complaint source and id', async () => {
     mockList.mockResolvedValue({ data: { items: [] } })
 
