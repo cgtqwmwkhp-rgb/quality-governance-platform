@@ -103,4 +103,21 @@ describe('investigation-builder templateHelpers', () => {
       updated_at: '2026-01-01T00:00:00Z',
     }).sections[0].min_level).toBe('high')
   })
+
+  it('defaults API sections without a minimum investigation level to high', () => {
+    const restored = mapApiToDraft({
+      id: 1,
+      name: 'Custom',
+      version: '1.0',
+      is_active: true,
+      applicable_entity_types: ['near_miss'],
+      structure: {
+        sections: [{ id: 'custom', name: 'Custom section', fields: [] }],
+      },
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    })
+
+    expect(restored.sections[0].min_level).toBe('high')
+  })
 })
