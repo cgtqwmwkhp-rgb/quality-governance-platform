@@ -86,4 +86,24 @@ describe('AssessmentCreate employee picker', () => {
     )
     expect(screen.getByLabelText(/workforce\.common\.engineer/i)).toBeDisabled()
   })
+
+  it('shows MAP-W2 Assist parity honesty on competency create', async () => {
+    listEngineers.mockResolvedValue({ data: { items: [] } })
+
+    const AssessmentCreate = (await import('../AssessmentCreate')).default
+    render(
+      <MemoryRouter>
+        <AssessmentCreate />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('map-w2-competency-assist-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('map-w2-competency-assist-honesty')).toHaveTextContent(
+      'workforce.assessments.map_w2.honesty',
+    )
+    expect(screen.getByTestId('map-w2-competency-scheme-chips')).toBeInTheDocument()
+    expect(screen.getByTestId('map-w2-competency-scheme-iso')).toBeInTheDocument()
+    expect(screen.getByTestId('map-w2-competency-scheme-planet-mark')).toBeInTheDocument()
+    expect(screen.getByTestId('map-w2-competency-scheme-uvdb')).toBeInTheDocument()
+  })
 })
