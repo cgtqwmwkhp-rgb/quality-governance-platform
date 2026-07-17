@@ -10,6 +10,8 @@ import {
   formatStandardCode,
   hasLiveComplianceScore,
   isOpenWatchImpact,
+  mapRiddorSubmissionToPack,
+  mapRiddorSubmissionsToPacks,
   mapRunsToMonitoringRows,
   MONITORING_AUDITS_HANDOFF_PATH,
   MONITORING_SCORE_HANDOFF_EVIDENCE,
@@ -159,4 +161,32 @@ describe('complianceAutomationHelpers', () => {
     })
   })
 
+  describe('mapRiddorSubmissionsToPacks', () => {
+    it('maps persisted register rows and skips invalid entries', () => {
+      const packs = mapRiddorSubmissionsToPacks([
+        {
+          id: 9,
+          incident_id: 42,
+          incident_reference: 'INC-0042',
+          riddor_type: 'specified_injury',
+          submission_status: 'draft_pack',
+          status_label: 'Draft pack saved in QGP — file on the HSE portal',
+          deadline: '2026-07-20T00:00:00',
+          is_overdue: false,
+          persisted: true,
+        },
+        { id: 'bad' },
+      ])
+      expect(packs).toHaveLength(1)
+      expect(packs[0]).toMatchObject({
+        id: 9,
+        incidentId: 42,
+        incidentReference: 'INC-0042',
+        riddorType: 'specified_injury',
+        submissionStatus: 'draft_pack',
+        persisted: true,
+      })
+      expect(mapRiddorSubmissionToPack({ id: 1 })).toBeNull()
+    })
+  })
 })

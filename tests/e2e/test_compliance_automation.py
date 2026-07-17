@@ -288,26 +288,69 @@ class TestRIDDORAutomation:
         assert len(result["riddor_types"]) == 0
 
     def test_prepare_riddor_submission(self, auth_client: Any) -> None:
-        """Test preparing RIDDOR submission data."""
+        """Test preparing and persisting a RIDDOR draft pack from an incident."""
+        incident_resp = auth_client.post(
+            "/api/v1/incidents/",
+            json={
+                "title": "CA-W1e RIDDOR prepare fracture",
+                "description": "Specified injury for RIDDOR pack persistence",
+                "incident_type": "injury",
+                "severity": "high",
+                "incident_date": "2026-07-10T09:00:00Z",
+                "location": "Workshop",
+            },
+        )
+        assert incident_resp.status_code in (200, 201), incident_resp.text
+        incident_id = incident_resp.json()["id"]
+
         response = auth_client.post(
-            "/api/v1/compliance-automation/riddor/prepare/123",
+            f"/api/v1/compliance-automation/riddor/prepare/{incident_id}",
             params={"riddor_type": "specified_injury"},
         )
-        assert response.status_code == 200
+        assert response.status_code == 200, response.text
 
         result = response.json()
-        assert result["incident_id"] == 123
+        assert result["incident_id"] == incident_id
         assert "submission_data" in result
-        assert result["status"] == "preparation_stub"
-        assert result["persisted"] is False
+        assert result["status"] == "draft_pack"
+        assert result["persisted"] is True
+        assert result["id"] is not None
+        assert "HSE portal" in result["status_label"]
+
+        listed = auth_client.get("/api/v1/compliance-automation/riddor/submissions")
+        assert listed.status_code == 200
+        submissions = listed.json().get("submissions", [])
+        assert any(row.get("id") == result["id"] for row in submissions)
 
     def test_submit_riddor(self, auth_client: Any) -> None:
-        """Test submitting RIDDOR report."""
-        response = auth_client.post("/api/v1/compliance-automation/riddor/submit/123")
-        assert response.status_code == 200
+        """Test honest HSE-gateway stub against a persisted pack."""
+        incident_resp = auth_client.post(
+            "/api/v1/incidents/",
+            json={
+                "title": "CA-W1e RIDDOR submit stub",
+                "description": "Pack then stub filing intent",
+                "incident_type": "injury",
+                "severity": "high",
+                "incident_date": "2026-07-11T09:00:00Z",
+                "location": "Yard",
+            },
+        )
+        assert incident_resp.status_code in (200, 201), incident_resp.text
+        incident_id = incident_resp.json()["id"]
+
+        prep = auth_client.post(
+            f"/api/v1/compliance-automation/riddor/prepare/{incident_id}",
+            params={"riddor_type": "specified_injury"},
+        )
+        assert prep.status_code == 200, prep.text
+
+        response = auth_client.post(f"/api/v1/compliance-automation/riddor/submit/{incident_id}")
+        assert response.status_code == 200, response.text
 
         result = response.json()
         assert result["status"] == "stubbed"
         assert result.get("gateway") == "not_connected"
+        assert result.get("persisted") is True
         assert "hse_reference" in result
-        assert result["hse_reference"].startswith("RIDDOR-")
+        assert result["hse_reference"].startswith("QGP-RIDDOR-")
+        assert result["submission_status"] == "awaiting_hse_filing"
