@@ -143,7 +143,8 @@ describe('KnowledgeExceptions closed loop', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText('ISO9001:8.5')).toBeInTheDocument()
+    expect(await screen.findByTestId('exception-identity-9')).toHaveTextContent('ISO 9001')
+    expect(screen.getByTestId('exception-identity-9')).toHaveTextContent('Clause 8.5')
     fireEvent.click(screen.getByTestId('exception-confirm-9'))
     await waitFor(() => {
       expect(mockConfirm).toHaveBeenCalledWith(9)
@@ -175,6 +176,77 @@ describe('KnowledgeExceptions server signal filter honesty', () => {
   })
 })
 
+describe('KnowledgeExceptions honesty (KE-W1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockList.mockResolvedValue({
+      data: [
+        {
+          id: 10,
+          entity_type: 'incident',
+          entity_id: '7',
+          clause_id: 'ISO9001:8.5',
+          linked_by: 'ai',
+          confidence: 0.5,
+          status: 'proposed',
+          scheme: 'iso9001',
+          auto_applied: false,
+          rationale: 'possible gap',
+          title: 'Gap',
+          notes: null,
+          signal_type: 'gap',
+          created_at: '2026-07-13T00:00:00Z',
+          created_by_email: null,
+        },
+        {
+          id: 11,
+          entity_type: 'incident',
+          entity_id: '7',
+          clause_id: '9001-8.5',
+          linked_by: 'ai',
+          confidence: 0.9,
+          status: 'proposed',
+          scheme: 'iso9001',
+          auto_applied: false,
+          rationale: 'Incident cites missing work instruction for welding step 3.',
+          title: 'Procedure gap',
+          notes: null,
+          signal_type: 'gap',
+          created_at: '2026-07-14T00:00:00Z',
+          created_by_email: null,
+        },
+      ],
+    })
+  })
+
+  it('shows clear standard+clause identity and collapses duplicate proposals', async () => {
+    const KnowledgeExceptions = (await import('../KnowledgeExceptions')).default
+    render(
+      <MemoryRouter>
+        <KnowledgeExceptions />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('exception-identity-11')).toHaveTextContent('ISO 9001')
+    expect(screen.getByTestId('exception-identity-11')).toHaveTextContent('Clause 8.5')
+    expect(screen.getByTestId('exceptions-filter-honesty')).toHaveTextContent(/1 allocation/)
+    expect(screen.getByTestId('exceptions-filter-honesty')).toHaveTextContent(/1 duplicate proposal collapsed/)
+    expect(screen.queryByTestId('exception-row-10')).not.toBeInTheDocument()
+  })
+
+  it('surfaces specific why summary and expandable detail', async () => {
+    const KnowledgeExceptions = (await import('../KnowledgeExceptions')).default
+    render(
+      <MemoryRouter>
+        <KnowledgeExceptions />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('exception-why-summary-11')).toHaveTextContent(/welding/i)
+    fireEvent.click(screen.getByTestId('exception-detail-toggle-11'))
+    expect(screen.getByTestId('exception-detail-panel-11')).toHaveTextContent(/AI confidence: 90%/)
+  })
+})
 
 describe('exceptions inbox URL sync', () => {
   it('encodes status + entity_type + signal_type', async () => {
