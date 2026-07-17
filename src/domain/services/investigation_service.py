@@ -1434,7 +1434,7 @@ class InvestigationService:
             reason_codes.append(ClosureReasonCode.LEVEL_NOT_SET)
 
         # Harden against non-mapping JSON blobs (list / scalar / null).
-        raw_data = investigation.data if isinstance(investigation.data, dict) else {}
+        raw_data: Dict[str, Any] = investigation.data if isinstance(investigation.data, dict) else {}
         section_values: Dict[str, Dict[str, Any]] = {}
         for section_key, field_key, value in iter_run_section_values(raw_data):
             section_values.setdefault(section_key, {})[field_key] = value
@@ -1447,7 +1447,7 @@ class InvestigationService:
         max_sections = level_section_counts.get(level_str or "high", 6)
 
         # Mirror parse_structure_json: skip malformed sections/fields instead of 500.
-        structure = template.structure if isinstance(template.structure, dict) else {}
+        structure: Dict[str, Any] = template.structure if isinstance(template.structure, dict) else {}
         sections = parse_structure_json(structure)
 
         for i, section in enumerate(sections):
