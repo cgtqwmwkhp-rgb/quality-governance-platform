@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -30,38 +31,50 @@ import { toast } from '../contexts/ToastContext'
 type ViewMode = 'month' | 'week' | 'agenda'
 type EventType = CalendarEventType
 
+export const AUDIT_SOURCE_MODULES = new Set(['audit_run', 'scheduled_audit'])
+export const ACTION_SOURCE_MODULES = new Set(['capa_action'])
+
+export function countActiveByModule(events: CalendarFeedEvent[]) {
+  const active = events.filter((e) => e.status !== 'completed')
+  return {
+    audits: active.filter((e) => AUDIT_SOURCE_MODULES.has(e.source_module)).length,
+    actions: active.filter((e) => ACTION_SOURCE_MODULES.has(e.source_module)).length,
+  }
+}
+
+export function labelPartialSources(
+  sources: string[],
+  t: (key: string, options?: { defaultValue?: string }) => string,
+) {
+  return sources
+    .map((s) => t(`calendar.source_label.${s}`, { defaultValue: s.replace(/_/g, ' ') }))
+    .join(', ')
+}
+
 const ALL_TYPES: EventType[] = ['audit', 'deadline', 'review', 'training', 'meeting']
 
-const TYPE_STYLE: Record<
-  EventType,
-  { label: string; chip: string; dot: string; border: string }
-> = {
+const TYPE_CHIP: Record<EventType, { chip: string; dot: string; border: string }> = {
   audit: {
-    label: 'Audit',
     chip: 'bg-info/15 text-info border-info/30',
     dot: 'bg-info',
     border: 'border-l-info',
   },
   review: {
-    label: 'Review',
     chip: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30',
     dot: 'bg-purple-500',
     border: 'border-l-purple-500',
   },
   deadline: {
-    label: 'Deadline',
     chip: 'bg-destructive/15 text-destructive border-destructive/30',
     dot: 'bg-destructive',
     border: 'border-l-destructive',
   },
   meeting: {
-    label: 'Meeting',
     chip: 'bg-success/15 text-success border-success/30',
     dot: 'bg-success',
     border: 'border-l-success',
   },
   training: {
-    label: 'Training',
     chip: 'bg-warning/15 text-warning border-warning/30',
     dot: 'bg-warning',
     border: 'border-l-warning',
@@ -111,16 +124,20 @@ function sameDay(a: Date, b: Date) {
 function EventChip({
   event,
   compact,
+  typeLabel,
+  statusLabel,
 }: {
   event: CalendarFeedEvent
   compact?: boolean
+  typeLabel: string
+  statusLabel: string
 }) {
-  const style = TYPE_STYLE[event.type] ?? TYPE_STYLE.deadline
+  const style = TYPE_CHIP[event.type] ?? TYPE_CHIP.deadline
   const tip = [
     event.title,
-    `${TYPE_STYLE[event.type]?.label ?? event.type} · ${event.status}`,
+    `${typeLabel} · ${statusLabel}`,
     event.owner ? `Owner: ${event.owner}` : null,
-    `Due ${event.date}`,
+    event.date,
     event.description || null,
   ]
     .filter(Boolean)
@@ -144,6 +161,7 @@ function EventChip({
 }
 
 export default function CalendarView() {
+  const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
   const today = useMemo(() => new Date(), [])
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()))
@@ -252,6 +270,30 @@ export default function CalendarView() {
       .slice(0, 8)
   }, [events, today])
 
+  const feedCounts = useMemo(() => countActiveByModule(events), [events])
+
+  const typeLabel = useCallback(
+    (type: EventType) => t(`calendar.type.${type}`, { defaultValue: type }),
+    [t],
+  )
+
+  const statusLabel = useCallback(
+    (status: string) =>
+      t(`calendar.status.${status}`, { defaultValue: status.replace(/_/g, ' ') }),
+    [t],
+  )
+
+  const sourceModuleLabel = useCallback(
+    (sourceModule: string) => {
+      if (AUDIT_SOURCE_MODULES.has(sourceModule)) return t('calendar.source_audit')
+      if (ACTION_SOURCE_MODULES.has(sourceModule)) return t('calendar.source_action')
+      return t(`calendar.source_label.${sourceModule}`, {
+        defaultValue: sourceModule.replace(/_/g, ' '),
+      })
+    },
+    [t],
+  )
+
   const toggleType = (type: EventType) => {
     const next = new Set(selectedTypes)
     if (next.has(type)) next.delete(type)
@@ -284,20 +326,18 @@ export default function CalendarView() {
             <div className="p-2 bg-primary/10 rounded-xl">
               <CalendarIcon className="w-8 h-8 text-primary" />
             </div>
-            Calendar
+            {t('calendar.title')}
           </h1>
-          <p className="text-muted-foreground mt-1">
-            Unified governance time hub — audits, deadlines, training, and reviews.
-          </p>
+          <p className="text-muted-foreground mt-1">{t('calendar.subtitle')}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex bg-surface rounded-lg p-1 border border-border">
             {(
               [
-                ['month', Grid3X3, 'Month'],
-                ['week', Columns3, 'Week'],
-                ['agenda', List, 'Agenda'],
+                ['month', Grid3X3, t('calendar.month')],
+                ['week', Columns3, t('calendar.week')],
+                ['agenda', List, t('calendar.agenda')],
               ] as const
             ).map(([mode, Icon, label]) => (
               <button
@@ -321,6 +361,7 @@ export default function CalendarView() {
             variant={showFilters ? 'default' : 'outline'}
             size="sm"
             onClick={() => setShowFilters((v) => !v)}
+            aria-label={t('calendar.filters')}
           >
             <Filter className="w-4 h-4" />
           </Button>
@@ -333,35 +374,71 @@ export default function CalendarView() {
               setQuery({ day: toISODate(today) })
             }}
           >
-            Today
+            {t('calendar.today')}
           </Button>
 
           <div className="relative">
             <Button onClick={() => setShowAdd((v) => !v)} data-testid="calendar-add-event">
               <Plus className="w-4 h-4" />
-              Add Event
+              {t('calendar.add_event')}
             </Button>
             {showAdd && (
               <Card className="absolute right-0 mt-2 z-20 w-56 p-2 shadow-lg border border-border">
-                <p className="text-xs text-muted-foreground px-2 py-1">Create from source</p>
+                <p className="text-xs text-muted-foreground px-2 py-1">
+                  {t('calendar.create_from_source')}
+                </p>
                 <Link
                   to="/audits"
                   className="block rounded-md px-3 py-2 text-sm hover:bg-accent"
                   onClick={() => setShowAdd(false)}
                 >
-                  Schedule audit
+                  {t('calendar.schedule_audit')}
                 </Link>
                 <Link
                   to="/actions"
                   className="block rounded-md px-3 py-2 text-sm hover:bg-accent"
                   onClick={() => setShowAdd(false)}
                 >
-                  Create action
+                  {t('calendar.create_action')}
                 </Link>
               </Card>
             )}
           </div>
         </div>
+      </div>
+
+      <div
+        className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+        data-testid="calendar-source-kpis"
+      >
+        <Card className="p-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">{t('calendar.kpi_audits')}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{t('calendar.kpi_audits_hint')}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl font-bold text-info" data-testid="calendar-kpi-audits">
+              {feedCounts.audits}
+            </span>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/audits">{t('calendar.schedule_audit')}</Link>
+            </Button>
+          </div>
+        </Card>
+        <Card className="p-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">{t('calendar.kpi_actions')}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{t('calendar.kpi_actions_hint')}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl font-bold text-destructive" data-testid="calendar-kpi-actions">
+              {feedCounts.actions}
+            </span>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/actions">{t('calendar.create_action')}</Link>
+            </Button>
+          </div>
+        </Card>
       </div>
 
       {showFilters && (
@@ -376,17 +453,17 @@ export default function CalendarView() {
                   onClick={() => toggleType(type)}
                   className={cn(
                     'inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm transition-colors',
-                    active ? TYPE_STYLE[type].chip : 'border-border text-muted-foreground opacity-60',
+                    active ? TYPE_CHIP[type].chip : 'border-border text-muted-foreground opacity-60',
                   )}
                 >
-                  <span className={cn('h-2 w-2 rounded-full', TYPE_STYLE[type].dot)} />
-                  {TYPE_STYLE[type].label}
+                  <span className={cn('h-2 w-2 rounded-full', TYPE_CHIP[type].dot)} />
+                  {typeLabel(type)}
                 </button>
               )
             })}
             {selectedTypes.length > 0 && (
               <Button variant="ghost" size="sm" onClick={() => setQuery({ types: null })}>
-                Clear
+                {t('calendar.clear_filters')}
               </Button>
             )}
           </div>
@@ -399,8 +476,12 @@ export default function CalendarView() {
         </div>
       )}
       {partial.length > 0 && !error && (
-        <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm">
-          Partial feed — unavailable sources: {partial.join(', ')}
+        <div
+          role="status"
+          className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm"
+          data-testid="calendar-partial-feed"
+        >
+          {t('calendar.partial_feed', { sources: labelPartialSources(partial, t) })}
         </div>
       )}
 
@@ -425,9 +506,9 @@ export default function CalendarView() {
             </Button>
             <h2 className="text-xl font-semibold text-foreground">
               {viewMode === 'week'
-                ? `Week of ${toISODate(weekDays[0]!)}`
+                ? t('calendar.week_of', { date: toISODate(weekDays[0]!) })
                 : viewMode === 'agenda'
-                  ? 'Agenda'
+                  ? t('calendar.agenda')
                   : `${monthNames[cursor.getMonth()]} ${cursor.getFullYear()}`}
             </h2>
             <Button
@@ -455,14 +536,17 @@ export default function CalendarView() {
           ) : viewMode === 'agenda' ? (
             <div className="space-y-3" data-testid="calendar-agenda">
               {events.length === 0 ? (
-                <div className="py-16 text-center text-muted-foreground text-sm space-y-3">
-                  <p>No governance deadlines in this window.</p>
+                <div
+                  className="py-16 text-center text-muted-foreground text-sm space-y-3"
+                  data-testid="calendar-empty-agenda"
+                >
+                  <p>{t('calendar.empty_agenda')}</p>
                   <div className="flex justify-center gap-2">
                     <Button asChild size="sm">
-                      <Link to="/audits">Schedule audit</Link>
+                      <Link to="/audits">{t('calendar.schedule_audit')}</Link>
                     </Button>
                     <Button asChild size="sm" variant="outline">
-                      <Link to="/actions">Create action</Link>
+                      <Link to="/actions">{t('calendar.create_action')}</Link>
                     </Button>
                   </div>
                 </div>
@@ -470,12 +554,13 @@ export default function CalendarView() {
                 events.map((event) => (
                   <Card
                     key={event.id}
-                    className={cn('p-4 border-l-4', TYPE_STYLE[event.type]?.border)}
+                    className={cn('p-4 border-l-4', TYPE_CHIP[event.type]?.border)}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex flex-wrap gap-2 mb-1">
-                          <Badge variant="outline">{TYPE_STYLE[event.type]?.label}</Badge>
+                          <Badge variant="outline">{typeLabel(event.type)}</Badge>
+                          <Badge variant="secondary">{sourceModuleLabel(event.source_module)}</Badge>
                           <Badge
                             variant={
                               event.status === 'overdue'
@@ -485,7 +570,7 @@ export default function CalendarView() {
                                   : 'secondary'
                             }
                           >
-                            {event.status}
+                            {statusLabel(event.status)}
                           </Badge>
                         </div>
                         <h3 className="font-semibold text-foreground">{event.title}</h3>
@@ -498,7 +583,7 @@ export default function CalendarView() {
                       {event.href && (
                         <Button asChild size="sm" variant="outline">
                           <Link to={event.href}>
-                            Open source <ExternalLink className="w-3.5 h-3.5 ml-1" />
+                            {t('calendar.open_source')} <ExternalLink className="w-3.5 h-3.5 ml-1" />
                           </Link>
                         </Button>
                       )}
@@ -553,11 +638,17 @@ export default function CalendarView() {
                       </span>
                       <div className="mt-1 space-y-1">
                         {dayEv.slice(0, 3).map((event) => (
-                          <EventChip key={event.id} event={event} compact />
+                          <EventChip
+                            key={event.id}
+                            event={event}
+                            compact
+                            typeLabel={typeLabel(event.type)}
+                            statusLabel={statusLabel(event.status)}
+                          />
                         ))}
                         {dayEv.length > 3 && (
                           <span className="text-[10px] text-muted-foreground pl-0.5">
-                            +{dayEv.length - 3} more
+                            {t('calendar.more', { count: dayEv.length - 3 })}
                           </span>
                         )}
                       </div>
@@ -566,14 +657,17 @@ export default function CalendarView() {
                 })}
               </div>
               {!loading && events.length === 0 && (
-                <div className="mt-8 text-center text-sm text-muted-foreground space-y-3">
-                  <p>No governance deadlines this month.</p>
+                <div
+                  className="mt-8 text-center text-sm text-muted-foreground space-y-3"
+                  data-testid="calendar-empty-month"
+                >
+                  <p>{t('calendar.empty_month')}</p>
                   <div className="flex justify-center gap-2">
                     <Button asChild size="sm">
-                      <Link to="/audits">Schedule audit</Link>
+                      <Link to="/audits">{t('calendar.schedule_audit')}</Link>
                     </Button>
                     <Button asChild size="sm" variant="outline">
-                      <Link to="/actions">Create action</Link>
+                      <Link to="/actions">{t('calendar.create_action')}</Link>
                     </Button>
                   </div>
                 </div>
@@ -584,12 +678,12 @@ export default function CalendarView() {
 
         <div className="space-y-4">
           <Card className="p-4">
-            <h3 className="font-semibold text-foreground mb-3">Event types</h3>
+            <h3 className="font-semibold text-foreground mb-3">{t('calendar.event_types')}</h3>
             <ul className="space-y-2 text-sm">
               {ALL_TYPES.map((type) => (
                 <li key={type} className="flex items-center gap-2 text-muted-foreground">
-                  <span className={cn('h-2.5 w-2.5 rounded-full', TYPE_STYLE[type].dot)} />
-                  {TYPE_STYLE[type].label}
+                  <span className={cn('h-2.5 w-2.5 rounded-full', TYPE_CHIP[type].dot)} />
+                  {typeLabel(type)}
                 </li>
               ))}
             </ul>
@@ -598,14 +692,16 @@ export default function CalendarView() {
           <Card className="p-4" data-testid="calendar-upcoming">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-foreground">
-                {selectedDay ? `Day · ${toISODate(selectedDay)}` : 'Upcoming'}
+                {selectedDay
+                  ? t('calendar.day_label', { date: toISODate(selectedDay) })
+                  : t('calendar.upcoming')}
               </h3>
               {selectedDay && (
                 <button
                   type="button"
                   className="text-muted-foreground hover:text-foreground"
                   onClick={() => setQuery({ day: null })}
-                  aria-label="Clear day selection"
+                  aria-label={t('calendar.clear_day')}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -614,9 +710,7 @@ export default function CalendarView() {
             <div className="space-y-3">
               {(selectedDay ? dayEvents : upcoming).length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  {selectedDay
-                    ? 'No events on this day.'
-                    : 'Nothing upcoming in the loaded range.'}
+                  {selectedDay ? t('calendar.empty_day') : t('calendar.empty_upcoming')}
                 </p>
               ) : (
                 (selectedDay ? dayEvents : upcoming).map((event) => (
@@ -625,7 +719,8 @@ export default function CalendarView() {
                     className="rounded-lg border border-border p-3 space-y-1"
                     title={[
                       event.title,
-                      `${TYPE_STYLE[event.type]?.label} · ${event.status}`,
+                      `${typeLabel(event.type)} · ${statusLabel(event.status)}`,
+                      sourceModuleLabel(event.source_module),
                       event.owner ? `Owner: ${event.owner}` : '',
                       event.description || '',
                     ]
@@ -633,9 +728,12 @@ export default function CalendarView() {
                       .join('\n')}
                   >
                     <div className="flex items-center gap-2">
-                      <span className={cn('h-2 w-2 rounded-full', TYPE_STYLE[event.type]?.dot)} />
+                      <span className={cn('h-2 w-2 rounded-full', TYPE_CHIP[event.type]?.dot)} />
                       <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                        {TYPE_STYLE[event.type]?.label}
+                        {typeLabel(event.type)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        · {sourceModuleLabel(event.source_module)}
                       </span>
                       {event.status === 'overdue' && (
                         <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
@@ -648,7 +746,7 @@ export default function CalendarView() {
                         to={event.href}
                         className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                       >
-                        Open source <ExternalLink className="w-3 h-3" />
+                        {t('calendar.open_source')} <ExternalLink className="w-3 h-3" />
                       </Link>
                     )}
                   </div>
