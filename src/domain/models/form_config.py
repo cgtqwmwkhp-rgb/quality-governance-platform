@@ -185,9 +185,7 @@ class Contract(Base, TimestampMixin, AuditTrailMixin):
     """Contract configuration for dropdown options."""
 
     __tablename__ = "contracts"
-    __table_args__ = (
-        Index("ix_contracts_tenant_active_order", "tenant_id", "is_active", "display_order"),
-    )
+    __table_args__ = (Index("ix_contracts_tenant_active_order", "tenant_id", "is_active", "display_order"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
