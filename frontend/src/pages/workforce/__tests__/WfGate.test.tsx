@@ -92,6 +92,12 @@ describe('WF-GATE Assessments filters', () => {
     const firstParams = listAssessments.mock.calls[0][0] as Record<string, string>
     expect(firstParams.search).toBeUndefined()
 
+    await waitFor(() =>
+      expect(listEngineers).toHaveBeenCalledWith(
+        expect.objectContaining({ is_active: 'true', page_size: '500' }),
+      ),
+    )
+
     const engineerSelect = await screen.findByLabelText('workforce.common.engineer')
     await user.selectOptions(engineerSelect, '42')
 
@@ -103,6 +109,23 @@ describe('WF-GATE Assessments filters', () => {
 
     const filtersBtn = screen.getByRole('button', { name: /workforce\.common\.filters/i })
     expect(filtersBtn).toBeDisabled()
+  })
+
+  it('shows honest empty roster guidance when no active employees', async () => {
+    listEngineers.mockResolvedValue({ data: { items: [] } })
+    listAssessments.mockResolvedValue({ data: { items: [] } })
+
+    const Assessments = (await import('../Assessments')).default
+    render(
+      <MemoryRouter>
+        <Assessments />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() =>
+      expect(screen.getByTestId('assessments-employees-empty')).toBeInTheDocument(),
+    )
+    expect(screen.getByLabelText('workforce.common.engineer')).toBeDisabled()
   })
 })
 
