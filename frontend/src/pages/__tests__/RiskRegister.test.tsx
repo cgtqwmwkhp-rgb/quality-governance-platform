@@ -267,7 +267,7 @@ describe('RiskRegister linked audit references', () => {
   it('reads nested by_level and overdue_review from summary API (no faux zeros)', async () => {
     renderRegister()
 
-    await screen.findByText('Inspection escalation')
+    await screen.findByTestId('risk-open-88')
     expect(screen.getByTestId('risk-metric-high')).toHaveTextContent('1')
     expect(screen.getByTestId('risk-metric-overdue-review')).toHaveTextContent('2')
     expect(screen.getByTestId('risk-metric-overdue-review')).not.toHaveAttribute(
@@ -301,6 +301,153 @@ describe('RiskRegister linked audit references', () => {
     expect(screen.getByTestId('risk-metric-critical')).toHaveTextContent('12')
     expect(screen.getByTestId('risk-metric-high')).toHaveTextContent('20')
     expect(screen.getByTestId('risk-metric-medium')).toHaveTextContent('50')
+  })
+})
+
+
+describe('RiskRegister SLT dashboard parity (RR-W5)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    delete window.__FEATURE_FLAGS__
+    const past = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const future = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    mockRiskList
+      .mockResolvedValueOnce({
+        data: {
+          items: [
+            {
+              id: 1,
+              reference: 'RSK-00001',
+              title: 'Highest residual',
+              status: 'active',
+              residual_score: 20,
+              inherent_score: 25,
+              category: 'strategic',
+              trend: 'increasing',
+              updated_at: '2026-07-10T09:15:00',
+              next_review_date: past,
+            },
+            {
+              id: 2,
+              reference: 'RSK-00002',
+              title: 'Second residual',
+              status: 'active',
+              residual_score: 16,
+              inherent_score: 20,
+              category: 'operational',
+              trend: 'stable',
+              updated_at: '2026-07-09T12:00:00',
+              next_review_date: future,
+            },
+            {
+              id: 3,
+              reference: 'RSK-00003',
+              title: 'No trend yet',
+              status: 'monitoring',
+              residual_score: 8,
+              inherent_score: 12,
+              category: 'compliance',
+              trend: null,
+              updated_at: null,
+              next_review_date: past,
+            },
+          ],
+          total: 3,
+        },
+      })
+      .mockResolvedValueOnce({ data: { items: [], total: 0 } })
+    mockGetSummary.mockResolvedValue({
+      data: {
+        total_risks: 3,
+        by_level: { critical: 1, high: 1, medium: 1, low: 0 },
+        outside_appetite: 0,
+        overdue_review: 2,
+        escalated: 0,
+      },
+    })
+    mockGetHeatmap.mockResolvedValue({
+      data: {
+        matrix: Array.from({ length: 5 }, (_, row) =>
+          Array.from({ length: 5 }, (__, col) => ({
+            likelihood: 5 - row,
+            impact: col + 1,
+            score: (5 - row) * (col + 1),
+            level: 'low',
+            color: '#22c55e',
+            risk_count: 0,
+            risk_ids: [],
+            risk_titles: [],
+          })),
+        ),
+        summary: {
+          total_risks: 3,
+          critical_risks: 1,
+          high_risks: 1,
+          outside_appetite: 0,
+          average_inherent_score: 0,
+          average_residual_score: 0,
+        },
+        likelihood_labels: {
+          1: 'Rare',
+          2: 'Unlikely',
+          3: 'Possible',
+          4: 'Likely',
+          5: 'Almost Certain',
+        },
+        impact_labels: {
+          1: 'Insignificant',
+          2: 'Minor',
+          3: 'Moderate',
+          4: 'Major',
+          5: 'Catastrophic',
+        },
+      },
+    })
+    mockGetTrends.mockResolvedValue({ data: { series: [], top_movers: [] } })
+    mockAuditRuns.mockResolvedValue({ data: { items: [] } })
+    mockAuditFindings.mockResolvedValue({ data: { items: [] } })
+  })
+
+  it('renders Top 10 panel ordered by residual score and overdue honesty panel', async () => {
+    renderRegister()
+
+    expect(await screen.findByTestId('risk-slt-panels')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-slt-top10')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-slt-overdue')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-slt-overdue-count')).toHaveTextContent('2')
+
+    const topList = screen.getByTestId('risk-slt-top10-list')
+    const topRows = topList.querySelectorAll('[data-testid^="risk-slt-top10-row-"]')
+    expect(topRows[0]).toHaveAttribute('data-testid', 'risk-slt-top10-row-1')
+    expect(topRows[1]).toHaveAttribute('data-testid', 'risk-slt-top10-row-2')
+
+    expect(screen.getByTestId('risk-slt-overdue-list')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-slt-overdue-row-1')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-slt-overdue-row-3')).toBeInTheDocument()
+  })
+
+  it('shows Trend and Last updated columns with honesty when data missing', async () => {
+    renderRegister()
+
+    await screen.findByTestId('risk-updated-1')
+    expect(screen.getByTestId('risk-trend-increasing')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-trend-stable')).toBeInTheDocument()
+    expect(screen.getAllByTestId('risk-trend-unavailable').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByTestId('risk-updated-1')).not.toHaveTextContent('—')
+    expect(screen.getByTestId('risk-updated-3')).toHaveTextContent('—')
+  })
+
+  it('overdue filter chip from SLT panel filters the register table', async () => {
+    renderRegister()
+
+    await screen.findByTestId('risk-slt-overdue-filter')
+    fireEvent.click(screen.getByTestId('risk-slt-overdue-filter'))
+
+    expect(await screen.findByTestId('risk-hero-filter-chip')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-open-1')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-open-3')).toBeInTheDocument()
+    expect(screen.queryByTestId('risk-open-2')).not.toBeInTheDocument()
   })
 })
 

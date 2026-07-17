@@ -48,7 +48,13 @@ from src.domain.models.risk_register import (
 )
 from src.domain.models.user import User
 from src.domain.services.audit_escalation_risk_title import backfill_descriptive_escalation_titles
-from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
+from src.domain.services.risk_service import (
+    BowTieService,
+    KRIService,
+    RiskScoringEngine,
+    RiskService,
+    read_score_trend_from_tags,
+)
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 
 
@@ -285,6 +291,9 @@ async def list_risks(
                 "escalation_reason": r.escalation_reason,
                 "risk_owner_name": r.risk_owner_name,
                 "next_review_date": (r.next_review_date.isoformat() if r.next_review_date else None),
+                "updated_at": (r.updated_at.isoformat() if getattr(r, "updated_at", None) else None),
+                # Tag-persisted net trend only — no history N+1; null when unknown (FE honesty).
+                "trend": read_score_trend_from_tags(getattr(r, "tags", None)),
                 "linked_audits": r.linked_audits or [],
                 "linked_actions": r.linked_actions or [],
                 "linked_incidents": r.linked_incidents or [],
