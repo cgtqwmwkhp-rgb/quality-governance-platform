@@ -1953,6 +1953,12 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         action = cast(Optional[InvestigationAction], result.scalar_one_or_none())
         if action:
             source_id = action.investigation_id
+        else:
+            # Investigation-linked CAPAAction rows share source_type=investigation in the unified API.
+            capa_row = await _load_capa_by_api_source_type(db, action_id, current_user.tenant_id, src_type)
+            if capa_row is not None:
+                action = capa_row
+                source_id = capa_row.source_id or 0
     else:
         capa_row = await _load_capa_by_api_source_type(db, action_id, current_user.tenant_id, src_type)
         if capa_row is not None:
