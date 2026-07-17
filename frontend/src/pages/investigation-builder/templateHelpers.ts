@@ -48,7 +48,7 @@ function mapApiSection(section: ApiStructureSection, index: number): Investigati
   return {
     id: section.id ?? generateId(),
     name: section.name ?? `Section ${index + 1}`,
-    min_level: section.min_level ?? 'minimal',
+    min_level: section.min_level ?? 'high',
     fields: (section.fields ?? []).map(mapApiField),
   }
 }
