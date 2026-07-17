@@ -12,6 +12,7 @@
 
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { buildActionDetailPath } from './actionLinks'
 import {
   Bell,
@@ -39,7 +40,9 @@ import {
 import { complianceAutomationApi, getApiErrorMessage, knowledgeBankApi, type RegulatoryImpact } from '../api/client'
 import { cn } from '../helpers/utils'
 import { Button } from '../components/ui/Button'
+import { EmptyState } from '../components/ui/EmptyState'
 import { toast } from '../contexts/ToastContext'
+import { formatStandardCode, scoreBarColor } from './complianceAutomationHelpers'
 
 interface RegulatoryUpdate {
   id: number
@@ -98,23 +101,8 @@ const statusColors: Record<string, string> = {
 const HSE_RIDDOR_PORTAL_URL = 'https://notifications.hse.gov.uk/RiddorForms/'
 const HSE_RIDDOR_GUIDE_URL = 'https://www.hse.gov.uk/riddor/reporting/how-to-make-riddor-report.htm'
 
-function formatStandardCode(code: string): string {
-  const labels: Record<string, string> = {
-    ISO9001: 'ISO 9001',
-    ISO14001: 'ISO 14001',
-    ISO45001: 'ISO 45001',
-    ISO27001: 'ISO 27001',
-  }
-  return labels[code] ?? code.replace(/([A-Z]+)(\d+)/, '$1 $2')
-}
-
-function scoreBarColor(score: number): string {
-  if (score >= 80) return 'bg-success'
-  if (score >= 60) return 'bg-info'
-  return 'bg-primary'
-}
-
 export default function ComplianceAutomation() {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<
     'regulatory' | 'certificates' | 'audits' | 'scoring' | 'riddor' | 'watch'
   >('regulatory')
@@ -338,9 +326,14 @@ export default function ComplianceAutomation() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Compliance Automation</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            {t('compliance.automation.title', 'Monitoring')}
+          </h1>
           <p className="text-muted-foreground mt-1">
-            Monitor regulations, track certificates, and automate compliance
+            {t(
+              'compliance.automation.subtitle',
+              'Regulatory watch, certificate expiry, compliance scoring, and RIDDOR readiness',
+            )}
           </p>
         </div>
         <Button onClick={() => void loadData()} variant="outline">
@@ -441,7 +434,19 @@ export default function ComplianceAutomation() {
 
       {/* Regulatory Updates Tab */}
       {activeTab === 'regulatory' && (
-        <div className="space-y-4">
+        <div className="space-y-4" data-testid="monitoring-regulatory-tab">
+          {updates.length === 0 ? (
+            <div data-testid="monitoring-regulatory-empty">
+              <EmptyState
+                icon={<Bell className="w-8 h-8 text-muted-foreground" />}
+                title={t('compliance.automation.empty.regulatory.title', 'No regulatory updates yet')}
+                description={t(
+                  'compliance.automation.empty.regulatory.description',
+                  'Regulatory feed items appear here when ingested. Empty means no pending updates — not fabricated alerts.',
+                )}
+              />
+            </div>
+          ) : null}
           {updates.map((update) => (
             <div
               key={update.id}
@@ -505,14 +510,31 @@ export default function ComplianceAutomation() {
 
       {/* Certificates Tab */}
       {activeTab === 'certificates' && (
-        <div className="bg-card/50 border border-border rounded-xl overflow-hidden">
+        <div
+          className="bg-card/50 border border-border rounded-xl overflow-hidden"
+          data-testid="monitoring-certificates-tab"
+        >
           <div className="p-4 border-b border-border flex items-center justify-between">
-            <h3 className="font-medium text-foreground">Certificate Expiry Tracking</h3>
+            <h3 className="font-medium text-foreground">
+              {t('compliance.automation.cert_expiry_tracking', 'Certificate Expiry Tracking')}
+            </h3>
             <button className="flex items-center gap-2 px-3 py-1.5 bg-success hover:bg-success/90 text-success-foreground rounded-lg text-sm transition-colors">
               <Award className="w-4 h-4" />
-              Add Certificate
+              {t('compliance.automation.add_certificate', 'Add Certificate')}
             </button>
           </div>
+          {certificates.length === 0 ? (
+            <div data-testid="monitoring-certificates-empty">
+              <EmptyState
+                icon={<Award className="w-8 h-8 text-muted-foreground" />}
+                title={t('compliance.automation.empty.certificates.title', 'No certificates tracked yet')}
+                description={t(
+                  'compliance.automation.empty.certificates.description',
+                  'Track training, equipment, and site certificates here once added. Empty means none on record — not sample data.',
+                )}
+              />
+            </div>
+          ) : (
           <div className="divide-y divide-border">
             {certificates.map((cert) => (
               <div key={cert.id} className="p-4 hover:bg-accent/50 transition-colors">
@@ -569,19 +591,37 @@ export default function ComplianceAutomation() {
               </div>
             ))}
           </div>
+          )}
         </div>
       )}
 
       {/* Scheduled Audits Tab */}
       {activeTab === 'audits' && (
-        <div className="bg-card/50 border border-border rounded-xl overflow-hidden">
+        <div
+          className="bg-card/50 border border-border rounded-xl overflow-hidden"
+          data-testid="monitoring-audits-tab"
+        >
           <div className="p-4 border-b border-border flex items-center justify-between">
-            <h3 className="font-medium text-foreground">Scheduled Audits & Inspections</h3>
+            <h3 className="font-medium text-foreground">
+              {t('compliance.automation.scheduled_inspections', 'Scheduled Audits & Inspections')}
+            </h3>
             <button className="flex items-center gap-2 px-3 py-1.5 bg-success hover:bg-success/90 text-success-foreground rounded-lg text-sm transition-colors">
               <Calendar className="w-4 h-4" />
-              Schedule Audit
+              {t('compliance.automation.schedule_audit', 'Schedule Audit')}
             </button>
           </div>
+          {audits.length === 0 ? (
+            <div data-testid="monitoring-audits-empty">
+              <EmptyState
+                icon={<Calendar className="w-8 h-8 text-muted-foreground" />}
+                title={t('compliance.automation.empty.audits.title', 'No scheduled audits yet')}
+                description={t(
+                  'compliance.automation.empty.audits.description',
+                  'Scheduled audits appear here when configured. Use Audits for live audit runs — not demo placeholders.',
+                )}
+              />
+            </div>
+          ) : (
           <div className="divide-y divide-border">
             {audits.map((audit) => (
               <div key={audit.id} className="p-4 hover:bg-accent/50 transition-colors">
@@ -614,18 +654,29 @@ export default function ComplianceAutomation() {
               </div>
             ))}
           </div>
+          )}
         </div>
       )}
 
       {/* Compliance Scoring Tab */}
       {activeTab === 'scoring' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="monitoring-scoring-tab">
           <div className="bg-card/50 border border-border rounded-xl p-6">
-            <h3 className="font-medium text-foreground mb-4">Score Breakdown by Standard</h3>
+            <h3 className="font-medium text-foreground mb-4">
+              {t('compliance.automation.score_breakdown', 'Score Breakdown by Standard')}
+            </h3>
             {scoreBreakdown.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground text-sm space-y-2">
-                <p>No live standard scores yet.</p>
-                <p>Scores come from evidence coverage in your standards library — not demo placeholders.</p>
+              <div
+                className="py-8 text-center text-muted-foreground text-sm space-y-2"
+                data-testid="monitoring-score-breakdown-empty"
+              >
+                <p>{t('compliance.automation.empty.score.breakdown.title', 'No live standard scores yet')}</p>
+                <p>
+                  {t(
+                    'compliance.automation.empty.score.breakdown.description',
+                    'Scores come from evidence coverage in your standards library — not demo placeholders.',
+                  )}
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -648,10 +699,18 @@ export default function ComplianceAutomation() {
           </div>
 
           <div className="bg-card/50 border border-border rounded-xl p-6">
-            <h3 className="font-medium text-foreground mb-4">Key Gaps</h3>
+            <h3 className="font-medium text-foreground mb-4">
+              {t('compliance.automation.key_gaps', 'Key Gaps')}
+            </h3>
             {scoreGaps.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground text-sm">
-                No automated gap list yet. Run gap analysis or link evidence to standards to populate this view.
+              <div
+                className="py-8 text-center text-muted-foreground text-sm"
+                data-testid="monitoring-score-gaps-empty"
+              >
+                {t(
+                  'compliance.automation.empty.score.gaps.description',
+                  'No automated gap list yet. Run gap analysis or link evidence to standards to populate this view.',
+                )}
               </div>
             ) : (
               <div className="space-y-3">
