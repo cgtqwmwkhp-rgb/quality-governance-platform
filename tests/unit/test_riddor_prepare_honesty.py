@@ -9,10 +9,7 @@ import pytest
 from src.domain.exceptions import NotFoundError
 from src.domain.models.compliance_automation import RIDDORSubmission
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentType
-from src.domain.services.compliance_automation_service import (
-    RIDDOR_STATUS_DRAFT_PACK,
-    ComplianceAutomationService,
-)
+from src.domain.services.compliance_automation_service import RIDDOR_STATUS_DRAFT_PACK, ComplianceAutomationService
 
 
 def _incident(incident_id: int = 42) -> Incident:
