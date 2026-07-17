@@ -28,6 +28,7 @@ class ReferenceNumberService:
         "rta_action": "RTAACT",
         "complaint_action": "CMA",
         "capa": "CAPA",
+        "document": "DOC",
     }
 
     @classmethod
