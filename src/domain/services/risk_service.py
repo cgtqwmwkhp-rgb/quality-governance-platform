@@ -20,9 +20,11 @@ from src.domain.models.risk_register import (
     EnterpriseKeyRiskIndicator,
     EnterpriseRisk,
     EnterpriseRiskControl,
+    RiskActivityEvent,
     RiskAppetiteStatement,
     RiskAssessmentHistory,
     RiskControlMapping,
+    RiskNote,
 )
 
 
@@ -39,6 +41,9 @@ def naive_utc_now() -> datetime:
 ScoreTrend = str  # increasing | stable | decreasing
 
 SCORE_TREND_TAG_KEY = "score_trend"
+
+RISK_EVENT_ASSESSED = "assessed"
+RISK_EVENT_NOTE_ADDED = "note_added"
 
 
 def compute_net_score_trend(previous: Optional[int], current: int) -> ScoreTrend:
@@ -294,7 +299,13 @@ class RiskService:
         )
         self.db.add(history)
 
-        # TODO(RR-W2): append risk activity event when risk_activity_events table lands.
+        activity = self._build_assessment_activity_event(
+            risk,
+            actor_id=assessed_by,
+            score_trend=score_trend,
+            previous_net_score=previous_net_score,
+        )
+        self.db.add(activity)
 
         await self.db.commit()
         await self.db.refresh(risk)
@@ -322,6 +333,69 @@ class RiskService:
             treatment_strategy=risk.treatment_strategy,
             assessment_notes=notes,
         )
+
+    def _build_assessment_activity_event(
+        self,
+        risk: EnterpriseRisk,
+        *,
+        actor_id: Optional[int],
+        score_trend: ScoreTrend,
+        previous_net_score: Optional[int],
+    ) -> RiskActivityEvent:
+        """Build an assess activity row (caller adds + commits)."""
+        if actor_id is None:
+            raise ValueError("actor_id is required for assessment activity events")
+        summary = f"Assessment saved — net score {risk.residual_score} " f"(trend {score_trend})"
+        payload: dict[str, Any] = {
+            "inherent_score": risk.inherent_score,
+            "residual_score": risk.residual_score,
+            "previous_residual_score": previous_net_score,
+            "trend": score_trend,
+            "status": risk.status,
+            "treatment_strategy": risk.treatment_strategy,
+        }
+        return RiskActivityEvent(
+            tenant_id=risk.tenant_id,
+            risk_id=risk.id,
+            event_type=RISK_EVENT_ASSESSED,
+            summary=summary,
+            payload=payload,
+            actor_id=actor_id,
+        )
+
+    async def append_risk_note(
+        self,
+        risk: EnterpriseRisk,
+        *,
+        body: str,
+        created_by_id: int,
+    ) -> RiskNote:
+        """Append a note and matching activity event in one transaction."""
+        note = RiskNote(
+            tenant_id=risk.tenant_id,
+            risk_id=risk.id,
+            body=body,
+            created_by_id=created_by_id,
+            created_at=naive_utc_now(),
+        )
+        self.db.add(note)
+        await self.db.flush()
+        preview = body.strip()
+        if len(preview) > 120:
+            preview = f"{preview[:117]}..."
+        activity = RiskActivityEvent(
+            tenant_id=risk.tenant_id,
+            risk_id=risk.id,
+            event_type=RISK_EVENT_NOTE_ADDED,
+            summary=f"Note added: {preview}",
+            payload={"note_id": note.id},
+            actor_id=created_by_id,
+            created_at=naive_utc_now(),
+        )
+        self.db.add(activity)
+        await self.db.commit()
+        await self.db.refresh(note)
+        return note
 
     async def _record_assessment(
         self,

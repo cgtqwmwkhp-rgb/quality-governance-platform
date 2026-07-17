@@ -2,17 +2,24 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockGetProfile, mockGetTrends, mockAssess } = vi.hoisted(() => ({
-  mockGetProfile: vi.fn(),
-  mockGetTrends: vi.fn(),
-  mockAssess: vi.fn(),
-}))
+const { mockGetProfile, mockGetTrends, mockAssess, mockListNotes, mockListActivity, mockCreateNote } =
+  vi.hoisted(() => ({
+    mockGetProfile: vi.fn(),
+    mockGetTrends: vi.fn(),
+    mockAssess: vi.fn(),
+    mockListNotes: vi.fn(),
+    mockListActivity: vi.fn(),
+    mockCreateNote: vi.fn(),
+  }))
 
 vi.mock('../../api/client', () => ({
   riskRegisterApi: {
     getProfile: mockGetProfile,
     getTrends: mockGetTrends,
     assess: mockAssess,
+    listNotes: mockListNotes,
+    listActivity: mockListActivity,
+    createNote: mockCreateNote,
   },
   getApiErrorMessage: (err: unknown, fallback = 'Something went wrong') =>
     err instanceof Error ? err.message : fallback,
@@ -79,6 +86,8 @@ describe('RiskProfile', () => {
     mockGetTrends.mockResolvedValue({
       data: [{ month: '2026-06', avg_residual: 9, assessment_count: 1 }],
     })
+    mockListNotes.mockResolvedValue({ data: { items: [], total: 0, page: 1, page_size: 50, pages: 1 } })
+    mockListActivity.mockResolvedValue({ data: { items: [], total: 0, page: 1, page_size: 50, pages: 1 } })
   })
 
   it('renders hero shell from profile API', async () => {
@@ -99,8 +108,12 @@ describe('RiskProfile', () => {
     expect(screen.getByTestId('risk-profile-back')).toHaveAttribute('href', '/risk-register')
     expect(mockGetProfile).toHaveBeenCalledWith(42)
     expect(mockGetTrends).toHaveBeenCalledWith(365, false, 42)
+    expect(mockListNotes).toHaveBeenCalledWith(42, { page_size: 50 })
+    expect(mockListActivity).toHaveBeenCalledWith(42, { page_size: 50 })
     expect(screen.getByTestId('risk-profile-trend-chart')).toBeInTheDocument()
     expect(screen.getByTestId('risk-profile-assess')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-profile-notes')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-profile-activity')).toBeInTheDocument()
   })
 
   it('submits assess and reloads profile', async () => {
@@ -126,6 +139,51 @@ describe('RiskProfile', () => {
       )
     })
     expect(mockGetProfile).toHaveBeenCalledTimes(2)
+  })
+
+  it('posts a note and refreshes activity', async () => {
+    mockGetProfile.mockResolvedValue({ data: profileFixture })
+    mockCreateNote.mockResolvedValue({
+      data: {
+        id: 1,
+        risk_id: 42,
+        body: 'Follow up with supplier',
+        created_by_id: 7,
+        created_by_email: 'owner@example.com',
+        created_at: '2026-07-10T12:00:00',
+      },
+    })
+    mockListActivity.mockResolvedValueOnce({ data: { items: [], total: 0, page: 1, page_size: 50, pages: 1 } })
+    mockListActivity.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 9,
+            risk_id: 42,
+            event_type: 'note_added',
+            summary: 'Note added: Follow up with supplier',
+            actor_id: 7,
+            created_at: '2026-07-10T12:00:00',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 50,
+        pages: 1,
+      },
+    })
+    renderProfile()
+
+    await screen.findByTestId('risk-profile-page')
+    fireEvent.change(screen.getByTestId('risk-profile-note-input'), {
+      target: { value: 'Follow up with supplier' },
+    })
+    fireEvent.click(screen.getByTestId('risk-profile-note-submit'))
+
+    await waitFor(() => {
+      expect(mockCreateNote).toHaveBeenCalledWith(42, 'Follow up with supplier')
+    })
+    expect(mockListActivity).toHaveBeenCalledTimes(2)
   })
 
   it('shows not-found honesty for 404', async () => {

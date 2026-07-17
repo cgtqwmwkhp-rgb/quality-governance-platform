@@ -114,6 +114,42 @@ export interface RiskAssessResponse {
   next_review_date?: string | null
 }
 
+export interface RiskNote {
+  id: number
+  risk_id: number
+  body: string
+  created_by_id: number
+  created_by_email?: string | null
+  created_at?: string | null
+}
+
+export interface RiskNoteListResponse {
+  items: RiskNote[]
+  total: number
+  page: number
+  page_size: number
+  pages: number
+}
+
+export interface RiskActivityEvent {
+  id: number
+  risk_id: number
+  event_type: string
+  summary: string
+  payload?: Record<string, unknown> | null
+  actor_id: number
+  actor_email?: string | null
+  created_at?: string | null
+}
+
+export interface RiskActivityListResponse {
+  items: RiskActivityEvent[]
+  total: number
+  page: number
+  page_size: number
+  pages: number
+}
+
 export interface RiskTrendPoint {
   month: string
   avg_inherent?: number
@@ -295,6 +331,30 @@ export function createRiskRegisterApi(api: AxiosInstance) {
     delete: (id: number) => api.delete<void>(`/api/v1/risk-register/${id}`),
     assess: (id: number, data: RiskAssessPayload) =>
       api.post<RiskAssessResponse>(`/api/v1/risk-register/${id}/assess`, data),
+    listNotes: (id: number, params?: { page?: number; page_size?: number }) => {
+      const sp = new URLSearchParams()
+      if (params?.page != null) sp.set('page', String(params.page))
+      if (params?.page_size != null) sp.set('page_size', String(params.page_size))
+      const q = sp.toString()
+      return api.get<RiskNoteListResponse>(
+        `/api/v1/risk-register/${id}/notes${q ? `?${q}` : ''}`,
+      )
+    },
+    createNote: (id: number, body: string) =>
+      api.post<RiskNote>(`/api/v1/risk-register/${id}/notes`, { body }),
+    listActivity: (
+      id: number,
+      params?: { page?: number; page_size?: number; event_type?: string },
+    ) => {
+      const sp = new URLSearchParams()
+      if (params?.page != null) sp.set('page', String(params.page))
+      if (params?.page_size != null) sp.set('page_size', String(params.page_size))
+      if (params?.event_type) sp.set('event_type', params.event_type)
+      const q = sp.toString()
+      return api.get<RiskActivityListResponse>(
+        `/api/v1/risk-register/${id}/activity${q ? `?${q}` : ''}`,
+      )
+    },
     resolveSuggestionTriage: (
       id: number,
       body: { decision: 'accept' | 'reject'; notes?: string },

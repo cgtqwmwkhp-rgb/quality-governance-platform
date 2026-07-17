@@ -164,10 +164,12 @@ class TestRiskService:
         service.db.add = MagicMock()
         service.db.commit = AsyncMock()
 
-        updated = await service.update_risk_assessment(1, {"inherent_likelihood": 5, "inherent_impact": 4})
+        updated = await service.update_risk_assessment(
+            1, {"inherent_likelihood": 5, "inherent_impact": 4}, assessed_by=1
+        )
         assert updated.inherent_likelihood == 5
         assert updated.inherent_impact == 4
-        service.db.add.assert_called_once()
+        assert service.db.add.call_count == 2
         service.db.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -197,7 +199,7 @@ class TestRiskService:
         service.db.add = MagicMock()
         service.db.commit = AsyncMock()
 
-        await service.update_risk_assessment(1, {"trend": "stable"})
+        await service.update_risk_assessment(1, {"trend": "stable"}, assessed_by=1)
         assert risk.tags == {"score_trend": "stable"}
 
     @pytest.mark.asyncio
