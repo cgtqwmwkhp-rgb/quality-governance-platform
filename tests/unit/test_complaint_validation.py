@@ -62,6 +62,46 @@ class TestComplaintCreateValidation:
         with pytest.raises(ValidationError):
             ComplaintCreate(**data)
 
+    def test_intake_fields_wave1(self):
+        """Wave 1 intake: customer, channel, subject, alleged event."""
+        alleged = datetime(2026, 7, 1, 10, 30)
+        data = {
+            "title": "Staff conduct",
+            "description": "Rude behaviour on site.",
+            "received_date": datetime.now(),
+            "complainant_name": "Alex Client",
+            "complainant_company": "Acme Corp",
+            "source_type": "in_person",
+            "contract_id": 10,
+            "subject_user_id": 42,
+            "subject_name": "Sam Engineer",
+            "alleged_event_at": alleged,
+        }
+        complaint = ComplaintCreate(**data)
+        assert complaint.source_type == "in_person"
+        assert complaint.contract_id == 10
+        assert complaint.subject_user_id == 42
+        assert complaint.subject_name == "Sam Engineer"
+        assert complaint.alleged_event_at == alleged
+        assert complaint.complainant_company == "Acme Corp"
+
+    def test_update_keeps_complainant_and_intake_fields(self):
+        """Update schema must not silently drop complainant / intake fields."""
+        update = ComplaintUpdate(
+            complainant_name="Updated Name",
+            complainant_company="New Co",
+            source_type="phone",
+            contract_id=11,
+            subject_name="Other person",
+            alleged_event_at=datetime(2026, 6, 15, 9, 0),
+        )
+        assert update.complainant_name == "Updated Name"
+        assert update.complainant_company == "New Co"
+        assert update.source_type == "phone"
+        assert update.contract_id == 11
+        assert update.subject_name == "Other person"
+        assert update.alleged_event_at is not None
+
 
 class TestComplaintUpdateValidation:
     """Tests for ComplaintUpdate schema validation."""

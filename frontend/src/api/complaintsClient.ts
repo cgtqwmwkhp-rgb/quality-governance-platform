@@ -18,6 +18,14 @@ export interface PaginatedResponse<T> {
   total_pages?: number
 }
 
+export type ComplaintSourceType =
+  | 'manual'
+  | 'email'
+  | 'api'
+  | 'phone'
+  | 'portal'
+  | 'in_person'
+
 // ============ Complaint Types ============
 export interface Complaint {
   id: number
@@ -34,6 +42,11 @@ export interface Complaint {
   complainant_company?: string
   related_reference?: string
   department?: string
+  source_type?: ComplaintSourceType | string
+  contract_id?: number | null
+  subject_user_id?: number | null
+  subject_name?: string | null
+  alleged_event_at?: string | null
   target_resolution_date?: string
   investigation_notes?: string
   root_cause?: string
@@ -60,6 +73,11 @@ export interface ComplaintCreate {
   complainant_company?: string
   related_reference?: string
   department?: string
+  source_type?: ComplaintSourceType
+  contract_id?: number | null
+  subject_user_id?: number | null
+  subject_name?: string | null
+  alleged_event_at?: string | null
   reporter_submission?: Record<string, unknown>
 }
 
@@ -72,6 +90,14 @@ export interface ComplaintUpdate {
   complainant_name?: string
   complainant_email?: string
   complainant_phone?: string
+  complainant_company?: string
+  related_reference?: string
+  source_type?: ComplaintSourceType
+  contract_id?: number | null
+  subject_user_id?: number | null
+  subject_name?: string | null
+  alleged_event_at?: string | null
+  received_date?: string
   investigation_notes?: string
   root_cause?: string
   customer_satisfied?: boolean
