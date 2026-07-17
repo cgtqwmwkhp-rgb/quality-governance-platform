@@ -7,6 +7,7 @@ import {
   FlaskConical,
   ArrowRight,
   GitBranch,
+  CheckCircle,
   AlertTriangle,
   Car,
   MessageSquare,
