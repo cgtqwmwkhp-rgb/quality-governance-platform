@@ -114,6 +114,10 @@ async def test_upload_document_sets_document_tenant(monkeypatch):
         "src.api.routes.documents.storage_service",
         lambda: types.SimpleNamespace(upload=AsyncMock()),
     )
+    monkeypatch.setattr(
+        "src.api.routes.documents.ReferenceNumberService.generate",
+        AsyncMock(return_value="DOC-2026-0001"),
+    )
 
     async def fake_process(*args, **kwargs):
         args[1].status = DocumentStatus.APPROVED
