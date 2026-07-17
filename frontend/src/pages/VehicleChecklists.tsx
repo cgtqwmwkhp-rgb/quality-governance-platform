@@ -84,6 +84,13 @@ export interface VehicleSafetyAssetsResponse {
   registry_tooling_calibration_expiry?: string | null
 }
 
+type ChecklistListResponseWithSource = {
+  items: Record<string, unknown>[]
+  pages: number
+  source?: 'cache' | 'live' | string | null
+  cache_as_of?: string | null
+}
+
 const KIT_TYPE_HINTS = ['fire extinguisher', 'extinguisher', 'first aid', 'engineer tool', 'tooling']
 
 export function isKitAssetType(typeName?: string | null, category?: string | null): boolean {
@@ -253,6 +260,8 @@ export default function VehicleChecklists() {
   const [checklistItems, setChecklistItems] = useState<Record<string, unknown>[]>([])
   const [checklistPage, setChecklistPage] = useState(1)
   const [checklistPages, setChecklistPages] = useState(1)
+  const [dataSource, setDataSource] = useState<string | null>(null)
+  const [cacheAsOf, setCacheAsOf] = useState<string | null>(null)
 
   // Defects data
   const [defects, setDefects] = useState<VehicleDefect[]>([])
@@ -348,12 +357,16 @@ export default function VehicleChecklists() {
       if (tab === 'defects') return
       setLoading(true)
       setLoadError('')
+      setDataSource(null)
+      setCacheAsOf(null)
       try {
         const fetcher = tab === 'daily' ? vehicleChecklistsApi.listDaily : vehicleChecklistsApi.listMonthly
         const res = await fetcher(page, pageSize)
-        const data = res.data
+        const data = res.data as ChecklistListResponseWithSource
         setChecklistItems(data.items)
         setChecklistPages(data.pages)
+        setDataSource(data.source ?? null)
+        setCacheAsOf(data.cache_as_of ?? null)
       } catch (err) {
         const msg = getApiErrorMessage(err)
         setLoadError(msg)
@@ -1038,11 +1051,38 @@ export default function VehicleChecklists() {
       )}
 
       {/* Error Banner */}
+      {activeTab !== 'defects' && dataSource === 'cache' && (
+        <div
+          className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200"
+          role="status"
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4" />
+            <div>
+              <p className="text-sm font-medium">Data may be stale</p>
+              {cacheAsOf && <p className="mt-1 text-xs">Cache as of {cacheAsOf}</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
       {loadError && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-          <div className="flex items-center gap-2 text-destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <p className="text-sm font-medium">{loadError}</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <p className="text-sm font-medium">{loadError}</p>
+            </div>
+            {activeTab !== 'defects' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => loadChecklists(activeTab, checklistPage)}
+              >
+                <RefreshCw className="h-4 w-4 mr-1" />
+                Retry
+              </Button>
+            )}
           </div>
         </div>
       )}

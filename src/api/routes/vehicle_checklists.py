@@ -23,6 +23,7 @@ from src.api.schemas.vehicle_checklist import (
     DefectResponse,
     DefectUpdate,
 )
+from src.domain.error_codes import ErrorCode
 from src.domain.exceptions import AuthorizationError, DomainError, NotFoundError, ValidationError
 from src.domain.models.pams_cache import PAMSSyncLog, PAMSVanChecklistCache, PAMSVanChecklistMonthlyCache
 from src.domain.models.user import User
@@ -46,7 +47,7 @@ CACHE_MODEL_MAP = {
 
 
 def _service_unavailable(message: str) -> NoReturn:
-    exc = DomainError(message, code="SERVICE_UNAVAILABLE")
+    exc = DomainError(message, code=ErrorCode.EXTERNAL_SERVICE_ERROR)
     exc.http_status = 503
     raise exc
 
@@ -107,11 +108,16 @@ async def _list_from_cache(
     rows = (await db.execute(q)).scalars().all()
 
     items = []
+    synced_at_values = []
     for row in rows:
         data = dict(row.raw_data) if row.raw_data else {}
         data["_pams_id"] = row.pams_id
         data["_synced_at"] = row.synced_at.isoformat() if row.synced_at else None
+        if row.synced_at:
+            synced_at_values.append(row.synced_at)
         items.append(data)
+
+    cache_as_of = max(synced_at_values).isoformat() if synced_at_values else None
 
     return ChecklistListResponse(
         items=items,
@@ -119,6 +125,8 @@ async def _list_from_cache(
         page=page,
         page_size=page_size,
         pages=max(1, math.ceil(total / page_size)),
+        source="cache",
+        cache_as_of=cache_as_of,
     )
 
 
@@ -155,6 +163,8 @@ async def _list_from_live_pams(
                 page=page,
                 page_size=page_size,
                 pages=max(1, math.ceil(total / page_size)),
+                source="live",
+                cache_as_of=None,
             )
     except HTTPException:
         raise

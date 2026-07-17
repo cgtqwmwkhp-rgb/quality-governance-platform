@@ -27,6 +27,8 @@ class ChecklistListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+    source: Optional[str] = None
+    cache_as_of: Optional[str] = None
 
 
 class DefectCreate(BaseModel):

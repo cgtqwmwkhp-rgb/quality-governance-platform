@@ -101,6 +101,44 @@ describe('VehicleChecklists pagination contract', () => {
       expect(mockListDefects).toHaveBeenCalledWith(1, 100, undefined)
     })
   })
+
+  it('shows a stale-data banner when checklist data is served from cache', async () => {
+    mockListDaily.mockResolvedValueOnce({
+      data: {
+        items: [],
+        total: 0,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+        source: 'cache',
+        cache_as_of: '2026-01-03T12:30:00',
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByText('Data may be stale')).toBeInTheDocument()
+    expect(screen.getByText('Cache as of 2026-01-03T12:30:00')).toBeInTheDocument()
+  })
+
+  it('shows a retry button for checklist load failures', async () => {
+    mockListDaily
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce({
+        data: { items: [], total: 0, page: 1, page_size: 100, pages: 1, source: 'live' },
+      })
+
+    renderPage()
+
+    const retry = await screen.findByRole('button', { name: 'Retry' })
+    expect(retry).toBeInTheDocument()
+
+    fireEvent.click(retry)
+
+    await waitFor(() => {
+      expect(mockListDaily).toHaveBeenCalledTimes(2)
+    })
+  })
 })
 
 describe('VehicleChecklists van kit compliance panel (AM-VAN)', () => {
