@@ -106,6 +106,7 @@ describe('IMSDashboard IA W2 compliance hub', () => {
     expect(screen.getByTestId('compliance-hub-evidence')).toBeInTheDocument()
     expect(screen.getByTestId('compliance-hub-monitoring')).toBeInTheDocument()
     expect(screen.getByTestId('compliance-hub-isms')).toBeInTheDocument()
+    expect(screen.getByText('ims.hub.monitoring.title')).toBeInTheDocument()
     expect(screen.queryByText('85%')).not.toBeInTheDocument()
   })
 
