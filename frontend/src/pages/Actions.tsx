@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useDeferredValue, useMemo } from 'react'
+import { useEffect, useState, useCallback, useDeferredValue, useMemo, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -172,6 +172,31 @@ function isSafeActionsReturnTo(path: string | null | undefined): path is string 
   return true
 }
 
+const FILTER_STATUS_VALUES: FilterStatus[] = [
+  'all',
+  'open',
+  'in_progress',
+  'pending_verification',
+  'completed',
+]
+
+function parseActionsStatusParam(raw: string | null | undefined): FilterStatus {
+  if (raw && FILTER_STATUS_VALUES.includes(raw as FilterStatus)) {
+    return raw as FilterStatus
+  }
+  return 'all'
+}
+
+type HeroKey = 'total' | 'open' | 'in_progress' | 'overdue' | 'completed'
+
+function heroKeyFromFilters(viewMode: ViewMode, filterStatus: FilterStatus): HeroKey {
+  if (viewMode === 'overdue' || viewMode === 'my_overdue') return 'overdue'
+  if (filterStatus === 'open') return 'open'
+  if (filterStatus === 'in_progress') return 'in_progress'
+  if (filterStatus === 'completed') return 'completed'
+  return 'total'
+}
+
 export default function Actions() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -183,16 +208,18 @@ export default function Actions() {
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
     parseActionsViewParam(searchParams.get('view')),
   )
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
-  const [heroKey, setHeroKey] = useState<
-    'total' | 'open' | 'in_progress' | 'overdue' | 'completed'
-  >(() => {
-    const initialView = parseActionsViewParam(searchParams.get('view'))
-    return initialView === 'overdue' || initialView === 'my_overdue' ? 'overdue' : 'total'
-  })
-  const [sourceTypeFilter, setSourceTypeFilter] = useState<SourceTypeFilter>(
-    (searchParams.get('sourceType') as SourceTypeFilter) || 'all',
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>(() =>
+    parseActionsStatusParam(searchParams.get('status')),
   )
+  const [heroKey, setHeroKey] = useState<HeroKey>(() => {
+    const initialView = parseActionsViewParam(searchParams.get('view'))
+    const initialStatus = parseActionsStatusParam(searchParams.get('status'))
+    return heroKeyFromFilters(initialView, initialStatus)
+  })
+  const [sourceTypeFilter, setSourceTypeFilter] = useState<SourceTypeFilter>(() => {
+    const raw = searchParams.get('sourceType')
+    return raw ? (raw as SourceTypeFilter) : 'all'
+  })
   const sourceIdFilter = Number(searchParams.get('sourceId') || '')
   const [searchTerm, setSearchTerm] = useState('')
   const [showModal, setShowModal] = useState(false)
@@ -224,6 +251,30 @@ export default function Actions() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<ApiError | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+  const createTriggerRef = useRef<HTMLButtonElement>(null)
+
+  // Hydrate shareable filters from URL (back/forward + deep links).
+  useEffect(() => {
+    const nextView = parseActionsViewParam(searchParams.get('view'))
+    const nextStatus = parseActionsStatusParam(searchParams.get('status'))
+    const rawSourceType = searchParams.get('sourceType')
+    const nextSourceType: SourceTypeFilter = rawSourceType
+      ? (rawSourceType as SourceTypeFilter)
+      : 'all'
+    setViewMode((prev) => (prev === nextView ? prev : nextView))
+    setFilterStatus((prev) => (prev === nextStatus ? prev : nextStatus))
+    setSourceTypeFilter((prev) => (prev === nextSourceType ? prev : nextSourceType))
+    const nextHero = heroKeyFromFilters(nextView, nextStatus)
+    setHeroKey((prev) => (prev === nextHero ? prev : nextHero))
+  }, [searchParams])
+
+  useEffect(() => {
+    if (!showModal || submitSuccess) return
+    const id = window.requestAnimationFrame(() => {
+      document.getElementById('actions-field-0')?.focus()
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [showModal, submitSuccess])
 
   // Running Sheet / case bridge: ?create=1 opens modal with prefills + optional returnTo.
   useEffect(() => {
@@ -350,11 +401,13 @@ export default function Actions() {
     }
     if (viewMode === 'all') next.delete('view')
     else next.set('view', viewMode)
+    if (filterStatus === 'all') next.delete('status')
+    else next.set('status', filterStatus)
     const nextQuery = next.toString()
     if (nextQuery !== searchParams.toString()) {
       setSearchParams(next, { replace: true })
     }
-  }, [searchParams, setSearchParams, sourceIdFilter, sourceTypeFilter, viewMode])
+  }, [searchParams, setSearchParams, sourceIdFilter, sourceTypeFilter, viewMode, filterStatus])
 
   useEffect(() => {
     loadActions()
@@ -519,12 +572,13 @@ export default function Actions() {
   }, [filteredActions, sortMode])
 
   const byD = summary?.by_display_status ?? {}
+  const statsReady = summary != null && !summaryUnavailable
   const stats = {
-    total: summary?.total ?? actions.length,
-    open: byD.open ?? actions.filter((a) => a.display_status === 'open').length,
-    inProgress: byD.in_progress ?? actions.filter((a) => a.display_status === 'in_progress').length,
-    overdue: byD.overdue ?? actions.filter((a) => isOverdue(a.due_date, a.display_status)).length,
-    completed: byD.completed ?? actions.filter((a) => a.display_status === 'completed').length,
+    total: statsReady ? (summary?.total ?? 0) : null,
+    open: statsReady ? (byD.open ?? 0) : null,
+    inProgress: statsReady ? (byD.in_progress ?? 0) : null,
+    overdue: statsReady ? (byD.overdue ?? 0) : null,
+    completed: statsReady ? (byD.completed ?? 0) : null,
   }
 
   const badgeFor = (mode: ViewMode): string | null => {
@@ -541,9 +595,7 @@ export default function Actions() {
     return String(n)
   }
 
-  const applyHeroFilter = (
-    key: 'total' | 'open' | 'in_progress' | 'overdue' | 'completed',
-  ) => {
+  const applyHeroFilter = (key: HeroKey) => {
     setHeroKey(key)
     if (key === 'total') {
       setFilterStatus('all')
@@ -592,7 +644,7 @@ export default function Actions() {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">{t('actions.subtitle')}</p>
         </div>
-        <Button onClick={() => setShowModal(true)} size="sm">
+        <Button ref={createTriggerRef} onClick={() => setShowModal(true)} size="sm">
           <Plus size={16} />
           {t('actions.new')}
         </Button>
@@ -706,6 +758,7 @@ export default function Actions() {
                     ? 'border-primary/40 bg-primary/5 shadow-sm'
                     : 'border-border bg-card hover:bg-surface',
                   stat.key === 'overdue' &&
+                    stats.overdue != null &&
                     stats.overdue > 0 &&
                     !active &&
                     'border-destructive/25',
@@ -725,7 +778,7 @@ export default function Actions() {
                     <stat.icon className="h-3.5 w-3.5" aria-hidden="true" />
                   </span>
                   <span className="text-xl font-semibold tabular-nums text-foreground">
-                    {stat.value}
+                    {stat.value ?? '—'}
                   </span>
                 </div>
                 <p className="mt-1.5 text-xs font-medium text-muted-foreground">{stat.label}</p>
@@ -754,6 +807,7 @@ export default function Actions() {
               key={mode}
               type="button"
               data-testid={`actions-view-${mode}`}
+              aria-pressed={viewMode === mode}
               onClick={() => {
                 setViewMode(mode)
                 if (mode === 'overdue' || mode === 'my_overdue') {
@@ -1028,6 +1082,7 @@ export default function Actions() {
                 action.audit_run_id != null &&
                 action.audit_run_id > 0
               const moreCount = hasAuditLinks ? 2 : 0
+              const detailPanelId = `actions-detail-${action.action_key}`
 
               return (
                 <div
@@ -1191,6 +1246,7 @@ export default function Actions() {
                         size="sm"
                         className="h-8 w-8 px-0"
                         aria-expanded={isOpen}
+                        aria-controls={detailPanelId}
                         aria-label={
                           isOpen ? t('actions.collapse_details') : t('actions.expand_details')
                         }
@@ -1206,7 +1262,13 @@ export default function Actions() {
                   </div>
 
                   {isOpen ? (
-                    <div className="border-t border-border bg-surface/40 px-3 py-3 pl-7 space-y-3 text-sm">
+                    <div
+                      id={detailPanelId}
+                      role="region"
+                      aria-label={t('actions.detail.panel', 'Action details')}
+                      data-testid={`actions-detail-${action.action_key}`}
+                      className="border-t border-border bg-surface/40 px-3 py-3 pl-7 space-y-3 text-sm"
+                    >
                       {action.due_date ? (
                         <p
                           className={cn(
@@ -1228,6 +1290,20 @@ export default function Actions() {
                           </p>
                         </div>
                       ) : null}
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                        <span>
+                          {t('actions.detail.type', 'Type')}:{' '}
+                          <span className="font-medium text-foreground">{action.action_type}</span>
+                        </span>
+                        {action.created_at ? (
+                          <span>
+                            {t('actions.detail.created', 'Created')}:{' '}
+                            <span className="font-medium text-foreground">
+                              {new Date(action.created_at).toLocaleDateString()}
+                            </span>
+                          </span>
+                        ) : null}
+                      </div>
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                           {t('actions.detail.description')}
@@ -1267,7 +1343,12 @@ export default function Actions() {
           }
         }}
       >
-        <DialogContent>
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            createTriggerRef.current?.focus()
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{t('actions.dialog.title')}</DialogTitle>
           </DialogHeader>
