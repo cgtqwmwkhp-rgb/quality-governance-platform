@@ -2,7 +2,7 @@
 
 from datetime import date, datetime, timezone
 
-from src.domain.services.calendar_feed_service import _status_for, _iso_date, EVENT_TYPES
+from src.domain.services.calendar_feed_service import EVENT_TYPES, _iso_date, _status_for
 
 
 def test_event_types_cover_ui_chips() -> None:
