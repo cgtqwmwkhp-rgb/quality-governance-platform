@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 import VehicleChecklists, {
+  formatChecklistLoadError,
   formatKitExpiryLabel,
   isKitAssetType,
   kitExpiryBadgeVariant,
@@ -15,6 +16,7 @@ const mockAnalyticsSummary = vi.fn()
 const mockAnalyticsTrends = vi.fn()
 const mockAnalyticsHeatmap = vi.fn()
 const mockApiGet = vi.fn()
+const mockGetApiErrorMessage = vi.fn(() => 'Request failed')
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -36,7 +38,7 @@ vi.mock('../../api/client', () => ({
     analyticsTrends: (...args: unknown[]) => mockAnalyticsTrends(...args),
     analyticsHeatmap: (...args: unknown[]) => mockAnalyticsHeatmap(...args),
   },
-  getApiErrorMessage: () => 'Request failed',
+  getApiErrorMessage: (...args: unknown[]) => mockGetApiErrorMessage(...args),
 }))
 
 vi.mock('../../contexts/ToastContext', () => ({
@@ -216,5 +218,87 @@ describe('AM-VAN kit helpers', () => {
     expect(formatKitExpiryLabel('due_30')).toBe('Due ≤30d')
     expect(kitExpiryBadgeVariant('overdue')).toBe('critical')
     expect(kitExpiryBadgeVariant('in_date')).toBe('resolved')
+  })
+})
+
+describe('VehicleChecklists PAMS unavailable honesty (VAN-CL-503)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    mockListMonthly.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 1 },
+    })
+    mockListDefects.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 1 },
+    })
+    mockAnalyticsSummary.mockResolvedValue({
+      data: {
+        total_daily_checks: 0,
+        total_monthly_checks: 0,
+        open_defects: 0,
+        p1_defects: 0,
+        p2_defects: 0,
+        p3_defects: 0,
+        overdue_actions: 0,
+        last_sync: null,
+      },
+    })
+    mockAnalyticsTrends.mockResolvedValue({ data: [] })
+    mockAnalyticsHeatmap.mockResolvedValue({ data: [] })
+    mockApiGet.mockResolvedValue({ data: { assets: [] } })
+  })
+
+  it('shows honest PAMS unavailable state instead of filter-empty dash on daily 503', async () => {
+    mockGetApiErrorMessage.mockReturnValue(
+      'Server error: PAMS unavailable — van checklist data cannot be loaded right now. Please try again shortly.',
+    )
+    mockListDaily.mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 503 },
+    })
+
+    renderPage()
+
+    expect(await screen.findByTestId('vehicle-checklists-pams-unavailable')).toBeInTheDocument()
+    expect(screen.getByTestId('vehicle-checklists-pams-empty')).toBeInTheDocument()
+    expect(screen.getAllByText('PAMS unavailable').length).toBeGreaterThanOrEqual(1)
+    expect(screen.queryByText('No checklist data matches these filters')).not.toBeInTheDocument()
+  })
+
+  it('retries daily load from the PAMS unavailable banner', async () => {
+    mockGetApiErrorMessage.mockReturnValue('PAMS unavailable — van checklist data cannot be loaded right now.')
+    mockListDaily
+      .mockRejectedValueOnce({ response: { status: 503 } })
+      .mockResolvedValueOnce({
+        data: {
+          items: [{ vanReg: 'AB12CDE', brakes: 'pass' }],
+          total: 1,
+          page: 1,
+          page_size: 100,
+          pages: 1,
+        },
+      })
+
+    renderPage()
+
+    expect(await screen.findByTestId('vehicle-checklists-pams-retry')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('vehicle-checklists-pams-retry'))
+
+    await waitFor(() => {
+      expect(mockListDaily).toHaveBeenCalledTimes(2)
+    })
+    expect(await screen.findByText('AB12CDE')).toBeInTheDocument()
+    expect(screen.queryByTestId('vehicle-checklists-pams-unavailable')).not.toBeInTheDocument()
+  })
+
+  it('normalises checklist load errors to PAMS unavailable copy', () => {
+    expect(formatChecklistLoadError('Server error: PAMS database is temporarily unavailable.')).toBe(
+      'PAMS unavailable — van checklist data cannot be loaded right now.',
+    )
+    expect(
+      formatChecklistLoadError(
+        'PAMS unavailable — van checklist data cannot be loaded right now. Please try again shortly.',
+      ),
+    ).toContain('PAMS unavailable')
   })
 })
