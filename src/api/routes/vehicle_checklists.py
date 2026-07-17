@@ -45,9 +45,7 @@ CACHE_MODEL_MAP = {
 }
 
 
-PAMS_UNAVAILABLE_MESSAGE = (
-    "PAMS unavailable — van checklist data cannot be loaded right now. Please try again shortly."
-)
+PAMS_UNAVAILABLE_MESSAGE = "PAMS unavailable — van checklist data cannot be loaded right now. Please try again shortly."
 
 
 def _service_unavailable(message: str = PAMS_UNAVAILABLE_MESSAGE, *, reason: str = "unavailable") -> NoReturn:
@@ -226,9 +224,7 @@ async def list_monthly(
     Fail-soft: structured 503 when cache is empty and PAMS is unavailable.
     """
     try:
-        cache_count = (
-            await db.execute(select(func.count()).select_from(PAMSVanChecklistMonthlyCache))
-        ).scalar() or 0
+        cache_count = (await db.execute(select(func.count()).select_from(PAMSVanChecklistMonthlyCache))).scalar() or 0
 
         if cache_count > 0:
             return await _list_from_cache(db, PAMSVanChecklistMonthlyCache, page, page_size, search)
