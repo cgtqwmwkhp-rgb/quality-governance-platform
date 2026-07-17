@@ -79,9 +79,10 @@ const MOCK_INVESTIGATIONS = [
     assigned_entity_type: 'road_traffic_collision' as const,
     assigned_entity_id: 10,
     status: 'in_progress' as const,
+    level: 'high' as const,
     title: 'Vehicle collision on A1 motorway',
     description: 'Investigating root cause of collision',
-    data: {},
+    data: { sections: { section_1_details: {} } },
     created_at: '2026-02-01T00:00:00Z',
   },
   {
@@ -91,9 +92,13 @@ const MOCK_INVESTIGATIONS = [
     assigned_entity_type: 'reporting_incident' as const,
     assigned_entity_id: 20,
     status: 'completed' as const,
+    level: 'medium' as const,
     title: 'Warehouse safety incident',
     description: 'Completed investigation into safety breach',
-    data: { why_1: 'Poor lighting', why_2: 'Budget cuts', why_3: 'No maintenance' },
+    data: {
+      sections: { section_1_details: {}, section_3_investigation_findings: {} },
+      why_1: 'Poor lighting',
+    },
     created_at: '2026-01-15T00:00:00Z',
     completed_at: '2026-02-20T00:00:00Z',
   },
@@ -104,6 +109,7 @@ const MOCK_INVESTIGATIONS = [
     assigned_entity_type: 'complaint' as const,
     assigned_entity_id: 30,
     status: 'draft' as const,
+    level: 'low' as const,
     title: 'Customer complaint follow-up',
     data: {},
     created_at: '2026-03-01T00:00:00Z',
@@ -186,7 +192,8 @@ describe('Investigations', () => {
 
     expect(screen.getByText('In Progress')).toBeInTheDocument()
     expect(screen.getByText('Under Review')).toBeInTheDocument()
-    expect(screen.getByText('Completed')).toBeInTheDocument()
+    // Stat label + per-row status chip both say Completed
+    expect(screen.getAllByText('Completed').length).toBeGreaterThanOrEqual(1)
   })
 
   it('filters investigations by search term', async () => {
@@ -217,7 +224,7 @@ describe('Investigations', () => {
     expect(screen.getByText('Customer complaint follow-up')).toBeInTheDocument()
   })
 
-  it('opens detail modal when clicking an investigation card', async () => {
+  it('navigates to investigation report when clicking a compact row', async () => {
     setup()
 
     await waitFor(() => {
@@ -226,9 +233,9 @@ describe('Investigations', () => {
 
     fireEvent.click(screen.getByText('Vehicle collision on A1 motorway'))
 
-    await waitFor(() => {
-      expect(screen.getByText('5 Whys Analysis')).toBeInTheDocument()
-    })
+    expect(mockNavigate).toHaveBeenCalledWith('/investigations/1')
+    expect(screen.queryByText('5 Whys Analysis')).not.toBeInTheDocument()
+    expect(screen.queryByText('Why 1')).not.toBeInTheDocument()
   })
 
   it('shows empty state when no investigations exist', async () => {
@@ -279,15 +286,31 @@ describe('Investigations', () => {
     expect(screen.getByRole('button', { name: /New Investigation/i })).toBeInTheDocument()
   })
 
-  it('shows RCA preview for investigations with data', async () => {
+  it('does not show 5 Whys preview on the compact list', async () => {
     setup()
 
     await waitFor(() => {
       expect(screen.getByText('Warehouse safety incident')).toBeInTheDocument()
     })
 
-    expect(screen.getByText('Root Cause Analysis')).toBeInTheDocument()
-    expect(screen.getByText('Poor lighting')).toBeInTheDocument()
+    expect(screen.queryByText('Root Cause Analysis')).not.toBeInTheDocument()
+    expect(screen.queryByText('Poor lighting')).not.toBeInTheDocument()
+    expect(screen.queryByText('Why 1')).not.toBeInTheDocument()
+    expect(screen.getByText('2 report sections seeded')).toBeInTheDocument()
+  })
+
+  it('shows investigation level badges and Template Builder without INC043', async () => {
+    setup()
+
+    await waitFor(() => {
+      expect(screen.getByText('Vehicle collision on A1 motorway')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('HIGH')).toBeInTheDocument()
+    expect(screen.getByText('MEDIUM')).toBeInTheDocument()
+    expect(screen.getByText('LOW')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Template Builder/i })).toBeInTheDocument()
+    expect(screen.queryByText(/INC043/i)).not.toBeInTheDocument()
   })
 
   it('shows entity type labels on cards', async () => {
