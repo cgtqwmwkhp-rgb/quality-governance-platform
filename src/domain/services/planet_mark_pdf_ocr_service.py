@@ -31,6 +31,7 @@ class _AzureDiEnrichmentClient(Protocol):
 
     async def analyze_document(self, content: bytes, filename: str, content_type: str) -> Any: ...
 
+
 PROVENANCE_MEASUREMENT_REPORT = "ocr_measurement_report"
 PROVENANCE_CERTIFICATE = "ocr_certificate"
 
