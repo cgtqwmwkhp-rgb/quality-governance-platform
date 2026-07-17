@@ -38,6 +38,7 @@ def _optional_risk_level(score: Optional[int]) -> Optional[str]:
         return None
     return RiskScoringEngine.get_risk_level(score)
 
+
 router = APIRouter()
 
 

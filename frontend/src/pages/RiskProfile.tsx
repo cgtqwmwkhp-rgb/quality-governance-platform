@@ -61,7 +61,7 @@ export default function RiskProfile() {
       const res = await riskRegisterApi.getProfile(id)
       setProfile(res.data)
     } catch (err: unknown) {
-      trackError(err, { component: 'RiskProfile', action: 'load', riskId })
+      trackError(err, { component: 'RiskProfile', action: 'load', extra: { riskId } })
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 404) {
         setNotFound(true)
