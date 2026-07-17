@@ -31,7 +31,6 @@ import {
   Eye,
   Play,
   RefreshCw,
-  ChevronRight,
   AlertCircle,
   BarChart3,
   Zap,
@@ -99,6 +98,22 @@ const statusColors: Record<string, string> = {
 const HSE_RIDDOR_PORTAL_URL = 'https://notifications.hse.gov.uk/RiddorForms/'
 const HSE_RIDDOR_GUIDE_URL = 'https://www.hse.gov.uk/riddor/reporting/how-to-make-riddor-report.htm'
 
+function formatStandardCode(code: string): string {
+  const labels: Record<string, string> = {
+    ISO9001: 'ISO 9001',
+    ISO14001: 'ISO 14001',
+    ISO45001: 'ISO 45001',
+    ISO27001: 'ISO 27001',
+  }
+  return labels[code] ?? code.replace(/([A-Z]+)(\d+)/, '$1 $2')
+}
+
+function scoreBarColor(score: number): string {
+  if (score >= 80) return 'bg-success'
+  if (score >= 60) return 'bg-info'
+  return 'bg-primary'
+}
+
 export default function ComplianceAutomation() {
   const [activeTab, setActiveTab] = useState<
     'regulatory' | 'certificates' | 'audits' | 'scoring' | 'riddor' | 'watch'
@@ -109,10 +124,14 @@ export default function ComplianceAutomation() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [complianceScore, setComplianceScore] = useState({
-    overall: 87.5,
-    previous: 85.2,
-    change: 2.3,
+    overall: 0,
+    previous: 0,
+    change: 0,
   })
+  const [scoreBreakdown, setScoreBreakdown] = useState<Array<{ code: string; label: string; score: number }>>(
+    [],
+  )
+  const [scoreGaps, setScoreGaps] = useState<string[]>([])
   const [watchImpacts, setWatchImpacts] = useState<RegulatoryImpact[]>([])
   const [runningWatch, setRunningWatch] = useState(false)
   const [actionBusyId, setActionBusyId] = useState<number | null>(null)
@@ -164,7 +183,11 @@ export default function ComplianceAutomation() {
       const trend = ((trendRes.data.trend as Array<{ score: number }>) || []).filter(
         (entry) => typeof entry.score === 'number',
       )
-      const scoreData = scoreRes.data as { overall_score?: number }
+      const scoreData = scoreRes.data as {
+        overall_score?: number
+        categories?: Record<string, number>
+        key_gaps?: string[]
+      }
       const previous = trend.length > 1 ? trend[trend.length - 2]!.score : scoreData.overall_score ?? 0
       const overall = scoreData.overall_score ?? 0
       setComplianceScore({
@@ -172,12 +195,22 @@ export default function ComplianceAutomation() {
         previous,
         change: Number((overall - previous).toFixed(1)),
       })
+      setScoreBreakdown(
+        Object.entries(scoreData.categories ?? {}).map(([code, score]) => ({
+          code,
+          label: formatStandardCode(code),
+          score,
+        })),
+      )
+      setScoreGaps(scoreData.key_gaps ?? [])
     } catch (err) {
       setError(getApiErrorMessage(err))
       setUpdates([])
       setCertificates([])
       setAudits([])
       setComplianceScore({ overall: 0, previous: 0, change: 0 })
+      setScoreBreakdown([])
+      setScoreGaps([])
     } finally {
       setLoading(false)
     }
@@ -589,56 +622,47 @@ export default function ComplianceAutomation() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-card/50 border border-border rounded-xl p-6">
             <h3 className="font-medium text-foreground mb-4">Score Breakdown by Standard</h3>
-            <div className="space-y-4">
-              {[
-                { name: 'ISO 9001', score: 92, color: 'bg-success' },
-                { name: 'ISO 14001', score: 88.5, color: 'bg-info' },
-                { name: 'ISO 45001', score: 82, color: 'bg-primary' },
-              ].map((standard) => (
-                <div key={standard.name}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-foreground font-medium">{standard.name}</span>
-                    <span className="text-foreground">{standard.score}%</span>
+            {scoreBreakdown.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground text-sm space-y-2">
+                <p>No live standard scores yet.</p>
+                <p>Scores come from evidence coverage in your standards library — not demo placeholders.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {scoreBreakdown.map((standard) => (
+                  <div key={standard.code}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-foreground font-medium">{standard.label}</span>
+                      <span className="text-foreground">{standard.score}%</span>
+                    </div>
+                    <div className="h-3 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${scoreBarColor(standard.score)}`}
+                        style={{ width: `${Math.min(100, Math.max(0, standard.score))}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-3 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${standard.color}`}
-                      style={{ width: `${standard.score}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="bg-card/50 border border-border rounded-xl p-6">
             <h3 className="font-medium text-foreground mb-4">Key Gaps</h3>
-            <div className="space-y-3">
-              {[
-                { standard: 'ISO 45001', clause: '8.2', description: 'First aid training gaps' },
-                {
-                  standard: 'ISO 14001',
-                  clause: '6.1',
-                  description: 'Environmental risk register outdated',
-                },
-                {
-                  standard: 'ISO 9001',
-                  clause: '10.2',
-                  description: 'NCR closure rate below target',
-                },
-              ].map((gap, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                  <AlertCircle className="w-5 h-5 text-warning" />
-                  <div className="flex-1">
-                    <p className="text-foreground text-sm">{gap.description}</p>
-                    <p className="text-muted-foreground text-xs">
-                      {gap.standard} Clause {gap.clause}
-                    </p>
+            {scoreGaps.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground text-sm">
+                No automated gap list yet. Run gap analysis or link evidence to standards to populate this view.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {scoreGaps.map((gap, i) => (
+                  <div key={i} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                    <AlertCircle className="w-5 h-5 text-warning shrink-0" />
+                    <p className="text-foreground text-sm">{gap}</p>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

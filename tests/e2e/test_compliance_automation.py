@@ -298,7 +298,8 @@ class TestRIDDORAutomation:
         result = response.json()
         assert result["incident_id"] == 123
         assert "submission_data" in result
-        assert result["status"] == "ready_to_submit"
+        assert result["status"] == "preparation_stub"
+        assert result["persisted"] is False
 
     def test_submit_riddor(self, auth_client: Any) -> None:
         """Test submitting RIDDOR report."""
