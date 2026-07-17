@@ -42,6 +42,7 @@ import {
   getApiErrorMessage,
 } from '../api/client'
 import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Card } from '../components/ui/Card'
 import {
@@ -51,10 +52,27 @@ import {
   DialogTitle,
   DialogFooter,
 } from '../components/ui/Dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/Select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/Tooltip'
 import { cn } from '../helpers/utils'
-import { getStatusDisplay } from '../utils/investigationStatusFilter'
+import {
+  getStatusDisplay,
+  type InvestigationStatusValue,
+} from '../utils/investigationStatusFilter'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
+
+const WORKFLOW_STATUSES: InvestigationStatusValue[] = [
+  'draft',
+  'in_progress',
+  'under_review',
+  'completed',
+]
 
 import InvestigationHeader from './investigation/InvestigationHeader'
 import InvestigationTimeline from './investigation/InvestigationTimeline'
@@ -144,6 +162,14 @@ export default function InvestigationDetail() {
   const [actionsLoadFailed, setActionsLoadFailed] = useState(false)
   const [openCreateActionToken, setOpenCreateActionToken] = useState(0)
   const [actionStatusFilter, setActionStatusFilter] = useState<string>('all')
+
+  const [summaryFindings, setSummaryFindings] = useState('')
+  const [summaryConclusion, setSummaryConclusion] = useState('')
+  const [summaryLead, setSummaryLead] = useState('')
+  const [summaryUnsaved, setSummaryUnsaved] = useState(false)
+  const [savingSummary, setSavingSummary] = useState(false)
+  const [summarySaveError, setSummarySaveError] = useState<string | null>(null)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
 
   // ── Loaders ──────────────────────────────────────────────
 
@@ -294,6 +320,16 @@ export default function InvestigationDetail() {
     setRcaUnsaved(false)
   }, [investigation])
 
+  const initializeSummaryData = useCallback(() => {
+    if (!investigation) return
+    const data = (investigation.data as Record<string, unknown>) || {}
+    setSummaryFindings(String(data['findings'] || ''))
+    setSummaryConclusion(String(data['conclusion'] || ''))
+    setSummaryLead(String(data['lead_investigator'] || ''))
+    setSummaryUnsaved(false)
+    setSummarySaveError(null)
+  }, [investigation])
+
   // ── Handlers ─────────────────────────────────────────────
 
   const handleUploadEvidence = async (file: File) => {
@@ -421,7 +457,12 @@ export default function InvestigationDetail() {
           lastError: 'Endpoint returned 501',
         })
       } else if (apiErr.response?.status === 403) {
-        message = 'You do not have permission to generate packs'
+        message = t('investigations.report.permission_gated')
+        setPackCapability({
+          canGenerate: false,
+          reason: message,
+          lastError: 'Endpoint returned 403',
+        })
       }
       setPackError(message)
       toast.error(message)
@@ -493,6 +534,53 @@ export default function InvestigationDetail() {
     }
   }
 
+  const handleSaveSummary = async () => {
+    if (!investigationId || !investigation) return
+    setSavingSummary(true)
+    setSummarySaveError(null)
+    try {
+      const existingData = (investigation.data as Record<string, unknown>) || {}
+      await investigationsApi.update(investigationId, {
+        data: {
+          ...existingData,
+          findings: summaryFindings,
+          conclusion: summaryConclusion,
+          lead_investigator: summaryLead,
+        },
+      })
+      await loadInvestigation()
+      setSummaryUnsaved(false)
+      toast.success(t('investigations.summary.saved'))
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'saveSummary' })
+      const message = getApiErrorMessage(err)
+      setSummarySaveError(message)
+      toast.error(message)
+    } finally {
+      setSavingSummary(false)
+    }
+  }
+
+  const handleStatusChange = async (nextStatus: string) => {
+    if (!investigationId || !investigation || nextStatus === investigation.status) return
+    if (nextStatus === 'closed') {
+      toast.error(t('investigations.meta.status_close_via_checklist'))
+      return
+    }
+    setUpdatingStatus(true)
+    try {
+      await investigationsApi.update(investigationId, { status: nextStatus })
+      toast.success(t('investigations.meta.status_updated'))
+      await loadInvestigation()
+      await loadClosureValidation()
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'updateStatus' })
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
+
   // ── Effects ──────────────────────────────────────────────
 
   useEffect(() => {
@@ -504,6 +592,9 @@ export default function InvestigationDetail() {
   useEffect(() => {
     initializeRcaData()
   }, [investigation, initializeRcaData])
+  useEffect(() => {
+    initializeSummaryData()
+  }, [investigation, initializeSummaryData])
 
   useEffect(() => {
     if (!investigationId) return
@@ -607,6 +698,7 @@ export default function InvestigationDetail() {
         investigation={investigation}
         statusDisplay={statusDisplay}
         EntityIcon={EntityIcon}
+        sourceLink={sourceLink}
       />
 
       <Card className="p-5 border-primary/20 bg-primary/5">
@@ -626,7 +718,7 @@ export default function InvestigationDetail() {
             {sourceLink && (
               <Button variant="outline" onClick={() => navigate(sourceLink.href)}>
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                {t('investigations.handoff.back_to_source', { source: sourceLink.label })}
+                {t('investigations.handoff.open_source_report', { source: sourceLink.label })}
               </Button>
             )}
             <Button
@@ -666,6 +758,20 @@ export default function InvestigationDetail() {
               <p className="mt-1 text-lg font-semibold text-foreground">
                 {sourceLink ? '1' : '0'}
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('investigations.handoff.proof_source_caption')}
+              </p>
+            </div>
+            <div className="rounded-lg border border-primary/15 bg-background/60 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {t('investigations.handoff.proof_investigation', 'Investigation')}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-foreground font-mono">
+                {investigation.reference_number || `INV-${investigation.id}`}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('investigations.handoff.proof_investigation_caption')}
+              </p>
             </div>
             <div className="rounded-lg border border-primary/15 bg-background/60 p-3">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -681,13 +787,8 @@ export default function InvestigationDetail() {
                   count: actions.length,
                 })}
               </p>
-            </div>
-            <div className="rounded-lg border border-primary/15 bg-background/60 p-3">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                {t('investigations.handoff.proof_investigation', 'Investigation')}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-foreground font-mono">
-                {investigation.reference_number || `INV-${investigation.id}`}
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('investigations.handoff.proof_capa_caption')}
               </p>
             </div>
           </div>
@@ -695,7 +796,7 @@ export default function InvestigationDetail() {
             {sourceLink ? (
               <Button variant="outline" size="sm" onClick={() => navigate(sourceLink.href)}>
                 <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
-                {t('investigations.handoff.back_to_source', { source: sourceLink.label })}
+                {t('investigations.handoff.open_source_report', { source: sourceLink.label })}
               </Button>
             ) : null}
             <Button variant="outline" size="sm" onClick={() => navigate(capaHref)}>
@@ -755,64 +856,188 @@ export default function InvestigationDetail() {
         {activeTab === 'summary' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
-              <Card className="p-6">
-                <h3 className="text-lg font-semibold text-foreground mb-4">
-                  {t('common.description')}
+              <Card className="p-6" data-testid="investigation-source-snapshot">
+                <h3 className="text-lg font-semibold text-foreground mb-1">
+                  {t('investigations.source_snapshot')}
                 </h3>
-                <p className="text-muted-foreground whitespace-pre-wrap">
-                  {investigation.description || 'No description provided.'}
+                <p className="text-xs text-muted-foreground mb-4">
+                  {t('investigations.source_snapshot_hint')}
                 </p>
+                <p className="text-muted-foreground whitespace-pre-wrap">
+                  {investigation.description || t('investigations.source_snapshot_empty')}
+                </p>
+                {sourceLink ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-4"
+                    onClick={() => navigate(sourceLink.href)}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                    {t('investigations.handoff.open_source_report', {
+                      source: sourceLink.label,
+                    })}
+                  </Button>
+                ) : null}
               </Card>
-              <Card className="p-6">
-                <h3 className="text-lg font-semibold text-foreground mb-4">
-                  {t('investigations.findings_conclusion')}
-                </h3>
+              <Card className="p-6" data-testid="investigation-findings-editor">
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground">
+                      {t('investigations.findings_conclusion')}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {t('investigations.summary.edit_hint')}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => void handleSaveSummary()}
+                    disabled={savingSummary || !summaryUnsaved}
+                    data-testid="investigation-summary-save"
+                  >
+                    {savingSummary ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4 mr-2" />
+                    )}
+                    {t('investigations.summary.save')}
+                  </Button>
+                </div>
                 <div className="space-y-4">
                   <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Findings</h4>
-                    <p className="text-foreground">
-                      {String(
-                        (investigation.data as Record<string, unknown>)?.['findings'] || '',
-                      ) || 'Not yet documented.'}
-                    </p>
+                    <label
+                      htmlFor="inv-findings"
+                      className="block text-sm font-medium text-muted-foreground mb-1"
+                    >
+                      {t('investigations.summary.findings')}
+                    </label>
+                    <Textarea
+                      id="inv-findings"
+                      rows={4}
+                      value={summaryFindings}
+                      onChange={(e) => {
+                        setSummaryFindings(e.target.value)
+                        setSummaryUnsaved(true)
+                      }}
+                      placeholder={t('investigations.summary.findings_placeholder')}
+                      data-testid="investigation-findings-input"
+                    />
                   </div>
                   <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Conclusion</h4>
-                    <p className="text-foreground">
-                      {String(
-                        (investigation.data as Record<string, unknown>)?.['conclusion'] || '',
-                      ) || 'Not yet documented.'}
-                    </p>
+                    <label
+                      htmlFor="inv-conclusion"
+                      className="block text-sm font-medium text-muted-foreground mb-1"
+                    >
+                      {t('investigations.summary.conclusion')}
+                    </label>
+                    <Textarea
+                      id="inv-conclusion"
+                      rows={4}
+                      value={summaryConclusion}
+                      onChange={(e) => {
+                        setSummaryConclusion(e.target.value)
+                        setSummaryUnsaved(true)
+                      }}
+                      placeholder={t('investigations.summary.conclusion_placeholder')}
+                      data-testid="investigation-conclusion-input"
+                    />
                   </div>
+                  {summarySaveError ? (
+                    <p className="text-sm text-destructive" role="alert">
+                      {summarySaveError}
+                    </p>
+                  ) : null}
                 </div>
               </Card>
-              <InvestigationComments
-                comments={comments}
-                commentsLoading={commentsLoading}
-                newComment={newComment}
-                onNewCommentChange={setNewComment}
-                addingComment={addingComment}
-                onAddComment={handleAddComment}
-              />
+              <div data-testid="investigation-notes-section">
+                <h3 className="text-lg font-semibold text-foreground mb-3">
+                  {t('investigations.notes.section_title')}
+                </h3>
+                <InvestigationComments
+                  comments={comments}
+                  commentsLoading={commentsLoading}
+                  newComment={newComment}
+                  onNewCommentChange={setNewComment}
+                  addingComment={addingComment}
+                  onAddComment={handleAddComment}
+                />
+              </div>
             </div>
             <div className="space-y-6">
-              <Card className="p-6">
+              <Card className="p-6" data-testid="investigation-meta-controls">
                 <h3 className="text-lg font-semibold text-foreground mb-4">
                   {t('common.details')}
                 </h3>
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <User className="w-4 h-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">
-                        {t('investigations.lead_investigator')}
+                  <div>
+                    <label
+                      htmlFor="inv-status"
+                      className="block text-xs text-muted-foreground mb-1"
+                    >
+                      {t('investigations.meta.status')}
+                    </label>
+                    {investigation.status === 'closed' ? (
+                      <p className="text-sm text-foreground" data-testid="investigation-status-readonly">
+                        {statusDisplay.label}
                       </p>
-                      <p className="text-sm text-foreground">
-                        {String(
-                          (investigation.data as Record<string, unknown>)?.['lead_investigator'] ||
-                            '',
-                        ) || 'Not assigned'}
-                      </p>
+                    ) : (
+                      <Select
+                        value={investigation.status}
+                        onValueChange={(value) => void handleStatusChange(value)}
+                        disabled={updatingStatus}
+                      >
+                        <SelectTrigger id="inv-status" data-testid="investigation-status-select">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {WORKFLOW_STATUSES.map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {getStatusDisplay(status).label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {t('investigations.meta.status_hint')}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      {t('investigations.level.label')}
+                    </p>
+                    <p
+                      className="text-sm text-foreground capitalize"
+                      data-testid="investigation-level-display"
+                    >
+                      {investigation.level
+                        ? investigation.level
+                        : t('investigations.level.unknown')}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {t('investigations.level.from_source')}
+                    </p>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="inv-lead"
+                      className="block text-xs text-muted-foreground mb-1"
+                    >
+                      {t('investigations.lead_investigator')}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <Input
+                        id="inv-lead"
+                        value={summaryLead}
+                        onChange={(e) => {
+                          setSummaryLead(e.target.value)
+                          setSummaryUnsaved(true)
+                        }}
+                        placeholder={t('investigations.meta.assignee_placeholder')}
+                        data-testid="investigation-assignee-input"
+                      />
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -1185,23 +1410,49 @@ export default function InvestigationDetail() {
                 </div>
               </Card>
             )}
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">
+            <Card className="p-6" data-testid="investigation-report-generate">
+              <h3 className="text-lg font-semibold text-foreground mb-2">
                 {t('investigations.generate_report')}
               </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                {t('investigations.report.generate_hint')}
+              </p>
               {!packCapability.canGenerate && (
-                <div className="mb-4 p-3 bg-warning/10 border border-warning/30 rounded-lg">
+                <div
+                  className="mb-4 p-3 bg-warning/10 border border-warning/30 rounded-lg"
+                  data-testid="investigation-report-gated"
+                  role="status"
+                >
                   <div className="flex items-center gap-2 text-warning">
                     <AlertCircle className="w-5 h-5" />
-                    <span className="font-medium">Report generation not available</span>
+                    <span className="font-medium">
+                      {t('investigations.report.permission_gated_title')}
+                    </span>
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
-                    {packCapability.reason ||
-                      'Pack generation is not available in this environment.'}
+                    {packCapability.reason || t('investigations.report.permission_gated')}
                   </p>
                 </div>
               )}
-              <div className="flex items-center gap-4">
+              <div className="grid gap-4 sm:grid-cols-2 mb-4">
+                <div className="rounded-lg border border-border p-3">
+                  <p className="text-sm font-medium text-foreground">
+                    {t('investigations.report.audience.internal')}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('investigations.report.internal_desc')}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border p-3">
+                  <p className="text-sm font-medium text-foreground">
+                    {t('investigations.report.audience.external')}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('investigations.report.external_desc')}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 flex-wrap">
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -1209,18 +1460,21 @@ export default function InvestigationDetail() {
                         <Button
                           onClick={() => handleGeneratePack('internal_customer')}
                           disabled={generatingPack || !packCapability.canGenerate}
+                          data-testid="investigation-report-internal"
                         >
                           {generatingPack ? (
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                           ) : (
                             <Download className="w-4 h-4 mr-2" />
                           )}
-                          Internal Report
+                          {t('investigations.report.generate_internal')}
                         </Button>
                       </span>
                     </TooltipTrigger>
                     {!packCapability.canGenerate && (
-                      <TooltipContent>{packCapability.reason || 'Not available'}</TooltipContent>
+                      <TooltipContent>
+                        {packCapability.reason || t('investigations.report.permission_gated')}
+                      </TooltipContent>
                     )}
                   </Tooltip>
                 </TooltipProvider>
@@ -1232,25 +1486,25 @@ export default function InvestigationDetail() {
                           variant="outline"
                           onClick={() => handleGeneratePack('external_customer')}
                           disabled={generatingPack || !packCapability.canGenerate}
+                          data-testid="investigation-report-external"
                         >
                           {generatingPack ? (
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                           ) : (
                             <Download className="w-4 h-4 mr-2" />
                           )}
-                          External Report
+                          {t('investigations.report.generate_external')}
                         </Button>
                       </span>
                     </TooltipTrigger>
                     {!packCapability.canGenerate && (
-                      <TooltipContent>{packCapability.reason || 'Not available'}</TooltipContent>
+                      <TooltipContent>
+                        {packCapability.reason || t('investigations.report.permission_gated')}
+                      </TooltipContent>
                     )}
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              <p className="text-sm text-muted-foreground mt-4">
-                {t('investigations.report.generate_hint')}
-              </p>
             </Card>
             <Card className="p-6">
               <div className="flex items-center justify-between mb-4">
@@ -1287,8 +1541,12 @@ export default function InvestigationDetail() {
                           <Package className="w-5 h-5 text-primary" />
                         </div>
                         <div>
-                          <p className="font-medium text-foreground capitalize">
-                            {pack.audience.replace(/_/g, ' ')} Report
+                          <p className="font-medium text-foreground">
+                            {pack.audience === 'external_customer'
+                              ? t('investigations.report.audience.external')
+                              : pack.audience === 'internal_customer'
+                                ? t('investigations.report.audience.internal')
+                                : `${pack.audience.replace(/_/g, ' ')} Report`}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             Generated: {new Date(pack.generated_at).toLocaleString()}
