@@ -4,9 +4,8 @@
 
 - `frontend/src/pages/Actions.tsx`
 - `frontend/src/pages/__tests__/Actions.test.tsx`
+- `frontend/src/i18n/locales/en.json` (3 `actions.detail.*` keys for expand polish)
 - `scripts/governance/pr_body_act_r2_polish.md`
-
-(i18n keys `actions.detail.*` already on `main`; component uses `t(..., fallback)`.)
 
 **Zero overlap** with parallel lanes: Layout/App/client spines; Harden #1048–#1050.
 
