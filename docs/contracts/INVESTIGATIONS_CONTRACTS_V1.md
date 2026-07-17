@@ -7,7 +7,7 @@
 
 ---
 
-## 1. Template Contract v2.1
+## 1. Template Contract v2.2
 
 Replicates Plantexpand Incident Investigation Report Template v2.0 with conditional addenda for Complaint and RTA.
 
@@ -15,21 +15,24 @@ Replicates Plantexpand Incident Investigation Report Template v2.0 with conditio
 
 | Section | ID | Title | Level Gating | Required |
 |---------|-----|-------|--------------|----------|
-| 1 | `section_1_details` | Incident/Event Details | LOW, MEDIUM, HIGH | Yes |
-| 2 | `section_2_immediate_actions` | Immediate Actions Taken | LOW, MEDIUM, HIGH | Yes |
+| 1 | `section_1_details` | Incident/Event Details | MINIMAL, LOW, MEDIUM, HIGH | Yes |
+| 2 | `section_2_immediate_actions` | Immediate Actions Taken | MINIMAL, LOW, MEDIUM, HIGH | Yes |
 | 3 | `section_3_investigation_findings` | Investigation Findings | LOW, MEDIUM, HIGH | Yes |
 | 4 | `section_4_root_cause` | Root Cause Analysis (5-Whys) | MEDIUM, HIGH | MEDIUM+ |
+| 4b | `section_4b_hsg245_analysis` | HSG245 Cause Analysis | HIGH | HIGH only |
 | 5 | `section_5_corrective_actions` | Corrective Actions (CAPA) | HIGH | HIGH only |
 | 6 | `section_6_fishbone` | Fishbone Diagram | HIGH | HIGH only |
-| Sign-off | `section_signoff` | Sign-off & Approval | LOW, MEDIUM, HIGH | Yes |
+| 7 | `section_7_management_system_review` | Management System & Risk Assessment Review | HIGH | HIGH only |
+| Sign-off | `section_signoff` | Sign-off & Approval | MINIMAL, LOW, MEDIUM, HIGH | Yes |
 
 ### 1.2 Level Gating Rules
 
 ```json
 {
+  "MINIMAL": ["section_1_details", "section_2_immediate_actions", "section_signoff"],
   "LOW": ["section_1_details", "section_2_immediate_actions", "section_3_investigation_findings", "section_signoff"],
   "MEDIUM": ["section_1_details", "section_2_immediate_actions", "section_3_investigation_findings", "section_4_root_cause", "section_signoff"],
-  "HIGH": ["section_1_details", "section_2_immediate_actions", "section_3_investigation_findings", "section_4_root_cause", "section_5_corrective_actions", "section_6_fishbone", "section_signoff"]
+  "HIGH": ["section_1_details", "section_2_immediate_actions", "section_3_investigation_findings", "section_4_root_cause", "section_4b_hsg245_analysis", "section_5_corrective_actions", "section_6_fishbone", "section_7_management_system_review", "section_signoff"]
 }
 ```
 
@@ -91,7 +94,17 @@ Replicates Plantexpand Incident Investigation Report Template v2.0 with conditio
 | `target_completion` | Target Completion Date | date | Yes |
 | `responsible_person` | Responsible Person | user_select | Yes |
 
-### 1.8 Section 6: Fishbone Diagram (HIGH only)
+### 1.8 Section 4b: HSG245 Cause Analysis (HIGH only)
+
+| Field ID | Label | Type | Required |
+|----------|-------|------|----------|
+| `investigation_team_roles` | Investigation Team and Roles | textarea | Yes |
+| `investigation_timeline` | Investigation Timeline | timeline | Yes |
+| `place_plant_people_process` | Place / Plant / People / Process Analysis | textarea | Yes |
+| `immediate_underlying_root_causes` | Immediate / Underlying / Root Causes | textarea | Yes |
+| `evidence_corroboration` | Evidence Corroboration | textarea | Yes |
+
+### 1.9 Section 6: Fishbone Diagram (HIGH only)
 
 | Field ID | Label | Type | Required |
 |----------|-------|------|----------|
@@ -106,7 +119,16 @@ Fishbone Categories:
 - Environment
 - Measurement
 
-### 1.9 Section Sign-off
+### 1.10 Section 7: Management System & Risk Assessment Review (HIGH only)
+
+| Field ID | Label | Type | Required |
+|----------|-------|------|----------|
+| `risk_assessment_review` | Risk Assessment Review | textarea | Yes |
+| `procedure_review` | Procedure / Method Statement Review | textarea | Yes |
+| `competence_supervision_review` | Competence and Supervision Review | textarea | Yes |
+| `systemic_improvements` | Management System Improvements | textarea | Yes |
+
+### 1.11 Section Sign-off
 
 | Field ID | Label | Type | Required |
 |----------|-------|------|----------|
@@ -489,7 +511,7 @@ Approval Status Enum:
 
 | Contract | Version | Status |
 |----------|---------|--------|
-| Template Contract | v2.1 | LOCKED |
+| Template Contract | v2.2 | APPROVED |
 | EvidenceAsset Contract | v1 | LOCKED |
 | Mapping Contract | v1 | LOCKED |
 | Customer Pack Redaction Rules | v1 | LOCKED |

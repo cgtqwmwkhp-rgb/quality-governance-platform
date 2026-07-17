@@ -37,9 +37,10 @@ class InvestigationStatus(str, enum.Enum):
 class InvestigationLevel(str, enum.Enum):
     """Investigation level determines required sections (Template Contract v2.1)."""
 
+    MINIMAL = "minimal"  # Event facts, immediate actions, local lessons + sign-off
     LOW = "low"  # Sections 1-3 + Sign-off
     MEDIUM = "medium"  # Sections 1-4 + Sign-off
-    HIGH = "high"  # Sections 1-6 (all) + Sign-off
+    HIGH = "high"  # Full HSG245 report, CAPA, fishbone, and management-system review
 
 
 class CustomerPackAudience(str, enum.Enum):

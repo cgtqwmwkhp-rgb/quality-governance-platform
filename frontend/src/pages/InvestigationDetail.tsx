@@ -73,6 +73,7 @@ import {
   buildPackManifestStubDownload,
   triggerPackDownload,
 } from './investigation/investigationReportHelpers'
+import { getReportSectionsForLevel } from './investigation/hsg245ReportSections'
 
 const TABS = [
   { id: 'summary', label: 'Summary', icon: FileText },
@@ -1062,6 +1063,21 @@ export default function InvestigationDetail() {
 
         {activeTab === 'report' && (
           <div className="space-y-6">
+            <Card className="p-6" data-testid="investigation-hsg245-report-sections">
+              <h3 className="text-lg font-semibold text-foreground">HSG245 report scope</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {String(investigation.level || 'medium').toUpperCase()} level sections required for this
+                investigation. HIGH investigations use the full, detailed analysis pack.
+              </p>
+              <div className="mt-4 space-y-3">
+                {getReportSectionsForLevel(investigation.level).map((section) => (
+                  <div key={section.id} className="rounded-lg border border-border p-3">
+                    <p className="font-medium text-foreground">{section.title}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{section.detail}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
             {packError && (
               <Card className="p-4 bg-destructive/10 border-destructive/30">
                 <div className="flex items-center gap-2 text-destructive">

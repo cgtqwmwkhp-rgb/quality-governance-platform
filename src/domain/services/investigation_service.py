@@ -178,6 +178,39 @@ def _level_to_str(level: object) -> Optional[str]:
     return str(level)
 
 
+INVESTIGATION_LEVEL_ORDER = {
+    InvestigationLevel.MINIMAL.value: 0,
+    InvestigationLevel.LOW.value: 1,
+    InvestigationLevel.MEDIUM.value: 2,
+    InvestigationLevel.HIGH.value: 3,
+}
+
+# Backward-compatible gates for the locked named report sections. New template
+# sections persist their own ``min_level`` metadata in structure JSON.
+DEFAULT_SECTION_MIN_LEVEL = {
+    "section_1_details": InvestigationLevel.MINIMAL.value,
+    "section_2_immediate_actions": InvestigationLevel.MINIMAL.value,
+    "section_3_investigation_findings": InvestigationLevel.LOW.value,
+    "section_4_root_cause": InvestigationLevel.MEDIUM.value,
+    "section_4b_hsg245_analysis": InvestigationLevel.HIGH.value,
+    "section_5_corrective_actions": InvestigationLevel.HIGH.value,
+    "section_6_fishbone": InvestigationLevel.HIGH.value,
+    "section_7_management_system_review": InvestigationLevel.HIGH.value,
+    "section_signoff": InvestigationLevel.MINIMAL.value,
+    # Legacy default-template alias.
+    "rca": InvestigationLevel.MEDIUM.value,
+}
+
+
+def section_is_in_scope(section: Dict[str, Any], level: Optional[str]) -> bool:
+    """Return whether a template section applies at an investigation level."""
+    min_level = str(
+        section.get("min_level")
+        or DEFAULT_SECTION_MIN_LEVEL.get(str(section.get("id")), InvestigationLevel.MINIMAL.value)
+    ).lower()
+    return INVESTIGATION_LEVEL_ORDER.get(level or "", -1) >= INVESTIGATION_LEVEL_ORDER.get(min_level, 0)
+
+
 # ---------------------------------------------------------------------------
 # Status manager
 # ---------------------------------------------------------------------------
@@ -222,6 +255,8 @@ class InvestigationService:
 
     # Severity mapping tables (Mapping Contract v1)
     NEAR_MISS_SEVERITY_MAP = {
+        "negligible": InvestigationLevel.MINIMAL,
+        "near_miss": InvestigationLevel.MINIMAL,
         "low": InvestigationLevel.LOW,
         "medium": InvestigationLevel.MEDIUM,
         "high": InvestigationLevel.HIGH,
@@ -229,7 +264,7 @@ class InvestigationService:
     }
 
     RTA_SEVERITY_MAP = {
-        "near_miss": InvestigationLevel.LOW,
+        "near_miss": InvestigationLevel.MINIMAL,
         "damage_only": InvestigationLevel.MEDIUM,
         "minor_injury": InvestigationLevel.MEDIUM,
         "serious_injury": InvestigationLevel.HIGH,
@@ -237,6 +272,7 @@ class InvestigationService:
     }
 
     COMPLAINT_PRIORITY_MAP = {
+        "NEGLIGIBLE": InvestigationLevel.MINIMAL,
         "LOW": InvestigationLevel.LOW,
         "MEDIUM": InvestigationLevel.MEDIUM,
         "HIGH": InvestigationLevel.HIGH,
@@ -444,6 +480,8 @@ class InvestigationService:
                     level = InvestigationLevel.HIGH
                 elif severity_value == "medium":
                     level = InvestigationLevel.MEDIUM
+                elif severity_value in ["negligible", "near_miss"]:
+                    level = InvestigationLevel.MINIMAL
                 else:
                     level = InvestigationLevel.LOW
 
@@ -1439,20 +1477,21 @@ class InvestigationService:
         for section_key, field_key, value in iter_run_section_values(raw_data):
             section_values.setdefault(section_key, {})[field_key] = value
 
-        level_section_counts = {
-            "low": 3,
-            "medium": 4,
-            "high": 6,
-        }
-        max_sections = level_section_counts.get(level_str or "high", 6)
-
         # Mirror parse_structure_json: skip malformed sections/fields instead of 500.
         structure: Dict[str, Any] = template.structure if isinstance(template.structure, dict) else {}
         sections = parse_structure_json(structure)
+        raw_section_lookup: Dict[str, Dict[str, Any]] = {}
+        for raw_section in structure.get("sections") or []:
+            if isinstance(raw_section, dict) and raw_section.get("id") is not None:
+                raw_section_lookup[str(raw_section["id"])] = raw_section
 
-        for i, section in enumerate(sections):
-            if i >= max_sections:
-                break
+        for section in sections:
+            scope_payload: Dict[str, Any] = {"id": section.section_key}
+            raw_meta = raw_section_lookup.get(section.section_key)
+            if isinstance(raw_meta, dict) and raw_meta.get("min_level") is not None:
+                scope_payload["min_level"] = raw_meta["min_level"]
+            if not section_is_in_scope(scope_payload, level_str):
+                continue
 
             section_id = section.section_key
             section_data = section_values.get(section_id)
