@@ -173,6 +173,8 @@
   "admin.lookups.subtitle": "Manage lookup values used across configurable forms",
   "admin.lookups.title": "Lookup Tables",
   "admin.lookups.unavailable": "Count unavailable",
+  "admin.lookups.workforce_roles_desc": "Configure role codes for employees (job_title / competency role matching). Nothing is pre-seeded.",
+  "admin.lookups.workforce_roles_hint": "Suggested codes",
   "admin.notifications.subtitle": "Configure notification channels and trigger behavior",
   "admin.notifications.title": "Notification Settings",
   "admin.settings.no_settings": "No settings in this category",

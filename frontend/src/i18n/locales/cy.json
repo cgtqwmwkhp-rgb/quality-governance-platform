@@ -146,6 +146,8 @@
   "admin.forms.unpublish": "Dad-gyhoeddi",
   "admin.lookups.subtitle": "Rheoli gwerthoedd chwilio a ddefnyddir ar draws ffurflenni cyfluniadwy",
   "admin.lookups.title": "Tablau Chwilio",
+  "admin.lookups.workforce_roles_desc": "Cyflunio codau rolau ar gyfer cyflogeion (teitl swydd / paru rol cymhwysedd). Nid oes dim wedi'i hysbysu ymlaen llaw.",
+  "admin.lookups.workforce_roles_hint": "Codau a awgrymir",
   "admin.notifications.subtitle": "Cyflunio sianeli hysbysu ac ymddygiad sbarduno",
   "admin.notifications.title": "Gosodiadau Hysbysu",
   "admin.settings.no_settings": "Dim gosodiadau yn y categori hwn",

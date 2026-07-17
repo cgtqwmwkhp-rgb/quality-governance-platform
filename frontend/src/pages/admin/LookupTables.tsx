@@ -14,6 +14,11 @@ import {
 } from '../../components/ui/Dialog'
 import { toast } from '../../contexts/ToastContext'
 import { cn } from '../../helpers/utils'
+import {
+  WORKFORCE_ROLES_LOOKUP_CATEGORY,
+  WORKFORCE_ROLE_CODE_HINTS,
+  workforceRoleHintCodes,
+} from './workforceRolesCatalog'
 
 const LOOKUP_CATEGORIES = [
   { key: 'incident_types', label: 'Incident Types' },
@@ -22,6 +27,7 @@ const LOOKUP_CATEGORIES = [
   { key: 'severity_levels', label: 'Severity Levels' },
   { key: 'departments', label: 'Departments' },
   { key: 'locations', label: 'Locations' },
+  { key: WORKFORCE_ROLES_LOOKUP_CATEGORY, label: 'Workforce Roles' },
 ] as const
 
 type CategoryKey = (typeof LOOKUP_CATEGORIES)[number]['key']
@@ -176,11 +182,25 @@ export default function LookupTables() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  {t(
-                    `admin.lookups.${cat.key}_desc`,
-                    `Configure ${cat.label.toLowerCase()} for your organisation`,
-                  )}
+                  {cat.key === WORKFORCE_ROLES_LOOKUP_CATEGORY
+                    ? t(
+                        'admin.lookups.workforce_roles_desc',
+                        'Configure role codes for employees (job_title / competency role matching). Nothing is pre-seeded.',
+                      )
+                    : t(
+                        `admin.lookups.${cat.key}_desc`,
+                        `Configure ${cat.label.toLowerCase()} for your organisation`,
+                      )}
                 </p>
+                {cat.key === WORKFORCE_ROLES_LOOKUP_CATEGORY ? (
+                  <p
+                    className="text-xs text-muted-foreground font-mono"
+                    data-testid="lookup-workforce-roles-hints"
+                  >
+                    {t('admin.lookups.workforce_roles_hint', 'Suggested codes')}:{' '}
+                    <span className="font-mono">{workforceRoleHintCodes()}</span>
+                  </p>
+                ) : null}
                 {notConfigured ? (
                   <p className="text-xs text-amber-800" data-testid={`lookup-empty-${cat.key}`}>
                     {t(
@@ -227,12 +247,27 @@ export default function LookupTables() {
           ) : (
             <div className="space-y-4">
               {options.length === 0 ? (
-                <p className="text-sm text-muted-foreground" data-testid="lookup-editor-empty">
-                  {t(
-                    'admin.lookups.editor_empty',
-                    'Not configured — add the first option below. Nothing is fabricated.',
-                  )}
-                </p>
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground" data-testid="lookup-editor-empty">
+                    {t(
+                      'admin.lookups.editor_empty',
+                      'Not configured — add the first option below. Nothing is fabricated.',
+                    )}
+                  </p>
+                  {editorCategory?.key === WORKFORCE_ROLES_LOOKUP_CATEGORY ? (
+                    <ul
+                      className="text-xs text-muted-foreground space-y-1"
+                      data-testid="lookup-editor-workforce-role-hints"
+                    >
+                      {WORKFORCE_ROLE_CODE_HINTS.map((hint) => (
+                        <li key={hint.code} className="font-mono">
+                          {hint.code}
+                          <span className="font-sans text-muted-foreground/80"> — {hint.label}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
               ) : (
                 <ul className="space-y-2 max-h-56 overflow-y-auto" data-testid="lookup-editor-list">
                   {options.map((opt) => (
