@@ -67,6 +67,7 @@ import {
   getCapaHandoffLabelKey,
   getCapaLink,
   getInvestigationSourceLink,
+  resolveCapaHandoffMode,
 } from '../components/investigations/handoffLinks'
 import {
   buildGeneratedPackDownload,
@@ -138,6 +139,7 @@ export default function InvestigationDetail() {
   const [actions, setActions] = useState<Action[]>([])
   const [actionsLoading, setActionsLoading] = useState(false)
   const [actionsLoadFailed, setActionsLoadFailed] = useState(false)
+  const [openCreateActionToken, setOpenCreateActionToken] = useState(0)
   const [actionStatusFilter, setActionStatusFilter] = useState<string>('all')
 
   // ── Loaders ──────────────────────────────────────────────
@@ -422,15 +424,13 @@ export default function InvestigationDetail() {
 
   const handleCreateAction = async (form: ActionFormData) => {
     if (!investigationId) return
-    await actionsApi.create({
+    // Formal CAPA with investigation parent set server-side (no manual Source ID).
+    await investigationsApi.createCapa(investigationId, {
       title: form.title,
-      description: form.description || 'Action from investigation',
+      description: form.description || undefined,
       priority: form.priority,
       due_date: form.due_date || undefined,
-      action_type: 'corrective',
-      source_type: 'investigation',
-      source_id: investigationId,
-      assigned_to_email: form.assigned_to || undefined,
+      assignee_email: form.assigned_to || undefined,
     })
     await loadActions()
   }
@@ -544,8 +544,20 @@ export default function InvestigationDetail() {
   const EntityIcon = ENTITY_ICONS[investigation.assigned_entity_type] || AlertTriangle
   const statusDisplay = getStatusDisplay(investigation.status)
   const sourceLink = getInvestigationSourceLink(investigation)
-  const capaHref = getCapaLink('investigation', investigation.id)
   const capaHandoffCount = actionsLoadFailed ? 0 : actions.length
+  const capaHandoffMode = resolveCapaHandoffMode(capaHandoffCount)
+  const capaHref =
+    capaHandoffMode === 'create'
+      ? getCapaLink('investigation', investigation.id, {
+          create: true,
+          returnTo: `/investigations/${investigation.id}`,
+        })
+      : getCapaLink('investigation', investigation.id)
+
+  const openCreateActionInTab = () => {
+    setActiveTab('actions')
+    setOpenCreateActionToken((n) => n + 1)
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -576,11 +588,21 @@ export default function InvestigationDetail() {
               </Button>
             )}
             <Button
-              onClick={() => navigate(capaHref)}
+              onClick={() => {
+                if (capaHandoffMode === 'create') {
+                  openCreateActionInTab()
+                  return
+                }
+                navigate(capaHref)
+              }}
               disabled={actionsLoading}
               data-testid="investigation-capa-handoff-cta"
             >
-              <ExternalLink className="w-4 h-4 mr-2" />
+              {capaHandoffMode === 'create' ? (
+                <ListTodo className="w-4 h-4 mr-2" />
+              ) : (
+                <ExternalLink className="w-4 h-4 mr-2" />
+              )}
               {t(getCapaHandoffLabelKey('investigation', capaHandoffCount), {
                 count: actions.length,
               })}
@@ -1057,6 +1079,8 @@ export default function InvestigationDetail() {
             onActionStatusFilterChange={setActionStatusFilter}
             onCreateAction={handleCreateAction}
             onUpdateActionStatus={handleUpdateActionStatus}
+            openCreateToken={openCreateActionToken}
+            parentLabel={investigation.reference_number}
           />
         )}
 

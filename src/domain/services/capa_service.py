@@ -366,16 +366,20 @@ class CAPAService:
         if investigation is None:
             raise LookupError(f"Investigation with ID {investigation_id} not found")
 
-        prior = await self.db.execute(
-            select(CAPAAction).where(
-                CAPAAction.tenant_id == tenant_id,
-                CAPAAction.source_type == CAPASource.INVESTIGATION,
-                CAPAAction.source_id == investigation_id,
+        # Idempotent only for empty convenience creates (no explicit title).
+        # When the user supplies a title, always create a new CAPA so investigators
+        # can add multiple corrective actions against one investigation.
+        if not (title and title.strip()):
+            prior = await self.db.execute(
+                select(CAPAAction).where(
+                    CAPAAction.tenant_id == tenant_id,
+                    CAPAAction.source_type == CAPASource.INVESTIGATION,
+                    CAPAAction.source_id == investigation_id,
+                )
             )
-        )
-        existing_capa = prior.scalar_one_or_none()
-        if existing_capa is not None:
-            return existing_capa
+            existing_capa = prior.scalar_one_or_none()
+            if existing_capa is not None:
+                return existing_capa
 
         resolved_assignee = assignee_id
         if resolved_assignee is None and assignee_email:

@@ -55,6 +55,8 @@ import {
   ActionCreate,
   ActionsSummary,
   ActionsViewCounts,
+  getApiErrorMessage,
+  investigationsApi,
   notificationsApi,
 } from '../api/client'
 import { decodeTokenPayload, getPlatformToken } from '../utils/auth'
@@ -99,25 +101,43 @@ interface ApiError {
 }
 
 function classifyError(error: unknown): ApiError {
-  if (error instanceof Error) {
-    const message = error.message.toLowerCase()
-    if (message.includes('401') || message.includes('unauthorized')) {
-      return { error_class: 'AUTH_ERROR', message: 'Authentication required. Please log in.' }
+  const detail = getApiErrorMessage(error).trim()
+  if (error instanceof Error || detail) {
+    const message = `${detail} ${error instanceof Error ? error.message : ''}`.toLowerCase()
+    if (message.includes('401') || message.includes('unauthorized') || message.includes('403')) {
+      return {
+        error_class: 'AUTH_ERROR',
+        message: detail || 'Authentication required. Please log in.',
+      }
     }
     if (message.includes('404') || message.includes('not found')) {
-      return { error_class: 'NOT_FOUND', message: 'Action not found.' }
+      // Preserve server detail (e.g. "Incident not found") — never rewrite all 404s
+      // as "Action not found", which hid wrong-parent Source ID mistakes.
+      return {
+        error_class: 'NOT_FOUND',
+        message: detail && !/^request failed with status code/i.test(detail) ? detail : 'Not found.',
+      }
     }
-    if (message.includes('400') || message.includes('validation')) {
-      return { error_class: 'VALIDATION_ERROR', message: 'Invalid data provided.' }
+    if (message.includes('400') || message.includes('422') || message.includes('validation')) {
+      return {
+        error_class: 'VALIDATION_ERROR',
+        message: detail || 'Invalid data provided.',
+      }
     }
     if (message.includes('network') || message.includes('fetch')) {
       return {
         error_class: 'NETWORK_ERROR',
-        message: 'Network error. Please check your connection.',
+        message: detail || 'Network error. Please check your connection.',
       }
     }
     if (message.includes('500') || message.includes('server')) {
-      return { error_class: 'SERVER_ERROR', message: 'Server error. Please try again later.' }
+      return {
+        error_class: 'SERVER_ERROR',
+        message: detail || 'Server error. Please try again later.',
+      }
+    }
+    if (detail && !/^request failed with status code/i.test(detail)) {
+      return { error_class: 'UNKNOWN', message: detail }
     }
   }
   return { error_class: 'UNKNOWN', message: 'An unexpected error occurred.' }
@@ -254,6 +274,12 @@ export default function Actions() {
     return isSafeActionsReturnTo(raw) ? raw : null
   }, [searchParams])
 
+  const parentLockedFromContext = useMemo(() => {
+    const st = (searchParams.get('sourceType') || '').toLowerCase()
+    const sid = Number(searchParams.get('sourceId') || '')
+    return st === 'investigation' && Number.isFinite(sid) && sid > 0
+  }, [searchParams])
+
   const currentUserId = useMemo(() => {
     const token = getPlatformToken()
     if (!token) return null
@@ -270,6 +296,14 @@ export default function Actions() {
   const [submitError, setSubmitError] = useState<ApiError | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const createTriggerRef = useRef<HTMLButtonElement>(null)
+
+  /** Parent locked when creating under an investigation (deep-link or form). */
+  const lockedInvestigationParent = useMemo(() => {
+    const st = (formData.source_type || '').toLowerCase()
+    const sid = parseInt(formData.source_id, 10)
+    if (st !== 'investigation' || !Number.isFinite(sid) || sid <= 0) return null
+    return { sourceId: sid, label: `Investigation #${sid}` }
+  }, [formData.source_id, formData.source_type])
 
   // Hydrate shareable filters from URL (back/forward + deep links).
   useEffect(() => {
@@ -455,13 +489,46 @@ export default function Actions() {
     setIsSubmitting(true)
 
     try {
+      const sourceType = formData.source_type.toLowerCase()
+      const sourceId = parseInt(formData.source_id, 10)
+
+      // Investigation parents create a formal CAPA (auto-linked) — no manual orphan IDs.
+      if (sourceType === 'investigation') {
+        if (!Number.isFinite(sourceId) || sourceId <= 0) {
+          setSubmitError({
+            error_class: 'VALIDATION_ERROR',
+            message: 'Investigation parent is required.',
+          })
+          return
+        }
+        const capaResponse = await investigationsApi.createCapa(sourceId, {
+          title: formData.title,
+          description: formData.description,
+          priority: formData.priority,
+          due_date: formData.due_date || undefined,
+        })
+        setSubmitSuccess(true)
+        await loadActions()
+        setTimeout(() => {
+          setShowModal(false)
+          setFormData(INITIAL_FORM)
+          setSubmitSuccess(false)
+          if (createReturnTo) {
+            navigate(createReturnTo)
+          } else if (capaResponse.data?.id) {
+            navigate(buildActionDetailPath(`capa:${capaResponse.data.id}`))
+          }
+        }, 1500)
+        return
+      }
+
       const payload: ActionCreate = {
         title: formData.title,
         description: formData.description,
         action_type: formData.action_type,
         priority: formData.priority,
         source_type: formData.source_type,
-        source_id: parseInt(formData.source_id, 10),
+        source_id: sourceId,
         due_date: formData.due_date || undefined,
       }
 
@@ -1494,51 +1561,70 @@ export default function Actions() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label
-                    htmlFor="actions-field-2"
-                    className="block text-sm font-medium text-foreground mb-2"
-                  >
-                    {t('actions.form.source_type')}
-                  </label>
-                  <Select
-                    value={formData.source_type}
-                    onValueChange={(value) =>
-                      setFormData((prev) => ({ ...prev, source_type: value }))
-                    }
-                  >
-                    <SelectTrigger id="actions-field-2">
-                      <SelectValue placeholder="Select source" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="incident">Incident</SelectItem>
-                      <SelectItem value="audit_finding">Audit Finding</SelectItem>
-                      <SelectItem value="rta">RTA</SelectItem>
-                      <SelectItem value="complaint">Complaint</SelectItem>
-                    </SelectContent>
-                  </Select>
+              {lockedInvestigationParent || parentLockedFromContext ? (
+                <div
+                  className="rounded-xl border border-primary/20 bg-primary/5 p-3"
+                  data-testid="actions-locked-parent"
+                >
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Parent record
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">
+                    {lockedInvestigationParent?.label ||
+                      `Investigation #${searchParams.get('sourceId')}`}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Linked automatically — Source ID is not entered manually.
+                  </p>
                 </div>
-                <div>
-                  <label
-                    htmlFor="actions-field-3"
-                    className="block text-sm font-medium text-foreground mb-2"
-                  >
-                    Source ID <span className="text-destructive">*</span>
-                  </label>
-                  <Input
-                    id="actions-field-3"
-                    type="number"
-                    placeholder="e.g., 42"
-                    value={formData.source_id}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, source_id: e.target.value }))
-                    }
-                    required
-                    min={1}
-                  />
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      htmlFor="actions-field-2"
+                      className="block text-sm font-medium text-foreground mb-2"
+                    >
+                      {t('actions.form.source_type')}
+                    </label>
+                    <Select
+                      value={formData.source_type}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, source_type: value }))
+                      }
+                    >
+                      <SelectTrigger id="actions-field-2">
+                        <SelectValue placeholder="Select source" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="incident">Incident</SelectItem>
+                        <SelectItem value="investigation">Investigation</SelectItem>
+                        <SelectItem value="audit_finding">Audit Finding</SelectItem>
+                        <SelectItem value="rta">RTA</SelectItem>
+                        <SelectItem value="complaint">Complaint</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="actions-field-3"
+                      className="block text-sm font-medium text-foreground mb-2"
+                    >
+                      Source ID <span className="text-destructive">*</span>
+                    </label>
+                    <Input
+                      id="actions-field-3"
+                      type="number"
+                      placeholder="e.g., 42"
+                      value={formData.source_id}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, source_id: e.target.value }))
+                      }
+                      required
+                      min={1}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

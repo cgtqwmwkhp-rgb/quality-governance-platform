@@ -26,14 +26,28 @@ export function getInvestigationSourceLink(investigation: Investigation) {
   }
 }
 
+export type CapaLinkOptions = {
+  /** Open New Action modal with parent locked (investigation CAPA stitch). */
+  create?: boolean
+  /** Safe in-app return path after create (e.g. /investigations/7). */
+  returnTo?: string
+}
+
 export function getCapaLink(
   sourceType: 'incident' | 'investigation' | 'near_miss' | 'rta',
   sourceId: number,
+  options?: CapaLinkOptions,
 ) {
   const params = new URLSearchParams({
     sourceType,
     sourceId: String(sourceId),
   })
+  if (options?.create) {
+    params.set('create', '1')
+  }
+  if (options?.returnTo && options.returnTo.startsWith('/') && !options.returnTo.startsWith('//')) {
+    params.set('returnTo', options.returnTo)
+  }
 
   return `/actions?${params.toString()}`
 }

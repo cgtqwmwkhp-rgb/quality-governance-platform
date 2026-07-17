@@ -13,6 +13,8 @@ STORAGE_CAPA = "capa"
 STORAGE_CAPA_ITEM = "capa_item"
 
 # API source_type values that map only to capa_actions (not incident_actions / complaint_actions).
+# "investigation" is also CAPA-backed (formal CAPAAction) while InvestigationAction /
+# CAPAItem rows are still queried separately when filtering by investigation.
 CAPA_ONLY_API_SOURCE_TYPES: frozenset[str] = frozenset(
     {
         "assessment",
@@ -29,6 +31,7 @@ CAPA_ONLY_API_SOURCE_TYPES: frozenset[str] = frozenset(
         "capa_complaint",
         "near_miss",
         "rta",
+        "investigation",
     }
 )
 

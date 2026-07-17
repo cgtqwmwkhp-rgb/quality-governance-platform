@@ -37,6 +37,17 @@ describe('investigation hand-off links', () => {
     expect(getCapaLink('near_miss', 3)).toBe('/actions?sourceType=near_miss&sourceId=3')
   })
 
+  it('builds create deep-link with locked investigation parent + returnTo', () => {
+    expect(
+      getCapaLink('investigation', 7, {
+        create: true,
+        returnTo: '/investigations/7',
+      }),
+    ).toBe(
+      '/actions?sourceType=investigation&sourceId=7&create=1&returnTo=%2Finvestigations%2F7',
+    )
+  })
+
   it('resolves create vs open CAPA hand-off mode', () => {
     expect(resolveCapaHandoffMode(0)).toBe('create')
     expect(resolveCapaHandoffMode(2)).toBe('open')

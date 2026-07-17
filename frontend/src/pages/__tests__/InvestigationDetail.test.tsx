@@ -84,6 +84,7 @@ vi.mock('../../api/client', () => ({
     update: vi.fn(),
     addComment: vi.fn(),
     autosave: vi.fn(),
+    createCapa: vi.fn(),
   },
   actionsApi: {
     list: vi.fn(),
@@ -203,7 +204,7 @@ describe('InvestigationDetail', () => {
     expect(client.investigationsApi.getPacks).toHaveBeenCalledWith(7, { page: 1, page_size: 50 })
   })
 
-  it('links back to the source record and into the CAPA workspace', async () => {
+  it('links back to the source record and opens in-context CAPA create when empty', async () => {
     renderPage()
 
     await waitFor(() => {
@@ -214,6 +215,36 @@ describe('InvestigationDetail', () => {
       screen.getAllByRole('button', { name: 'investigations.handoff.back_to_source' })[0],
     )
     expect(mockNavigate).toHaveBeenCalledWith('/rtas/42')
+
+    fireEvent.click(screen.getByTestId('investigation-capa-handoff-cta'))
+    expect(mockNavigate).not.toHaveBeenCalledWith(
+      expect.stringContaining('/actions?sourceType=investigation'),
+    )
+    expect(screen.getByTestId('investigation-actions-panel')).toBeInTheDocument()
+  })
+
+  it('navigates to Actions list when CAPA already exists (open mode)', async () => {
+    client.actionsApi.list.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 3,
+            title: 'Install barrier',
+            status: 'open',
+            source_type: 'investigation',
+            source_id: 7,
+          },
+        ],
+      },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-capa-handoff-cta')).toHaveTextContent(
+        'investigations.handoff.open_capa',
+      )
+    })
 
     fireEvent.click(screen.getByTestId('investigation-capa-handoff-cta'))
     expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=investigation&sourceId=7')
