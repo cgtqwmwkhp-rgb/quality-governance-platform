@@ -3123,5 +3123,12 @@
   "planet_mark.shell.years.ocr.field.average_fte": "Average FTE",
   "planet_mark.shell.years.ocr.field.certificate_number": "Certificate number",
   "planet_mark.shell.years.ocr.field.reporting_period_label": "Reporting period",
-  "planet_mark.shell.years.ocr.field.certification_status_cue": "Certification status cue"
+  "planet_mark.shell.years.ocr.field.certification_status_cue": "Certification status cue",
+  "investigations": {
+    "closure": {
+      "closed_success": "Investigation closed",
+      "close_cta": "Close investigation",
+      "already_closed": "Investigation is already closed"
+    }
+  }
 }

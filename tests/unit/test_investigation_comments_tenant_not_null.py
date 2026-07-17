@@ -47,3 +47,39 @@ def test_migration_chains_from_investigation_actions_and_never_invents_tenant():
     assert "tenant_id = 1" not in body
     assert "SET tenant_id = 1" not in body.upper()
     assert (REPO_ROOT / "docs/data/investigation-comments-tenant-backfill.md").is_file()
+
+
+def _add_comment_snippet(source: str) -> str:
+    start = source.index("async def add_comment")
+    markers = (
+        "\n    @classmethod\n    async def ",
+        "\n    @classmethod\n    def ",
+        "\n@router.",
+        "\nasync def ",
+    )
+    next_def = -1
+    for marker in markers:
+        idx = source.find(marker, start + 1)
+        if idx != -1 and (next_def == -1 or idx < next_def):
+            next_def = idx
+    return source[start:] if next_def == -1 else source[start:next_def]
+
+
+def test_add_comment_service_stamps_tenant_from_investigation_and_never_invents():
+    """Write path must inherit tenant_id from the parent investigation run."""
+    body = (REPO_ROOT / "src/domain/services/investigation_service.py").read_text(encoding="utf-8")
+    snippet = _add_comment_snippet(body)
+    assert "tenant_id=investigation.tenant_id" in snippet
+    assert "tenant_id is required to create an investigation comment" in snippet
+    assert "tenant_id=1" not in snippet
+    assert "SET tenant_id = 1" not in snippet.upper()
+
+
+def test_add_comment_route_stamps_tenant_from_investigation_and_never_invents():
+    """Route POST .../comments must stamp tenant_id (NOT NULL after WCS-TEN2)."""
+    body = (REPO_ROOT / "src/api/routes/investigations.py").read_text(encoding="utf-8")
+    snippet = _add_comment_snippet(body)
+    assert "tenant_id=investigation.tenant_id" in snippet
+    assert "InvestigationComment(" in snippet
+    assert "tenant_id=1" not in snippet
+    assert "SET tenant_id = 1" not in snippet.upper()

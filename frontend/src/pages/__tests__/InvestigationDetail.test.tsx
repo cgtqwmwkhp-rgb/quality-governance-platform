@@ -88,6 +88,7 @@ vi.mock('../../api/client', () => ({
   },
   actionsApi: {
     list: vi.fn(),
+    update: vi.fn(),
   },
   evidenceAssetsApi: {
     list: vi.fn(),
@@ -348,6 +349,44 @@ describe('InvestigationDetail', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('investigation-closure-checklist')).toBeInTheDocument()
+    })
+  })
+
+
+  it('shows Close CTA when can_close and PATCHes status=closed', async () => {
+    client.investigationsApi.getClosureValidation.mockResolvedValue({
+      data: { can_close: true, reasons: [], open_work_count: 0, open_work: [] },
+    })
+    client.investigationsApi.update.mockResolvedValue({
+      data: { ...mockInvestigation, status: 'closed' },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-close-cta')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('investigation-close-cta'))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.update).toHaveBeenCalledWith(7, { status: 'closed' })
+    })
+  })
+
+  it('surfaces Report pack list errors honestly', async () => {
+    client.investigationsApi.getPacks.mockRejectedValue(new Error('packs unavailable'))
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('packs unavailable')).toBeInTheDocument()
     })
   })
 })
