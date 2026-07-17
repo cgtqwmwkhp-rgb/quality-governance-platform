@@ -105,8 +105,7 @@ function TemplateListView() {
           </Link>
           <h1 className="text-3xl font-bold text-foreground">Investigation Templates</h1>
           <p className="text-muted-foreground mt-1">
-            INC043-grade structure: seven contract sections from the Plantexpand investigation
-            report. Wave 1 question types apply within each section.
+            Seven-section investigation report structure. Question types apply within each section.
           </p>
         </div>
         <Button onClick={() => navigate('/investigations/templates/builder/new')}>
@@ -126,11 +125,11 @@ function TemplateListView() {
           <EmptyState
             icon={<Layers className="text-muted-foreground" size={28} aria-hidden="true" />}
             title="No investigation templates yet"
-            description={`New templates start from the INC043 seven-section contract (${INC043_CONTRACT_SECTIONS.map((section) => section.title.replace(/^\d+\.\s*/, '')).join(', ')}). PDF export and customer-pack rendering remain on the Report tab — this builder defines section structure only.`}
+            description={`New templates start from the seven-section investigation report contract (${INC043_CONTRACT_SECTIONS.map((section) => section.title.replace(/^\d+\.\s*/, '')).join(', ')}). PDF export and customer-pack rendering remain on the Report tab — this builder defines section structure only.`}
             action={
               <Button onClick={() => navigate('/investigations/templates/builder/new')}>
                 <LayoutTemplate size={16} aria-hidden="true" />
-                Create INC043 scaffold
+                Create investigation report scaffold
               </Button>
             }
           />
@@ -291,8 +290,8 @@ function TemplateEditorView({ templateId }: { templateId?: string }) {
             {isNew ? 'New Investigation Template' : 'Edit Investigation Template'}
           </h1>
           <p className="text-muted-foreground mt-1">
-            INC043 contract: {mappedContractCount}/{INC043_CONTRACT_SECTIONS.length} sections mapped
-            · Wave 1 palette ({FE_BUILDER_QUESTION_TYPES.length} question types).
+            Report contract: {mappedContractCount}/{INC043_CONTRACT_SECTIONS.length} sections mapped
+            · palette ({FE_BUILDER_QUESTION_TYPES.length} question types).
           </p>
         </div>
         <Button onClick={handleSave} disabled={saving}>
@@ -306,7 +305,7 @@ function TemplateEditorView({ templateId }: { templateId?: string }) {
       <Card className="p-6 space-y-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <p className="text-sm text-muted-foreground">
-            Templates should cover all seven INC043 sections before investigations can reach
+            Templates should cover all seven report sections before investigations can reach
             closure-grade parity. Branded PDF export is handled separately on the investigation
             Report tab.
           </p>
@@ -322,7 +321,7 @@ function TemplateEditorView({ templateId }: { templateId?: string }) {
             }
           >
             <LayoutTemplate size={16} aria-hidden="true" />
-            Apply INC043 scaffold
+            Apply report scaffold
           </Button>
         </div>
         <ContractSectionChecklist checklist={contractChecklist} />

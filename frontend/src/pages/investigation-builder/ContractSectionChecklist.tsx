@@ -41,7 +41,7 @@ export function ContractSectionChecklist({
     <div className={cn('space-y-3', className)} data-testid="inc043-section-checklist">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-medium text-foreground">INC043 section contract</p>
+          <p className="text-sm font-medium text-foreground">Investigation report section contract</p>
           <p className="text-xs text-muted-foreground">
             {presentCount}/{INC043_CONTRACT_SECTIONS.length} sections mapped · {completeCount} with
             questions

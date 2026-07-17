@@ -169,6 +169,7 @@ class InvestigationRunResponse(BaseModel):
     title: str
     description: Optional[str] = None
     status: str = "draft"
+    # HSG245-aligned depth: minimal | low | medium | high
     level: Optional[str] = None
     data: Dict[str, Any] = Field(default_factory=dict)
     reference_number: str

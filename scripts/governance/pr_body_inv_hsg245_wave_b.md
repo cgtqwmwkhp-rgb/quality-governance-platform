@@ -1,65 +1,68 @@
-# Investigation HSG245 levels — Wave B
+# Change Ledger (CL-INV-HSG245-WAVE-B)
 
-## Summary
+## 1) Summary
+- **Feature / Change name:** INV-HSG245-WAVE-B — four-level HSG245 investigation model + level-aware section gates
+- **User goal:** Investigations use `minimal` through `high` levels with named section gates, level-scoped Report tab content, and Template Builder `min_level` controls — without changing the Investigations list page (Wave A / #1109)
+- **In scope:** Domain model, closure validation, Detail Report tab, Template Builder `min_level`, contract v2.2
+- **Out of scope:** Wave A list chrome; Wave C customer-pack omit/approval RBAC; Alembic
+- **Feature flag / kill switch:** N/A
 
-Introduces the four-level HSG245 investigation model without changing the Investigations list chrome:
+## 2) Impact Map (what changed)
+- **Frontend:** `InvestigationDetail.tsx`, investigation-builder (Template Builder, contract sections, helpers), HSG245 report sections — **not** `Investigations.tsx`
+- **Backend / APIs / DB:** `InvestigationLevel.MINIMAL`, level-aware closure validation, additive API `level` field
+- **Config/env/flags:** None
+- **Dependencies:** Merged #1109 on main (`be8e3f2d`)
 
-- adds `minimal` as a first-class investigation level and maps negligible / near-miss potential to it;
-- replaces positional closure validation with named, level-aware section gates;
-- presents the level-appropriate report scope in the Investigation Detail Report tab, including the HIGH HSG245 analysis, SMART CAPA, fishbone, and management-system/risk-assessment review pack;
-- lets Template Builder administrators persist a section `min_level` (`minimal` through `high`) alongside existing field removal / required controls.
+## 3) Compatibility & Data Safety
+- **Compatibility strategy:** Additive `min_level` JSON metadata; templates without `min_level` default safely to MINIMAL
+- **Breaking changes:** None — named contract sections retain backward-compatible gates
+- **Migration plan:** N/A (no Alembic)
+- **Rollback strategy:** Revert squash-merge
 
-Wave C customer-pack omit/approval RBAC is explicitly out of scope.
+## 4) Acceptance Criteria (AC)
+- [x] AC-01: No Wave A list-page changes in this PR
+- [x] AC-02: Closure validation uses named section `min_level` instead of positional first-N heuristic
+- [x] AC-03: Investigation level supports four values, including `minimal`
+- [x] AC-04: Detail Report tab shows only sections in scope for the run level
+- [x] AC-05: Minimal/low omit deep RCA; HIGH includes HSG245 analysis, SMART CAPA, fishbone, management-system review
+- [x] AC-06: Template Builder persists section `min_level` alongside existing field controls
 
-## Gate 0 — Scope and branch
-
-- [x] Branch starts from `origin/main`: `path11/inv-hsg245-levels-wave-b`
-- [x] No rebase or edits to Wave A PR #1109
-- [x] No list-page chrome changes in `Investigations.tsx`
-- [x] No customer-pack omit/approval/RBAC implementation
-
-## Gate 1 — Contract and domain model
-
-- [x] `InvestigationLevel.MINIMAL = "minimal"` added
-- [x] Investigation API/client exposes the level
-- [x] Template Contract v2.2 defines MINIMAL and the named HIGH-only HSG245, CAPA, fishbone, and management-system review sections
-
-## Gate 2 — Level-aware behaviour
-
-- [x] Closure validation uses a named section's `min_level` rather than the former first-N-section heuristic
-- [x] Existing named contract sections retain backward-compatible gates
-- [x] Template Builder serializes and restores `min_level`
-- [x] Detail Report tab shows only the report sections in scope for the run level
-
-## Gate 3 — HIGH report depth
-
-- [x] HIGH report scope includes structured place/plant/people/process and immediate/underlying/root-cause analysis
-- [x] HIGH report scope includes SMART CAPA, fishbone, and management-system/risk-assessment review
-- [x] MEDIUM retains concise root-cause analysis; MINIMAL omits deep RCA
-
-## Gate 4 — Verification
-
+## 5) Testing Evidence (link to runs)
 - [x] `pytest tests/unit/test_investigation_service.py tests/integration/test_investigation_stage2.py -q` — 26 passed
 - [x] `npx vitest run src/pages/investigation/__tests__/hsg245ReportSections.test.ts src/pages/investigation-builder/__tests__/templateHelpers.test.ts src/pages/investigation-builder/__tests__/contractSections.test.ts` — 9 passed
 - [x] `npm run build` — passed
+- [ ] CI after merge + Change Ledger fix
 
-## Gate 5 — Risk and follow-up
+## 6) Critical Journeys Verified (CUJ)
+- [x] CUJ-01: Negligible/near-miss source creates MINIMAL investigation with facts, immediate actions, sign-off only
+- [x] CUJ-02: Investigator opens HIGH run Report tab and sees complete HSG245 report scope
+- [x] CUJ-03: Template Builder admin assigns section `min_level` and setting persists in template JSON
+- [x] CUJ-04: Closure validation skips HIGH-only section for MEDIUM and blocks for HIGH when incomplete
 
-- [x] No Alembic migration: `min_level` is additive JSON structure metadata
-- [x] Existing templates without `min_level` default safely to MINIMAL unless they use a named contract section with a defined gate
-- [x] Customer-pack section omit remains reserved for Wave C
+## 7) Observability & Ops
+- Existing investigation timeline / closure-validation endpoints unchanged; level surfaced on API responses
 
-## Acceptance criteria
+## 8) Release Plan (Local → Staging → Canary → Prod)
+- Merge after Wave A (#1109) on main; verify Template Builder + Detail Report tab per level on staging
 
-- [x] AC-01: No Wave A list-page changes in this PR.
-- [x] AC-03: Investigation level supports four values, including `minimal`.
-- [x] AC-05: Minimal/low do not require deep RCA; HIGH has detailed RCA/HSG245 analysis, CAPA, fishbone, and management-system review.
-- [x] AC-06: Template Builder can set section `min_level` and admins can remove/reduce fields through the existing builder controls.
-- [ ] AC-07/AC-08: Customer-pack omit approval is Wave C and intentionally excluded.
+## 9) Rollback Plan (Mandatory)
+- **Rollback trigger:** Level gating blocks valid closures or hides required report sections
+- **Rollback steps:** Revert squash-merge
+- **Owner:** Platform / Investigations track
 
-## Critical user journeys
+## 10) Evidence Pack (links)
+- Wave A merged: #1109 (`be8e3f2d`)
+- Tip base at branch open: `15eab9f8`
+- Customer-pack omit/approval reserved for Wave C
 
-- [x] CUJ-01: A negligible/near-miss potential source creates a MINIMAL investigation with facts, immediate actions, and sign-off only.
-- [x] CUJ-02: An investigator opens a HIGH run's Report tab and sees the complete HSG245 report scope.
-- [x] CUJ-03: A Template Builder administrator assigns a section's minimum level and the setting persists in template structure JSON.
-- [x] CUJ-04: Closure validation skips a HIGH-only section for MEDIUM and blocks it for HIGH when its required fields are incomplete.
+---
+
+# Gate Checklist (must be complete before merge)
+- [x] **Gate 0:** Scope lock + AC defined + Change Ledger complete
+- [x] **Gate 1:** Contract/domain model — MINIMAL level + v2.2 sections
+- [x] **Gate 2:** Level-aware closure validation + Template Builder `min_level`
+- [x] **Gate 3:** HIGH report depth (HSG245, CAPA, fishbone, mgmt-system review)
+- [ ] **Gate 4:** CI green after merge
+- [x] **Gate 5:** No Alembic; Wave C RBAC explicitly deferred
+
+Made with [Cursor](https://cursor.com)
