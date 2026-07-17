@@ -71,10 +71,15 @@ export interface RiskProfile {
   category?: string | null
   status?: string | null
   treatment?: string | null
+  inherent_likelihood?: number | null
+  inherent_impact?: number | null
   inherent_score?: number | null
   inherent_level?: string | null
+  residual_likelihood?: number | null
+  residual_impact?: number | null
   residual_score?: number | null
   residual_level?: string | null
+  trend?: 'increasing' | 'stable' | 'decreasing' | null
   risk_owner_id?: number | null
   risk_owner_name?: string | null
   last_review_date?: string | null
@@ -84,6 +89,36 @@ export interface RiskProfile {
   assessment_history?: RiskProfileAssessmentHistoryItem[]
   linked_actions?: unknown[]
   review_notes?: string | null
+}
+
+export interface RiskAssessPayload {
+  inherent_likelihood?: number
+  inherent_impact?: number
+  residual_likelihood?: number
+  residual_impact?: number
+  review_notes?: string
+  assessment_notes?: string
+  last_review_date?: string
+  next_review_date?: string
+  trend?: 'increasing' | 'stable' | 'decreasing'
+}
+
+export interface RiskAssessResponse {
+  message: string
+  inherent_score?: number
+  residual_score?: number
+  risk_level?: string
+  is_within_appetite?: boolean
+  trend?: 'increasing' | 'stable' | 'decreasing'
+  last_review_date?: string | null
+  next_review_date?: string | null
+}
+
+export interface RiskTrendPoint {
+  month: string
+  avg_inherent?: number
+  avg_residual: number
+  assessment_count?: number
 }
 
 export interface RiskHeatmapCell {
@@ -212,8 +247,8 @@ export function createRiskRegisterApi(api: AxiosInstance) {
     update: (id: number, data: Partial<RiskEntry>) =>
       api.put<RiskEntry>(`/api/v1/risk-register/${id}`, data),
     delete: (id: number) => api.delete<void>(`/api/v1/risk-register/${id}`),
-    assess: (id: number, scores: { likelihood: number; impact: number }) =>
-      api.post<RiskEntry>(`/api/v1/risk-register/${id}/assess`, scores),
+    assess: (id: number, data: RiskAssessPayload) =>
+      api.post<RiskAssessResponse>(`/api/v1/risk-register/${id}/assess`, data),
     resolveSuggestionTriage: (
       id: number,
       body: { decision: 'accept' | 'reject'; notes?: string },
@@ -246,10 +281,14 @@ export function createRiskRegisterApi(api: AxiosInstance) {
       const q = sp.toString()
       return api.get<RiskSummary>(`/api/v1/risk-register/summary${q ? `?${q}` : ''}`)
     },
-    getTrends: (days = 90, includeMovers = false) =>
-      api.get<RiskTrendsResponse | RiskTrendsResponse['series']>(
-        `/api/v1/risk-register/trends?days=${days}${includeMovers ? '&include_movers=true' : ''}`,
-      ),
+    getTrends: (days = 90, includeMovers = false, riskId?: number) => {
+      const sp = new URLSearchParams({ days: String(days) })
+      if (includeMovers) sp.set('include_movers', 'true')
+      if (riskId != null) sp.set('risk_id', String(riskId))
+      return api.get<RiskTrendsResponse | RiskTrendPoint[]>(
+        `/api/v1/risk-register/trends?${sp.toString()}`,
+      )
+    },
     getBowtie: (id: number) => api.get<unknown>(`/api/v1/risk-register/${id}/bowtie`),
     addBowtieElement: (id: number, data: Record<string, unknown>) =>
       api.post<unknown>(riskRegisterBowtieElementsPath(id), data),

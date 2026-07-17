@@ -4,7 +4,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
+from src.domain.services.risk_service import (
+    BowTieService,
+    KRIService,
+    RiskScoringEngine,
+    RiskService,
+    compute_net_score_trend,
+    read_score_trend_from_tags,
+    write_score_trend_to_tags,
+)
 
 # ---------------------------------------------------------------------------
 # RiskScoringEngine
@@ -132,22 +140,65 @@ class TestRiskService:
     @pytest.mark.asyncio
     async def test_update_risk_assessment_recalculates_scores(self, service):
         risk = MagicMock(
+            id=1,
+            tenant_id=1,
             inherent_likelihood=3,
             inherent_impact=3,
             residual_likelihood=2,
             residual_impact=2,
+            inherent_score=9,
+            residual_score=4,
             appetite_threshold=12,
             review_frequency_days=90,
+            status="active",
+            treatment_strategy="treat",
+            tags=None,
         )
-        result = MagicMock()
-        result.scalar_one_or_none.return_value = risk
-        service.db.execute.return_value = result
+        risk_result = MagicMock()
+        risk_result.scalar_one_or_none.return_value = risk
+        prev_history = MagicMock()
+        prev_history.scalar_one_or_none.return_value = 4
+
+        service.db.execute = AsyncMock(side_effect=[risk_result, prev_history])
         service.db.refresh = AsyncMock()
-        service._record_assessment = AsyncMock()
+        service.db.add = MagicMock()
+        service.db.commit = AsyncMock()
 
         updated = await service.update_risk_assessment(1, {"inherent_likelihood": 5, "inherent_impact": 4})
         assert updated.inherent_likelihood == 5
         assert updated.inherent_impact == 4
+        service.db.add.assert_called_once()
+        service.db.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_update_risk_assessment_manual_trend_override(self, service):
+        risk = MagicMock(
+            id=1,
+            tenant_id=1,
+            inherent_likelihood=3,
+            inherent_impact=3,
+            residual_likelihood=2,
+            residual_impact=2,
+            inherent_score=9,
+            residual_score=4,
+            appetite_threshold=12,
+            review_frequency_days=90,
+            status="active",
+            treatment_strategy="treat",
+            tags=None,
+        )
+        risk_result = MagicMock()
+        risk_result.scalar_one_or_none.return_value = risk
+        prev_history = MagicMock()
+        prev_history.scalar_one_or_none.return_value = 8
+
+        service.db.execute = AsyncMock(side_effect=[risk_result, prev_history])
+        service.db.refresh = AsyncMock()
+        service.db.add = MagicMock()
+        service.db.commit = AsyncMock()
+
+        await service.update_risk_assessment(1, {"trend": "stable"})
+        assert risk.tags == {"score_trend": "stable"}
 
     @pytest.mark.asyncio
     async def test_get_heat_map_data_empty(self, service):
@@ -326,3 +377,23 @@ class TestKRIService:
 
     def test_calculate_trend_single_entry(self, service):
         assert service._calculate_trend([{"value": 10}]) == "stable"
+
+
+class TestNetScoreTrendHelpers:
+    def test_compute_net_score_trend(self):
+        assert compute_net_score_trend(None, 10) == "stable"
+        assert compute_net_score_trend(8, 12) == "increasing"
+        assert compute_net_score_trend(12, 8) == "decreasing"
+        assert compute_net_score_trend(10, 10) == "stable"
+
+    def test_tags_round_trip(self):
+        assert read_score_trend_from_tags(None) is None
+        tags = write_score_trend_to_tags({"foo": "bar"}, "decreasing")
+        assert tags == {"foo": "bar", "score_trend": "decreasing"}
+        assert read_score_trend_from_tags(tags) == "decreasing"
+
+    def test_resolve_score_trend_from_history(self):
+        h1 = MagicMock(residual_score=12)
+        h2 = MagicMock(residual_score=16)
+        risk = MagicMock(tags=None)
+        assert RiskService.resolve_score_trend(risk, [h1, h2]) == "decreasing"

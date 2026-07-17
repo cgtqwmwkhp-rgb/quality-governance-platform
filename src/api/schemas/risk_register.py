@@ -1,8 +1,8 @@
 """Enterprise Risk Register API response schemas."""
 
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # ============================================================================
 # Risk List / CRUD Schemas
@@ -51,6 +51,9 @@ class RiskAssessmentResponse(BaseModel):
     residual_score: Optional[int] = None
     risk_level: Optional[str] = None
     is_within_appetite: Optional[bool] = None
+    trend: Optional[Literal["increasing", "stable", "decreasing"]] = None
+    last_review_date: Optional[str] = None
+    next_review_date: Optional[str] = None
 
 
 # ============================================================================
@@ -131,10 +134,15 @@ class RiskProfileResponse(BaseModel):
     category: Optional[str] = None
     status: Optional[str] = None
     treatment: Optional[str] = None
+    inherent_likelihood: Optional[int] = None
+    inherent_impact: Optional[int] = None
     inherent_score: Optional[int] = None
     inherent_level: Optional[str] = None
+    residual_likelihood: Optional[int] = None
+    residual_impact: Optional[int] = None
     residual_score: Optional[int] = None
     residual_level: Optional[str] = None
+    trend: Optional[Literal["increasing", "stable", "decreasing"]] = None
     risk_owner_id: Optional[int] = None
     risk_owner_name: Optional[str] = None
     last_review_date: Optional[str] = None

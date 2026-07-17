@@ -34,7 +34,12 @@ describe('createRiskRegisterApi', () => {
     rr.getProfile(2)
     rr.update(2, { title: 'r2' })
     rr.delete(2)
-    rr.assess(2, { likelihood: 3, impact: 4 })
+    rr.assess(2, {
+      inherent_likelihood: 3,
+      inherent_impact: 4,
+      residual_likelihood: 2,
+      residual_impact: 3,
+    })
     rr.resolveSuggestionTriage(2, { decision: 'accept', notes: 'ok' })
     rr.getHeatmap()
     rr.getSummary()
@@ -45,8 +50,10 @@ describe('createRiskRegisterApi', () => {
     expect(api.put).toHaveBeenCalledWith('/api/v1/risk-register/2', { title: 'r2' })
     expect(api.delete).toHaveBeenCalledWith('/api/v1/risk-register/2')
     expect(api.post).toHaveBeenCalledWith('/api/v1/risk-register/2/assess', {
-      likelihood: 3,
-      impact: 4,
+      inherent_likelihood: 3,
+      inherent_impact: 4,
+      residual_likelihood: 2,
+      residual_impact: 3,
     })
     expect(api.post).toHaveBeenCalledWith('/api/v1/risk-register/2/suggestion-triage', {
       decision: 'accept',
@@ -55,6 +62,12 @@ describe('createRiskRegisterApi', () => {
     expect(api.get).toHaveBeenCalledWith('/api/v1/risk-register/heatmap')
     expect(api.get).toHaveBeenCalledWith('/api/v1/risk-register/summary')
     expect(api.get).toHaveBeenCalledWith('/api/v1/risk-register/trends?days=30')
+  })
+
+  it('getTrends supports risk_id filter', () => {
+    const api = mockApi()
+    createRiskRegisterApi(api as never).getTrends(90, false, 42)
+    expect(api.get).toHaveBeenCalledWith('/api/v1/risk-register/trends?days=90&risk_id=42')
   })
 
   it('bowtie/controls/KRI/appetite helpers', () => {

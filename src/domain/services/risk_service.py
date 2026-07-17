@@ -31,6 +31,44 @@ def naive_utc_cutoff(days: int) -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
 
 
+def naive_utc_now() -> datetime:
+    """Current naive UTC timestamp for risk_register DateTime columns."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+ScoreTrend = str  # increasing | stable | decreasing
+
+SCORE_TREND_TAG_KEY = "score_trend"
+
+
+def compute_net_score_trend(previous: Optional[int], current: int) -> ScoreTrend:
+    """Derive residual-score direction from the last two net scores."""
+    if previous is None:
+        return "stable"
+    if current > previous:
+        return "increasing"
+    if current < previous:
+        return "decreasing"
+    return "stable"
+
+
+def read_score_trend_from_tags(tags: Optional[list | dict]) -> Optional[ScoreTrend]:
+    """Read persisted score trend from the risk tags JSON blob."""
+    if not isinstance(tags, dict):
+        return None
+    trend = tags.get(SCORE_TREND_TAG_KEY)
+    if trend in {"increasing", "stable", "decreasing"}:
+        return trend
+    return None
+
+
+def write_score_trend_to_tags(tags: Optional[list | dict], trend: ScoreTrend) -> dict:
+    """Persist score trend in tags without a dedicated column (W1; no Alembic)."""
+    merged = dict(tags) if isinstance(tags, dict) else {}
+    merged[SCORE_TREND_TAG_KEY] = trend
+    return merged
+
+
 class RiskScoringEngine:
     """5x5 Risk Matrix Scoring Engine"""
 
@@ -198,11 +236,19 @@ class RiskService:
     async def update_risk_assessment(
         self, risk_id: int, data: dict, assessed_by: Optional[int] = None
     ) -> EnterpriseRisk:
-        """Update risk assessment scores"""
+        """Update risk assessment scores and append history in one transaction."""
         result = await self.db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))
         risk = result.scalar_one_or_none()
         if not risk:
             raise ValueError(f"Risk {risk_id} not found")
+
+        prev_history = await self.db.execute(
+            select(RiskAssessmentHistory.residual_score)
+            .where(RiskAssessmentHistory.risk_id == risk_id)
+            .order_by(RiskAssessmentHistory.assessment_date.desc())
+            .limit(1)
+        )
+        previous_net_score = prev_history.scalar_one_or_none()
 
         if "inherent_likelihood" in data:
             risk.inherent_likelihood = data["inherent_likelihood"]
@@ -218,27 +264,51 @@ class RiskService:
 
         risk.is_within_appetite = risk.residual_score <= risk.appetite_threshold
 
-        risk.last_review_date = datetime.now(timezone.utc)
-        risk.next_review_date = datetime.now(timezone.utc) + timedelta(days=risk.review_frequency_days)
+        now = naive_utc_now()
+        if "last_review_date" in data and data["last_review_date"] is not None:
+            risk.last_review_date = data["last_review_date"]
+        else:
+            risk.last_review_date = now
+
+        if "next_review_date" in data and data["next_review_date"] is not None:
+            risk.next_review_date = data["next_review_date"]
+        else:
+            risk.next_review_date = now + timedelta(days=risk.review_frequency_days)
 
         if "review_notes" in data:
             risk.review_notes = data["review_notes"]
 
+        manual_trend = data.get("trend")
+        if manual_trend in {"increasing", "stable", "decreasing"}:
+            score_trend: ScoreTrend = manual_trend
+        else:
+            score_trend = compute_net_score_trend(previous_net_score, risk.residual_score)
+        risk.tags = write_score_trend_to_tags(risk.tags, score_trend)
+
+        risk.updated_at = now
+
+        history = self._build_assessment_history(
+            risk,
+            assessed_by=assessed_by,
+            notes=data.get("assessment_notes"),
+        )
+        self.db.add(history)
+
+        # TODO(RR-W2): append risk activity event when risk_activity_events table lands.
+
         await self.db.commit()
         await self.db.refresh(risk)
 
-        await self._record_assessment(risk, assessed_by, data.get("assessment_notes"))
-
         return risk
 
-    async def _record_assessment(
+    def _build_assessment_history(
         self,
         risk: EnterpriseRisk,
         assessed_by: Optional[int] = None,
         notes: Optional[str] = None,
-    ) -> None:
-        """Record assessment in history"""
-        history = RiskAssessmentHistory(
+    ) -> RiskAssessmentHistory:
+        """Build an assessment history row (caller adds + commits)."""
+        return RiskAssessmentHistory(
             risk_id=risk.id,
             tenant_id=risk.tenant_id,
             assessed_by=assessed_by,
@@ -252,8 +322,34 @@ class RiskService:
             treatment_strategy=risk.treatment_strategy,
             assessment_notes=notes,
         )
+
+    async def _record_assessment(
+        self,
+        risk: EnterpriseRisk,
+        assessed_by: Optional[int] = None,
+        notes: Optional[str] = None,
+    ) -> None:
+        """Record assessment in history (create path; separate commit)."""
+        history = self._build_assessment_history(risk, assessed_by=assessed_by, notes=notes)
         self.db.add(history)
         await self.db.commit()
+
+    @staticmethod
+    def resolve_score_trend(
+        risk: EnterpriseRisk,
+        history: list[RiskAssessmentHistory],
+    ) -> ScoreTrend:
+        """Return persisted or computed net-score trend for profile/list surfaces."""
+        stored = read_score_trend_from_tags(getattr(risk, "tags", None))
+        if stored:
+            return stored
+        if len(history) >= 2:
+            latest = history[0].residual_score
+            prior = history[1].residual_score
+            return compute_net_score_trend(prior, latest)
+        if len(history) == 1:
+            return "stable"
+        return "stable"
 
     async def get_heat_map_data(
         self,
