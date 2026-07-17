@@ -33,8 +33,6 @@ import {
   Inbox,
   Play,
   RefreshCw,
-  AlertCircle,
-  BarChart3,
   Zap,
   BookOpen,
 } from 'lucide-react'
@@ -54,12 +52,12 @@ import {
   countOverdueMonitoringRuns,
   countPendingChangesInbox,
   countUnreviewedRegulatoryUpdates,
-  formatStandardCode,
   hasLiveComplianceScore,
   isOpenWatchImpact,
   mapRunsToMonitoringRows,
   MONITORING_AUDITS_HANDOFF_PATH,
-  scoreBarColor,
+  MONITORING_SCORE_HANDOFF_EVIDENCE,
+  MONITORING_SCORE_HANDOFF_IMS,
   type MonitoringAuditRunRow,
 } from './complianceAutomationHelpers'
 
@@ -113,7 +111,7 @@ const HSE_RIDDOR_GUIDE_URL = 'https://www.hse.gov.uk/riddor/reporting/how-to-mak
 export default function ComplianceAutomation() {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<
-    'changes' | 'certificates' | 'audits' | 'scoring' | 'riddor'
+    'changes' | 'certificates' | 'audits' | 'riddor'
   >('changes')
   const [updates, setUpdates] = useState<RegulatoryUpdate[]>([])
   const [certificates, setCertificates] = useState<Certificate[]>([])
@@ -125,10 +123,6 @@ export default function ComplianceAutomation() {
     previous: 0,
     change: 0,
   })
-  const [scoreBreakdown, setScoreBreakdown] = useState<Array<{ code: string; label: string; score: number }>>(
-    [],
-  )
-  const [scoreGaps, setScoreGaps] = useState<string[]>([])
   const [scoreCategories, setScoreCategories] = useState<Record<string, number>>({})
   const [watchImpacts, setWatchImpacts] = useState<RegulatoryImpact[]>([])
   const [runningWatch, setRunningWatch] = useState(false)
@@ -189,15 +183,7 @@ export default function ComplianceAutomation() {
         previous,
         change: Number((overall - previous).toFixed(1)),
       })
-      setScoreBreakdown(
-        Object.entries(scoreData.categories ?? {}).map(([code, score]) => ({
-          code,
-          label: formatStandardCode(code),
-          score,
-        })),
-      )
       setScoreCategories(scoreData.categories ?? {})
-      setScoreGaps(scoreData.key_gaps ?? [])
     } catch (err) {
       setError(getApiErrorMessage(err))
       setUpdates([])
@@ -205,9 +191,7 @@ export default function ComplianceAutomation() {
       setCertificates([])
       setAuditRuns([])
       setComplianceScore({ overall: 0, previous: 0, change: 0 })
-      setScoreBreakdown([])
       setScoreCategories({})
-      setScoreGaps([])
     } finally {
       setLoading(false)
     }
@@ -330,7 +314,6 @@ export default function ComplianceAutomation() {
       icon: Calendar,
       count: countOverdueMonitoringRuns(auditRuns),
     },
-    { id: 'scoring', label: 'Compliance Score', icon: BarChart3 },
     { id: 'riddor', label: 'RIDDOR', icon: FileText },
   ]
 
@@ -358,7 +341,7 @@ export default function ComplianceAutomation() {
           <p className="text-muted-foreground mt-1">
             {t(
               'compliance.automation.subtitle',
-              'Regulatory watch, certificate expiry, compliance scoring, and RIDDOR readiness',
+              'Regulatory watch, certificate expiry, audit handoff, and RIDDOR readiness — live scores live in IMS / Compliance Evidence',
             )}
           </p>
         </div>
@@ -368,7 +351,7 @@ export default function ComplianceAutomation() {
         </Button>
       </div>
 
-      {/* Score Overview */}
+      {/* Score KPI chip — Score tab removed; hand off to IMS / Compliance Evidence */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <div
           className="lg:col-span-1 bg-gradient-to-br from-primary to-primary-hover rounded-xl p-6 text-primary-foreground"
@@ -397,8 +380,32 @@ export default function ComplianceAutomation() {
           <div className="text-4xl font-bold mb-1">
             {scoreIsLive ? `${complianceScore.overall}%` : '—'}
           </div>
-          <div className="text-primary-foreground/80 text-sm">
+          <div className="text-primary-foreground/80 text-sm mb-3">
             {t('compliance.automation.overall_score', 'Overall Compliance Score')}
+          </div>
+          <p className="text-xs text-primary-foreground/70 mb-3" data-testid="monitoring-score-tab-retired">
+            {t(
+              'compliance.automation.score.tab.retired',
+              'Score breakdown tab removed — open IMS for multi-scheme scores or Compliance Evidence for coverage.',
+            )}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to={MONITORING_SCORE_HANDOFF_IMS}
+              className="inline-flex items-center gap-1 rounded-md bg-primary-foreground/15 px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary-foreground/25"
+              data-testid="monitoring-score-handoff-ims"
+            >
+              {t('compliance.automation.score.handoff.ims', 'Open IMS')}
+              <ExternalLink className="w-3 h-3" />
+            </Link>
+            <Link
+              to={MONITORING_SCORE_HANDOFF_EVIDENCE}
+              className="inline-flex items-center gap-1 rounded-md bg-primary-foreground/15 px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-primary-foreground/25"
+              data-testid="monitoring-score-handoff-evidence"
+            >
+              {t('compliance.automation.score.handoff.evidence', 'Compliance Evidence')}
+              <ExternalLink className="w-3 h-3" />
+            </Link>
           </div>
         </div>
 
@@ -928,73 +935,6 @@ export default function ComplianceAutomation() {
         </div>
       )}
 
-      {/* Compliance Scoring Tab */}
-      {activeTab === 'scoring' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="monitoring-scoring-tab">
-          <div className="bg-card/50 border border-border rounded-xl p-6">
-            <h3 className="font-medium text-foreground mb-4">
-              {t('compliance.automation.score_breakdown', 'Score Breakdown by Standard')}
-            </h3>
-            {scoreBreakdown.length === 0 ? (
-              <div
-                className="py-8 text-center text-muted-foreground text-sm space-y-2"
-                data-testid="monitoring-score-breakdown-empty"
-              >
-                <p>{t('compliance.automation.empty.score.breakdown.title', 'No live standard scores yet')}</p>
-                <p>
-                  {t(
-                    'compliance.automation.empty.score.breakdown.description',
-                    'Scores come from evidence coverage in your standards library — not demo placeholders.',
-                  )}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {scoreBreakdown.map((standard) => (
-                  <div key={standard.code}>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-foreground font-medium">{standard.label}</span>
-                      <span className="text-foreground">{standard.score}%</span>
-                    </div>
-                    <div className="h-3 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${scoreBarColor(standard.score)}`}
-                        style={{ width: `${Math.min(100, Math.max(0, standard.score))}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-card/50 border border-border rounded-xl p-6">
-            <h3 className="font-medium text-foreground mb-4">
-              {t('compliance.automation.key_gaps', 'Key Gaps')}
-            </h3>
-            {scoreGaps.length === 0 ? (
-              <div
-                className="py-8 text-center text-muted-foreground text-sm"
-                data-testid="monitoring-score-gaps-empty"
-              >
-                {t(
-                  'compliance.automation.empty.score.gaps.description',
-                  'No automated gap list yet. Run gap analysis or link evidence to standards to populate this view.',
-                )}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {scoreGaps.map((gap, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                    <AlertCircle className="w-5 h-5 text-warning shrink-0" />
-                    <p className="text-foreground text-sm">{gap}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* RIDDOR Tab */}
       {activeTab === 'riddor' && (
