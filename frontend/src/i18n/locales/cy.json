@@ -1770,6 +1770,7 @@
   "portal.person_involved_name": "Enw'r Person sy'n Gysylltiedig",
   "portal.phone_email_placeholder": "Ffôn neu e-bost...",
   "portal.photos": "Lluniau",
+  "portal.photos.evidence.honesty": "Caiff enwau ffeiliau lluniau eu cofnodi gyda'r adroddiad hwn. Nid yw ffeiliau deuaidd yn cael eu huwchlwytho i'r storfa dystiolaeth o'r porth eto — gall staff atodi tystiolaeth ar ôl triawd.",
   "portal.photos_optional": "Lluniau (dewisol)",
   "portal.point_of_impact": "Pwynt Trawiad",
   "portal.policy_placeholder": "Polisi #...",

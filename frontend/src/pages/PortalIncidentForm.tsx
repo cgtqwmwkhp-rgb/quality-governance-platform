@@ -30,6 +30,10 @@ import BodyInjurySelector, { InjurySelection } from '../components/BodyInjurySel
 import DraftRecoveryDialog from '../components/DraftRecoveryDialog'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import { canOfferStaffDeepLink, portalStaffRecordLabel, portalTriageRoutedHint } from './portalSubmitSuccess'
+import {
+  buildPortalPhotoMetadataSummary,
+  portalPhotoEvidenceHonestyCopy,
+} from './portalPhotoEvidenceHonesty'
 import { useGeolocation } from '../hooks/useGeolocation'
 import { useVoiceToText } from '../hooks/useVoiceToText'
 import { useFormAutosave } from '../hooks/useFormAutosave'
@@ -383,14 +387,7 @@ export default function PortalIncidentForm() {
               ? 'low'
               : 'medium'
 
-      const photoSummary = {
-        count: formData.photos.length,
-        files: formData.photos.map((photo) => ({
-          name: photo.name,
-          type: photo.type,
-          size: photo.size,
-        })),
-      }
+      const photoSummary = buildPortalPhotoMetadataSummary(formData.photos)
 
       const reporterSubmission: Record<string, unknown> =
         reportType === 'complaint'
@@ -1065,11 +1062,20 @@ export default function PortalIncidentForm() {
               </>
             )}
 
-            {/* Photos */}
+            {/* Photos — EVD-02 metadata-only honesty toward evidence-assets spine */}
             <div>
               <span className="block text-sm font-medium text-foreground mb-2">
                 {t('portal.photos')}
               </span>
+              <p
+                className="text-xs text-muted-foreground mb-3"
+                data-testid="portal-photo-evidence-honesty"
+              >
+                {t(
+                  'portal.photos.evidence.honesty',
+                  portalPhotoEvidenceHonestyCopy(formData.photos.length),
+                )}
+              </p>
               <div className="grid grid-cols-4 gap-2">
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
