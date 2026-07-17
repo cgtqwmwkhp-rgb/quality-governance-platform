@@ -89,12 +89,32 @@ export interface InductionRun {
 export interface EngineerProfile {
   id: number
   external_id: string
-  user_id: number
+  user_id?: number | null
+  display_name?: string | null
+  pams_technician_id?: number | null
   employee_number?: string
   job_title?: string
   department?: string
   site?: string
   is_active: boolean
+}
+
+export interface EngineerCreatePayload {
+  user_id?: number | null
+  display_name?: string | null
+  employee_number?: string
+  job_title?: string
+  role?: string
+  department?: string
+  site?: string
+}
+
+export interface PamsTechnicianSyncResult {
+  created: number
+  updated: number
+  deactivated: number
+  skipped: number
+  errors: number
 }
 
 export interface CompetencyRecord {
@@ -364,6 +384,10 @@ export function createWorkforceApi(api: AxiosInstance) {
       pages: number
     }>('/api/v1/engineers/', { params }),
   getEngineer: (id: number) => api.get<EngineerProfile>(`/api/v1/engineers/${id}`),
+  createEngineer: (data: EngineerCreatePayload) =>
+    api.post<EngineerProfile>('/api/v1/engineers/', data),
+  syncFromPams: (params?: { tenant_id?: number }) =>
+    api.post<PamsTechnicianSyncResult>('/api/v1/engineers/sync-from-pams', undefined, { params }),
   getCompetencies: (engineerId: number) =>
     api.get<CompetencyRecord[]>(`/api/v1/engineers/${engineerId}/competencies`),
 

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # ============== Engineer Schemas ==============
 
@@ -11,7 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class EngineerCreate(BaseModel):
     """Schema for creating an engineer."""
 
-    user_id: int
+    user_id: Optional[int] = None
+    display_name: Optional[str] = Field(None, max_length=200)
     employee_number: Optional[str] = Field(None, max_length=50)
     job_title: Optional[str] = Field(None, max_length=100)
     department: Optional[str] = Field(None, max_length=100)
@@ -19,6 +20,20 @@ class EngineerCreate(BaseModel):
     start_date: Optional[datetime] = None
     specialisations: Optional[List[Any]] = None
     certifications: Optional[List[Any]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def map_role_to_job_title(cls, data: Any) -> Any:
+        if isinstance(data, dict) and data.get("role") and not data.get("job_title"):
+            data = dict(data)
+            data["job_title"] = data["role"]
+        return data
+
+    @model_validator(mode="after")
+    def require_user_or_display_name(self) -> "EngineerCreate":
+        if self.user_id is None and not (self.display_name and self.display_name.strip()):
+            raise ValueError("Either user_id or display_name is required")
+        return self
 
 
 class EngineerUpdate(BaseModel):
@@ -43,7 +58,9 @@ class EngineerResponse(BaseModel):
 
     id: int
     external_id: str
-    user_id: int
+    user_id: Optional[int] = None
+    display_name: Optional[str] = None
+    pams_technician_id: Optional[int] = None
     employee_number: Optional[str] = None
     job_title: Optional[str] = None
     department: Optional[str] = None
@@ -86,6 +103,16 @@ class EngineerLinkStatusResponse(BaseModel):
     @classmethod
     def unlinked(cls) -> "EngineerLinkStatusResponse":
         return cls(linked=False)
+
+
+class PamsTechnicianSyncResponse(BaseModel):
+    """Result counts from PAMS technicians_store sync."""
+
+    created: int
+    updated: int
+    deactivated: int
+    skipped: int
+    errors: int
 
 
 class EngineerListResponse(BaseModel):

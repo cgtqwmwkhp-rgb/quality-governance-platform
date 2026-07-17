@@ -19,6 +19,7 @@ from src.api.schemas.engineer import (
     EngineerListResponse,
     EngineerResponse,
     EngineerUpdate,
+    PamsTechnicianSyncResponse,
     SkillsMatrixEntry,
     SkillsMatrixResponse,
 )
@@ -121,6 +122,7 @@ async def list_engineers(
         query = query.where(
             or_(
                 Engineer.employee_number.ilike(pattern),
+                Engineer.display_name.ilike(pattern),
                 Engineer.job_title.ilike(pattern),
                 Engineer.department.ilike(pattern),
                 Engineer.site.ilike(pattern),
@@ -153,9 +155,11 @@ async def create_engineer(
     tenant_id = _require_engineer_tenant_id(user)
     if not _is_workforce_manager(user):
         raise AuthorizationError("You do not have permission to create engineer records")
-    await _validate_engineer_user_assignment(db, user, data.user_id)
+    if data.user_id is not None:
+        await _validate_engineer_user_assignment(db, user, data.user_id)
     engineer = Engineer(
         user_id=data.user_id,
+        display_name=data.display_name,
         employee_number=data.employee_number,
         job_title=data.job_title,
         department=data.department,
@@ -200,6 +204,42 @@ async def get_engineer_by_user_me(
         engineer.id,
     )
     return EngineerLinkStatusResponse.from_engineer(engineer)
+
+
+@router.post("/sync-from-pams", response_model=PamsTechnicianSyncResponse)
+async def sync_engineers_from_pams(
+    user: Annotated[User, Depends(require_permission("engineer:create"))],
+    tenant_id: Optional[int] = Query(None, description="Override tenant; defaults to DEFAULT_TENANT_ID"),
+):
+    """Sync active PAMS technicians_store rows into engineer profiles (manager only)."""
+    if not _is_workforce_manager(user):
+        raise AuthorizationError("You do not have permission to sync engineers from PAMS")
+
+    from src.domain.services.pams_technician_sync_service import resolve_tenant_id, sync_pams_technicians
+    from src.infrastructure.database import SessionLocal
+
+    effective_tenant_id = tenant_id if tenant_id is not None else _require_engineer_tenant_id(user)
+    if user.tenant_id is not None and effective_tenant_id != user.tenant_id:
+        raise AuthorizationError("You do not have permission to sync engineers for another tenant")
+    resolve_tenant_id(effective_tenant_id)
+
+    db = SessionLocal()
+    try:
+        counts = sync_pams_technicians(db, tenant_id=effective_tenant_id)
+    finally:
+        db.close()
+
+    logger.info(
+        "pams_technician_sync tenant_id=%s created=%s updated=%s deactivated=%s skipped=%s errors=%s user_id=%s",
+        effective_tenant_id,
+        counts.created,
+        counts.updated,
+        counts.deactivated,
+        counts.skipped,
+        counts.errors,
+        getattr(user, "id", None),
+    )
+    return PamsTechnicianSyncResponse(**counts.as_dict())
 
 
 @router.get("/{engineer_id}", response_model=EngineerResponse)

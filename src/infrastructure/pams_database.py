@@ -1,8 +1,8 @@
 """PAMS external MySQL database connection (read-only).
 
 Provides async access to the PAMS Azure MySQL database for reading
-vanchecklist and vanchecklistmonthly tables.  All write operations
-go to the primary QGP PostgreSQL database — PAMS is never mutated.
+vanchecklist, vanchecklistmonthly, and technicians_store tables.  All write
+operations go to the primary QGP PostgreSQL database — PAMS is never mutated.
 """
 
 import logging
@@ -108,8 +108,8 @@ async def init_pams() -> None:
     try:
         sync_engine = create_engine(sync_url, poolclass=NullPool, connect_args=sync_connect_args)
         _pams_metadata = MetaData()
-        _pams_metadata.reflect(bind=sync_engine, only=["vanchecklist", "vanchecklistmonthly"])
-        for tbl_name in ("vanchecklist", "vanchecklistmonthly"):
+        _pams_metadata.reflect(bind=sync_engine, only=["vanchecklist", "vanchecklistmonthly", "technicians_store"])
+        for tbl_name in ("vanchecklist", "vanchecklistmonthly", "technicians_store"):
             if tbl_name in _pams_metadata.tables:
                 _pams_tables[tbl_name] = _pams_metadata.tables[tbl_name]
                 logger.info(

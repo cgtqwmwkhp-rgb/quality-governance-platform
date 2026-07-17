@@ -9,6 +9,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from src.core.config import settings
 from src.infrastructure.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -432,6 +433,49 @@ def sync_pams_checklists(self) -> dict[str, Any]:  # type: ignore[override]
     _send_p1_notifications()
 
     return results
+
+
+@celery_app.task(
+    bind=True,
+    name="src.infrastructure.tasks.pams_sync_tasks.sync_pams_technicians",
+    queue="default",
+    max_retries=2,
+    soft_time_limit=300,
+)
+def sync_pams_technicians(self) -> dict[str, Any]:  # type: ignore[override]
+    """Celery task: sync PAMS technicians_store into engineers."""
+    from src.domain.services.pams_technician_sync_service import resolve_tenant_id
+    from src.domain.services.pams_technician_sync_service import sync_pams_technicians as run_sync
+    from src.infrastructure.database import SessionLocal
+
+    if not settings.pams_database_url:
+        logger.info("PAMS_DATABASE_URL not set — skipping technicians sync")
+        return {"status": "skipped", "reason": "PAMS not configured"}
+
+    try:
+        tenant_id = resolve_tenant_id()
+    except Exception as exc:
+        logger.warning("PAMS technicians sync skipped: %s", exc)
+        return {"status": "skipped", "reason": str(exc)}
+
+    db = SessionLocal()
+    try:
+        counts = run_sync(db, tenant_id=tenant_id)
+        result = counts.as_dict()
+        result["status"] = "success"
+        logger.info(
+            "PAMS technicians sync complete tenant_id=%s created=%s updated=%s deactivated=%s",
+            tenant_id,
+            counts.created,
+            counts.updated,
+            counts.deactivated,
+        )
+        return result
+    except Exception as exc:
+        logger.exception("PAMS technicians sync failed")
+        return {"status": "error", "error": str(exc)}
+    finally:
+        db.close()
 
 
 def _send_p1_notifications() -> None:
