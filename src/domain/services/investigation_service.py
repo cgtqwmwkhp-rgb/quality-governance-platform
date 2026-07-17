@@ -1053,11 +1053,26 @@ class InvestigationService:
 
         Raises NotFoundError if investigation or parent comment not found.
         """
-        investigation = await cls.get_investigation(db, investigation_id, tenant_id)
+        # Fetch investigation without tenant filter to check for null tenant_id
+        stmt = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
+        result = await db.execute(stmt)
+        investigation = result.scalar_one_or_none()
+        if investigation is None:
+            raise NotFoundError(
+                f"InvestigationRun with ID {investigation_id} not found",
+                code="ENTITY_NOT_FOUND",
+                details={"entity_id": investigation_id},
+            )
         if investigation.tenant_id is None:
             raise ValidationError(
                 "tenant_id is required to create an investigation comment",
                 details={"investigation_id": investigation.id},
+            )
+        if investigation.tenant_id != tenant_id:
+            raise NotFoundError(
+                f"InvestigationRun with ID {investigation_id} not found",
+                code="ENTITY_NOT_FOUND",
+                details={"entity_id": investigation_id},
             )
 
         if parent_comment_id:
