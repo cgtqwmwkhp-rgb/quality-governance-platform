@@ -498,6 +498,146 @@ describe('Audits external import flow', () => {
   })
 })
 
+describe('Audits board work lanes (AUD-W-W1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
+    mockListFindings.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+  })
+
+  it('groups audits into Do now, Needs review, and Closed lanes', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 1,
+            reference_number: 'AUD-00001',
+            template_id: 21,
+            template_version: 1,
+            title: 'Scheduled internal audit',
+            status: 'scheduled',
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+          {
+            id: 2,
+            reference_number: 'AUD-00002',
+            template_id: 21,
+            template_version: 1,
+            title: 'Imported UVDB intake',
+            status: 'pending_review',
+            source_origin: 'third_party',
+            assurance_scheme: 'Achilles UVDB',
+            is_external_audit_import: true,
+            created_at: '2026-07-12T10:05:00Z',
+          },
+          {
+            id: 3,
+            reference_number: 'AUD-00003',
+            template_id: 21,
+            template_version: 1,
+            title: 'Completed safety audit',
+            status: 'completed',
+            score_percentage: 92,
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:10:00Z',
+          },
+        ],
+        total: 3,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-board-lane-do_now')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-board-lane-review')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-board-lane-closed')).toBeInTheDocument()
+
+    expect(
+      within(screen.getByTestId('audits-board-lane-do_now')).getByText('Scheduled internal audit'),
+    ).toBeInTheDocument()
+    expect(
+      within(screen.getByTestId('audits-board-lane-review')).getByText('Imported UVDB intake'),
+    ).toBeInTheDocument()
+    expect(
+      within(screen.getByTestId('audits-board-lane-closed')).getByText('Completed safety audit'),
+    ).toBeInTheDocument()
+
+    expect(
+      within(screen.getByTestId('audits-board-lane-do_now')).getByRole('button', { name: /^Start$/i }),
+    ).toBeInTheDocument()
+
+    const reviewLane = screen.getByTestId('audits-board-lane-review')
+    const closedLane = screen.getByTestId('audits-board-lane-closed')
+    expect(
+      within(reviewLane).getByText('Imported UVDB intake').closest('[role="button"]'),
+    ).toBeInTheDocument()
+    expect(within(reviewLane).getByText('Open Review')).toBeInTheDocument()
+    expect(
+      within(closedLane).getByText('Completed safety audit').closest('[role="button"]'),
+    ).toBeInTheDocument()
+    expect(within(closedLane).getByText('View')).toBeInTheDocument()
+  })
+
+  it('shows program filter chips when data supports them and filters the board', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 10,
+            reference_number: 'AUD-00010',
+            template_id: 21,
+            template_version: 1,
+            title: 'Internal safety walk',
+            status: 'scheduled',
+            source_origin: 'internal',
+            created_at: '2026-07-12T10:00:00Z',
+          },
+          {
+            id: 11,
+            reference_number: 'AUD-00011',
+            template_id: 11,
+            template_version: 1,
+            title: 'Customer site audit',
+            status: 'pending_review',
+            source_origin: 'customer',
+            assurance_scheme: 'Customer Audit',
+            is_external_audit_import: true,
+            created_at: '2026-07-12T11:00:00Z',
+          },
+        ],
+        total: 2,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByTestId('audits-program-filters')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-program-chip-internal')).toBeInTheDocument()
+    expect(screen.getByTestId('audits-program-chip-customer')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('audits-program-chip-customer'))
+
+    expect(screen.getByText('Customer site audit')).toBeInTheDocument()
+    expect(screen.queryByText('Internal safety walk')).not.toBeInTheDocument()
+
+    const filterToolbar = screen.getByRole('toolbar', { name: 'Audit filters' })
+    expect(within(filterToolbar).getByText('Total Audits')).toBeInTheDocument()
+    expect(within(filterToolbar).getByText('1')).toBeInTheDocument()
+  })
+})
+
 describe('Audits board empty-state honesty', () => {
   beforeEach(() => {
     vi.clearAllMocks()
