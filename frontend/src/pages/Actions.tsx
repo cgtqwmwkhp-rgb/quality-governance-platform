@@ -17,9 +17,9 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
-  ExternalLink,
   ArrowRight,
   MailWarning,
+  MoreHorizontal,
 } from 'lucide-react'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -42,6 +42,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../components/ui/DropdownMenu'
 import { cn } from '../helpers/utils'
 import {
   actionsApi,
@@ -178,6 +184,12 @@ export default function Actions() {
     parseActionsViewParam(searchParams.get('view')),
   )
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
+  const [heroKey, setHeroKey] = useState<
+    'total' | 'open' | 'in_progress' | 'overdue' | 'completed'
+  >(() => {
+    const initialView = parseActionsViewParam(searchParams.get('view'))
+    return initialView === 'overdue' || initialView === 'my_overdue' ? 'overdue' : 'total'
+  })
   const [sourceTypeFilter, setSourceTypeFilter] = useState<SourceTypeFilter>(
     (searchParams.get('sourceType') as SourceTypeFilter) || 'all',
   )
@@ -529,6 +541,24 @@ export default function Actions() {
     return String(n)
   }
 
+  const applyHeroFilter = (
+    key: 'total' | 'open' | 'in_progress' | 'overdue' | 'completed',
+  ) => {
+    setHeroKey(key)
+    if (key === 'total') {
+      setFilterStatus('all')
+      setViewMode('all')
+      return
+    }
+    if (key === 'overdue') {
+      setFilterStatus('all')
+      setViewMode('overdue')
+      return
+    }
+    setViewMode('all')
+    setFilterStatus(key)
+  }
+
   // First paint only — keep view-mode chrome mounted on subsequent filter reloads
   // so Mine/Overdue toggles remain clickable (and unit/e2e tests do not race a full-page skeleton).
   if (loading && !hasLoadedOnce) {
@@ -553,15 +583,17 @@ export default function Actions() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-4 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">{t('actions.title')}</h1>
-          <p className="text-muted-foreground mt-1">{t('actions.subtitle')}</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            {t('actions.title')}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{t('actions.subtitle')}</p>
         </div>
-        <Button onClick={() => setShowModal(true)}>
-          <Plus size={20} />
+        <Button onClick={() => setShowModal(true)} size="sm">
+          <Plus size={16} />
           {t('actions.new')}
         </Button>
       </div>
@@ -614,67 +646,93 @@ export default function Actions() {
           </p>
         </div>
       ) : (
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {[
-          {
-            label: t('actions.total'),
-            value: stats.total,
-            icon: ListTodo,
-            variant: 'primary' as const,
-          },
-          {
-            label: t('status.open'),
-            value: stats.open,
-            icon: AlertCircle,
-            variant: 'info' as const,
-          },
-          {
-            label: t('status.in_progress'),
-            value: stats.inProgress,
-            icon: Clock,
-            variant: 'warning' as const,
-          },
-          {
-            label: t('common.overdue'),
-            value: stats.overdue,
-            icon: Flag,
-            variant: 'destructive' as const,
-          },
-          {
-            label: t('actions.completed'),
-            value: stats.completed,
-            icon: CheckCircle2,
-            variant: 'success' as const,
-          },
-        ].map((stat) => (
-          <Card
-            key={stat.label}
-            hoverable
-            className={cn(
-              'p-5',
-              stat.label === 'Overdue' && stats.overdue > 0 && 'border-destructive/30',
-            )}
-          >
-            <div
-              className={cn(
-                'w-10 h-10 rounded-xl flex items-center justify-center mb-3',
-                stat.variant === 'primary' && 'bg-primary/10 text-primary',
-                stat.variant === 'info' && 'bg-info/10 text-info',
-                stat.variant === 'warning' && 'bg-warning/10 text-warning',
-                stat.variant === 'destructive' && 'bg-destructive/10 text-destructive',
-                stat.variant === 'success' && 'bg-success/10 text-success',
-              )}
-            >
-              <stat.icon className="w-5 h-5" />
-            </div>
-            <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-            <p className="text-sm text-muted-foreground">{stat.label}</p>
-            {stat.label === 'Overdue' && stats.overdue > 0 && (
-              <div className="absolute top-3 right-3 w-3 h-3 bg-destructive rounded-full animate-pulse" />
-            )}
-          </Card>
-        ))}
-      </div>
+        <div
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2"
+          role="group"
+          aria-label={t('actions.hero_filters', 'Filter by status')}
+          data-testid="actions-hero-board"
+        >
+          {(
+            [
+              {
+                key: 'total' as const,
+                label: t('actions.total'),
+                value: stats.total,
+                icon: ListTodo,
+                tone: 'primary' as const,
+              },
+              {
+                key: 'open' as const,
+                label: t('status.open'),
+                value: stats.open,
+                icon: AlertCircle,
+                tone: 'info' as const,
+              },
+              {
+                key: 'in_progress' as const,
+                label: t('status.in_progress'),
+                value: stats.inProgress,
+                icon: Clock,
+                tone: 'warning' as const,
+              },
+              {
+                key: 'overdue' as const,
+                label: t('common.overdue'),
+                value: stats.overdue,
+                icon: Flag,
+                tone: 'destructive' as const,
+              },
+              {
+                key: 'completed' as const,
+                label: t('actions.completed'),
+                value: stats.completed,
+                icon: CheckCircle2,
+                tone: 'success' as const,
+              },
+            ] as const
+          ).map((stat) => {
+            const active = heroKey === stat.key
+            return (
+              <button
+                key={stat.key}
+                type="button"
+                data-testid={`actions-hero-${stat.key}`}
+                aria-pressed={active}
+                onClick={() => applyHeroFilter(stat.key)}
+                className={cn(
+                  'rounded-xl border px-3 py-2.5 text-left transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  active
+                    ? 'border-primary/40 bg-primary/5 shadow-sm'
+                    : 'border-border bg-card hover:bg-surface',
+                  stat.key === 'overdue' &&
+                    stats.overdue > 0 &&
+                    !active &&
+                    'border-destructive/25',
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className={cn(
+                      'inline-flex h-7 w-7 items-center justify-center rounded-lg',
+                      stat.tone === 'primary' && 'bg-primary/10 text-primary',
+                      stat.tone === 'info' && 'bg-info/10 text-info',
+                      stat.tone === 'warning' && 'bg-warning/10 text-warning',
+                      stat.tone === 'destructive' && 'bg-destructive/10 text-destructive',
+                      stat.tone === 'success' && 'bg-success/10 text-success',
+                    )}
+                  >
+                    <stat.icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                  <span className="text-xl font-semibold tabular-nums text-foreground">
+                    {stat.value}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-xs font-medium text-muted-foreground">{stat.label}</p>
+              </button>
+            )
+          })}
+        </div>
       )}
 
       {/* Filters */}
@@ -696,7 +754,15 @@ export default function Actions() {
               key={mode}
               type="button"
               data-testid={`actions-view-${mode}`}
-              onClick={() => setViewMode(mode)}
+              onClick={() => {
+                setViewMode(mode)
+                if (mode === 'overdue' || mode === 'my_overdue') {
+                  setHeroKey('overdue')
+                  setFilterStatus('all')
+                } else if (mode === 'all') {
+                  setHeroKey('total')
+                }
+              }}
               disabled={loading}
               className={cn(
                 'px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 inline-flex items-center gap-2',
@@ -734,7 +800,15 @@ export default function Actions() {
 
         <Select
           value={filterStatus}
-          onValueChange={(value) => setFilterStatus(value as FilterStatus)}
+          onValueChange={(value) => {
+            const next = value as FilterStatus
+            setFilterStatus(next)
+            if (next === 'all') {
+              setHeroKey(viewMode === 'overdue' || viewMode === 'my_overdue' ? 'overdue' : 'total')
+            } else if (next === 'open' || next === 'in_progress' || next === 'completed') {
+              setHeroKey(next)
+            }
+          }}
         >
           <SelectTrigger className="w-[180px]">
             <Filter className="w-4 h-4 mr-2" />
@@ -917,8 +991,8 @@ export default function Actions() {
         </Card>
       ) : null}
 
-      {/* Actions List */}
-      <div className="space-y-4">
+      {/* Actions List — dense single-column rows */}
+      <div>
         {sortedActions.length === 0 ? (
           <EmptyState
             icon={<ListTodo className="w-8 h-8 text-muted-foreground" />}
@@ -930,212 +1004,254 @@ export default function Actions() {
             }
           />
         ) : (
-          sortedActions.map((action) => {
-            const overdue = isOverdue(action.due_date, action.display_status)
-            const isOpen = expandedKey === action.action_key
+          <div
+            className="overflow-hidden rounded-xl border border-border bg-card divide-y divide-border"
+            data-testid="actions-list"
+          >
+            {sortedActions.map((action) => {
+              const overdue = isOverdue(action.due_date, action.display_status)
+              const isOpen = expandedKey === action.action_key
+              const hasFindingLink =
+                action.source_type === 'audit_finding' &&
+                Number.isFinite(action.source_id) &&
+                action.source_id > 0
+              const hasIncidentLink =
+                action.source_type === 'incident' &&
+                Number.isFinite(action.source_id) &&
+                action.source_id > 0
+              const hasInvestigationLink =
+                action.source_type === 'investigation' &&
+                Number.isFinite(action.source_id) &&
+                action.source_id > 0
+              const hasAuditLinks =
+                action.source_type === 'audit_finding' &&
+                action.audit_run_id != null &&
+                action.audit_run_id > 0
+              const moreCount = hasAuditLinks ? 2 : 0
 
-            return (
-              <Card
-                key={action.action_key}
-                hoverable
-                className={cn('overflow-hidden', overdue && 'border-destructive/30')}
-              >
-                <div className="flex items-stretch">
-                  <div
-                    className={cn(
-                      'w-1.5',
-                      action.priority === 'critical' && 'bg-destructive',
-                      action.priority === 'high' && 'bg-warning',
-                      action.priority === 'medium' && 'bg-warning/70',
-                      action.priority === 'low' && 'bg-success',
-                    )}
-                  />
+              return (
+                <div
+                  key={action.action_key}
+                  className={cn(
+                    'group',
+                    overdue && 'bg-destructive/[0.02]',
+                    isOpen && 'bg-surface/60',
+                  )}
+                  data-testid={`actions-row-${action.action_key}`}
+                >
+                  <div className="flex items-center gap-3 px-3 py-2.5">
+                    <span
+                      className={cn(
+                        'h-8 w-1 shrink-0 rounded-full',
+                        action.priority === 'critical' && 'bg-destructive',
+                        action.priority === 'high' && 'bg-warning',
+                        action.priority === 'medium' && 'bg-warning/70',
+                        action.priority === 'low' && 'bg-success',
+                        !['critical', 'high', 'medium', 'low'].includes(action.priority) &&
+                          'bg-muted',
+                      )}
+                      aria-hidden="true"
+                    />
 
-                  <CardContent className="flex-1 p-5">
-                    <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2 flex-wrap">
-                          <span className="font-mono text-sm text-primary">
-                            {action.reference_number || `ACT-${action.id}`}
-                          </span>
-                          <Badge variant={getPriorityVariant(action.priority) as any}>
-                            {action.priority}
-                          </Badge>
-                          <Badge variant={getStatusVariant(action.display_status) as any}>
-                            {action.display_status.replace('_', ' ')}
-                          </Badge>
-                          {overdue && (
-                            <Badge variant="destructive" className="animate-pulse">
-                              OVERDUE
-                            </Badge>
-                          )}
-                        </div>
-                        <h3 className="text-lg font-semibold text-foreground mb-1">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h3 className="truncate text-sm font-medium text-foreground">
                           {action.title}
                         </h3>
-                        {!isOpen ? (
-                          <p className="text-sm text-muted-foreground line-clamp-1">{action.description}</p>
+                        {overdue ? (
+                          <Badge variant="destructive" className="shrink-0 text-[10px] px-1.5 py-0">
+                            OVERDUE
+                          </Badge>
                         ) : null}
-                        {(action.source_scheme || action.clause_reference || action.source_title) && (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {action.source_scheme && (
-                              <Badge variant="secondary" className="text-[10px]">
-                                {action.source_scheme}
-                              </Badge>
-                            )}
-                            {action.clause_reference && (
-                              <Badge variant="outline" className="text-[10px]">
-                                {action.clause_reference}
-                              </Badge>
-                            )}
-                            {action.source_title && (
-                              <span className="text-xs text-muted-foreground">
-                                {action.source_title}
-                              </span>
-                            )}
-                          </div>
-                        )}
                       </div>
-
-                      <div className="flex flex-wrap lg:flex-col items-start lg:items-end gap-2 lg:gap-1 lg:w-48 flex-shrink-0">
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-lg">
-                          <span className="text-lg">{getSourceIcon(action.source_type)}</span>
-                          <span className="text-xs font-mono text-muted-foreground">
-                            {action.source_ref}
-                          </span>
-                          <ArrowUpRight className="w-3 h-3 text-muted-foreground" />
-                        </div>
-
-                        {action.source_type === 'audit_finding' &&
-                        Number.isFinite(action.source_id) &&
-                        action.source_id > 0 ? (
-                          <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
-                            <Link to={`/audits?view=findings&findingId=${action.source_id}`}>
-                              {t('actions.view_finding')}
-                              <ExternalLink className="w-3 h-3 ml-1" />
-                            </Link>
-                          </Button>
-                        ) : null}
-
-                        {action.source_type === 'incident' &&
-                        Number.isFinite(action.source_id) &&
-                        action.source_id > 0 ? (
-                          <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
-                            <Link to={`/incidents/${action.source_id}`}>
-                              {t('actions.view_incident', 'View incident')}
-                              <ExternalLink className="w-3 h-3 ml-1" />
-                            </Link>
-                          </Button>
-                        ) : null}
-
-                        {action.source_type === 'investigation' &&
-                        Number.isFinite(action.source_id) &&
-                        action.source_id > 0 ? (
-                          <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
-                            <Link to={`/investigations/${action.source_id}`}>
-                              {t('actions.view_investigation', 'View investigation')}
-                              <ExternalLink className="w-3 h-3 ml-1" />
-                            </Link>
-                          </Button>
-                        ) : null}
-
-                        {action.due_date && (
-                          <div
-                            className={cn(
-                              'flex flex-col gap-0.5 text-sm',
-                              overdue ? 'text-destructive' : 'text-muted-foreground',
-                            )}
-                          >
-                            <div className="flex items-center gap-2">
-                              <Calendar className="w-4 h-4 shrink-0" />
-                              <span>Due {new Date(action.due_date).toLocaleDateString()}</span>
-                            </div>
-                            <span className="text-xs pl-6 opacity-90">
-                              {formatDueRelative(action.due_date)}
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                        <span className="font-mono text-primary/90">
+                          {action.reference_number || `ACT-${action.id}`}
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <Badge
+                          variant={getStatusVariant(action.display_status) as any}
+                          className="text-[10px] px-1.5 py-0 font-normal"
+                        >
+                          {action.display_status.replace('_', ' ')}
+                        </Badge>
+                        <Badge
+                          variant={getPriorityVariant(action.priority) as any}
+                          className="text-[10px] px-1.5 py-0 font-normal"
+                        >
+                          {action.priority}
+                        </Badge>
+                        {action.source_ref ? (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className="inline-flex items-center gap-1 truncate">
+                              <span aria-hidden="true">{getSourceIcon(action.source_type)}</span>
+                              <span className="font-mono truncate">{action.source_ref}</span>
                             </span>
-                          </div>
-                        )}
+                          </>
+                        ) : null}
+                        {action.owner ? (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className="inline-flex items-center gap-1 truncate">
+                              <User className="h-3 w-3 shrink-0" aria-hidden="true" />
+                              {action.owner}
+                            </span>
+                          </>
+                        ) : null}
+                        {action.source_scheme ? (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className="truncate">{action.source_scheme}</span>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
 
-                        {action.source_type === 'audit_finding' &&
-                        action.audit_run_id != null &&
-                        action.audit_run_id > 0 ? (
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
+                    {action.due_date ? (
+                      <div
+                        className={cn(
+                          'hidden sm:flex w-[7.5rem] shrink-0 flex-col items-end text-right text-xs',
+                          overdue ? 'text-destructive' : 'text-muted-foreground',
+                        )}
+                      >
+                        <span className="inline-flex items-center gap-1 font-medium">
+                          <Calendar className="h-3 w-3" aria-hidden="true" />
+                          {new Date(action.due_date).toLocaleDateString()}
+                        </span>
+                        <span className="opacity-90">{formatDueRelative(action.due_date)}</span>
+                      </div>
+                    ) : (
+                      <div className="hidden sm:block w-[7.5rem] shrink-0" />
+                    )}
+
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {hasFindingLink ? (
+                        <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" asChild>
+                          <Link to={`/audits?view=findings&findingId=${action.source_id}`}>
+                            {t('actions.view_finding')}
+                            <ArrowUpRight className="ml-1 h-3 w-3" aria-hidden="true" />
+                          </Link>
+                        </Button>
+                      ) : null}
+                      {hasIncidentLink ? (
+                        <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" asChild>
+                          <Link to={`/incidents/${action.source_id}`}>
+                            {t('actions.view_incident', 'View incident')}
+                            <ArrowUpRight className="ml-1 h-3 w-3" aria-hidden="true" />
+                          </Link>
+                        </Button>
+                      ) : null}
+                      {hasInvestigationLink ? (
+                        <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" asChild>
+                          <Link to={`/investigations/${action.source_id}`}>
+                            {t('actions.view_investigation', 'View investigation')}
+                            <ArrowUpRight className="ml-1 h-3 w-3" aria-hidden="true" />
+                          </Link>
+                        </Button>
+                      ) : null}
+
+                      {moreCount > 0 ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 px-0"
+                              aria-label={t('actions.more_links', 'More links')}
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="min-w-[12rem]">
+                            <DropdownMenuItem asChild className="pl-2">
                               <Link to={`/audits/${action.audit_run_id}/execute`}>
                                 {t('actions.open_audit_run')}
-                                <ExternalLink className="w-3 h-3 ml-1" />
                               </Link>
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-8 text-xs" asChild>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild className="pl-2">
                               <Link to={`/audits/${action.audit_run_id}/import-review`}>
                                 {t('actions.open_import_review')}
                               </Link>
-                            </Button>
-                          </div>
-                        ) : null}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : null}
 
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
-                            <Link to={buildActionDetailPath(action.action_key)}>
-                              {t('actions.open_profile')}
-                              <ExternalLink className="w-3 h-3 ml-1" />
-                            </Link>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 text-xs -ml-2"
-                            onClick={() => setExpandedKey(isOpen ? null : action.action_key)}
-                          >
-                            {isOpen ? (
-                              <>
-                                <ChevronUp className="w-3.5 h-3.5 mr-1" />
-                                {t('actions.collapse_details')}
-                              </>
-                            ) : (
-                              <>
-                                <ChevronDown className="w-3.5 h-3.5 mr-1" />
-                                {t('actions.expand_details')}
-                              </>
-                            )}
-                          </Button>
-                        </div>
+                      <Button size="sm" className="h-8 px-3 text-xs font-medium" asChild>
+                        <Link to={buildActionDetailPath(action.action_key)}>
+                          {t('actions.open_profile')}
+                        </Link>
+                      </Button>
 
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 px-0"
+                        aria-expanded={isOpen}
+                        aria-label={
+                          isOpen ? t('actions.collapse_details') : t('actions.expand_details')
+                        }
+                        onClick={() => setExpandedKey(isOpen ? null : action.action_key)}
+                      >
                         {isOpen ? (
-                          <div className="mt-3 pt-3 border-t border-border space-y-2 text-sm">
-                            {action.completion_notes ? (
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                                  {t('actions.detail.verification')}
-                                </p>
-                                <p className="text-foreground whitespace-pre-wrap">{action.completion_notes}</p>
-                              </div>
-                            ) : null}
-                            <div>
-                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                                {t('actions.detail.description')}
-                              </p>
-                              <p className="text-foreground whitespace-pre-wrap">
-                                {action.description || '—'}
-                              </p>
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {action.owner && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <User className="w-4 h-4" />
-                            <span>{action.owner}</span>
-                          </div>
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
                         )}
-                      </div>
+                      </Button>
                     </div>
-                  </CardContent>
+                  </div>
+
+                  {isOpen ? (
+                    <div className="border-t border-border bg-surface/40 px-3 py-3 pl-7 space-y-3 text-sm">
+                      {action.due_date ? (
+                        <p
+                          className={cn(
+                            'sm:hidden text-xs',
+                            overdue ? 'text-destructive' : 'text-muted-foreground',
+                          )}
+                        >
+                          Due {new Date(action.due_date).toLocaleDateString()} ·{' '}
+                          {formatDueRelative(action.due_date)}
+                        </p>
+                      ) : null}
+                      {action.completion_notes ? (
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            {t('actions.detail.verification')}
+                          </p>
+                          <p className="mt-1 whitespace-pre-wrap text-foreground">
+                            {action.completion_notes}
+                          </p>
+                        </div>
+                      ) : null}
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          {t('actions.detail.description')}
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap text-foreground">
+                          {action.description || '—'}
+                        </p>
+                      </div>
+                      {(action.clause_reference || action.source_title) && (
+                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          {action.clause_reference ? (
+                            <Badge variant="outline" className="text-[10px]">
+                              {action.clause_reference}
+                            </Badge>
+                          ) : null}
+                          {action.source_title ? <span>{action.source_title}</span> : null}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
-              </Card>
-            )
-          })
+              )
+            })}
+          </div>
         )}
       </div>
 
