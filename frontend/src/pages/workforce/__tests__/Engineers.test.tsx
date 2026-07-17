@@ -78,6 +78,25 @@ describe('Engineers', () => {
     vi.clearAllMocks()
   })
 
+  it('shows user link badges on roster cards (EMP-06)', async () => {
+    listEngineers.mockResolvedValue({
+      data: {
+        items: [
+          { ...employee, id: 1, user_id: 99 },
+          { ...employee, id: 2, user_id: null, display_name: 'PAMS Only' },
+        ],
+      },
+    })
+    renderPage()
+
+    expect(await screen.findByTestId('engineer-user-linked-1')).toHaveTextContent(
+      'workforce.engineers.user_link.roster_linked:{"id":99}',
+    )
+    expect(screen.getByTestId('engineer-user-unlinked-2')).toHaveTextContent(
+      'workforce.engineers.user_link.roster_unlinked',
+    )
+  })
+
   it('shows honest empty state with PAMS sync CTA when roster is empty', async () => {
     renderPage()
 

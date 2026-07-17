@@ -400,6 +400,32 @@ export default function EngineerProfile() {
             </p>
           </div>
         </div>
+
+        <div
+          className="mt-4 pt-4 border-t border-border"
+          data-testid="engineer-user-link"
+        >
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">
+            {t('workforce.engineers.user_link.label')}
+          </p>
+          {engineer.user_id != null ? (
+            <p
+              className="text-foreground font-medium mt-1 font-mono text-sm"
+              data-testid="engineer-user-link-linked"
+            >
+              {t('workforce.engineers.user_link.linked', { id: engineer.user_id })}
+            </p>
+          ) : (
+            <div className="mt-1 space-y-1" data-testid="engineer-user-link-unlinked">
+              <p className="text-foreground font-medium">
+                {t('workforce.engineers.user_link.unlinked')}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {t('workforce.engineers.user_link.unlinked_hint')}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {assetTypeMapError && (
