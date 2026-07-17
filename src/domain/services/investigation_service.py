@@ -1054,6 +1054,11 @@ class InvestigationService:
         Raises NotFoundError if investigation or parent comment not found.
         """
         investigation = await cls.get_investigation(db, investigation_id, tenant_id)
+        if investigation.tenant_id is None:
+            raise ValidationError(
+                "tenant_id is required to create an investigation comment",
+                details={"investigation_id": investigation.id},
+            )
 
         if parent_comment_id:
             parent_query = select(InvestigationComment).where(
@@ -1070,6 +1075,7 @@ class InvestigationService:
                 )
 
         comment = InvestigationComment(
+            tenant_id=investigation.tenant_id,
             investigation_id=investigation_id,
             content=body,
             section_id=section_id,
@@ -1396,6 +1402,7 @@ class InvestigationService:
 
         query = select(InvestigationComment).where(
             InvestigationComment.investigation_id == investigation_id,
+            InvestigationComment.tenant_id == tenant_id,
         )
 
         if not include_deleted:
