@@ -104,3 +104,26 @@ export function scoreBarColor(score: number): string {
   if (score >= 60) return 'bg-info'
   return 'bg-primary'
 }
+
+/** Open regulatory-watch impact rows eligible for the Changes inbox badge. */
+export function isOpenWatchImpact(impact: { status: string }): boolean {
+  return impact.status !== 'resolved' && impact.status !== 'dismissed'
+}
+
+export function countUnreviewedRegulatoryUpdates(
+  updates: ReadonlyArray<{ is_reviewed: boolean }>,
+): number {
+  return updates.filter((update) => !update.is_reviewed).length
+}
+
+export function countOpenWatchImpacts(impacts: ReadonlyArray<{ status: string }>): number {
+  return impacts.filter(isOpenWatchImpact).length
+}
+
+/** Pending feed reviews + open matched impacts for the unified Changes inbox tab badge. */
+export function countPendingChangesInbox(
+  updates: ReadonlyArray<{ is_reviewed: boolean }>,
+  impacts: ReadonlyArray<{ status: string }>,
+): number {
+  return countUnreviewedRegulatoryUpdates(updates) + countOpenWatchImpacts(impacts)
+}
