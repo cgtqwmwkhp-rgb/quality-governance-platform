@@ -110,6 +110,9 @@ async def test_create_capa_for_investigation_idempotent_without_title():
 
     assert capa is existing
     db.add.assert_not_called()
+    # Untitled idempotency must LIMIT 1 so multiple CAPAs do not raise MultipleResultsFound.
+    prior_stmt = db.execute.await_args_list[1].args[0]
+    assert prior_stmt._limit_clause is not None
 
 
 @pytest.mark.asyncio
