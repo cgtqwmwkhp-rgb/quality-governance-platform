@@ -1722,8 +1722,8 @@
   "planet_mark.shell.export_ready": "JSON pack is ready for {{year}} from live year, Scope 3, actions, and hotspot initiatives.",
   "planet_mark.shell.empty.trends": "No trend data yet",
   "planet_mark.shell.empty.trends_desc": "Year-over-year comparisons appear once multiple reporting years have live carbon totals from ingest or manual entry.",
-  "planet_mark.shell.empty.monthly": "Monthly breakdown not connected",
-  "planet_mark.shell.empty.monthly_desc": "Monthly emission ingest is not wired in this shell. Import or enter data at the reporting-year level first; monthly views will land in a follow-on slice.",
+  "planet_mark.shell.empty.monthly": "Monthly emission series not live",
+  "planet_mark.shell.empty.monthly_desc": "Year-level evidence upload exists on the API, but monthly tCO₂e ingest into this tab is not wired. Forecast versus the 5% Scope 1 & 2 commitment is a follow-on.",
   "planet_mark.shell.empty.improve": "No improvement actions yet",
   "planet_mark.shell.empty.improve_desc": "No saved Improve actions yet. Use hotspot initiatives above when Scope 3 data is available, or import/create actions manually.",
   "planet_mark.shell.empty.export": "Select a reporting year to export",
@@ -2927,5 +2927,16 @@
   "workforce.assessments.map_w2.title": "Standards map Assist parity",
   "workforce.assessments.map_w2.honesty": "Competency assessment create reuses published audit/inspection templates. Multi-scheme Assist mapping chips are not wired on this create flow — same honesty as the Inspection builder.",
   "workforce.assessments.map_w2.scheme_awaiting": "Assist awaiting",
-  "workforce.assessments.map_w2.parity_hint": "ISO / Planet Mark / UVDB suggest→accept chips will mirror Inspection Template Stats coverage when Assist Map mode ships."
+  "workforce.assessments.map_w2.parity_hint": "ISO / Planet Mark / UVDB suggest→accept chips will mirror Inspection Template Stats coverage when Assist Map mode ships.",
+  "planet_mark.shell.monthly_e4.title": "Monthly evidence honesty",
+  "planet_mark.shell.monthly_e4.honesty": "This Monthly tab is an honesty shell: year evidence upload is available on the API, monthly emission ingest is not connected here, and forecast-versus-target copy is follow-on — not a live score.",
+  "planet_mark.shell.monthly_e4.cap.year_evidence_api": "Year evidence upload API",
+  "planet_mark.shell.monthly_e4.cap.monthly_emission_ingest": "Monthly emission ingest series",
+  "planet_mark.shell.monthly_e4.cap.forecast_vs_target": "Forecast vs 5% S1&2 target",
+  "planet_mark.shell.monthly_e4.status.live_api": "API available",
+  "planet_mark.shell.monthly_e4.status.shell_only": "Shell only",
+  "planet_mark.shell.monthly_e4.status.follow_on": "Follow-on",
+  "planet_mark.shell.monthly_e4.forecast_followon": "Forecast against the 5% annual Scope 1 and 2 cut will appear after monthly ingest lands — this tab does not invent a trajectory.",
+  "planet_mark.shell.monthly_e4.select_year_title": "Select a reporting year",
+  "planet_mark.shell.monthly_e4.select_year_desc": "Choose a reporting year above to see Monthly evidence honesty for that year. Upload still happens via year evidence APIs — not a fabricated monthly grid."
 }

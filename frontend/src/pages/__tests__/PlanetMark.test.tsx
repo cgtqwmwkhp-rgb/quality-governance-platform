@@ -172,10 +172,18 @@ describe('PlanetMark shell', () => {
     expect(screen.getByText('22.1')).toBeInTheDocument()
   })
 
-  it('shows honest empty state on monthly section (no ingest API)', async () => {
+  it('shows PM-E4 monthly evidence honesty shell + empty ingest state', async () => {
     renderPlanetMark('/planet-mark?year=1&section=monthly')
 
     expect(await screen.findByTestId('planet-mark-section-monthly')).toBeInTheDocument()
+    expect(screen.getByTestId('planet-mark-monthly-e4-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('planet-mark-monthly-e4-honesty')).toHaveTextContent(
+      'planet_mark.shell.monthly_e4.honesty',
+    )
+    expect(screen.getByTestId('planet-mark-monthly-e4-cap-year_evidence_api')).toBeInTheDocument()
+    expect(screen.getByTestId('planet-mark-monthly-e4-forecast')).toHaveTextContent(
+      'planet_mark.shell.monthly_e4.forecast_followon',
+    )
     expect(screen.getByText('planet_mark.shell.empty.monthly')).toBeInTheDocument()
     expect(screen.getByText('planet_mark.shell.empty.monthly_desc')).toBeInTheDocument()
   })
