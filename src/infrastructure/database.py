@@ -5,6 +5,7 @@ import os
 import sys
 import time
 from typing import Any, AsyncGenerator
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -15,6 +16,53 @@ from src.core.config import settings
 from src.domain.models.base import Base  # noqa: F401 – re-exported for metadata binding
 
 logger = logging.getLogger(__name__)
+
+
+def to_sync_database_url(database_url: str) -> str:
+    """Convert an async SQLAlchemy URL into a sync driver URL safe for psycopg2.
+
+    Azure / asyncpg DSNs often carry ``ssl=true`` (or ``ssl=require``). That is
+    valid for asyncpg but rejected by libpq/psycopg2 as
+    ``invalid connection option "ssl"`` — which 500'd
+    ``POST /api/v1/engineers/sync-from-pams`` when it opened ``SessionLocal``.
+    Rewrite ``ssl`` → ``sslmode`` for PostgreSQL URLs.
+    """
+    sync_url = str(database_url)
+    if "+asyncpg" in sync_url:
+        sync_url = sync_url.replace("+asyncpg", "")
+    elif "+aiosqlite" in sync_url:
+        sync_url = sync_url.replace("+aiosqlite", "")
+
+    parts = urlsplit(sync_url)
+    scheme = (parts.scheme or "").lower()
+    if not (scheme.startswith("postgresql") or scheme.startswith("postgres")):
+        return sync_url
+    if not parts.query:
+        return sync_url
+
+    query_items = parse_qsl(parts.query, keep_blank_values=True)
+    rewritten: list[tuple[str, str]] = []
+    has_sslmode = any(key == "sslmode" for key, _ in query_items)
+    for key, value in query_items:
+        if key != "ssl":
+            rewritten.append((key, value))
+            continue
+        if has_sslmode:
+            # Prefer an explicit sslmode= already present; drop asyncpg ssl=.
+            continue
+        lowered = (value or "").strip().lower()
+        if lowered in {"1", "true", "yes", "require"}:
+            rewritten.append(("sslmode", "require"))
+        elif lowered in {"0", "false", "no", "disable"}:
+            rewritten.append(("sslmode", "disable"))
+        elif lowered in {"prefer", "allow", "verify-ca", "verify-full"}:
+            rewritten.append(("sslmode", lowered))
+        else:
+            rewritten.append(("sslmode", value or "require"))
+        has_sslmode = True
+
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(rewritten), parts.fragment))
+
 
 _is_testing = (
     os.environ.get("TESTING") == "1"
@@ -50,12 +98,8 @@ elif "postgresql" in settings.database_url:
 
 engine = create_async_engine(settings.database_url, **engine_kwargs)
 
-# Sync engine for Celery tasks
-_sync_url = str(settings.database_url)
-if "+asyncpg" in _sync_url:
-    _sync_url = _sync_url.replace("+asyncpg", "")
-elif "+aiosqlite" in _sync_url:
-    _sync_url = _sync_url.replace("+aiosqlite", "")
+# Sync engine for Celery tasks + sync-from-pams (must be psycopg2-safe)
+_sync_url = to_sync_database_url(settings.database_url)
 sync_engine = create_engine(_sync_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=sync_engine, expire_on_commit=False)
 

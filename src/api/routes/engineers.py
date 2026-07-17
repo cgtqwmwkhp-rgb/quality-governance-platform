@@ -215,17 +215,37 @@ async def sync_engineers_from_pams(
     if not _is_workforce_manager(user):
         raise AuthorizationError("You do not have permission to sync engineers from PAMS")
 
+    from src.domain.exceptions import BadRequestError, ExternalServiceError
     from src.domain.services.pams_technician_sync_service import resolve_tenant_id, sync_pams_technicians
     from src.infrastructure.database import SessionLocal
 
-    effective_tenant_id = tenant_id if tenant_id is not None else _require_engineer_tenant_id(user)
+    # Null-safe tenant: query override → caller membership → DEFAULT_TENANT_ID.
+    # Never open SessionLocal writes with an unresolved tenant (FORCE RLS / NOT NULL).
+    if tenant_id is not None:
+        candidate_tenant_id: Optional[int] = tenant_id
+    elif getattr(user, "tenant_id", None) is not None:
+        candidate_tenant_id = _require_engineer_tenant_id(user)
+    else:
+        candidate_tenant_id = None
+    effective_tenant_id = resolve_tenant_id(candidate_tenant_id)
     if user.tenant_id is not None and effective_tenant_id != user.tenant_id:
         raise AuthorizationError("You do not have permission to sync engineers for another tenant")
-    resolve_tenant_id(effective_tenant_id)
 
     db = SessionLocal()
     try:
         counts = sync_pams_technicians(db, tenant_id=effective_tenant_id)
+    except (BadRequestError, ExternalServiceError, AuthorizationError):
+        raise
+    except Exception as exc:
+        logger.exception(
+            "pams_technician_sync unexpected failure tenant_id=%s user_id=%s",
+            effective_tenant_id,
+            getattr(user, "id", None),
+        )
+        raise ExternalServiceError(
+            "PAMS technician sync failed unexpectedly — check PAMS connectivity and engineer schema",
+            details={"cause": type(exc).__name__, "tenant_id": effective_tenant_id},
+        ) from exc
     finally:
         db.close()
 
