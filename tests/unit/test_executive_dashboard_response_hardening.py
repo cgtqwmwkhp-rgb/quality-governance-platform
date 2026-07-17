@@ -6,12 +6,12 @@ import pytest
 
 from src.api.schemas.executive_dashboard import ExecutiveDashboardResponse
 from src.domain.services.executive_dashboard import (
-    ExecutiveDashboardService,
     _EMPTY_COMPLAINT_SUMMARY,
     _EMPTY_INCIDENT_SUMMARY,
     _EMPTY_NEAR_MISS_SUMMARY,
     _EMPTY_RTA_SUMMARY,
     _EMPTY_TRENDS,
+    ExecutiveDashboardService,
 )
 
 
