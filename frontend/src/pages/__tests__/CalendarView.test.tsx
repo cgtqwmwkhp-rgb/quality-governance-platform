@@ -151,6 +151,25 @@ describe('CalendarView', () => {
     const banner = await screen.findByTestId('calendar-partial-feed')
     expect(banner).toBeInTheDocument()
   })
+
+  it('shows personal-product honesty shell (not Option C)', async () => {
+    const CalendarView = (await import('../CalendarView')).default
+    render(
+      <MemoryRouter initialEntries={['/calendar']}>
+        <Routes>
+          <Route path="/calendar" element={<CalendarView />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('calendar-personal-honesty')).toBeInTheDocument()
+    expect(screen.getByTestId('calendar-personal-honesty-copy')).toHaveTextContent(
+      'calendar.personal_honesty.title',
+    )
+    expect(screen.getByTestId('calendar-personal-cap-governance_feed')).toBeInTheDocument()
+    expect(screen.getByTestId('calendar-personal-cap-personal_events')).toBeInTheDocument()
+    expect(screen.getByTestId('calendar-personal-cap-ics_sync')).toBeInTheDocument()
+  })
 })
 
 describe('calendarView helpers', () => {
