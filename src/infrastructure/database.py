@@ -63,6 +63,7 @@ def to_sync_database_url(database_url: str) -> str:
 
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(rewritten), parts.fragment))
 
+
 _is_testing = (
     os.environ.get("TESTING") == "1"
     or "PYTEST_CURRENT_TEST" in os.environ

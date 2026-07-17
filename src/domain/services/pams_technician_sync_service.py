@@ -288,11 +288,7 @@ def sync_pams_technicians(
         ) from exc
 
     users = db.query(User).filter(User.tenant_id == resolved_tenant_id, User.is_active.is_(True)).all()
-    users_by_email = {
-        email: user
-        for user in users
-        if (email := (user.email or "").strip().lower())
-    }
+    users_by_email = {email: user for user in users if (email := (user.email or "").strip().lower())}
 
     existing_engineers = db.query(Engineer).filter(Engineer.tenant_id == resolved_tenant_id).all()
     by_pams_id = {eng.pams_technician_id: eng for eng in existing_engineers if eng.pams_technician_id is not None}
