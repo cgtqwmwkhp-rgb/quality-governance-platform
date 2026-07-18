@@ -917,6 +917,9 @@ class DocumentCampaignService:
         if not campaign.quiz_questions:
             raise NotFoundError("No quiz for this assignment")
 
+        if assignment.quiz_passed:
+            raise BadRequestError("Quiz already passed; resubmission not allowed")
+
         if assignment.quiz_attempts >= MAX_QUIZ_ATTEMPTS:
             raise BadRequestError(f"Maximum quiz attempts ({MAX_QUIZ_ATTEMPTS}) reached")
 

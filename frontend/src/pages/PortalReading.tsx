@@ -14,7 +14,6 @@ import {
   api,
   documentCampaignApi,
   getApiErrorMessage,
-  knowledgeBankApi,
   type DocumentCampaignAssignment,
   type DocumentCampaignQuiz,
   type DocumentCampaignQuizResult,
@@ -89,7 +88,9 @@ export default function PortalReading() {
   const [questionDrafts, setQuestionDrafts] = useState<Record<number, string>>({})
   const [askingQuestionId, setAskingQuestionId] = useState<number | null>(null)
   const [expandedQuestionId, setExpandedQuestionId] = useState<number | null>(null)
-  const [questionGateChoices, setQuestionGateChoices] = useState<Record<number, QuestionGateChoice>>({})
+  const [questionGateChoices, setQuestionGateChoices] = useState<
+    Record<number, QuestionGateChoice>
+  >({})
   const [signChoices, setSignChoices] = useState<Record<number, SignChoice>>({})
   const [questionsSent, setQuestionsSent] = useState<Record<number, boolean>>({})
 
@@ -138,10 +139,7 @@ export default function PortalReading() {
       })
   }, [focusAssignmentId, items, loading, quizzes, t])
 
-  const pendingItems = useMemo(
-    () => items.filter((item) => item.status !== 'completed'),
-    [items],
-  )
+  const pendingItems = useMemo(() => items.filter((item) => item.status !== 'completed'), [items])
 
   const handleOpenCampaign = async (item: DocumentCampaignAssignment) => {
     setOpeningCampaignId(item.id)
@@ -199,10 +197,7 @@ export default function PortalReading() {
 
     setSubmittingQuizId(item.id)
     try {
-      const response = await documentCampaignApi.submitQuiz(
-        item.id,
-        buildQuizAnswers(quiz, values),
-      )
+      const response = await documentCampaignApi.submitQuiz(item.id, buildQuizAnswers(quiz, values))
       const result = response.data
       setQuizResults((prev) => ({ ...prev, [item.id]: result }))
       setItems((prev) =>
@@ -212,9 +207,7 @@ export default function PortalReading() {
                 ...assignment,
                 quiz_passed: result.passed ?? result.quiz_passed ?? assignment.quiz_passed,
                 quiz_score: result.score ?? result.quiz_score ?? assignment.quiz_score,
-                quiz_attempts:
-                  result.quiz_attempts ??
-                  (assignment.quiz_attempts ?? 0) + 1,
+                quiz_attempts: result.quiz_attempts ?? (assignment.quiz_attempts ?? 0) + 1,
               }
             : assignment,
         ),
@@ -241,7 +234,10 @@ export default function PortalReading() {
     const gateChoice = questionGateChoices[item.id] ?? null
     const signChoice = signChoices[item.id] ?? null
     const disposition = resolveSignatureDisposition(gateChoice, signChoice)
-    if (!disposition || !canProceedToCompletionFields(gateChoice, signChoice, questionsSent[item.id] ?? false)) {
+    if (
+      !disposition ||
+      !canProceedToCompletionFields(gateChoice, signChoice, questionsSent[item.id] ?? false)
+    ) {
       toast.error(t('my_reading.question_gate_required'))
       return
     }
@@ -289,11 +285,10 @@ export default function PortalReading() {
     }
     setAskingQuestionId(item.id)
     try {
-      const threadResponse = await knowledgeBankApi.createThread(item.document_id, {
+      await documentCampaignApi.askAssignmentQuestion(item.id, {
         title: body.slice(0, 80),
-        version: item.document_version ?? undefined,
+        body,
       })
-      await knowledgeBankApi.postMessage(threadResponse.data.id, { body })
       setQuestionDrafts((prev) => ({ ...prev, [item.id]: '' }))
       setExpandedQuestionId(null)
       setQuestionsSent((prev) => ({ ...prev, [item.id]: true }))
@@ -340,7 +335,9 @@ export default function PortalReading() {
       <main className="max-w-lg mx-auto px-4 sm:px-6 py-6 pb-12 space-y-6">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold text-foreground">{t('portal_reading.heading')}</h1>
+            <h1 className="text-2xl font-semibold text-foreground">
+              {t('portal_reading.heading')}
+            </h1>
             {pendingItems.length > 0 && (
               <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
                 {pendingItems.length}
@@ -361,7 +358,12 @@ export default function PortalReading() {
           >
             {error}
             <div className="mt-3">
-              <Button variant="outline" size="lg" className="w-full min-h-12" onClick={() => void loadAssignments()}>
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full min-h-12"
+                onClick={() => void loadAssignments()}
+              >
                 Retry
               </Button>
             </div>
@@ -393,7 +395,11 @@ export default function PortalReading() {
               const signatureRequired = isSignatureRequiredForCompletion(gateChoice, signChoice)
 
               return (
-                <Card key={item.id} className="p-4" data-testid={`portal-reading-assignment-${item.id}`}>
+                <Card
+                  key={item.id}
+                  className="p-4"
+                  data-testid={`portal-reading-assignment-${item.id}`}
+                >
                   <div className="space-y-3">
                     <div>
                       <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -434,9 +440,7 @@ export default function PortalReading() {
                         size="lg"
                         className="w-full min-h-12 text-base"
                         aria-expanded={isQuestionExpanded}
-                        onClick={() =>
-                          setExpandedQuestionId(isQuestionExpanded ? null : item.id)
-                        }
+                        onClick={() => setExpandedQuestionId(isQuestionExpanded ? null : item.id)}
                       >
                         <MessageCircleQuestion className="w-5 h-5 mr-2" />
                         {t('portal_reading.ask_question')}
@@ -449,7 +453,9 @@ export default function PortalReading() {
                         disabled={item.status === 'completed'}
                         aria-expanded={isExpanded}
                       >
-                        <ChevronDown className={`w-5 h-5 mr-2 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        <ChevronDown
+                          className={`w-5 h-5 mr-2 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                        />
                         {item.status === 'completed'
                           ? t('my_reading.completed')
                           : t('my_reading.complete')}
@@ -467,7 +473,10 @@ export default function PortalReading() {
                         <Textarea
                           value={questionDrafts[item.id] ?? ''}
                           onChange={(event) =>
-                            setQuestionDrafts((prev) => ({ ...prev, [item.id]: event.target.value }))
+                            setQuestionDrafts((prev) => ({
+                              ...prev,
+                              [item.id]: event.target.value,
+                            }))
                           }
                           placeholder={t('portal_reading.question_placeholder')}
                           className="min-h-24 text-base"
@@ -598,9 +607,14 @@ export default function PortalReading() {
                         )}
 
                         {showGate && (
-                          <section className="space-y-3" data-testid={`portal-reading-question-gate-${item.id}`}>
+                          <section
+                            className="space-y-3"
+                            data-testid={`portal-reading-question-gate-${item.id}`}
+                          >
                             <h2 className="font-medium">{t('my_reading.question_gate_title')}</h2>
-                            <p className="text-sm text-muted-foreground">{t('my_reading.question_gate_help')}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {t('my_reading.question_gate_help')}
+                            </p>
                             <div className="flex gap-2">
                               <Button
                                 type="button"
@@ -639,7 +653,10 @@ export default function PortalReading() {
                                 <Textarea
                                   value={questionDrafts[item.id] ?? ''}
                                   onChange={(event) =>
-                                    setQuestionDrafts((prev) => ({ ...prev, [item.id]: event.target.value }))
+                                    setQuestionDrafts((prev) => ({
+                                      ...prev,
+                                      [item.id]: event.target.value,
+                                    }))
                                   }
                                   placeholder={t('portal_reading.question_placeholder')}
                                   className="min-h-20 text-base"
@@ -663,7 +680,9 @@ export default function PortalReading() {
 
                                 {questionSent && (
                                   <div className="space-y-2">
-                                    <p className="text-sm font-medium">{t('my_reading.sign_choice_title')}</p>
+                                    <p className="text-sm font-medium">
+                                      {t('my_reading.sign_choice_title')}
+                                    </p>
                                     <Button
                                       type="button"
                                       variant={signChoice === 'defer' ? 'default' : 'outline'}
@@ -681,7 +700,10 @@ export default function PortalReading() {
                                       size="lg"
                                       className="w-full min-h-12"
                                       onClick={() =>
-                                        setSignChoices((prev) => ({ ...prev, [item.id]: 'sign_now' }))
+                                        setSignChoices((prev) => ({
+                                          ...prev,
+                                          [item.id]: 'sign_now',
+                                        }))
                                       }
                                     >
                                       {t('my_reading.sign_choice_sign_now')}
@@ -724,7 +746,10 @@ export default function PortalReading() {
                               id={`portal-signature-${item.id}`}
                               value={signatures[item.id] ?? ''}
                               onChange={(event) =>
-                                setSignatures((prev) => ({ ...prev, [item.id]: event.target.value }))
+                                setSignatures((prev) => ({
+                                  ...prev,
+                                  [item.id]: event.target.value,
+                                }))
                               }
                               placeholder={t('my_reading.signature_placeholder')}
                               className="min-h-12 text-base"
