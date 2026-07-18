@@ -354,7 +354,7 @@ export interface AuditResponseCreate {
   response_json?: Record<string, unknown> | null
   score?: number | null
   max_score?: number | null
-  notes?: string
+  notes?: string | null
 }
 
 export interface AuditResponseUpdate {
@@ -362,7 +362,7 @@ export interface AuditResponseUpdate {
   response_json?: Record<string, unknown> | null
   score?: number | null
   max_score?: number | null
-  notes?: string
+  notes?: string | null
 }
 
 export interface AuditFindingCreate {
