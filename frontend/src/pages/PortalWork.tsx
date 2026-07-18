@@ -170,6 +170,7 @@ export default function PortalWork() {
 
   const overdueCount = actions.items.filter((a) => isOverdue(a.due_date, a.display_status || a.status))
     .length
+  const pendingReadingCount = reading.items.length + campaigns.items.length
 
   return (
     <div data-testid="portal-work" className="min-h-screen bg-surface">
@@ -291,6 +292,15 @@ export default function PortalWork() {
             <h2 id="portal-work-reading-heading" className="font-semibold text-foreground">
               Pending reading
             </h2>
+            {pendingReadingCount > 0 && (
+              <span
+                data-testid="portal-work-reading-count"
+                className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold"
+                aria-label={`${pendingReadingCount} pending reads`}
+              >
+                {pendingReadingCount}
+              </span>
+            )}
           </div>
 
           {reading.loading ? (
@@ -336,6 +346,14 @@ export default function PortalWork() {
                 </div>
               ) : campaigns.items.length > 0 ? (
                 <div data-testid="portal-work-campaigns" className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Campaign assignments</span>
+                    {campaigns.items.length > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                        {campaigns.items.length}
+                      </span>
+                    )}
+                  </div>
                   {campaigns.items.slice(0, 3).map((item) => (
                     <Card key={item.id} className="p-4">
                       <div className="space-y-3">

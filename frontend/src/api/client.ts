@@ -2696,6 +2696,7 @@ export type {
   DocumentCampaignQuizAnswer,
   DocumentCampaignQuizResult,
   CompleteDocumentCampaignAssignmentRequest,
+  SignatureDisposition,
   CampaignComplianceRow,
   GroupComplianceRow,
   SnoozeAssignmentResponse,

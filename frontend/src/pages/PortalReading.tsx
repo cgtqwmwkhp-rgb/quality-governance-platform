@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
+  api,
   documentCampaignApi,
   getApiErrorMessage,
   knowledgeBankApi,
@@ -29,16 +30,33 @@ import { Textarea } from '../components/ui/Textarea'
 import {
   buildQuizAnswers,
   canCompleteCampaign,
+  canProceedToCompletionFields,
+  canSubmitQuiz,
   hasUnansweredQuiz,
-  isOpenQuestion,
   isQuizRequired,
+  isSignatureRequiredForCompletion,
+  quizAttemptsRemaining,
   quizQuestionLabel,
+  resolveSignatureDisposition,
+  shouldRenderOpenQuestion,
+  showQuestionGate,
+  type QuestionGateChoice,
+  type SignChoice,
 } from './campaignReadingHelpers'
 
 const reportFailure = (err: unknown): string => {
   const message = getApiErrorMessage(err)
   toast.error(message)
   return message
+}
+
+async function resolveDocumentSignedUrl(documentId: number): Promise<string> {
+  const response = await api.get<{ signed_url: string }>(
+    `/api/v1/documents/${documentId}/signed-url`,
+    { params: { download: false } },
+  )
+  const rawUrl = response.data.signed_url
+  return new URL(rawUrl, api.defaults.baseURL || window.location.origin).toString()
 }
 
 function formatDue(due?: string | null): string | null {
@@ -71,6 +89,9 @@ export default function PortalReading() {
   const [questionDrafts, setQuestionDrafts] = useState<Record<number, string>>({})
   const [askingQuestionId, setAskingQuestionId] = useState<number | null>(null)
   const [expandedQuestionId, setExpandedQuestionId] = useState<number | null>(null)
+  const [questionGateChoices, setQuestionGateChoices] = useState<Record<number, QuestionGateChoice>>({})
+  const [signChoices, setSignChoices] = useState<Record<number, SignChoice>>({})
+  const [questionsSent, setQuestionsSent] = useState<Record<number, boolean>>({})
 
   const loadAssignments = useCallback(async () => {
     setLoading(true)
@@ -131,7 +152,8 @@ export default function PortalReading() {
           assignment.id === item.id ? { ...assignment, status: 'opened' } : assignment,
         ),
       )
-      window.open(`/documents/${item.document_id}`, '_blank', 'noopener,noreferrer')
+      const signedUrl = await resolveDocumentSignedUrl(item.document_id)
+      window.open(signedUrl, '_blank', 'noopener,noreferrer')
     } catch (err) {
       reportFailure(err)
     } finally {
@@ -165,6 +187,10 @@ export default function PortalReading() {
   const handleSubmitQuiz = async (item: DocumentCampaignAssignment) => {
     const quiz = quizzes[item.id]
     if (!quiz) return
+    if (!canSubmitQuiz(item, quizResults[item.id])) {
+      toast.error(t('my_reading.quiz_attempts_exhausted'))
+      return
+    }
     const values = quizAnswers[item.id] ?? {}
     if (hasUnansweredQuiz(quiz, values)) {
       toast.error(t('my_reading.complete_all_quiz_questions'))
@@ -177,9 +203,24 @@ export default function PortalReading() {
         item.id,
         buildQuizAnswers(quiz, values),
       )
-      setQuizResults((prev) => ({ ...prev, [item.id]: response.data }))
+      const result = response.data
+      setQuizResults((prev) => ({ ...prev, [item.id]: result }))
+      setItems((prev) =>
+        prev.map((assignment) =>
+          assignment.id === item.id
+            ? {
+                ...assignment,
+                quiz_passed: result.passed ?? result.quiz_passed ?? assignment.quiz_passed,
+                quiz_score: result.score ?? result.quiz_score ?? assignment.quiz_score,
+                quiz_attempts:
+                  result.quiz_attempts ??
+                  (assignment.quiz_attempts ?? 0) + 1,
+              }
+            : assignment,
+        ),
+      )
       toast.success(
-        (response.data.passed ?? response.data.quiz_passed)
+        (result.passed ?? result.quiz_passed)
           ? t('my_reading.quiz_passed')
           : t('my_reading.quiz_submitted'),
       )
@@ -196,16 +237,33 @@ export default function PortalReading() {
       toast.error(t('my_reading.pass_quiz_before_completing'))
       return
     }
+
+    const gateChoice = questionGateChoices[item.id] ?? null
+    const signChoice = signChoices[item.id] ?? null
+    const disposition = resolveSignatureDisposition(gateChoice, signChoice)
+    if (!disposition || !canProceedToCompletionFields(gateChoice, signChoice, questionsSent[item.id] ?? false)) {
+      toast.error(t('my_reading.question_gate_required'))
+      return
+    }
+
     const acceptanceStatement = acceptanceStatements[item.id]?.trim()
     if (!acceptanceStatement) {
       toast.error(t('my_reading.acceptance_required'))
       return
     }
+
+    const signature = signatures[item.id]?.trim()
+    if (isSignatureRequiredForCompletion(gateChoice, signChoice) && !signature) {
+      toast.error(t('my_reading.signature_required'))
+      return
+    }
+
     setCompletingCampaignId(item.id)
     try {
       const response = await documentCampaignApi.completeAssignment(item.id, {
         acceptance_statement: acceptanceStatement,
-        ...(signatures[item.id]?.trim() ? { signature_data: signatures[item.id].trim() } : {}),
+        signature_disposition: disposition,
+        ...(signature ? { signature_data: signature } : {}),
       })
       setItems((prev) =>
         prev.map((assignment) =>
@@ -223,7 +281,7 @@ export default function PortalReading() {
     }
   }
 
-  const handleAskQuestion = async (item: DocumentCampaignAssignment) => {
+  const handleAskQuestion = async (item: DocumentCampaignAssignment, markGateSent = false) => {
     const body = questionDrafts[item.id]?.trim()
     if (!body) {
       toast.error(t('portal_reading.question_required'))
@@ -238,7 +296,12 @@ export default function PortalReading() {
       await knowledgeBankApi.postMessage(threadResponse.data.id, { body })
       setQuestionDrafts((prev) => ({ ...prev, [item.id]: '' }))
       setExpandedQuestionId(null)
-      toast.success(t('portal_reading.question_sent'))
+      setQuestionsSent((prev) => ({ ...prev, [item.id]: true }))
+      if (markGateSent) {
+        toast.success(t('portal_reading.question_sent'))
+      } else {
+        toast.success(t('portal_reading.question_sent'))
+      }
     } catch (err) {
       reportFailure(err)
     } finally {
@@ -261,13 +324,29 @@ export default function PortalReading() {
           <div className="flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-primary" />
             <span className="font-semibold text-foreground">{t('portal_reading.title')}</span>
+            {pendingItems.length > 0 && (
+              <span
+                data-testid="portal-reading-pending-count"
+                className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-xs font-semibold"
+                aria-label={t('portal_reading.pending_count', { count: pendingItems.length })}
+              >
+                {pendingItems.length}
+              </span>
+            )}
           </div>
         </div>
       </header>
 
       <main className="max-w-lg mx-auto px-4 sm:px-6 py-6 pb-12 space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">{t('portal_reading.heading')}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold text-foreground">{t('portal_reading.heading')}</h1>
+            {pendingItems.length > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                {pendingItems.length}
+              </span>
+            )}
+          </div>
           <p className="text-muted-foreground text-sm mt-1">{t('portal_reading.subtitle')}</p>
         </div>
 
@@ -300,6 +379,19 @@ export default function PortalReading() {
               const dueLabel = formatDue(item.due_date ?? item.due_at)
               const isExpanded = expandedCampaignId === item.id
               const isQuestionExpanded = expandedQuestionId === item.id
+              const quizResult = quizResults[item.id]
+              const gateChoice = questionGateChoices[item.id] ?? null
+              const signChoice = signChoices[item.id] ?? null
+              const questionSent = questionsSent[item.id] ?? false
+              const attemptsLeft = quizAttemptsRemaining(item, quizResult)
+              const showGate = showQuestionGate(item, quizResult)
+              const showCompletionFields = canProceedToCompletionFields(
+                gateChoice,
+                signChoice,
+                questionSent,
+              )
+              const signatureRequired = isSignatureRequiredForCompletion(gateChoice, signChoice)
+
               return (
                 <Card key={item.id} className="p-4" data-testid={`portal-reading-assignment-${item.id}`}>
                   <div className="space-y-3">
@@ -410,6 +502,11 @@ export default function PortalReading() {
                                   {t('my_reading.pass_mark', { score: quizzes[item.id].pass_mark })}
                                 </p>
                               )}
+                              {isQuizRequired(item) && (
+                                <p className="text-sm text-muted-foreground" role="status">
+                                  {t('my_reading.quiz_attempts_remaining', { count: attemptsLeft })}
+                                </p>
+                              )}
                             </div>
                             {quizLoadingId === item.id ? (
                               <Loader2 className="w-5 h-5 animate-spin text-primary" />
@@ -422,7 +519,7 @@ export default function PortalReading() {
                                     <legend className="text-sm font-medium">
                                       {quizQuestionLabel(question, index)}
                                     </legend>
-                                    {isOpenQuestion(question) ? (
+                                    {shouldRenderOpenQuestion(question) ? (
                                       <Textarea
                                         value={answer}
                                         onChange={(event) =>
@@ -469,16 +566,13 @@ export default function PortalReading() {
                                 )
                               })
                             )}
-                            {quizResults[item.id] && (
+                            {quizResult && (
                               <p className="text-sm font-medium" role="status">
                                 {t('my_reading.quiz_score', {
-                                  score:
-                                    quizResults[item.id].score ??
-                                    quizResults[item.id].quiz_score ??
-                                    0,
+                                  score: quizResult.score ?? quizResult.quiz_score ?? 0,
                                 })}{' '}
                                 —{' '}
-                                {(quizResults[item.id].passed ?? quizResults[item.id].quiz_passed)
+                                {(quizResult.passed ?? quizResult.quiz_passed)
                                   ? t('my_reading.passed')
                                   : t('my_reading.not_passed')}
                               </p>
@@ -489,7 +583,11 @@ export default function PortalReading() {
                               size="lg"
                               className="w-full min-h-12"
                               onClick={() => void handleSubmitQuiz(item)}
-                              disabled={quizLoadingId === item.id || submittingQuizId === item.id}
+                              disabled={
+                                quizLoadingId === item.id ||
+                                submittingQuizId === item.id ||
+                                !canSubmitQuiz(item, quizResult)
+                              }
                             >
                               {submittingQuizId === item.id && (
                                 <Loader2 className="w-5 h-5 mr-2 animate-spin" />
@@ -498,53 +596,155 @@ export default function PortalReading() {
                             </Button>
                           </section>
                         )}
-                        <section className="space-y-3">
-                          <label
-                            className="block text-sm font-medium"
-                            htmlFor={`portal-acceptance-${item.id}`}
-                          >
-                            {t('my_reading.acceptance_statement')}
-                          </label>
-                          <Textarea
-                            id={`portal-acceptance-${item.id}`}
-                            value={acceptanceStatements[item.id] ?? ''}
-                            onChange={(event) =>
-                              setAcceptanceStatements((prev) => ({
-                                ...prev,
-                                [item.id]: event.target.value,
-                              }))
-                            }
-                            className="min-h-20 text-base"
-                          />
-                          <label
-                            className="block text-sm font-medium"
-                            htmlFor={`portal-signature-${item.id}`}
-                          >
-                            {t('my_reading.signature_optional')}
-                          </label>
-                          <Input
-                            id={`portal-signature-${item.id}`}
-                            value={signatures[item.id] ?? ''}
-                            onChange={(event) =>
-                              setSignatures((prev) => ({ ...prev, [item.id]: event.target.value }))
-                            }
-                            placeholder={t('my_reading.signature_placeholder')}
-                            className="min-h-12 text-base"
-                          />
-                          <Button
-                            type="button"
-                            size="lg"
-                            className="w-full min-h-12"
-                            onClick={() => void handleCompleteCampaign(item)}
-                            disabled={completingCampaignId === item.id}
-                          >
-                            {completingCampaignId === item.id && (
-                              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+
+                        {showGate && (
+                          <section className="space-y-3" data-testid={`portal-reading-question-gate-${item.id}`}>
+                            <h2 className="font-medium">{t('my_reading.question_gate_title')}</h2>
+                            <p className="text-sm text-muted-foreground">{t('my_reading.question_gate_help')}</p>
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                variant={gateChoice === 'yes' ? 'default' : 'outline'}
+                                size="lg"
+                                className="flex-1 min-h-12"
+                                onClick={() =>
+                                  setQuestionGateChoices((prev) => ({ ...prev, [item.id]: 'yes' }))
+                                }
+                              >
+                                {t('my_reading.question_gate_yes')}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={gateChoice === 'no' ? 'default' : 'outline'}
+                                size="lg"
+                                className="flex-1 min-h-12"
+                                onClick={() => {
+                                  setQuestionGateChoices((prev) => ({ ...prev, [item.id]: 'no' }))
+                                  setSignChoices((prev) => {
+                                    const next = { ...prev }
+                                    delete next[item.id]
+                                    return next
+                                  })
+                                }}
+                              >
+                                {t('my_reading.question_gate_no')}
+                              </Button>
+                            </div>
+
+                            {gateChoice === 'yes' && (
+                              <div className="space-y-3 border rounded-lg p-3">
+                                <p className="text-sm text-muted-foreground">
+                                  {t('portal_reading.question_hint')}
+                                </p>
+                                <Textarea
+                                  value={questionDrafts[item.id] ?? ''}
+                                  onChange={(event) =>
+                                    setQuestionDrafts((prev) => ({ ...prev, [item.id]: event.target.value }))
+                                  }
+                                  placeholder={t('portal_reading.question_placeholder')}
+                                  className="min-h-20 text-base"
+                                  aria-label={t('portal_reading.ask_question')}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="lg"
+                                  className="w-full min-h-12"
+                                  onClick={() => void handleAskQuestion(item, true)}
+                                  disabled={askingQuestionId === item.id || questionSent}
+                                >
+                                  {askingQuestionId === item.id && (
+                                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                                  )}
+                                  {questionSent
+                                    ? t('my_reading.question_sent_short')
+                                    : t('portal_reading.send_question')}
+                                </Button>
+
+                                {questionSent && (
+                                  <div className="space-y-2">
+                                    <p className="text-sm font-medium">{t('my_reading.sign_choice_title')}</p>
+                                    <Button
+                                      type="button"
+                                      variant={signChoice === 'defer' ? 'default' : 'outline'}
+                                      size="lg"
+                                      className="w-full min-h-12"
+                                      onClick={() =>
+                                        setSignChoices((prev) => ({ ...prev, [item.id]: 'defer' }))
+                                      }
+                                    >
+                                      {t('my_reading.sign_choice_defer')}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant={signChoice === 'sign_now' ? 'default' : 'outline'}
+                                      size="lg"
+                                      className="w-full min-h-12"
+                                      onClick={() =>
+                                        setSignChoices((prev) => ({ ...prev, [item.id]: 'sign_now' }))
+                                      }
+                                    >
+                                      {t('my_reading.sign_choice_sign_now')}
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
                             )}
-                            <CheckCircle2 className="w-5 h-5 mr-2" />
-                            {t('my_reading.complete_assignment')}
-                          </Button>
-                        </section>
+                          </section>
+                        )}
+
+                        {showCompletionFields && (
+                          <section className="space-y-3">
+                            <label
+                              className="block text-sm font-medium"
+                              htmlFor={`portal-acceptance-${item.id}`}
+                            >
+                              {t('my_reading.acceptance_statement')}
+                            </label>
+                            <Textarea
+                              id={`portal-acceptance-${item.id}`}
+                              value={acceptanceStatements[item.id] ?? ''}
+                              onChange={(event) =>
+                                setAcceptanceStatements((prev) => ({
+                                  ...prev,
+                                  [item.id]: event.target.value,
+                                }))
+                              }
+                              className="min-h-20 text-base"
+                            />
+                            <label
+                              className="block text-sm font-medium"
+                              htmlFor={`portal-signature-${item.id}`}
+                            >
+                              {signatureRequired
+                                ? t('my_reading.signature_required_label')
+                                : t('my_reading.signature_optional')}
+                            </label>
+                            <Input
+                              id={`portal-signature-${item.id}`}
+                              value={signatures[item.id] ?? ''}
+                              onChange={(event) =>
+                                setSignatures((prev) => ({ ...prev, [item.id]: event.target.value }))
+                              }
+                              placeholder={t('my_reading.signature_placeholder')}
+                              className="min-h-12 text-base"
+                              required={signatureRequired}
+                            />
+                            <Button
+                              type="button"
+                              size="lg"
+                              className="w-full min-h-12"
+                              onClick={() => void handleCompleteCampaign(item)}
+                              disabled={completingCampaignId === item.id}
+                            >
+                              {completingCampaignId === item.id && (
+                                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                              )}
+                              <CheckCircle2 className="w-5 h-5 mr-2" />
+                              {t('my_reading.complete_assignment')}
+                            </Button>
+                          </section>
+                        )}
                       </div>
                     )}
                   </div>

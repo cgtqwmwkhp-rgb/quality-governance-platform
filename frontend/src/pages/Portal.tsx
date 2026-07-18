@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   FileText,
@@ -9,10 +9,12 @@ import {
   LogOut,
   User,
   Briefcase,
+  Bell,
 } from 'lucide-react'
 import { BrandMarkTile } from '../components/BrandMark'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
+import { documentCampaignApi } from '../api/client'
 import { Card } from '../components/ui/Card'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
 import { cn } from '../helpers/utils'
@@ -21,10 +23,23 @@ export default function Portal() {
   const navigate = useNavigate()
   const { user, logout } = usePortalAuth()
   const { announce } = useLiveAnnouncer()
+  const [pendingCampaignCount, setPendingCampaignCount] = useState(0)
 
   useEffect(() => {
     announce('Employee portal loaded')
   }, [announce])
+
+  useEffect(() => {
+    void documentCampaignApi
+      .listMyAssignments()
+      .then((response) => {
+        const pending = (response.data.items ?? []).filter((item) => item.status !== 'completed').length
+        setPendingCampaignCount(pending)
+      })
+      .catch(() => {
+        setPendingCampaignCount(0)
+      })
+  }, [])
 
   const handleLogout = () => {
     logout()
@@ -110,20 +125,44 @@ export default function Portal() {
           <button
             data-testid="portal-work-btn"
             type="button"
-            aria-label="My Work — assigned actions and reading"
+            aria-label={
+              pendingCampaignCount > 0
+                ? `My Work — ${pendingCampaignCount} pending campaign assignments`
+                : 'My Work — assigned actions and reading'
+            }
             onClick={() => navigate('/portal/work')}
             className={cn(
-              'w-full flex items-center gap-4 p-5 rounded-2xl transition-all group',
+              'w-full flex items-center gap-4 p-5 rounded-2xl transition-all group relative',
               'bg-card hover:bg-muted/40 border-2 border-border hover:border-primary/30',
             )}
           >
-            <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center relative">
               <Briefcase className="w-7 h-7 text-primary" />
+              {pendingCampaignCount > 0 && (
+                <span
+                  data-testid="portal-work-pending-badge"
+                  className="absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-xs font-semibold motion-safe:animate-pulse"
+                  aria-hidden="true"
+                >
+                  <Bell className="w-3 h-3" />
+                  <span className="sr-only">{pendingCampaignCount}</span>
+                </span>
+              )}
             </div>
             <div className="flex-1 text-left">
-              <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
-                My Work
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
+                  My Work
+                </h3>
+                {pendingCampaignCount > 0 && (
+                  <span
+                    data-testid="portal-work-pending-count"
+                    className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-destructive/10 text-destructive text-xs font-semibold"
+                  >
+                    {pendingCampaignCount}
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-muted-foreground">
                 Assigned actions, pending reading, profile link
               </p>
