@@ -320,8 +320,10 @@ class Settings(BaseSettings):
     # Voyage + Pinecone (library semantic index / smart search)
     voyage_api_key: str = ""
     pinecone_api_key: str = ""
+    # Serverless index host URL (preferred over legacy {index}-{env}.svc construction)
+    pinecone_host: str = ""
     pinecone_index: str = "qgp-documents"
-    pinecone_environment: str = "gcp-starter"
+    pinecone_environment: str = "aped-4627-b74a"
 
     # OpenTelemetry / Azure Monitor
     otel_trace_sample_rate: Optional[float] = None

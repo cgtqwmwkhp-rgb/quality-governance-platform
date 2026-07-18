@@ -226,6 +226,7 @@ jobs:
           AZURE_DI_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name AZURE-DOCUMENT-INTELLIGENCE-KEY --query value -o tsv 2>/dev/null || true)
           VOYAGE_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name VOYAGE-API-KEY --query value -o tsv 2>/dev/null || true)
           PINECONE_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name PINECONE-API-KEY --query value -o tsv 2>/dev/null || true)
+          PINECONE_HOST_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name PINECONE-HOST --query value -o tsv 2>/dev/null || true)
           PINECONE_INDEX_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name PINECONE-INDEX --query value -o tsv 2>/dev/null || true)
           PINECONE_ENVIRONMENT_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name PINECONE-ENVIRONMENT --query value -o tsv 2>/dev/null || true)
           REDIS_URL_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name REDIS-URL --query value -o tsv)
@@ -286,8 +287,9 @@ jobs:
               AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD="true" \
               VOYAGE_API_KEY="${VOYAGE_API_KEY_VAL}" \
               PINECONE_API_KEY="${PINECONE_API_KEY_VAL}" \
+              PINECONE_HOST="${PINECONE_HOST_VAL}" \
               PINECONE_INDEX="${PINECONE_INDEX_VAL:-qgp-documents}" \
-              PINECONE_ENVIRONMENT="${PINECONE_ENVIRONMENT_VAL:-gcp-starter}" \
+              PINECONE_ENVIRONMENT="${PINECONE_ENVIRONMENT_VAL:-aped-4627-b74a}" \
               UAT_MODE="READ_WRITE" \
               CELERY_BROKER_URL="${REDIS_URL_VAL}" \
               CELERY_RESULT_BACKEND="${REDIS_URL_VAL}" \
