@@ -113,6 +113,9 @@ Frontend Azure AD variables (`VITE_*`) are documented in **`frontend/.env.exampl
 | `MISTRAL_API_KEY` | Mistral API credential for OCR. | Key Vault | Optional |
 | `MISTRAL_OCR_MODEL`, `MISTRAL_API_BASE_URL`, `MISTRAL_OCR_TIMEOUT_SECONDS` | Mistral OCR configuration. | App Service | Optional |
 | `GOOGLE_GEMINI_API_KEY` | Optional Gemini review integration. | Key Vault | Optional |
+| `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` | Dedicated QGP Azure DI endpoint (not Jobsheet). | Key Vault | Optional (DS-1b prep; default unset) |
+| `AZURE_DOCUMENT_INTELLIGENCE_KEY` | Azure DI subscription key for QGP resource. | Key Vault | Optional (DS-1b prep; default unset) |
+| `AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD` | E4 kill switch; must stay `false` until DPO sign-off. | App Service | Optional (default `false`) |
 
 ---
 
