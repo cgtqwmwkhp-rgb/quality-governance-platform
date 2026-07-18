@@ -7,6 +7,176 @@ import pytest
 from src.domain.services.audit_scoring_service import AuditScoringService, ScoreResult
 
 
+class TestDeriveResponseScore:
+    def test_yes_no_positive_derives_full_score_and_max(self):
+        question = SimpleNamespace(
+            question_type="yes_no",
+            max_score=1.0,
+            weight=1.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=None,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_value="yes",
+        )
+        assert score == 1.0
+        assert max_score == 1.0
+
+    def test_yes_no_negative_derives_zero(self):
+        question = SimpleNamespace(
+            question_type="yes_no",
+            max_score=2.0,
+            weight=2.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=None,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_value="no",
+        )
+        assert score == 0.0
+        assert max_score == 2.0
+
+    def test_apply_derived_scores_fills_missing_fields(self):
+        question = SimpleNamespace(
+            question_type="pass_fail",
+            max_score=1.0,
+            weight=1.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=None,
+        )
+        enriched = AuditScoringService.apply_derived_scores(
+            question,
+            {"question_id": 1, "response_value": "pass"},
+        )
+        assert enriched["score"] == 1.0
+        assert enriched["max_score"] == 1.0
+
+    def test_client_supplied_scores_win(self):
+        question = SimpleNamespace(
+            question_type="yes_no",
+            max_score=1.0,
+            weight=1.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=None,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_value="yes",
+            score=0.5,
+            max_score=2.0,
+        )
+        assert score == 0.5
+        assert max_score == 2.0
+
+    def test_radio_option_score_not_full_credit(self):
+        question = SimpleNamespace(
+            question_type="radio",
+            max_score=10.0,
+            weight=10.0,
+            positive_answer="yes",
+            options_json=[
+                {"label": "Good", "value": "good", "score": 10},
+                {"label": "Partial", "value": "partial", "score": 4},
+            ],
+            max_value=None,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_value="partial",
+        )
+        assert score == 4.0
+        assert max_score == 10.0
+
+    def test_apply_derived_scores_recomputes_when_score_omitted(self):
+        question = SimpleNamespace(
+            question_type="yes_no",
+            max_score=1.0,
+            weight=1.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=None,
+        )
+        enriched = AuditScoringService.apply_derived_scores(
+            question,
+            {"response_value": "no"},
+        )
+        assert enriched["score"] == 0.0
+        assert enriched["max_score"] == 1.0
+
+    def test_unanswered_does_not_set_max_score(self):
+        question = SimpleNamespace(
+            question_type="yes_no",
+            max_score=1.0,
+            weight=1.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=None,
+        )
+        enriched = AuditScoringService.apply_derived_scores(
+            question,
+            {"response_value": None, "notes": "parking lot"},
+        )
+        assert enriched["score"] is None
+        assert enriched["max_score"] is None
+
+    def test_invalid_numeric_answer_is_unscored(self):
+        question = SimpleNamespace(
+            question_type="numeric",
+            max_score=10.0,
+            weight=10.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=10.0,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_value="not-a-number",
+        )
+        assert score is None
+        assert max_score is None
+
+    def test_numeric_score_capped_at_max(self):
+        question = SimpleNamespace(
+            question_type="numeric",
+            max_score=10.0,
+            weight=10.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=10.0,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_number=50,
+        )
+        assert score == 10.0
+        assert max_score == 10.0
+
+    def test_checklist_json_array_uses_option_scores(self):
+        question = SimpleNamespace(
+            question_type="checklist",
+            max_score=10.0,
+            weight=10.0,
+            positive_answer="yes",
+            options_json=[
+                {"label": "A", "value": "a", "score": 3},
+                {"label": "B", "value": "b", "score": 2},
+            ],
+            max_value=None,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_value='["a","b"]',
+        )
+        assert score == 5.0
+        assert max_score == 10.0
+
+
 class TestScoreResult:
     def test_score_result_creation(self):
         sr = ScoreResult(total_score=80.0, max_score=100.0, score_percentage=80.0)
@@ -87,15 +257,17 @@ class TestCalculateRunScore:
         assert result.max_score == 0
         assert result.score_percentage == 0.0
 
-    def test_none_scores_treated_as_zero(self):
+    def test_unscored_responses_excluded_from_totals(self):
         responses = [
             self._response(None, 10),
             self._response(5, None),
+            self._response(8, 10),
         ]
         result = AuditScoringService.calculate_run_score(responses)
 
-        assert result.total_score == 5
+        assert result.total_score == 8
         assert result.max_score == 10
+        assert result.score_percentage == 80.0
 
     def test_single_response(self):
         responses = [self._response(7, 10)]

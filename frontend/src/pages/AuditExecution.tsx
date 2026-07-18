@@ -75,6 +75,8 @@ interface AuditQuestion {
   type: string
   required: boolean
   weight: number
+  maxScore?: number
+  maxValue?: number
   options?: { id: string; label: string; value: string; score?: number }[]
   evidenceRequired: boolean
   guidance?: string
@@ -217,6 +219,116 @@ export function canAdvancePastFailEvidenceGate(
   return !isFailEvidenceGateActive(question, response)
 }
 
+export function scorePayloadForQuestion(
+  question: Pick<
+    AuditQuestion,
+    'type' | 'weight' | 'maxScore' | 'maxValue' | 'positiveAnswer' | 'options'
+  >,
+  response: Pick<QuestionResponse, 'response'>,
+): { score: number | null; max_score: number | null } {
+  const maxScore = question.maxScore ?? question.weight ?? 1
+  // Notes/photos / cleared fields must not contribute 0/max to run totals.
+  if (
+    response.response === null ||
+    response.response === undefined ||
+    response.response === '' ||
+    (Array.isArray(response.response) && response.response.length === 0)
+  ) {
+    return { score: null, max_score: null }
+  }
+  if (question.type === 'pass_fail' || question.type === 'yes_no') {
+    const positiveVal =
+      question.positiveAnswer === 'no'
+        ? question.type === 'pass_fail'
+          ? 'fail'
+          : 'no'
+        : question.type === 'pass_fail'
+          ? 'pass'
+          : 'yes'
+    const answer = String(response.response).trim().toLowerCase()
+    return {
+      score: answer === positiveVal ? maxScore : 0,
+      max_score: maxScore,
+    }
+  }
+  if (question.type === 'yes_no_na') {
+    const positiveVal = question.positiveAnswer === 'no' ? 'no' : 'yes'
+    const answer = String(response.response).trim().toLowerCase()
+    const ok = answer === positiveVal || answer === 'na'
+    return { score: ok ? maxScore : 0, max_score: maxScore }
+  }
+  if (question.type.startsWith('scale_')) {
+    const scaleDefault = question.type === 'scale_1_5' ? 5 : 10
+    const max = question.maxValue ?? scaleDefault
+    const raw = Number(response.response)
+    if (!max || Number.isNaN(raw)) {
+      return { score: null, max_score: null }
+    }
+    const scaled = (raw / max) * maxScore
+    return {
+      score: Math.min(maxScore, Math.max(0, scaled)),
+      max_score: maxScore,
+    }
+  }
+  if (
+    typeof response.response === 'number' ||
+    ['numeric', 'number', 'rating', 'score'].includes(question.type)
+  ) {
+    const raw = Number(response.response)
+    if (Number.isNaN(raw)) {
+      return { score: null, max_score: null }
+    }
+    // Match server: scale raw entry by max_value into question max_score points.
+    const maxValue = question.maxValue ?? maxScore ?? 1
+    const scaled = maxValue ? (raw / maxValue) * maxScore : 0
+    return { score: Math.min(maxScore, Math.max(0, scaled)), max_score: maxScore }
+  }
+  if (
+    ['radio', 'select', 'dropdown', 'checkbox', 'multi_select', 'multi_choice', 'checklist'].includes(
+      question.type,
+    )
+  ) {
+    const options = question.options || []
+    const selected = new Set<string>()
+    if (Array.isArray(response.response)) {
+      response.response.forEach((item) => {
+        const str = String(item).trim().toLowerCase()
+        if (str) selected.add(str)
+      })
+    } else if (typeof response.response === 'string') {
+      response.response.split(/[,;]/).forEach((part) => {
+        const str = part.trim().toLowerCase()
+        if (str) selected.add(str)
+      })
+    }
+    if (selected.size === 0) {
+      return { score: null, max_score: null }
+    }
+    const matchedScores: number[] = []
+    for (const option of options) {
+      const optionValue = String(option.value || '').trim().toLowerCase()
+      const optionLabel = String(option.label || '').trim().toLowerCase()
+      if (selected.has(optionValue) || selected.has(optionLabel)) {
+        matchedScores.push(option.score !== undefined ? option.score : maxScore)
+      }
+    }
+    if (matchedScores.length > 0) {
+      const totalScore = matchedScores.reduce((sum, s) => sum + s, 0)
+      return { score: Math.min(maxScore, totalScore), max_score: maxScore }
+    }
+    return { score: maxScore, max_score: maxScore }
+  }
+  // Text/date/photo/etc.: credit only when there is a non-empty answer.
+  const hasAnswer =
+    typeof response.response === 'string'
+      ? response.response.trim().length > 0
+      : response.response != null
+  if (!hasAnswer) {
+    return { score: null, max_score: null }
+  }
+  return { score: maxScore, max_score: maxScore }
+}
+
 export function shouldShowFailEvidencePanel(
   question: FailEvidenceQuestion,
   response: FailEvidenceResponse | undefined,
@@ -265,6 +377,7 @@ const ResponseButton = ({
   children,
   icon: Icon,
   autoAdvancePending = false,
+  disabled = false,
 }: {
   selected: boolean
   onClick: () => void
@@ -272,6 +385,7 @@ const ResponseButton = ({
   children: React.ReactNode
   icon?: React.ElementType
   autoAdvancePending?: boolean
+  disabled?: boolean
 }) => {
   const variantStyles = {
     success: 'border-success bg-success/20 text-success',
@@ -293,8 +407,9 @@ const ResponseButton = ({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={accessibleLabel}
-      className={`relative flex-1 flex items-center justify-center gap-2 py-4 px-4 rounded-xl border-2 font-semibold transition-all duration-200 overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background
+      className={`relative flex-1 flex items-center justify-center gap-2 py-4 px-4 rounded-xl border-2 font-semibold transition-all duration-200 overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed
         ${selected ? variantStyles[variant] : `border-border bg-secondary text-muted-foreground ${hoverStyles[variant]}`}`}
     >
       {Icon && <Icon className="w-5 h-5" />}
@@ -714,6 +829,8 @@ export default function AuditExecution() {
                 type: mapBackendQuestionType(q),
                 required: q.is_required,
                 weight: q.weight,
+                maxScore: q.max_score ?? q.weight ?? 1,
+                maxValue: q.max_value ?? undefined,
                 options: q.options?.map((o) => ({
                   id: o.value,
                   label: o.label,
@@ -832,7 +949,21 @@ export default function AuditExecution() {
         })
         setResponses(existingResponses)
         setResponseIdMap(idMap)
-        setRunCompleted(runData.status === 'completed')
+        const alreadyCompleted = runData.status === 'completed'
+        setRunCompleted(alreadyCompleted)
+
+        if (alreadyCompleted) {
+          const findings = runData.findings || []
+          const linkedRiskIds = new Set(
+            findings.flatMap((finding) => (Array.isArray(finding.risk_ids) ? finding.risk_ids : [])),
+          )
+          setCompletionSummary({
+            findings: findings.length,
+            actions: findings.filter((finding) => finding.corrective_action_required).length,
+            risks: linkedRiskIds.size,
+          })
+          setStayOnCompletionProof(true)
+        }
 
         if (runData.status === 'scheduled') {
           await auditsApi.startRun(runIdNum)
@@ -859,7 +990,7 @@ export default function AuditExecution() {
   // newer than what came back from the server (e.g. user got logged out
   // mid-audit and we flushed answers to IndexedDB before redirecting).
   useEffect(() => {
-    if (!runIdNum || !audit) return
+    if (!runIdNum || !audit || runCompleted) return
     let cancelled = false
     void getAuditDraft(runIdNum).then((draft) => {
       if (cancelled || !draft) return
@@ -883,7 +1014,7 @@ export default function AuditExecution() {
     // Intentionally only depend on runIdNum + audit being loaded; we want
     // this to fire exactly once per audit, not whenever responses change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runIdNum, audit])
+  }, [runIdNum, audit, runCompleted])
 
   // Snapshot registration: api/client.ts calls every registered snapshot
   // just before any auth-loss redirect so unsaved answers get stashed in
@@ -992,17 +1123,27 @@ export default function AuditExecution() {
 
       for (const [questionId, resp] of Object.entries(responses)) {
         const hasPhotos = (resp.evidenceAssetIds?.length ?? 0) > 0
-        if (resp.response === null && !resp.notes && !hasPhotos) continue
+        const existingId = updatedIdMap[questionId]
+        const isEmpty = resp.response === null && !resp.notes && !hasPhotos
+        // Skip brand-new empty rows, but still PATCH clears for previously saved answers.
+        if (isEmpty && !existingId) continue
 
+        const question = allQuestions.find((candidate) => candidate.id === questionId)
+        const scored = question
+          ? scorePayloadForQuestion(question, resp)
+          : { score: null, max_score: null }
         const payload = {
-          response_value: serializeResponse(resp.response),
-          notes: resp.notes || undefined,
+          // Explicit null clears a previously saved answer (undefined would omit the field).
+          response_value: serializeResponse(resp.response) ?? null,
+          notes: resp.notes || null,
+          // Persist scores only for real answers; send null on update to clear stale points.
+          score: scored.score,
+          max_score: scored.max_score,
           ...(hasPhotos
             ? { response_json: buildEvidenceResponseJson(resp.evidenceAssetIds || []) }
             : {}),
         }
 
-        const existingId = updatedIdMap[questionId]
         if (existingId) {
           await auditsApi.updateResponse(existingId, payload)
         } else {
@@ -1214,43 +1355,24 @@ export default function AuditExecution() {
 
   // Calculate score
   const calculateScore = () => {
-    let totalWeight = 0
-    let achievedWeight = 0
+    // Match API calculate_run_score: sum(score) / sum(max_score).
+    let totalScore = 0
+    let totalMax = 0
 
     audit.sections.forEach((section) => {
       section.questions.forEach((question) => {
         const response = responses[question.id]
         if (!response) return
 
-        totalWeight += question.weight
+        const { score, max_score } = scorePayloadForQuestion(question, response)
+        if (score === null || max_score === null || max_score <= 0) return
 
-        if (question.type === 'pass_fail' || question.type === 'yes_no') {
-          const positiveVal =
-            question.positiveAnswer === 'no'
-              ? question.type === 'pass_fail'
-                ? 'fail'
-                : 'no'
-              : question.type === 'pass_fail'
-                ? 'pass'
-                : 'yes'
-          if (response.response === positiveVal) {
-            achievedWeight += question.weight
-          }
-        } else if (question.type === 'yes_no_na') {
-          const positiveVal = question.positiveAnswer === 'no' ? 'no' : 'yes'
-          if (response.response === positiveVal || response.response === 'na') {
-            achievedWeight += question.weight
-          }
-        } else if (question.type.startsWith('scale_')) {
-          const max = question.type === 'scale_1_5' ? 5 : 10
-          achievedWeight += (Number(response.response) / max) * question.weight
-        } else if (question.weight > 0) {
-          achievedWeight += question.weight
-        }
+        totalScore += score
+        totalMax += max_score
       })
     })
 
-    return totalWeight > 0 ? Math.round((achievedWeight / totalWeight) * 100) : 0
+    return totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0
   }
 
   const findingsNeedingActions = Object.values(responses).filter((response) => {
@@ -1260,6 +1382,7 @@ export default function AuditExecution() {
 
   // Update response
   const updateResponse = (updates: Partial<Omit<QuestionResponse, 'questionId' | 'timestamp'>>) => {
+    if (runCompleted) return
     dirtyRef.current = true
     setResponses((prev) => ({
       ...prev,
@@ -1461,6 +1584,7 @@ export default function AuditExecution() {
 
   // Auto-advance handler for binary question types (YES/NO, PASS/FAIL, N/A)
   const handleBinaryResponse = (value: string) => {
+    if (runCompleted) return
     // Cancel any in-flight timer — user changed their answer or re-tapped
     if (autoAdvanceTimerRef.current) {
       clearTimeout(autoAdvanceTimerRef.current)
@@ -1507,6 +1631,7 @@ export default function AuditExecution() {
               onClick={() => handleBinaryResponse('pass')}
               variant={yesVariant}
               icon={yesIcon}
+              disabled={runCompleted}
               autoAdvancePending={autoAdvancePending && currentResponse?.response === 'pass'}
             >
               PASS
@@ -1516,6 +1641,7 @@ export default function AuditExecution() {
               onClick={() => handleBinaryResponse('fail')}
               variant={noVariant}
               icon={noIcon}
+              disabled={runCompleted}
               autoAdvancePending={autoAdvancePending && currentResponse?.response === 'fail'}
             >
               FAIL
@@ -1531,6 +1657,7 @@ export default function AuditExecution() {
               onClick={() => handleBinaryResponse('yes')}
               variant={yesVariant}
               icon={yesIcon}
+              disabled={runCompleted}
               autoAdvancePending={autoAdvancePending && currentResponse?.response === 'yes'}
             >
               YES
@@ -1540,6 +1667,7 @@ export default function AuditExecution() {
               onClick={() => handleBinaryResponse('no')}
               variant={noVariant}
               icon={noIcon}
+              disabled={runCompleted}
               autoAdvancePending={autoAdvancePending && currentResponse?.response === 'no'}
             >
               NO
@@ -1555,6 +1683,7 @@ export default function AuditExecution() {
               onClick={() => handleBinaryResponse('yes')}
               variant={yesVariant}
               icon={yesIcon}
+              disabled={runCompleted}
               autoAdvancePending={autoAdvancePending && currentResponse?.response === 'yes'}
             >
               YES
@@ -1564,6 +1693,7 @@ export default function AuditExecution() {
               onClick={() => handleBinaryResponse('no')}
               variant={noVariant}
               icon={noIcon}
+              disabled={runCompleted}
               autoAdvancePending={autoAdvancePending && currentResponse?.response === 'no'}
             >
               NO
@@ -1573,6 +1703,7 @@ export default function AuditExecution() {
               onClick={() => handleBinaryResponse('na')}
               variant="neutral"
               icon={MinusCircle}
+              disabled={runCompleted}
               autoAdvancePending={autoAdvancePending && currentResponse?.response === 'na'}
             >
               N/A

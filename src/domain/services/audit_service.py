@@ -1591,6 +1591,33 @@ class AuditService:
         if run.status != AuditStatus.IN_PROGRESS:
             raise ValidationError("Only in-progress runs can be completed")
 
+        # Backfill score/max_score when clients omit them (execution UI historically did).
+        question_ids = [r.question_id for r in (run.responses or []) if r.question_id]
+        questions_by_id: dict[int, AuditQuestion] = {}
+        if question_ids:
+            q_result = await self.db.execute(select(AuditQuestion).where(AuditQuestion.id.in_(question_ids)))
+            questions_by_id = {q.id: q for q in q_result.scalars().all()}
+        for response in run.responses or []:
+            question = questions_by_id.get(response.question_id)
+            # Derive from the current answer only (ignore stored points) so cleared /
+            # unscored rows drop stale score pairs before run aggregation.
+            score_value, max_score_value = AuditScoringService.derive_response_score(
+                question,
+                response_value=response.response_value,
+                response_text=response.response_text,
+                response_number=response.response_number,
+                response_bool=response.response_bool,
+                is_na=bool(response.is_na),
+            )
+            if score_value is None and max_score_value is None:
+                response.score = None
+                response.max_score = None
+                continue
+            if response.max_score is None and max_score_value is not None:
+                response.max_score = max_score_value
+            if response.score is None and score_value is not None:
+                response.score = score_value
+
         score = AuditScoringService.calculate_run_score(run.responses)
         run.score = score.total_score
         run.max_score = score.max_score
@@ -1654,7 +1681,12 @@ class AuditService:
         if existing.scalar_one_or_none():
             raise ValidationError("Response already exists for this question in this run")
 
-        response = AuditResponse(run_id=run_id, **data)
+        question = await self.db.get(AuditQuestion, data["question_id"])
+        if not question:
+            raise NotFoundError(f"AuditQuestion {data['question_id']} not found")
+        payload = AuditScoringService.apply_derived_scores(question, data)
+
+        response = AuditResponse(run_id=run_id, **payload)
         self.db.add(response)
         await self.db.flush()
         await self.db.refresh(response)
@@ -1686,6 +1718,21 @@ class AuditService:
         if response.run.status == AuditStatus.COMPLETED:
             raise ValidationError("Cannot update responses on a completed run")
 
+        question = await self.db.get(AuditQuestion, response.question_id)
+        # Omit stored score/max_score so answer-only PATCHes recompute; client-supplied
+        # scores in update_data still win via apply_derived_scores.
+        merged = {
+            "response_value": response.response_value,
+            "response_text": response.response_text,
+            "response_number": response.response_number,
+            "response_bool": response.response_bool,
+            "is_na": response.is_na,
+            **update_data,
+        }
+        enriched = AuditScoringService.apply_derived_scores(question, merged)
+        for key in ("score", "max_score"):
+            if key in enriched and key not in update_data:
+                update_data[key] = enriched[key]
         self._apply_dict(response, update_data)
         await self.db.flush()
         await self.db.refresh(response)

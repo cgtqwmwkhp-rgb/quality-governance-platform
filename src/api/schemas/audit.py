@@ -578,6 +578,7 @@ class AuditResponseBase(BaseModel):
     response_json: Optional[Dict[str, Any]] = None
     is_na: bool = False
     score: Optional[float] = None
+    max_score: Optional[float] = None
     notes: Optional[str] = None
 
 
@@ -598,6 +599,7 @@ class AuditResponseUpdate(BaseModel):
     response_json: Optional[Dict[str, Any]] = None
     is_na: Optional[bool] = None
     score: Optional[float] = None
+    max_score: Optional[float] = None
     notes: Optional[str] = None
 
 

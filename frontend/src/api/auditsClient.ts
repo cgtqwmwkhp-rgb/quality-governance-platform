@@ -350,18 +350,19 @@ export interface AuditResponse {
 
 export interface AuditResponseCreate {
   question_id: number
-  response_value?: string
+  response_value?: string | null
   response_json?: Record<string, unknown> | null
-  score?: number
-  max_score?: number
-  notes?: string
+  score?: number | null
+  max_score?: number | null
+  notes?: string | null
 }
 
 export interface AuditResponseUpdate {
-  response_value?: string
+  response_value?: string | null
   response_json?: Record<string, unknown> | null
-  score?: number
-  notes?: string
+  score?: number | null
+  max_score?: number | null
+  notes?: string | null
 }
 
 export interface AuditFindingCreate {
