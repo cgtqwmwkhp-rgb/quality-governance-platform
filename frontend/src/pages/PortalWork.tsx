@@ -12,10 +12,12 @@ import {
 } from 'lucide-react'
 import {
   actionsApi,
+  documentCampaignApi,
   engineersApi,
   getApiErrorMessage,
   policyAcknowledgmentsApi,
   type Action,
+  type DocumentCampaignAssignment,
   type PolicyAcknowledgment,
 } from '../api/client'
 import type { EngineerSelfProfile } from '../api/engineersClient'
@@ -77,6 +79,11 @@ export default function PortalWork() {
     loading: true,
     error: null,
   })
+  const [campaigns, setCampaigns] = useState<LoadState<DocumentCampaignAssignment>>({
+    items: [],
+    loading: true,
+    error: null,
+  })
   const [passport, setPassport] = useState<PassportState>({ status: 'loading' })
 
   const loadActions = useCallback(async () => {
@@ -109,6 +116,21 @@ export default function PortalWork() {
     }
   }, [])
 
+  const loadCampaigns = useCallback(async () => {
+    setCampaigns((prev) => ({ ...prev, loading: true, error: null }))
+    try {
+      const response = await documentCampaignApi.listMyAssignments()
+      const pending = (response.data.items ?? []).filter((item) => item.status !== 'completed')
+      setCampaigns({
+        items: pending,
+        loading: false,
+        error: null,
+      })
+    } catch (err) {
+      setCampaigns({ items: [], loading: false, error: reportFailure(err) })
+    }
+  }, [])
+
   const loadPassport = useCallback(async () => {
     setPassport({ status: 'loading' })
     try {
@@ -132,8 +154,9 @@ export default function PortalWork() {
     announce('My Work inbox loaded')
     void loadActions()
     void loadReading()
+    void loadCampaigns()
     void loadPassport()
-  }, [announce, loadActions, loadReading, loadPassport])
+  }, [announce, loadActions, loadReading, loadCampaigns, loadPassport])
 
   const handleOpenReading = async (item: PolicyAcknowledgment) => {
     try {
@@ -286,15 +309,75 @@ export default function PortalWork() {
                 </Button>
               </div>
             </div>
-          ) : reading.items.length === 0 ? (
+          ) : reading.items.length === 0 && !campaigns.loading && campaigns.items.length === 0 ? (
             <EmptyState
               className="py-10"
               icon={<BookOpen className="w-8 h-8 text-muted-foreground" />}
               title="No pending reads"
-              description="You have no policy acknowledgments waiting. Acknowledgments must be completed in the full app after opening the document."
+              description="You have no policy acknowledgments or document campaigns waiting."
             />
           ) : (
             <div className="space-y-3">
+              {campaigns.loading ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                </div>
+              ) : campaigns.error ? (
+                <div
+                  data-testid="portal-work-campaigns-error"
+                  className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+                >
+                  {campaigns.error}
+                  <div className="mt-2">
+                    <Button variant="outline" size="sm" onClick={() => void loadCampaigns()}>
+                      Retry
+                    </Button>
+                  </div>
+                </div>
+              ) : campaigns.items.length > 0 ? (
+                <div data-testid="portal-work-campaigns" className="space-y-3">
+                  {campaigns.items.slice(0, 3).map((item) => (
+                    <Card key={item.id} className="p-4">
+                      <div className="space-y-3">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge variant="submitted">{item.status}</Badge>
+                            <Badge variant="outline">Campaign</Badge>
+                          </div>
+                          <p className="font-medium text-foreground">
+                            {item.document_title ?? `Document #${item.document_id}`}
+                          </p>
+                          {item.campaign_title && (
+                            <p className="text-sm text-muted-foreground">{item.campaign_title}</p>
+                          )}
+                          <p className="text-sm text-muted-foreground">
+                            Due {formatDue(item.due_date ?? item.due_at) ?? '—'}
+                          </p>
+                        </div>
+                        <Button
+                          size="lg"
+                          className="w-full min-h-12"
+                          onClick={() =>
+                            navigate(`/portal/reading?assignment=${item.id}`)
+                          }
+                        >
+                          Continue reading
+                        </Button>
+                      </div>
+                    </Card>
+                  ))}
+                  {campaigns.items.length > 3 && (
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="w-full min-h-12"
+                      onClick={() => navigate('/portal/reading')}
+                    >
+                      View all {campaigns.items.length} campaigns
+                    </Button>
+                  )}
+                </div>
+              ) : null}
               {reading.items.map((item) => (
                 <Card key={item.id} className="p-4">
                   <div className="flex items-start justify-between gap-3">

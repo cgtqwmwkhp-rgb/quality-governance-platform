@@ -8,7 +8,6 @@ import {
   policyAcknowledgmentsApi,
   type DocumentCampaignAssignment,
   type DocumentCampaignQuiz,
-  type DocumentCampaignQuizAnswer,
   type DocumentCampaignQuizResult,
   type PolicyAcknowledgment,
 } from '../api/client'
@@ -26,6 +25,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import {
+  buildQuizAnswers,
+  canCompleteCampaign,
+  hasUnansweredQuiz,
+  isOpenQuestion,
+  isQuizRequired,
+  quizQuestionLabel,
+} from './campaignReadingHelpers'
 
 const reportFailure = (err: unknown): string => {
   const message = getApiErrorMessage(err)
@@ -36,15 +43,6 @@ const reportFailure = (err: unknown): string => {
 type ReadingItem =
   | { source: 'policy'; item: PolicyAcknowledgment }
   | { source: 'campaign'; item: DocumentCampaignAssignment }
-
-const isQuizRequired = (assignment: DocumentCampaignAssignment) =>
-  assignment.quiz_required ?? assignment.requires_quiz ?? false
-
-const quizQuestionLabel = (question: DocumentCampaignQuiz['questions'][number], index: number) =>
-  question.question_text ?? question.question ?? `Question ${index + 1}`
-
-const isOpenQuestion = (question: DocumentCampaignQuiz['questions'][number]) =>
-  ['open_text', 'text'].includes(question.question_type ?? question.type ?? '')
 
 export default function MyReading() {
   const { t } = useTranslation()
@@ -174,22 +172,17 @@ export default function MyReading() {
     const quiz = quizzes[item.id]
     if (!quiz) return
     const values = quizAnswers[item.id] ?? {}
-    const unanswered = quiz.questions.some((question, index) => !values[question.question_index ?? index]?.trim())
-    if (unanswered) {
+    if (hasUnansweredQuiz(quiz, values)) {
       toast.error(t('my_reading.complete_all_quiz_questions'))
       return
     }
-    const answers: DocumentCampaignQuizAnswer[] = quiz.questions.map((question, index) => {
-      const questionIndex = question.question_index ?? index
-      const answer = values[questionIndex]
-      return isOpenQuestion(question)
-        ? { question_index: questionIndex, text_answer: answer }
-        : { question_index: questionIndex, selected_option: answer }
-    })
 
     setSubmittingQuizId(item.id)
     try {
-      const response = await documentCampaignApi.submitQuiz(item.id, answers)
+      const response = await documentCampaignApi.submitQuiz(
+        item.id,
+        buildQuizAnswers(quiz, values),
+      )
       setQuizResults((prev) => ({ ...prev, [item.id]: response.data }))
       toast.success(
         (response.data.passed ?? response.data.quiz_passed)
@@ -205,7 +198,7 @@ export default function MyReading() {
 
   const handleCompleteCampaign = async (item: DocumentCampaignAssignment) => {
     const quizResult = quizResults[item.id]
-    if (isQuizRequired(item) && !(quizResult?.passed ?? quizResult?.quiz_passed ?? item.quiz_passed)) {
+    if (!canCompleteCampaign(item, quizResult)) {
       toast.error(t('my_reading.pass_quiz_before_completing'))
       return
     }

@@ -5,6 +5,7 @@ import PortalWork from '../PortalWork'
 
 const mockList = vi.fn()
 const mockListMyPending = vi.fn()
+const mockListMyAssignments = vi.fn()
 const mockGetByUserMe = vi.fn()
 const mockRecordOpen = vi.fn()
 const mockToastError = vi.fn()
@@ -17,6 +18,9 @@ vi.mock('../../api/client', () => ({
   policyAcknowledgmentsApi: {
     listMyPending: (...args: unknown[]) => mockListMyPending(...args),
     recordOpen: (...args: unknown[]) => mockRecordOpen(...args),
+  },
+  documentCampaignApi: {
+    listMyAssignments: (...args: unknown[]) => mockListMyAssignments(...args),
   },
   engineersApi: {
     getByUserMe: (...args: unknown[]) => mockGetByUserMe(...args),
@@ -70,6 +74,7 @@ describe('PortalWork CUJ-P10', () => {
       },
     })
     mockListMyPending.mockResolvedValue({ data: { items: [], total: 0 } })
+    mockListMyAssignments.mockResolvedValue({ data: { items: [], total: 0 } })
     mockGetByUserMe.mockResolvedValue({ data: { linked: false } })
   })
 
@@ -124,5 +129,29 @@ describe('PortalWork CUJ-P10', () => {
 
     expect(await screen.findByTestId('portal-work-actions-error')).toBeInTheDocument()
     expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it('shows pending campaign assignments with continue link', async () => {
+    mockListMyAssignments.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 3,
+            document_id: 12,
+            document_title: 'Fire Safety SOP',
+            campaign_title: 'Annual refresh',
+            status: 'pending',
+            due_date: '2026-09-01',
+          },
+        ],
+        total: 1,
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByTestId('portal-work-campaigns')).toBeInTheDocument()
+    expect(screen.getByText('Fire Safety SOP')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Continue reading/i })).toBeInTheDocument()
   })
 })
