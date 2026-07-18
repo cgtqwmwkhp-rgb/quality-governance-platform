@@ -7,7 +7,7 @@ and the per-engineer assignment APIs (open, quiz, complete) used by "My Reading"
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.api.deps import CurrentUser, DbSession, require_permission
 from src.api.schemas.document_campaign import (
@@ -30,6 +30,9 @@ from src.api.schemas.document_campaign import (
     GroupResponse,
     LaunchCampaignResponse,
     MyAssignmentsResponse,
+    MyPassportResponse,
+    PassportAssignmentItem,
+    PassportStats,
     QuestionInboxItem,
     QuestionInboxResponse,
     QuestionMessageResponse,
@@ -41,6 +44,7 @@ from src.api.schemas.document_campaign import (
     ReminderDefaultsUpdateRequest,
     SnoozeAssignmentRequest,
     SnoozeAssignmentResponse,
+    SpawnReackCampaignResponse,
 )
 from src.api.utils.tenant import require_tenant_id
 from src.domain.models.document_campaign import DocumentCampaign, EngineerGroup
@@ -564,3 +568,45 @@ async def snooze_assignment(
     if snooze_until is None:
         raise HTTPException(status_code=500, detail="Snooze did not set snooze_until")
     return SnoozeAssignmentResponse(id=assignment.id, snooze_until=snooze_until)
+
+
+# =============================================================================
+# Compliance Passport (O-07)
+# =============================================================================
+
+
+@router.get("/my-passport", response_model=MyPassportResponse)
+async def get_my_passport(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Engineer compliance passport — outstanding/completed assignments + aggregate stats."""
+    service = DocumentCampaignService(db)
+    data = await service.get_my_passport(
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        user_id=current_user.id,
+    )
+    return MyPassportResponse(
+        outstanding=[PassportAssignmentItem(**item) for item in data["outstanding"]],
+        completed=[PassportAssignmentItem(**item) for item in data["completed"]],
+        stats=PassportStats(**data["stats"]),
+    )
+
+
+@router.get("/campaigns/{campaign_id}/evidence-pack.csv")
+async def export_campaign_evidence_csv(
+    campaign_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """CSV export of campaign assignment evidence (quiz/sign-off metadata)."""
+    service = DocumentCampaignService(db)
+    csv_content, filename = await service.build_evidence_pack_csv(
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        campaign_id=campaign_id,
+    )
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

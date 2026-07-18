@@ -4,11 +4,13 @@ Manages engineer groups, document campaigns (read/quiz/sign-off), audience
 expansion, launch notifications, and per-user assignment progress.
 """
 
+import csv
+import io
 import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1219,3 +1221,182 @@ class DocumentCampaignService:
         await self.db.commit()
         await self.db.refresh(message)
         return message
+
+    # ==================== Compliance Passport (O-07) ====================
+
+    async def get_my_passport(self, *, tenant_id: int, user_id: int) -> Dict[str, Any]:
+        """Aggregate the current user's campaign assignments into a compliance passport."""
+        result = await self.db.execute(
+            select(CampaignAssignment, DocumentCampaign, Document)
+            .join(DocumentCampaign, DocumentCampaign.id == CampaignAssignment.campaign_id)
+            .join(Document, Document.id == DocumentCampaign.document_id)
+            .where(
+                CampaignAssignment.user_id == user_id,
+                CampaignAssignment.tenant_id == tenant_id,
+            )
+            .order_by(CampaignAssignment.due_at)
+        )
+
+        outstanding: List[Dict[str, Any]] = []
+        completed: List[Dict[str, Any]] = []
+        quiz_attempted = 0
+        quiz_passed_count = 0
+
+        for assignment, campaign, document in result.all():
+            status_value = assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status)
+            item = {
+                "id": assignment.id,
+                "campaign_id": campaign.id,
+                "document_id": document.id,
+                "document_title": document.title or f"Document #{document.id}",
+                "campaign_title": campaign.title,
+                "status": status_value,
+                "assigned_at": assignment.assigned_at,
+                "due_at": assignment.due_at,
+                "completed_at": assignment.completed_at,
+                "quiz_score": assignment.quiz_score,
+                "quiz_passed": assignment.quiz_passed,
+            }
+            if assignment.status == AssignmentStatus.COMPLETED:
+                completed.append(item)
+            else:
+                outstanding.append(item)
+
+            if assignment.quiz_passed is not None:
+                quiz_attempted += 1
+                if assignment.quiz_passed:
+                    quiz_passed_count += 1
+
+        total_assigned = len(outstanding) + len(completed)
+        completion_rate = round((len(completed) / total_assigned * 100), 1) if total_assigned else 0.0
+        quiz_pass_rate = round((quiz_passed_count / quiz_attempted * 100), 1) if quiz_attempted else 0.0
+
+        return {
+            "outstanding": outstanding,
+            "completed": completed,
+            "stats": {
+                "completion_rate": completion_rate,
+                "quiz_pass_rate": quiz_pass_rate,
+                "total_assigned": total_assigned,
+            },
+        }
+
+    # ==================== Evidence CSV export (O-09) ====================
+
+    async def build_evidence_pack_csv(self, *, tenant_id: int, campaign_id: int) -> Tuple[str, str]:
+        """Build CSV evidence pack for a campaign (assignments + quiz/sign-off metadata)."""
+        campaign = await self.get_campaign(tenant_id=tenant_id, campaign_id=campaign_id)
+
+        result = await self.db.execute(
+            select(CampaignAssignment, User.email)
+            .join(User, User.id == CampaignAssignment.user_id)
+            .where(
+                CampaignAssignment.campaign_id == campaign_id,
+                CampaignAssignment.tenant_id == tenant_id,
+            )
+            .order_by(User.email)
+        )
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(
+            [
+                "user_email",
+                "status",
+                "assigned_at",
+                "due_at",
+                "first_opened_at",
+                "completed_at",
+                "quiz_score",
+                "quiz_passed",
+                "signature_present",
+                "ip_address",
+            ]
+        )
+
+        for assignment, email in result.all():
+            status_value = assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status)
+            writer.writerow(
+                [
+                    email or "",
+                    status_value,
+                    assignment.assigned_at.isoformat() if assignment.assigned_at else "",
+                    assignment.due_at.isoformat() if assignment.due_at else "",
+                    assignment.first_opened_at.isoformat() if assignment.first_opened_at else "",
+                    assignment.completed_at.isoformat() if assignment.completed_at else "",
+                    assignment.quiz_score if assignment.quiz_score is not None else "",
+                    assignment.quiz_passed if assignment.quiz_passed is not None else "",
+                    bool(assignment.signature_data),
+                    assignment.ip_address or "",
+                ]
+            )
+
+        filename = f"campaign-{campaign.id}-evidence-pack.csv"
+        return output.getvalue(), filename
+
+    # ==================== Re-ack on new version (O-10) ====================
+
+    async def spawn_reack_campaign(
+        self,
+        *,
+        document_id: int,
+        tenant_id: int,
+        actor_id: int,
+    ) -> Dict[str, Any]:
+        """Create a draft re-acknowledgment campaign when active campaigns exist on a document."""
+        result = await self.db.execute(
+            select(DocumentCampaign)
+            .where(
+                DocumentCampaign.document_id == document_id,
+                DocumentCampaign.tenant_id == tenant_id,
+                DocumentCampaign.status == CampaignStatus.ACTIVE,
+            )
+            .order_by(DocumentCampaign.launched_at.desc().nullslast(), DocumentCampaign.id.desc())
+        )
+        source = result.scalars().first()
+        if source is None:
+            return {"spawned": False, "reason": "no_active_campaigns"}
+
+        doc_title = await self._document_title(tenant_id=tenant_id, document_id=document_id)
+        base_title = source.title or doc_title
+        reack_title = f"Re-acknowledgment: {base_title}"
+
+        existing_draft = await self.db.execute(
+            select(DocumentCampaign).where(
+                DocumentCampaign.document_id == document_id,
+                DocumentCampaign.tenant_id == tenant_id,
+                DocumentCampaign.status == CampaignStatus.DRAFT,
+                DocumentCampaign.title == reack_title,
+            )
+        )
+        if existing_draft.scalar_one_or_none() is not None:
+            return {"spawned": False, "reason": "draft_reack_already_exists", "source_campaign_id": source.id}
+
+        campaign = DocumentCampaign(
+            tenant_id=tenant_id,
+            document_id=document_id,
+            quiz_draft_id=source.quiz_draft_id,
+            title=reack_title,
+            status=CampaignStatus.DRAFT,
+            due_within_days=source.due_within_days,
+            require_quiz=source.require_quiz,
+            require_sign=source.require_sign,
+            reminder_offsets_hours=list(source.reminder_offsets_hours or DEFAULT_REMINDER_OFFSETS_HOURS),
+            audience_all_users=source.audience_all_users,
+            audience_department=source.audience_department,
+            audience_role=source.audience_role,
+            audience_group_ids=list(source.audience_group_ids) if source.audience_group_ids else None,
+            audience_user_ids=list(source.audience_user_ids) if source.audience_user_ids else None,
+            quiz_questions=source.quiz_questions,
+            quiz_pass_mark=source.quiz_pass_mark,
+            created_by_id=actor_id,
+        )
+        self.db.add(campaign)
+        await self.db.commit()
+        await self.db.refresh(campaign)
+
+        return {
+            "spawned": True,
+            "campaign_id": campaign.id,
+            "source_campaign_id": source.id,
+        }

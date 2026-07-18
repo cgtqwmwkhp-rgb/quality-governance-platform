@@ -118,6 +118,33 @@ export interface CompleteDocumentCampaignAssignmentRequest {
   signature_data?: string
 }
 
+
+export interface CompliancePassportAssignment {
+  id: number
+  campaign_id: number
+  document_id: number
+  document_title: string
+  campaign_title?: string | null
+  status: string
+  assigned_at: string
+  due_at: string
+  completed_at?: string | null
+  quiz_score?: number | null
+  quiz_passed?: boolean | null
+}
+
+export interface CompliancePassportStats {
+  completion_rate: number
+  quiz_pass_rate: number
+  total_assigned: number
+}
+
+export interface CompliancePassportResponse {
+  outstanding: CompliancePassportAssignment[]
+  completed: CompliancePassportAssignment[]
+  stats: CompliancePassportStats
+}
+
 export interface ReminderDefaults {
   reminder_hours: number[]
 }
@@ -267,5 +294,17 @@ export function createDocumentCampaignApi(api: AxiosInstance) {
       api.post<SnoozeAssignmentResponse>(`${base}/assignments/${assignmentId}/snooze`, { hours }),
     getComplianceByGroup: (campaignId: number) =>
       api.get<GroupComplianceListResponse>(`${base}/compliance/${campaignId}/by-group`),
+    getMyPassport: () => api.get<CompliancePassportResponse>(`${base}/my-passport`),
+
+    downloadEvidencePackCsv: (campaignId: number) =>
+      api.get<Blob>(`${base}/campaigns/${campaignId}/evidence-pack.csv`, {
+        responseType: 'blob',
+      }),
+
+    spawnReackCampaign: (documentId: number) =>
+      api.post<{ spawned: boolean; campaign_id?: number; source_campaign_id?: number; reason?: string }>(
+        `/api/v1/documents/${documentId}/spawn-reack-campaign`,
+      ),
+
   }
 }

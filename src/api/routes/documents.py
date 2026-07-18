@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.api.schemas.document_campaign import SpawnReackCampaignResponse
 from src.api.utils.tenant import require_tenant_id
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.document import (
@@ -34,6 +35,7 @@ from src.domain.models.document import (
 )
 from src.domain.models.user import User
 from src.domain.services.document_ai_service import VectorSearchService
+from src.domain.services.document_campaign_service import DocumentCampaignService
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
 from src.domain.services.document_version_service import (
@@ -940,6 +942,19 @@ async def publish_document_version(
         published_by_id=current_user.id,
         version_id=version_id,
     )
+    try:
+        campaign_service = DocumentCampaignService(db)
+        await campaign_service.spawn_reack_campaign(
+            document_id=document_id,
+            tenant_id=require_tenant_id(current_user.tenant_id),
+            actor_id=current_user.id,
+        )
+    except Exception:  # noqa: BLE001 — publish must not fail on re-ack hook
+        logger.warning(
+            "spawn_reack_campaign failed after library publish for document %s",
+            document_id,
+            exc_info=True,
+        )
     await db.commit()
     versions = await document_version_service.list_library_versions(
         db,
@@ -956,6 +971,23 @@ async def publish_document_version(
         working_version=next((v["version_number"] for v in serialized if v["status"] == "draft"), None),
         versions=[LibraryVersionResponse(**v) for v in serialized],
     )
+
+
+@router.post("/{document_id}/spawn-reack-campaign", response_model=SpawnReackCampaignResponse)
+async def spawn_reack_campaign(
+    document_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """Manually spawn a draft re-acknowledgment campaign after a document version change."""
+    await _get_document_or_404(db, document_id, current_user)
+    service = DocumentCampaignService(db)
+    result = await service.spawn_reack_campaign(
+        document_id=document_id,
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        actor_id=current_user.id,
+    )
+    return SpawnReackCampaignResponse(**result)
 
 
 # =============================================================================
