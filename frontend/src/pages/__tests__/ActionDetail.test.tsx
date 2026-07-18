@@ -84,7 +84,7 @@ describe('ActionDetail source deep-links', () => {
   it('links audit-finding actions to their finding', async () => {
     renderDetail()
 
-    expect(await screen.findByRole('heading', { name: 'Correct audit finding' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('Title')).toHaveValue('Correct audit finding')
     const link = screen.getByTestId('action-source-deeplink')
     expect(link).toHaveAttribute('href', '/audits?view=findings&findingId=42')
     expect(link).toHaveTextContent('View finding')
@@ -95,7 +95,7 @@ describe('ActionDetail source deep-links', () => {
 
     renderDetail()
 
-    expect(await screen.findByRole('heading', { name: 'Correct audit finding' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('Title')).toHaveValue('Correct audit finding')
     expect(screen.queryByTestId('action-source-deeplink')).not.toBeInTheDocument()
   })
 
@@ -113,7 +113,7 @@ describe('ActionDetail source deep-links', () => {
 
     renderDetail('incident_action:3')
 
-    expect(await screen.findByRole('heading', { name: 'Cordon north gate' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('Title')).toHaveValue('Cordon north gate')
     const link = screen.getByTestId('action-source-deeplink')
     expect(link).toHaveAttribute('href', '/incidents/11')
     expect(link).toHaveTextContent('View incident')
@@ -133,7 +133,7 @@ describe('ActionDetail source deep-links', () => {
 
     renderDetail('capa:14')
 
-    expect(await screen.findByRole('heading', { name: 'CAPA from incident' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('Title')).toHaveValue('CAPA from incident')
     expect(screen.getByTestId('action-source-deeplink')).toHaveAttribute('href', '/incidents/11')
   })
 
@@ -151,12 +151,23 @@ describe('ActionDetail source deep-links', () => {
 
     renderDetail('investigation_action:5')
 
-    expect(
-      await screen.findByRole('heading', { name: 'Install anti-slip matting' }),
-    ).toBeInTheDocument()
+    expect(await screen.findByLabelText('Title')).toHaveValue('Install anti-slip matting')
     const link = screen.getByTestId('action-source-deeplink')
     expect(link).toHaveAttribute('href', '/investigations/21')
     expect(link).toHaveTextContent('View investigation')
+  })
+
+  it('resolves bare numeric /actions/:id as capa:{id}', async () => {
+    mockGetByKey.mockResolvedValue({ data: { ...auditFindingAction, action_key: 'capa:2', id: 2 } })
+
+    renderDetail('2')
+
+    expect(await screen.findByLabelText('Title')).toHaveValue('Correct audit finding')
+    expect(mockGetByKey).toHaveBeenCalledWith('capa:2')
+    expect(screen.getByTestId('action-detail-status')).toBeInTheDocument()
+    expect(screen.getByTestId('action-detail-due')).toBeInTheDocument()
+    expect(screen.getByTestId('action-detail-assignee')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Assign/i })).toBeInTheDocument()
   })
 
   it('shows SMTP honesty beside CAPA assignment when email is unconfigured', async () => {
