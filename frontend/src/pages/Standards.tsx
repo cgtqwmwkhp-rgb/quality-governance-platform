@@ -222,13 +222,19 @@ export default function Standards() {
       if (hit.parent_clause_id) next[hit.parent_clause_id] = true
       return next
     })
-    // Defer so the expanded node is in the DOM
-    const t = window.setTimeout(() => {
-      document
-        .querySelector(`[data-clause-number="${CSS.escape(hit.clause_number)}"]`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }, 50)
-    return () => window.clearTimeout(t)
+    // Defer until after paint so the expanded node is in the DOM
+    let raf2 = 0
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        document
+          .querySelector(`[data-clause-number="${CSS.escape(hit.clause_number)}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+    })
+    return () => {
+      cancelAnimationFrame(raf1)
+      if (raf2) cancelAnimationFrame(raf2)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightClause, clauses])
 
