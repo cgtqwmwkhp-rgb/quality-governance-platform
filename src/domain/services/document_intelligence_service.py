@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +24,21 @@ _AUDIT_MERGE_PURPOSES = frozenset({"planet_mark", "external_audit", "uvdb", "cus
 LIBRARY_THIN_NATIVE_WORD_THRESHOLD = 25
 
 
+class _AzureDiClient(Protocol):
+    @property
+    def is_configured(self) -> bool: ...
+
+    @property
+    def enable_prod(self) -> bool: ...
+
+    async def analyze_document(
+        self,
+        content: bytes,
+        filename: str,
+        content_type: str,
+    ): ...
+
+
 @dataclass
 class DocumentIntelligenceResult:
     """Extraction output from the shared document intelligence spine."""
@@ -39,6 +54,7 @@ class DocumentIntelligenceResult:
     native_text: str = ""
     ocr_text: str = ""
     used_mistral_ocr: bool = False
+    used_azure_di: bool = False
     hard_ocr_failure: bool = False
 
 
@@ -93,14 +109,94 @@ def _from_ocr_result(result: ExternalAuditExtractionResult) -> DocumentIntellige
 class DocumentIntelligenceService:
     """Shared document intelligence: library thin-native policy + audit merge policy."""
 
-    def __init__(self, ocr_service: ExternalAuditOcrService | None = None) -> None:
+    def __init__(
+        self,
+        ocr_service: ExternalAuditOcrService | None = None,
+        azure_di_client: _AzureDiClient | None = None,
+    ) -> None:
         self.ocr_service = ocr_service or ExternalAuditOcrService()
+        self._azure_di_client = azure_di_client
+
+    def _azure_client(self) -> _AzureDiClient:
+        if self._azure_di_client is not None:
+            return self._azure_di_client
+        from src.infrastructure.external.azure_document_intelligence import AzureDocumentIntelligenceClient
+
+        self._azure_di_client = AzureDocumentIntelligenceClient()
+        return self._azure_di_client
 
     @staticmethod
     def _mime_for_document(document: Document) -> str:
         if document.mime_type:
             return document.mime_type
         return f"application/{document.file_type.value}"
+
+    async def _azure_di_failover(
+        self,
+        *,
+        raw: bytes,
+        filename: str,
+        content_type: str | None,
+        baseline: DocumentIntelligenceResult,
+    ) -> DocumentIntelligenceResult:
+        """DS-1b: when Mistral is missing/thin/failed, try Azure DI if E4-enabled."""
+        client = self._azure_client()
+        if not client.is_configured or not client.enable_prod:
+            return baseline
+
+        azure = await client.analyze_document(
+            raw,
+            filename,
+            content_type or "application/pdf",
+        )
+        if getattr(azure, "provider_status", None) != "completed":
+            note = getattr(azure, "note", None)
+            if note:
+                baseline.note = note if not baseline.note else f"{baseline.note}; {note}"
+            return baseline
+
+        azure_text = (getattr(azure, "text", "") or "").strip()
+        if not azure_text:
+            return baseline
+
+        azure_pages = [page.text for page in getattr(azure, "pages", []) if getattr(page, "text", None)]
+        if not azure_pages:
+            azure_pages = [azure_text]
+
+        baseline_words = len(baseline.text.split()) if baseline.text.strip() else 0
+        azure_words = len(azure_text.split())
+        if azure_words < max(LIBRARY_THIN_NATIVE_WORD_THRESHOLD, int(baseline_words * 1.05)):
+            # Prefer existing text when Azure is not meaningfully richer.
+            if baseline.text.strip() and not _is_thin_native_text(baseline.text):
+                return baseline
+
+        method = baseline.extraction_method
+        if method and "azure_di" not in method:
+            method = f"{method}+azure_di_failover" if method not in {"", "none"} else "azure_di_failover"
+        else:
+            method = "azure_di_failover"
+
+        logger.info(
+            "Azure DI failover selected for %s (%d vs %d words)",
+            filename,
+            azure_words,
+            baseline_words,
+        )
+        return DocumentIntelligenceResult(
+            text=azure_text,
+            page_texts=azure_pages,
+            extraction_method=method,
+            page_count=len(azure_pages) or baseline.page_count,
+            sheet_count=baseline.sheet_count,
+            has_tables=baseline.has_tables or any(getattr(p, "table_count", 0) for p in getattr(azure, "pages", [])),
+            note=baseline.note,
+            ocr_provider_status="completed",
+            native_text=baseline.native_text,
+            ocr_text=azure_text,
+            used_mistral_ocr=baseline.used_mistral_ocr,
+            used_azure_di=True,
+            hard_ocr_failure=False,
+        )
 
     async def extract_bytes(
         self,
@@ -118,7 +214,15 @@ class DocumentIntelligenceService:
                 filename=filename,
                 content_type=content_type,
             )
-            return _from_ocr_result(ocr_result)
+            result = _from_ocr_result(ocr_result)
+            if result.hard_ocr_failure or _is_thin_native_text(result.text):
+                result = await self._azure_di_failover(
+                    raw=raw,
+                    filename=filename,
+                    content_type=content_type,
+                    baseline=result,
+                )
+            return result
 
         resolved_file_type = file_type or self.ocr_service._infer_file_type(filename, content_type)
         native = extract_document_content(resolved_file_type, filename, raw)
@@ -127,7 +231,14 @@ class DocumentIntelligenceService:
         if native_text and not _is_thin_native_text(native_text):
             return _from_native_extraction(native)
 
-        if not self.ocr_service.is_configured:
+        if self.ocr_service.is_configured:
+            ocr_result = await self.ocr_service.extract(
+                raw=raw,
+                filename=filename,
+                content_type=content_type,
+            )
+            result = _from_ocr_result(ocr_result)
+        else:
             result = _from_native_extraction(native)
             if _is_thin_native_text(native_text):
                 thin_note = (
@@ -135,14 +246,16 @@ class DocumentIntelligenceService:
                     "for library document fallback."
                 )
                 result.note = thin_note if not result.note else f"{result.note}; {thin_note}"
-            return result
 
-        ocr_result = await self.ocr_service.extract(
-            raw=raw,
-            filename=filename,
-            content_type=content_type,
-        )
-        return _from_ocr_result(ocr_result)
+        if result.hard_ocr_failure or _is_thin_native_text(result.text):
+            result = await self._azure_di_failover(
+                raw=raw,
+                filename=filename,
+                content_type=content_type,
+                baseline=result,
+            )
+
+        return result
 
     async def process(
         self,

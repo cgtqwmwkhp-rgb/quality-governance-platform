@@ -146,6 +146,53 @@ def test_purpose_for_assurance_scheme_maps_uvdb_and_customer() -> None:
 
 
 @pytest.mark.asyncio
+async def test_extract_bytes_azure_di_failover_when_mistral_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "src.domain.services.document_intelligence_service.extract_document_content",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            text="scan",
+            page_texts=["scan"],
+            extraction_method="pdf_text",
+            page_count=1,
+            sheet_count=None,
+            has_tables=False,
+            note=None,
+        ),
+    )
+    azure_pages = [SimpleNamespace(text="Azure recovered full scanned policy text for indexing.", table_count=0)]
+    azure_client = SimpleNamespace(
+        is_configured=True,
+        enable_prod=True,
+        analyze_document=AsyncMock(
+            return_value=SimpleNamespace(
+                provider_status="completed",
+                text="Azure recovered full scanned policy text for indexing.",
+                pages=azure_pages,
+                note=None,
+            )
+        ),
+    )
+    service = DocumentIntelligenceService(
+        ocr_service=SimpleNamespace(is_configured=False, extract=AsyncMock()),
+        azure_di_client=azure_client,
+    )
+
+    result = await service.extract_bytes(
+        raw=b"%PDF",
+        filename="scan.pdf",
+        content_type="application/pdf",
+        file_type=FileType.PDF,
+    )
+
+    assert result.used_azure_di is True
+    assert "Azure recovered" in result.text
+    assert "azure_di" in result.extraction_method
+    azure_client.analyze_document.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_extract_bytes_audit_purpose_uses_merge_spine() -> None:
     merged = ExternalAuditExtractionResult(
         text="UVDB audit section scores and findings.",

@@ -299,7 +299,7 @@ class Settings(BaseSettings):
     mistral_ocr_timeout_seconds: int = 120
     google_gemini_api_key: str = ""
 
-    # Azure Document Intelligence (DS-1b prep — E4 DPO gate; defaults OFF)
+    # Azure Document Intelligence (DS-1b — E4; defaults OFF until ENABLE_PROD)
     azure_document_intelligence_endpoint: str = ""
     azure_document_intelligence_key: str = ""
     azure_document_intelligence_enable_prod: bool = False

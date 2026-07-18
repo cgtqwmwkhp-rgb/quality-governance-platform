@@ -70,14 +70,18 @@ def get_azure_di_readiness() -> dict[str, Any]:
         "endpoint_present": endpoint_present,
         "api_key_present": api_key_present,
         "role": "dual_ocr_consensus",
-        # Meta honesty: prod enablement is an E4 DPO gate — never true on probes.
-        "enabled_in_prod": False,
+        # Honest after E4 DPO sign-off: live when credentials + ENABLE_PROD are both set.
+        "enabled_in_prod": bool(configured and enable_flag),
         "prod_enable_flag_set": enable_flag,
-        "used_in_library": False,
-        "used_in_prod": False,
+        "used_in_library": bool(configured and enable_flag),
+        "used_in_prod": bool(configured and enable_flag),
         "resource_scope": "qgp_dedicated_required",
         "jobsheet_resource_allowed": False,
-        "capabilities": ["dual_ocr_consensus_scaffold"],
+        "capabilities": (
+            ["dual_ocr_consensus_scaffold", "library_ocr_failover"]
+            if configured and enable_flag
+            else ["dual_ocr_consensus_scaffold"]
+        ),
         "ping": {
             "status": "skipped",
             "connectivity": "unprobed",

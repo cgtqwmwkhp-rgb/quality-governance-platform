@@ -17,9 +17,9 @@ Machine-readable OCR configuration honesty for external audit import, library do
 |----------|--------------------------|------|
 | **mistral** | `MISTRAL_API_KEY`, `MISTRAL_OCR_TIMEOUT_SECONDS` | Primary OCR for scanned/image-heavy imports and library index jobs |
 | **gemini** | `GOOGLE_GEMINI_API_KEY` or `GEMINI_API_KEY` | Post-OCR review / analysis |
-| **azure_di** | `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT`, `AZURE_DOCUMENT_INTELLIGENCE_KEY`, `AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD` | Dual-OCR consensus scaffold (not prod-enabled) |
+| **azure_di** | `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT`, `AZURE_DOCUMENT_INTELLIGENCE_KEY`, `AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD` | Library OCR failover + Planet Mark enrichment when ENABLE_PROD |
 
-## Library Azure DI (DS-1b prep)
+## Library Azure DI (DS-1b — enabled after E4 DPO sign-off)
 
 Library document OCR today uses **Mistral** only (`library_documents.ocr_configured` mirrors `MISTRAL_API_KEY` presence).
 
@@ -32,21 +32,21 @@ Meta fields make this explicit:
 
 | Field | Value (prep lane) | Meaning |
 |-------|-------------------|---------|
-| `providers.azure_di.enabled_in_prod` | always `false` | DI is not live in prod from this lane |
-| `providers.azure_di.used_in_library` | `false` | Library paths do not call Azure DI |
-| `providers.azure_di.used_in_prod` | `false` | No prod OCR traffic via DI adapter |
+| `providers.azure_di.enabled_in_prod` | `configured AND ENABLE_PROD` | Honest enablement after E4 sign-off |
+| `providers.azure_di.used_in_library` | same as enabled_in_prod | Library DocumentIntelligenceService failover path |
+| `providers.azure_di.used_in_prod` | same as enabled_in_prod | Live analyze when flag + credentials set |
 | `providers.azure_di.resource_scope` | `qgp_dedicated_required` | Ops must provision QGP DI, not reuse Jobsheet |
 | `providers.azure_di.jobsheet_resource_allowed` | `false` | Jobsheet DI endpoint must not be wired |
-| `providers.azure_di.prod_enable_flag_set` | env presence | Reports `AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD` only; does not enable prod |
-| `library_documents.azure_di_enabled_in_prod` | `false` | Library block mirrors DI prod gate |
-| `library_documents.azure_di_used` | `false` | Library index jobs use Mistral/native only |
+| `providers.azure_di.prod_enable_flag_set` | env presence | Reports whether ENABLE_PROD is set |
+| `library_documents.azure_di_enabled_in_prod` | mirrors provider flag | Library block mirrors DI prod gate |
+| `library_documents.azure_di_used` | mirrors provider flag | Library index jobs may call DI on thin/failed OCR |
 
 ## E4 DPO gate (explicit non-goal)
 
-- **Do not** enable Azure Document Intelligence in production from this lane.
+- Enable Azure Document Intelligence only with a **dedicated QGP** DI resource (never Jobsheet).
 - `azure_di.configured` means both endpoint + key env vars are non-empty — **not** that DI is live.
-- `azure_di.enabled_in_prod` is always `false` in meta/readiness responses until a future E4 cutover PR explicitly changes the contract.
-- `AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD` defaults OFF; credentials alone never enable OCR.
+- `azure_di.enabled_in_prod` is `true` only when endpoint+key are set **and** `AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD` is true.
+- `AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD` defaults OFF in code; credentials alone never enable OCR.
 - Meta and `/readyz` probes **never** dial Mistral, Gemini, or Azure DI.
 
 ## QGP /readyz honesty

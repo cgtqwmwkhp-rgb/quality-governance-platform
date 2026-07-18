@@ -542,6 +542,8 @@ jobs:
           MISTRAL_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name MISTRAL-API-KEY --query value -o tsv 2>/dev/null || true)
           GEMINI_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name GOOGLE-GEMINI-API-KEY --query value -o tsv 2>/dev/null || true)
           GENSPARK_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name GENSPARK-API-KEY --query value -o tsv 2>/dev/null || true)
+          AZURE_DI_ENDPOINT_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name AZURE-DOCUMENT-INTELLIGENCE-ENDPOINT --query value -o tsv 2>/dev/null || true)
+          AZURE_DI_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name AZURE-DOCUMENT-INTELLIGENCE-KEY --query value -o tsv 2>/dev/null || true)
           REDIS_URL_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name REDIS-URL --query value -o tsv)
 
           if [ -z "$DB_URL" ]; then
@@ -584,6 +586,9 @@ jobs:
               GENSPARK_MODEL="claude-opus-4-6-1m" \
               GENSPARK_FAST_MODEL="claude-sonnet-4-6" \
               AI_PROVIDER="genspark" \
+              AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT="${AZURE_DI_ENDPOINT_VAL}" \
+              AZURE_DOCUMENT_INTELLIGENCE_KEY="${AZURE_DI_KEY_VAL}" \
+              AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD="true" \
               UAT_MODE="READ_WRITE" \
               APPLICATIONINSIGHTS_CONNECTION_STRING="${{ secrets.APPINSIGHTS_CONNECTION_STRING }}" \
               CORS_ORIGINS='["https://app-qgp-prod.azurestaticapps.net","https://purple-water-03205fa03.6.azurestaticapps.net"]' \
@@ -593,6 +598,21 @@ jobs:
             --output none
           
           echo "✅ Application settings configured"
+
+          # Celery worker runs library index OCR — keep DI env aligned with API.
+          for celery_app in "${{ env.AZURE_WEBAPP_NAME }}-worker" "${{ env.AZURE_WEBAPP_NAME }}-beat"; do
+            if az webapp show --name "$celery_app" --resource-group "$AZURE_RESOURCE_GROUP" &>/dev/null; then
+              az webapp config appsettings set \
+                --name "$celery_app" \
+                --resource-group "$AZURE_RESOURCE_GROUP" \
+                --settings \
+                  AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT="${AZURE_DI_ENDPOINT_VAL}" \
+                  AZURE_DOCUMENT_INTELLIGENCE_KEY="${AZURE_DI_KEY_VAL}" \
+                  AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD="true" \
+                  MISTRAL_API_KEY="${MISTRAL_API_KEY_VAL}" \
+                --output none || true
+            fi
+          done
 
           echo "🔧 Aligning App Service runtime configuration..."
           az webapp config set \
