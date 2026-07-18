@@ -8,6 +8,7 @@
 - `frontend/src/api/documentCampaignClient.ts`
 - `frontend/src/api/documentCampaignClient.test.ts`
 - `frontend/src/api/client.ts` (re-export roster types only)
+- `frontend/.size-limit.json` (index budget 161→162 kB for roster i18n)
 - `frontend/src/pages/CampaignRosterPanel.tsx` (NEW)
 - `frontend/src/pages/DocumentCampaignResults.tsx` (NEW)
 - `frontend/src/pages/DocumentCampaignPanel.tsx`
