@@ -160,11 +160,7 @@ class ImportValidationReport:
 
     @property
     def ok(self) -> bool:
-        return (
-            self.error_rows == 0
-            and self.total_rows > 0
-            and self.action_plan_error_rows == 0
-        )
+        return self.error_rows == 0 and self.total_rows > 0 and self.action_plan_error_rows == 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -264,9 +260,7 @@ class RiskRegisterImportService:
 
         missing = required_fields - set(column_map.values())
         if missing:
-            raise BadRequestError(
-                f"{sheet_name} sheet missing required column(s): " + ", ".join(sorted(missing))
-            )
+            raise BadRequestError(f"{sheet_name} sheet missing required column(s): " + ", ".join(sorted(missing)))
 
         parsed: list[dict[str, Any]] = []
         for row_number, raw_row in enumerate(rows_iter, start=2):
@@ -427,9 +421,7 @@ class RiskRegisterImportService:
         )
         return {risk.reference.upper(): risk for risk in result.scalars().all()}
 
-    async def _existing_capa_by_source_refs(
-        self, source_refs: set[str], tenant_id: int
-    ) -> dict[str, CAPAAction]:
+    async def _existing_capa_by_source_refs(self, source_refs: set[str], tenant_id: int) -> dict[str, CAPAAction]:
         if not source_refs:
             return {}
         result = await self.db.execute(
@@ -684,8 +676,7 @@ class RiskRegisterImportService:
                         field="risk_reference",
                         code="UNKNOWN_RISK_REF",
                         message=(
-                            f"Linked Risk Ref '{risk_ref}' not found in Risk Register sheet "
-                            "or existing register"
+                            f"Linked Risk Ref '{risk_ref}' not found in Risk Register sheet " "or existing register"
                         ),
                     )
                 )
@@ -752,9 +743,7 @@ class RiskRegisterImportService:
         register_rows, action_rows = self.parse_workbook(content)
         report, validated = await self.validate_rows(register_rows, tenant_id=tenant_id, dry_run=True)
         register_refs = {item.reference for item in validated} | {
-            self._cell_text(r.get("reference")).upper()
-            for r in register_rows
-            if self._cell_text(r.get("reference"))
+            self._cell_text(r.get("reference")).upper() for r in register_rows if self._cell_text(r.get("reference"))
         }
 
         if action_rows is None:

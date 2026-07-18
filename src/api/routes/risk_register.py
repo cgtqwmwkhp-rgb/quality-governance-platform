@@ -247,8 +247,9 @@ async def list_risks(
         base_stmt = base_stmt.where(EnterpriseRisk.department == department)
     if status:
         base_stmt = base_stmt.where(EnterpriseRisk.status == status)
-    if search and search.strip():
-        needle = f"%{search.strip()}%"
+    search_q = search if isinstance(search, str) else None
+    if search_q and search_q.strip():
+        needle = f"%{search_q.strip()}%"
         base_stmt = base_stmt.where(
             or_(
                 EnterpriseRisk.reference.ilike(needle),
