@@ -95,7 +95,7 @@ def test_build_apply_plan_skips_not_extracted() -> None:
 
 
 @pytest.mark.asyncio
-async def test_service_uses_external_audit_ocr_spine() -> None:
+async def test_service_uses_document_intelligence_spine() -> None:
     spine = SimpleNamespace(
         text=SAMPLE_REPORT,
         extraction_method="pdfplumber",
@@ -103,12 +103,12 @@ async def test_service_uses_external_audit_ocr_spine() -> None:
         hard_ocr_failure=False,
         ocr_provider_status=None,
     )
-    ocr_pipeline = MagicMock()
-    ocr_pipeline.extract = AsyncMock(return_value=spine)
+    intelligence = MagicMock()
+    intelligence.extract_bytes = AsyncMock(return_value=spine)
     azure = MagicMock()
     azure.is_configured = False
 
-    service = PlanetMarkPdfOcrService(ocr_pipeline=ocr_pipeline, azure_client=azure)
+    service = PlanetMarkPdfOcrService(intelligence_service=intelligence, azure_client=azure)
     result = await service.extract(
         content=b"%PDF-1.4 fake",
         filename="YE2024-report.pdf",
@@ -116,7 +116,9 @@ async def test_service_uses_external_audit_ocr_spine() -> None:
         document_kind="measurement_report",
     )
 
-    ocr_pipeline.extract.assert_awaited_once()
+    intelligence.extract_bytes.assert_awaited_once()
+    call_kwargs = intelligence.extract_bytes.await_args.kwargs
+    assert call_kwargs["purpose"] == "planet_mark"
     assert result.total_co2e_tonnes.value == "654.459"
     assert result.extraction_method == "pdfplumber"
     assert result.has_any_extraction
@@ -131,8 +133,8 @@ async def test_service_reports_azure_stub_honestly_when_configured() -> None:
         hard_ocr_failure=False,
         ocr_provider_status=None,
     )
-    ocr_pipeline = MagicMock()
-    ocr_pipeline.extract = AsyncMock(return_value=spine)
+    intelligence = MagicMock()
+    intelligence.extract_bytes = AsyncMock(return_value=spine)
     azure = MagicMock()
     azure.is_configured = True
     azure.analyze_document = AsyncMock(
@@ -142,7 +144,7 @@ async def test_service_reports_azure_stub_honestly_when_configured() -> None:
         )
     )
 
-    service = PlanetMarkPdfOcrService(ocr_pipeline=ocr_pipeline, azure_client=azure)
+    service = PlanetMarkPdfOcrService(intelligence_service=intelligence, azure_client=azure)
     result = await service.extract(
         content=b"%PDF",
         filename="report.pdf",

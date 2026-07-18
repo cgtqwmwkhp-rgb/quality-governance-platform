@@ -31,7 +31,15 @@ from src.domain.services.ai_consensus_service import AIConsensusService
 from src.domain.services.external_audit_analysis_service import ExternalAuditAnalysisService
 from src.domain.services.external_audit_import_ai_metadata import apply_ai_metadata_to_job
 from src.domain.services.external_audit_import_failure import classify_processing_failure, is_hard_ai_failure
-from src.domain.services.external_audit_ocr_service import MAX_SOURCE_FILE_BYTES, ExternalAuditOcrService
+from src.domain.services.document_intelligence_service import (
+    DocumentIntelligenceService,
+    purpose_for_assurance_scheme,
+)
+from src.domain.services.external_audit_ocr_service import (
+    MAX_SOURCE_FILE_BYTES,
+    ExternalAuditExtractionResult,
+    ExternalAuditOcrService,
+)
 from src.domain.services.external_audit_promotion_service import ExternalAuditPromotionService, PromotionResult
 from src.domain.services.external_audit_uvdb_iso_mapping_service import ExternalAuditUVDBISOMappingService
 from src.domain.services.gemini_review_service import GeminiReviewService
@@ -59,7 +67,8 @@ class ExternalAuditImportService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.analysis_service = ExternalAuditAnalysisService()
-        self.ocr_pipeline = ExternalAuditOcrService()
+        self.intelligence_service = DocumentIntelligenceService()
+        self.ocr_pipeline = self.intelligence_service.ocr_service
         # Compatibility aliases used by create_job / older call sites
         self.ocr_service = self.ocr_pipeline.ocr_service
         self.ai_analysis_service = MistralAnalysisService()
@@ -550,10 +559,25 @@ class ExternalAuditImportService:
             return job
 
         try:
-            extraction_result = await self.ocr_pipeline.extract(
+            extraction_purpose = purpose_for_assurance_scheme(run.assurance_scheme)
+            di_result = await self.intelligence_service.extract_bytes(
                 raw=raw,
                 filename=asset.original_filename,
                 content_type=asset.content_type,
+                purpose=extraction_purpose,
+            )
+            extraction_result = ExternalAuditExtractionResult(
+                text=di_result.text,
+                page_texts=di_result.page_texts,
+                extraction_method=di_result.extraction_method,
+                page_count=di_result.page_count,
+                sheet_count=di_result.sheet_count,
+                has_tables=di_result.has_tables,
+                note=di_result.note,
+                ocr_provider_status=di_result.ocr_provider_status,
+                native_text=di_result.native_text,
+                ocr_text=di_result.ocr_text,
+                hard_ocr_failure=di_result.hard_ocr_failure,
             )
             if extraction_result.hard_ocr_failure:
                 job.status = ExternalAuditImportStatus.FAILED

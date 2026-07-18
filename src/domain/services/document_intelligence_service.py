@@ -11,11 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.models.document import Document, FileType
 from src.domain.services.document_extraction_service import extract_document_content
 from src.domain.services.external_audit_ocr_service import ExternalAuditExtractionResult, ExternalAuditOcrService
+from src.domain.services.scheme_profiles import canonical_scheme_id
 from src.infrastructure.storage import storage_service
 
 logger = logging.getLogger(__name__)
 
-Purpose = Literal["library"]
+Purpose = Literal["library", "planet_mark", "external_audit", "uvdb", "customer_audit"]
+
+_AUDIT_MERGE_PURPOSES = frozenset({"planet_mark", "external_audit", "uvdb", "customer_audit"})
 
 # Native text below this word count is treated as thin/empty for library OCR fallback.
 LIBRARY_THIN_NATIVE_WORD_THRESHOLD = 25
@@ -60,6 +63,16 @@ def _from_native_extraction(extraction) -> DocumentIntelligenceResult:
     )
 
 
+def purpose_for_assurance_scheme(scheme: str | None) -> Purpose:
+    """Map audit run assurance scheme to document intelligence purpose."""
+    canonical = canonical_scheme_id(scheme or "")
+    if canonical == "achilles_uvdb":
+        return "uvdb"
+    if canonical == "customer_other":
+        return "customer_audit"
+    return "external_audit"
+
+
 def _from_ocr_result(result: ExternalAuditExtractionResult) -> DocumentIntelligenceResult:
     return DocumentIntelligenceResult(
         text=result.text,
@@ -78,7 +91,7 @@ def _from_ocr_result(result: ExternalAuditExtractionResult) -> DocumentIntellige
 
 
 class DocumentIntelligenceService:
-    """Library-facing document intelligence using native extract + optional Mistral OCR."""
+    """Shared document intelligence: library thin-native policy + audit merge policy."""
 
     def __init__(self, ocr_service: ExternalAuditOcrService | None = None) -> None:
         self.ocr_service = ocr_service or ExternalAuditOcrService()
@@ -95,12 +108,20 @@ class DocumentIntelligenceService:
         raw: bytes,
         filename: str,
         content_type: str | None,
-        file_type: FileType,
+        file_type: FileType | None = None,
         purpose: Purpose = "library",
     ) -> DocumentIntelligenceResult:
-        """Extract searchable text, invoking Mistral OCR only when native text is empty/thin."""
-        del purpose  # reserved for future purpose-specific policy hooks
-        native = extract_document_content(file_type, filename, raw)
+        """Extract searchable text using purpose-specific native/OCR policy."""
+        if purpose in _AUDIT_MERGE_PURPOSES:
+            ocr_result = await self.ocr_service.extract(
+                raw=raw,
+                filename=filename,
+                content_type=content_type,
+            )
+            return _from_ocr_result(ocr_result)
+
+        resolved_file_type = file_type or self.ocr_service._infer_file_type(filename, content_type)
+        native = extract_document_content(resolved_file_type, filename, raw)
         native_text = native.text.strip()
 
         if native_text and not _is_thin_native_text(native_text):
@@ -144,7 +165,7 @@ class DocumentIntelligenceService:
             raw=raw,
             filename=document.file_name,
             content_type=self._mime_for_document(document),
-            file_type=document.file_type,
+            file_type=document.file_type if purpose == "library" else None,
             purpose=purpose,
         )
 
@@ -162,4 +183,6 @@ __all__ = [
     "DocumentIntelligenceResult",
     "DocumentIntelligenceService",
     "LIBRARY_THIN_NATIVE_WORD_THRESHOLD",
+    "Purpose",
+    "purpose_for_assurance_scheme",
 ]
