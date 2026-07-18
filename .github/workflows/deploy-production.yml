@@ -599,6 +599,10 @@ jobs:
                   ANTHROPIC_MODEL="claude-sonnet-4-5" \
                   OPENAI_API_KEY="${OPENAI_API_KEY_VAL}" \
                   AI_PROVIDER="anthropic" \
+                  VOYAGE_API_KEY="${VOYAGE_API_KEY_VAL}" \
+                  PINECONE_API_KEY="${PINECONE_API_KEY_VAL}" \
+                  PINECONE_INDEX="${PINECONE_INDEX_VAL:-qgp-documents}" \
+                  PINECONE_ENVIRONMENT="${PINECONE_ENVIRONMENT_VAL:-gcp-starter}" \
                 --output none || true
             fi
           done
