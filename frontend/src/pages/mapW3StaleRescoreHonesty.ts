@@ -63,7 +63,7 @@ export interface MapW3RescoreHonesty {
   staleReasons: Record<string, MapW3StaleReason>
   /** Author must re-run Assist — never treat stale accepted links as live. */
   needsAssistRerun: boolean
-  /** Multi-scheme accept chips remain non-live until confirm loop lands. */
+  /** Multi-scheme accept chips are live (MAP-04 confirm loop); false while stale. */
   assistMapLive: boolean
   acceptedMultiSchemeLinks: number
 }
@@ -172,12 +172,14 @@ export function computeRescoreHonesty(
     (l) => l.status === 'accepted' && !staleLinkIds.includes(l.id),
   ).length
 
+  const hasStaleLinks = staleLinkIds.length > 0
   return {
-    hasStaleLinks: staleLinkIds.length > 0,
+    hasStaleLinks,
     staleLinkIds,
     staleReasons,
-    needsAssistRerun: staleLinkIds.length > 0,
-    assistMapLive: false,
+    needsAssistRerun: hasStaleLinks,
+    // Confirm loop is live (MAP-04); pause accept chips only while links are stale.
+    assistMapLive: !hasStaleLinks,
     acceptedMultiSchemeLinks: acceptedLive,
   }
 }

@@ -1,4 +1,11 @@
-import type { AuditTemplate, Section, Question, QuestionType, ScoringMethod } from './types'
+import type {
+  AuditTemplate,
+  Section,
+  Question,
+  QuestionType,
+  ScoringMethod,
+  QuestionStandardLink,
+} from './types'
 import type { AuditQuestionCreate, AuditQuestionUpdate, EvidenceRequirement } from '../../api/client'
 import { generateId, createNewSection, SECTION_COLORS } from './types'
 import { fromApiQuestionType, toApiQuestionType } from './questionTypeRegistry'
@@ -24,6 +31,9 @@ type BackendQuestion = {
   allow_na?: boolean
   max_score?: number | null
   max_value?: number | null
+  regulatory_reference?: string | null
+  assessor_guidance?: Record<string, unknown> | null
+  assessor_guidance_json?: Record<string, unknown> | null
 }
 
 function mapBackendQuestionType(q: BackendQuestion): QuestionType {
@@ -71,9 +81,40 @@ function buildEvidenceRequirements(question: Question): EvidenceRequirement | un
   }
 }
 
+function mapStandardLinksFromGuidance(
+  questionId: string,
+  guidance: Record<string, unknown> | null | undefined,
+): QuestionStandardLink[] {
+  const raw = guidance?.map_standard_links
+  if (!Array.isArray(raw)) return []
+  const allowed = new Set(['suggested', 'accepted', 'rejected', 'stale'])
+  return raw
+    .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object')
+    .map((row) => {
+      const statusRaw = String(row.status ?? 'suggested')
+      const status = (
+        allowed.has(statusRaw) ? statusRaw : 'suggested'
+      ) as QuestionStandardLink['status']
+      return {
+        id: String(row.id ?? `${questionId}-${row.refId ?? row.ref_id}`),
+        questionId: String(row.questionId ?? questionId),
+        scheme: String(row.scheme ?? 'ISO'),
+        refId: String(row.refId ?? row.ref_id ?? ''),
+        label: String(row.label ?? row.refId ?? row.ref_id ?? ''),
+        confidence: Number(row.confidence ?? 0),
+        status,
+        sourceFingerprint: String(row.sourceFingerprint ?? ''),
+        libraryVersion: String(row.libraryVersion ?? 'builder-map-v1'),
+      }
+    })
+    .filter((link) => link.refId)
+}
+
 function mapApiQuestion(q: BackendQuestion, questionIdMap: Record<string, number>): Question {
   const id = String(q.id)
   questionIdMap[id] = q.id
+  const guidance = q.assessor_guidance ?? q.assessor_guidance_json ?? null
+  const standardLinks = mapStandardLinksFromGuidance(id, guidance)
   return {
     id,
     text: q.question_text,
@@ -94,6 +135,8 @@ function mapApiQuestion(q: BackendQuestion, questionIdMap: Record<string, number
     riskLevel: q.risk_category as Question['riskLevel'],
     guidance: q.help_text,
     positiveAnswer: q.positive_answer || undefined,
+    isoClause: q.regulatory_reference || undefined,
+    standardLinks,
   }
 }
 

@@ -6,15 +6,21 @@ Provides Gemini-powered endpoints for:
 - Compliance-to-assessment template conversion
 - Assessor guidance generation
 - Gap analysis for existing templates
+- Builder multi-scheme standard-link suggest + confirm persist (MAP-01..04)
 """
 
-from typing import Annotated, Optional
+from typing import Annotated, Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from src.api.dependencies import DbSession, require_permission
+from src.api.utils.tenant import require_tenant_id
 from src.domain.models.user import User
+from src.domain.services.builder_standard_link_service import (
+    DEFAULT_LIBRARY_VERSION,
+    builder_standard_link_service,
+)
 from src.domain.services.gemini_ai_service import GeminiAIService
 
 router = APIRouter()
@@ -69,6 +75,64 @@ class PromptTemplateRequest(BaseModel):
     """Request for freeform prompt-to-template generation."""
 
     prompt: str = Field(..., min_length=5, max_length=4000)
+
+
+class SuggestQuestionInput(BaseModel):
+    """One builder question snapshot for Assist Map suggest."""
+
+    question_id: str = Field(..., min_length=1, max_length=64)
+    question_text: str = Field(..., min_length=1, max_length=2000)
+    description: Optional[str] = Field(None, max_length=2000)
+
+
+class SuggestStandardLinksRequest(BaseModel):
+    """Batch suggest multi-scheme mappings for template questions."""
+
+    questions: list[SuggestQuestionInput] = Field(..., min_length=1, max_length=200)
+    schemes: list[str] = Field(
+        default_factory=lambda: ["ISO", "Planet Mark", "UVDB"],
+        max_length=8,
+    )
+    library_version: str = Field(DEFAULT_LIBRARY_VERSION, max_length=64)
+
+
+class StandardLinkPayload(BaseModel):
+    """Client-proposed or previously suggested standard link."""
+
+    model_config = {"populate_by_name": True}
+
+    id: Optional[str] = Field(None, max_length=64)
+    scheme: str = Field(..., min_length=1, max_length=40)
+    ref_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=80,
+        validation_alias=AliasChoices("refId", "ref_id"),
+    )
+    label: Optional[str] = Field(None, max_length=300)
+    confidence: Optional[float] = Field(None, ge=0, le=100)
+    status: Optional[str] = Field(None, max_length=32)
+    source_fingerprint: Optional[str] = Field(
+        None,
+        max_length=200,
+        validation_alias=AliasChoices("sourceFingerprint", "source_fingerprint"),
+    )
+    library_version: Optional[str] = Field(
+        None,
+        max_length=64,
+        validation_alias=AliasChoices("libraryVersion", "library_version"),
+    )
+    rationale: Optional[str] = Field(None, max_length=2000)
+
+
+class DecideStandardLinkRequest(BaseModel):
+    """Accept / edit / reject a suggested mapping (MAP-04 confirm loop)."""
+
+    decision: Literal["accept", "edit", "reject"]
+    link: StandardLinkPayload
+    edited_ref_id: Optional[str] = Field(None, max_length=80)
+    edited_label: Optional[str] = Field(None, max_length=300)
+    rationale: Optional[str] = Field(None, max_length=2000)
 
 
 # ============ Endpoints ============
@@ -191,3 +255,83 @@ async def gap_analysis(
         existing_templates=request.existing_templates,
         asset_type=request.asset_type,
     )
+
+
+@router.post("/suggest-standard-links")
+async def suggest_standard_links(
+    request: SuggestStandardLinksRequest,
+    db: DbSession,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
+) -> dict[str, Any]:
+    """AI Assist Map: suggest ISO / Planet Mark / UVDB links for builder questions."""
+    tenant_id = require_tenant_id(getattr(user, "tenant_id", None))
+    suggestions = await builder_standard_link_service.suggest_for_questions(
+        db,
+        questions=[q.model_dump() for q in request.questions],
+        schemes=request.schemes,
+        tenant_id=tenant_id,
+        library_version=request.library_version,
+    )
+    return {
+        "library_version": request.library_version,
+        "assist_map_live": True,
+        "suggestions": suggestions,
+        "count": len(suggestions),
+    }
+
+
+@router.post("/questions/{question_id}/standard-links/decide")
+async def decide_standard_link(
+    question_id: int,
+    request: DecideStandardLinkRequest,
+    db: DbSession,
+    user: Annotated[User, Depends(require_permission("audit:update"))],
+) -> dict[str, Any]:
+    """Persist Accept / Edit / Reject for a builder standard-link suggestion."""
+    tenant_id = require_tenant_id(getattr(user, "tenant_id", None))
+    if request.decision == "reject":
+        rationale = (request.rationale or "").strip()
+        if len(rationale) < 3:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Reject requires a rationale (min 3 characters)",
+            )
+    try:
+        result = await builder_standard_link_service.decide_link(
+            db,
+            question_id=question_id,
+            tenant_id=tenant_id,
+            user=user,
+            decision=request.decision,
+            link={
+                **request.link.model_dump(),
+                "refId": request.link.ref_id,
+                "sourceFingerprint": request.link.source_fingerprint,
+                "libraryVersion": request.link.library_version,
+            },
+            edited_ref_id=request.edited_ref_id,
+            edited_label=request.edited_label,
+            rationale=request.rationale,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    await db.commit()
+    return result
+
+
+@router.get("/templates/{template_id}/standards-coverage")
+async def template_standards_coverage(
+    template_id: int,
+    db: DbSession,
+    user: Annotated[User, Depends(require_permission("audit:read"))],
+) -> dict[str, Any]:
+    """Template Stats coverage from accepted multi-scheme standard links."""
+    tenant_id = require_tenant_id(getattr(user, "tenant_id", None))
+    try:
+        return await builder_standard_link_service.template_coverage(
+            db,
+            template_id=template_id,
+            tenant_id=tenant_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

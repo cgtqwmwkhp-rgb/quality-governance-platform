@@ -483,6 +483,99 @@ export default function QuestionEditor({
                   <option value="critical">Critical</option>
                 </select>
               </div>
+              {(question.standardLinks?.length ?? 0) > 0 && (
+                <div
+                  className="col-span-2 space-y-2"
+                  data-testid={`map-confirm-chips-${question.id}`}
+                >
+                  <p className="text-xs text-muted-foreground">
+                    Multi-scheme links — Accept / Edit / Reject (persisted on confirm)
+                  </p>
+                  <ul className="space-y-2">
+                    {question.standardLinks!.map((link) => (
+                      <li
+                        key={link.id}
+                        className="flex flex-wrap items-center gap-2 rounded border border-border bg-card px-2 py-1.5"
+                        data-testid={`map-confirm-link-${link.id}`}
+                      >
+                        <span className="text-xs font-medium text-foreground">
+                          {link.scheme} · {link.refId}
+                        </span>
+                        <span className="text-xs text-muted-foreground truncate max-w-[12rem]">
+                          {link.label}
+                        </span>
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          {link.status}
+                          {typeof link.confidence === 'number'
+                            ? ` · ${Math.round(link.confidence * (link.confidence <= 1 ? 100 : 1))}%`
+                            : ''}
+                        </span>
+                        {(link.status === 'suggested' || link.status === 'stale') && (
+                          <span className="flex flex-wrap gap-1 ml-auto">
+                            <button
+                              type="button"
+                              className="rounded px-2 py-0.5 text-[11px] bg-primary text-primary-foreground"
+                              data-testid={`map-confirm-accept-${link.id}`}
+                              onClick={() =>
+                                onUpdate(question.id, {
+                                  standardLinks: question.standardLinks?.map((row) =>
+                                    row.id === link.id ? { ...row, status: 'accepted' } : row,
+                                  ),
+                                  isoClause:
+                                    link.scheme === 'ISO' ? link.refId : question.isoClause,
+                                })
+                              }
+                            >
+                              Accept
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded px-2 py-0.5 text-[11px] border border-border"
+                              data-testid={`map-confirm-edit-${link.id}`}
+                              onClick={() => {
+                                const next = window.prompt('Edit clause / ref id', link.refId)
+                                if (!next || !next.trim()) return
+                                const label =
+                                  window.prompt('Edit label', link.label)?.trim() || link.label
+                                onUpdate(question.id, {
+                                  standardLinks: question.standardLinks?.map((row) =>
+                                    row.id === link.id
+                                      ? {
+                                          ...row,
+                                          status: 'accepted',
+                                          refId: next.trim(),
+                                          label,
+                                        }
+                                      : row,
+                                  ),
+                                  isoClause:
+                                    link.scheme === 'ISO' ? next.trim() : question.isoClause,
+                                })
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded px-2 py-0.5 text-[11px] border border-destructive text-destructive"
+                              data-testid={`map-confirm-reject-${link.id}`}
+                              onClick={() =>
+                                onUpdate(question.id, {
+                                  standardLinks: question.standardLinks?.map((row) =>
+                                    row.id === link.id ? { ...row, status: 'rejected' } : row,
+                                  ),
+                                })
+                              }
+                            >
+                              Reject
+                            </button>
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="col-span-2">
                 <label
                   htmlFor={`guidance-${question.id}`}

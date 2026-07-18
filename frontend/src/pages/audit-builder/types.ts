@@ -30,6 +30,18 @@ export interface ConditionalLogic {
   value: string
 }
 
+export interface QuestionStandardLink {
+  id: string
+  questionId: string
+  scheme: string
+  refId: string
+  label: string
+  confidence: number
+  status: 'suggested' | 'accepted' | 'rejected' | 'stale'
+  sourceFingerprint: string
+  libraryVersion: string
+}
+
 export interface Question {
   id: string
   text: string
@@ -42,6 +54,8 @@ export interface Question {
   evidenceRequired: boolean
   evidenceType?: 'photo' | 'document' | 'signature' | 'any'
   isoClause?: string
+  /** Multi-scheme Assist Map links (MAP-01..04) beyond free-text isoClause. */
+  standardLinks?: QuestionStandardLink[]
   riskLevel?: 'critical' | 'high' | 'medium' | 'low'
   guidance?: string
   failureTriggersAction: boolean
