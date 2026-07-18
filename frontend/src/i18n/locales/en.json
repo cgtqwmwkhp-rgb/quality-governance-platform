@@ -1058,6 +1058,8 @@
   "documents.downstream.failed.description": "Automatic indexing did not complete. Re-upload or contact an admin — downstream AI Exceptions will stay empty until indexing succeeds.",
   "documents.downstream.other.title": "Downstream not ready",
   "documents.downstream.other.description": "This document is not indexed yet. AI Exceptions and golden-thread evidence appear after successful indexing.",
+  "documents.detail.evidence_page": "Document page {{page}}",
+  "documents.detail.quiz_ai_fallback": "AI quiz generation was unavailable — a single fallback question was returned. Review before approving or regenerate when AI is available.",
   "edit": "Edit",
   "empty.no_audits": "No audits to display",
   "empty.no_complaints": "No complaints to display",
