@@ -57,7 +57,7 @@ export const canSubmitQuiz = (
   assignment: DocumentCampaignAssignment,
   quizResult?: DocumentCampaignQuizResult,
 ): boolean => {
-  if (quizResult?.passed ?? quizResult?.quiz_passed) return false
+  if (quizResult?.passed ?? quizResult?.quiz_passed ?? assignment.quiz_passed) return false
   return getQuizAttemptsUsed(assignment, quizResult) < MAX_QUIZ_ATTEMPTS
 }
 

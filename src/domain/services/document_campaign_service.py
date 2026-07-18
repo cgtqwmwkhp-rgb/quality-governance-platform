@@ -116,7 +116,8 @@ def grade_quiz_answers(
     review_needed = False
 
     for index, question in enumerate(questions):
-        question_type = str(question.get("type") or "mcq").strip().lower()
+        normalized = _normalize_quiz_question_for_delivery(question)
+        question_type = str(normalized.get("type") or "mcq").strip().lower()
         answer = answers_by_index.get(index)
 
         if _is_open_question_type(question_type):
@@ -916,6 +917,9 @@ class DocumentCampaignService:
 
         if not campaign.quiz_questions:
             raise NotFoundError("No quiz for this assignment")
+
+        if assignment.quiz_passed:
+            raise BadRequestError("Quiz already passed — no further attempts allowed")
 
         if assignment.quiz_attempts >= MAX_QUIZ_ATTEMPTS:
             raise BadRequestError(f"Maximum quiz attempts ({MAX_QUIZ_ATTEMPTS}) reached")
