@@ -15,9 +15,11 @@ from src.domain.models.document_campaign import AssignmentStatus, CampaignAssign
 from src.domain.models.governed_knowledge import QuizDraftStatus
 from src.domain.services.document_campaign_service import (
     DocumentCampaignService,
+    MAX_QUIZ_ATTEMPTS,
     grade_quiz_answers,
     strip_quiz_answer_keys,
 )
+from src.domain.services.document_campaign_notifications import portal_assignment_action_url
 
 
 def _scalars_result(items):
@@ -101,12 +103,37 @@ class TestGradeQuizAnswers:
         assert result.score == 100
         assert result.passed is True
 
+    def test_open_text_treated_as_open_not_mcq(self):
+        questions = [
+            {"type": "open_text", "question": "Describe the control.", "correct_answer": "n/a"},
+            {"type": "text", "question": "Any concerns?", "correct_answer": "n/a"},
+        ]
+        answers = [
+            {"question_index": 0, "text_answer": "We log incidents."},
+            {"question_index": 1, "text_answer": "None."},
+        ]
+        result = grade_quiz_answers(questions, answers, pass_mark=70)
+
+        assert result.score == 100
+        assert result.passed is True
+        assert result.review_needed is True
+
+
+class TestPortalAssignmentActionUrl:
+    def test_uses_portal_reading_path_with_assignment_id(self):
+        assert portal_assignment_action_url(42) == "/portal/reading?assignment=42"
+
 
 class TestStripQuizAnswerKeys:
     def test_removes_correct_answer(self):
         stripped = strip_quiz_answer_keys(MCQ_QUESTIONS)
         assert all("correct_answer" not in q for q in stripped)
         assert stripped[0]["question"] == "Q1"
+
+    def test_coerces_mcq_without_options_to_open(self):
+        questions = [{"type": "mcq", "question": "Explain.", "options": [], "correct_answer": "n/a"}]
+        stripped = strip_quiz_answer_keys(questions)
+        assert stripped[0]["type"] == "open"
 
 
 # =============================================================================
@@ -511,7 +538,70 @@ class TestAssignmentQuizAndCompletion:
         assert result.score == 100
         assert result.passed is True
         assert assignment.quiz_attempts == 1
-        assert assignment.quiz_passed is True
+        assert result.quiz_attempts == 1
+        assert result.attempts_remaining == MAX_QUIZ_ATTEMPTS - 1
+
+    @pytest.mark.asyncio
+    async def test_submit_quiz_rejects_when_max_attempts_reached(self):
+        assignment = SimpleNamespace(
+            id=1,
+            user_id=7,
+            tenant_id=1,
+            campaign_id=1,
+            quiz_attempts=MAX_QUIZ_ATTEMPTS,
+        )
+        campaign = SimpleNamespace(
+            id=1,
+            tenant_id=1,
+            quiz_questions=[{"type": "mcq", "question": "Q1", "correct_answer": "A"}],
+            quiz_pass_mark=70,
+        )
+        db = SimpleNamespace(execute=AsyncMock(return_value=_scalar_one_result(assignment)))
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+
+        with pytest.raises(BadRequestError, match="Maximum quiz attempts"):
+            await service.submit_assignment_quiz(
+                user_id=7,
+                assignment_id=1,
+                answers=[{"question_index": 0, "selected_option": "A"}],
+            )
+
+    @pytest.mark.asyncio
+    async def test_submit_quiz_allows_third_attempt(self):
+        assignment = SimpleNamespace(
+            id=1,
+            user_id=7,
+            tenant_id=1,
+            campaign_id=1,
+            quiz_score=None,
+            quiz_passed=None,
+            quiz_attempts=2,
+            quiz_review_needed=False,
+            last_quiz_answers=None,
+        )
+        campaign = SimpleNamespace(
+            id=1,
+            tenant_id=1,
+            quiz_questions=[{"type": "mcq", "question": "Q1", "correct_answer": "A"}],
+            quiz_pass_mark=70,
+        )
+        db = SimpleNamespace(
+            execute=AsyncMock(return_value=_scalar_one_result(assignment)),
+            commit=AsyncMock(),
+            refresh=AsyncMock(),
+        )
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+
+        result = await service.submit_assignment_quiz(
+            user_id=7,
+            assignment_id=1,
+            answers=[{"question_index": 0, "selected_option": "A"}],
+        )
+
+        assert assignment.quiz_attempts == 3
+        assert result.attempts_remaining == 0
 
     @pytest.mark.asyncio
     async def test_complete_assignment_blocked_without_quiz_pass(self):
@@ -522,6 +612,7 @@ class TestAssignmentQuizAndCompletion:
         db = SimpleNamespace(execute=AsyncMock(return_value=_scalar_one_result(assignment)))
         service = DocumentCampaignService(db)
         service.get_campaign = AsyncMock(return_value=campaign)
+        service._has_open_assignee_question = AsyncMock(return_value=False)
 
         with pytest.raises(BadRequestError):
             await service.complete_assignment(
@@ -529,6 +620,71 @@ class TestAssignmentQuizAndCompletion:
                 assignment_id=1,
                 acceptance_statement="I have read and understood this document.",
             )
+
+    @pytest.mark.asyncio
+    async def test_complete_assignment_requires_signature_without_open_question(self):
+        assignment = SimpleNamespace(
+            id=1,
+            user_id=7,
+            tenant_id=1,
+            campaign_id=1,
+            quiz_passed=None,
+            status=AssignmentStatus.PENDING,
+            completed_at=None,
+            acceptance_statement=None,
+            signature_data=None,
+            signature_disposition=None,
+            ip_address=None,
+            user_agent=None,
+        )
+        campaign = SimpleNamespace(id=1, tenant_id=1, require_quiz=False, document_id=99)
+        db = SimpleNamespace(execute=AsyncMock(return_value=_scalar_one_result(assignment)))
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+        service._has_open_assignee_question = AsyncMock(return_value=False)
+
+        with pytest.raises(BadRequestError, match="Signature is required"):
+            await service.complete_assignment(
+                user_id=7,
+                assignment_id=1,
+                acceptance_statement="I have read and understood this document.",
+            )
+
+    @pytest.mark.asyncio
+    async def test_complete_assignment_allows_deferred_signature_with_open_question(self):
+        assignment = SimpleNamespace(
+            id=1,
+            user_id=7,
+            tenant_id=1,
+            campaign_id=1,
+            quiz_passed=None,
+            status=AssignmentStatus.PENDING,
+            completed_at=None,
+            acceptance_statement=None,
+            signature_data=None,
+            signature_disposition=None,
+            ip_address=None,
+            user_agent=None,
+        )
+        campaign = SimpleNamespace(id=1, tenant_id=1, require_quiz=False, document_id=99)
+        db = SimpleNamespace(
+            execute=AsyncMock(return_value=_scalar_one_result(assignment)),
+            commit=AsyncMock(),
+            refresh=AsyncMock(),
+        )
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+        service._has_open_assignee_question = AsyncMock(return_value=True)
+
+        result = await service.complete_assignment(
+            user_id=7,
+            assignment_id=1,
+            acceptance_statement="I have read and understood this document.",
+        )
+
+        assert result.status == AssignmentStatus.COMPLETED
+        assert result.signature_data is None
+        assert result.signature_disposition == "signature_deferred_pending_answer"
 
     @pytest.mark.asyncio
     async def test_complete_assignment_succeeds_when_quiz_passed_or_not_required(self):
@@ -542,10 +698,11 @@ class TestAssignmentQuizAndCompletion:
             completed_at=None,
             acceptance_statement=None,
             signature_data=None,
+            signature_disposition=None,
             ip_address=None,
             user_agent=None,
         )
-        campaign = SimpleNamespace(id=1, tenant_id=1, require_quiz=False)
+        campaign = SimpleNamespace(id=1, tenant_id=1, require_quiz=False, document_id=99)
         db = SimpleNamespace(
             execute=AsyncMock(return_value=_scalar_one_result(assignment)),
             commit=AsyncMock(),
@@ -553,6 +710,7 @@ class TestAssignmentQuizAndCompletion:
         )
         service = DocumentCampaignService(db)
         service.get_campaign = AsyncMock(return_value=campaign)
+        service._has_open_assignee_question = AsyncMock(return_value=False)
 
         result = await service.complete_assignment(
             user_id=7,
@@ -566,6 +724,7 @@ class TestAssignmentQuizAndCompletion:
         assert result.status == AssignmentStatus.COMPLETED
         assert result.completed_at is not None
         assert result.signature_data == "data:image/png;base64,abc"
+        assert result.signature_disposition == "signed"
 
 
 # =============================================================================

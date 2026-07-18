@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.config import settings
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.document import Document
 from src.domain.models.document_campaign import (
@@ -48,6 +49,19 @@ from src.domain.services.document_campaign_notifications import (
 
 logger = logging.getLogger(__name__)
 
+MAX_QUIZ_ATTEMPTS = 3
+OPEN_QUESTION_TYPES = frozenset({"open", "open_text", "text"})
+SIGNATURE_DISPOSITION_SIGNED = "signed"
+SIGNATURE_DISPOSITION_SIGNED_PENDING_HSEQ = "signed_pending_hseq_answer"
+SIGNATURE_DISPOSITION_DEFERRED = "signature_deferred_pending_answer"
+VALID_SIGNATURE_DISPOSITIONS = frozenset(
+    {
+        SIGNATURE_DISPOSITION_SIGNED,
+        SIGNATURE_DISPOSITION_SIGNED_PENDING_HSEQ,
+        SIGNATURE_DISPOSITION_DEFERRED,
+    }
+)
+
 CAMPAIGN_DEFAULT_REMINDER_SETTING_KEY_PREFIX = "campaign.default_reminder_hours"
 CAMPAIGN_DEFAULT_REMINDER_CATEGORY = "campaigns"
 
@@ -65,6 +79,23 @@ class QuizGradeResult:
     passed: bool
     pass_mark: int
     review_needed: bool
+    quiz_attempts: int = 0
+    attempts_remaining: int = 0
+
+
+def _is_open_question_type(question_type: str) -> bool:
+    return str(question_type or "").strip().lower() in OPEN_QUESTION_TYPES
+
+
+def _normalize_quiz_question_for_delivery(question: Dict[str, Any]) -> Dict[str, Any]:
+    """Coerce MCQ questions with missing/empty options to open-ended delivery."""
+    normalized = dict(question)
+    question_type = str(normalized.get("type") or "mcq").strip().lower()
+    if question_type == "mcq":
+        options = normalized.get("options")
+        if not options:
+            normalized["type"] = "open"
+    return normalized
 
 
 def grade_quiz_answers(
@@ -88,7 +119,7 @@ def grade_quiz_answers(
         question_type = str(question.get("type") or "mcq").strip().lower()
         answer = answers_by_index.get(index)
 
-        if question_type == "open":
+        if _is_open_question_type(question_type):
             review_needed = True
             continue
 
@@ -113,7 +144,8 @@ def strip_quiz_answer_keys(questions: List[Dict[str, Any]]) -> List[Dict[str, An
     """Return quiz questions with correct-answer keys removed for MCQ delivery to engineers."""
     stripped = []
     for question in questions:
-        clean = {k: v for k, v in question.items() if k != "correct_answer"}
+        normalized = _normalize_quiz_question_for_delivery(question)
+        clean = {k: v for k, v in normalized.items() if k != "correct_answer"}
         stripped.append(clean)
     return stripped
 
@@ -502,10 +534,11 @@ class DocumentCampaignService:
             return 0
 
         doc_title = await self._document_title(tenant_id=campaign.tenant_id, document_id=campaign.document_id)
-        message = (
-            f"You have been assigned to read{' and complete a quiz for' if campaign.require_quiz else ''} "
-            f"'{doc_title}'."
+        welcome_paragraph = await self._generate_campaign_welcome_paragraph(
+            doc_title=doc_title,
+            require_quiz=bool(campaign.require_quiz),
         )
+        frontend_base = self._frontend_base_url()
 
         notified_count = 0
         for assignment in assignments:
@@ -516,6 +549,7 @@ class DocumentCampaignService:
                             tenant_id=campaign.tenant_id,
                             user_id=assignment.user_id,
                             campaign_id=campaign.id,
+                            assignment_id=assignment.id,
                             document_id=campaign.document_id,
                             doc_title=doc_title,
                             require_quiz=bool(campaign.require_quiz),
@@ -544,18 +578,95 @@ class DocumentCampaignService:
 
         await self._send_launch_emails(
             assignments=assignments,
-            subject="New document campaign assigned",
-            html_content=f"<p>{message}</p>",
+            doc_title=doc_title,
+            require_quiz=bool(campaign.require_quiz),
+            welcome_paragraph=welcome_paragraph,
+            frontend_base=frontend_base,
         )
 
         return notified_count
+
+    @staticmethod
+    def _frontend_base_url() -> str:
+        return (getattr(settings, "frontend_url", None) or "http://localhost:5173").rstrip("/")
+
+    async def _generate_campaign_welcome_paragraph(self, *, doc_title: str, require_quiz: bool) -> str:
+        """Best-effort AI welcome line for launch emails; falls back to static copy."""
+        static = (
+            f"You have been assigned to read{' and complete a quiz for' if require_quiz else ''} "
+            f"'{doc_title}'."
+        )
+        try:
+            from src.domain.services.document_ai_service import DocumentAIService
+            from src.domain.services.upstream_circuit_breaker import call_via_upstream_breaker
+
+            ai_service = DocumentAIService()
+            if not ai_service.api_key:
+                return static
+
+            import httpx
+
+            prompt = (
+                f"Write one short, friendly welcome sentence (max 35 words) for an employee "
+                f"assigned to read the document '{doc_title}'"
+                f"{' and pass a comprehension quiz' if require_quiz else ''}. "
+                "Do not include links or bullet points."
+            )
+
+            async def _do_call() -> dict:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f"{ai_service.base_url}/messages",
+                        headers={
+                            "x-api-key": ai_service.api_key,
+                            "anthropic-version": "2023-06-01",
+                            "content-type": "application/json",
+                        },
+                        json={
+                            "model": ai_service.model,
+                            "max_tokens": 120,
+                            "system": "You write concise, professional internal communications.",
+                            "messages": [{"role": "user", "content": prompt}],
+                        },
+                        timeout=30.0,
+                    )
+                    response.raise_for_status()
+                    return response.json()
+
+            data = await call_via_upstream_breaker("document_ai", _do_call)
+            text = str(data.get("content", [{}])[0].get("text", "")).strip()
+            return text or static
+        except Exception:  # noqa: BLE001 - launch must not fail on AI issues
+            logger.warning("Campaign launch welcome AI generation failed; using static copy", exc_info=True)
+            return static
+
+    @staticmethod
+    def _build_launch_email_html(
+        *,
+        welcome_paragraph: str,
+        doc_title: str,
+        require_quiz: bool,
+        assignment_id: int,
+        frontend_base: str,
+    ) -> str:
+        reading_url = f"{frontend_base}/portal/reading?assignment={assignment_id}"
+        work_url = f"{frontend_base}/portal/work"
+        steps = "read the document, complete the quiz, and sign your attestation" if require_quiz else (
+            "read the document and sign your attestation"
+        )
+        return f"""<p>{welcome_paragraph}</p>
+<p>Your assignment for <strong>{doc_title}</strong> is ready. Please {steps}.</p>
+<p><a href="{reading_url}">Open your reading assignment</a></p>
+<p><a href="{work_url}">View all portal work</a></p>"""
 
     async def _send_launch_emails(
         self,
         *,
         assignments: List[CampaignAssignment],
-        subject: str,
-        html_content: str,
+        doc_title: str,
+        require_quiz: bool,
+        welcome_paragraph: str,
+        frontend_base: str,
     ) -> None:
         """Best-effort email delivery. Never raises — launch must not fail on email issues."""
         try:
@@ -566,11 +677,19 @@ class DocumentCampaignService:
             logger.warning("EmailService unavailable; skipping campaign launch emails", exc_info=True)
             return
 
+        subject = "New document campaign assigned"
         for assignment in assignments:
             try:
                 recipient = await self._user_email(assignment.user_id)
                 if not recipient:
                     continue
+                html_content = self._build_launch_email_html(
+                    welcome_paragraph=welcome_paragraph,
+                    doc_title=doc_title,
+                    require_quiz=require_quiz,
+                    assignment_id=assignment.id,
+                    frontend_base=frontend_base,
+                )
                 await email_service.send_email(to=[recipient], subject=subject, html_content=html_content)
             except Exception:  # noqa: BLE001
                 logger.warning(
@@ -657,6 +776,7 @@ class DocumentCampaignService:
                                 tenant_id=campaign.tenant_id,
                                 user_id=recipient_id,
                                 campaign_id=campaign.id,
+                                assignment_id=assignment.id,
                                 document_id=campaign.document_id,
                                 doc_title=doc_title,
                                 assignee_user_id=assignment.user_id,
@@ -689,6 +809,7 @@ class DocumentCampaignService:
                         tenant_id=campaign.tenant_id,
                         user_id=assignment.user_id,
                         campaign_id=campaign.id,
+                        assignment_id=assignment.id,
                         document_id=campaign.document_id,
                         doc_title=doc_title,
                         due_at=due_at,
@@ -796,6 +917,9 @@ class DocumentCampaignService:
         if not campaign.quiz_questions:
             raise NotFoundError("No quiz for this assignment")
 
+        if assignment.quiz_attempts >= MAX_QUIZ_ATTEMPTS:
+            raise BadRequestError(f"Maximum quiz attempts ({MAX_QUIZ_ATTEMPTS}) reached")
+
         result = grade_quiz_answers(campaign.quiz_questions, answers, campaign.quiz_pass_mark or 70)
 
         assignment.quiz_score = result.score
@@ -806,7 +930,32 @@ class DocumentCampaignService:
 
         await self.db.commit()
         await self.db.refresh(assignment)
-        return result
+        attempts_remaining = max(0, MAX_QUIZ_ATTEMPTS - assignment.quiz_attempts)
+        return QuizGradeResult(
+            score=result.score,
+            passed=result.passed,
+            pass_mark=result.pass_mark,
+            review_needed=result.review_needed,
+            quiz_attempts=assignment.quiz_attempts,
+            attempts_remaining=attempts_remaining,
+        )
+
+    async def _has_open_assignee_question(
+        self,
+        *,
+        tenant_id: int,
+        user_id: int,
+        document_id: int,
+    ) -> bool:
+        result = await self.db.execute(
+            select(func.count(DocumentDiscussionThread.id)).where(
+                DocumentDiscussionThread.tenant_id == tenant_id,
+                DocumentDiscussionThread.document_id == document_id,
+                DocumentDiscussionThread.created_by_id == user_id,
+                DocumentDiscussionThread.status == DiscussionThreadStatus.OPEN,
+            )
+        )
+        return (result.scalar_one() or 0) > 0
 
     async def complete_assignment(
         self,
@@ -815,6 +964,7 @@ class DocumentCampaignService:
         assignment_id: int,
         acceptance_statement: str,
         signature_data: Optional[str] = None,
+        signature_disposition: Optional[str] = None,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
     ) -> CampaignAssignment:
@@ -824,10 +974,43 @@ class DocumentCampaignService:
         if campaign.require_quiz and not assignment.quiz_passed:
             raise BadRequestError("Quiz must be passed before completing this assignment")
 
+        if signature_disposition is not None and signature_disposition not in VALID_SIGNATURE_DISPOSITIONS:
+            raise BadRequestError("Invalid signature_disposition")
+
+        has_open_question = await self._has_open_assignee_question(
+            tenant_id=assignment.tenant_id,
+            user_id=user_id,
+            document_id=campaign.document_id,
+        )
+        has_signature = bool(signature_data and signature_data.strip())
+
+        if not has_open_question:
+            if not has_signature:
+                raise BadRequestError("Signature is required to complete this assignment")
+            resolved_disposition = signature_disposition or SIGNATURE_DISPOSITION_SIGNED
+            if resolved_disposition != SIGNATURE_DISPOSITION_SIGNED:
+                raise BadRequestError("signature_disposition must be 'signed' when no open question exists")
+        elif has_signature:
+            resolved_disposition = signature_disposition or SIGNATURE_DISPOSITION_SIGNED_PENDING_HSEQ
+            if resolved_disposition not in (
+                SIGNATURE_DISPOSITION_SIGNED_PENDING_HSEQ,
+                SIGNATURE_DISPOSITION_SIGNED,
+            ):
+                raise BadRequestError(
+                    "signature_disposition must be signed or signed_pending_hseq_answer when signature is provided"
+                )
+        else:
+            resolved_disposition = signature_disposition or SIGNATURE_DISPOSITION_DEFERRED
+            if resolved_disposition != SIGNATURE_DISPOSITION_DEFERRED:
+                raise BadRequestError(
+                    "signature_disposition must be signature_deferred_pending_answer when completing without signature"
+                )
+
         assignment.status = AssignmentStatus.COMPLETED
         assignment.completed_at = datetime.now(timezone.utc)
         assignment.acceptance_statement = acceptance_statement
-        assignment.signature_data = signature_data
+        assignment.signature_data = signature_data if has_signature else None
+        assignment.signature_disposition = resolved_disposition
         assignment.ip_address = ip_address
         assignment.user_agent = user_agent
 
@@ -1096,7 +1279,7 @@ class DocumentCampaignService:
             "exported_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    # ==================== Question inbox (HSEC) ====================
+    # ==================== Question inbox (HSEQ) ====================
 
     async def list_question_inbox(self, *, tenant_id: int) -> List[Dict[str, Any]]:
         campaign_doc_ids = (

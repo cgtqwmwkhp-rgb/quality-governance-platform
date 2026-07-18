@@ -95,7 +95,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     color: 'bg-amber-100 text-amber-700',
   },
   {
-    title: 'HSEC Inbox',
+    title: 'HSEQ Inbox',
     description: 'Answer engineer questions on assigned reads',
     icon: <MessageSquare className="w-6 h-6" />,
     href: '/admin/hsec-inbox',

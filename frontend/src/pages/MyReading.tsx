@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { BookOpen, CheckCircle2, ChevronDown, Clock, ExternalLink, Loader2, MessageSquare, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   documentCampaignApi,
   getApiErrorMessage,
   policyAcknowledgmentsApi,
+  api,
   type DocumentCampaignAssignment,
   type DocumentCampaignQuiz,
   type DocumentCampaignQuizResult,
@@ -28,11 +29,28 @@ import {
 import {
   buildQuizAnswers,
   canCompleteCampaign,
+  canProceedToCompletionFields,
+  canSubmitQuiz,
   hasUnansweredQuiz,
-  isOpenQuestion,
   isQuizRequired,
+  isSignatureRequiredForCompletion,
+  quizAttemptsRemaining,
   quizQuestionLabel,
+  resolveSignatureDisposition,
+  shouldRenderOpenQuestion,
+  showQuestionGate,
+  type QuestionGateChoice,
+  type SignChoice,
 } from './campaignReadingHelpers'
+
+async function resolveDocumentSignedUrl(documentId: number): Promise<string> {
+  const response = await api.get<{ signed_url: string }>(
+    `/api/v1/documents/${documentId}/signed-url`,
+    { params: { download: false } },
+  )
+  const rawUrl = response.data.signed_url
+  return new URL(rawUrl, api.defaults.baseURL || window.location.origin).toString()
+}
 
 const reportFailure = (err: unknown): string => {
   const message = getApiErrorMessage(err)
@@ -46,7 +64,6 @@ type ReadingItem =
 
 export default function MyReading() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const [policyItems, setPolicyItems] = useState<PolicyAcknowledgment[]>([])
   const [campaignItems, setCampaignItems] = useState<DocumentCampaignAssignment[]>([])
   const [loading, setLoading] = useState(true)
@@ -66,6 +83,9 @@ export default function MyReading() {
   const [questionTitles, setQuestionTitles] = useState<Record<number, string>>({})
   const [questionBodies, setQuestionBodies] = useState<Record<number, string>>({})
   const [askingQuestionId, setAskingQuestionId] = useState<number | null>(null)
+  const [questionGateChoices, setQuestionGateChoices] = useState<Record<number, QuestionGateChoice>>({})
+  const [signChoices, setSignChoices] = useState<Record<number, SignChoice>>({})
+  const [questionsSent, setQuestionsSent] = useState<Record<number, boolean>>({})
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
@@ -136,7 +156,8 @@ export default function MyReading() {
           assignment.id === item.id ? { ...assignment, status: 'opened' } : assignment,
         ),
       )
-      navigate(`/documents/${item.document_id}`)
+      const signedUrl = await resolveDocumentSignedUrl(item.document_id)
+      window.open(signedUrl, '_blank', 'noopener,noreferrer')
     } catch (err) {
       reportFailure(err)
     } finally {
@@ -171,6 +192,10 @@ export default function MyReading() {
   const handleSubmitQuiz = async (item: DocumentCampaignAssignment) => {
     const quiz = quizzes[item.id]
     if (!quiz) return
+    if (!canSubmitQuiz(item, quizResults[item.id])) {
+      toast.error(t('my_reading.quiz_attempts_exhausted'))
+      return
+    }
     const values = quizAnswers[item.id] ?? {}
     if (hasUnansweredQuiz(quiz, values)) {
       toast.error(t('my_reading.complete_all_quiz_questions'))
@@ -183,9 +208,24 @@ export default function MyReading() {
         item.id,
         buildQuizAnswers(quiz, values),
       )
-      setQuizResults((prev) => ({ ...prev, [item.id]: response.data }))
+      const result = response.data
+      setQuizResults((prev) => ({ ...prev, [item.id]: result }))
+      setCampaignItems((prev) =>
+        prev.map((assignment) =>
+          assignment.id === item.id
+            ? {
+                ...assignment,
+                quiz_passed: result.passed ?? result.quiz_passed ?? assignment.quiz_passed,
+                quiz_score: result.score ?? result.quiz_score ?? assignment.quiz_score,
+                quiz_attempts:
+                  result.quiz_attempts ??
+                  (assignment.quiz_attempts ?? 0) + 1,
+              }
+            : assignment,
+        ),
+      )
       toast.success(
-        (response.data.passed ?? response.data.quiz_passed)
+        (result.passed ?? result.quiz_passed)
           ? t('my_reading.quiz_passed')
           : t('my_reading.quiz_submitted'),
       )
@@ -202,16 +242,33 @@ export default function MyReading() {
       toast.error(t('my_reading.pass_quiz_before_completing'))
       return
     }
+
+    const gateChoice = questionGateChoices[item.id] ?? null
+    const signChoice = signChoices[item.id] ?? null
+    const disposition = resolveSignatureDisposition(gateChoice, signChoice)
+    if (!disposition || !canProceedToCompletionFields(gateChoice, signChoice, questionsSent[item.id] ?? false)) {
+      toast.error(t('my_reading.question_gate_required'))
+      return
+    }
+
     const acceptanceStatement = acceptanceStatements[item.id]?.trim()
     if (!acceptanceStatement) {
       toast.error(t('my_reading.acceptance_required'))
       return
     }
+
+    const signature = signatures[item.id]?.trim()
+    if (isSignatureRequiredForCompletion(gateChoice, signChoice) && !signature) {
+      toast.error(t('my_reading.signature_required'))
+      return
+    }
+
     setCompletingCampaignId(item.id)
     try {
       const response = await documentCampaignApi.completeAssignment(item.id, {
         acceptance_statement: acceptanceStatement,
-        ...(signatures[item.id]?.trim() ? { signature_data: signatures[item.id].trim() } : {}),
+        signature_disposition: disposition,
+        ...(signature ? { signature_data: signature } : {}),
       })
       setCampaignItems((prev) =>
         prev.map((assignment) =>
@@ -229,7 +286,7 @@ export default function MyReading() {
     }
   }
 
-  const handleAskHsecQuestion = async (item: DocumentCampaignAssignment) => {
+  const handleAskHseqQuestion = async (item: DocumentCampaignAssignment) => {
     const body = questionBodies[item.id]?.trim()
     if (!body) {
       toast.error(t('my_reading.question_body_required'))
@@ -245,6 +302,7 @@ export default function MyReading() {
       toast.success(t('my_reading.question_sent'))
       setQuestionBodies((prev) => ({ ...prev, [item.id]: '' }))
       setQuestionTitles((prev) => ({ ...prev, [item.id]: '' }))
+      setQuestionsSent((prev) => ({ ...prev, [item.id]: true }))
     } catch (err) {
       reportFailure(err)
     } finally {
@@ -466,50 +524,22 @@ export default function MyReading() {
                   )}
                 </div>
               </div>
-              {source === 'campaign' && expandedCampaignId === item.id && (
+              {source === 'campaign' && expandedCampaignId === item.id && (() => {
+                const quizResult = quizResults[item.id]
+                const gateChoice = questionGateChoices[item.id] ?? null
+                const signChoice = signChoices[item.id] ?? null
+                const questionSent = questionsSent[item.id] ?? false
+                const attemptsLeft = quizAttemptsRemaining(item, quizResult)
+                const showGate = showQuestionGate(item, quizResult)
+                const showCompletionFields = canProceedToCompletionFields(
+                  gateChoice,
+                  signChoice,
+                  questionSent,
+                )
+                const signatureRequired = isSignatureRequiredForCompletion(gateChoice, signChoice)
+
+                return (
                 <div className="mt-5 border-t pt-5 space-y-5" data-testid={`campaign-complete-${item.id}`}>
-                  {item.status !== 'completed' && (
-                    <section className="space-y-3" data-testid={`campaign-ask-hsec-${item.id}`}>
-                      <div className="flex items-center gap-2">
-                        <MessageSquare className="w-4 h-4 text-primary" />
-                        <h2 className="font-medium">{t('my_reading.ask_hsec_title')}</h2>
-                      </div>
-                      <p className="text-sm text-muted-foreground">{t('my_reading.ask_hsec_help')}</p>
-                      <label className="block text-sm font-medium" htmlFor={`question-title-${item.id}`}>
-                        {t('my_reading.question_title_optional')}
-                      </label>
-                      <Input
-                        id={`question-title-${item.id}`}
-                        value={questionTitles[item.id] ?? ''}
-                        onChange={(event) =>
-                          setQuestionTitles((prev) => ({ ...prev, [item.id]: event.target.value }))
-                        }
-                        placeholder={t('my_reading.question_title_placeholder')}
-                      />
-                      <label className="block text-sm font-medium" htmlFor={`question-body-${item.id}`}>
-                        {t('my_reading.question_body')}
-                      </label>
-                      <Textarea
-                        id={`question-body-${item.id}`}
-                        value={questionBodies[item.id] ?? ''}
-                        onChange={(event) =>
-                          setQuestionBodies((prev) => ({ ...prev, [item.id]: event.target.value }))
-                        }
-                        placeholder={t('my_reading.question_body_placeholder')}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => void handleAskHsecQuestion(item)}
-                        disabled={askingQuestionId === item.id}
-                      >
-                        {askingQuestionId === item.id && (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        )}
-                        {t('my_reading.ask_hsec_submit')}
-                      </Button>
-                    </section>
-                  )}
                   {isQuizRequired(item) && (
                     <section className="space-y-3">
                       <div>
@@ -517,6 +547,11 @@ export default function MyReading() {
                         {quizzes[item.id]?.pass_mark != null && (
                           <p className="text-sm text-muted-foreground">
                             {t('my_reading.pass_mark', { score: quizzes[item.id].pass_mark })}
+                          </p>
+                        )}
+                        {isQuizRequired(item) && (
+                          <p className="text-sm text-muted-foreground" role="status">
+                            {t('my_reading.quiz_attempts_remaining', { count: attemptsLeft })}
                           </p>
                         )}
                       </div>
@@ -529,7 +564,7 @@ export default function MyReading() {
                           return (
                             <fieldset key={questionIndex} className="space-y-2">
                               <legend className="text-sm font-medium">{quizQuestionLabel(question, index)}</legend>
-                              {isOpenQuestion(question) ? (
+                              {shouldRenderOpenQuestion(question) ? (
                                 <Textarea
                                   value={answer}
                                   onChange={(event) =>
@@ -565,12 +600,12 @@ export default function MyReading() {
                           )
                         })
                       )}
-                      {quizResults[item.id] && (
+                      {quizResult && (
                         <p className="text-sm font-medium" role="status">
                           {t('my_reading.quiz_score', {
-                            score: quizResults[item.id].score ?? quizResults[item.id].quiz_score ?? 0,
+                            score: quizResult.score ?? quizResult.quiz_score ?? 0,
                           })}{' '}
-                          — {(quizResults[item.id].passed ?? quizResults[item.id].quiz_passed)
+                          — {(quizResult.passed ?? quizResult.quiz_passed)
                             ? t('my_reading.passed')
                             : t('my_reading.not_passed')}
                         </p>
@@ -579,13 +614,122 @@ export default function MyReading() {
                         type="button"
                         variant="outline"
                         onClick={() => void handleSubmitQuiz(item)}
-                        disabled={quizLoadingId === item.id || submittingQuizId === item.id}
+                        disabled={
+                          quizLoadingId === item.id ||
+                          submittingQuizId === item.id ||
+                          !canSubmitQuiz(item, quizResult)
+                        }
                       >
                         {submittingQuizId === item.id && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                         {t('my_reading.submit_quiz')}
                       </Button>
                     </section>
                   )}
+
+                  {showGate && (
+                    <section className="space-y-3" data-testid={`campaign-question-gate-${item.id}`}>
+                      <h2 className="font-medium">{t('my_reading.question_gate_title')}</h2>
+                      <p className="text-sm text-muted-foreground">{t('my_reading.question_gate_help')}</p>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={gateChoice === 'yes' ? 'default' : 'outline'}
+                          onClick={() =>
+                            setQuestionGateChoices((prev) => ({ ...prev, [item.id]: 'yes' }))
+                          }
+                        >
+                          {t('my_reading.question_gate_yes')}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={gateChoice === 'no' ? 'default' : 'outline'}
+                          onClick={() => {
+                            setQuestionGateChoices((prev) => ({ ...prev, [item.id]: 'no' }))
+                            setSignChoices((prev) => {
+                              const next = { ...prev }
+                              delete next[item.id]
+                              return next
+                            })
+                          }}
+                        >
+                          {t('my_reading.question_gate_no')}
+                        </Button>
+                      </div>
+
+                      {gateChoice === 'yes' && (
+                        <div className="space-y-3 border rounded-lg p-3" data-testid={`campaign-ask-hseq-${item.id}`}>
+                          <div className="flex items-center gap-2">
+                            <MessageSquare className="w-4 h-4 text-primary" />
+                            <h3 className="font-medium">{t('my_reading.ask_hsec_title')}</h3>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{t('my_reading.ask_hsec_help')}</p>
+                          <label className="block text-sm font-medium" htmlFor={`question-title-${item.id}`}>
+                            {t('my_reading.question_title_optional')}
+                          </label>
+                          <Input
+                            id={`question-title-${item.id}`}
+                            value={questionTitles[item.id] ?? ''}
+                            onChange={(event) =>
+                              setQuestionTitles((prev) => ({ ...prev, [item.id]: event.target.value }))
+                            }
+                            placeholder={t('my_reading.question_title_placeholder')}
+                          />
+                          <label className="block text-sm font-medium" htmlFor={`question-body-${item.id}`}>
+                            {t('my_reading.question_body')}
+                          </label>
+                          <Textarea
+                            id={`question-body-${item.id}`}
+                            value={questionBodies[item.id] ?? ''}
+                            onChange={(event) =>
+                              setQuestionBodies((prev) => ({ ...prev, [item.id]: event.target.value }))
+                            }
+                            placeholder={t('my_reading.question_body_placeholder')}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => void handleAskHseqQuestion(item)}
+                            disabled={askingQuestionId === item.id || questionSent}
+                          >
+                            {askingQuestionId === item.id && (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            )}
+                            {questionSent
+                              ? t('my_reading.question_sent_short')
+                              : t('my_reading.ask_hsec_submit')}
+                          </Button>
+
+                          {questionSent && (
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium">{t('my_reading.sign_choice_title')}</p>
+                              <Button
+                                type="button"
+                                variant={signChoice === 'defer' ? 'default' : 'outline'}
+                                className="w-full"
+                                onClick={() =>
+                                  setSignChoices((prev) => ({ ...prev, [item.id]: 'defer' }))
+                                }
+                              >
+                                {t('my_reading.sign_choice_defer')}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={signChoice === 'sign_now' ? 'default' : 'outline'}
+                                className="w-full"
+                                onClick={() =>
+                                  setSignChoices((prev) => ({ ...prev, [item.id]: 'sign_now' }))
+                                }
+                              >
+                                {t('my_reading.sign_choice_sign_now')}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </section>
+                  )}
+
+                  {showCompletionFields && (
                   <section className="space-y-3">
                     <label className="block text-sm font-medium" htmlFor={`acceptance-${item.id}`}>
                       {t('my_reading.acceptance_statement')}
@@ -598,13 +742,16 @@ export default function MyReading() {
                       }
                     />
                     <label className="block text-sm font-medium" htmlFor={`signature-${item.id}`}>
-                      {t('my_reading.signature_optional')}
+                      {signatureRequired
+                        ? t('my_reading.signature_required_label')
+                        : t('my_reading.signature_optional')}
                     </label>
                     <Input
                       id={`signature-${item.id}`}
                       value={signatures[item.id] ?? ''}
                       onChange={(event) => setSignatures((prev) => ({ ...prev, [item.id]: event.target.value }))}
                       placeholder={t('my_reading.signature_placeholder')}
+                      required={signatureRequired}
                     />
                     <Button
                       type="button"
@@ -616,8 +763,10 @@ export default function MyReading() {
                       {t('my_reading.complete_assignment')}
                     </Button>
                   </section>
+                  )}
                 </div>
-              )}
+                )
+              })()}
             </Card>
           ))}
         </div>

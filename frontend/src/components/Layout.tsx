@@ -224,7 +224,7 @@ export default function Layout({ onLogout }: LayoutProps) {
               {
                 path: '/admin/hsec-inbox',
                 icon: MessageSquare,
-                label: t('nav.hsec_inbox', { defaultValue: 'HSEC Inbox' }),
+                label: t('nav.hsec_inbox', { defaultValue: 'HSEQ Inbox' }),
               },
               {
                 path: '/admin/partner-webhooks',

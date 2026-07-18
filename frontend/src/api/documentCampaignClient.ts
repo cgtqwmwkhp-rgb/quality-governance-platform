@@ -58,6 +58,11 @@ export interface LaunchCampaignResponse {
   notified_count?: number
 }
 
+export type SignatureDisposition =
+  | 'signed'
+  | 'signature_deferred_pending_answer'
+  | 'signed_pending_hseq_answer'
+
 export interface DocumentCampaignAssignment {
   id: number
   campaign_id?: number
@@ -78,6 +83,7 @@ export interface DocumentCampaignAssignment {
   require_quiz?: boolean
   quiz_score?: number | null
   quiz_passed?: boolean | null
+  quiz_attempts?: number
 }
 
 export interface DocumentCampaignAssignmentListResponse {
@@ -111,11 +117,13 @@ export interface DocumentCampaignQuizResult {
   quiz_score?: number | null
   quiz_passed?: boolean | null
   pass_mark?: number | null
+  quiz_attempts?: number
 }
 
 export interface CompleteDocumentCampaignAssignmentRequest {
   acceptance_statement: string
   signature_data?: string
+  signature_disposition?: SignatureDisposition
 }
 
 

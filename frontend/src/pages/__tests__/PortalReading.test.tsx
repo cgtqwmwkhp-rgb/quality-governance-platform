@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import PortalReading from '../PortalReading'
@@ -11,12 +11,17 @@ const mockSubmitQuiz = vi.fn()
 const mockCompleteAssignment = vi.fn()
 const mockCreateThread = vi.fn()
 const mockPostMessage = vi.fn()
+const mockApiGet = vi.fn()
 const mockToastError = vi.fn()
 const mockToastSuccess = vi.fn()
 const mockAnnounce = vi.fn()
 const mockNavigate = vi.fn()
 
 vi.mock('../../api/client', () => ({
+  api: {
+    get: (...args: unknown[]) => mockApiGet(...args),
+    defaults: { baseURL: 'http://localhost:8000' },
+  },
   documentCampaignApi: {
     listMyAssignments: (...args: unknown[]) => mockListMyAssignments(...args),
     openAssignment: (...args: unknown[]) => mockOpenAssignment(...args),
@@ -73,12 +78,16 @@ describe('PortalReading O-08', () => {
             status: 'pending',
             due_date: '2026-08-01',
             quiz_required: true,
+            quiz_attempts: 0,
           },
         ],
         total: 1,
       },
     })
     mockOpenAssignment.mockResolvedValue({ data: { id: 7, status: 'opened' } })
+    mockApiGet.mockResolvedValue({
+      data: { signed_url: 'https://storage.example/doc.pdf?sig=abc' },
+    })
     mockGetAssignmentQuiz.mockResolvedValue({
       data: {
         pass_mark: 80,
@@ -87,7 +96,7 @@ describe('PortalReading O-08', () => {
         ],
       },
     })
-    mockSubmitQuiz.mockResolvedValue({ data: { score: 100, passed: true } })
+    mockSubmitQuiz.mockResolvedValue({ data: { score: 100, passed: true, quiz_attempts: 1 } })
     mockCompleteAssignment.mockResolvedValue({ data: { id: 7, status: 'completed' } })
     mockCreateThread.mockResolvedValue({ data: { id: 99 } })
     mockPostMessage.mockResolvedValue({ data: { id: 1, body: 'Help?' } })
@@ -101,7 +110,7 @@ describe('PortalReading O-08', () => {
     expect(mockListMyAssignments).toHaveBeenCalled()
   })
 
-  it('records open and launches document in a new tab', async () => {
+  it('records open and launches signed document URL in a new tab', async () => {
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
     renderPage()
 
@@ -110,7 +119,14 @@ describe('PortalReading O-08', () => {
 
     await waitFor(() => {
       expect(mockOpenAssignment).toHaveBeenCalledWith(7)
-      expect(openSpy).toHaveBeenCalledWith('/documents/42', '_blank', 'noopener,noreferrer')
+      expect(mockApiGet).toHaveBeenCalledWith('/api/v1/documents/42/signed-url', {
+        params: { download: false },
+      })
+      expect(openSpy).toHaveBeenCalledWith(
+        'https://storage.example/doc.pdf?sig=abc',
+        '_blank',
+        'noopener,noreferrer',
+      )
     })
     openSpy.mockRestore()
   })
@@ -124,15 +140,21 @@ describe('PortalReading O-08', () => {
       expect(mockGetAssignmentQuiz).toHaveBeenCalledWith(7)
     })
 
-    await waitFor(() => {
-      expect(screen.getByText('Yes')).toBeInTheDocument()
-    })
-    await userEvent.click(screen.getByText('Yes'))
+    await userEvent.click(screen.getByRole('radio', { name: 'Yes' }))
     await userEvent.click(screen.getByRole('button', { name: /Submit quiz/i }))
     await waitFor(() => expect(mockSubmitQuiz).toHaveBeenCalled())
 
+    const gate = await screen.findByTestId('portal-reading-question-gate-7')
+    await userEvent.click(within(gate).getByRole('button', { name: 'No' }))
+    await userEvent.type(screen.getByLabelText(/Signature \(required\)/i), 'Alex Engineer')
     await userEvent.click(screen.getByRole('button', { name: /Complete assignment/i }))
-    await waitFor(() => expect(mockCompleteAssignment).toHaveBeenCalledWith(7, expect.any(Object)))
+    await waitFor(() =>
+      expect(mockCompleteAssignment).toHaveBeenCalledWith(7, {
+        acceptance_statement: expect.any(String),
+        signature_disposition: 'signed',
+        signature_data: 'Alex Engineer',
+      }),
+    )
   })
 
   it('sends ask-question to knowledge bank thread', async () => {
