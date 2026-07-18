@@ -43,6 +43,24 @@ export function buildAuditRunWorkspacePath(run: {
   return `/audits/${run.id}/import-review`
 }
 
+/**
+ * Monitoring handoff path: Continue in-progress runs in execute workspace;
+ * scheduled/overdue open the Audits board (not a random live execute).
+ */
+export function buildMonitoringAuditHandoffPath(
+  run: {
+    id: number
+    is_external_audit_import?: boolean
+    is_external_import_intake?: boolean
+  },
+  status: MonitoringAuditRunStatus,
+): string {
+  if (status === 'in_progress' || isExternalAuditImportRun(run)) {
+    return buildAuditRunWorkspacePath(run)
+  }
+  return MONITORING_AUDITS_HANDOFF_PATH
+}
+
 export function deriveMonitoringAuditRunStatus(
   run: Pick<AuditRun, 'status' | 'scheduled_date' | 'due_date'>,
   now: Date = new Date(),
@@ -74,7 +92,7 @@ export function mapRunsToMonitoringRows(
         referenceNumber: run.reference_number,
         dueDate: run.scheduled_date ?? run.due_date ?? null,
         status,
-        workspacePath: buildAuditRunWorkspacePath(run),
+        workspacePath: buildMonitoringAuditHandoffPath(run, status),
       }
       if (run.assurance_scheme !== undefined) {
         row.assuranceScheme = run.assurance_scheme

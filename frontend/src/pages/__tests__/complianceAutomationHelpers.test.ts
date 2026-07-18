@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AuditRun } from '../../api/client'
 import {
   buildAuditRunWorkspacePath,
+  buildMonitoringAuditHandoffPath,
   countOpenWatchImpacts,
   countOverdueMonitoringRuns,
   countPendingChangesInbox,
@@ -84,6 +85,31 @@ describe('complianceAutomationHelpers', () => {
       expect(
         buildAuditRunWorkspacePath(makeRun({ is_external_audit_import: true })),
       ).toBe('/audits/1/import-review')
+    })
+
+    it('hands scheduled/overdue monitoring rows to Audits board, not execute', () => {
+      expect(buildMonitoringAuditHandoffPath(makeRun({ id: 42 }), 'scheduled')).toBe(
+        '/audits?view=kanban',
+      )
+      expect(buildMonitoringAuditHandoffPath(makeRun({ id: 42 }), 'overdue')).toBe(
+        '/audits?view=kanban',
+      )
+      expect(buildMonitoringAuditHandoffPath(makeRun({ id: 7 }), 'in_progress')).toBe(
+        '/audits/7/execute',
+      )
+    })
+
+    it('maps scheduled rows to board handoff and in-progress to execute', () => {
+      const now = new Date('2026-07-01T12:00:00Z')
+      const rows = mapRunsToMonitoringRows(
+        [
+          makeRun({ id: 42, scheduled_date: '2026-08-01', status: 'scheduled' }),
+          makeRun({ id: 7, status: 'in_progress', title: 'Site walk' }),
+        ],
+        now,
+      )
+      expect(rows.find((r) => r.id === 42)?.workspacePath).toBe('/audits?view=kanban')
+      expect(rows.find((r) => r.id === 7)?.workspacePath).toBe('/audits/7/execute')
     })
 
     it('derives overdue when scheduled date is in the past', () => {

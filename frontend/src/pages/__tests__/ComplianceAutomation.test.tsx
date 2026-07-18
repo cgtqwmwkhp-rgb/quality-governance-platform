@@ -331,7 +331,7 @@ describe('ComplianceAutomation monitoring honesty', () => {
     expect(screen.getByText('Site inspection')).toBeInTheDocument()
     expect(screen.getByTestId('monitoring-audit-run-42')).toHaveAttribute(
       'href',
-      '/audits/42/execute',
+      '/audits?view=kanban',
     )
     expect(screen.getByTestId('monitoring-audit-run-7')).toHaveAttribute('href', '/audits/7/execute')
     expect(screen.getByTestId('monitoring-audits-schedule-link')).toHaveAttribute(
