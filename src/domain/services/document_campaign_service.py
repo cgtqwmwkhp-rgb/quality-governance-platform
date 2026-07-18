@@ -102,7 +102,7 @@ class DocumentCampaignService:
     async def create_group(
         self,
         *,
-        tenant_id: Optional[int],
+        tenant_id: int,
         created_by_id: int,
         name: str,
         description: Optional[str] = None,
@@ -131,7 +131,7 @@ class DocumentCampaignService:
         await self.db.refresh(group)
         return group
 
-    async def list_groups(self, *, tenant_id: Optional[int]) -> List[Dict[str, Any]]:
+    async def list_groups(self, *, tenant_id: int) -> List[Dict[str, Any]]:
         result = await self.db.execute(
             select(EngineerGroup, func.count(EngineerGroupMember.id))
             .outerjoin(EngineerGroupMember, EngineerGroupMember.group_id == EngineerGroup.id)
@@ -144,7 +144,7 @@ class DocumentCampaignService:
     async def add_group_members(
         self,
         *,
-        tenant_id: Optional[int],
+        tenant_id: int,
         group_id: int,
         user_ids: List[int],
         added_by_id: int,
@@ -172,7 +172,7 @@ class DocumentCampaignService:
         await self.db.refresh(group)
         return group
 
-    async def remove_group_member(self, *, tenant_id: Optional[int], group_id: int, user_id: int) -> None:
+    async def remove_group_member(self, *, tenant_id: int, group_id: int, user_id: int) -> None:
         await self._get_group(tenant_id=tenant_id, group_id=group_id)
 
         result = await self.db.execute(
@@ -188,7 +188,7 @@ class DocumentCampaignService:
         await self.db.delete(member)
         await self.db.commit()
 
-    async def _get_group(self, *, tenant_id: Optional[int], group_id: int) -> EngineerGroup:
+    async def _get_group(self, *, tenant_id: int, group_id: int) -> EngineerGroup:
         result = await self.db.execute(
             select(EngineerGroup).where(EngineerGroup.id == group_id, EngineerGroup.tenant_id == tenant_id)
         )
@@ -202,7 +202,7 @@ class DocumentCampaignService:
     async def create_campaign(
         self,
         *,
-        tenant_id: Optional[int],
+        tenant_id: int,
         created_by_id: int,
         document_id: int,
         quiz_draft_id: Optional[int] = None,
@@ -270,7 +270,7 @@ class DocumentCampaignService:
         await self.db.refresh(campaign)
         return campaign
 
-    async def _get_approved_quiz_draft(self, *, tenant_id: Optional[int], quiz_draft_id: int) -> DocumentQuizDraft:
+    async def _get_approved_quiz_draft(self, *, tenant_id: int, quiz_draft_id: int) -> DocumentQuizDraft:
         result = await self.db.execute(
             select(DocumentQuizDraft).where(
                 DocumentQuizDraft.id == quiz_draft_id,
@@ -282,7 +282,7 @@ class DocumentCampaignService:
             raise BadRequestError("Quiz draft not found or not approved")
         return draft
 
-    async def get_campaign(self, *, tenant_id: Optional[int], campaign_id: int) -> DocumentCampaign:
+    async def get_campaign(self, *, tenant_id: int, campaign_id: int) -> DocumentCampaign:
         result = await self.db.execute(
             select(DocumentCampaign).where(
                 DocumentCampaign.id == campaign_id,
@@ -294,14 +294,12 @@ class DocumentCampaignService:
             raise NotFoundError("Campaign not found")
         return campaign
 
-    async def get_campaign_with_summary(self, *, tenant_id: Optional[int], campaign_id: int) -> Dict[str, Any]:
+    async def get_campaign_with_summary(self, *, tenant_id: int, campaign_id: int) -> Dict[str, Any]:
         campaign = await self.get_campaign(tenant_id=tenant_id, campaign_id=campaign_id)
         summary = await self._compliance_summary(campaign_id)
         return {"campaign": campaign, **summary}
 
-    async def list_campaigns_for_document(
-        self, *, tenant_id: Optional[int], document_id: int
-    ) -> List[DocumentCampaign]:
+    async def list_campaigns_for_document(self, *, tenant_id: int, document_id: int) -> List[DocumentCampaign]:
         result = await self.db.execute(
             select(DocumentCampaign)
             .where(
@@ -337,7 +335,7 @@ class DocumentCampaignService:
 
     # ==================== Audience Expansion ====================
 
-    async def expand_audience(self, *, tenant_id: Optional[int], audience: Dict[str, Any]) -> List[int]:
+    async def expand_audience(self, *, tenant_id: int, audience: Dict[str, Any]) -> List[int]:
         """Expand an audience spec into a de-duplicated, sorted list of user IDs."""
         user_ids: set = {int(u) for u in (audience.get("user_ids") or [])}
 
@@ -386,7 +384,7 @@ class DocumentCampaignService:
     async def launch_campaign(
         self,
         *,
-        tenant_id: Optional[int],
+        tenant_id: int,
         campaign_id: int,
         launched_by_id: int,
     ) -> Dict[str, int]:
@@ -528,7 +526,7 @@ class DocumentCampaignService:
                     exc_info=True,
                 )
 
-    async def _document_title(self, *, tenant_id: Optional[int], document_id: int) -> str:
+    async def _document_title(self, *, tenant_id: int, document_id: int) -> str:
         result = await self.db.execute(select(Document.title).where(Document.id == document_id))
         title = result.scalar_one_or_none()
         return title or "the document"
@@ -539,7 +537,7 @@ class DocumentCampaignService:
 
     # ==================== Engineer-facing Assignment APIs ====================
 
-    async def get_my_assignments(self, *, tenant_id: Optional[int], user_id: int) -> List[Dict[str, Any]]:
+    async def get_my_assignments(self, *, tenant_id: int, user_id: int) -> List[Dict[str, Any]]:
         result = await self.db.execute(
             select(CampaignAssignment, DocumentCampaign, Document)
             .join(DocumentCampaign, DocumentCampaign.id == CampaignAssignment.campaign_id)

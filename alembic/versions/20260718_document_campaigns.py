@@ -20,7 +20,7 @@ def upgrade() -> None:
     op.create_table(
         "engineer_groups",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("tenant_id", sa.Integer(), nullable=True),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(200), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("created_by_id", sa.Integer(), nullable=True),
@@ -36,7 +36,7 @@ def upgrade() -> None:
     op.create_table(
         "engineer_group_members",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("tenant_id", sa.Integer(), nullable=True),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
         sa.Column("group_id", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("added_by_id", sa.Integer(), nullable=True),
@@ -55,7 +55,7 @@ def upgrade() -> None:
     op.create_table(
         "document_campaigns",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("tenant_id", sa.Integer(), nullable=True),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
         sa.Column("document_id", sa.Integer(), nullable=False),
         sa.Column("quiz_draft_id", sa.Integer(), nullable=True),
         sa.Column("title", sa.String(300), nullable=True),
@@ -92,7 +92,7 @@ def upgrade() -> None:
     op.create_table(
         "campaign_assignments",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("tenant_id", sa.Integer(), nullable=True),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
         sa.Column("campaign_id", sa.Integer(), nullable=False),
         sa.Column("user_id", sa.Integer(), nullable=False),
         sa.Column("status", sa.String(20), nullable=False, server_default="pending"),

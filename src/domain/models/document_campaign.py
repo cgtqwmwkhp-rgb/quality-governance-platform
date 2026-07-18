@@ -49,7 +49,7 @@ class EngineerGroup(Base, TimestampMixin):
     __tablename__ = "engineer_groups"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -73,7 +73,7 @@ class EngineerGroupMember(Base):
     __table_args__ = (UniqueConstraint("group_id", "user_id", name="uq_engineer_group_member"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     group_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("engineer_groups.id", ondelete="CASCADE"), nullable=False, index=True
@@ -102,7 +102,7 @@ class DocumentCampaign(Base, TimestampMixin):
     __tablename__ = "document_campaigns"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     document_id: Mapped[int] = mapped_column(Integer, ForeignKey("documents.id"), nullable=False, index=True)
     quiz_draft_id: Mapped[Optional[int]] = mapped_column(
@@ -155,7 +155,7 @@ class CampaignAssignment(Base, TimestampMixin):
     __table_args__ = (UniqueConstraint("campaign_id", "user_id", name="uq_campaign_assignment_user"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     campaign_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("document_campaigns.id", ondelete="CASCADE"), nullable=False, index=True
