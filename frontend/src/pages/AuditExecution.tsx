@@ -1123,7 +1123,10 @@ export default function AuditExecution() {
 
       for (const [questionId, resp] of Object.entries(responses)) {
         const hasPhotos = (resp.evidenceAssetIds?.length ?? 0) > 0
-        if (resp.response === null && !resp.notes && !hasPhotos) continue
+        const existingId = updatedIdMap[questionId]
+        const isEmpty = resp.response === null && !resp.notes && !hasPhotos
+        // Skip brand-new empty rows, but still PATCH clears for previously saved answers.
+        if (isEmpty && !existingId) continue
 
         const question = allQuestions.find((candidate) => candidate.id === questionId)
         const scored = question
@@ -1132,7 +1135,7 @@ export default function AuditExecution() {
         const payload = {
           // Explicit null clears a previously saved answer (undefined would omit the field).
           response_value: serializeResponse(resp.response) ?? null,
-          notes: resp.notes || undefined,
+          notes: resp.notes || null,
           // Persist scores only for real answers; send null on update to clear stale points.
           score: scored.score,
           max_score: scored.max_score,
@@ -1141,7 +1144,6 @@ export default function AuditExecution() {
             : {}),
         }
 
-        const existingId = updatedIdMap[questionId]
         if (existingId) {
           await auditsApi.updateResponse(existingId, payload)
         } else {
