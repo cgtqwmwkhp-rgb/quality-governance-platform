@@ -87,7 +87,7 @@ describe('AssessmentCreate employee picker', () => {
     expect(screen.getByLabelText(/workforce\.common\.engineer/i)).toBeDisabled()
   })
 
-  it('shows MAP-W2 Assist parity honesty on competency create', async () => {
+  it('shows MAP Assist confirm-loop honesty on competency create', async () => {
     listEngineers.mockResolvedValue({ data: { items: [] } })
 
     const AssessmentCreate = (await import('../AssessmentCreate')).default
@@ -99,7 +99,7 @@ describe('AssessmentCreate employee picker', () => {
 
     expect(await screen.findByTestId('map-w2-competency-assist-panel')).toBeInTheDocument()
     expect(screen.getByTestId('map-w2-competency-assist-honesty')).toHaveTextContent(
-      'workforce.assessments.map_w2.honesty',
+      /Assist Map confirm loop is live/i,
     )
     expect(screen.getByTestId('map-w2-competency-scheme-chips')).toBeInTheDocument()
     expect(screen.getByTestId('map-w2-competency-scheme-iso')).toBeInTheDocument()

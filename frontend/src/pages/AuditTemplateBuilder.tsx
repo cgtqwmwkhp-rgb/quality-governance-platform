@@ -17,6 +17,8 @@ import {
   Layers,
   Lock,
   Unlock,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
 import AITemplateGenerator from '../components/AITemplateGenerator'
 import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
@@ -36,8 +38,11 @@ import PublishDialog from './audit-builder/PublishDialog'
 import {
   MAP_W2_SCHEME_CHIPS,
   computeIsoClauseCoverage,
+  mergeSuggestedLinks,
   schemeChipStatus,
 } from './builderMapAssistHonesty'
+import { decideStandardLink, suggestStandardLinks } from './builderMapAssistApi'
+import type { MapW3StandardLink } from './mapW3StaleRescoreHonesty'
 
 const CATEGORIES = [
   { id: 'quality', label: 'Quality Management', icon: Award, color: 'blue' },
@@ -205,6 +210,8 @@ export default function AuditTemplateBuilder() {
   )
   const [isPublishing, setIsPublishing] = useState(false)
   const [isLoading, setIsLoading] = useState(!!templateId)
+  const [mapSuggesting, setMapSuggesting] = useState(false)
+  const [mapAssistError, setMapAssistError] = useState<string | null>(null)
   const sectionIdMap = useRef<Record<string, number>>({})
   const questionIdMap = useRef<Record<string, number>>({})
   const deletedSectionIds = useRef<number[]>([])
@@ -297,7 +304,10 @@ export default function AuditTemplateBuilder() {
       ss.map((s) => (s.id === sid ? { ...s, questions: [...s.questions, q] } : s)),
     )
   }
-  const handleUpdateQuestion = (sid: string, qid: string, updates: Partial<Question>) =>
+  const handleUpdateQuestion = (sid: string, qid: string, updates: Partial<Question>) => {
+    const prior = template.sections
+      .find((s) => s.id === sid)
+      ?.questions.find((q) => q.id === qid)
     updateSections((ss) =>
       ss.map((s) =>
         s.id === sid
@@ -305,6 +315,71 @@ export default function AuditTemplateBuilder() {
           : s,
       ),
     )
+    // Persist confirm-loop Accept/Edit/Reject when backend question exists (MAP-04).
+    if (updates.standardLinks && prior?.standardLinks) {
+      const backendQid = questionIdMap.current[qid]
+      if (backendQid) {
+        const priorById = new Map(prior.standardLinks.map((l) => [l.id, l]))
+        for (const link of updates.standardLinks) {
+          const before = priorById.get(link.id)
+          if (!before || before.status === link.status) continue
+          if (link.status !== 'accepted' && link.status !== 'rejected') continue
+          const decision = before.status === 'suggested' || before.status === 'stale'
+            ? link.status === 'rejected'
+              ? 'reject'
+              : before.refId !== link.refId || before.label !== link.label
+                ? 'edit'
+                : 'accept'
+            : link.status === 'rejected'
+              ? 'reject'
+              : 'edit'
+          void decideStandardLink(backendQid, decision, link as MapW3StandardLink, {
+            editedRefId: link.refId,
+            editedLabel: link.label,
+            rationale: decision === 'reject' ? 'Rejected from builder confirm loop' : undefined,
+          }).catch((err) => {
+            setMapAssistError(err instanceof Error ? err.message : 'Failed to persist mapping')
+          })
+        }
+      }
+    }
+  }
+
+  const handleSuggestStandardLinks = async () => {
+    const questions = allQuestions.filter((q) => q.text.trim())
+    if (questions.length === 0) {
+      setMapAssistError('Add question text before running Assist Map')
+      return
+    }
+    setMapSuggesting(true)
+    setMapAssistError(null)
+    try {
+      const suggestions = await suggestStandardLinks(
+        questions.map((q) => ({
+          question_id: q.id,
+          question_text: q.text,
+          description: q.description,
+        })),
+      )
+      updateSections((sections) =>
+        sections.map((section) => ({
+          ...section,
+          questions: section.questions.map((question) => {
+            const merged = mergeSuggestedLinks(
+              (question.standardLinks ?? []) as MapW3StandardLink[],
+              suggestions.filter((s) => s.questionId === question.id),
+            )
+            return { ...question, standardLinks: merged }
+          }),
+        })),
+      )
+      announce(`Assist Map suggested ${suggestions.length} standard link(s)`, 'polite')
+    } catch (err) {
+      setMapAssistError(err instanceof Error ? err.message : 'Assist Map suggest failed')
+    } finally {
+      setMapSuggesting(false)
+    }
+  }
   const handleDeleteQuestion = (sid: string, qid: string) => {
     const backendQuestionId = questionIdMap.current[qid]
     if (backendQuestionId) {
@@ -513,11 +588,23 @@ export default function AuditTemplateBuilder() {
                           {mapCoverage.isoCoveragePercent}%
                         </span>
                       </div>
+                      <div
+                        className="flex justify-between"
+                        data-testid="map-04-multi-scheme-coverage"
+                      >
+                        <span className="text-sm text-muted-foreground">
+                          Multi-scheme coverage
+                        </span>
+                        <span className="text-sm font-medium text-foreground">
+                          {mapCoverage.multiSchemeCoveragePercent}%
+                        </span>
+                      </div>
                       <p className="text-xs text-muted-foreground" data-testid="map-w2-coverage-hint">
                         {t('audit_builder.map_w2.coverage_hint', {
                           linked: mapCoverage.withIsoClause,
                           total: mapCoverage.totalQuestions,
-                        })}
+                        })}{' '}
+                        Accepted links: {mapCoverage.acceptedMultiSchemeLinks}.
                       </p>
                     </div>
                   </div>
@@ -530,28 +617,56 @@ export default function AuditTemplateBuilder() {
                       {t('audit_builder.map_w2.title')}
                     </h3>
                     <p className="text-xs text-muted-foreground mb-3" data-testid="map-w2-assist-honesty">
-                      {t('audit_builder.map_w2.honesty')}
+                      Assist Map is live — suggest ISO / Planet Mark / UVDB, then Accept / Edit /
+                      Reject under Advanced Settings. Links persist on confirm.
                     </p>
                     <div className="flex flex-wrap gap-2" data-testid="map-w2-scheme-chips">
                       {MAP_W2_SCHEME_CHIPS.map((scheme) => {
                         const status = schemeChipStatus(scheme, mapCoverage)
+                        const label =
+                          status === 'accepted'
+                            ? 'accepted'
+                            : status === 'manual_iso'
+                              ? t('audit_builder.map_w2.scheme_manual_iso')
+                              : t('audit_builder.map_w2.scheme_awaiting')
                         return (
                           <Badge
                             key={scheme}
-                            variant={status === 'manual_iso' ? 'success' : 'secondary'}
+                            variant={
+                              status === 'accepted' || status === 'manual_iso'
+                                ? 'success'
+                                : 'secondary'
+                            }
                             data-testid={`map-w2-scheme-${scheme.replace(/\s+/g, '-').toLowerCase()}`}
                           >
-                            {scheme}
-                            {status === 'manual_iso'
-                              ? ` · ${t('audit_builder.map_w2.scheme_manual_iso')}`
-                              : ` · ${t('audit_builder.map_w2.scheme_awaiting')}`}
+                            {scheme} · {label}
                           </Badge>
                         )
                       })}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      {t('audit_builder.map_w2.assist_followon')}
-                    </p>
+                    <button
+                      type="button"
+                      className="mt-3 inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-60"
+                      data-testid="map-04-suggest-cta"
+                      onClick={() => void handleSuggestStandardLinks()}
+                      disabled={mapSuggesting}
+                    >
+                      {mapSuggesting ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5" />
+                      )}
+                      Suggest standards mappings
+                    </button>
+                    {mapAssistError ? (
+                      <p className="text-xs text-destructive mt-2" data-testid="map-04-assist-error">
+                        {mapAssistError}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Open Advanced Settings on a question to confirm suggested chips.
+                      </p>
+                    )}
                   </div>
 
                   <div className="bg-card/50 border border-border rounded-2xl p-4">

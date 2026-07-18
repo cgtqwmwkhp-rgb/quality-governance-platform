@@ -115,6 +115,7 @@ describe('mapW3StaleRescoreHonesty MAP-W3', () => {
     expect(honesty.hasStaleLinks).toBe(false)
     expect(honesty.needsAssistRerun).toBe(false)
     expect(honesty.acceptedMultiSchemeLinks).toBe(1)
+    expect(honesty.assistMapLive).toBe(true)
     expect(shouldPromptResuggest(honesty)).toBe(false)
   })
 

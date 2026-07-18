@@ -17,6 +17,11 @@ import {
   employeePickerOptionLabel,
   sortEmployeesForPicker,
 } from './employeePickerUtils'
+import { MAP_W2_SCHEME_CHIPS } from '../builderMapAssistHonesty'
+import {
+  fetchTemplateStandardsCoverage,
+  type BuilderStandardsCoverage,
+} from '../builderMapAssistApi'
 
 export default function AssessmentCreate() {
   const { t } = useTranslation()
@@ -35,6 +40,7 @@ export default function AssessmentCreate() {
   const [location, setLocation] = useState('')
   const [scheduledDate, setScheduledDate] = useState('')
   const [notes, setNotes] = useState('')
+  const [mapCoverage, setMapCoverage] = useState<BuilderStandardsCoverage | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -55,6 +61,24 @@ export default function AssessmentCreate() {
     }
     load()
   }, [])
+
+  useEffect(() => {
+    if (!templateId) {
+      setMapCoverage(null)
+      return
+    }
+    let cancelled = false
+    void fetchTemplateStandardsCoverage(Number(templateId))
+      .then((coverage) => {
+        if (!cancelled) setMapCoverage(coverage)
+      })
+      .catch(() => {
+        if (!cancelled) setMapCoverage(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [templateId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -117,22 +141,38 @@ export default function AssessmentCreate() {
             {t('workforce.assessments.map_w2.title')}
           </h2>
           <p className="text-sm text-muted-foreground" data-testid="map-w2-competency-assist-honesty">
-            {t('workforce.assessments.map_w2.honesty')}
+            Assist Map confirm loop is live on the template builder. Select a competency template to
+            see persisted multi-scheme coverage before you create the assessment.
           </p>
         </CardHeader>
         <CardContent className="space-y-2">
           <div className="flex flex-wrap gap-2" data-testid="map-w2-competency-scheme-chips">
-            {['ISO', 'Planet Mark', 'UVDB'].map((scheme) => (
-              <span
-                key={scheme}
-                className="inline-flex items-center rounded-md border border-border bg-secondary px-2 py-0.5 text-xs text-muted-foreground"
-                data-testid={`map-w2-competency-scheme-${scheme.replace(/\s+/g, '-').toLowerCase()}`}
-              >
-                {scheme} · {t('workforce.assessments.map_w2.scheme_awaiting')}
-              </span>
-            ))}
+            {MAP_W2_SCHEME_CHIPS.map((scheme) => {
+              const accepted = mapCoverage?.by_scheme?.[scheme] ?? 0
+              return (
+                <span
+                  key={scheme}
+                  className="inline-flex items-center rounded-md border border-border bg-secondary px-2 py-0.5 text-xs text-muted-foreground"
+                  data-testid={`map-w2-competency-scheme-${scheme.replace(/\s+/g, '-').toLowerCase()}`}
+                >
+                  {scheme} ·{' '}
+                  {accepted > 0
+                    ? `${accepted} accepted`
+                    : t('workforce.assessments.map_w2.scheme_awaiting')}
+                </span>
+              )
+            })}
           </div>
-          <p className="text-xs text-muted-foreground">{t('workforce.assessments.map_w2.parity_hint')}</p>
+          {mapCoverage ? (
+            <p className="text-xs text-muted-foreground" data-testid="map-04-competency-coverage">
+              Multi-scheme coverage {mapCoverage.coverage_percent}% (
+              {mapCoverage.questions_with_accepted_links}/{mapCoverage.total_questions} questions ·{' '}
+              {mapCoverage.accepted_multi_scheme_links} accepted links). Map further links on the
+              Audit / Inspection template builder.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">{t('workforce.assessments.map_w2.parity_hint')}</p>
+          )}
         </CardContent>
       </Card>
 
