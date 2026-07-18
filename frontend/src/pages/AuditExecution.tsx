@@ -306,6 +306,7 @@ const ResponseButton = ({
   children,
   icon: Icon,
   autoAdvancePending = false,
+  disabled = false,
 }: {
   selected: boolean
   onClick: () => void
@@ -313,6 +314,7 @@ const ResponseButton = ({
   children: React.ReactNode
   icon?: React.ElementType
   autoAdvancePending?: boolean
+  disabled?: boolean
 }) => {
   const variantStyles = {
     success: 'border-success bg-success/20 text-success',
@@ -334,8 +336,9 @@ const ResponseButton = ({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={accessibleLabel}
-      className={`relative flex-1 flex items-center justify-center gap-2 py-4 px-4 rounded-xl border-2 font-semibold transition-all duration-200 overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background
+      className={`relative flex-1 flex items-center justify-center gap-2 py-4 px-4 rounded-xl border-2 font-semibold transition-all duration-200 overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed
         ${selected ? variantStyles[variant] : `border-border bg-secondary text-muted-foreground ${hoverStyles[variant]}`}`}
     >
       {Icon && <Icon className="w-5 h-5" />}
@@ -874,7 +877,21 @@ export default function AuditExecution() {
         })
         setResponses(existingResponses)
         setResponseIdMap(idMap)
-        setRunCompleted(runData.status === 'completed')
+        const alreadyCompleted = runData.status === 'completed'
+        setRunCompleted(alreadyCompleted)
+
+        if (alreadyCompleted) {
+          const findings = runData.findings || []
+          const linkedRiskIds = new Set(
+            findings.flatMap((finding) => (Array.isArray(finding.risk_ids) ? finding.risk_ids : [])),
+          )
+          setCompletionSummary({
+            findings: findings.length,
+            actions: findings.filter((finding) => finding.corrective_action_required).length,
+            risks: linkedRiskIds.size,
+          })
+          setStayOnCompletionProof(true)
+        }
 
         if (runData.status === 'scheduled') {
           await auditsApi.startRun(runIdNum)
@@ -901,7 +918,7 @@ export default function AuditExecution() {
   // newer than what came back from the server (e.g. user got logged out
   // mid-audit and we flushed answers to IndexedDB before redirecting).
   useEffect(() => {
-    if (!runIdNum || !audit) return
+    if (!runIdNum || !audit || runCompleted) return
     let cancelled = false
     void getAuditDraft(runIdNum).then((draft) => {
       if (cancelled || !draft) return
@@ -925,7 +942,7 @@ export default function AuditExecution() {
     // Intentionally only depend on runIdNum + audit being loaded; we want
     // this to fire exactly once per audit, not whenever responses change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runIdNum, audit])
+  }, [runIdNum, audit, runCompleted])
 
   // Snapshot registration: api/client.ts calls every registered snapshot
   // just before any auth-loss redirect so unsaved answers get stashed in
@@ -1288,6 +1305,7 @@ export default function AuditExecution() {
 
   // Update response
   const updateResponse = (updates: Partial<Omit<QuestionResponse, 'questionId' | 'timestamp'>>) => {
+    if (runCompleted) return
     dirtyRef.current = true
     setResponses((prev) => ({
       ...prev,
@@ -1489,6 +1507,7 @@ export default function AuditExecution() {
 
   // Auto-advance handler for binary question types (YES/NO, PASS/FAIL, N/A)
   const handleBinaryResponse = (value: string) => {
+    if (runCompleted) return
     // Cancel any in-flight timer — user changed their answer or re-tapped
     if (autoAdvanceTimerRef.current) {
       clearTimeout(autoAdvanceTimerRef.current)
@@ -1535,6 +1554,7 @@ export default function AuditExecution() {
               onClick={() => handleBinaryResponse('pass')}
               variant={yesVariant}
               icon={yesIcon}
+              disabled={runCompleted}
               autoAdvancePending={autoAdvancePending && currentResponse?.response === 'pass'}
             >
               PASS
@@ -1544,6 +1564,7 @@ export default function AuditExecution() {
               onClick={() => handleBinaryResponse('fail')}
               variant={noVariant}
               icon={noIcon}
+              disabled={runCompleted}
               autoAdvancePending={autoAdvancePending && currentResponse?.response === 'fail'}
             >
               FAIL
@@ -1559,6 +1580,7 @@ export default function AuditExecution() {
               onClick={() => handleBinaryResponse('yes')}
               variant={yesVariant}
               icon={yesIcon}
+              disabled={runCompleted}
               autoAdvancePending={autoAdvancePending && currentResponse?.response === 'yes'}
             >
               YES
@@ -1568,6 +1590,7 @@ export default function AuditExecution() {
               onClick={() => handleBinaryResponse('no')}
               variant={noVariant}
               icon={noIcon}
+              disabled={runCompleted}
               autoAdvancePending={autoAdvancePending && currentResponse?.response === 'no'}
             >
               NO
@@ -1583,6 +1606,7 @@ export default function AuditExecution() {
               onClick={() => handleBinaryResponse('yes')}
               variant={yesVariant}
               icon={yesIcon}
+              disabled={runCompleted}
               autoAdvancePending={autoAdvancePending && currentResponse?.response === 'yes'}
             >
               YES
@@ -1592,6 +1616,7 @@ export default function AuditExecution() {
               onClick={() => handleBinaryResponse('no')}
               variant={noVariant}
               icon={noIcon}
+              disabled={runCompleted}
               autoAdvancePending={autoAdvancePending && currentResponse?.response === 'no'}
             >
               NO
@@ -1601,6 +1626,7 @@ export default function AuditExecution() {
               onClick={() => handleBinaryResponse('na')}
               variant="neutral"
               icon={MinusCircle}
+              disabled={runCompleted}
               autoAdvancePending={autoAdvancePending && currentResponse?.response === 'na'}
             >
               N/A

@@ -91,6 +91,80 @@ describe('AuditExecution', () => {
     })
   })
 
+  it('opens already-completed runs on the completion proof screen (not editable execute)', async () => {
+    mockGetRunDetail.mockResolvedValue({
+      data: {
+        id: 41,
+        reference_number: 'AUD-00041',
+        template_id: 11,
+        template_version: 1,
+        title: 'Warehouse inspection',
+        location: 'London',
+        status: 'completed',
+        responses: [
+          {
+            id: 1,
+            question_id: 8,
+            response_value: 'ok',
+          },
+        ],
+        findings: [
+          {
+            id: 1,
+            corrective_action_required: true,
+            risk_ids: [9],
+          },
+        ],
+        completion_percentage: 100,
+        created_at: '2026-03-24T10:05:00Z',
+      },
+    })
+    mockGetTemplate.mockResolvedValue({
+      data: {
+        id: 11,
+        name: 'Warehouse inspection',
+        audit_type: 'internal',
+        version: 1,
+        scoring_method: 'percentage',
+        allow_offline: false,
+        require_gps: false,
+        require_signature: false,
+        require_approval: false,
+        auto_create_findings: true,
+        is_active: true,
+        is_published: true,
+        sections: [
+          {
+            id: 5,
+            title: 'Safety',
+            is_active: true,
+            sort_order: 1,
+            questions: [
+              {
+                id: 8,
+                question_text: 'Inspection notes',
+                question_type: 'text',
+                is_required: false,
+                is_active: true,
+                sort_order: 1,
+                weight: 1,
+                failure_triggers_action: false,
+              },
+            ],
+          },
+        ],
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByText('Inspection completed')).toBeInTheDocument()
+    expect(screen.getByText('1 finding / 1 action created')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'YES' })).not.toBeInTheDocument()
+    expect(mockStartRun).not.toHaveBeenCalled()
+    expect(mockCompleteRun).not.toHaveBeenCalled()
+  })
+
   it('shows live downstream counts then redirects to audit-sourced actions', async () => {
     const initialRun = {
       id: 41,

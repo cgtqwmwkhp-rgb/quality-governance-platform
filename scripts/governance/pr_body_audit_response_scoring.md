@@ -4,11 +4,11 @@
 - **Feature / Change name:** Audit response score/max_score derivation
 - **User goal (1-2 lines):** Completed audits must persist a real score and pass/fail instead of always writing 0% / passed=false when the UI shows AUDIT PASSED.
 - **In scope:** Derive score/max_score from question+answer on response create/update; backfill on complete_run; expose max_score on response schemas; send score payloads from AuditExecution; unit tests; this Change Ledger
-- **Out of scope:** Historical score backfill for already-completed runs; completed-run execute read-only UX; SWA/API tipspine ops
+- **Out of scope:** Historical score backfill for already-completed runs; SWA/API tipspine ops; full answer-integrity normalize from stale path11 branch
 - **Feature flag / kill switch:** N/A — correctness fix
 
 ## 2) Impact Map (what changed)
-- **Frontend (routes/screens/components):** `AuditExecution.tsx` persists `score`/`max_score`; `auditsClient.ts` update type includes `max_score`
+- **Frontend (routes/screens/components):** `AuditExecution.tsx` persists `score`/`max_score` and opens completed runs on the completion proof screen (not editable execute); `auditsClient.ts` update type includes `max_score`
 - **Backend (handlers/services):** `audit_scoring_service.py` derive helpers; `audit_service.py` create/update/complete enrichment; `audits.py` create_response enrichment
 - **APIs (endpoints changed/added):** `POST /api/v1/audits/runs/{id}/responses`, `PATCH /api/v1/audits/responses/{id}`, complete-run scoring behavior
 - **Schemas/contracts (OpenAPI/Zod/DTO/types):** `AuditResponse*` schemas gain optional `max_score`
@@ -30,6 +30,7 @@
 - [x] AC-03: complete_run backfills missing response scores before aggregating
 - [x] AC-04: AuditExecution save payload includes score/max_score
 - [x] AC-05: Unit tests cover derive + existing aggregate cases (`test_audit_scoring.py`)
+- [x] AC-06: Opening `/audits/:id/execute` for a completed run shows Inspection completed (not editable YES/NO)
 
 ## 5) Testing Evidence (link to runs)
 - [x] Lint — black on touched Python
