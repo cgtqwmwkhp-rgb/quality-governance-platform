@@ -227,8 +227,13 @@ export function scorePayloadForQuestion(
   response: Pick<QuestionResponse, 'response'>,
 ): { score: number | null; max_score: number | null } {
   const maxScore = question.maxScore ?? question.weight ?? 1
-  // Notes/photos without a main answer must not contribute 0/max to run totals.
-  if (response.response === null || response.response === undefined) {
+  // Notes/photos / cleared fields must not contribute 0/max to run totals.
+  if (
+    response.response === null ||
+    response.response === undefined ||
+    response.response === '' ||
+    (Array.isArray(response.response) && response.response.length === 0)
+  ) {
     return { score: null, max_score: null }
   }
   if (question.type === 'pass_fail' || question.type === 'yes_no') {
@@ -289,7 +294,7 @@ export function scorePayloadForQuestion(
       })
     }
     if (selected.size === 0) {
-      return { score: 0, max_score: maxScore }
+      return { score: null, max_score: null }
     }
     const matchedScores: number[] = []
     for (const option of options) {
@@ -304,6 +309,14 @@ export function scorePayloadForQuestion(
       return { score: Math.min(maxScore, totalScore), max_score: maxScore }
     }
     return { score: maxScore, max_score: maxScore }
+  }
+  // Text/date/photo/etc.: credit only when there is a non-empty answer.
+  const hasAnswer =
+    typeof response.response === 'string'
+      ? response.response.trim().length > 0
+      : response.response != null
+  if (!hasAnswer) {
+    return { score: null, max_score: null }
   }
   return { score: maxScore, max_score: maxScore }
 }

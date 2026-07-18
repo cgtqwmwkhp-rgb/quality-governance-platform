@@ -100,7 +100,8 @@ class AuditScoringService:
                 try:
                     num = float(answer)
                 except ValueError:
-                    derived = resolved_max
+                    # Invalid numeric input is unscored (not full credit).
+                    derived = None
                 else:
                     max_value = float(
                         getattr(question, "max_value", None)

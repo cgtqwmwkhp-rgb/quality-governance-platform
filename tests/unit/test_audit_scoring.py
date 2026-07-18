@@ -125,6 +125,22 @@ class TestDeriveResponseScore:
         assert enriched["score"] is None
         assert enriched["max_score"] is None
 
+    def test_invalid_numeric_answer_is_unscored(self):
+        question = SimpleNamespace(
+            question_type="numeric",
+            max_score=10.0,
+            weight=10.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=10.0,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_value="not-a-number",
+        )
+        assert score is None
+        assert max_score is None
+
 
 class TestScoreResult:
     def test_score_result_creation(self):
