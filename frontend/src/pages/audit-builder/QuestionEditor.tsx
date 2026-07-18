@@ -24,8 +24,10 @@ import {
   Trash2,
   ArrowRightLeft,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import type { Question, QuestionType, QuestionOption } from './types'
 import { generateId } from './types'
+import { standardsHrefForIsoRef } from '../builderMapAssistApi'
 
 export const QUESTION_TYPES: {
   type: QuestionType
@@ -544,9 +546,20 @@ export default function QuestionEditor({
                         className="flex flex-wrap items-center gap-2 rounded border border-border bg-card px-2 py-1.5"
                         data-testid={`map-confirm-link-${link.id}`}
                       >
-                        <span className="text-xs font-medium text-foreground">
-                          {link.scheme} · {link.refId}
-                        </span>
+                        {link.scheme === 'ISO' ? (
+                          <Link
+                            to={standardsHrefForIsoRef(link.refId)}
+                            className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                            data-testid={`map-iso-deeplink-${link.id}`}
+                            title="Open ISO clause in Standards"
+                          >
+                            {link.scheme} · {link.refId}
+                          </Link>
+                        ) : (
+                          <span className="text-xs font-medium text-foreground">
+                            {link.scheme} · {link.refId}
+                          </span>
+                        )}
                         <span className="text-xs text-muted-foreground truncate max-w-[12rem]">
                           {link.label}
                         </span>

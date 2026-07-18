@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # ============== Engineer Schemas ==============
 
@@ -37,9 +37,10 @@ class EngineerCreate(BaseModel):
 
 
 class EngineerUpdate(BaseModel):
-    """Schema for updating an engineer - all fields optional."""
+    """Schema for updating an engineer - QGP pseudo-DB only (never writes PAMS)."""
 
     user_id: Optional[int] = None
+    display_name: Optional[str] = Field(None, max_length=200)
     employee_number: Optional[str] = Field(None, max_length=50)
     job_title: Optional[str] = Field(None, max_length=100)
     department: Optional[str] = Field(None, max_length=100)
@@ -49,6 +50,21 @@ class EngineerUpdate(BaseModel):
     certifications: Optional[List[Any]] = None
     is_active: Optional[bool] = None
     notes: Optional[str] = None
+    qgp_profile_override: Optional[bool] = None
+
+
+class EngineerLinkUserRequest(BaseModel):
+    """Link a QGP login User to an Engineer person record."""
+
+    user_id: int
+
+
+class LinkedUserSummary(BaseModel):
+    """Optional login seat summary for pickers (Person may exist without this)."""
+
+    id: int
+    email: str
+    full_name: Optional[str] = None
 
 
 class EngineerResponse(BaseModel):
@@ -70,9 +86,16 @@ class EngineerResponse(BaseModel):
     certifications_json: Optional[List[Any]] = None
     is_active: bool
     notes: Optional[str] = None
+    qgp_profile_override: bool = False
     tenant_id: int | None = None
     created_at: datetime
     updated_at: datetime
+    linked_user: Optional[LinkedUserSummary] = None
+
+    @field_validator("qgp_profile_override", mode="before")
+    @classmethod
+    def coerce_qgp_override(cls, value: Any) -> bool:
+        return bool(value) if value is not None else False
 
 
 class EngineerLinkStatusResponse(BaseModel):

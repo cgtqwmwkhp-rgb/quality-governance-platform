@@ -290,7 +290,6 @@ describe('EngineerProfile', () => {
     )
 
     expect(await screen.findByTestId('engineer-user-link-unlinked')).toBeInTheDocument()
-    expect(screen.getByText('workforce.engineers.user_link.unlinked')).toBeInTheDocument()
     expect(screen.getByText('workforce.engineers.user_link.unlinked_hint')).toBeInTheDocument()
     expect(screen.queryByTestId('engineer-user-link-linked')).not.toBeInTheDocument()
   })

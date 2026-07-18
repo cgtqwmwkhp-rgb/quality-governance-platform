@@ -38,12 +38,15 @@ async def test_get_engineer_allows_self_read():
         certifications_json=None,
         is_active=True,
         notes=None,
+        qgp_profile_override=False,
+        display_name=None,
+        pams_technician_id=None,
         tenant_id=1,
         competency_records=[],
         created_at="2026-01-01T00:00:00Z",
         updated_at="2026-01-01T00:00:00Z",
     )
-    db = types.SimpleNamespace(execute=AsyncMock(return_value=_FakeResult(engineer)))
+    db = types.SimpleNamespace(execute=AsyncMock(side_effect=[_FakeResult(engineer), _FakeResult(None)]))
     user = types.SimpleNamespace(id=42, tenant_id=1, is_superuser=False, roles=[])
 
     result = await get_engineer(10, db, user)
@@ -84,13 +87,16 @@ async def test_list_engineers_scopes_non_manager_to_self():
         certifications_json=None,
         is_active=True,
         notes=None,
+        qgp_profile_override=False,
+        display_name=None,
+        pams_technician_id=None,
         tenant_id=1,
         created_at="2026-01-01T00:00:00Z",
         updated_at="2026-01-01T00:00:00Z",
     )
     db = types.SimpleNamespace(
         scalar=AsyncMock(return_value=1),
-        execute=AsyncMock(return_value=_FakeResult([engineer])),
+        execute=AsyncMock(side_effect=[_FakeResult([engineer]), _FakeResult(None)]),
     )
     user = types.SimpleNamespace(id=42, tenant_id=1, is_superuser=False, roles=[])
 
