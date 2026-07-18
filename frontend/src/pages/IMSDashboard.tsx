@@ -16,7 +16,6 @@ import {
   TrendingUp,
   Calendar,
   Users,
-  Target,
   BarChart3,
   Link2,
   ChevronRight,
@@ -207,6 +206,97 @@ export default function IMSDashboard() {
 
   const reviewComplete = managementReviewInputs.filter((i) => i.status === 'Complete').length
   const reviewReadiness = Math.round((reviewComplete / managementReviewInputs.length) * 100)
+
+  const auditSchedule = dashData?.audit_schedule ?? []
+  const openScheduledAudits = auditSchedule.filter((a) => a.status !== 'completed').length
+  const inProgressAudits = auditSchedule.filter((a) => a.status === 'in_progress').length
+
+  const overviewKpis = useMemo(() => {
+    const controlStatus =
+      overallCompliance >= 80 ? 'good' : overallCompliance >= 50 ? 'warning' : 'critical'
+    const metrics: {
+      label: string
+      value: number
+      target?: number
+      unit: string
+      status: 'good' | 'warning' | 'critical'
+    }[] = [
+      {
+        label: 'Standards tracked',
+        value: trackedStandardCount,
+        unit: '',
+        status: trackedStandardCount > 0 ? 'good' : 'warning',
+      },
+      {
+        label: 'Open scheduled audits',
+        value: openScheduledAudits,
+        unit: '',
+        status: openScheduledAudits > 0 ? 'warning' : 'good',
+      },
+      {
+        label: 'In-progress audits',
+        value: inProgressAudits,
+        unit: '',
+        status: inProgressAudits > 0 ? 'warning' : 'good',
+      },
+      {
+        label: 'Control implementation',
+        value: Math.round(overallCompliance),
+        target: 100,
+        unit: '%',
+        status: controlStatus,
+      },
+    ]
+    if (evidenceCoveragePct != null && !dashData?.compliance_coverage_error) {
+      metrics.push({
+        label: 'Evidence coverage',
+        value: Math.round(evidenceCoveragePct),
+        target: 100,
+        unit: '%',
+        status: evidenceCoveragePct >= 80 ? 'good' : evidenceCoveragePct >= 50 ? 'warning' : 'critical',
+      })
+    }
+    return metrics
+  }, [
+    dashData?.compliance_coverage_error,
+    evidenceCoveragePct,
+    inProgressAudits,
+    openScheduledAudits,
+    overallCompliance,
+    trackedStandardCount,
+  ])
+
+  const overviewActivity = useMemo(() => {
+    return [...auditSchedule]
+      .sort((a, b) => {
+        const aTime = a.scheduled_date ? new Date(a.scheduled_date).getTime() : 0
+        const bTime = b.scheduled_date ? new Date(b.scheduled_date).getTime() : 0
+        return bTime - aTime
+      })
+      .slice(0, 5)
+      .map((audit) => ({
+        id: audit.id,
+        action:
+          audit.status === 'in_progress'
+            ? 'Audit in progress'
+            : audit.status === 'completed'
+              ? 'Audit completed'
+              : 'Audit scheduled',
+        detail: `${audit.reference_number}${audit.title ? ` · ${audit.title}` : ''}`,
+        time: audit.scheduled_date
+          ? new Date(audit.scheduled_date).toLocaleDateString()
+          : audit.due_date
+            ? new Date(audit.due_date).toLocaleDateString()
+            : 'Date TBD',
+        icon: audit.status === 'completed' ? CheckCircle2 : Calendar,
+        color:
+          audit.status === 'completed'
+            ? 'text-success'
+            : audit.status === 'in_progress'
+              ? 'text-warning'
+              : 'text-info',
+      }))
+  }, [auditSchedule])
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -412,68 +502,97 @@ export default function IMSDashboard() {
       {/* ── Overview Tab ── */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
+          <Card data-testid="ims-overview-kpi-card">
             <CardHeader>
               <CardTitle>Key Performance Metrics</CardTitle>
+              <p className="text-sm text-muted-foreground" data-testid="ims-overview-kpi-honesty">
+                Live from the IMS dashboard API — not demo targets. Targets show only when a real goal applies.
+              </p>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {[
-                  { label: 'Open Actions', value: 12, target: 0, unit: '', status: 'warning' },
-                  { label: 'Overdue Actions', value: 2, target: 0, unit: '', status: 'critical' },
-                  { label: 'Document Review Compliance', value: 94, target: 100, unit: '%', status: 'good' },
-                  { label: 'Training Completion', value: 98, target: 100, unit: '%', status: 'good' },
-                  { label: 'Audit Completion', value: 75, target: 100, unit: '%', status: 'warning' },
-                ].map((metric, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <span className="text-foreground text-sm">{metric.label}</span>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          'font-bold',
-                          metric.status === 'good'
-                            ? 'text-success'
-                            : metric.status === 'warning'
-                              ? 'text-warning'
-                              : 'text-destructive',
-                        )}
-                      >
-                        {metric.value}{metric.unit}
-                      </span>
-                      <span className="text-muted-foreground text-sm">/ {metric.target}{metric.unit}</span>
+              {dashLoading ? (
+                <TableSkeleton rows={5} columns={2} />
+              ) : (
+                <div className="space-y-4">
+                  {overviewKpis.map((metric) => (
+                    <div key={metric.label} className="flex items-center justify-between">
+                      <span className="text-foreground text-sm">{metric.label}</span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            'font-bold',
+                            metric.status === 'good'
+                              ? 'text-success'
+                              : metric.status === 'warning'
+                                ? 'text-warning'
+                                : 'text-destructive',
+                          )}
+                        >
+                          {metric.value}
+                          {metric.unit}
+                        </span>
+                        {metric.target != null ? (
+                          <span className="text-muted-foreground text-sm">
+                            / {metric.target}
+                            {metric.unit}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          <Card>
+          <Card data-testid="ims-overview-activity-card">
             <CardHeader>
               <CardTitle>Recent Activity</CardTitle>
+              <p className="text-sm text-muted-foreground" data-testid="ims-overview-activity-honesty">
+                Pulled from the live audit schedule — empty means none scheduled, not a demo feed.
+              </p>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {[
-                  { action: 'Audit Finding Closed', detail: 'Minor NC #2024-015', time: '2 hours ago', icon: CheckCircle2, color: 'text-success' },
-                  { action: 'Document Updated', detail: 'Environmental Aspects Register', time: '4 hours ago', icon: FileText, color: 'text-info' },
-                  { action: 'Risk Assessment Completed', detail: 'New Contractor Activity', time: '1 day ago', icon: Shield, color: 'text-purple-500' },
-                  { action: 'Training Completed', detail: 'ISO 45001 Awareness - 15 staff', time: '2 days ago', icon: Users, color: 'text-warning' },
-                  { action: 'Objective Updated', detail: 'Q4 Recycling Target Achieved', time: '3 days ago', icon: Target, color: 'text-success' },
-                ].map((activity, i) => {
-                  const Icon = activity.icon
-                  return (
-                    <div key={i} className="flex items-start gap-3 p-2 hover:bg-surface rounded-lg transition-colors">
-                      <Icon className={cn('w-5 h-5 mt-0.5 flex-shrink-0', activity.color)} aria-hidden="true" />
-                      <div className="flex-grow min-w-0">
-                        <div className="text-foreground text-sm">{activity.action}</div>
-                        <div className="text-muted-foreground text-xs">{activity.detail}</div>
-                      </div>
-                      <span className="text-muted-foreground text-xs flex-shrink-0">{activity.time}</span>
-                    </div>
-                  )
-                })}
-              </div>
+              {dashLoading ? (
+                <TableSkeleton rows={4} columns={1} />
+              ) : overviewActivity.length === 0 ? (
+                <EmptyState
+                  icon={<ClipboardList className="w-8 h-8 text-muted-foreground" />}
+                  title="No scheduled audit activity yet"
+                  description="When audits are scheduled in Audits, the next items appear here. This panel never invents demo findings."
+                  action={
+                    <Button variant="outline" onClick={() => navigate('/audits')}>
+                      Open Audits <ChevronRight className="w-4 h-4 ml-1" aria-hidden="true" />
+                    </Button>
+                  }
+                />
+              ) : (
+                <div className="space-y-3">
+                  {overviewActivity.map((activity) => {
+                    const Icon = activity.icon
+                    return (
+                      <button
+                        key={activity.id}
+                        type="button"
+                        className="flex w-full items-start gap-3 rounded-lg p-2 text-left transition-colors hover:bg-surface"
+                        onClick={() => navigate(`/audits/${activity.id}/execute`)}
+                      >
+                        <Icon
+                          className={cn('mt-0.5 h-5 w-5 flex-shrink-0', activity.color)}
+                          aria-hidden="true"
+                        />
+                        <div className="min-w-0 flex-grow">
+                          <div className="text-sm text-foreground">{activity.action}</div>
+                          <div className="text-xs text-muted-foreground">{activity.detail}</div>
+                        </div>
+                        <span className="flex-shrink-0 text-xs text-muted-foreground">
+                          {activity.time}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -831,50 +950,68 @@ export default function IMSDashboard() {
               </div>
 
               {/* Annex A Control Domains */}
-              <Card>
+              <Card data-testid="ims-isms-domains-card">
                 <CardHeader>
                   <CardTitle>Annex A Control Domains (ISO 27001:2022)</CardTitle>
-                  <p className="text-sm text-muted-foreground">93 controls across 4 themes</p>
+                  <p className="text-sm text-muted-foreground" data-testid="ims-isms-domains-honesty">
+                    {ismsData.domains.length > 0
+                      ? `${ismsData.controls.applicable || ismsData.domains.reduce((n, d) => n + d.total, 0)} controls across live domain scores`
+                      : 'Domain scores appear when Annex A controls are seeded — zeros below are not invented.'}
+                  </p>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {(ismsData.domains.length > 0
-                      ? ismsData.domains
-                      : [
-                          { domain: 'organizational', total: 37, implemented: 0, percentage: 0 },
-                          { domain: 'people', total: 8, implemented: 0, percentage: 0 },
-                          { domain: 'physical', total: 14, implemented: 0, percentage: 0 },
-                          { domain: 'technological', total: 34, implemented: 0, percentage: 0 },
-                        ]
-                    ).map((d, i) => {
-                      const meta = domainMeta[d.domain] ?? { label: d.domain, icon: Building2, colorBg: 'bg-muted' }
-                      const Icon = meta.icon
-                      return (
-                        <div key={i} className="bg-surface rounded-lg p-4 border border-border">
-                          <div className="flex items-center gap-3 mb-3">
-                            <div className={cn('p-2 rounded-lg', meta.colorBg)}>
-                              <Icon className="w-5 h-5 text-white" aria-hidden="true" />
+                  {ismsData.domains.length === 0 ? (
+                    <EmptyState
+                      icon={<Lock className="w-8 h-8 text-muted-foreground" />}
+                      title="No Annex A domain scores yet"
+                      description="Connect or seed ISO 27001 controls to populate Organizational, People, Physical, and Technological themes. This view does not show placeholder 0/37 rows."
+                    />
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {ismsData.domains.map((d, i) => {
+                        const meta = domainMeta[d.domain] ?? {
+                          label: d.domain,
+                          icon: Building2,
+                          colorBg: 'bg-muted',
+                        }
+                        const Icon = meta.icon
+                        return (
+                          <div key={i} className="bg-surface rounded-lg p-4 border border-border">
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className={cn('p-2 rounded-lg', meta.colorBg)}>
+                                <Icon className="w-5 h-5 text-white" aria-hidden="true" />
+                              </div>
+                              <div>
+                                <div className="font-medium text-foreground text-sm">{meta.label}</div>
+                                <div className="text-xs text-muted-foreground">{d.total} controls</div>
+                              </div>
                             </div>
-                            <div>
-                              <div className="font-medium text-foreground text-sm">{meta.label}</div>
-                              <div className="text-xs text-muted-foreground">{d.total} controls</div>
+                            <div className="flex justify-between text-sm mb-2">
+                              <span className="text-muted-foreground">Implemented</span>
+                              <span className="text-foreground font-medium">
+                                {d.implemented}/{d.total}
+                              </span>
                             </div>
-                          </div>
-                          <div className="flex justify-between text-sm mb-2">
-                            <span className="text-muted-foreground">Implemented</span>
-                            <span className="text-foreground font-medium">{d.implemented}/{d.total}</span>
-                          </div>
-                          <div className="w-full bg-muted rounded-full h-2" role="progressbar" aria-valuenow={d.percentage} aria-valuemin={0} aria-valuemax={100}>
                             <div
-                              className={cn('h-2 rounded-full', meta.colorBg)}
-                              style={{ width: `${d.percentage}%` }}
-                            />
+                              className="w-full bg-muted rounded-full h-2"
+                              role="progressbar"
+                              aria-valuenow={d.percentage}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                            >
+                              <div
+                                className={cn('h-2 rounded-full', meta.colorBg)}
+                                style={{ width: `${d.percentage}%` }}
+                              />
+                            </div>
+                            <div className="text-right text-xs text-muted-foreground mt-1">
+                              {d.percentage}%
+                            </div>
                           </div>
-                          <div className="text-right text-xs text-muted-foreground mt-1">{d.percentage}%</div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

@@ -867,22 +867,33 @@ export default function UVDBAudits() {
               getImportReviewPath(audits[0]?.audit_run_id, audits[0]?.import_job_id)
             }
           />
-          <div className="flex gap-3">
-            <button
-              disabled
-              title="Protocol export is not available yet"
-              className="flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-secondary px-4 py-2 opacity-60"
+          <div className="flex flex-col gap-2 md:items-end">
+            <div className="flex gap-3">
+              <button
+                disabled
+                title="Protocol export is not available yet"
+                aria-disabled="true"
+                data-testid="uvdb-export-protocol"
+                className="flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-secondary px-4 py-2 opacity-60"
+              >
+                <Download className="w-4 h-4" />
+                {t('uvdb.export_protocol')}
+              </button>
+              <button
+                onClick={handleOpenCreateAuditForm}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                {t('uvdb.new_audit')}
+              </button>
+            </div>
+            <p
+              className="max-w-md text-xs text-muted-foreground"
+              data-testid="uvdb-export-protocol-honesty"
             >
-              <Download className="w-4 h-4" />
-              {t('uvdb.export_protocol')}
-            </button>
-            <button
-              onClick={handleOpenCreateAuditForm}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              {t('uvdb.new_audit')}
-            </button>
+              Protocol export is not available yet — this control stays disabled until the export
+              pack is wired. It is not a broken download.
+            </p>
           </div>
         </div>
       </div>
