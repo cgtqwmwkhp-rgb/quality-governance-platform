@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronRight, Download, Loader2, Megaphone, Save } from 'lucide-react'
 import {
@@ -17,6 +18,7 @@ import {
   reminderHoursFromPresetKeys,
   type CampaignReminderPresetKey,
 } from '../documentCampaignHelpers'
+import { CampaignRosterPanel } from '../CampaignRosterPanel'
 
 export default function CampaignCompliance() {
   const { t } = useTranslation()
@@ -93,17 +95,15 @@ export default function CampaignCompliance() {
   }
 
 
-  const handleToggleGroupBreakdown = async (row: CampaignComplianceRow) => {
-    const hasGroups = (row.audience_group_ids?.length ?? 0) > 0
-    if (!hasGroups) return
-
+  const handleToggleCampaignDetail = async (row: CampaignComplianceRow) => {
     if (expandedCampaignId === row.campaign_id) {
       setExpandedCampaignId(null)
       return
     }
 
     setExpandedCampaignId(row.campaign_id)
-    if (groupRowsByCampaign[row.campaign_id]) return
+    const hasGroups = (row.audience_group_ids?.length ?? 0) > 0
+    if (!hasGroups || groupRowsByCampaign[row.campaign_id]) return
 
     setGroupLoadingId(row.campaign_id)
     try {
@@ -210,22 +210,24 @@ export default function CampaignCompliance() {
                       <Fragment key={row.campaign_id}>
                         <tr className="border-b border-border last:border-0">
                           <td className="py-3 pr-2">
-                            {hasGroups ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                aria-expanded={expanded}
-                                aria-label={t('admin.campaign_compliance.toggle_groups')}
-                                onClick={() => void handleToggleGroupBreakdown(row)}
-                              >
-                                {expanded ? (
-                                  <ChevronDown className="w-4 h-4" />
-                                ) : (
-                                  <ChevronRight className="w-4 h-4" />
-                                )}
-                              </Button>
-                            ) : null}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              aria-expanded={expanded}
+                              aria-label={t(
+                                'admin.campaign_compliance.toggle_roster',
+                                'Show assignee roster',
+                              )}
+                              onClick={() => void handleToggleCampaignDetail(row)}
+                              data-testid={`campaign-compliance-expand-${row.campaign_id}`}
+                            >
+                              {expanded ? (
+                                <ChevronDown className="w-4 h-4" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4" />
+                              )}
+                            </Button>
                           </td>
                           <td className="py-3 pr-4">
                             <p className="font-medium text-foreground">
@@ -241,68 +243,99 @@ export default function CampaignCompliance() {
                           <td className="py-3 pr-4">{row.overdue}</td>
                           <td className="py-3 pr-4">{row.quiz_pass_count ?? 0}</td>
                           <td className="py-3">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => void handleExportEvidence(row.campaign_id)}
-                              disabled={exportingId === row.campaign_id}
-                            >
-                              {exportingId === row.campaign_id ? (
-                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              ) : (
-                                <Download className="w-4 h-4 mr-2" />
-                              )}
-                              {t('admin.campaign_compliance.export_evidence')}
-                            </Button>
+                            <div className="flex flex-wrap gap-2">
+                              <Button variant="outline" size="sm" asChild>
+                                <Link
+                                  to={`/documents/${row.document_id}?tab=campaign-results&campaignId=${row.campaign_id}`}
+                                >
+                                  {t('admin.campaign_compliance.open_document', 'Document results')}
+                                </Link>
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void handleExportEvidence(row.campaign_id)}
+                                disabled={exportingId === row.campaign_id}
+                              >
+                                {exportingId === row.campaign_id ? (
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Download className="w-4 h-4 mr-2" />
+                                )}
+                                {t('admin.campaign_compliance.export_evidence')}
+                              </Button>
+                            </div>
                           </td>
                         </tr>
-                        {expanded && hasGroups && (
+                        {expanded && (
                           <tr className="border-b border-border bg-muted/30">
-                            <td colSpan={8} className="py-3 px-4">
-                              {groupLoadingId === row.campaign_id ? (
-                                <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                              ) : groupRows.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">
-                                  {t('admin.campaign_compliance.no_group_data')}
+                            <td colSpan={8} className="space-y-4 px-4 py-3">
+                              {hasGroups ? (
+                                <div>
+                                  <p className="mb-2 text-sm font-medium text-foreground">
+                                    {t('admin.campaign_compliance.group_breakdown', 'By group')}
+                                  </p>
+                                  {groupLoadingId === row.campaign_id ? (
+                                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                                  ) : groupRows.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">
+                                      {t('admin.campaign_compliance.no_group_data')}
+                                    </p>
+                                  ) : (
+                                    <table className="mb-4 w-full text-sm">
+                                      <thead>
+                                        <tr className="text-left text-muted-foreground">
+                                          <th className="py-1 pr-4 font-medium">
+                                            {t('admin.campaign_compliance.col_group')}
+                                          </th>
+                                          <th className="py-1 pr-4 font-medium">
+                                            {t('admin.campaign_compliance.col_assigned')}
+                                          </th>
+                                          <th className="py-1 pr-4 font-medium">
+                                            {t('admin.campaign_compliance.col_completion')}
+                                          </th>
+                                          <th className="py-1 pr-4 font-medium">
+                                            {t('admin.campaign_compliance.col_pending')}
+                                          </th>
+                                          <th className="py-1 pr-4 font-medium">
+                                            {t('admin.campaign_compliance.col_overdue')}
+                                          </th>
+                                          <th className="py-1 font-medium">
+                                            {t('admin.campaign_compliance.col_quiz_pass')}
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {groupRows.map((groupRow) => (
+                                          <tr
+                                            key={`${row.campaign_id}-${groupRow.group_id ?? 'ungrouped'}`}
+                                          >
+                                            <td className="py-2 pr-4 font-medium">
+                                              {groupRow.group_name}
+                                            </td>
+                                            <td className="py-2 pr-4">{groupRow.assigned}</td>
+                                            <td className="py-2 pr-4">
+                                              {Math.round(groupRow.completion_rate)}%
+                                            </td>
+                                            <td className="py-2 pr-4">{groupRow.pending}</td>
+                                            <td className="py-2 pr-4">{groupRow.overdue}</td>
+                                            <td className="py-2">{groupRow.quiz_pass_count}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  )}
+                                </div>
+                              ) : null}
+                              <div>
+                                <p className="mb-2 text-sm font-medium text-foreground">
+                                  {t(
+                                    'admin.campaign_compliance.roster_title',
+                                    'Who has read / scored',
+                                  )}
                                 </p>
-                              ) : (
-                                <table className="w-full text-sm">
-                                  <thead>
-                                    <tr className="text-left text-muted-foreground">
-                                      <th className="py-1 pr-4 font-medium">
-                                        {t('admin.campaign_compliance.col_group')}
-                                      </th>
-                                      <th className="py-1 pr-4 font-medium">
-                                        {t('admin.campaign_compliance.col_assigned')}
-                                      </th>
-                                      <th className="py-1 pr-4 font-medium">
-                                        {t('admin.campaign_compliance.col_completion')}
-                                      </th>
-                                      <th className="py-1 pr-4 font-medium">
-                                        {t('admin.campaign_compliance.col_pending')}
-                                      </th>
-                                      <th className="py-1 pr-4 font-medium">
-                                        {t('admin.campaign_compliance.col_overdue')}
-                                      </th>
-                                      <th className="py-1 font-medium">
-                                        {t('admin.campaign_compliance.col_quiz_pass')}
-                                      </th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {groupRows.map((groupRow) => (
-                                      <tr key={`${row.campaign_id}-${groupRow.group_id ?? 'ungrouped'}`}>
-                                        <td className="py-2 pr-4 font-medium">{groupRow.group_name}</td>
-                                        <td className="py-2 pr-4">{groupRow.assigned}</td>
-                                        <td className="py-2 pr-4">{Math.round(groupRow.completion_rate)}%</td>
-                                        <td className="py-2 pr-4">{groupRow.pending}</td>
-                                        <td className="py-2 pr-4">{groupRow.overdue}</td>
-                                        <td className="py-2">{groupRow.quiz_pass_count}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              )}
+                                <CampaignRosterPanel campaignId={row.campaign_id} compact />
+                              </div>
                             </td>
                           </tr>
                         )}

@@ -4,6 +4,7 @@ export const DOCUMENT_DETAIL_TABS = [
   'evidence',
   'versions',
   'quiz',
+  'campaign-results',
   'qa',
   'watch',
 ] as const

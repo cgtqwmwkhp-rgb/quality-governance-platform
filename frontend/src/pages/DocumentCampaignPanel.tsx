@@ -408,27 +408,53 @@ export function DocumentCampaignPanel({ documentId, hasApprovedQuiz }: DocumentC
                   ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {campaign.assigned_count != null ? (
+                  {campaign.assigned_count != null || campaign.total_assigned != null ? (
                     <span className="text-muted-foreground">
                       {t('documents.detail.campaign_assigned_count', {
-                        count: campaign.assigned_count,
+                        count: campaign.total_assigned ?? campaign.assigned_count ?? 0,
+                      })}
+                    </span>
+                  ) : null}
+                  {typeof campaign.completion_rate === 'number' ? (
+                    <span className="text-muted-foreground" data-testid={`campaign-completion-${campaign.id}`}>
+                      {t('documents.detail.campaign_completion_chip', {
+                        defaultValue: '{{rate}}% complete',
+                        rate: Math.round(campaign.completion_rate),
+                      })}
+                    </span>
+                  ) : null}
+                  {typeof campaign.overdue === 'number' && campaign.overdue > 0 ? (
+                    <span className="text-destructive">
+                      {t('documents.detail.campaign_overdue_chip', {
+                        defaultValue: '{{count}} overdue',
+                        count: campaign.overdue,
                       })}
                     </span>
                   ) : null}
                   {campaign.launched_at ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void handleExportEvidence(campaign.id)}
-                      disabled={exportingCampaignId === campaign.id}
-                    >
-                      {exportingCampaignId === campaign.id ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Download className="w-4 h-4 mr-2" />
-                      )}
-                      {t('documents.detail.campaign_export_evidence')}
-                    </Button>
+                    <>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link
+                          to={`/documents/${documentId}?tab=campaign-results&campaignId=${campaign.id}`}
+                          data-testid={`campaign-view-results-${campaign.id}`}
+                        >
+                          {t('documents.detail.campaign_view_results', 'View results')}
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void handleExportEvidence(campaign.id)}
+                        disabled={exportingCampaignId === campaign.id}
+                      >
+                        {exportingCampaignId === campaign.id ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Download className="w-4 h-4 mr-2" />
+                        )}
+                        {t('documents.detail.campaign_export_evidence')}
+                      </Button>
+                    </>
                   ) : null}
                 </div>
               </div>

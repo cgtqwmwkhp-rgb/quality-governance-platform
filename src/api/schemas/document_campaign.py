@@ -303,6 +303,50 @@ class ComplianceSummaryResponse(BaseModel):
     total: int
 
 
+class CampaignRosterItem(BaseModel):
+    """One assignee row for HSEQ campaign results / central compliance roster."""
+
+    assignment_id: int
+    user_id: int
+    user_email: str
+    user_name: str
+    status: str
+    assigned_at: Optional[str] = None
+    due_at: Optional[str] = None
+    first_opened_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    quiz_score: Optional[int] = None
+    quiz_passed: Optional[bool] = None
+    quiz_attempts: int = 0
+    reminders_sent: int = 0
+    last_reminder_at: Optional[str] = None
+
+
+class CampaignRosterSummary(BaseModel):
+    assigned: int
+    completed: int
+    pending: int
+    overdue: int
+    expired: int
+    opened: int
+    not_opened: int
+    quiz_pass_count: int
+    quiz_fail_count: int
+    completion_rate: float
+    open_rate: float
+
+
+class CampaignRosterResponse(BaseModel):
+    campaign_id: int
+    document_id: int
+    require_quiz: bool
+    items: List[CampaignRosterItem]
+    total: int
+    limit: int
+    offset: int
+    summary: CampaignRosterSummary
+
+
 class QuestionInboxItem(BaseModel):
     document_id: int
     document_title: str

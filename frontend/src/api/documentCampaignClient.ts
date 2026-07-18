@@ -32,8 +32,66 @@ export interface DocumentCampaign {
   audience_group_id?: number | null
   audience_user_ids?: number[]
   assigned_count?: number
+  total_assigned?: number
+  completed?: number
+  pending?: number
+  overdue?: number
+  expired?: number
+  completion_rate?: number
   created_at?: string
   launched_at?: string | null
+  title?: string | null
+}
+
+export interface CampaignRosterRow {
+  assignment_id: number
+  user_id: number
+  user_email: string
+  user_name: string
+  status: string
+  assigned_at?: string | null
+  due_at?: string | null
+  first_opened_at?: string | null
+  completed_at?: string | null
+  quiz_score?: number | null
+  quiz_passed?: boolean | null
+  quiz_attempts: number
+  reminders_sent: number
+  last_reminder_at?: string | null
+}
+
+export interface CampaignRosterSummary {
+  assigned: number
+  completed: number
+  pending: number
+  overdue: number
+  expired: number
+  opened: number
+  not_opened: number
+  quiz_pass_count: number
+  quiz_fail_count: number
+  completion_rate: number
+  open_rate: number
+}
+
+export interface CampaignRosterResponse {
+  campaign_id: number
+  document_id: number
+  require_quiz: boolean
+  items: CampaignRosterRow[]
+  total: number
+  limit: number
+  offset: number
+  summary: CampaignRosterSummary
+}
+
+export interface CampaignRosterQuery {
+  status?: string
+  q?: string
+  opened?: boolean
+  quiz_passed?: boolean
+  limit?: number
+  offset?: number
 }
 
 export interface CreateCampaignPayload {
@@ -293,6 +351,8 @@ export function createDocumentCampaignApi(api: AxiosInstance) {
     setReminderDefaults: (reminder_hours: number[]) =>
       api.put<ReminderDefaults>(`${base}/reminder-defaults`, { reminder_hours }),
     listCompliance: () => api.get<ComplianceListResponse>(`${base}/compliance`),
+    listCampaignRoster: (campaignId: number, params?: CampaignRosterQuery) =>
+      api.get<CampaignRosterResponse>(`${base}/campaigns/${campaignId}/roster`, { params }),
     downloadEvidencePack: async (campaignId: number) => {
       const response = await api.get(`${base}/campaigns/${campaignId}/evidence-pack`, {
         responseType: 'json',

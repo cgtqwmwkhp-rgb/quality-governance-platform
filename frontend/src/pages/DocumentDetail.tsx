@@ -54,6 +54,7 @@ import {
   sanitizeQuestionCount,
 } from './documentQuizHelpers'
 import { DocumentCampaignPanel } from './DocumentCampaignPanel'
+import { DocumentCampaignResults } from './DocumentCampaignResults'
 
 const DocumentPdfPreview = lazy(() => import('../components/DocumentPdfPreview'))
 
@@ -138,6 +139,9 @@ export default function DocumentDetail() {
   const [searchParams] = useSearchParams()
   const documentId = Number(id)
   const defaultTab = resolveDocumentDetailTab(searchParams.get('tab'))
+  const campaignIdParam = Number(searchParams.get('campaignId'))
+  const initialCampaignId =
+    Number.isFinite(campaignIdParam) && campaignIdParam > 0 ? campaignIdParam : null
   const proposedSectionRef = useRef<HTMLDivElement | null>(null)
 
   const [document, setDocument] = useState<LibraryDocument | null>(null)
@@ -590,6 +594,9 @@ export default function DocumentDetail() {
           <TabsTrigger value="evidence">Standards & Evidence</TabsTrigger>
           <TabsTrigger value="versions">Versions</TabsTrigger>
           <TabsTrigger value="quiz">{t('documents.detail.tab_share_quiz_compliance')}</TabsTrigger>
+          <TabsTrigger value="campaign-results">
+            {t('documents.detail.tab_campaign_results', 'Campaign results')}
+          </TabsTrigger>
           <TabsTrigger value="qa">Q&A</TabsTrigger>
           <TabsTrigger value="watch">Watch</TabsTrigger>
         </TabsList>
@@ -1027,6 +1034,13 @@ export default function DocumentDetail() {
           <DocumentCampaignPanel
             documentId={documentId}
             hasApprovedQuiz={quizDraft?.status === 'approved'}
+          />
+        </TabsContent>
+
+        <TabsContent value="campaign-results" className="mt-4 space-y-4">
+          <DocumentCampaignResults
+            documentId={documentId}
+            initialCampaignId={initialCampaignId}
           />
         </TabsContent>
 
