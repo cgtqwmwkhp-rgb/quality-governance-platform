@@ -1000,7 +1000,7 @@
   "documents.downstream.processing.description": "Mae eich dogfen yn cael ei phrosesu. Mae Eithriadau AI ac mapio cynllun yn llenwi ar ôl i'r mynegeio orffen — golygfeydd downstream gwag yn golygu nad yw'n barod eto, nid data ar goll.",
   "documents.downstream.processing.next_step": "Adnewyddwch y llyfrgell hon ar ôl mynegeio, yna agor Eithriadau AI ar gyfer adolygiad mapio cymal.",
   "documents.downstream.indexed.title": "Wedi'i fyngeio — signalau downstream ar gael",
-  "documents.downstream.indexed.description": "Mae'r ddogfen hon wedi'i mynegeio. Adolygwch fapiau cymal a ganfuwyd gan AI yn Eithriadau AI; mae tystiolaeth edau aur dogfennau rheoledig yn Rheoli Dogfennau.",
+  "documents.downstream.indexed.description": "Mae'r ddogfen hon wedi'i mynegeio. Adolygwch fapiau cymal a ganfuwyd gan AI yn Eithriadau AI; mae archwiliad cadwyn dystiolaeth dogfennau rheoledig yn Rheoli Dogfennau (cyswllt caled pan gaiff ei fudo).",
   "documents.downstream.failed.title": "Methodd y mynegeio",
   "documents.downstream.failed.description": "Ni chwblhawyd mynegeio awtomatig. Ail-uwchlwythwch neu cysylltwch â gweinyddwr — bydd Eithriadau AI downstream yn aros yn wag nes i'r mynegeio lwyddo.",
   "documents.downstream.other.title": "Downstream ddim yn barod",

@@ -424,9 +424,7 @@ async def get_document_golden_thread(
             "no hard link exists yet. Its evidence links are not controlled-document evidence."
         )
     elif match.relationship_state == "ambiguous":
-        integrity_message = (
-            "More than one library document matches; no candidate or evidence links are displayed."
-        )
+        integrity_message = "More than one library document matches; no candidate or evidence links are displayed."
     else:
         integrity_message = "No library-document match exists for this controlled document."
 

@@ -102,6 +102,7 @@ describe('DocumentVersionControlBar', () => {
       expect(onRevise).toHaveBeenCalledWith(
         'Clarify inspection cadence after audit finding',
         false,
+        null,
       )
     })
   })

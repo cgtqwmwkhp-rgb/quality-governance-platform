@@ -105,9 +105,7 @@ WHERE cd.id = matches.controlled_id
 async def count_unlinked_controlled(db: AsyncSession) -> int:
     return int(
         await db.scalar(
-            select(func.count())
-            .select_from(ControlledDocument)
-            .where(ControlledDocument.library_document_id.is_(None))
+            select(func.count()).select_from(ControlledDocument).where(ControlledDocument.library_document_id.is_(None))
         )
         or 0
     )
