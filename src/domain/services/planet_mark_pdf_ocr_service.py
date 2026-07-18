@@ -1,8 +1,8 @@
 """Planet Mark Measurement Report / Certificate OCR → year-reading candidates.
 
-Wave 1 (path11/pm-ocr-year-readings). Text extraction reuses the same OCR spine
-as external audits (``ExternalAuditOcrService`` → document_extraction_service +
-MistralOCRService). Azure DI is consulted only when explicitly enabled; otherwise
+Wave 1 (path11/pm-ocr-year-readings). Text extraction routes through
+``DocumentIntelligenceService`` (purpose ``planet_mark``), which delegates to the
+shared audit OCR merge spine. Azure DI is consulted only when explicitly enabled;
 it reports honest not_configured / stub_not_enabled without fabricating numbers.
 
 Honesty contract:
@@ -18,7 +18,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional, Protocol
 
-from src.domain.services.external_audit_ocr_service import ExternalAuditOcrService
+from src.domain.services.document_intelligence_service import DocumentIntelligenceService
 
 logger = logging.getLogger(__name__)
 
@@ -264,10 +264,14 @@ class PlanetMarkPdfOcrService:
 
     def __init__(
         self,
-        ocr_pipeline: ExternalAuditOcrService | None = None,
+        intelligence_service: DocumentIntelligenceService | None = None,
+        ocr_pipeline: Any | None = None,
         azure_client: _AzureDiEnrichmentClient | None = None,
     ) -> None:
-        self._ocr = ocr_pipeline or ExternalAuditOcrService()
+        if intelligence_service is not None:
+            self._intelligence = intelligence_service
+        else:
+            self._intelligence = DocumentIntelligenceService(ocr_service=ocr_pipeline)
         # Azure DI is optional enrichment; API layer injects the infra client.
         self._azure = azure_client
 
@@ -283,7 +287,12 @@ class PlanetMarkPdfOcrService:
             document_kind = DOCUMENT_KIND_MEASUREMENT_REPORT
 
         warnings: list[str] = []
-        spine = await self._ocr.extract(raw=content, filename=filename, content_type=content_type)
+        spine = await self._intelligence.extract_bytes(
+            raw=content,
+            filename=filename,
+            content_type=content_type,
+            purpose="planet_mark",
+        )
         text = spine.text or ""
         extraction_method = spine.extraction_method or "none"
 

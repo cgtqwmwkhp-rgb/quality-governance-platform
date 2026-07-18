@@ -75,6 +75,47 @@ export interface QuestionEditorProps {
 
 const CHOICE_BASED_TYPES: QuestionType[] = ['multi_choice', 'checklist']
 
+/** Preferred menu height; clamped to available viewport space so the list can scroll. */
+export const QUESTION_TYPE_MENU_MAX_PX = 320
+
+/** Pure helper — exported for unit tests. */
+export function computeQuestionTypeMenuPlacement(
+  trigger: DOMRect,
+  viewport: { width: number; height: number },
+  opts: { maxHeight?: number; gap?: number; width?: number } = {},
+): { menuStyle: CSSProperties; listMaxHeight: number } {
+  const menuMax = opts.maxHeight ?? QUESTION_TYPE_MENU_MAX_PX
+  const gap = opts.gap ?? 4
+  const width = opts.width ?? 256
+  const spaceBelow = viewport.height - trigger.bottom - gap
+  const spaceAbove = trigger.top - gap
+  // Prefer below with a clamped scrollable list; flip up only when below is
+  // below the minimum usable height and above has more room.
+  const minUsable = 120
+  const openUpward = spaceBelow < minUsable && spaceAbove > spaceBelow
+  const available = Math.max(minUsable, openUpward ? spaceAbove : spaceBelow)
+  const listMaxHeight = Math.min(menuMax, available)
+  const left = Math.min(Math.max(8, trigger.left), viewport.width - width - 8)
+  const menuStyle: CSSProperties = openUpward
+    ? {
+        position: 'fixed',
+        left,
+        bottom: viewport.height - trigger.top + gap,
+        width,
+        zIndex: 80,
+        maxHeight: listMaxHeight,
+      }
+    : {
+        position: 'fixed',
+        left,
+        top: trigger.bottom + gap,
+        width,
+        zIndex: 80,
+        maxHeight: listMaxHeight,
+      }
+  return { menuStyle, listMaxHeight }
+}
+
 function buildDefaultOptions(): QuestionOption[] {
   return [
     { id: generateId(), label: 'Option 1', value: 'option_1', score: 0 },
@@ -92,35 +133,24 @@ function QuestionTypeSelector({
   const [isOpen, setIsOpen] = useState(false)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({})
+  const [listMaxHeight, setListMaxHeight] = useState(QUESTION_TYPE_MENU_MAX_PX)
   const selected = QUESTION_TYPES.find((t) => t.type === selectedType)
 
-  useLayoutEffect(() => {
-    if (!isOpen || !buttonRef.current) return
-    const rect = buttonRef.current.getBoundingClientRect()
-    const menuMax = 320 // max-h-80
-    const gap = 4
-    const spaceBelow = window.innerHeight - rect.bottom - gap
-    const openUpward = spaceBelow < Math.min(menuMax, 280) && rect.top > spaceBelow
-    const width = 256
-    const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8)
-    setMenuStyle(
-      openUpward
-        ? {
-            position: 'fixed',
-            left,
-            bottom: window.innerHeight - rect.top + gap,
-            width,
-            zIndex: 80,
-          }
-        : {
-            position: 'fixed',
-            left,
-            top: rect.bottom + gap,
-            width,
-            zIndex: 80,
-          },
+  const reposition = () => {
+    if (!buttonRef.current) return
+    const { menuStyle: next, listMaxHeight: maxH } = computeQuestionTypeMenuPlacement(
+      buttonRef.current.getBoundingClientRect(),
+      { width: window.innerWidth, height: window.innerHeight },
     )
+    setMenuStyle(next)
+    setListMaxHeight(maxH)
+  }
+
+  useLayoutEffect(() => {
+    if (!isOpen) return
+    reposition()
   }, [isOpen])
 
   useEffect(() => {
@@ -133,16 +163,23 @@ function QuestionTypeSelector({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setIsOpen(false)
     }
-    const onReposition = () => setIsOpen(false)
+    // Close on outer scroll/resize, but NEVER when the scroll originates inside the menu —
+    // capture-phase scroll was closing the list as soon as the user tried to scroll options.
+    const onOuterScroll = (event: Event) => {
+      const target = event.target
+      if (target instanceof Node && menuRef.current?.contains(target)) return
+      setIsOpen(false)
+    }
+    const onResize = () => reposition()
     document.addEventListener('mousedown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
-    window.addEventListener('resize', onReposition)
-    window.addEventListener('scroll', onReposition, true)
+    window.addEventListener('resize', onResize)
+    window.addEventListener('scroll', onOuterScroll, true)
     return () => {
       document.removeEventListener('mousedown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('resize', onReposition)
-      window.removeEventListener('scroll', onReposition, true)
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('scroll', onOuterScroll, true)
     }
   }, [isOpen])
 
@@ -168,10 +205,19 @@ function QuestionTypeSelector({
             role="listbox"
             aria-label="Question type"
             style={menuStyle}
-            className="bg-secondary border border-border rounded-xl shadow-xl overflow-hidden"
+            className="bg-secondary border border-border rounded-xl shadow-xl overflow-hidden flex flex-col"
             data-testid="question-type-menu"
           >
-            <div className="max-h-80 overflow-y-auto p-2 space-y-1">
+            <div
+              ref={listRef}
+              className="overflow-y-auto overscroll-contain p-2 space-y-1"
+              style={{ maxHeight: listMaxHeight, WebkitOverflowScrolling: 'touch' }}
+              data-testid="question-type-menu-list"
+              onWheel={(event) => {
+                // Keep wheel scrolling inside the menu; do not dismiss the portal.
+                event.stopPropagation()
+              }}
+            >
               {QUESTION_TYPES.map((type) => (
                 <button
                   key={type.type}

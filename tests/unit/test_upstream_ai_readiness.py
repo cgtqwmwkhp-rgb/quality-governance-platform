@@ -73,9 +73,25 @@ def test_ocr_providers_readiness_includes_azure_di(monkeypatch):
     azure = result["providers"]["azure_di"]
     assert azure["configured"] is True
     assert azure["enabled_in_prod"] is False
+    assert azure["used_in_library"] is False
+    assert azure["used_in_prod"] is False
+    assert azure["resource_scope"] == "qgp_dedicated_required"
+    assert azure["jobsheet_resource_allowed"] is False
     assert "e4_non_goal" in result
     assert "azure-key-placeholder" not in str(result)
     assert "di.example.azure.com" not in str(result)
+
+
+def test_ocr_providers_meta_azure_di_prod_flag_does_not_enable_in_meta(monkeypatch):
+    """DS-1b: prod enable env must not flip enabled_in_prod on meta/readiness."""
+    monkeypatch.setenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT", "https://di.example.azure.com/")
+    monkeypatch.setenv("AZURE_DOCUMENT_INTELLIGENCE_KEY", "azure-key")
+    monkeypatch.setenv("AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD", "true")
+
+    azure = get_ocr_providers_readiness()["providers"]["azure_di"]
+    assert azure["prod_enable_flag_set"] is True
+    assert azure["enabled_in_prod"] is False
+    assert azure["used_in_prod"] is False
 
 
 def test_ocr_providers_readiness_all_configured(monkeypatch):
@@ -111,3 +127,12 @@ def test_ocr_ops_capabilities_flags():
     assert caps["dispute_ack_stubs"] is True
     assert caps["provider_dial_on_probes"] is False
     assert "e4_non_goal" in caps
+
+
+def test_settings_azure_di_defaults_off():
+    from src.core.config import Settings
+
+    settings = Settings()
+    assert settings.azure_document_intelligence_endpoint == ""
+    assert settings.azure_document_intelligence_key == ""
+    assert settings.azure_document_intelligence_enable_prod is False

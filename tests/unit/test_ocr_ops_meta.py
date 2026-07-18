@@ -33,6 +33,8 @@ def test_ocr_providers_meta_not_configured(monkeypatch, client: TestClient) -> N
     assert data["providers"]["gemini"]["configured"] is False
     assert data["providers"]["azure_di"]["configured"] is False
     assert data["providers"]["azure_di"]["enabled_in_prod"] is False
+    assert data["providers"]["azure_di"]["used_in_library"] is False
+    assert data["providers"]["azure_di"]["jobsheet_resource_allowed"] is False
     assert "e4_non_goal" in data
     ocr_artifacts = data["capabilities"]["ocr_artifacts_table"]
     assert ocr_artifacts["status"] == "declared"
@@ -107,6 +109,7 @@ def test_ocr_providers_meta_matches_fixture_shape(monkeypatch) -> None:
     assert result["external_audit_import"]["ocr_configured"] == fixture["external_audit_import"]["ocr_configured"]
     assert "library_document_ocr" in result["providers"]["mistral"]["capabilities"]
     assert result["library_documents"]["azure_di_enabled_in_prod"] is False
+    assert result["library_documents"]["azure_di_used"] is False
     assert result["library_documents"]["index_jobs_async"] is True
 
 
@@ -122,4 +125,5 @@ def test_readyz_includes_ocr_providers_summary(monkeypatch, client: TestClient) 
     assert ocr.get("gemini_configured") is True
     assert ocr.get("meta_endpoint") == "/api/v1/meta/ocr-providers"
     assert ocr.get("legacy_meta_endpoint") == "/api/v1/health/meta/ocr-providers"
+    assert ocr.get("azure_di_enabled_in_prod") is False
     assert ocr.get("capabilities", {}).get("page_consensus_persist") is True

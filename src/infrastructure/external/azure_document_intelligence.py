@@ -70,7 +70,13 @@ def get_azure_di_readiness() -> dict[str, Any]:
         "endpoint_present": endpoint_present,
         "api_key_present": api_key_present,
         "role": "dual_ocr_consensus",
-        "enabled_in_prod": bool(configured and enable_flag),
+        # Meta honesty: prod enablement is an E4 DPO gate — never true on probes.
+        "enabled_in_prod": False,
+        "prod_enable_flag_set": enable_flag,
+        "used_in_library": False,
+        "used_in_prod": False,
+        "resource_scope": "qgp_dedicated_required",
+        "jobsheet_resource_allowed": False,
         "capabilities": ["dual_ocr_consensus_scaffold"],
         "ping": {
             "status": "skipped",
@@ -81,9 +87,10 @@ def get_azure_di_readiness() -> dict[str, Any]:
 
     if status == "not_configured":
         payload["note"] = (
-            "Azure Document Intelligence is not configured. Set "
-            "AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and AZURE_DOCUMENT_INTELLIGENCE_KEY "
-            "when E4 dual-OCR is approved. E4 DPO gate: production adapter remains "
+            "Azure Document Intelligence is not configured. When E4 dual-OCR is approved, "
+            "provision a dedicated QGP Azure Document Intelligence resource (not the Jobsheet "
+            "DI endpoint) and set AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT and "
+            "AZURE_DOCUMENT_INTELLIGENCE_KEY. E4 DPO gate: production adapter remains "
             "disabled; this endpoint reports env presence only."
         )
     elif status == "partial":
@@ -100,8 +107,9 @@ def get_azure_di_readiness() -> dict[str, Any]:
     elif not enable_flag:
         payload["note"] = (
             "Azure DI credentials are present but the production adapter is not enabled "
-            "(E4 DPO gate). Set AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD=true only after E4 "
-            "DPO sign-off. Meta/readiness probes never transmit document content."
+            "(E4 DPO gate). Use a dedicated QGP Document Intelligence resource — do not "
+            "point at the Jobsheet DI endpoint. Set AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD=true "
+            "only after E4 DPO sign-off. Meta/readiness probes never transmit document content."
         )
     else:
         payload["note"] = (

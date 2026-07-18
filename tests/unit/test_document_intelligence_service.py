@@ -11,6 +11,7 @@ from src.domain.models.document import FileType
 from src.domain.services.document_intelligence_service import (
     LIBRARY_THIN_NATIVE_WORD_THRESHOLD,
     DocumentIntelligenceService,
+    purpose_for_assurance_scheme,
 )
 from src.domain.services.external_audit_ocr_service import ExternalAuditExtractionResult
 
@@ -135,3 +136,37 @@ async def test_process_updates_document_metadata(monkeypatch: pytest.MonkeyPatch
     assert result.text == "extracted"
     assert document.page_count == 2
     assert document.has_tables is True
+
+
+def test_purpose_for_assurance_scheme_maps_uvdb_and_customer() -> None:
+    assert purpose_for_assurance_scheme("achilles_uvdb") == "uvdb"
+    assert purpose_for_assurance_scheme("customer_other") == "customer_audit"
+    assert purpose_for_assurance_scheme("iso_9001") == "external_audit"
+    assert purpose_for_assurance_scheme(None) == "external_audit"
+
+
+@pytest.mark.asyncio
+async def test_extract_bytes_audit_purpose_uses_merge_spine() -> None:
+    merged = ExternalAuditExtractionResult(
+        text="UVDB audit section scores and findings.",
+        page_texts=["UVDB audit section scores and findings."],
+        extraction_method="mistral_ocr",
+        native_text="thin",
+        ocr_text="UVDB audit section scores and findings.",
+    )
+    ocr_service = SimpleNamespace(
+        is_configured=True,
+        extract=AsyncMock(return_value=merged),
+    )
+    service = DocumentIntelligenceService(ocr_service=ocr_service)
+
+    result = await service.extract_bytes(
+        raw=b"%PDF",
+        filename="uvdb-report.pdf",
+        content_type="application/pdf",
+        purpose="uvdb",
+    )
+
+    assert result.text.startswith("UVDB audit")
+    assert result.used_mistral_ocr is True
+    ocr_service.extract.assert_awaited_once()

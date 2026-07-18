@@ -24,7 +24,12 @@
       "endpoint_present": false,
       "api_key_present": false,
       "status": "not_configured",
-      "enabled_in_prod": false
+      "enabled_in_prod": false,
+      "prod_enable_flag_set": false,
+      "used_in_library": false,
+      "used_in_prod": false,
+      "resource_scope": "qgp_dedicated_required",
+      "jobsheet_resource_allowed": false
     }
   },
   "external_audit_import": {
