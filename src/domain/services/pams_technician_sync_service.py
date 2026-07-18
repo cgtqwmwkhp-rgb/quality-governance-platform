@@ -162,16 +162,23 @@ def apply_mapped_technician_to_engineer(
     user_id: int | None,
     preserve_existing_user: bool = True,
 ) -> None:
-    """Apply mapped PAMS fields onto an Engineer ORM instance."""
-    engineer.display_name = mapped.display_name
-    engineer.job_title = mapped.job_title
-    engineer.site = mapped.site
-    engineer.employee_number = mapped.employee_number
+    """Apply mapped PAMS fields onto an Engineer ORM instance.
+
+    Never writes to PAMS. When ``qgp_profile_override`` is set, identity fields
+    edited in QGP are preserved — sync still refreshes active flag + PAMS ids.
+    """
+    override = bool(getattr(engineer, "qgp_profile_override", False))
+    if not override:
+        engineer.display_name = mapped.display_name
+        engineer.job_title = mapped.job_title
+        engineer.site = mapped.site
+        engineer.employee_number = mapped.employee_number
+        if mapped.notes:
+            engineer.notes = mapped.notes
+    # Always keep roster presence + join keys aligned with PAMS feed.
     engineer.is_active = mapped.is_active
     engineer.pams_technician_id = mapped.pams_id
     engineer.external_id = mapped.external_id
-    if mapped.notes:
-        engineer.notes = mapped.notes
     if user_id is not None:
         engineer.user_id = user_id
     elif not preserve_existing_user:

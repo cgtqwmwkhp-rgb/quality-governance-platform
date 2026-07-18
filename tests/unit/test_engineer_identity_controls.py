@@ -95,7 +95,7 @@ async def test_update_engineer_rejects_user_reassignment():
 
     assert exc_info.value.http_status == 400
     assert exc_info.value.code == "BAD_REQUEST"
-    assert exc_info.value.message == "Engineer user assignment cannot be changed via update"
+    assert "link-user" in exc_info.value.message
     db.commit.assert_not_awaited()
 
 
@@ -120,7 +120,7 @@ async def test_create_engineer_allows_display_name_without_user():
     from datetime import datetime, timezone
 
     db = types.SimpleNamespace(
-        execute=AsyncMock(),
+        execute=AsyncMock(return_value=_FakeResult(None)),
         add=Mock(),
         commit=AsyncMock(),
         refresh=AsyncMock(),
@@ -132,6 +132,7 @@ async def test_create_engineer_allows_display_name_without_user():
         engineer.id = 501
         engineer.external_id = "ext-501"
         engineer.is_active = True
+        engineer.qgp_profile_override = False
         engineer.created_at = datetime.now(timezone.utc)
         engineer.updated_at = datetime.now(timezone.utc)
 
