@@ -3199,5 +3199,23 @@
       "close_cta": "Close investigation",
       "already_closed": "Investigation is already closed"
     }
-  }
+  },
+  "admin.campaign_compliance.title": "Campaign Compliance",
+  "admin.campaign_compliance.subtitle": "Monitor document campaign completion and configure default reminders",
+  "admin.campaign_compliance.defaults_title": "Default reminder presets",
+  "admin.campaign_compliance.defaults_help": "Applied when launching new document campaigns unless overridden in the launch panel.",
+  "admin.campaign_compliance.save_defaults": "Save defaults",
+  "admin.campaign_compliance.defaults_saved": "Reminder defaults saved.",
+  "admin.campaign_compliance.defaults_save_error": "Could not save reminder defaults.",
+  "admin.campaign_compliance.reminder_required": "Select at least one reminder preset.",
+  "admin.campaign_compliance.table_title": "Campaign compliance",
+  "admin.campaign_compliance.col_document": "Document / campaign",
+  "admin.campaign_compliance.col_status": "Status",
+  "admin.campaign_compliance.col_completion": "Completion",
+  "admin.campaign_compliance.col_pending": "Pending",
+  "admin.campaign_compliance.col_overdue": "Overdue",
+  "admin.campaign_compliance.col_quiz_pass": "Quiz pass",
+  "admin.campaign_compliance.col_assigned": "Assigned",
+  "admin.campaign_compliance.toggle_groups": "Toggle group breakdown",
+  "admin.campaign_compliance.no_group_data": "No group breakdown available."
 }
