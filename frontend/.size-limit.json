@@ -3,16 +3,8 @@
     "path": "dist/assets/index-*.js",
     "limit": "155 kB",
     "gzip": true,
-    "name": "index: 152\u2192155 kB \u2014 tip index.gz 153.15 after flag-debt FE; shared shell cannot reclaim without defer"
+    "name": "index: 150→155 kB — shared main bundle after #1122 merge; BE spine does not add FE but gate tracks main dist"
   },
-  {
-    "path": "dist/assets/vendor-*.js",
-    "limit": "200 kB",
-    "gzip": true
-  },
-  {
-    "path": "dist/assets/index-*.css",
-    "limit": "35 kB",
-    "gzip": true
-  }
+  { "path": "dist/assets/vendor-*.js", "limit": "200 kB", "gzip": true },
+  { "path": "dist/assets/index-*.css", "limit": "35 kB", "gzip": true }
 ]

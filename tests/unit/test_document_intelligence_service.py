@@ -9,8 +9,8 @@ import pytest
 
 from src.domain.models.document import FileType
 from src.domain.services.document_intelligence_service import (
-    DocumentIntelligenceService,
     LIBRARY_THIN_NATIVE_WORD_THRESHOLD,
+    DocumentIntelligenceService,
 )
 from src.domain.services.external_audit_ocr_service import ExternalAuditExtractionResult
 

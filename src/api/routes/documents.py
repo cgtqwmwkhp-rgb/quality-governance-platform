@@ -552,9 +552,7 @@ async def upload_document(
             status=doc.status.value,
             index_job_id=index_job.id if index_job else None,
             message=(
-                "Document uploaded; indexing job queued"
-                if dispatched
-                else "Document uploaded and processing completed"
+                "Document uploaded; indexing job queued" if dispatched else "Document uploaded and processing completed"
             ),
         )
     except HTTPException:
