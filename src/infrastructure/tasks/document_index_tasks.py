@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from celery.exceptions import MaxRetriesExceededError  # type: ignore[import-untyped]
+from celery.exceptions import MaxRetriesExceededError
 from sqlalchemy import update
 
 from src.domain.models.document import IndexJob, IndexJobStatus
