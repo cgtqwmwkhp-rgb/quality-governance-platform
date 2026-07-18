@@ -36,7 +36,6 @@ import {
   investigationsApi,
   actionsApi,
   Action,
-  UserSearchResult,
   getApiErrorMessage,
   CreateFromRecordError,
   notificationsApi,
@@ -79,7 +78,7 @@ import {
   readReporterPhotoCount,
 } from './complaintEvidenceHonesty'
 import { cn } from '../helpers/utils'
-import { UserEmailSearch } from '../components/UserEmailSearch'
+import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 
 export default function ComplaintDetail() {
   const { t } = useTranslation()
@@ -378,10 +377,6 @@ export default function ComplaintDetail() {
     } finally {
       setCreating(false)
     }
-  }
-
-  const handleAssigneeChange = (email: string, _user?: UserSearchResult) => {
-    setActionForm({ ...actionForm, assigned_to: email })
   }
 
   const ACTION_STATUS_OPTIONS = [
@@ -1432,13 +1427,26 @@ export default function ComplaintDetail() {
                 required
               />
             </div>
-            <UserEmailSearch
-              label={t('complaints.detail.assign_to')}
-              value={actionForm.assigned_to}
-              onChange={handleAssigneeChange}
-              placeholder={t('complaints.detail.search_by_email')}
-              required
-            />
+            <div className="space-y-2">
+              <span className="block text-sm font-medium text-foreground">
+                {t('complaints.detail.assign_to')}
+              </span>
+              <EngineerPeoplePicker
+                valueLabel={actionForm.assigned_to}
+                requireLogin
+                onChange={(selection) =>
+                  setActionForm({
+                    ...actionForm,
+                    assigned_to: selection?.user?.email || selection?.label || '',
+                  })
+                }
+                placeholder={t(
+                  'complaints.detail.search_employees',
+                  'Search active employees…',
+                )}
+                testId="complaint-action-assignee-picker"
+              />
+            </div>
             <div>
               <label
                 htmlFor="complaintdetail-field-12"

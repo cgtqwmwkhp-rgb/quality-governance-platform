@@ -35,7 +35,6 @@ import {
   Action,
   EvidenceAsset,
   evidenceAssetsApi,
-  UserSearchResult,
   getApiErrorMessage,
   CreateFromRecordError,
 } from '../api/client'
@@ -70,7 +69,7 @@ import {
   getSubmissionSnapshot,
 } from '../helpers/caseSubmission'
 import { cn } from '../helpers/utils'
-import { UserEmailSearch } from '../components/UserEmailSearch'
+import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import { AssetPicker } from '../components/AssetPicker'
 import { getCapaHandoffLabelKey, getCapaLink } from '../components/investigations/handoffLinks'
 import {
@@ -418,14 +417,6 @@ export default function IncidentDetail() {
     } finally {
       setCreating(false)
     }
-  }
-
-  const handleAssigneeChange = (email: string, _user?: UserSearchResult) => {
-    setActionForm({ ...actionForm, assigned_to: email })
-  }
-
-  const handleInvestigatorChange = (email: string, _user?: UserSearchResult) => {
-    setInvestigationForm({ ...investigationForm, lead_investigator: email })
   }
 
   // Action detail handlers
@@ -1391,12 +1382,26 @@ export default function IncidentDetail() {
                 </SelectContent>
               </Select>
             </div>
-            <UserEmailSearch
-              label={t('incidents.detail.lead_investigator')}
-              value={investigationForm.lead_investigator}
-              onChange={handleInvestigatorChange}
-              placeholder={t('incidents.detail.search_email_placeholder')}
-            />
+            <div className="space-y-2">
+              <span className="block text-sm font-medium text-foreground">
+                {t('incidents.detail.lead_investigator')}
+              </span>
+              <EngineerPeoplePicker
+                valueLabel={investigationForm.lead_investigator}
+                requireLogin
+                onChange={(selection) =>
+                  setInvestigationForm({
+                    ...investigationForm,
+                    lead_investigator: selection?.user?.email || selection?.label || '',
+                  })
+                }
+                placeholder={t(
+                  'incidents.detail.search_employees_placeholder',
+                  'Search active employees…',
+                )}
+                testId="incident-lead-investigator-picker"
+              />
+            </div>
             <div>
               <label
                 htmlFor="incidentdetail-field-8"
@@ -1485,12 +1490,26 @@ export default function IncidentDetail() {
                 required
               />
             </div>
-            <UserEmailSearch
-              label={t('incidents.detail.assign_to')}
-              value={actionForm.assigned_to}
-              onChange={handleAssigneeChange}
-              placeholder={t('incidents.detail.search_email_placeholder')}
-            />
+            <div className="space-y-2">
+              <span className="block text-sm font-medium text-foreground">
+                {t('incidents.detail.assign_to')}
+              </span>
+              <EngineerPeoplePicker
+                valueLabel={actionForm.assigned_to}
+                requireLogin
+                onChange={(selection) =>
+                  setActionForm({
+                    ...actionForm,
+                    assigned_to: selection?.user?.email || selection?.label || '',
+                  })
+                }
+                placeholder={t(
+                  'incidents.detail.search_employees_placeholder',
+                  'Search active employees…',
+                )}
+                testId="incident-action-assignee-picker"
+              />
+            </div>
             <div>
               <label
                 htmlFor="incidentdetail-field-10"

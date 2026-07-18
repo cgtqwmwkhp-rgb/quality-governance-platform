@@ -38,8 +38,8 @@ vi.mock('../../components/ui/Breadcrumbs', () => ({
   Breadcrumbs: () => <div data-testid="breadcrumbs" />,
 }))
 
-vi.mock('../../components/UserEmailSearch', () => ({
-  UserEmailSearch: () => <div data-testid="user-email-search" />,
+vi.mock('../../components/EngineerPeoplePicker', () => ({
+  EngineerPeoplePicker: () => <input data-testid="engineer-people-picker" />,
 }))
 
 vi.mock('../../components/ui/Tabs', () => ({
@@ -84,6 +84,9 @@ vi.mock('../../api/client', () => ({
   },
   evidenceAssetsApi: {
     list: vi.fn(),
+  },
+  workforceApi: {
+    listEngineers: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
   },
   getApiErrorMessage: (err: Error) => err.message,
 }))
