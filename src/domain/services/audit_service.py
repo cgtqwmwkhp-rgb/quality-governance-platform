@@ -1717,14 +1717,14 @@ class AuditService:
             raise ValidationError("Cannot update responses on a completed run")
 
         question = await self.db.get(AuditQuestion, response.question_id)
+        # Omit stored score/max_score so answer-only PATCHes recompute; client-supplied
+        # scores in update_data still win via apply_derived_scores.
         merged = {
             "response_value": response.response_value,
             "response_text": response.response_text,
             "response_number": response.response_number,
             "response_bool": response.response_bool,
             "is_na": response.is_na,
-            "score": response.score,
-            "max_score": response.max_score,
             **update_data,
         }
         enriched = AuditScoringService.apply_derived_scores(question, merged)

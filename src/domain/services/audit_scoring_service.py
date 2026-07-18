@@ -109,7 +109,15 @@ class AuditScoringService:
                     derived = (num / max_value) * resolved_max if max_value else 0.0
             else:
                 derived = None
-        elif question_type in {"radio", "select", "dropdown", "checkbox", "multi_select"}:
+        elif question_type in {
+            "radio",
+            "select",
+            "dropdown",
+            "checkbox",
+            "multi_select",
+            "multi_choice",
+            "checklist",
+        }:
             derived = cls._score_from_options(question, answer, resolved_max)
         elif question_type in {"text", "textarea", "date", "photo", "signature"}:
             has_answer = bool(answer) or response_text not in (None, "") or response_number is not None

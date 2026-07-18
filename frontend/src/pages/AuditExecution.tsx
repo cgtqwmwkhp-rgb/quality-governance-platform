@@ -219,7 +219,7 @@ export function canAdvancePastFailEvidenceGate(
 }
 
 export function scorePayloadForQuestion(
-  question: Pick<AuditQuestion, 'type' | 'weight' | 'maxScore' | 'positiveAnswer'>,
+  question: Pick<AuditQuestion, 'type' | 'weight' | 'maxScore' | 'positiveAnswer' | 'options'>,
   response: Pick<QuestionResponse, 'response'>,
 ): { score: number; max_score: number } {
   const maxScore = question.maxScore ?? question.weight ?? 1
@@ -254,6 +254,41 @@ export function scorePayloadForQuestion(
   }
   if (typeof response.response === 'number') {
     return { score: Number(response.response), max_score: maxScore }
+  }
+  if (
+    ['radio', 'select', 'dropdown', 'checkbox', 'multi_select', 'multi_choice', 'checklist'].includes(
+      question.type,
+    )
+  ) {
+    const options = question.options || []
+    const selected = new Set<string>()
+    if (Array.isArray(response.response)) {
+      response.response.forEach((item) => {
+        const str = String(item).trim().toLowerCase()
+        if (str) selected.add(str)
+      })
+    } else if (typeof response.response === 'string') {
+      response.response.split(/[,;]/).forEach((part) => {
+        const str = part.trim().toLowerCase()
+        if (str) selected.add(str)
+      })
+    }
+    if (selected.size === 0) {
+      return { score: 0, max_score: maxScore }
+    }
+    const matchedScores: number[] = []
+    for (const option of options) {
+      const optionValue = String(option.value || '').trim().toLowerCase()
+      const optionLabel = String(option.label || '').trim().toLowerCase()
+      if (selected.has(optionValue) || selected.has(optionLabel)) {
+        matchedScores.push(option.score !== undefined ? option.score : maxScore)
+      }
+    }
+    if (matchedScores.length > 0) {
+      const totalScore = matchedScores.reduce((sum, s) => sum + s, 0)
+      return { score: Math.min(maxScore, totalScore), max_score: maxScore }
+    }
+    return { score: maxScore, max_score: maxScore }
   }
   return { score: maxScore, max_score: maxScore }
 }

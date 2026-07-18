@@ -74,6 +74,41 @@ class TestDeriveResponseScore:
         assert score == 0.5
         assert max_score == 2.0
 
+    def test_radio_option_score_not_full_credit(self):
+        question = SimpleNamespace(
+            question_type="radio",
+            max_score=10.0,
+            weight=10.0,
+            positive_answer="yes",
+            options_json=[
+                {"label": "Good", "value": "good", "score": 10},
+                {"label": "Partial", "value": "partial", "score": 4},
+            ],
+            max_value=None,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_value="partial",
+        )
+        assert score == 4.0
+        assert max_score == 10.0
+
+    def test_apply_derived_scores_recomputes_when_score_omitted(self):
+        question = SimpleNamespace(
+            question_type="yes_no",
+            max_score=1.0,
+            weight=1.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=None,
+        )
+        enriched = AuditScoringService.apply_derived_scores(
+            question,
+            {"response_value": "no"},
+        )
+        assert enriched["score"] == 0.0
+        assert enriched["max_score"] == 1.0
+
 
 class TestScoreResult:
     def test_score_result_creation(self):
