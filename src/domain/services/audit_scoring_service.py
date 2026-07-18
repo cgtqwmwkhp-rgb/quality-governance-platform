@@ -16,9 +16,11 @@ class ScoreResult:
 class AuditScoringService:
     @staticmethod
     def calculate_run_score(responses: list) -> ScoreResult:
-        scored_responses = [r for r in responses if not r.is_na]
-        total_score = sum(r.score or 0 for r in scored_responses)
-        max_score = sum(r.max_score or 0 for r in scored_responses)
+        # Only count fully scored answers. Notes/photos without a score must not
+        # inflate the denominator (and NA is excluded entirely).
+        scored_responses = [r for r in responses if not r.is_na and r.score is not None and r.max_score is not None]
+        total_score = sum(float(r.score) for r in scored_responses)
+        max_score = sum(float(r.max_score) for r in scored_responses)
         score_percentage = (total_score / max_score * 100) if max_score > 0 else 0.0
         return ScoreResult(
             total_score=total_score,
@@ -128,6 +130,9 @@ class AuditScoringService:
 
         if score is not None:
             return float(score), resolved_max
+        # Unanswered: leave both unset so notes-only rows don't enter the denominator.
+        if derived is None:
+            return None, None
         return derived, resolved_max
 
     @classmethod
@@ -144,10 +149,8 @@ class AuditScoringService:
             score=enriched.get("score"),
             max_score=enriched.get("max_score"),
         )
-        if max_score is not None:
-            enriched["max_score"] = max_score
-        if score is not None:
-            enriched["score"] = score
+        enriched["max_score"] = max_score
+        enriched["score"] = score
         return enriched
 
     @staticmethod

@@ -33,6 +33,7 @@
 - [x] AC-06: Opening `/audits/:id/execute` for a completed run shows Inspection completed (not editable YES/NO)
 - [x] AC-07: Option-based answers (radio/select/checkbox/etc.) use per-option scores, not always full credit
 - [x] AC-08: Answer-only PATCH recomputes score/max_score (does not keep stale stored points)
+- [x] AC-09: Notes/photos without a main answer do not persist 0/max or shrink score_percentage
 
 ## 5) Testing Evidence (link to runs)
 - [x] Lint — black on touched Python

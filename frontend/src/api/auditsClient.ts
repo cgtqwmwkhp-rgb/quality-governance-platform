@@ -352,16 +352,16 @@ export interface AuditResponseCreate {
   question_id: number
   response_value?: string
   response_json?: Record<string, unknown> | null
-  score?: number
-  max_score?: number
+  score?: number | null
+  max_score?: number | null
   notes?: string
 }
 
 export interface AuditResponseUpdate {
   response_value?: string
   response_json?: Record<string, unknown> | null
-  score?: number
-  max_score?: number
+  score?: number | null
+  max_score?: number | null
   notes?: string
 }
 

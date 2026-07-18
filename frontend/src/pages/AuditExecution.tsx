@@ -221,10 +221,11 @@ export function canAdvancePastFailEvidenceGate(
 export function scorePayloadForQuestion(
   question: Pick<AuditQuestion, 'type' | 'weight' | 'maxScore' | 'positiveAnswer' | 'options'>,
   response: Pick<QuestionResponse, 'response'>,
-): { score: number; max_score: number } {
+): { score: number | null; max_score: number | null } {
   const maxScore = question.maxScore ?? question.weight ?? 1
+  // Notes/photos without a main answer must not contribute 0/max to run totals.
   if (response.response === null || response.response === undefined) {
-    return { score: 0, max_score: maxScore }
+    return { score: null, max_score: null }
   }
   if (question.type === 'pass_fail' || question.type === 'yes_no') {
     const positiveVal =
@@ -1091,12 +1092,13 @@ export default function AuditExecution() {
         const question = allQuestions.find((candidate) => candidate.id === questionId)
         const scored = question
           ? scorePayloadForQuestion(question, resp)
-          : { score: undefined, max_score: undefined }
+          : { score: null, max_score: null }
         const payload = {
           response_value: serializeResponse(resp.response),
           notes: resp.notes || undefined,
-          ...(scored.score !== undefined ? { score: scored.score } : {}),
-          ...(scored.max_score !== undefined ? { max_score: scored.max_score } : {}),
+          // Persist scores only for real answers; send null on update to clear stale points.
+          score: scored.score,
+          max_score: scored.max_score,
           ...(hasPhotos
             ? { response_json: buildEvidenceResponseJson(resp.evidenceAssetIds || []) }
             : {}),
@@ -1322,11 +1324,11 @@ export default function AuditExecution() {
         const response = responses[question.id]
         if (!response) return
 
-        totalWeight += question.weight
         const { score, max_score } = scorePayloadForQuestion(question, response)
-        if (max_score > 0) {
-          achievedWeight += (score / max_score) * question.weight
-        }
+        if (score === null || max_score === null || max_score <= 0) return
+
+        totalWeight += question.weight
+        achievedWeight += (score / max_score) * question.weight
       })
     })
 

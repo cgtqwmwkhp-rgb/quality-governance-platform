@@ -109,6 +109,22 @@ class TestDeriveResponseScore:
         assert enriched["score"] == 0.0
         assert enriched["max_score"] == 1.0
 
+    def test_unanswered_does_not_set_max_score(self):
+        question = SimpleNamespace(
+            question_type="yes_no",
+            max_score=1.0,
+            weight=1.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=None,
+        )
+        enriched = AuditScoringService.apply_derived_scores(
+            question,
+            {"response_value": None, "notes": "parking lot"},
+        )
+        assert enriched["score"] is None
+        assert enriched["max_score"] is None
+
 
 class TestScoreResult:
     def test_score_result_creation(self):
@@ -190,15 +206,17 @@ class TestCalculateRunScore:
         assert result.max_score == 0
         assert result.score_percentage == 0.0
 
-    def test_none_scores_treated_as_zero(self):
+    def test_unscored_responses_excluded_from_totals(self):
         responses = [
             self._response(None, 10),
             self._response(5, None),
+            self._response(8, 10),
         ]
         result = AuditScoringService.calculate_run_score(responses)
 
-        assert result.total_score == 5
+        assert result.total_score == 8
         assert result.max_score == 10
+        assert result.score_percentage == 80.0
 
     def test_single_response(self):
         responses = [self._response(7, 10)]
