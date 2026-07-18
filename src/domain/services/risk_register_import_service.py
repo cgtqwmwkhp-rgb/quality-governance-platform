@@ -733,7 +733,7 @@ class RiskRegisterImportService:
                     owner=owner,
                     due_date=self._parse_datetime(row.get("deadline")),
                     progress_notes=progress_notes,
-                    existing_capa_id=existing_capa.id if existing_capa else None,
+                    existing_capa_id=int(existing_capa.id) if existing_capa else None,
                 )
             )
 
@@ -874,10 +874,10 @@ class RiskRegisterImportService:
                     CAPAAction.tenant_id == tenant_id,
                 )
             )
-            capa = result.scalar_one()
+            capa: CAPAAction = result.scalar_one()
             capa.title = item.title[:255]
             capa.description = item.description
-            capa.source_id = risk.id
+            capa.source_id = int(risk.id)
             capa.source_type = CAPASource.RISK
             capa.source_reference = item.match_key
             capa.due_date = item.due_date
@@ -982,7 +982,7 @@ class RiskRegisterImportService:
                 tenant_id=tenant_id,
             )
             if action == "create":
-                capa_created_ids.append(capa.id)
+                capa_created_ids.append(int(capa.id))
             else:
                 capa_updated_count += 1
 
