@@ -17,10 +17,7 @@ from pydantic import AliasChoices, BaseModel, Field
 from src.api.dependencies import DbSession, require_permission
 from src.api.utils.tenant import require_tenant_id
 from src.domain.models.user import User
-from src.domain.services.builder_standard_link_service import (
-    DEFAULT_LIBRARY_VERSION,
-    builder_standard_link_service,
-)
+from src.domain.services.builder_standard_link_service import DEFAULT_LIBRARY_VERSION, builder_standard_link_service
 from src.domain.services.gemini_ai_service import GeminiAIService
 
 router = APIRouter()

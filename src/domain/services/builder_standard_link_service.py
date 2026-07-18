@@ -22,10 +22,7 @@ from src.domain.models.compliance_evidence import (
     EvidenceSignalType,
 )
 from src.domain.models.governed_knowledge import AiDecisionLog
-from src.domain.services.governed_knowledge_service import (
-    GovernedKnowledgeService,
-    SchemeMapping,
-)
+from src.domain.services.governed_knowledge_service import GovernedKnowledgeService, SchemeMapping
 
 logger = logging.getLogger(__name__)
 
