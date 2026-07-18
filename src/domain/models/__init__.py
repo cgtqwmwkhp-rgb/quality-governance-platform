@@ -73,6 +73,14 @@ from src.domain.models.document import (
     DocumentVersion,
     IndexJob,
 )
+from src.domain.models.document_campaign import (
+    AssignmentStatus,
+    CampaignAssignment,
+    CampaignStatus,
+    DocumentCampaign,
+    EngineerGroup,
+    EngineerGroupMember,
+)
 
 # Document Control (Tier 1)
 from src.domain.models.document_control import (
@@ -459,4 +467,11 @@ __all__ = [
     "DriverProfile",
     "DriverAcknowledgement",
     "AcknowledgementStatus",
+    # Document Campaigns (Engineer document read/quiz/sign-off spine)
+    "EngineerGroup",
+    "EngineerGroupMember",
+    "DocumentCampaign",
+    "CampaignAssignment",
+    "CampaignStatus",
+    "AssignmentStatus",
 ]

@@ -25,6 +25,7 @@ from src.api.routes import (
     copilot,
     cross_standard_mappings,
     dlq_admin,
+    document_campaign,
     document_control,
     documents,
     drivers,
@@ -292,5 +293,10 @@ router.include_router(
     prefix="/drivers",
     tags=["Driver Profiles"],
 )
+# Document Campaigns (engineer document read/quiz/sign-off spine)
+router.include_router(
+    document_campaign.router,
+    tags=["Document Campaigns"],
+)  # prefix="/document-campaigns" declared on router
 
 __all__ = ["router"]
