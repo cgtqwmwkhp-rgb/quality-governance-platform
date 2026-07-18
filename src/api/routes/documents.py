@@ -29,13 +29,15 @@ from src.domain.models.document import (
     DocumentStatus,
     DocumentType,
     FileType,
+    IndexJob,
     SensitivityLevel,
 )
 from src.domain.models.user import User
-from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
+from src.domain.services.document_ai_service import VectorSearchService
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
 from src.domain.services.document_version_service import document_version_service
+from src.domain.services.index_job_service import IndexJobService, dispatch_index_job
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.infrastructure.storage import StorageError, storage_service
@@ -155,6 +157,34 @@ class DocumentUploadResponse(BaseModel):
     title: str
     status: str
     message: str
+    index_job_id: Optional[int] = None
+
+
+class DocumentReprocessResponse(BaseModel):
+    """Response after queueing document reprocessing."""
+
+    document_id: int
+    index_job_id: int
+    status: str
+    message: str
+
+
+class IndexJobResponse(BaseModel):
+    """Background indexing job status."""
+
+    id: int
+    job_type: str
+    status: str
+    document_ids: list[int]
+    chunk_count: int
+    chunks_processed: int
+    chunks_succeeded: int
+    chunks_failed: int
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 
 class SearchResult(BaseModel):
@@ -337,98 +367,50 @@ async def _process_uploaded_document(
     file_ext: str,
     file_type: FileType,
     current_user: Optional[User] = None,
-) -> None:
-    """Isolate upload processing behind a single async boundary."""
-    ai_service = DocumentAIService()
-    extraction = _extract_document_content(file_type, file_name, content)
-
-    doc.page_count = extraction.page_count
-    doc.sheet_count = extraction.sheet_count
-    doc.has_tables = extraction.has_tables
-    doc.indexing_error = extraction.note
-
-    text_content = extraction.text.strip()
-    if not text_content:
-        doc.status = DocumentStatus.APPROVED
-        return
-
-    analysis = await ai_service.analyze_document(text_content, file_name, file_ext)
-    doc.ai_summary = analysis.summary
-    doc.ai_tags = analysis.tags
-    doc.ai_keywords = analysis.keywords
-    doc.ai_topics = analysis.topics
-    doc.ai_entities = analysis.entities
-    doc.ai_confidence = analysis.confidence
-    doc.ai_processed_at = datetime.now(timezone.utc)
-    doc.has_tables = doc.has_tables or analysis.has_tables
-    doc.has_images = analysis.has_images
-    doc.word_count = len(text_content.split())
-
-    chunks = await ai_service.generate_chunks(text_content)
-    doc.chunk_count = len(chunks)
-
-    for chunk in chunks:
-        db.add(
-            DocumentChunk(
-                document_id=doc.id,
-                tenant_id=doc.tenant_id,
-                content=chunk.content,
-                chunk_index=chunk.index,
-                token_count=chunk.token_count,
-                heading=chunk.heading,
-                char_start=chunk.char_start,
-                char_end=chunk.char_end,
-            )
-        )
-
-    embedding_service = EmbeddingService()
-    vector_service = VectorSearchService()
-    embeddings = await embedding_service.generate_embeddings([chunk.content for chunk in chunks])
-
-    if embeddings and await vector_service.upsert_chunks(
-        doc.id,
-        chunks,
-        embeddings,
-        extra_metadata={
-            "tenant_id": doc.tenant_id or 0,
-            "document_type": doc.document_type.value if hasattr(doc.document_type, "value") else str(doc.document_type),
-        },
-    ):
-        doc.indexed_at = datetime.now(timezone.utc)
-        doc.status = DocumentStatus.INDEXED
-        doc.indexing_error = None
-    else:
-        doc.status = DocumentStatus.APPROVED
-
-    if current_user is not None and text_content:
-        await _trigger_governed_kb_mapping(db, doc, text_content, current_user)
+) -> IndexJob:
+    """Create an index job and run it synchronously (test/dev fallback hook)."""
+    del file_name, file_ext, file_type
+    index_service = IndexJobService(db)
+    job = await index_service.create_job(
+        document_ids=[doc.id],
+        job_type="single",
+        tenant_id=doc.tenant_id,
+        created_by_id=current_user.id if current_user else None,
+    )
+    await index_service.process_job(
+        job.id,
+        tenant_id=doc.tenant_id,
+        content_cache={doc.id: content},
+        current_user=current_user,
+    )
+    return job
 
 
-async def _trigger_governed_kb_mapping(
+async def _enqueue_document_index_job(
     db: DbSession,
     doc: Document,
-    text_content: str,
+    content: bytes,
+    *,
+    job_type: str,
     current_user: User,
-) -> None:
-    """Fire-and-forget governed knowledge evidence mapping; never breaks upload."""
-    try:
-        from src.domain.services.governed_knowledge_service import governed_knowledge_service
-
-        doc_type = doc.document_type.value if hasattr(doc.document_type, "value") else str(doc.document_type)
-        await governed_knowledge_service.map_document_to_schemes(
-            db,
-            doc.id,
-            text_content,
-            doc_type,
-            doc.tenant_id,
-            current_user,
+) -> tuple[IndexJob, bool]:
+    """Create an index job and dispatch Celery when available."""
+    index_service = IndexJobService(db)
+    job = await index_service.create_job(
+        document_ids=[doc.id],
+        job_type=job_type,
+        tenant_id=doc.tenant_id,
+        created_by_id=current_user.id,
+    )
+    dispatched = dispatch_index_job(job.id, doc.tenant_id, current_user.id)
+    if not dispatched:
+        await index_service.process_job(
+            job.id,
+            tenant_id=doc.tenant_id,
+            content_cache={doc.id: content},
+            current_user=current_user,
         )
-    except Exception:
-        logger.warning(
-            "Governed KB evidence mapping failed for document %s; upload continues",
-            doc.id,
-            exc_info=True,
-        )
+    return job, dispatched
 
 
 # =============================================================================
@@ -544,12 +526,20 @@ async def upload_document(
             ) from exc
 
         try:
-            await _process_uploaded_document(db, doc, content, file_name, file_ext, file_type, current_user)
+            index_job, dispatched = await _enqueue_document_index_job(
+                db,
+                doc,
+                content,
+                job_type="single",
+                current_user=current_user,
+            )
             await db.commit()
         except Exception as e:
             doc.status = DocumentStatus.FAILED
             doc.indexing_error = str(e)
             await db.commit()
+            index_job = None
+            dispatched = False
 
         await db.refresh(doc)
 
@@ -560,7 +550,10 @@ async def upload_document(
             reference_number=_document_reference_number(doc),
             title=doc.title,
             status=doc.status.value,
-            message="Document uploaded and processing started",
+            index_job_id=index_job.id if index_job else None,
+            message=(
+                "Document uploaded; indexing job queued" if dispatched else "Document uploaded and processing completed"
+            ),
         )
     except HTTPException:
         raise
@@ -573,6 +566,65 @@ async def upload_document(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Document upload failed: {exc}",
         ) from exc
+
+
+@router.post(
+    "/{document_id}/reprocess",
+    response_model=DocumentReprocessResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def reprocess_document(
+    document_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+) -> DocumentReprocessResponse:
+    """Re-run document intelligence and indexing for an existing library document."""
+    doc = await _get_document_or_404(db, document_id, current_user)
+    doc.status = DocumentStatus.PROCESSING
+    doc.indexing_error = None
+
+    content = await storage_service().download(doc.file_path)
+    index_job, dispatched = await _enqueue_document_index_job(
+        db,
+        doc,
+        content,
+        job_type="reindex",
+        current_user=current_user,
+    )
+    await db.commit()
+    await db.refresh(doc)
+
+    return DocumentReprocessResponse(
+        document_id=doc.id,
+        index_job_id=index_job.id,
+        status=doc.status.value,
+        message="Document reprocessing queued" if dispatched else "Document reprocessing completed",
+    )
+
+
+@router.get("/index-jobs/{job_id}", response_model=IndexJobResponse)
+async def get_index_job(
+    job_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> IndexJobResponse:
+    """Return background indexing job status."""
+    index_service = IndexJobService(db)
+    job = await index_service.get_job(job_id, tenant_id=getattr(current_user, "tenant_id", None))
+    if job is None:
+        raise NotFoundError("Index job not found")
+    return IndexJobResponse(
+        id=job.id,
+        job_type=job.job_type,
+        status=job.status.value if hasattr(job.status, "value") else str(job.status),
+        document_ids=list(job.document_ids or []),
+        chunk_count=job.chunk_count,
+        chunks_processed=job.chunks_processed,
+        chunks_succeeded=job.chunks_succeeded,
+        chunks_failed=job.chunks_failed,
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+    )
 
 
 # =============================================================================
