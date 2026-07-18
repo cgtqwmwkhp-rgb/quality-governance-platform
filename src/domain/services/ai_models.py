@@ -90,11 +90,7 @@ class AIConfig:
             provider = (
                 AIProvider.ANTHROPIC
                 if anthropic_key
-                else AIProvider.OPENAI
-                if openai_key
-                else AIProvider.GENSPARK
-                if genspark_key
-                else AIProvider.OPENAI
+                else AIProvider.OPENAI if openai_key else AIProvider.GENSPARK if genspark_key else AIProvider.OPENAI
             )
 
         return cls(
