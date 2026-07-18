@@ -184,6 +184,14 @@ async def create_user(
         user.roles = list(roles)  # type: ignore[arg-type]  # TYPE-IGNORE: SQLALCHEMY-001
 
     db.add(user)
+    await db.flush()
+
+    # Best-in-class: Person record always exists for a login seat (never writes PAMS).
+    if user.tenant_id is not None:
+        from src.domain.services.engineer_user_link_service import ensure_engineer_for_user_async
+
+        await ensure_engineer_for_user_async(db, user, tenant_id=user.tenant_id)
+
     await db.commit()
     await db.refresh(user)
 

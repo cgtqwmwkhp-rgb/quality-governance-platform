@@ -16,9 +16,11 @@ from src.api.schemas.engineer import (
     CompetencyRecordResponse,
     EngineerCreate,
     EngineerLinkStatusResponse,
+    EngineerLinkUserRequest,
     EngineerListResponse,
     EngineerResponse,
     EngineerUpdate,
+    LinkedUserSummary,
     PamsTechnicianSyncResponse,
     SkillsMatrixEntry,
     SkillsMatrixResponse,
@@ -79,7 +81,13 @@ def _effective_competency_state(record: CompetencyRecord) -> str:
     return state
 
 
-async def _validate_engineer_user_assignment(db: DbSession, user: CurrentUser, target_user_id: int) -> None:
+async def _validate_engineer_user_assignment(
+    db: DbSession,
+    user: CurrentUser,
+    target_user_id: int,
+    *,
+    allow_engineer_id: Optional[int] = None,
+) -> User:
     user_query = select(User).where(User.id == target_user_id, User.is_active.is_(True))
     user_result = await db.execute(user_query)
     target_user = user_result.scalar_one_or_none()
@@ -93,11 +101,29 @@ async def _validate_engineer_user_assignment(db: DbSession, user: CurrentUser, t
     existing_query = apply_tenant_filter(existing_query, Engineer, user.tenant_id)
     existing_result = await db.execute(existing_query)
     existing_engineer_id = existing_result.scalar_one_or_none()
-    if existing_engineer_id is not None:
+    if existing_engineer_id is not None and existing_engineer_id != allow_engineer_id:
         raise ConflictError(
             "An engineer profile already exists for this user",
             details={"engineer_id": existing_engineer_id, "user_id": target_user_id},
         )
+    return target_user
+
+
+async def _linked_user_summary(db: DbSession, user_id: Optional[int]) -> Optional[LinkedUserSummary]:
+    if user_id is None:
+        return None
+    result = await db.execute(select(User).where(User.id == user_id))
+    linked = result.scalar_one_or_none()
+    if linked is None:
+        return None
+    full_name = (getattr(linked, "full_name", None) or "").strip() or None
+    return LinkedUserSummary(id=linked.id, email=linked.email, full_name=full_name)
+
+
+async def _engineer_response(db: DbSession, engineer: Engineer) -> EngineerResponse:
+    payload = EngineerResponse.model_validate(engineer)
+    payload.linked_user = await _linked_user_summary(db, engineer.user_id)
+    return payload
 
 
 @router.get("/", response_model=EngineerListResponse)
@@ -136,8 +162,11 @@ async def list_engineers(
     items = items_result.scalars().all()
     pages = (total + page_size - 1) // page_size if total > 0 else 0
 
+    responses: list[EngineerResponse] = []
+    for engineer in items:
+        responses.append(await _engineer_response(db, engineer))
     return EngineerListResponse(
-        items=[EngineerResponse.model_validate(e) for e in items],
+        items=responses,
         total=total,
         page=page,
         page_size=page_size,
@@ -172,7 +201,7 @@ async def create_engineer(
     db.add(engineer)
     await db.commit()
     await db.refresh(engineer)
-    return EngineerResponse.model_validate(engineer)
+    return await _engineer_response(db, engineer)
 
 
 @router.get("/by-user/me", response_model=EngineerLinkStatusResponse)
@@ -277,7 +306,7 @@ async def get_engineer(
     if engineer is None:
         raise NotFoundError("Engineer not found")
     _assert_engineer_access(user, engineer, allow_self_read=True)
-    return EngineerResponse.model_validate(engineer)
+    return await _engineer_response(db, engineer)
 
 
 @router.patch("/{engineer_id}", response_model=EngineerResponse)
@@ -287,7 +316,7 @@ async def update_engineer(
     db: DbSession,
     user: Annotated[User, Depends(require_permission("engineer:update"))],
 ):
-    """Update an engineer."""
+    """Update an engineer on QGP only — never writes back to PAMS."""
     tenant_id = _require_engineer_tenant_id(user)
     query = select(Engineer).where(Engineer.id == engineer_id)
     query = apply_tenant_filter(query, Engineer, tenant_id)
@@ -299,16 +328,106 @@ async def update_engineer(
 
     updates = data.model_dump(exclude_unset=True)
     if "user_id" in updates and updates["user_id"] != engineer.user_id:
-        raise BadRequestError("Engineer user assignment cannot be changed via update")
+        raise BadRequestError(
+            "Engineer user assignment cannot be changed via update — use link-user / unlink-user"
+        )
+    updates.pop("user_id", None)
     if "specialisations" in updates:
         updates["specialisations_json"] = updates.pop("specialisations")
     if "certifications" in updates:
         updates["certifications_json"] = updates.pop("certifications")
+
+    identity_keys = {
+        "display_name",
+        "employee_number",
+        "job_title",
+        "department",
+        "site",
+        "notes",
+        "start_date",
+        "specialisations_json",
+        "certifications_json",
+    }
+    if identity_keys.intersection(updates) and "qgp_profile_override" not in updates:
+        updates["qgp_profile_override"] = True
+
     for k, v in updates.items():
         setattr(engineer, k, v)
     await db.commit()
     await db.refresh(engineer)
-    return EngineerResponse.model_validate(engineer)
+    logger.info(
+        "engineer_qgp_profile_updated engineer_id=%s override=%s user_id=%s",
+        engineer.id,
+        engineer.qgp_profile_override,
+        getattr(user, "id", None),
+    )
+    return await _engineer_response(db, engineer)
+
+
+@router.post("/{engineer_id}/link-user", response_model=EngineerResponse)
+async def link_engineer_user(
+    engineer_id: int,
+    data: EngineerLinkUserRequest,
+    db: DbSession,
+    user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    """Attach a QGP login User to an Engineer person record (does not touch PAMS)."""
+    if not _is_workforce_manager(user):
+        raise AuthorizationError("You do not have permission to link engineer users")
+    tenant_id = _require_engineer_tenant_id(user)
+    query = select(Engineer).where(Engineer.id == engineer_id)
+    query = apply_tenant_filter(query, Engineer, tenant_id)
+    result = await db.execute(query)
+    engineer = result.scalar_one_or_none()
+    if engineer is None:
+        raise NotFoundError("Engineer not found")
+
+    target = await _validate_engineer_user_assignment(
+        db, user, data.user_id, allow_engineer_id=engineer.id
+    )
+    engineer.user_id = target.id
+    if not (engineer.display_name and engineer.display_name.strip()):
+        from src.domain.services.engineer_user_link_service import display_name_for_user
+
+        engineer.display_name = display_name_for_user(target)
+    await db.commit()
+    await db.refresh(engineer)
+    logger.info(
+        "engineer_user_linked engineer_id=%s linked_user_id=%s by_user_id=%s",
+        engineer.id,
+        target.id,
+        getattr(user, "id", None),
+    )
+    return await _engineer_response(db, engineer)
+
+
+@router.post("/{engineer_id}/unlink-user", response_model=EngineerResponse)
+async def unlink_engineer_user(
+    engineer_id: int,
+    db: DbSession,
+    user: Annotated[User, Depends(require_permission("engineer:update"))],
+):
+    """Detach QGP login from Engineer — roster person remains (PAMS untouched)."""
+    if not _is_workforce_manager(user):
+        raise AuthorizationError("You do not have permission to unlink engineer users")
+    tenant_id = _require_engineer_tenant_id(user)
+    query = select(Engineer).where(Engineer.id == engineer_id)
+    query = apply_tenant_filter(query, Engineer, tenant_id)
+    result = await db.execute(query)
+    engineer = result.scalar_one_or_none()
+    if engineer is None:
+        raise NotFoundError("Engineer not found")
+    previous = engineer.user_id
+    engineer.user_id = None
+    await db.commit()
+    await db.refresh(engineer)
+    logger.info(
+        "engineer_user_unlinked engineer_id=%s previous_user_id=%s by_user_id=%s",
+        engineer.id,
+        previous,
+        getattr(user, "id", None),
+    )
+    return await _engineer_response(db, engineer)
 
 
 @router.get("/{engineer_id}/competencies", response_model=List[CompetencyRecordResponse])

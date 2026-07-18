@@ -76,6 +76,8 @@ class Engineer(Base, TimestampMixin, AuditTrailMixin):
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # When True, PAMS sync must not overwrite QGP-edited identity fields (pseudo-DB).
+    qgp_profile_override: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 

@@ -11,7 +11,9 @@ import {
   type CompetencyRequirement,
   type TrainingTicket,
   type TicketVerifyState,
+  type UserSearchResult,
 } from '../../api/client'
+import { UserEmailSearch } from '../../components/UserEmailSearch'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Label } from '../../components/ui/Label'
@@ -182,6 +184,22 @@ export default function EngineerProfile() {
   const [ticketSaving, setTicketSaving] = useState(false)
   const [ticketFormError, setTicketFormError] = useState<string | null>(null)
 
+  const [editOpen, setEditOpen] = useState(false)
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({
+    display_name: '',
+    employee_number: '',
+    job_title: '',
+    department: '',
+    site: '',
+    is_active: true,
+  })
+  const [linkEmail, setLinkEmail] = useState('')
+  const [linkUser, setLinkUser] = useState<UserSearchResult | undefined>()
+  const [linkBusy, setLinkBusy] = useState(false)
+  const [linkError, setLinkError] = useState<string | null>(null)
+
   useEffect(() => {
     workforceApi
       .listAssetTypes()
@@ -302,6 +320,82 @@ export default function EngineerProfile() {
     setTicketDialogOpen(true)
   }
 
+  const openEditProfile = () => {
+    if (!engineer) return
+    setEditForm({
+      display_name: engineer.display_name || '',
+      employee_number: engineer.employee_number || '',
+      job_title: engineer.job_title || '',
+      department: engineer.department || '',
+      site: engineer.site || '',
+      is_active: engineer.is_active,
+    })
+    setEditError(null)
+    setEditOpen(true)
+  }
+
+  const saveProfile = async () => {
+    if (!engineer) return
+    if (!editForm.display_name.trim()) {
+      setEditError(t('workforce.engineers.edit_display_name_required', 'Display name is required'))
+      return
+    }
+    setEditSaving(true)
+    setEditError(null)
+    try {
+      const res = await workforceApi.updateEngineer(engineer.id, {
+        display_name: editForm.display_name.trim(),
+        employee_number: editForm.employee_number.trim() || null,
+        job_title: editForm.job_title.trim() || null,
+        department: editForm.department.trim() || null,
+        site: editForm.site.trim() || null,
+        is_active: editForm.is_active,
+      })
+      setEngineer(res.data)
+      setEditOpen(false)
+    } catch (err) {
+      trackError(err, { component: 'EngineerProfile', action: 'updateProfile' })
+      setEditError(getApiErrorMessage(err))
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const handleLinkUser = async () => {
+    if (!engineer || !linkUser?.id) {
+      setLinkError(t('workforce.engineers.user_link.select_user', 'Select a QGP user from search'))
+      return
+    }
+    setLinkBusy(true)
+    setLinkError(null)
+    try {
+      const res = await workforceApi.linkEngineerUser(engineer.id, linkUser.id)
+      setEngineer(res.data)
+      setLinkEmail('')
+      setLinkUser(undefined)
+    } catch (err) {
+      trackError(err, { component: 'EngineerProfile', action: 'linkUser' })
+      setLinkError(getApiErrorMessage(err))
+    } finally {
+      setLinkBusy(false)
+    }
+  }
+
+  const handleUnlinkUser = async () => {
+    if (!engineer) return
+    setLinkBusy(true)
+    setLinkError(null)
+    try {
+      const res = await workforceApi.unlinkEngineerUser(engineer.id)
+      setEngineer(res.data)
+    } catch (err) {
+      trackError(err, { component: 'EngineerProfile', action: 'unlinkUser' })
+      setLinkError(getApiErrorMessage(err))
+    } finally {
+      setLinkBusy(false)
+    }
+  }
+
   const saveTicket = async () => {
     if (!engineer) return
     if (!ticketForm.scheme.trim() || !ticketForm.ticket_number.trim()) {
@@ -371,30 +465,57 @@ export default function EngineerProfile() {
         </Link>
       </div>
 
-      {/* Identity */}
+      {/* Identity — QGP pseudo-DB (edits never write PAMS) */}
       <div className="bg-card border border-border rounded-xl p-6" data-testid="engineer-identity">
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
                 <span className="text-primary font-bold text-lg">
-                  {(engineer.job_title || 'E')[0].toUpperCase()}
+                  {(engineer.display_name || engineer.job_title || 'E')[0].toUpperCase()}
                 </span>
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-foreground">
-                  {engineer.employee_number || engineer.job_title || `Engineer #${engineer.id}`}
+                  {engineer.display_name?.trim() ||
+                    engineer.employee_number ||
+                    engineer.job_title ||
+                    `Engineer #${engineer.id}`}
                 </h1>
                 <p className="text-muted-foreground">{engineer.job_title || 'Field Engineer'}</p>
               </div>
             </div>
           </div>
-          <span
-            className={`px-3 py-1 rounded-full text-xs font-medium ${engineer.is_active ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}
-          >
-            {engineer.is_active ? t('common.active') : t('common.inactive')}
-          </span>
+          <div className="flex items-center gap-2">
+            {engineer.qgp_profile_override ? (
+              <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                {t('workforce.engineers.qgp_override_badge', 'QGP profile')}
+              </span>
+            ) : null}
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-medium ${engineer.is_active ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}
+            >
+              {engineer.is_active ? t('common.active') : t('common.inactive')}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={openEditProfile}
+              data-testid="engineer-edit-profile"
+            >
+              <Pencil className="w-4 h-4 mr-1" />
+              {t('common.edit', 'Edit')}
+            </Button>
+          </div>
         </div>
+
+        <p className="text-xs text-muted-foreground mt-3">
+          {t(
+            'workforce.engineers.qgp_only_hint',
+            'Edits apply on this platform only — PAMS technician records are never updated.',
+          )}
+        </p>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
           <div>
@@ -426,31 +547,145 @@ export default function EngineerProfile() {
         </div>
 
         <div
-          className="mt-4 pt-4 border-t border-border"
+          className="mt-4 pt-4 border-t border-border space-y-3"
           data-testid="engineer-user-link"
         >
           <p className="text-xs text-muted-foreground uppercase tracking-wide">
             {t('workforce.engineers.user_link.label')}
           </p>
           {engineer.user_id != null ? (
-            <p
-              className="text-foreground font-medium mt-1 font-mono text-sm"
-              data-testid="engineer-user-link-linked"
-            >
-              {t('workforce.engineers.user_link.linked', { id: engineer.user_id })}
-            </p>
-          ) : (
-            <div className="mt-1 space-y-1" data-testid="engineer-user-link-unlinked">
-              <p className="text-foreground font-medium">
-                {t('workforce.engineers.user_link.unlinked')}
+            <div className="flex flex-wrap items-center gap-3" data-testid="engineer-user-link-linked">
+              <p className="text-foreground font-medium text-sm">
+                {engineer.linked_user?.full_name ||
+                  engineer.linked_user?.email ||
+                  t('workforce.engineers.user_link.linked', { id: engineer.user_id })}
+                {engineer.linked_user?.email ? (
+                  <span className="text-muted-foreground font-normal"> · {engineer.linked_user.email}</span>
+                ) : null}
               </p>
-              <p className="text-sm text-muted-foreground">
-                {t('workforce.engineers.user_link.unlinked_hint')}
-              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={linkBusy}
+                onClick={() => void handleUnlinkUser()}
+                data-testid="engineer-unlink-user"
+              >
+                {t('workforce.engineers.user_link.unlink', 'Unlink user')}
+              </Button>
             </div>
+          ) : (
+            <div className="space-y-3" data-testid="engineer-user-link-unlinked">
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  'workforce.engineers.user_link.unlinked_hint',
+                  'Link a QGP login so this person can own cases and see portal Work. Roster stays valid without a login.',
+                )}
+              </p>
+              <UserEmailSearch
+                value={linkEmail}
+                onChange={(email, user) => {
+                  setLinkEmail(email)
+                  setLinkUser(user)
+                }}
+                placeholder={t(
+                  'workforce.engineers.user_link.search_placeholder',
+                  'Search QGP user by email…',
+                )}
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={linkBusy || !linkUser?.id}
+                onClick={() => void handleLinkUser()}
+                data-testid="engineer-link-user"
+              >
+                {t('workforce.engineers.user_link.link', 'Link user')}
+              </Button>
+            </div>
+          )}
+          {linkError && (
+            <p className="text-sm text-destructive" role="alert">
+              {linkError}
+            </p>
           )}
         </div>
       </div>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-lg" data-testid="engineer-edit-dialog">
+          <DialogHeader>
+            <DialogTitle>{t('workforce.engineers.edit_title', 'Edit employee profile')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {editError && (
+              <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{editError}</div>
+            )}
+            <div className="space-y-1">
+              <Label htmlFor="eng-display-name">{t('workforce.engineers.display_name')}</Label>
+              <Input
+                id="eng-display-name"
+                value={editForm.display_name}
+                onChange={(e) => setEditForm((p) => ({ ...p, display_name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="eng-employee-no">{t('workforce.engineers.employee_no')}</Label>
+              <Input
+                id="eng-employee-no"
+                value={editForm.employee_number}
+                onChange={(e) => setEditForm((p) => ({ ...p, employee_number: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="eng-job-title">{t('workforce.engineers.job_title')}</Label>
+              <Input
+                id="eng-job-title"
+                value={editForm.job_title}
+                onChange={(e) => setEditForm((p) => ({ ...p, job_title: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="eng-department">{t('workforce.common.department')}</Label>
+              <Input
+                id="eng-department"
+                value={editForm.department}
+                onChange={(e) => setEditForm((p) => ({ ...p, department: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="eng-site">{t('workforce.engineers.site')}</Label>
+              <Input
+                id="eng-site"
+                value={editForm.site}
+                onChange={(e) => setEditForm((p) => ({ ...p, site: e.target.value }))}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={editForm.is_active}
+                onChange={(e) => setEditForm((p) => ({ ...p, is_active: e.target.checked }))}
+              />
+              {t('common.active')}
+            </label>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'workforce.engineers.qgp_only_hint',
+                'Edits apply on this platform only — PAMS technician records are never updated.',
+              )}
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="secondary" onClick={() => setEditOpen(false)} disabled={editSaving}>
+              {t('common.cancel')}
+            </Button>
+            <Button type="button" onClick={() => void saveProfile()} disabled={editSaving}>
+              {editSaving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {assetTypeMapError && (
         <div
