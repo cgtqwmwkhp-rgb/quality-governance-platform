@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
 import {
@@ -16,8 +16,11 @@ import {
   RefreshCw,
   Save,
   Layers,
+  ListTodo,
+  Clock,
+  Eye,
 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   investigationsApi,
   actionsApi,
@@ -48,6 +51,12 @@ import {
 } from '../components/ui/Dialog'
 import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
+import {
+  getEnabledFilterOptions,
+  getStatusValuesForFilter,
+  statusMatchesFilter,
+  type InvestigationStatusValue,
+} from '../utils/investigationStatusFilter'
 
 const ENTITY_ICONS: Record<string, typeof AlertTriangle> = {
   road_traffic_collision: Car,
@@ -118,6 +127,86 @@ function countSeededSections(data: Record<string, unknown> | undefined): number 
   const sections = data?.sections
   if (!sections || typeof sections !== 'object' || Array.isArray(sections)) return 0
   return Object.keys(sections as Record<string, unknown>).length
+}
+
+type HeroKey = 'total' | 'in_progress' | 'under_review' | 'completed'
+
+const HERO_TO_STATUS_FILTER: Record<HeroKey, string> = {
+  total: 'all',
+  in_progress: 'in_progress',
+  under_review: 'pending_review',
+  completed: 'completed',
+}
+
+const ENTITY_TYPE_FILTERS = [
+  { value: 'all', label: 'All sources' },
+  { value: 'reporting_incident', label: 'Reporting incident' },
+  { value: 'near_miss', label: 'Near miss' },
+  { value: 'road_traffic_collision', label: 'Road traffic collision' },
+  { value: 'complaint', label: 'Complaint' },
+] as const
+
+type EntityTypeFilter = (typeof ENTITY_TYPE_FILTERS)[number]['value']
+
+const STATUS_FILTER_IDS = new Set(getEnabledFilterOptions().map((o) => o.id))
+
+function parseStatusFilterParam(raw: string | null): string {
+  if (raw && STATUS_FILTER_IDS.has(raw)) return raw
+  return 'all'
+}
+
+function parseEntityTypeParam(raw: string | null): EntityTypeFilter {
+  if (raw && ENTITY_TYPE_FILTERS.some((e) => e.value === raw)) {
+    return raw as EntityTypeFilter
+  }
+  return 'all'
+}
+
+function heroKeyFromStatusFilter(statusFilter: string): HeroKey | null {
+  if (statusFilter === 'in_progress') return 'in_progress'
+  if (statusFilter === 'pending_review') return 'under_review'
+  if (statusFilter === 'completed') return 'completed'
+  if (statusFilter === 'all') return 'total'
+  return null
+}
+
+/** Single backend status for API; multi-value filters (e.g. Open) omit status. */
+function apiStatusForFilter(statusFilter: string): string | undefined {
+  const values = getStatusValuesForFilter(statusFilter)
+  if (values.length === 1) return values[0]
+  return undefined
+}
+
+function collectPeopleHaystack(inv: Investigation): string {
+  const data = (inv.data || {}) as Record<string, unknown>
+  const keys = [
+    'lead_investigator',
+    'assignee_email',
+    'assigned_to_email',
+    'assigned_to',
+    'investigator',
+    'reviewer',
+    'owner_email',
+    'people_involved',
+  ]
+  const parts: string[] = []
+  for (const key of keys) {
+    const val = data[key]
+    if (typeof val === 'string' && val.trim()) parts.push(val)
+  }
+  return parts.join(' ')
+}
+
+/** Local smart-search fallback (title/ref/description/people) until BE honors q for actions/comments. */
+function matchesLocalSmartSearch(inv: Investigation, needle: string): boolean {
+  if (!needle) return true
+  const haystacks = [
+    inv.title,
+    inv.reference_number,
+    inv.description,
+    collectPeopleHaystack(inv),
+  ]
+  return haystacks.some((h) => (h || '').toLowerCase().includes(needle))
 }
 
 // Create Investigation Modal Component with Dropdown Selector
@@ -511,11 +600,24 @@ function CreateInvestigationModal({
 export default function Investigations() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [investigations, setInvestigations] = useState<Investigation[]>([])
+  /** Unfiltered catalog for hero KPI counts (not narrowed by status/q). */
+  const [catalog, setCatalog] = useState<Investigation[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [statusFilter, setStatusFilter] = useState(() =>
+    parseStatusFilterParam(searchParams.get('status')),
+  )
+  const [entityTypeFilter, setEntityTypeFilter] = useState<EntityTypeFilter>(() =>
+    parseEntityTypeParam(searchParams.get('entityType')),
+  )
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '')
+  const [debouncedQ, setDebouncedQ] = useState(() => (searchParams.get('q') || '').trim())
   const [showModal, setShowModal] = useState(false)
   const [selectedInvestigation, setSelectedInvestigation] = useState<Investigation | null>(null)
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingQueryParamRef = useRef<string | null>(null)
 
   // Actions for selected investigation
   const [investigationActions, setInvestigationActions] = useState<ActionItem[]>([])
@@ -544,9 +646,90 @@ export default function Investigations() {
   const [updatingAction, setUpdatingAction] = useState(false)
   const [actionUpdateError, setActionUpdateError] = useState<string | null>(null)
 
+  const heroKey = heroKeyFromStatusFilter(statusFilter)
+  const statusFilterOptions = useMemo(() => getEnabledFilterOptions(), [])
+
+  // Hydrate shareable filters from URL (back/forward + deep links).
+  useEffect(() => {
+    const nextStatus = parseStatusFilterParam(searchParams.get('status'))
+    const nextEntity = parseEntityTypeParam(searchParams.get('entityType'))
+    const nextQ = searchParams.get('q') || ''
+    const isOwnUrlWrite = pendingQueryParamRef.current === nextQ.trim()
+    pendingQueryParamRef.current = null
+    setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus))
+    setEntityTypeFilter((prev) => (prev === nextEntity ? prev : nextEntity))
+    if (!isOwnUrlWrite) {
+      setSearchTerm((prev) => (prev === nextQ ? prev : nextQ))
+    }
+    setDebouncedQ((prev) => {
+      const trimmed = nextQ.trim()
+      return prev === trimmed ? prev : trimmed
+    })
+  }, [searchParams])
+
+  // Write filters to URL.
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams)
+    if (statusFilter === 'all') next.delete('status')
+    else next.set('status', statusFilter)
+    if (entityTypeFilter === 'all') next.delete('entityType')
+    else next.set('entityType', entityTypeFilter)
+    const q = debouncedQ.trim()
+    if (!q) next.delete('q')
+    else next.set('q', q)
+    if (next.toString() !== searchParams.toString()) {
+      pendingQueryParamRef.current = q
+      setSearchParams(next, { replace: true })
+    }
+  }, [statusFilter, entityTypeFilter, debouncedQ, searchParams, setSearchParams])
+
+  // Debounce search → q (API + URL).
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    searchDebounceRef.current = setTimeout(() => {
+      setDebouncedQ(searchTerm.trim())
+    }, 300)
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    }
+  }, [searchTerm])
+
+  const loadCatalog = useCallback(async () => {
+    try {
+      const response = await investigationsApi.list(1, 100)
+      setCatalog(response.data.items || [])
+    } catch (err) {
+      trackError(err, { component: 'Investigations', action: 'loadCatalog' })
+      setCatalog([])
+    }
+  }, [])
+
+  const loadInvestigations = useCallback(async () => {
+    setLoading(true)
+    try {
+      const apiStatus = apiStatusForFilter(statusFilter)
+      const response = await investigationsApi.list(1, 100, {
+        status: apiStatus,
+        entity_type: entityTypeFilter === 'all' ? undefined : entityTypeFilter,
+        q: debouncedQ || undefined,
+      })
+      setInvestigations(response.data.items || [])
+    } catch (err) {
+      trackError(err, { component: 'Investigations', action: 'load' })
+      setInvestigations([])
+    } finally {
+      setLoading(false)
+      setInitialLoading(false)
+    }
+  }, [statusFilter, entityTypeFilter, debouncedQ])
+
+  useEffect(() => {
+    loadCatalog()
+  }, [loadCatalog])
+
   useEffect(() => {
     loadInvestigations()
-  }, [])
+  }, [loadInvestigations])
 
   // Load actions and initialize RCA when investigation is selected
   useEffect(() => {
@@ -581,16 +764,9 @@ export default function Investigations() {
     }
   }
 
-  const loadInvestigations = async () => {
-    try {
-      const response = await investigationsApi.list(1, 100)
-      setInvestigations(response.data.items || [])
-    } catch (err) {
-      trackError(err, { component: 'Investigations', action: 'load' })
-      setInvestigations([])
-    } finally {
-      setLoading(false)
-    }
+  const applyHeroFilter = (key: HeroKey) => {
+    const next = HERO_TO_STATUS_FILTER[key]
+    setStatusFilter((prev) => (prev === next && key !== 'total' ? 'all' : next))
   }
 
   const handleCreateAction = async (e: React.FormEvent) => {
@@ -692,7 +868,7 @@ export default function Investigations() {
         data: mergedData,
       })
       setSelectedInvestigation(response.data)
-      await loadInvestigations()
+      await Promise.all([loadInvestigations(), loadCatalog()])
       setRcaUnsaved(false)
     } catch (err) {
       trackError(err, { component: 'Investigations', action: 'saveRCA' })
@@ -705,23 +881,56 @@ export default function Investigations() {
     return ENTITY_ICONS[type] || AlertTriangle
   }
 
-  const filteredInvestigations = investigations.filter((i) => {
+  const filteredInvestigations = useMemo(() => {
+    // Instant local UX on keystrokes; debouncedQ drives API/URL for PR-5 server search.
     const needle = searchTerm.trim().toLowerCase()
-    if (!needle) return true
-    return (
-      (i.title || '').toLowerCase().includes(needle) ||
-      (i.reference_number || '').toLowerCase().includes(needle)
-    )
-  })
+    const statusValues = getStatusValuesForFilter(statusFilter)
+    const needsClientStatus =
+      statusFilter !== 'all' && (statusValues.length !== 1 || !apiStatusForFilter(statusFilter))
 
-  const stats = {
-    total: investigations.length,
-    inProgress: investigations.filter((i) => i.status === 'in_progress').length,
-    underReview: investigations.filter((i) => i.status === 'under_review').length,
-    completed: investigations.filter((i) => i.status === 'completed').length,
-  }
+    const normalizedDebouncedQ = debouncedQ.trim().toLowerCase()
+    const useCatalogForPendingSearch =
+      catalog.length > 0 && (needle !== normalizedDebouncedQ || loading)
+    const source = useCatalogForPendingSearch ? catalog : investigations
+    const rows = source.filter((inv) => {
+      if (entityTypeFilter !== 'all' && inv.assigned_entity_type !== entityTypeFilter) {
+        return false
+      }
+      if (needsClientStatus || statusValues.length > 1) {
+        if (!statusMatchesFilter(inv.status as InvestigationStatusValue, statusFilter)) {
+          return false
+        }
+      } else if (statusFilter !== 'all' && statusValues.length === 1) {
+        // API already filtered single status; keep as safety net
+        if (inv.status !== statusValues[0]) return false
+      }
+      return true
+    })
 
-  if (loading) {
+    if (!needle) return rows
+
+    const localFiltered = rows.filter((inv) => matchesLocalSmartSearch(inv, needle))
+    return localFiltered
+  }, [
+    investigations,
+    catalog,
+    statusFilter,
+    entityTypeFilter,
+    searchTerm,
+    debouncedQ,
+    loading,
+  ])
+
+  const stats = useMemo(() => {
+    return {
+      total: catalog.length,
+      inProgress: catalog.filter((i) => i.status === 'in_progress').length,
+      underReview: catalog.filter((i) => i.status === 'under_review').length,
+      completed: catalog.filter((i) => i.status === 'completed').length,
+    }
+  }, [catalog])
+
+  if (initialLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -753,63 +962,151 @@ export default function Investigations() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          {
-            label: t('investigations.stats.total'),
-            value: stats.total,
-            variant: 'primary' as const,
-          },
-          { label: t('status.in_progress'), value: stats.inProgress, variant: 'warning' as const },
-          { label: t('status.under_review'), value: stats.underReview, variant: 'info' as const },
-          {
-            label: t('investigations.stats.completed'),
-            value: stats.completed,
-            variant: 'success' as const,
-          },
-        ].map((stat) => (
-          <Card key={stat.label} className="p-5">
-            <div
+      {/* Interactive hero filters */}
+      <div
+        className="grid grid-cols-2 lg:grid-cols-4 gap-2"
+        role="group"
+        aria-label={t('investigations.hero_filters', 'Filter by status')}
+        data-testid="investigations-hero-board"
+      >
+        {(
+          [
+            {
+              key: 'total' as const,
+              label: t('investigations.stats.total'),
+              value: stats.total,
+              icon: ListTodo,
+              tone: 'primary' as const,
+            },
+            {
+              key: 'in_progress' as const,
+              label: t('status.in_progress'),
+              value: stats.inProgress,
+              icon: Clock,
+              tone: 'warning' as const,
+            },
+            {
+              key: 'under_review' as const,
+              label: t('status.under_review'),
+              value: stats.underReview,
+              icon: Eye,
+              tone: 'info' as const,
+            },
+            {
+              key: 'completed' as const,
+              label: t('investigations.stats.completed'),
+              value: stats.completed,
+              icon: CheckCircle,
+              tone: 'success' as const,
+            },
+          ] as const
+        ).map((stat) => {
+          const active = heroKey !== null && heroKey === stat.key
+          return (
+            <button
+              key={stat.key}
+              type="button"
+              data-testid={`investigations-hero-${stat.key}`}
+              aria-pressed={active}
+              onClick={() => applyHeroFilter(stat.key)}
               className={cn(
-                'w-12 h-12 rounded-xl flex items-center justify-center mb-3',
-                stat.variant === 'primary' && 'bg-primary/10',
-                stat.variant === 'warning' && 'bg-warning/10',
-                stat.variant === 'info' && 'bg-info/10',
-                stat.variant === 'success' && 'bg-success/10',
+                'rounded-xl border px-3 py-2.5 text-left transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                active
+                  ? 'border-primary/40 bg-primary/5 shadow-sm'
+                  : 'border-border bg-card hover:bg-surface',
               )}
             >
-              <span
-                className={cn(
-                  'text-xl font-bold',
-                  stat.variant === 'primary' && 'text-primary',
-                  stat.variant === 'warning' && 'text-warning',
-                  stat.variant === 'info' && 'text-info',
-                  stat.variant === 'success' && 'text-success',
-                )}
-              >
-                {stat.value}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">{stat.label}</p>
-          </Card>
-        ))}
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className={cn(
+                    'inline-flex h-7 w-7 items-center justify-center rounded-lg',
+                    stat.tone === 'primary' && 'bg-primary/10 text-primary',
+                    stat.tone === 'warning' && 'bg-warning/10 text-warning',
+                    stat.tone === 'info' && 'bg-info/10 text-info',
+                    stat.tone === 'success' && 'bg-success/10 text-success',
+                  )}
+                >
+                  <stat.icon className="h-3.5 w-3.5" aria-hidden="true" />
+                </span>
+                <span className="text-xl font-semibold tabular-nums text-foreground">
+                  {stat.value}
+                </span>
+              </div>
+              <p className="mt-1.5 text-xs font-medium text-muted-foreground">{stat.label}</p>
+            </button>
+          )
+        })}
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-        <Input
-          type="text"
-          placeholder={t('investigations.search_placeholder')}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
+      {/* Secondary filters + smart search */}
+      <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+        <div className="flex flex-wrap gap-2">
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(parseStatusFilterParam(value))}
+          >
+            <SelectTrigger
+              className="w-[180px]"
+              data-testid="investigations-status-filter"
+              aria-label={t('investigations.filter_status', 'Status')}
+            >
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              {statusFilterOptions.map((opt) => (
+                <SelectItem key={opt.id} value={opt.id}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={entityTypeFilter}
+            onValueChange={(value) => setEntityTypeFilter(parseEntityTypeParam(value))}
+          >
+            <SelectTrigger
+              className="w-[200px]"
+              data-testid="investigations-entity-filter"
+              aria-label={t('investigations.filter_source', 'Source type')}
+            >
+              <SelectValue placeholder="Source type" />
+            </SelectTrigger>
+            <SelectContent>
+              {ENTITY_TYPE_FILTERS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder={t(
+              'investigations.search_placeholder',
+              'Search investigations, actions, people…',
+            )}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+            data-testid="investigations-smart-search"
+            aria-label={t(
+              'investigations.smart_search',
+              'Search investigations, actions, people',
+            )}
+          />
+        </div>
       </div>
 
       {/* Compact investigation work queue — report opens on the detail route */}
-      <div className="space-y-2" data-testid="investigations-list">
+      <div
+        className="space-y-2"
+        data-testid="investigations-list"
+        aria-busy={loading}
+      >
         {filteredInvestigations.length === 0 ? (
           <EmptyState
             icon={<FlaskConical className="w-8 h-8 text-muted-foreground" />}
@@ -1066,7 +1363,8 @@ export default function Investigations() {
         open={showModal}
         onOpenChange={setShowModal}
         onCreated={() => {
-          loadInvestigations()
+          void loadInvestigations()
+          void loadCatalog()
           setShowModal(false)
         }}
       />

@@ -235,14 +235,37 @@ export interface InvestigationTemplateListResponse {
   pages: number
 }
 
+/** Optional filters for investigation list (status / entity_type / smart search q). */
+export interface InvestigationListParams {
+  status?: string
+  entity_type?: string
+  /** Smart search — title/ref/people/actions/comments when BE honors q (PR-5). */
+  q?: string
+}
+
 export function createInvestigationsApi(api: AxiosInstance) {
   return {
-  list: (page = 1, pageSize = 10, status?: string) => {
+  /**
+   * List investigations.
+   * Third arg accepts legacy `status` string or `{ status, entity_type, q }`.
+   * `q` is forwarded for smart search; ignored by API until PR-5 BE lands.
+   */
+  list: (
+    page = 1,
+    pageSize = 10,
+    statusOrOptions?: string | InvestigationListParams,
+  ) => {
+    const options: InvestigationListParams =
+      typeof statusOrOptions === 'string'
+        ? { status: statusOrOptions }
+        : statusOrOptions ?? {}
     const params = new URLSearchParams({
       page: String(page),
       page_size: String(pageSize),
     })
-    if (status) params.set('status', status)
+    if (options.status) params.set('status', options.status)
+    if (options.entity_type) params.set('entity_type', options.entity_type)
+    if (options.q?.trim()) params.set('q', options.q.trim())
     return api.get<PaginatedResponse<Investigation>>(`/api/v1/investigations/?${params}`)
   },
   create: (data: InvestigationCreate) => api.post<Investigation>('/api/v1/investigations/', data),
