@@ -116,24 +116,41 @@ class TestStripQuizAnswerKeys:
 
 class TestExpandAudience:
     @pytest.mark.asyncio
-    async def test_user_ids_only_issues_no_queries(self):
-        db = SimpleNamespace(execute=AsyncMock())
+    async def test_user_ids_filtered_to_valid_active_tenant_users(self):
+        db = SimpleNamespace(execute=AsyncMock(return_value=_scalars_result([1, 2])))
         service = DocumentCampaignService(db)
 
-        result = await service.expand_audience(tenant_id=1, audience={"user_ids": [3, 1, 2, 1]})
+        result = await service.expand_audience(tenant_id=1, audience={"user_ids": [3, 1, 2, 1, 900]})
 
-        assert result == [1, 2, 3]
-        db.execute.assert_not_called()
+        assert result == [1, 2]
+        db.execute.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_group_ids_expand_via_membership(self):
-        db = SimpleNamespace(execute=AsyncMock(return_value=_scalars_result([5, 6])))
+    async def test_user_ids_only_returns_empty_when_none_valid(self):
+        db = SimpleNamespace(execute=AsyncMock(return_value=_scalars_result([])))
+        service = DocumentCampaignService(db)
+
+        result = await service.expand_audience(tenant_id=1, audience={"user_ids": [900, 999]})
+
+        assert result == []
+        db.execute.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_group_ids_expand_via_membership_and_filter_invalid(self):
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[
+                    _scalars_result([5, 6, 900]),
+                    _scalars_result([5, 6]),
+                ]
+            )
+        )
         service = DocumentCampaignService(db)
 
         result = await service.expand_audience(tenant_id=1, audience={"group_ids": [100]})
 
         assert result == [5, 6]
-        assert db.execute.await_count == 1
+        assert db.execute.await_count == 2
 
     @pytest.mark.asyncio
     async def test_all_users_short_circuits_department_and_role(self):
@@ -146,12 +163,18 @@ class TestExpandAudience:
         )
 
         assert result == [1, 2, 3]
-        assert db.execute.await_count == 1  # only the all_users query — department/role skipped
+        assert db.execute.await_count == 2  # all_users query + final validation filter
 
     @pytest.mark.asyncio
     async def test_department_and_role_are_unioned(self):
         db = SimpleNamespace(
-            execute=AsyncMock(side_effect=[_scalars_result([1, 2]), _scalars_result([2, 3])]),
+            execute=AsyncMock(
+                side_effect=[
+                    _scalars_result([1, 2]),
+                    _scalars_result([2, 3]),
+                    _scalars_result([1, 2, 3]),
+                ]
+            ),
         )
         service = DocumentCampaignService(db)
 
@@ -161,11 +184,18 @@ class TestExpandAudience:
         )
 
         assert result == [1, 2, 3]
-        assert db.execute.await_count == 2
+        assert db.execute.await_count == 3
 
     @pytest.mark.asyncio
     async def test_combines_group_and_explicit_user_ids(self):
-        db = SimpleNamespace(execute=AsyncMock(return_value=_scalars_result([5])))
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[
+                    _scalars_result([5]),
+                    _scalars_result([5, 9]),
+                ]
+            )
+        )
         service = DocumentCampaignService(db)
 
         result = await service.expand_audience(
@@ -285,7 +315,12 @@ class TestLaunchCampaign:
         )
 
         db = SimpleNamespace(
-            execute=AsyncMock(return_value=_scalars_result([20])),  # user 20 already assigned
+            execute=AsyncMock(
+                side_effect=[
+                    _scalars_result([10, 20, 30]),  # expand_audience validation
+                    _scalars_result([20]),  # existing assignments
+                ]
+            ),
             add=MagicMock(),
             commit=AsyncMock(),
         )
@@ -317,6 +352,25 @@ class TestLaunchCampaign:
             await service.launch_campaign(tenant_id=1, campaign_id=1, launched_by_id=5)
 
     @pytest.mark.asyncio
+    async def test_launch_rejects_empty_valid_audience(self):
+        campaign = SimpleNamespace(
+            id=1,
+            tenant_id=1,
+            status=CampaignStatus.DRAFT,
+            audience_all_users=False,
+            audience_department=None,
+            audience_role=None,
+            audience_group_ids=None,
+            audience_user_ids=[900],
+        )
+        db = SimpleNamespace(execute=AsyncMock(return_value=_scalars_result([])))
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+
+        with pytest.raises(BadRequestError, match="No valid active users"):
+            await service.launch_campaign(tenant_id=1, campaign_id=1, launched_by_id=5)
+
+    @pytest.mark.asyncio
     async def test_launch_with_no_new_users_assigns_zero(self):
         campaign = SimpleNamespace(
             id=1,
@@ -334,7 +388,12 @@ class TestLaunchCampaign:
             launched_by_id=None,
         )
         db = SimpleNamespace(
-            execute=AsyncMock(return_value=_scalars_result([10])),
+            execute=AsyncMock(
+                side_effect=[
+                    _scalars_result([10]),  # expand_audience validation
+                    _scalars_result([10]),  # user 10 already assigned
+                ]
+            ),
             add=MagicMock(),
             commit=AsyncMock(),
         )
@@ -344,6 +403,42 @@ class TestLaunchCampaign:
         result = await service.launch_campaign(tenant_id=1, campaign_id=1, launched_by_id=5)
 
         assert result["campaign_id"] == 1 and result["assigned_count"] == 0 and result["notified_count"] == 0
+        assert campaign.status == CampaignStatus.ACTIVE
+
+    @pytest.mark.asyncio
+    async def test_launch_succeeds_when_notifications_fail(self):
+        campaign = SimpleNamespace(
+            id=1,
+            tenant_id=1,
+            status=CampaignStatus.DRAFT,
+            document_id=99,
+            due_within_days=14,
+            require_quiz=False,
+            audience_all_users=False,
+            audience_department=None,
+            audience_role=None,
+            audience_group_ids=None,
+            audience_user_ids=[10],
+            launched_at=None,
+            launched_by_id=None,
+        )
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[
+                    _scalars_result([10]),
+                    _scalars_result([]),
+                ]
+            ),
+            add=MagicMock(),
+            commit=AsyncMock(),
+        )
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+        service._notify_and_email_assignments = AsyncMock(side_effect=RuntimeError("notify boom"))
+
+        result = await service.launch_campaign(tenant_id=1, campaign_id=1, launched_by_id=5)
+
+        assert result["campaign_id"] == 1 and result["assigned_count"] == 1 and result["notified_count"] == 0
         assert campaign.status == CampaignStatus.ACTIVE
 
 

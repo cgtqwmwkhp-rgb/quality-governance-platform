@@ -393,7 +393,17 @@ class DocumentCampaignService:
                 )
                 user_ids.update(result.scalars().all())
 
-        return sorted(user_ids)
+        if not user_ids:
+            return []
+
+        result = await self.db.execute(
+            select(User.id).where(
+                User.id.in_(user_ids),
+                User.tenant_id == tenant_id,
+                User.is_active == True,  # noqa: E712
+            )
+        )
+        return sorted(result.scalars().all())
 
     # ==================== Launch ====================
 
@@ -416,6 +426,8 @@ class DocumentCampaignService:
             "user_ids": campaign.audience_user_ids,
         }
         user_ids = await self.expand_audience(tenant_id=tenant_id, audience=audience)
+        if not user_ids:
+            raise BadRequestError("No valid active users in campaign audience — check user IDs / groups")
 
         existing_result = await self.db.execute(
             select(CampaignAssignment.user_id).where(CampaignAssignment.campaign_id == campaign_id)
@@ -446,11 +458,19 @@ class DocumentCampaignService:
 
         await self.db.commit()
 
-        notified_count = await self._notify_and_email_assignments(
-            campaign=campaign,
-            assignments=new_assignments,
-            launched_by_id=launched_by_id,
-        )
+        notified_count = 0
+        try:
+            notified_count = await self._notify_and_email_assignments(
+                campaign=campaign,
+                assignments=new_assignments,
+                launched_by_id=launched_by_id,
+            )
+        except Exception:  # noqa: BLE001 - launch must succeed once assignments are committed
+            logger.warning(
+                "Campaign %s launched but notification/email delivery failed",
+                campaign.id,
+                exc_info=True,
+            )
 
         return {
             "campaign_id": campaign.id,
@@ -503,7 +523,15 @@ class DocumentCampaignService:
                     exc_info=True,
                 )
 
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except Exception:  # noqa: BLE001 - best-effort, must not fail launch
+            logger.warning(
+                "Failed to commit in-app notifications for campaign %s",
+                campaign.id,
+                exc_info=True,
+            )
+            return 0
 
         await self._send_launch_emails(
             assignments=assignments,
