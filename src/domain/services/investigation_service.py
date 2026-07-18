@@ -971,7 +971,7 @@ class InvestigationService:
     @classmethod
     def get_customer_pack_visibility(cls, investigation: InvestigationRun) -> Dict[str, Any]:
         """Return per-section customer-pack visibility map from run data (no Alembic)."""
-        data = investigation.data if isinstance(investigation.data, dict) else {}
+        data: Dict[str, Any] = investigation.data if isinstance(investigation.data, dict) else {}
         raw = data.get("customer_pack_visibility")
         return dict(raw) if isinstance(raw, dict) else {}
 
@@ -1013,7 +1013,7 @@ class InvestigationService:
         approver_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Request or approve per-section customer-pack omit (stored on investigation.data)."""
-        data = dict(investigation.data) if isinstance(investigation.data, dict) else {}
+        data: Dict[str, Any] = dict(investigation.data) if isinstance(investigation.data, dict) else {}
         visibility = dict(data.get("customer_pack_visibility") or {})
         current = dict(visibility.get(section_id) or {})
 
