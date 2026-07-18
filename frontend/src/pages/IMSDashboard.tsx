@@ -207,7 +207,10 @@ export default function IMSDashboard() {
   const reviewComplete = managementReviewInputs.filter((i) => i.status === 'Complete').length
   const reviewReadiness = Math.round((reviewComplete / managementReviewInputs.length) * 100)
 
-  const auditSchedule = dashData?.audit_schedule ?? []
+  const auditSchedule = useMemo(
+    () => dashData?.audit_schedule ?? [],
+    [dashData?.audit_schedule],
+  )
   const openScheduledAudits = auditSchedule.filter((a) => a.status !== 'completed').length
   const inProgressAudits = auditSchedule.filter((a) => a.status === 'in_progress').length
 
