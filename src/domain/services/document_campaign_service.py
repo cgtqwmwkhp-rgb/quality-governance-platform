@@ -594,8 +594,7 @@ class DocumentCampaignService:
     async def _generate_campaign_welcome_paragraph(self, *, doc_title: str, require_quiz: bool) -> str:
         """Best-effort AI welcome line for launch emails; falls back to static copy."""
         static = (
-            f"You have been assigned to read{' and complete a quiz for' if require_quiz else ''} "
-            f"'{doc_title}'."
+            f"You have been assigned to read{' and complete a quiz for' if require_quiz else ''} " f"'{doc_title}'."
         )
         try:
             from src.domain.services.document_ai_service import DocumentAIService
@@ -652,8 +651,10 @@ class DocumentCampaignService:
     ) -> str:
         reading_url = f"{frontend_base}/portal/reading?assignment={assignment_id}"
         work_url = f"{frontend_base}/portal/work"
-        steps = "read the document, complete the quiz, and sign your attestation" if require_quiz else (
-            "read the document and sign your attestation"
+        steps = (
+            "read the document, complete the quiz, and sign your attestation"
+            if require_quiz
+            else ("read the document and sign your attestation")
         )
         return f"""<p>{welcome_paragraph}</p>
 <p>Your assignment for <strong>{doc_title}</strong> is ready. Please {steps}.</p>

@@ -10,8 +10,7 @@ import {
   MessageCircleQuestion,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import {
-  api,
+import api, {
   documentCampaignApi,
   getApiErrorMessage,
   type DocumentCampaignAssignment,

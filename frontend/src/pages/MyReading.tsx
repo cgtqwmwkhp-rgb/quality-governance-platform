@@ -2,11 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookOpen, CheckCircle2, ChevronDown, Clock, ExternalLink, Loader2, MessageSquare, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import {
+import api, {
   documentCampaignApi,
   getApiErrorMessage,
   policyAcknowledgmentsApi,
-  api,
   type DocumentCampaignAssignment,
   type DocumentCampaignQuiz,
   type DocumentCampaignQuizResult,
