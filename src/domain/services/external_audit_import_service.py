@@ -28,13 +28,10 @@ from src.domain.models.external_audit_import import (
     ExternalAuditImportStatus,
 )
 from src.domain.services.ai_consensus_service import AIConsensusService
+from src.domain.services.document_intelligence_service import DocumentIntelligenceService, purpose_for_assurance_scheme
 from src.domain.services.external_audit_analysis_service import ExternalAuditAnalysisService
 from src.domain.services.external_audit_import_ai_metadata import apply_ai_metadata_to_job
 from src.domain.services.external_audit_import_failure import classify_processing_failure, is_hard_ai_failure
-from src.domain.services.document_intelligence_service import (
-    DocumentIntelligenceService,
-    purpose_for_assurance_scheme,
-)
 from src.domain.services.external_audit_ocr_service import (
     MAX_SOURCE_FILE_BYTES,
     ExternalAuditExtractionResult,
@@ -562,7 +559,7 @@ class ExternalAuditImportService:
             extraction_purpose = purpose_for_assurance_scheme(run.assurance_scheme)
             di_result = await self.intelligence_service.extract_bytes(
                 raw=raw,
-                filename=asset.original_filename,
+                filename=asset.original_filename or "source",
                 content_type=asset.content_type,
                 purpose=extraction_purpose,
             )
