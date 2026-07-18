@@ -46,9 +46,7 @@ async def test_get_engineer_allows_self_read():
         created_at="2026-01-01T00:00:00Z",
         updated_at="2026-01-01T00:00:00Z",
     )
-    db = types.SimpleNamespace(
-        execute=AsyncMock(side_effect=[_FakeResult(engineer), _FakeResult(None)])
-    )
+    db = types.SimpleNamespace(execute=AsyncMock(side_effect=[_FakeResult(engineer), _FakeResult(None)]))
     user = types.SimpleNamespace(id=42, tenant_id=1, is_superuser=False, roles=[])
 
     result = await get_engineer(10, db, user)
