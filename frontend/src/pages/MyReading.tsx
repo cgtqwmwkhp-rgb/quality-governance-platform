@@ -64,6 +64,7 @@ export default function MyReading() {
   const [acceptanceStatements, setAcceptanceStatements] = useState<Record<number, string>>({})
   const [signatures, setSignatures] = useState<Record<number, string>>({})
   const [completingCampaignId, setCompletingCampaignId] = useState<number | null>(null)
+  const [snoozingCampaignId, setSnoozingCampaignId] = useState<number | null>(null)
   const [questionTitles, setQuestionTitles] = useState<Record<number, string>>({})
   const [questionBodies, setQuestionBodies] = useState<Record<number, string>>({})
   const [askingQuestionId, setAskingQuestionId] = useState<number | null>(null)
@@ -258,6 +259,27 @@ export default function MyReading() {
     }
   }
 
+
+  const handleSnoozeCampaign = async (item: DocumentCampaignAssignment) => {
+    if (item.status !== 'pending' && item.status !== 'overdue') return
+    setSnoozingCampaignId(item.id)
+    try {
+      const response = await documentCampaignApi.snoozeAssignment(item.id, 24)
+      setCampaignItems((prev) =>
+        prev.map((assignment) =>
+          assignment.id === item.id
+            ? { ...assignment, snooze_until: response.data.snooze_until }
+            : assignment,
+        ),
+      )
+      toast.success(t('my_reading.snooze_success'))
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setSnoozingCampaignId(null)
+    }
+  }
+
   const items = useMemo<ReadingItem[]>(
     () => [
       ...policyItems.map((item): ReadingItem => ({ source: 'policy', item })),
@@ -388,6 +410,23 @@ export default function MyReading() {
                         <ExternalLink className="w-4 h-4 mr-2" />
                         {t('my_reading.open_read')}
                       </Button>
+
+                      {(item.status === 'pending' || item.status === 'overdue') && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void handleSnoozeCampaign(item)}
+                          disabled={snoozingCampaignId === item.id}
+                          data-testid={`my-reading-snooze-${item.id}`}
+                        >
+                          {snoozingCampaignId === item.id ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <Clock className="w-4 h-4 mr-2" />
+                          )}
+                          {t('my_reading.snooze_24h')}
+                        </Button>
+                      )}
                       <Button variant="outline" size="sm" asChild>
                         <Link to={`/documents/${item.policy_id}?tab=qa`}>Q&A</Link>
                       </Button>
@@ -421,6 +460,23 @@ export default function MyReading() {
                         )}
                         {t('my_reading.open_read')}
                       </Button>
+
+                      {(item.status === 'pending' || item.status === 'overdue') && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void handleSnoozeCampaign(item)}
+                          disabled={snoozingCampaignId === item.id}
+                          data-testid={`my-reading-snooze-${item.id}`}
+                        >
+                          {snoozingCampaignId === item.id ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <Clock className="w-4 h-4 mr-2" />
+                          )}
+                          {t('my_reading.snooze_24h')}
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         onClick={() => void handleToggleCampaignComplete(item)}

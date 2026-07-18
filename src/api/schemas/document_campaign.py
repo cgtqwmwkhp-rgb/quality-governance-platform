@@ -278,6 +278,7 @@ class ComplianceSummaryItem(BaseModel):
     overdue: int
     completion_rate: float
     quiz_pass_count: int
+    audience_group_ids: List[int] = Field(default_factory=list)
     reminder_offsets_hours: List[int] = Field(default_factory=list)
     launched_at: Optional[datetime] = None
     due_within_days: int
@@ -328,3 +329,30 @@ class QuestionMessageResponse(BaseModel):
     author_id: int
     body: str
     created_at: datetime
+
+class SnoozeAssignmentRequest(BaseModel):
+    hours: int = Field(..., ge=1, le=168)
+
+
+class SnoozeAssignmentResponse(BaseModel):
+    id: int
+    snooze_until: datetime
+    message: str = "Assignment snoozed"
+
+
+class GroupComplianceItem(BaseModel):
+    group_id: Optional[int] = None
+    group_name: str
+    assigned: int
+    completed: int
+    pending: int
+    overdue: int
+    quiz_pass_count: int
+    completion_rate: float
+
+
+class GroupComplianceResponse(BaseModel):
+    campaign_id: int
+    items: List[GroupComplianceItem]
+    total: int
+

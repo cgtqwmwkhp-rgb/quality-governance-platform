@@ -2696,6 +2696,9 @@ export type {
   DocumentCampaignQuizAnswer,
   DocumentCampaignQuizResult,
   CompleteDocumentCampaignAssignmentRequest,
+  CampaignComplianceRow,
+  GroupComplianceRow,
+  SnoozeAssignmentResponse,
 } from './documentCampaignClient'
 
 export const documentCampaignApi = createDocumentCampaignApi(api)

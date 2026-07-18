@@ -72,6 +72,7 @@ export interface DocumentCampaignAssignment {
   opened_at?: string | null
   first_opened_at?: string | null
   completed_at?: string | null
+  snooze_until?: string | null
   quiz_required?: boolean
   requires_quiz?: boolean
   require_quiz?: boolean
@@ -121,6 +122,29 @@ export interface ReminderDefaults {
   reminder_hours: number[]
 }
 
+export interface SnoozeAssignmentResponse {
+  id: number
+  snooze_until: string
+  message?: string
+}
+
+export interface GroupComplianceRow {
+  group_id: number | null
+  group_name: string
+  assigned: number
+  completed: number
+  pending: number
+  overdue: number
+  quiz_pass_count: number
+  completion_rate: number
+}
+
+export interface GroupComplianceListResponse {
+  campaign_id: number
+  items: GroupComplianceRow[]
+  total: number
+}
+
 export interface CampaignComplianceRow {
   campaign_id: number
   document_id: number
@@ -132,6 +156,7 @@ export interface CampaignComplianceRow {
   overdue: number
   completion_rate: number
   quiz_pass_count?: number
+  audience_group_ids?: number[]
   reminder_offsets_hours: number[]
   launched_at: string | null
   due_within_days: number
@@ -238,5 +263,9 @@ export function createDocumentCampaignApi(api: AxiosInstance) {
     replyQuestion: (threadId: number, payload: ReplyQuestionPayload) =>
       api.post(`${base}/questions/${threadId}/reply`, payload),
     resolveQuestion: (threadId: number) => api.post(`${base}/questions/${threadId}/resolve`),
+    snoozeAssignment: (assignmentId: number, hours: number) =>
+      api.post<SnoozeAssignmentResponse>(`${base}/assignments/${assignmentId}/snooze`, { hours }),
+    getComplianceByGroup: (campaignId: number) =>
+      api.get<GroupComplianceListResponse>(`${base}/compliance/${campaignId}/by-group`),
   }
 }

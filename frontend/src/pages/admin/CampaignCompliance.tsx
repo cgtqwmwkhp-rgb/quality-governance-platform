@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Download, Loader2, Megaphone, Save } from 'lucide-react'
+import { ChevronDown, ChevronRight, Download, Loader2, Megaphone, Save } from 'lucide-react'
 import {
   documentCampaignApi,
   getApiErrorMessage,
   type CampaignComplianceRow,
+  type GroupComplianceRow,
 } from '../../api/client'
 import { toast } from '../../contexts/ToastContext'
 import { Button } from '../../components/ui/Button'
@@ -27,6 +28,9 @@ export default function CampaignCompliance() {
   const [complianceRows, setComplianceRows] = useState<CampaignComplianceRow[]>([])
   const [complianceLoading, setComplianceLoading] = useState(true)
   const [exportingId, setExportingId] = useState<number | null>(null)
+  const [expandedCampaignId, setExpandedCampaignId] = useState<number | null>(null)
+  const [groupRowsByCampaign, setGroupRowsByCampaign] = useState<Record<number, GroupComplianceRow[]>>({})
+  const [groupLoadingId, setGroupLoadingId] = useState<number | null>(null)
 
   const reminderHours = useMemo(
     () => reminderHoursFromPresetKeys(reminderPresets),
@@ -85,6 +89,33 @@ export default function CampaignCompliance() {
       toast.error(getApiErrorMessage(err, t('admin.campaign_compliance.defaults_save_error')))
     } finally {
       setSavingDefaults(false)
+    }
+  }
+
+
+  const handleToggleGroupBreakdown = async (row: CampaignComplianceRow) => {
+    const hasGroups = (row.audience_group_ids?.length ?? 0) > 0
+    if (!hasGroups) return
+
+    if (expandedCampaignId === row.campaign_id) {
+      setExpandedCampaignId(null)
+      return
+    }
+
+    setExpandedCampaignId(row.campaign_id)
+    if (groupRowsByCampaign[row.campaign_id]) return
+
+    setGroupLoadingId(row.campaign_id)
+    try {
+      const response = await documentCampaignApi.getComplianceByGroup(row.campaign_id)
+      setGroupRowsByCampaign((prev) => ({
+        ...prev,
+        [row.campaign_id]: response.data.items ?? [],
+      }))
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, t('admin.campaign_compliance.group_load_error')))
+    } finally {
+      setGroupLoadingId(null)
     }
   }
 
@@ -159,46 +190,125 @@ export default function CampaignCompliance() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="py-2 pr-2 font-medium w-8" />
                     <th className="py-2 pr-4 font-medium">{t('admin.campaign_compliance.col_document')}</th>
                     <th className="py-2 pr-4 font-medium">{t('admin.campaign_compliance.col_status')}</th>
                     <th className="py-2 pr-4 font-medium">{t('admin.campaign_compliance.col_completion')}</th>
                     <th className="py-2 pr-4 font-medium">{t('admin.campaign_compliance.col_pending')}</th>
                     <th className="py-2 pr-4 font-medium">{t('admin.campaign_compliance.col_overdue')}</th>
+                    <th className="py-2 pr-4 font-medium">{t('admin.campaign_compliance.col_quiz_pass')}</th>
                     <th className="py-2 font-medium">{t('admin.campaign_compliance.col_actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {complianceRows.map((row) => (
-                    <tr key={row.campaign_id} className="border-b border-border last:border-0">
-                      <td className="py-3 pr-4">
-                        <p className="font-medium text-foreground">
-                          {row.title || row.document_title || `#${row.document_id}`}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {t('admin.campaign_compliance.campaign_id', { id: row.campaign_id })}
-                        </p>
-                      </td>
-                      <td className="py-3 pr-4 capitalize">{row.status}</td>
-                      <td className="py-3 pr-4">{Math.round(row.completion_rate)}%</td>
-                      <td className="py-3 pr-4">{row.pending}</td>
-                      <td className="py-3 pr-4">{row.overdue}</td>
-                      <td className="py-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void handleExportEvidence(row.campaign_id)}
-                          disabled={exportingId === row.campaign_id}
-                        >
-                          {exportingId === row.campaign_id ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          ) : (
-                            <Download className="w-4 h-4 mr-2" />
-                          )}
-                          {t('admin.campaign_compliance.export_evidence')}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {complianceRows.map((row) => {
+                    const hasGroups = (row.audience_group_ids?.length ?? 0) > 0
+                    const expanded = expandedCampaignId === row.campaign_id
+                    const groupRows = groupRowsByCampaign[row.campaign_id] ?? []
+
+                    return (
+                      <Fragment key={row.campaign_id}>
+                        <tr className="border-b border-border last:border-0">
+                          <td className="py-3 pr-2">
+                            {hasGroups ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                aria-expanded={expanded}
+                                aria-label={t('admin.campaign_compliance.toggle_groups')}
+                                onClick={() => void handleToggleGroupBreakdown(row)}
+                              >
+                                {expanded ? (
+                                  <ChevronDown className="w-4 h-4" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4" />
+                                )}
+                              </Button>
+                            ) : null}
+                          </td>
+                          <td className="py-3 pr-4">
+                            <p className="font-medium text-foreground">
+                              {row.title || row.document_title || `#${row.document_id}`}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {t('admin.campaign_compliance.campaign_id', { id: row.campaign_id })}
+                            </p>
+                          </td>
+                          <td className="py-3 pr-4 capitalize">{row.status}</td>
+                          <td className="py-3 pr-4">{Math.round(row.completion_rate)}%</td>
+                          <td className="py-3 pr-4">{row.pending}</td>
+                          <td className="py-3 pr-4">{row.overdue}</td>
+                          <td className="py-3 pr-4">{row.quiz_pass_count ?? 0}</td>
+                          <td className="py-3">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => void handleExportEvidence(row.campaign_id)}
+                              disabled={exportingId === row.campaign_id}
+                            >
+                              {exportingId === row.campaign_id ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : (
+                                <Download className="w-4 h-4 mr-2" />
+                              )}
+                              {t('admin.campaign_compliance.export_evidence')}
+                            </Button>
+                          </td>
+                        </tr>
+                        {expanded && hasGroups && (
+                          <tr className="border-b border-border bg-muted/30">
+                            <td colSpan={8} className="py-3 px-4">
+                              {groupLoadingId === row.campaign_id ? (
+                                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                              ) : groupRows.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">
+                                  {t('admin.campaign_compliance.no_group_data')}
+                                </p>
+                              ) : (
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="text-left text-muted-foreground">
+                                      <th className="py-1 pr-4 font-medium">
+                                        {t('admin.campaign_compliance.col_group')}
+                                      </th>
+                                      <th className="py-1 pr-4 font-medium">
+                                        {t('admin.campaign_compliance.col_assigned')}
+                                      </th>
+                                      <th className="py-1 pr-4 font-medium">
+                                        {t('admin.campaign_compliance.col_completion')}
+                                      </th>
+                                      <th className="py-1 pr-4 font-medium">
+                                        {t('admin.campaign_compliance.col_pending')}
+                                      </th>
+                                      <th className="py-1 pr-4 font-medium">
+                                        {t('admin.campaign_compliance.col_overdue')}
+                                      </th>
+                                      <th className="py-1 font-medium">
+                                        {t('admin.campaign_compliance.col_quiz_pass')}
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {groupRows.map((groupRow) => (
+                                      <tr key={`${row.campaign_id}-${groupRow.group_id ?? 'ungrouped'}`}>
+                                        <td className="py-2 pr-4 font-medium">{groupRow.group_name}</td>
+                                        <td className="py-2 pr-4">{groupRow.assigned}</td>
+                                        <td className="py-2 pr-4">{Math.round(groupRow.completion_rate)}%</td>
+                                        <td className="py-2 pr-4">{groupRow.pending}</td>
+                                        <td className="py-2 pr-4">{groupRow.overdue}</td>
+                                        <td className="py-2">{groupRow.quiz_pass_count}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

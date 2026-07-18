@@ -106,6 +106,7 @@ const NotificationSettings = lazy(() => import('./pages/admin/NotificationSettin
 const CampaignCompliance = lazy(() => import('./pages/admin/CampaignCompliance'))
 const HsecQuestionInbox = lazy(() => import('./pages/admin/HsecQuestionInbox'))
 const PartnerWebhooks = lazy(() => import('./pages/admin/PartnerWebhooks'))
+const CampaignCompliance = lazy(() => import('./pages/admin/CampaignCompliance'))
 const RequireRole = lazy(() => import('./components/RequireRole'))
 
 function PageLoader() {
@@ -557,6 +558,14 @@ function App() {
                   element={
                     <RequireRole allowed={['admin']}>
                       <PartnerWebhooks />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/campaign-compliance"
+                  element={
+                    <RequireRole allowed={['admin', 'hsec']}>
+                      <CampaignCompliance />
                     </RequireRole>
                   }
                 />

@@ -4,7 +4,7 @@ Covers audience expansion, MCQ quiz grading, and campaign launch behaviour
 (assignment creation, duplicate skipping, and notification counts).
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -566,3 +566,165 @@ class TestAssignmentQuizAndCompletion:
         assert result.status == AssignmentStatus.COMPLETED
         assert result.completed_at is not None
         assert result.signature_data == "data:image/png;base64,abc"
+
+
+# =============================================================================
+# Snooze
+# =============================================================================
+
+
+class TestSnoozeAssignment:
+    @pytest.mark.asyncio
+    async def test_snooze_sets_snooze_until_for_own_pending_assignment(self):
+        assignment = SimpleNamespace(
+            id=1,
+            user_id=7,
+            tenant_id=1,
+            campaign_id=1,
+            status=AssignmentStatus.PENDING,
+            snooze_until=None,
+        )
+        db = SimpleNamespace(
+            execute=AsyncMock(return_value=_scalar_one_result(assignment)),
+            commit=AsyncMock(),
+            refresh=AsyncMock(),
+        )
+        service = DocumentCampaignService(db)
+
+        result = await service.snooze_assignment(user_id=7, assignment_id=1, hours=24)
+
+        assert result.snooze_until is not None
+        db.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_snooze_rejects_completed_assignment(self):
+        assignment = SimpleNamespace(
+            id=1,
+            user_id=7,
+            tenant_id=1,
+            campaign_id=1,
+            status=AssignmentStatus.COMPLETED,
+            snooze_until=None,
+        )
+        db = SimpleNamespace(execute=AsyncMock(return_value=_scalar_one_result(assignment)))
+        service = DocumentCampaignService(db)
+
+        with pytest.raises(BadRequestError):
+            await service.snooze_assignment(user_id=7, assignment_id=1, hours=24)
+
+    @pytest.mark.asyncio
+    async def test_snooze_rejects_invalid_hours(self):
+        db = SimpleNamespace(execute=AsyncMock())
+        service = DocumentCampaignService(db)
+
+        with pytest.raises(BadRequestError):
+            await service.snooze_assignment(user_id=7, assignment_id=1, hours=200)
+
+
+# =============================================================================
+# Reminder processing
+# =============================================================================
+
+
+class TestProcessDueReminders:
+    @pytest.mark.asyncio
+    async def test_skips_reminder_when_snoozed_but_still_marks_overdue(self):
+        now = datetime.now(timezone.utc)
+        campaign = SimpleNamespace(
+            id=1,
+            tenant_id=1,
+            status=CampaignStatus.ACTIVE,
+            document_id=99,
+            launched_at=now - timedelta(hours=48),
+            reminder_offsets_hours=[24],
+        )
+        assignment = SimpleNamespace(
+            id=10,
+            campaign_id=1,
+            user_id=5,
+            status=AssignmentStatus.PENDING,
+            due_at=now - timedelta(hours=1),
+            reminders_sent=0,
+            last_reminder_at=None,
+            snooze_until=now + timedelta(hours=12),
+        )
+
+        campaigns_result = MagicMock()
+        campaigns_result.scalars.return_value.all.return_value = [campaign]
+        assignments_result = MagicMock()
+        assignments_result.scalars.return_value.all.return_value = [assignment]
+
+        db = SimpleNamespace(
+            execute=AsyncMock(side_effect=[campaigns_result, assignments_result]),
+            commit=AsyncMock(),
+        )
+        service = DocumentCampaignService(db)
+        service._notify_and_email_reminders = AsyncMock()
+
+        counts = await service.process_due_reminders()
+
+        assert assignment.status == AssignmentStatus.OVERDUE
+        assert counts["overdue_marked"] == 1
+        assert counts["reminders_sent"] == 0
+        assert assignment.reminders_sent == 0
+        service._notify_and_email_reminders.assert_not_called()
+
+
+# =============================================================================
+# Compliance by group
+# =============================================================================
+
+
+class TestComplianceByGroup:
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_no_audience_groups(self):
+        campaign = SimpleNamespace(
+            id=1,
+            tenant_id=1,
+            audience_group_ids=None,
+        )
+        db = SimpleNamespace(execute=AsyncMock())
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+
+        rows = await service.compliance_by_group(tenant_id=1, campaign_id=1)
+
+        assert rows == []
+
+    @pytest.mark.asyncio
+    async def test_builds_group_and_ungrouped_rows(self):
+        campaign = SimpleNamespace(id=1, tenant_id=1, audience_group_ids=[10])
+        group = SimpleNamespace(id=10, tenant_id=1, name="Field Engineers")
+        assignment_in_group = SimpleNamespace(
+            id=1,
+            user_id=100,
+            status=AssignmentStatus.COMPLETED,
+            quiz_passed=True,
+        )
+        assignment_ungrouped = SimpleNamespace(
+            id=2,
+            user_id=200,
+            status=AssignmentStatus.PENDING,
+            quiz_passed=False,
+        )
+
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[
+                    _scalars_result([assignment_in_group, assignment_ungrouped]),
+                    _scalars_result([group]),
+                    MagicMock(all=MagicMock(return_value=[(10, 100)])),
+                ]
+            )
+        )
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+
+        rows = await service.compliance_by_group(tenant_id=1, campaign_id=1)
+
+        assert len(rows) == 2
+        assert rows[0]["group_name"] == "Field Engineers"
+        assert rows[0]["assigned"] == 1
+        assert rows[0]["completed"] == 1
+        assert rows[1]["group_name"] == "Ungrouped"
+        assert rows[1]["pending"] == 1
