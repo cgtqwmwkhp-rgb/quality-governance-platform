@@ -40,6 +40,33 @@ def action_key_for(storage_kind: str, row_id: int) -> str:
     return f"{storage_kind}:{row_id}"
 
 
+# Prefer operational incident actions first — UAT seeds often use bare numeric /actions/{id}.
+NUMERIC_ACTION_KEY_KINDS: tuple[str, ...] = (
+    STORAGE_INCIDENT_ACTION,
+    STORAGE_CAPA,
+    STORAGE_INVESTIGATION_ACTION,
+    STORAGE_COMPLAINT_ACTION,
+    STORAGE_RTA_ACTION,
+    STORAGE_CAPA_ITEM,
+)
+
+
+def expand_action_key_candidates(key: str) -> list[str]:
+    """Expand a route/query key into concrete action_key candidates.
+
+    Accepts stable keys (`capa:12`) and bare numeric ids (`12` / UAT `/actions/2`).
+    """
+    raw = (key or "").strip()
+    if not raw:
+        return []
+    if ":" in raw:
+        return [raw]
+    if raw.isdigit():
+        row_id = int(raw)
+        return [action_key_for(kind, row_id) for kind in NUMERIC_ACTION_KEY_KINDS]
+    return [raw]
+
+
 def parse_action_key(key: str) -> tuple[str, int]:
     key = key.strip()
     if ":" not in key:

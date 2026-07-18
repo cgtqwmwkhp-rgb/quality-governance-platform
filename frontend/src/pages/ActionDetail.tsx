@@ -100,6 +100,8 @@ export default function ActionDetail() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [statusDraft, setStatusDraft] = useState<string>('')
+  const [dueDraft, setDueDraft] = useState<string>('')
+  const [assigneeDraft, setAssigneeDraft] = useState<string>('')
   const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
 
   const [notes, setNotes] = useState<ActionOwnerNote[]>([])
@@ -154,6 +156,8 @@ export default function ActionDetail() {
       const res = await actionsApi.getByKey(key.trim())
       setAction(res.data)
       setStatusDraft(res.data.display_status || res.data.status)
+      setDueDraft(res.data.due_date ? res.data.due_date.slice(0, 10) : '')
+      setAssigneeDraft(res.data.assigned_to_email || res.data.owner_email || '')
       await fetchNotesAndEvidence(res.data.action_key, true)
     } catch (e: unknown) {
       setError(getApiErrorMessage(e, 'Could not load this action.'))
@@ -216,13 +220,62 @@ export default function ActionDetail() {
     if (!action) return
     setSaving(true)
     setError(null)
+    setInlineMessage(null)
     try {
       const payload: ActionUpdate = { status: statusDraft }
       const res = await actionsApi.update(action.id, action.source_type, payload)
       setAction(res.data)
       setStatusDraft(res.data.display_status || res.data.status)
+      setInlineMessage({ tone: 'success', text: 'Status updated.' })
     } catch (e: unknown) {
       setError(getApiErrorMessage(e, 'Update failed. Check permissions and status value.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveDueDate = async () => {
+    if (!action) return
+    setSaving(true)
+    setInlineMessage(null)
+    try {
+      const payload: ActionUpdate = { due_date: dueDraft || undefined }
+      const res = await actionsApi.update(action.id, action.source_type, payload)
+      setAction(res.data)
+      setDueDraft(res.data.due_date ? res.data.due_date.slice(0, 10) : '')
+      setInlineMessage({ tone: 'success', text: 'Due date saved.' })
+    } catch (e: unknown) {
+      setInlineMessage({
+        tone: 'error',
+        text: getApiErrorMessage(e, 'Could not update due date.'),
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveAssignee = async (email: string) => {
+    if (!action || !email.trim()) return
+    setSaving(true)
+    setInlineMessage(null)
+    try {
+      const res = await actionsApi.update(action.id, action.source_type, {
+        assigned_to_email: email.trim(),
+      })
+      setAction(res.data)
+      setAssigneeDraft(res.data.assigned_to_email || res.data.owner_email || email.trim())
+      setInlineMessage({
+        tone: 'success',
+        text:
+          emailConfigured === false
+            ? t('actions.email_unavailable.body')
+            : t('actions.assignee_saved'),
+      })
+    } catch (err: unknown) {
+      setInlineMessage({
+        tone: 'error',
+        text: getApiErrorMessage(err, 'Could not update assignee.'),
+      })
     } finally {
       setSaving(false)
     }
@@ -390,6 +443,7 @@ export default function ActionDetail() {
   }
 
   const statusDirty = statusDraft !== (action.display_status || action.status)
+  const dueDirty = dueDraft !== (action.due_date ? action.due_date.slice(0, 10) : '')
   const isCapa = action.action_key.startsWith('capa:') || action.source_type === 'capa'
   const sourceLink = getActionSourceLink(action.source_type, action.source_id)
 
@@ -477,31 +531,8 @@ export default function ActionDetail() {
             </Button>
           </div>
         ) : null}
-        <dl className="mt-3 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
-          {action.due_date ? (
-            <div>
-              <dt className="inline font-medium text-foreground/80">Due</dt>{' '}
-              <dd className="inline">
-                {new Date(action.due_date).toLocaleString(undefined, {
-                  dateStyle: 'medium',
-                  timeStyle: undefined,
-                })}
-              </dd>
-            </div>
-          ) : null}
-          {action.owner_email ? (
-            <div>
-              <dt className="inline font-medium text-foreground/80">Owner</dt>{' '}
-              <dd className="inline">{action.owner_email}</dd>
-            </div>
-          ) : null}
-          {action.assigned_to_email ? (
-            <div>
-              <dt className="inline font-medium text-foreground/80">Assignee</dt>{' '}
-              <dd className="inline">{action.assigned_to_email}</dd>
-            </div>
-          ) : null}
-          {action.completed_at ? (
+        {action.completed_at ? (
+          <dl className="mt-3 text-sm text-muted-foreground">
             <div>
               <dt className="inline font-medium text-foreground/80">Completed</dt>{' '}
               <dd className="inline">
@@ -511,8 +542,8 @@ export default function ActionDetail() {
                 })}
               </dd>
             </div>
-          ) : null}
-        </dl>
+          </dl>
+        ) : null}
         {action.completion_notes?.trim() ? (
           <div className="mt-3 rounded-md border border-border bg-muted/20 p-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -760,9 +791,14 @@ export default function ActionDetail() {
             )}
           </div>
 
-          <div className="border-t border-border pt-4 space-y-3">
+          <div
+            className="border-t border-border pt-4 space-y-3"
+            data-testid="action-detail-status-control"
+          >
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium text-foreground">Update status</p>
+              <label htmlFor="action-detail-status" className="text-sm font-medium text-foreground">
+                Status
+              </label>
               {statusDirty ? (
                 <Badge variant="outline" className="text-amber-800 dark:text-amber-200 border-amber-600/40">
                   Unsaved change
@@ -772,28 +808,37 @@ export default function ActionDetail() {
             <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
               <div className="flex-1">
                 <Select value={statusDraft} onValueChange={setStatusDraft}>
-                  <SelectTrigger>
+                  <SelectTrigger
+                    id="action-detail-status"
+                    aria-label="Status"
+                    data-testid="action-detail-status"
+                  >
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="open">open</SelectItem>
-                    <SelectItem value="in_progress">in_progress</SelectItem>
-                    <SelectItem value="pending_verification">pending_verification</SelectItem>
-                    <SelectItem value="completed">completed</SelectItem>
-                    <SelectItem value="cancelled">cancelled</SelectItem>
-                    <SelectItem value="closed">closed (CAPA)</SelectItem>
-                    <SelectItem value="verification">verification (CAPA)</SelectItem>
-                    <SelectItem value="overdue">overdue (CAPA)</SelectItem>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="pending_verification">Pending verification</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectItem value="closed">Closed (CAPA)</SelectItem>
+                    <SelectItem value="verification">Verification (CAPA)</SelectItem>
+                    <SelectItem value="overdue">Overdue (CAPA)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <Button type="button" onClick={saveStatus} disabled={saving || !statusDirty}>
+              <Button
+                type="button"
+                onClick={saveStatus}
+                disabled={saving || !statusDirty}
+                aria-label="Update status"
+              >
                 {saving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Save className="w-4 h-4 mr-1" />
                 )}
-                Save
+                Update status
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -801,10 +846,46 @@ export default function ActionDetail() {
             </p>
           </div>
 
-          <div className="border-t border-border pt-4">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Assignee email (optional)
-            </p>
+          <div
+            className="border-t border-border pt-4 space-y-3"
+            data-testid="action-detail-due-control"
+          >
+            <label htmlFor="action-detail-due" className="text-sm font-medium text-foreground">
+              Due date
+            </label>
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+              <Input
+                id="action-detail-due"
+                type="date"
+                aria-label="Due date"
+                data-testid="action-detail-due"
+                value={dueDraft}
+                onChange={(e) => setDueDraft(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={saveDueDate}
+                disabled={saving || !dueDirty}
+                aria-label="Save due date"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                Save due
+              </Button>
+            </div>
+          </div>
+
+          <div
+            className="border-t border-border pt-4"
+            data-testid="action-detail-assignee-control"
+          >
+            <label
+              htmlFor="action-detail-assignee"
+              className="text-xs font-semibold text-muted-foreground uppercase tracking-wide"
+            >
+              Assignee / Owner (optional)
+            </label>
             {isCapa && emailConfigured === false ? (
               <div
                 className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
@@ -824,34 +905,21 @@ export default function ActionDetail() {
               className="flex flex-col sm:flex-row gap-2 mt-2"
               onSubmit={async (e) => {
                 e.preventDefault()
-                const fd = new FormData(e.currentTarget)
-                const email = String(fd.get('email') || '').trim()
-                if (!email || !action) return
-                setSaving(true)
-                try {
-                  const res = await actionsApi.update(action.id, action.source_type, {
-                    assigned_to_email: email,
-                  })
-                  setAction(res.data)
-                  setInlineMessage({
-                    tone: 'success',
-                    text:
-                      emailConfigured === false
-                        ? t('actions.email_unavailable.body')
-                        : t('actions.assignee_saved'),
-                  })
-                } catch (err: unknown) {
-                  setInlineMessage({
-                    tone: 'error',
-                    text: getApiErrorMessage(err, 'Could not update assignee.'),
-                  })
-                } finally {
-                  setSaving(false)
-                }
+                await saveAssignee(assigneeDraft)
               }}
             >
-              <Input name="email" type="email" placeholder="user@company.com" className="flex-1" />
-              <Button type="submit" variant="secondary" disabled={saving}>
+              <Input
+                id="action-detail-assignee"
+                name="email"
+                type="email"
+                aria-label="Assignee email"
+                data-testid="action-detail-assignee"
+                placeholder="user@company.com"
+                className="flex-1"
+                value={assigneeDraft}
+                onChange={(e) => setAssigneeDraft(e.target.value)}
+              />
+              <Button type="submit" variant="secondary" disabled={saving || !assigneeDraft.trim()}>
                 Assign
               </Button>
             </form>

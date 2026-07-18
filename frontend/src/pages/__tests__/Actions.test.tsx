@@ -478,7 +478,7 @@ describe('Actions Running Sheet create bridge', () => {
       </MemoryRouter>,
     )
 
-    await user.click(await screen.findByRole('button', { name: 'New Action' }))
+    await user.click(await screen.findByTestId('actions-create'))
     await user.type(screen.getByPlaceholderText('Action title...'), 'Follow up')
     await user.type(screen.getByPlaceholderText('Describe the action required...'), 'Details')
     await user.type(screen.getByPlaceholderText('e.g., 42'), '42')
@@ -576,11 +576,15 @@ describe('Actions Round 2 polish — honesty & a11y', () => {
     )
 
     expect(await screen.findByText('Try Again')).toBeInTheDocument()
-    expect(screen.queryByTestId('actions-hero-board')).not.toBeInTheDocument()
+    // Hero chrome stays mounted so Overdue/status filters remain discoverable,
+    // but numeric KPIs stay blank (not optimistic zeros/totals) while list is failed.
+    expect(screen.getByTestId('actions-hero-board')).toBeInTheDocument()
+    expect(screen.getByTestId('actions-hero-overdue')).toHaveAccessibleName(/Overdue/i)
+    expect(screen.getByTestId('actions-hero-total')).toHaveTextContent('—')
     expect(screen.queryByText('9')).not.toBeInTheDocument()
   })
 
-  it('closes create dialog on Escape and returns focus to New Action trigger', async () => {
+  it('closes create dialog on Escape and returns focus to Create Action trigger', async () => {
     mockSummary.mockResolvedValue({ data: { total: 0, by_display_status: {} } })
     mockList.mockResolvedValue({ data: { items: [] } })
 
@@ -591,7 +595,7 @@ describe('Actions Round 2 polish — honesty & a11y', () => {
       </MemoryRouter>,
     )
 
-    const trigger = await screen.findByRole('button', { name: 'New Action' })
+    const trigger = await screen.findByTestId('actions-create')
     await user.click(trigger)
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
@@ -751,10 +755,33 @@ describe('Actions Round 3 polish — CUJ honesty & upstream links', () => {
       </MemoryRouter>,
     )
 
-    await user.click(await screen.findByRole('button', { name: 'New Action' }))
+    await user.click(await screen.findByTestId('actions-create'))
     expect(await screen.findByTestId('actions-create-next-steps')).toHaveTextContent(
       'Assignee and completion are saved on the action profile',
     )
+  })
+
+  it('exposes search, status, assignee, and priority controls with stable testids', async () => {
+    mockList.mockResolvedValue({ data: { items: [] } })
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('actions-search')).toBeInTheDocument()
+    expect(screen.getByTestId('actions-filter-status')).toBeInTheDocument()
+    expect(screen.getByTestId('actions-filter-assignee')).toBeInTheDocument()
+    expect(screen.getByTestId('actions-filter-priority')).toBeInTheDocument()
+    expect(screen.getByTestId('actions-hero-overdue')).toHaveAccessibleName(/Overdue/i)
+    expect(screen.getByTestId('actions-create')).toHaveAccessibleName(/Add Action/i)
+
+    const user = userEvent.setup()
+    await user.click(screen.getByTestId('actions-create'))
+    expect(await screen.findByTestId('actions-create-source-type')).toBeInTheDocument()
+    expect(screen.getByText('Source Type')).toBeInTheDocument()
+    expect(screen.getByLabelText('Title')).toBeInTheDocument()
   })
 
   it('shows upstream source link inside expanded detail panel', async () => {

@@ -167,7 +167,14 @@ function getComplaintSourceLink(sourceType: string, sourceId: number) {
 }
 
 type ViewMode = ActionsViewMode
-type FilterStatus = 'all' | 'open' | 'in_progress' | 'pending_verification' | 'completed'
+type FilterStatus =
+  | 'all'
+  | 'open'
+  | 'in_progress'
+  | 'pending_verification'
+  | 'completed'
+  | 'cancelled'
+  | 'overdue'
 type SourceTypeFilter =
   | 'all'
   | 'audit_finding'
@@ -180,6 +187,8 @@ type SourceTypeFilter =
   | 'capa_complaint'
   | 'regulatory_watch'
 type SortMode = 'newest' | 'due_first'
+type FilterAssignee = 'all' | 'assigned' | 'unassigned'
+type FilterPriority = 'all' | 'critical' | 'high' | 'medium' | 'low'
 
 // Form state type for creating actions
 interface CreateActionForm {
@@ -216,6 +225,8 @@ const FILTER_STATUS_VALUES: FilterStatus[] = [
   'in_progress',
   'pending_verification',
   'completed',
+  'cancelled',
+  'overdue',
 ]
 
 function parseActionsStatusParam(raw: string | null | undefined): FilterStatus {
@@ -260,6 +271,8 @@ export default function Actions() {
   })
   const sourceIdFilter = Number(searchParams.get('sourceId') || '')
   const [searchTerm, setSearchTerm] = useState('')
+  const [filterAssignee, setFilterAssignee] = useState<FilterAssignee>('all')
+  const [filterPriority, setFilterPriority] = useState<FilterPriority>('all')
   const [showModal, setShowModal] = useState(false)
   const [sortMode, setSortMode] = useState<SortMode>('newest')
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
@@ -621,7 +634,7 @@ export default function Actions() {
   }
 
   const deferredSearch = useDeferredValue(searchTerm)
-  // Search + status remain client-side; My/Overdue are applied server-side in loadActions.
+  // Search + status/assignee/priority remain client-side; My/Overdue are server-scoped in loadActions.
   const filteredActions = actions.filter((action) => {
     if (
       deferredSearch &&
@@ -632,9 +645,14 @@ export default function Actions() {
     ) {
       return false
     }
-    if (filterStatus !== 'all' && action.display_status !== filterStatus) {
+    if (filterStatus === 'overdue') {
+      if (!isOverdue(action.due_date, action.display_status)) return false
+    } else if (filterStatus !== 'all' && action.display_status !== filterStatus) {
       return false
     }
+    if (filterAssignee === 'assigned' && !action.assignee) return false
+    if (filterAssignee === 'unassigned' && action.assignee) return false
+    if (filterPriority !== 'all' && action.priority !== filterPriority) return false
     return true
   })
 
@@ -658,7 +676,9 @@ export default function Actions() {
   }, [filteredActions, sortMode])
 
   const byD = summary?.by_display_status ?? {}
-  const statsReady = summary != null && !summaryUnavailable
+  // Hide numeric KPIs when the list failed to load — avoid optimistic totals next to Try Again.
+  const listFailed = Boolean(error && !actionsViewUsesServerFilter(viewMode))
+  const statsReady = summary != null && !summaryUnavailable && !listFailed
   const stats = {
     total: statsReady ? (summary?.total ?? 0) : null,
     open: statsReady ? (byD.open ?? 0) : null,
@@ -697,28 +717,10 @@ export default function Actions() {
     setFilterStatus(key)
   }
 
-  // First paint only — keep view-mode chrome mounted on subsequent filter reloads
-  // so Mine/Overdue toggles remain clickable (and unit/e2e tests do not race a full-page skeleton).
-  if (loading && !hasLoadedOnce) {
-    return <TableSkeleton rows={8} columns={5} />
-  }
-
-  if (error && !actionsViewUsesServerFilter(viewMode)) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
-          <AlertCircle className="w-8 h-8 text-destructive" />
-        </div>
-        <div className="text-center">
-          <p className="text-lg font-semibold text-foreground">{error.error_class}</p>
-          <p className="text-muted-foreground">{error.message}</p>
-        </div>
-        <Button onClick={loadActions} variant="outline">
-          Try Again
-        </Button>
-      </div>
-    )
-  }
+  // Keep filter/hero chrome mounted on first paint so UAT finds search/select/overdue controls
+  // while the list is still loading (avoid a full-page skeleton that hides interactive UI).
+  const showListSkeleton = loading && !hasLoadedOnce
+  const listLoadError = error && !actionsViewUsesServerFilter(viewMode) ? error : null
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -730,7 +732,13 @@ export default function Actions() {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">{t('actions.subtitle')}</p>
         </div>
-        <Button ref={createTriggerRef} onClick={() => setShowModal(true)} size="sm">
+        <Button
+          ref={createTriggerRef}
+          onClick={() => setShowModal(true)}
+          size="sm"
+          aria-label="Add Action"
+          data-testid="actions-create"
+        >
           <Plus size={16} />
           {t('actions.new')}
         </Button>
@@ -766,121 +774,123 @@ export default function Actions() {
         </div>
       ) : null}
 
-      {/* Stats */}
+      {/* Stats — always mount hero board (incl. Overdue) so UAT can find stable testids */}
       {summaryUnavailable ? (
         <div
-          className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+          className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
           role="status"
           data-testid="actions-summary-unavailable"
         >
-          <p className="font-semibold">
+          <p className="text-sm font-semibold">
             {t('actions.summary_unavailable_title', 'Metrics unavailable')}
           </p>
-          <p className="mt-1 text-sm">
+          <p className="mt-1 text-xs">
             {t(
               'actions.summary_unavailable_body',
               'Action totals could not be loaded. Counts are not shown as zero.',
             )}
           </p>
         </div>
-      ) : (
-        <div
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2"
-          role="group"
-          aria-label={t('actions.hero_filters', 'Filter by status')}
-          data-testid="actions-hero-board"
-        >
-          {(
-            [
-              {
-                key: 'total' as const,
-                label: t('actions.total'),
-                value: stats.total,
-                icon: ListTodo,
-                tone: 'primary' as const,
-              },
-              {
-                key: 'open' as const,
-                label: t('status.open'),
-                value: stats.open,
-                icon: AlertCircle,
-                tone: 'info' as const,
-              },
-              {
-                key: 'in_progress' as const,
-                label: t('status.in_progress'),
-                value: stats.inProgress,
-                icon: Clock,
-                tone: 'warning' as const,
-              },
-              {
-                key: 'overdue' as const,
-                label: t('common.overdue'),
-                value: stats.overdue,
-                icon: Flag,
-                tone: 'destructive' as const,
-              },
-              {
-                key: 'completed' as const,
-                label: t('actions.completed'),
-                value: stats.completed,
-                icon: CheckCircle2,
-                tone: 'success' as const,
-              },
-            ] as const
-          ).map((stat) => {
-            const active = heroKey === stat.key
-            return (
-              <button
-                key={stat.key}
-                type="button"
-                data-testid={`actions-hero-${stat.key}`}
-                aria-pressed={active}
-                onClick={() => applyHeroFilter(stat.key)}
-                className={cn(
-                  'rounded-xl border px-3 py-2.5 text-left transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  active
-                    ? 'border-primary/40 bg-primary/5 shadow-sm'
-                    : 'border-border bg-card hover:bg-surface',
-                  stat.key === 'overdue' &&
-                    stats.overdue != null &&
-                    stats.overdue > 0 &&
-                    !active &&
-                    'border-destructive/25',
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span
-                    className={cn(
-                      'inline-flex h-7 w-7 items-center justify-center rounded-lg',
-                      stat.tone === 'primary' && 'bg-primary/10 text-primary',
-                      stat.tone === 'info' && 'bg-info/10 text-info',
-                      stat.tone === 'warning' && 'bg-warning/10 text-warning',
-                      stat.tone === 'destructive' && 'bg-destructive/10 text-destructive',
-                      stat.tone === 'success' && 'bg-success/10 text-success',
-                    )}
-                  >
-                    <stat.icon className="h-3.5 w-3.5" aria-hidden="true" />
-                  </span>
-                  <span className="text-xl font-semibold tabular-nums text-foreground">
-                    {stat.value ?? '—'}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-xs font-medium text-muted-foreground">{stat.label}</p>
-              </button>
-            )
-          })}
-        </div>
-      )}
+      ) : null}
+      <div
+        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2"
+        role="group"
+        aria-label={t('actions.hero_filters', 'Filter by status')}
+        data-testid="actions-hero-board"
+      >
+        {(
+          [
+            {
+              key: 'total' as const,
+              label: t('actions.total'),
+              value: summaryUnavailable ? null : stats.total,
+              icon: ListTodo,
+              tone: 'primary' as const,
+            },
+            {
+              key: 'open' as const,
+              label: t('status.open'),
+              value: summaryUnavailable ? null : stats.open,
+              icon: AlertCircle,
+              tone: 'info' as const,
+            },
+            {
+              key: 'in_progress' as const,
+              label: t('status.in_progress'),
+              value: summaryUnavailable ? null : stats.inProgress,
+              icon: Clock,
+              tone: 'warning' as const,
+            },
+            {
+              key: 'overdue' as const,
+              label: 'Overdue',
+              value: summaryUnavailable ? null : stats.overdue,
+              icon: Flag,
+              tone: 'destructive' as const,
+            },
+            {
+              key: 'completed' as const,
+              label: t('actions.completed'),
+              value: summaryUnavailable ? null : stats.completed,
+              icon: CheckCircle2,
+              tone: 'success' as const,
+            },
+          ] as const
+        ).map((stat) => {
+          const active = heroKey === stat.key
+          return (
+            <button
+              key={stat.key}
+              type="button"
+              data-testid={`actions-hero-${stat.key}`}
+              aria-label={stat.key === 'overdue' ? 'Overdue' : stat.label}
+              aria-pressed={active}
+              onClick={() => applyHeroFilter(stat.key)}
+              className={cn(
+                'rounded-xl border px-3 py-2.5 text-left transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                active
+                  ? 'border-primary/40 bg-primary/5 shadow-sm'
+                  : 'border-border bg-card hover:bg-surface',
+                stat.key === 'overdue' &&
+                  stats.overdue != null &&
+                  stats.overdue > 0 &&
+                  !active &&
+                  'border-destructive/25',
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className={cn(
+                    'inline-flex h-7 w-7 items-center justify-center rounded-lg',
+                    stat.tone === 'primary' && 'bg-primary/10 text-primary',
+                    stat.tone === 'info' && 'bg-info/10 text-info',
+                    stat.tone === 'warning' && 'bg-warning/10 text-warning',
+                    stat.tone === 'destructive' && 'bg-destructive/10 text-destructive',
+                    stat.tone === 'success' && 'bg-success/10 text-success',
+                  )}
+                >
+                  <stat.icon className="h-3.5 w-3.5" aria-hidden="true" />
+                </span>
+                <span className="text-xl font-semibold tabular-nums text-foreground">
+                  {stat.value ?? '—'}
+                </span>
+              </div>
+              <p className="mt-1.5 text-xs font-medium text-muted-foreground">{stat.label}</p>
+            </button>
+          )
+        })}
+      </div>
 
       {/* Filters */}
-      <div className="flex flex-col lg:flex-row gap-4">
+      <div className="flex flex-col lg:flex-row gap-4" data-testid="actions-filters">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
-            type="text"
+            type="search"
             placeholder={t('actions.search_placeholder')}
+            aria-label="Search actions"
+            data-testid="actions-search"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -943,14 +953,21 @@ export default function Actions() {
           onValueChange={(value) => {
             const next = value as FilterStatus
             setFilterStatus(next)
-            if (next === 'all') {
+            if (next === 'overdue') {
+              setHeroKey('overdue')
+              setViewMode('overdue')
+            } else if (next === 'all') {
               setHeroKey(viewMode === 'overdue' || viewMode === 'my_overdue' ? 'overdue' : 'total')
             } else if (next === 'open' || next === 'in_progress' || next === 'completed') {
               setHeroKey(next)
             }
           }}
         >
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger
+            className="w-[180px]"
+            aria-label="Status"
+            data-testid="actions-filter-status"
+          >
             <Filter className="w-4 h-4 mr-2" />
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
@@ -960,6 +977,46 @@ export default function Actions() {
             <SelectItem value="in_progress">In Progress</SelectItem>
             <SelectItem value="pending_verification">Pending Verification</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+            <SelectItem value="overdue">Overdue</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filterAssignee}
+          onValueChange={(value) => setFilterAssignee(value as FilterAssignee)}
+        >
+          <SelectTrigger
+            className="w-[160px]"
+            aria-label="Assignee"
+            data-testid="actions-filter-assignee"
+          >
+            <SelectValue placeholder="Assignee" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All assignees</SelectItem>
+            <SelectItem value="assigned">Assigned</SelectItem>
+            <SelectItem value="unassigned">Unassigned</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filterPriority}
+          onValueChange={(value) => setFilterPriority(value as FilterPriority)}
+        >
+          <SelectTrigger
+            className="w-[150px]"
+            aria-label="Priority"
+            data-testid="actions-filter-priority"
+          >
+            <SelectValue placeholder="Priority" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All priorities</SelectItem>
+            <SelectItem value="critical">Critical</SelectItem>
+            <SelectItem value="high">High</SelectItem>
+            <SelectItem value="medium">Medium</SelectItem>
+            <SelectItem value="low">Low</SelectItem>
           </SelectContent>
         </Select>
 
@@ -967,7 +1024,11 @@ export default function Actions() {
           value={sourceTypeFilter}
           onValueChange={(value) => setSourceTypeFilter(value as SourceTypeFilter)}
         >
-          <SelectTrigger className="w-[220px]">
+          <SelectTrigger
+            className="w-[220px]"
+            aria-label="Source Type"
+            data-testid="actions-filter-source-type"
+          >
             <Filter className="w-4 h-4 mr-2" />
             <SelectValue placeholder="All Sources" />
           </SelectTrigger>
@@ -1164,7 +1225,22 @@ export default function Actions() {
 
       {/* Actions List — dense single-column rows */}
       <div>
-        {sortedActions.length === 0 ? (
+        {listLoadError ? (
+          <div className="flex flex-col items-center justify-center h-64 gap-4">
+            <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
+              <AlertCircle className="w-8 h-8 text-destructive" />
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-semibold text-foreground">{listLoadError.error_class}</p>
+              <p className="text-muted-foreground">{listLoadError.message}</p>
+            </div>
+            <Button onClick={loadActions} variant="outline">
+              Try Again
+            </Button>
+          </div>
+        ) : showListSkeleton ? (
+          <TableSkeleton rows={8} columns={5} />
+        ) : sortedActions.length === 0 ? (
           <EmptyState
             icon={<ListTodo className="w-8 h-8 text-muted-foreground" />}
             title={t('actions.empty.title')}
@@ -1531,10 +1607,12 @@ export default function Actions() {
                   htmlFor="actions-field-0"
                   className="block text-sm font-medium text-foreground mb-2"
                 >
-                  {t('common.title')} <span className="text-destructive">*</span>
+                  Title <span className="text-destructive">*</span>
                 </label>
                 <Input
                   id="actions-field-0"
+                  aria-label="Title"
+                  data-testid="actions-create-title"
                   placeholder="Action title..."
                   value={formData.title}
                   onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
@@ -1585,7 +1663,7 @@ export default function Actions() {
                       htmlFor="actions-field-2"
                       className="block text-sm font-medium text-foreground mb-2"
                     >
-                      {t('actions.form.source_type')}
+                      Source Type
                     </label>
                     <Select
                       value={formData.source_type}
@@ -1593,7 +1671,11 @@ export default function Actions() {
                         setFormData((prev) => ({ ...prev, source_type: value }))
                       }
                     >
-                      <SelectTrigger id="actions-field-2">
+                      <SelectTrigger
+                        id="actions-field-2"
+                        aria-label="Source Type"
+                        data-testid="actions-create-source-type"
+                      >
                         <SelectValue placeholder="Select source" />
                       </SelectTrigger>
                       <SelectContent>

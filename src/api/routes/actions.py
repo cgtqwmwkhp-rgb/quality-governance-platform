@@ -25,6 +25,7 @@ from src.api.routes._action_unified import (
     capa_api_source_type,
     capa_enum_from_api_filter,
     display_status_for,
+    expand_action_key_candidates,
     parse_action_key,
 )
 from src.api.schemas.error_codes import ErrorCode
@@ -1606,17 +1607,13 @@ async def get_actions_view_counts(db: DbSession, current_user: CurrentUser) -> A
     )
 
 
-async def load_action_response_by_key(
+async def _load_action_response_for_parsed_key(
     db: DbSession,
     tenant_id: Optional[int],
-    key: str,
+    kind: str,
+    row_id: int,
 ) -> ActionResponse:
-    """Resolve a unified action by action_key for the given tenant (shared by detail, notes, evidence)."""
-    try:
-        kind, row_id = parse_action_key(key)
-    except ValueError as exc:
-        raise ValidationError(str(exc)) from exc
-
+    """Resolve one concrete action_key kind+id (no bare-numeric expansion)."""
     if kind == STORAGE_CAPA:
         result = await db.execute(
             select(CAPAAction).where(
@@ -1707,11 +1704,40 @@ async def load_action_response_by_key(
     raise BadRequestError(f"Unknown action_key kind: {kind}")
 
 
+async def load_action_response_by_key(
+    db: DbSession,
+    tenant_id: Optional[int],
+    key: str,
+) -> ActionResponse:
+    """Resolve a unified action by action_key (or bare numeric id) for the tenant."""
+    candidates = expand_action_key_candidates(key)
+    if not candidates:
+        raise ValidationError("action_key is required")
+
+    last_not_found: Optional[NotFoundError] = None
+    for candidate in candidates:
+        try:
+            kind, row_id = parse_action_key(candidate)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+        try:
+            return await _load_action_response_for_parsed_key(db, tenant_id, kind, row_id)
+        except NotFoundError as exc:
+            last_not_found = exc
+            continue
+
+    raise last_not_found or NotFoundError("Action not found")
+
+
 @router.get("/by-key", response_model=ActionResponse)
 async def get_action_by_key(
     db: DbSession,
     current_user: CurrentUser,
-    key: str = Query(..., min_length=3, description="Stable key e.g. capa:12, incident_action:4"),
+    key: str = Query(
+        ...,
+        min_length=1,
+        description="Stable key (capa:12) or bare numeric id (UAT /actions/2)",
+    ),
 ) -> ActionResponse:
     """Resolve an action by its action_key (no source_type guesswork)."""
     return await load_action_response_by_key(db, current_user.tenant_id, key)
@@ -1721,7 +1747,7 @@ async def get_action_by_key(
 async def list_action_owner_notes(
     db: DbSession,
     current_user: CurrentUser,
-    key: str = Query(..., min_length=3, description="Unified action_key"),
+    key: str = Query(..., min_length=1, description="Unified action_key or bare numeric id"),
     limit: int = Query(100, ge=1, le=200, description="Max notes to return (newest first)"),
 ) -> ActionOwnerNoteListResponse:
     """List time-stamped owner commentary for an action (newest first)."""

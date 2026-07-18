@@ -5,6 +5,7 @@ import ActionDetail from '../ActionDetail'
 import { buildActionDetailPath } from '../actionLinks'
 
 const mockGetByKey = vi.fn()
+const mockUpdate = vi.fn()
 const mockListOwnerNotes = vi.fn()
 const mockListEvidence = vi.fn()
 const mockGetDeliveryStatus = vi.fn()
@@ -33,7 +34,7 @@ vi.mock('../../api/client', () => ({
     getByKey: (...args: unknown[]) => mockGetByKey(...args),
     listOwnerNotes: (...args: unknown[]) => mockListOwnerNotes(...args),
     appendOwnerNote: vi.fn(),
-    update: vi.fn(),
+    update: (...args: unknown[]) => mockUpdate(...args),
   },
   notificationsApi: {
     getDeliveryStatus: (...args: unknown[]) => mockGetDeliveryStatus(...args),
@@ -184,5 +185,24 @@ describe('ActionDetail source deep-links', () => {
       'href',
       '/audits?view=findings&findingId=42',
     )
+  })
+
+  it('exposes editable Status, Assignee, and Due controls', async () => {
+    mockGetByKey.mockResolvedValue({
+      data: {
+        ...auditFindingAction,
+        due_date: '2026-08-01T00:00:00Z',
+        assigned_to_email: 'owner@example.com',
+      },
+    })
+
+    renderDetail()
+
+    expect(await screen.findByTestId('action-detail-status')).toBeInTheDocument()
+    expect(screen.getByTestId('action-detail-due')).toHaveAttribute('type', 'date')
+    expect(screen.getByTestId('action-detail-assignee')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Update status/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Assign$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Save due/i })).toBeInTheDocument()
   })
 })
