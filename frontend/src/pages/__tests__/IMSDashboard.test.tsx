@@ -195,8 +195,8 @@ describe('IMSDashboard IA W2 compliance hub', () => {
     expect(screen.getByTestId('ims-metric-evidence-coverage')).toBeInTheDocument()
     expect(screen.getByLabelText('82% control implementation')).toBeInTheDocument()
     expect(screen.getByLabelText('67% evidence coverage')).toBeInTheDocument()
-    expect(screen.getByText('Control implementation')).toBeInTheDocument()
-    expect(screen.getByText('Evidence coverage')).toBeInTheDocument()
+    expect(screen.getAllByText('Control implementation').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Evidence coverage').length).toBeGreaterThanOrEqual(1)
   })
 
   it('labels single banner as control implementation when evidence coverage is absent', async () => {
@@ -216,6 +216,27 @@ describe('IMSDashboard IA W2 compliance hub', () => {
 
     expect(screen.queryByTestId('ims-metric-evidence-coverage')).not.toBeInTheDocument()
     expect(screen.getByText(/Control implementation — live from management system controls/i)).toBeInTheDocument()
+  })
+
+  it('shows live overview KPIs and audit-schedule activity without demo feed', async () => {
+    const { default: IMSDashboard } = await import('../IMSDashboard')
+
+    render(
+      <MemoryRouter initialEntries={['/ims']}>
+        <Routes>
+          <Route path="/ims" element={<IMSDashboard />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ims-overview-kpi-honesty')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('ims-overview-activity-honesty')).toBeInTheDocument()
+    expect(screen.queryByText(/Minor NC #2024-015/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Open Actions/i)).not.toBeInTheDocument()
+    expect(screen.getByText('Open scheduled audits')).toBeInTheDocument()
+    expect(screen.getByText(/AUD-2026-042/i)).toBeInTheDocument()
   })
 
   it('shows MAP-W1 multi-scheme honesty on Cross-Standard Mapping tab', async () => {

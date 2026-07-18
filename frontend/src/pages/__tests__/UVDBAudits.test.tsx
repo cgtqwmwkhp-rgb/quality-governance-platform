@@ -289,6 +289,7 @@ describe('UVDBAudits', () => {
     expect(screen.getByRole('button', { name: 'uvdb.tab.audit_history' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'uvdb.tab.iso_mapping' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'uvdb.export_protocol' })).toBeDisabled()
+    expect(screen.getByTestId('uvdb-export-protocol-honesty')).toBeInTheDocument()
   })
 
   it('links to import review only when a real audit run id is available', async () => {
