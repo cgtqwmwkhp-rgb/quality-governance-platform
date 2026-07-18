@@ -20,7 +20,7 @@ import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
-import { UserEmailSearch } from '../components/UserEmailSearch'
+import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import {
   Dialog,
   DialogContent,
@@ -551,15 +551,25 @@ export default function Incidents() {
                           data-testid={`incident-assign-${incident.id}`}
                         >
                           <div className="flex flex-col gap-2 min-w-[220px]">
-                            <UserEmailSearch
-                              value={assigneeById[incident.id]?.email || ''}
-                              onChange={(email, user) =>
+                            <EngineerPeoplePicker
+                              valueLabel={assigneeById[incident.id]?.email || ''}
+                              requireLogin
+                              onChange={(selection) =>
                                 setAssigneeById((prev) => ({
                                   ...prev,
-                                  [incident.id]: { email, user },
+                                  [incident.id]: selection?.user
+                                    ? {
+                                        email: selection.user.email || selection.label,
+                                        user: selection.user,
+                                      }
+                                    : { email: '' },
                                 }))
                               }
-                              placeholder={t('incidents.triage.search_owner', 'Search case owner…')}
+                              placeholder={t(
+                                'incidents.triage.search_owner',
+                                'Search active employees…',
+                              )}
+                              testId={`incident-owner-picker-${incident.id}`}
                             />
                             <Button
                               type="button"

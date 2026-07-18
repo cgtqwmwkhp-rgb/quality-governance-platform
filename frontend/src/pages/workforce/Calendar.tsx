@@ -145,7 +145,8 @@ export default function Calendar() {
         const total = res.data?.total
         const map: Record<number, string> = {}
         for (const e of items) {
-          map[e.id] = e.employee_number || e.job_title || `#${e.id}`
+          map[e.id] =
+            e.display_name?.trim() || e.employee_number || e.job_title || `#${e.id}`
         }
         setEngineerMap(map)
         if (isListTruncated(total, CALENDAR_PAGE_SIZE, items.length)) {

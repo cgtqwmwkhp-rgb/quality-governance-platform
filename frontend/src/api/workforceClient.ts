@@ -86,6 +86,12 @@ export interface InductionRun {
   competency_gate_message?: string
 }
 
+export interface LinkedUserSummary {
+  id: number
+  email: string
+  full_name?: string | null
+}
+
 export interface EngineerProfile {
   id: number
   external_id: string
@@ -97,6 +103,8 @@ export interface EngineerProfile {
   department?: string
   site?: string
   is_active: boolean
+  /** Present when EMP-LINK is live — optional for tolerant readers. */
+  linked_user?: LinkedUserSummary | null
 }
 
 export interface EngineerCreatePayload {

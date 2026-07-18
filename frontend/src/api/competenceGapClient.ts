@@ -58,6 +58,7 @@ export interface GoldenThreadResponse {
 /** Minimal engineer shape for inbox link pickers (GET /api/v1/engineers/). */
 export interface CompetenceGapPickerEngineer {
   id: number
+  display_name?: string | null
   employee_number?: string
   job_title?: string
   is_active?: boolean
@@ -83,7 +84,12 @@ export function competenceGapSourceLabelKey(sourceType: string): string {
 }
 
 export function engineerPickerLabel(engineer: CompetenceGapPickerEngineer): string {
-  return engineer.employee_number || engineer.job_title || `Engineer #${engineer.id}`
+  return (
+    engineer.display_name?.trim() ||
+    engineer.employee_number ||
+    engineer.job_title ||
+    `Engineer #${engineer.id}`
+  )
 }
 
 export function requirementPickerLabel(requirement: CompetenceGapPickerRequirement): string {
