@@ -6,7 +6,7 @@ and the per-engineer assignment APIs (open, quiz, complete) used by "My Reading"
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from src.api.deps import CurrentUser, DbSession, require_permission
@@ -560,4 +560,7 @@ async def snooze_assignment(
         assignment_id=assignment_id,
         hours=snooze_data.hours,
     )
-    return SnoozeAssignmentResponse(id=assignment.id, snooze_until=assignment.snooze_until)
+    snooze_until = assignment.snooze_until
+    if snooze_until is None:
+        raise HTTPException(status_code=500, detail="Snooze did not set snooze_until")
+    return SnoozeAssignmentResponse(id=assignment.id, snooze_until=snooze_until)
