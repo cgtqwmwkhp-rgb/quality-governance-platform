@@ -553,47 +553,73 @@ class InvestigationService:
         db.add(event)
         return event
 
+    _CUSTOMER_PACK_IDENTITY_FIELDS = (
+        "reporter_name",
+        "reporter_email",
+        "driver_name",
+        "driver_email",
+        "complainant_name",
+        "complainant_email",
+        "investigator_name",
+        "reviewer_name",
+        "approver_name",
+        "persons_involved",
+        "witnesses",
+        "witness_names",
+        "first_responder",
+        "responsible_person",
+    )
+
     @classmethod
-    def generate_customer_pack(
+    def _investigation_pack_scalar(cls, value: Any, default: str) -> str:
+        if value is not None and hasattr(value, "value"):
+            return value.value
+        if value is not None:
+            return str(value)
+        return default
+
+    @classmethod
+    def _redact_customer_pack_field(
+        cls,
+        audience: CustomerPackAudience,
+        section_key: str,
+        field_id: str,
+        field_value: Any,
+        redaction_log: List[Dict[str, Any]],
+    ) -> Any:
+        if audience != CustomerPackAudience.EXTERNAL_CUSTOMER:
+            return field_value
+        if field_id not in cls._CUSTOMER_PACK_IDENTITY_FIELDS or not field_value:
+            return field_value
+
+        original_value = field_value
+        if "name" in field_id:
+            redacted_value = "[Name Redacted]"
+        elif "email" in field_id:
+            redacted_value = "[Email Redacted]"
+        else:
+            redacted_value = "[Redacted]"
+
+        redaction_log.append(
+            {
+                "field_path": f"{section_key}.{field_id}",
+                "redaction_type": "IDENTITY_REDACTION",
+                "original_type": type(original_value).__name__,
+            }
+        )
+        return redacted_value
+
+    @classmethod
+    def _build_customer_pack_sections(
         cls,
         investigation: InvestigationRun,
         audience: CustomerPackAudience,
-        evidence_assets: List[EvidenceAsset],
-        generated_by_id: int,
-        generated_by_role: Optional[str] = None,
-    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """Generate customer pack with redaction rules applied.
-
-        Returns:
-            Tuple of (pack_content, redaction_log, included_assets)
-        """
+        approved_omits: set[str],
+    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         redaction_log: List[Dict[str, Any]] = []
-        included_assets: List[Dict[str, Any]] = []
-
-        if investigation.status is not None and hasattr(investigation.status, "value"):
-            status_val = investigation.status.value
-        elif investigation.status is not None:
-            status_val = str(investigation.status)
-        else:
-            status_val = "unknown"
-
-        if investigation.level is not None and hasattr(investigation.level, "value"):
-            level_val = investigation.level.value
-        elif investigation.level is not None:
-            level_val = str(investigation.level)
-        else:
-            level_val = "medium"
-
-        content: Dict[str, Any] = {
-            "investigation_reference": investigation.reference_number,
-            "title": investigation.title,
-            "status": status_val,
-            "level": level_val,
-            "sections": {},
-        }
-
-        approved_omits = set(cls.approved_customer_omits(investigation))
+        sections: Dict[str, Any] = {}
         source_data: Dict[str, Any] = investigation.data if isinstance(investigation.data, dict) else {}
+
         for section_id, section_data in source_data.get("sections", {}).items():
             section_key = str(section_id)
             if section_key in approved_omits:
@@ -606,50 +632,17 @@ class InvestigationService:
                 )
                 continue
 
-            content["sections"][section_key] = {}  # type: ignore[index]  # TYPE-IGNORE: MYPY-1
-
+            sections[section_key] = {}
             if isinstance(section_data, dict):
                 for field_id, field_value in section_data.items():
-                    redacted = False
+                    sections[section_key][field_id] = cls._redact_customer_pack_field(
+                        audience,
+                        section_key,
+                        field_id,
+                        field_value,
+                        redaction_log,
+                    )
 
-                    if audience == CustomerPackAudience.EXTERNAL_CUSTOMER:
-                        identity_fields = [
-                            "reporter_name",
-                            "reporter_email",
-                            "driver_name",
-                            "driver_email",
-                            "complainant_name",
-                            "complainant_email",
-                            "investigator_name",
-                            "reviewer_name",
-                            "approver_name",
-                            "persons_involved",
-                            "witnesses",
-                            "witness_names",
-                            "first_responder",
-                            "responsible_person",
-                        ]
-
-                        if field_id in identity_fields and field_value:
-                            original_value = field_value
-                            if "name" in field_id:
-                                field_value = "[Name Redacted]"
-                            elif "email" in field_id:
-                                field_value = "[Email Redacted]"
-                            else:
-                                field_value = "[Redacted]"
-                            redacted = True
-                            redaction_log.append(
-                                {
-                                    "field_path": f"{section_key}.{field_id}",
-                                    "redaction_type": "IDENTITY_REDACTION",
-                                    "original_type": type(original_value).__name__,
-                                }
-                            )
-
-                    content["sections"][section_key][field_id] = field_value  # type: ignore[index]  # TYPE-IGNORE: MYPY-1
-
-        # Also record approved omits that are HSG245 UI section ids (may not be in data.sections).
         for section_key in approved_omits:
             if section_key not in source_data.get("sections", {}):
                 redaction_log.append(
@@ -659,9 +652,16 @@ class InvestigationService:
                         "original_type": "section",
                     }
                 )
-        if approved_omits:
-            content["omitted_sections"] = sorted(approved_omits)
 
+        return sections, redaction_log
+
+    @classmethod
+    def _build_customer_pack_included_assets(
+        cls,
+        audience: CustomerPackAudience,
+        evidence_assets: List[EvidenceAsset],
+    ) -> List[Dict[str, Any]]:
+        included_assets: List[Dict[str, Any]] = []
         for asset in evidence_assets:
             can_include = False
             exclusion_reason = None
@@ -678,9 +678,6 @@ class InvestigationService:
                 EvidenceVisibility.PUBLIC,
             ):
                 can_include = True
-                if audience == CustomerPackAudience.EXTERNAL_CUSTOMER:
-                    if asset.contains_pii or asset.redaction_required:
-                        pass
 
             included_assets.append(
                 {
@@ -694,7 +691,39 @@ class InvestigationService:
                     "redaction_required": asset.redaction_required,
                 }
             )
+        return included_assets
 
+    @classmethod
+    def generate_customer_pack(
+        cls,
+        investigation: InvestigationRun,
+        audience: CustomerPackAudience,
+        evidence_assets: List[EvidenceAsset],
+        generated_by_id: int,
+        generated_by_role: Optional[str] = None,
+    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Generate customer pack with redaction rules applied.
+
+        Returns:
+            Tuple of (pack_content, redaction_log, included_assets)
+        """
+        approved_omits = set(cls.approved_customer_omits(investigation))
+        sections, redaction_log = cls._build_customer_pack_sections(
+            investigation,
+            audience,
+            approved_omits,
+        )
+        content: Dict[str, Any] = {
+            "investigation_reference": investigation.reference_number,
+            "title": investigation.title,
+            "status": cls._investigation_pack_scalar(investigation.status, "unknown"),
+            "level": cls._investigation_pack_scalar(investigation.level, "medium"),
+            "sections": sections,
+        }
+        if approved_omits:
+            content["omitted_sections"] = sorted(approved_omits)
+
+        included_assets = cls._build_customer_pack_included_assets(audience, evidence_assets)
         return content, redaction_log, included_assets
 
     @classmethod
