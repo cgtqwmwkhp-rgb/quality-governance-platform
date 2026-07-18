@@ -76,6 +76,7 @@ interface AuditQuestion {
   required: boolean
   weight: number
   maxScore?: number
+  maxValue?: number
   options?: { id: string; label: string; value: string; score?: number }[]
   evidenceRequired: boolean
   guidance?: string
@@ -219,7 +220,10 @@ export function canAdvancePastFailEvidenceGate(
 }
 
 export function scorePayloadForQuestion(
-  question: Pick<AuditQuestion, 'type' | 'weight' | 'maxScore' | 'positiveAnswer' | 'options'>,
+  question: Pick<
+    AuditQuestion,
+    'type' | 'weight' | 'maxScore' | 'maxValue' | 'positiveAnswer' | 'options'
+  >,
   response: Pick<QuestionResponse, 'response'>,
 ): { score: number | null; max_score: number | null } {
   const maxScore = question.maxScore ?? question.weight ?? 1
@@ -253,8 +257,18 @@ export function scorePayloadForQuestion(
       max_score: maxScore,
     }
   }
-  if (typeof response.response === 'number') {
-    return { score: Number(response.response), max_score: maxScore }
+  if (
+    typeof response.response === 'number' ||
+    ['numeric', 'number', 'rating', 'score'].includes(question.type)
+  ) {
+    const raw = Number(response.response)
+    if (Number.isNaN(raw)) {
+      return { score: null, max_score: null }
+    }
+    // Match server: scale raw entry by max_value into question max_score points.
+    const maxValue = question.maxValue ?? maxScore ?? 1
+    const scaled = maxValue ? (raw / maxValue) * maxScore : 0
+    return { score: Math.min(maxScore, Math.max(0, scaled)), max_score: maxScore }
   }
   if (
     ['radio', 'select', 'dropdown', 'checkbox', 'multi_select', 'multi_choice', 'checklist'].includes(
@@ -795,6 +809,7 @@ export default function AuditExecution() {
                 required: q.is_required,
                 weight: q.weight,
                 maxScore: q.max_score ?? q.weight ?? 1,
+                maxValue: q.max_value ?? undefined,
                 options: q.options?.map((o) => ({
                   id: o.value,
                   label: o.label,
@@ -1094,7 +1109,8 @@ export default function AuditExecution() {
           ? scorePayloadForQuestion(question, resp)
           : { score: null, max_score: null }
         const payload = {
-          response_value: serializeResponse(resp.response),
+          // Explicit null clears a previously saved answer (undefined would omit the field).
+          response_value: serializeResponse(resp.response) ?? null,
           notes: resp.notes || undefined,
           // Persist scores only for real answers; send null on update to clear stale points.
           score: scored.score,
@@ -1316,8 +1332,9 @@ export default function AuditExecution() {
 
   // Calculate score
   const calculateScore = () => {
-    let totalWeight = 0
-    let achievedWeight = 0
+    // Match API calculate_run_score: sum(score) / sum(max_score).
+    let totalScore = 0
+    let totalMax = 0
 
     audit.sections.forEach((section) => {
       section.questions.forEach((question) => {
@@ -1327,12 +1344,12 @@ export default function AuditExecution() {
         const { score, max_score } = scorePayloadForQuestion(question, response)
         if (score === null || max_score === null || max_score <= 0) return
 
-        totalWeight += question.weight
-        achievedWeight += (score / max_score) * question.weight
+        totalScore += score
+        totalMax += max_score
       })
     })
 
-    return totalWeight > 0 ? Math.round((achievedWeight / totalWeight) * 100) : 0
+    return totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0
   }
 
   const findingsNeedingActions = Object.values(responses).filter((response) => {

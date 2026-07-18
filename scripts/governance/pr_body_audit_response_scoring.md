@@ -34,6 +34,9 @@
 - [x] AC-07: Option-based answers (radio/select/checkbox/etc.) use per-option scores, not always full credit
 - [x] AC-08: Answer-only PATCH recomputes score/max_score (does not keep stale stored points)
 - [x] AC-09: Notes/photos without a main answer do not persist 0/max or shrink score_percentage
+- [x] AC-10: Cleared answers PATCH `response_value: null` (no stale answer left for complete_run backfill)
+- [x] AC-11: Live UI percent uses sum(score)/sum(max_score) like the API
+- [x] AC-12: Numeric/rating answers scale by max_value into max_score (capped)
 
 ## 5) Testing Evidence (link to runs)
 - [x] Lint — black on touched Python

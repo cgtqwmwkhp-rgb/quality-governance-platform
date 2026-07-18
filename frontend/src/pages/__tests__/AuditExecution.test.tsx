@@ -23,6 +23,12 @@ vi.mock('../../api/client', () => ({
     createResponse: vi.fn(),
     updateResponse: vi.fn(),
   },
+  evidenceAssetsApi: {
+    upload: vi.fn().mockResolvedValue({ data: { id: 99 } }),
+    list: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+    getSignedUrl: vi.fn().mockResolvedValue({ data: { signed_url: 'https://example.com/photo.jpg' } }),
+    delete: vi.fn().mockResolvedValue({}),
+  },
   getApiErrorMessage: (error: unknown) => (error instanceof Error ? error.message : 'Request failed'),
 }))
 
