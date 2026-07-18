@@ -117,6 +117,74 @@ export interface CompleteDocumentCampaignAssignmentRequest {
   signature_data?: string
 }
 
+export interface ReminderDefaults {
+  reminder_hours: number[]
+}
+
+export interface CampaignComplianceRow {
+  campaign_id: number
+  document_id: number
+  document_title: string
+  status: string
+  assigned: number
+  completed: number
+  pending: number
+  overdue: number
+  completion_rate: number
+  quiz_pass_count?: number
+  reminder_offsets_hours: number[]
+  launched_at: string | null
+  due_within_days: number
+  title?: string | null
+}
+
+export interface QuestionInboxThread {
+  thread_id: number
+  document_id: number
+  document_title: string
+  thread_title?: string | null
+  title?: string | null
+  status: string
+  created_at: string
+  created_by_id: number
+  latest_message_preview?: string | null
+  latest_message?: { body: string } | null
+}
+
+export interface ComplianceListResponse {
+  items: CampaignComplianceRow[]
+  total: number
+}
+
+export interface QuestionInboxListResponse {
+  items: QuestionInboxThread[]
+  total: number
+}
+
+export interface AskAssignmentQuestionPayload {
+  title?: string
+  body: string
+}
+
+export interface ReplyQuestionPayload {
+  body: string
+}
+
+function triggerJsonDownload(data: unknown, filename: string): void {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: 'application/json;charset=utf-8',
+  })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.rel = 'noopener'
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  URL.revokeObjectURL(url)
+}
+
 export function createDocumentCampaignApi(api: AxiosInstance) {
   const base = '/api/v1/document-campaigns'
 
@@ -148,5 +216,27 @@ export function createDocumentCampaignApi(api: AxiosInstance) {
       data: CompleteDocumentCampaignAssignmentRequest,
     ) =>
       api.post<DocumentCampaignAssignment>(`${base}/assignments/${assignmentId}/complete`, data),
+
+    // EPIC-2: reminder defaults, compliance, evidence, HSEC inbox
+    getReminderDefaults: () => api.get<ReminderDefaults>(`${base}/reminder-defaults`),
+    setReminderDefaults: (reminder_hours: number[]) =>
+      api.put<ReminderDefaults>(`${base}/reminder-defaults`, { reminder_hours }),
+    listCompliance: () => api.get<ComplianceListResponse>(`${base}/compliance`),
+    downloadEvidencePack: async (campaignId: number) => {
+      const response = await api.get(`${base}/campaigns/${campaignId}/evidence-pack`, {
+        responseType: 'json',
+      })
+      triggerJsonDownload(
+        response.data,
+        `campaign-evidence-${campaignId}-${new Date().toISOString().slice(0, 10)}.json`,
+      )
+      return response
+    },
+    listQuestionInbox: () => api.get<QuestionInboxListResponse>(`${base}/question-inbox`),
+    askAssignmentQuestion: (assignmentId: number, payload: AskAssignmentQuestionPayload) =>
+      api.post(`${base}/assignments/${assignmentId}/questions`, payload),
+    replyQuestion: (threadId: number, payload: ReplyQuestionPayload) =>
+      api.post(`${base}/questions/${threadId}/reply`, payload),
+    resolveQuestion: (threadId: number) => api.post(`${base}/questions/${threadId}/resolve`),
   }
 }

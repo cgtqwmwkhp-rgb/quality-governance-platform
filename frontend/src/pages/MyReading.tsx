@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { BookOpen, CheckCircle2, ChevronDown, ExternalLink, Loader2, Search } from 'lucide-react'
+import { BookOpen, CheckCircle2, ChevronDown, ExternalLink, Loader2, MessageSquare, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   documentCampaignApi,
@@ -64,6 +64,9 @@ export default function MyReading() {
   const [acceptanceStatements, setAcceptanceStatements] = useState<Record<number, string>>({})
   const [signatures, setSignatures] = useState<Record<number, string>>({})
   const [completingCampaignId, setCompletingCampaignId] = useState<number | null>(null)
+  const [questionTitles, setQuestionTitles] = useState<Record<number, string>>({})
+  const [questionBodies, setQuestionBodies] = useState<Record<number, string>>({})
+  const [askingQuestionId, setAskingQuestionId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
@@ -229,6 +232,29 @@ export default function MyReading() {
       reportFailure(err)
     } finally {
       setCompletingCampaignId(null)
+    }
+  }
+
+  const handleAskHsecQuestion = async (item: DocumentCampaignAssignment) => {
+    const body = questionBodies[item.id]?.trim()
+    if (!body) {
+      toast.error(t('my_reading.question_body_required'))
+      return
+    }
+    setAskingQuestionId(item.id)
+    try {
+      const title = questionTitles[item.id]?.trim()
+      await documentCampaignApi.askAssignmentQuestion(item.id, {
+        ...(title ? { title } : {}),
+        body,
+      })
+      toast.success(t('my_reading.question_sent'))
+      setQuestionBodies((prev) => ({ ...prev, [item.id]: '' }))
+      setQuestionTitles((prev) => ({ ...prev, [item.id]: '' }))
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setAskingQuestionId(null)
     }
   }
 
@@ -410,6 +436,48 @@ export default function MyReading() {
               </div>
               {source === 'campaign' && expandedCampaignId === item.id && (
                 <div className="mt-5 border-t pt-5 space-y-5" data-testid={`campaign-complete-${item.id}`}>
+                  {item.status !== 'completed' && (
+                    <section className="space-y-3" data-testid={`campaign-ask-hsec-${item.id}`}>
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4 text-primary" />
+                        <h2 className="font-medium">{t('my_reading.ask_hsec_title')}</h2>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{t('my_reading.ask_hsec_help')}</p>
+                      <label className="block text-sm font-medium" htmlFor={`question-title-${item.id}`}>
+                        {t('my_reading.question_title_optional')}
+                      </label>
+                      <Input
+                        id={`question-title-${item.id}`}
+                        value={questionTitles[item.id] ?? ''}
+                        onChange={(event) =>
+                          setQuestionTitles((prev) => ({ ...prev, [item.id]: event.target.value }))
+                        }
+                        placeholder={t('my_reading.question_title_placeholder')}
+                      />
+                      <label className="block text-sm font-medium" htmlFor={`question-body-${item.id}`}>
+                        {t('my_reading.question_body')}
+                      </label>
+                      <Textarea
+                        id={`question-body-${item.id}`}
+                        value={questionBodies[item.id] ?? ''}
+                        onChange={(event) =>
+                          setQuestionBodies((prev) => ({ ...prev, [item.id]: event.target.value }))
+                        }
+                        placeholder={t('my_reading.question_body_placeholder')}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void handleAskHsecQuestion(item)}
+                        disabled={askingQuestionId === item.id}
+                      >
+                        {askingQuestionId === item.id && (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        )}
+                        {t('my_reading.ask_hsec_submit')}
+                      </Button>
+                    </section>
+                  )}
                   {isQuizRequired(item) && (
                     <section className="space-y-3">
                       <div>

@@ -80,6 +80,7 @@ CELERY_TASK_MODULES = (
     "src.infrastructure.tasks.cleanup_tasks",
     "src.infrastructure.tasks.competency_tasks",
     "src.infrastructure.tasks.dlq_replay",
+    "src.infrastructure.tasks.document_campaign_tasks",
     "src.infrastructure.tasks.document_index_tasks",
     "src.infrastructure.tasks.email_tasks",
     "src.infrastructure.tasks.external_audit_import_tasks",
@@ -177,6 +178,10 @@ celery_app.conf.beat_schedule = {
     "run-regulatory-watch": {
         "task": "src.infrastructure.tasks.regulatory_watch_tasks.run_regulatory_watch",
         "schedule": crontab(hour=5, minute=30, day_of_week="1"),  # Weekly Monday 05:30 UTC
+    },
+    "process-campaign-reminders": {
+        "task": "src.infrastructure.tasks.document_campaign_tasks.process_campaign_reminders",
+        "schedule": crontab(minute=15),  # Every hour at :15
     },
 }
 

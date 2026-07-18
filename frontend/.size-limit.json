@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "156 kB",
+    "limit": "157 kB",
     "gzip": true,
-    "name": "index: 155\u2192156 kB \u2014 My Reading campaign journey (+282 B over 155)"
+    "name": "index: 156\u2192157 kB \u2014 Campaign EPIC-2 admin/compliance/inbox (+916 B over 156)"
   },
   {
     "path": "dist/assets/vendor-*.js",

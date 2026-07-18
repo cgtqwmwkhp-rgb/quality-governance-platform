@@ -37,6 +37,7 @@ import {
   Package,
   ShieldAlert,
   Webhook,
+  Megaphone,
 } from 'lucide-react'
 import { BrandMarkTile } from './BrandMark'
 import { useState, useEffect, useCallback, lazy, Suspense, Fragment } from 'react'
@@ -209,6 +210,16 @@ export default function Layout({ onLogout }: LayoutProps) {
                 path: '/admin/notifications',
                 icon: Bell,
                 label: t('nav.notifications', { defaultValue: 'Notifications' }),
+              },
+              {
+                path: '/admin/campaign-compliance',
+                icon: Megaphone,
+                label: t('nav.campaign_compliance', { defaultValue: 'Campaign Compliance' }),
+              },
+              {
+                path: '/admin/hsec-inbox',
+                icon: MessageSquare,
+                label: t('nav.hsec_inbox', { defaultValue: 'HSEC Inbox' }),
               },
               {
                 path: '/admin/partner-webhooks',

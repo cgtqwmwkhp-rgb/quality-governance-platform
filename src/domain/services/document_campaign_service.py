@@ -4,6 +4,7 @@ Manages engineer groups, document campaigns (read/quiz/sign-off), audience
 expansion, launch notifications, and per-user assignment progress.
 """
 
+import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -23,11 +24,26 @@ from src.domain.models.document_campaign import (
     EngineerGroup,
     EngineerGroupMember,
 )
-from src.domain.models.governed_knowledge import DocumentQuizDraft, QuizDraftStatus
+from src.domain.models.form_config import SystemSetting
+from src.domain.models.governed_knowledge import (
+    DiscussionThreadStatus,
+    DocumentDiscussionMessage,
+    DocumentDiscussionThread,
+    DocumentQuizDraft,
+    QuizDraftStatus,
+)
 from src.domain.models.notification import Notification, NotificationPriority, NotificationType
 from src.domain.models.user import Role, User, user_roles
 
 logger = logging.getLogger(__name__)
+
+CAMPAIGN_DEFAULT_REMINDER_SETTING_KEY_PREFIX = "campaign.default_reminder_hours"
+CAMPAIGN_DEFAULT_REMINDER_CATEGORY = "campaigns"
+
+
+def _reminder_defaults_setting_key(tenant_id: int) -> str:
+    """Tenant-scoped key — SystemSetting.key is globally unique."""
+    return f"{CAMPAIGN_DEFAULT_REMINDER_SETTING_KEY_PREFIX}.tenant.{tenant_id}"
 
 
 @dataclass(frozen=True)
@@ -634,3 +650,397 @@ class DocumentCampaignService:
         await self.db.commit()
         await self.db.refresh(assignment)
         return assignment
+
+    # ==================== Reminder defaults (SystemSetting) ====================
+
+    async def get_reminder_defaults(self, *, tenant_id: int) -> List[int]:
+        setting_key = _reminder_defaults_setting_key(tenant_id)
+        result = await self.db.execute(
+            select(SystemSetting).where(
+                SystemSetting.tenant_id == tenant_id,
+                SystemSetting.key == setting_key,
+            )
+        )
+        setting = result.scalar_one_or_none()
+        if setting is None:
+            return list(DEFAULT_REMINDER_OFFSETS_HOURS)
+        try:
+            parsed = json.loads(setting.value)
+            if isinstance(parsed, list) and all(isinstance(h, int) for h in parsed):
+                return sorted(parsed)
+        except (json.JSONDecodeError, TypeError):
+            logger.warning("Invalid %s setting for tenant %s", setting_key, tenant_id)
+        return list(DEFAULT_REMINDER_OFFSETS_HOURS)
+
+    async def set_reminder_defaults(
+        self,
+        *,
+        tenant_id: int,
+        hours: List[int],
+        user_id: int,
+    ) -> List[int]:
+        if not hours or any(h < 0 for h in hours):
+            raise BadRequestError("reminder_hours must be a non-empty list of non-negative integers")
+
+        normalized = sorted(dict.fromkeys(int(h) for h in hours))
+        setting_key = _reminder_defaults_setting_key(tenant_id)
+        result = await self.db.execute(
+            select(SystemSetting).where(
+                SystemSetting.tenant_id == tenant_id,
+                SystemSetting.key == setting_key,
+            )
+        )
+        setting = result.scalar_one_or_none()
+        if setting is None:
+            setting = SystemSetting(
+                tenant_id=tenant_id,
+                key=setting_key,
+                value=json.dumps(normalized),
+                category=CAMPAIGN_DEFAULT_REMINDER_CATEGORY,
+                value_type="json",
+                description="Default reminder offsets (hours after launch) for new document campaigns",
+                created_by_id=user_id,
+            )
+            self.db.add(setting)
+        else:
+            setting.value = json.dumps(normalized)
+            setting.updated_by_id = user_id
+
+        await self.db.commit()
+        return normalized
+
+    # ==================== Scheduled reminders (Celery) ====================
+
+    async def process_due_reminders(self) -> Dict[str, int]:
+        """Process overdue marking and due reminder sends across all tenants."""
+        now = datetime.now(timezone.utc)
+        counts = {"reminders_sent": 0, "overdue_marked": 0, "campaigns_scanned": 0}
+
+        result = await self.db.execute(
+            select(DocumentCampaign).where(
+                DocumentCampaign.status == CampaignStatus.ACTIVE,
+                DocumentCampaign.launched_at.isnot(None),
+            )
+        )
+        campaigns = list(result.scalars().all())
+        counts["campaigns_scanned"] = len(campaigns)
+
+        for campaign in campaigns:
+            launched_at = campaign.launched_at
+            if launched_at is None:
+                continue
+            if launched_at.tzinfo is None:
+                launched_at = launched_at.replace(tzinfo=timezone.utc)
+
+            hours_since_launch = (now - launched_at).total_seconds() / 3600
+            sorted_offsets = sorted(campaign.reminder_offsets_hours or [])
+
+            assignments_result = await self.db.execute(
+                select(CampaignAssignment).where(
+                    CampaignAssignment.campaign_id == campaign.id,
+                    CampaignAssignment.status.in_([AssignmentStatus.PENDING, AssignmentStatus.OVERDUE]),
+                )
+            )
+            assignments = list(assignments_result.scalars().all())
+            reminders_to_send: List[CampaignAssignment] = []
+
+            for assignment in assignments:
+                due_at = assignment.due_at
+                if due_at is not None and due_at.tzinfo is None:
+                    due_at = due_at.replace(tzinfo=timezone.utc)
+
+                if assignment.status == AssignmentStatus.PENDING and due_at is not None and due_at < now:
+                    assignment.status = AssignmentStatus.OVERDUE
+                    counts["overdue_marked"] += 1
+
+                if assignment.reminders_sent < len(sorted_offsets):
+                    threshold = sorted_offsets[assignment.reminders_sent]
+                    if hours_since_launch >= threshold:
+                        assignment.reminders_sent += 1
+                        assignment.last_reminder_at = now
+                        counts["reminders_sent"] += 1
+                        reminders_to_send.append(assignment)
+
+            if reminders_to_send:
+                await self._notify_and_email_reminders(campaign=campaign, assignments=reminders_to_send)
+
+        await self.db.commit()
+        return counts
+
+    async def _notify_and_email_reminders(
+        self,
+        *,
+        campaign: DocumentCampaign,
+        assignments: List[CampaignAssignment],
+    ) -> None:
+        if not assignments:
+            return
+
+        doc_title = await self._document_title(tenant_id=campaign.tenant_id, document_id=campaign.document_id)
+        action_url = f"/documents/{campaign.document_id}"
+        message = f"Reminder: please complete your read/sign-off for '{doc_title}'."
+
+        for assignment in assignments:
+            try:
+                self.db.add(
+                    Notification(
+                        tenant_id=campaign.tenant_id,
+                        user_id=assignment.user_id,
+                        type=NotificationType.ASSIGNMENT,
+                        priority=NotificationPriority.MEDIUM,
+                        title="Document campaign reminder",
+                        message=message,
+                        entity_type="document_campaign",
+                        entity_id=str(campaign.id),
+                        action_url=action_url,
+                    )
+                )
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "Failed to create reminder notification for user %s campaign %s",
+                    assignment.user_id,
+                    campaign.id,
+                    exc_info=True,
+                )
+
+        await self.db.commit()
+
+        await self._send_launch_emails(
+            assignments=assignments,
+            subject="Document campaign reminder",
+            html_content=f"<p>{message}</p>",
+        )
+
+    # ==================== Compliance summary & evidence ====================
+
+    async def list_compliance_summary(self, *, tenant_id: int) -> List[Dict[str, Any]]:
+        result = await self.db.execute(
+            select(DocumentCampaign, Document.title)
+            .join(Document, Document.id == DocumentCampaign.document_id)
+            .where(DocumentCampaign.tenant_id == tenant_id)
+            .order_by(DocumentCampaign.created_at.desc())
+        )
+
+        items: List[Dict[str, Any]] = []
+        for campaign, document_title in result.all():
+            summary = await self._compliance_summary(campaign.id)
+            quiz_pass_result = await self.db.execute(
+                select(func.count(CampaignAssignment.id)).where(
+                    CampaignAssignment.campaign_id == campaign.id,
+                    CampaignAssignment.quiz_passed == True,  # noqa: E712
+                )
+            )
+            quiz_pass_count = quiz_pass_result.scalar_one() or 0
+            status_value = campaign.status.value if hasattr(campaign.status, "value") else str(campaign.status)
+
+            items.append(
+                {
+                    "campaign_id": campaign.id,
+                    "document_id": campaign.document_id,
+                    "document_title": document_title,
+                    "title": campaign.title,
+                    "status": status_value,
+                    "assigned": summary["total_assigned"],
+                    "completed": summary["completed"],
+                    "pending": summary["pending"],
+                    "overdue": summary["overdue"],
+                    "completion_rate": summary["completion_rate"],
+                    "quiz_pass_count": quiz_pass_count,
+                    "reminder_offsets_hours": list(campaign.reminder_offsets_hours or []),
+                    "launched_at": campaign.launched_at,
+                    "due_within_days": campaign.due_within_days,
+                }
+            )
+        return items
+
+    async def build_evidence_pack(self, *, tenant_id: int, campaign_id: int) -> Dict[str, Any]:
+        campaign = await self.get_campaign(tenant_id=tenant_id, campaign_id=campaign_id)
+
+        doc_result = await self.db.execute(
+            select(Document).where(Document.id == campaign.document_id, Document.tenant_id == tenant_id)
+        )
+        document = doc_result.scalar_one_or_none()
+        if document is None:
+            raise NotFoundError("Document not found")
+
+        assignments_result = await self.db.execute(
+            select(CampaignAssignment, User)
+            .join(User, User.id == CampaignAssignment.user_id)
+            .where(CampaignAssignment.campaign_id == campaign_id)
+            .order_by(User.last_name, User.first_name)
+        )
+
+        assignment_rows = []
+        for assignment, user in assignments_result.all():
+            status_value = assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status)
+            assignment_rows.append(
+                {
+                    "assignment_id": assignment.id,
+                    "user_id": user.id,
+                    "user_email": user.email,
+                    "user_name": user.full_name,
+                    "status": status_value,
+                    "assigned_at": assignment.assigned_at.isoformat() if assignment.assigned_at else None,
+                    "due_at": assignment.due_at.isoformat() if assignment.due_at else None,
+                    "first_opened_at": assignment.first_opened_at.isoformat() if assignment.first_opened_at else None,
+                    "completed_at": assignment.completed_at.isoformat() if assignment.completed_at else None,
+                    "quiz_score": assignment.quiz_score,
+                    "quiz_passed": assignment.quiz_passed,
+                    "quiz_attempts": assignment.quiz_attempts,
+                    "acceptance_statement_present": bool(assignment.acceptance_statement),
+                    "signature_present": bool(assignment.signature_data),
+                    "ip_address": assignment.ip_address,
+                    "reminders_sent": assignment.reminders_sent,
+                    "last_reminder_at": (
+                        assignment.last_reminder_at.isoformat() if assignment.last_reminder_at else None
+                    ),
+                }
+            )
+
+        status_value = campaign.status.value if hasattr(campaign.status, "value") else str(campaign.status)
+        return {
+            "campaign": {
+                "id": campaign.id,
+                "title": campaign.title,
+                "status": status_value,
+                "due_within_days": campaign.due_within_days,
+                "require_quiz": campaign.require_quiz,
+                "require_sign": campaign.require_sign,
+                "reminder_offsets_hours": list(campaign.reminder_offsets_hours or []),
+                "launched_at": campaign.launched_at.isoformat() if campaign.launched_at else None,
+                "closed_at": campaign.closed_at.isoformat() if campaign.closed_at else None,
+            },
+            "document": {
+                "id": document.id,
+                "title": document.title,
+                "version": document.version,
+            },
+            "assignments": assignment_rows,
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    # ==================== Question inbox (HSEC) ====================
+
+    async def list_question_inbox(self, *, tenant_id: int) -> List[Dict[str, Any]]:
+        campaign_doc_ids = (
+            select(DocumentCampaign.document_id)
+            .where(DocumentCampaign.tenant_id == tenant_id)
+            .distinct()
+            .scalar_subquery()
+        )
+
+        result = await self.db.execute(
+            select(DocumentDiscussionThread, Document.title)
+            .join(Document, Document.id == DocumentDiscussionThread.document_id)
+            .where(
+                DocumentDiscussionThread.tenant_id == tenant_id,
+                DocumentDiscussionThread.status == DiscussionThreadStatus.OPEN,
+                DocumentDiscussionThread.document_id.in_(campaign_doc_ids),
+            )
+            .order_by(DocumentDiscussionThread.created_at.desc())
+        )
+
+        items: List[Dict[str, Any]] = []
+        for thread, document_title in result.all():
+            latest_result = await self.db.execute(
+                select(DocumentDiscussionMessage.body)
+                .where(DocumentDiscussionMessage.thread_id == thread.id)
+                .order_by(DocumentDiscussionMessage.created_at.desc())
+                .limit(1)
+            )
+            latest_preview = latest_result.scalar_one_or_none()
+            status_value = thread.status.value if hasattr(thread.status, "value") else str(thread.status)
+            items.append(
+                {
+                    "document_id": thread.document_id,
+                    "document_title": document_title,
+                    "thread_id": thread.id,
+                    "thread_title": thread.title,
+                    "status": status_value,
+                    "created_at": thread.created_at,
+                    "created_by_id": thread.created_by_id,
+                    "latest_message_preview": (latest_preview[:200] if latest_preview else None),
+                }
+            )
+        return items
+
+    async def ask_assignment_question(
+        self,
+        *,
+        user_id: int,
+        assignment_id: int,
+        title: Optional[str],
+        body: str,
+    ) -> DocumentDiscussionThread:
+        assignment = await self._get_own_assignment(user_id=user_id, assignment_id=assignment_id)
+        campaign = await self.get_campaign(tenant_id=assignment.tenant_id, campaign_id=assignment.campaign_id)
+
+        doc_result = await self.db.execute(
+            select(Document).where(
+                Document.id == campaign.document_id,
+                Document.tenant_id == assignment.tenant_id,
+            )
+        )
+        document = doc_result.scalar_one_or_none()
+        if document is None:
+            raise NotFoundError("Document not found")
+
+        thread = DocumentDiscussionThread(
+            tenant_id=assignment.tenant_id,
+            document_id=campaign.document_id,
+            version=document.version or "1.0",
+            title=title or f"Question on campaign assignment #{assignment.id}",
+            created_by_id=user_id,
+        )
+        self.db.add(thread)
+        await self.db.flush()
+
+        message = DocumentDiscussionMessage(
+            tenant_id=assignment.tenant_id,
+            thread_id=thread.id,
+            author_id=user_id,
+            body=body,
+        )
+        self.db.add(message)
+        await self.db.commit()
+        await self.db.refresh(thread)
+        return thread
+
+    async def _get_thread(self, *, tenant_id: int, thread_id: int) -> DocumentDiscussionThread:
+        result = await self.db.execute(
+            select(DocumentDiscussionThread).where(
+                DocumentDiscussionThread.id == thread_id,
+                DocumentDiscussionThread.tenant_id == tenant_id,
+            )
+        )
+        thread = result.scalar_one_or_none()
+        if thread is None:
+            raise NotFoundError("Discussion thread not found")
+        return thread
+
+    async def resolve_question(self, *, tenant_id: int, thread_id: int, resolver_id: int) -> DocumentDiscussionThread:
+        thread = await self._get_thread(tenant_id=tenant_id, thread_id=thread_id)
+        thread.status = DiscussionThreadStatus.RESOLVED
+        await self.db.commit()
+        await self.db.refresh(thread)
+        return thread
+
+    async def reply_question(
+        self,
+        *,
+        tenant_id: int,
+        thread_id: int,
+        author_id: int,
+        body: str,
+    ) -> DocumentDiscussionMessage:
+        thread = await self._get_thread(tenant_id=tenant_id, thread_id=thread_id)
+        message = DocumentDiscussionMessage(
+            tenant_id=tenant_id,
+            thread_id=thread.id,
+            author_id=author_id,
+            body=body,
+        )
+        self.db.add(message)
+        await self.db.commit()
+        await self.db.refresh(message)
+        return message

@@ -7,26 +7,36 @@ and the per-engineer assignment APIs (open, quiz, complete) used by "My Reading"
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, status
+from fastapi.responses import JSONResponse
 
 from src.api.deps import CurrentUser, DbSession, require_permission
 from src.api.schemas.document_campaign import (
+    AskAssignmentQuestionRequest,
     AssignmentOpenedResponse,
     AssignmentQuizResponse,
     AssignmentResponse,
-    CampaignCreateRequest,
     CampaignCreateRequestFE,
     CampaignListResponse,
     CampaignResponse,
     CompleteAssignmentRequest,
     CompleteAssignmentResponse,
+    ComplianceSummaryItem,
+    ComplianceSummaryResponse,
     GroupCreateRequest,
     GroupListResponse,
     GroupMembersRequest,
     GroupResponse,
     LaunchCampaignResponse,
     MyAssignmentsResponse,
+    QuestionInboxItem,
+    QuestionInboxResponse,
+    QuestionMessageResponse,
+    QuestionReplyRequest,
+    QuestionThreadResponse,
     QuizSubmitRequest,
     QuizSubmitResponse,
+    ReminderDefaultsResponse,
+    ReminderDefaultsUpdateRequest,
 )
 from src.api.utils.tenant import require_tenant_id
 from src.domain.models.document_campaign import DocumentCampaign, EngineerGroup
@@ -140,6 +150,164 @@ async def remove_group_member(
     service = DocumentCampaignService(db)
     await service.remove_group_member(
         tenant_id=require_tenant_id(current_user.tenant_id), group_id=group_id, user_id=user_id
+    )
+
+
+# =============================================================================
+# Reminder defaults, compliance, evidence, question inbox (HSEC)
+# =============================================================================
+
+
+@router.get("/reminder-defaults", response_model=ReminderDefaultsResponse)
+async def get_reminder_defaults(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """Get tenant default reminder offsets (hours after launch) for new campaigns."""
+    service = DocumentCampaignService(db)
+    hours = await service.get_reminder_defaults(tenant_id=require_tenant_id(current_user.tenant_id))
+    return ReminderDefaultsResponse(reminder_hours=hours)
+
+
+@router.put("/reminder-defaults", response_model=ReminderDefaultsResponse)
+async def set_reminder_defaults(
+    body: ReminderDefaultsUpdateRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """Set tenant default reminder offsets for new campaigns."""
+    service = DocumentCampaignService(db)
+    tenant_id = require_tenant_id(current_user.tenant_id)
+    hours = await service.set_reminder_defaults(
+        tenant_id=tenant_id,
+        hours=body.reminder_hours,
+        user_id=current_user.id,
+    )
+    return ReminderDefaultsResponse(reminder_hours=hours)
+
+
+@router.get("/compliance", response_model=ComplianceSummaryResponse)
+async def list_compliance_summary(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """List all campaigns with compliance summary metrics."""
+    service = DocumentCampaignService(db)
+    rows = await service.list_compliance_summary(tenant_id=require_tenant_id(current_user.tenant_id))
+    items = [ComplianceSummaryItem(**row) for row in rows]
+    return ComplianceSummaryResponse(items=items, total=len(items))
+
+
+@router.get("/campaigns/{campaign_id}/evidence-pack")
+async def download_evidence_pack(
+    campaign_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """Export campaign completion evidence as JSON attachment."""
+    service = DocumentCampaignService(db)
+    pack = await service.build_evidence_pack(
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        campaign_id=campaign_id,
+    )
+    filename = f"campaign-{campaign_id}-evidence.json"
+    return JSONResponse(
+        content=pack,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/question-inbox", response_model=QuestionInboxResponse)
+async def list_question_inbox(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """List open assignee questions on documents with active or past campaigns."""
+    service = DocumentCampaignService(db)
+    rows = await service.list_question_inbox(tenant_id=require_tenant_id(current_user.tenant_id))
+    items = [QuestionInboxItem(**row) for row in rows]
+    return QuestionInboxResponse(items=items, total=len(items))
+
+
+@router.post(
+    "/assignments/{assignment_id}/questions",
+    response_model=QuestionThreadResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def ask_assignment_question(
+    assignment_id: int,
+    body: AskAssignmentQuestionRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Assignee asks a question on the campaign document (creates discussion thread)."""
+    service = DocumentCampaignService(db)
+    thread = await service.ask_assignment_question(
+        user_id=current_user.id,
+        assignment_id=assignment_id,
+        title=body.title,
+        body=body.body,
+    )
+    status_value = thread.status.value if hasattr(thread.status, "value") else str(thread.status)
+    return QuestionThreadResponse(
+        id=thread.id,
+        document_id=thread.document_id,
+        title=thread.title,
+        status=status_value,
+        created_by_id=thread.created_by_id,
+        created_at=thread.created_at,
+    )
+
+
+@router.post(
+    "/questions/{thread_id}/reply",
+    response_model=QuestionMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def reply_question(
+    thread_id: int,
+    body: QuestionReplyRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """HSEC/admin reply to an assignee question thread."""
+    service = DocumentCampaignService(db)
+    message = await service.reply_question(
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        thread_id=thread_id,
+        author_id=current_user.id,
+        body=body.body,
+    )
+    return QuestionMessageResponse(
+        id=message.id,
+        thread_id=message.thread_id,
+        author_id=message.author_id,
+        body=message.body,
+        created_at=message.created_at,
+    )
+
+
+@router.post("/questions/{thread_id}/resolve", response_model=QuestionThreadResponse)
+async def resolve_question(
+    thread_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """Mark an assignee question thread as resolved."""
+    service = DocumentCampaignService(db)
+    thread = await service.resolve_question(
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        thread_id=thread_id,
+        resolver_id=current_user.id,
+    )
+    status_value = thread.status.value if hasattr(thread.status, "value") else str(thread.status)
+    return QuestionThreadResponse(
+        id=thread.id,
+        document_id=thread.document_id,
+        title=thread.title,
+        status=status_value,
+        created_by_id=thread.created_by_id,
+        created_at=thread.created_at,
     )
 
 

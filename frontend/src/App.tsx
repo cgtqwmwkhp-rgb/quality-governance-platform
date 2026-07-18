@@ -103,6 +103,8 @@ const SystemSettings = lazy(() => import('./pages/admin/SystemSettings'))
 const AdminUserManagement = lazy(() => import('./pages/admin/UserManagement'))
 const LookupTables = lazy(() => import('./pages/admin/LookupTables'))
 const NotificationSettings = lazy(() => import('./pages/admin/NotificationSettings'))
+const CampaignCompliance = lazy(() => import('./pages/admin/CampaignCompliance'))
+const HsecQuestionInbox = lazy(() => import('./pages/admin/HsecQuestionInbox'))
 const PartnerWebhooks = lazy(() => import('./pages/admin/PartnerWebhooks'))
 const RequireRole = lazy(() => import('./components/RequireRole'))
 
@@ -531,6 +533,22 @@ function App() {
                   element={
                     <RequireRole allowed={['admin']}>
                       <NotificationSettings />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/campaign-compliance"
+                  element={
+                    <RequireRole allowed={['admin', 'manager']}>
+                      <CampaignCompliance />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/hsec-inbox"
+                  element={
+                    <RequireRole allowed={['admin', 'manager']}>
+                      <HsecQuestionInbox />
                     </RequireRole>
                   }
                 />

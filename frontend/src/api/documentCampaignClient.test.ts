@@ -5,6 +5,7 @@ function mockApi() {
   return {
     get: vi.fn(),
     post: vi.fn(),
+    put: vi.fn(),
   }
 }
 
@@ -46,5 +47,66 @@ describe('createDocumentCampaignApi', () => {
 
     client.launchCampaign(9)
     expect(api.post).toHaveBeenCalledWith('/api/v1/document-campaigns/campaigns/9/launch')
+  })
+
+  it('loads and saves reminder defaults', () => {
+    const api = mockApi()
+    const client = createDocumentCampaignApi(api as never)
+    client.getReminderDefaults()
+    expect(api.get).toHaveBeenCalledWith('/api/v1/document-campaigns/reminder-defaults')
+
+    client.setReminderDefaults([24, 168])
+    expect(api.put).toHaveBeenCalledWith('/api/v1/document-campaigns/reminder-defaults', {
+      reminder_hours: [24, 168],
+    })
+  })
+
+  it('lists compliance and question inbox', () => {
+    const api = mockApi()
+    const client = createDocumentCampaignApi(api as never)
+    client.listCompliance()
+    expect(api.get).toHaveBeenCalledWith('/api/v1/document-campaigns/compliance')
+
+    client.listQuestionInbox()
+    expect(api.get).toHaveBeenCalledWith('/api/v1/document-campaigns/question-inbox')
+  })
+
+  it('handles evidence export and question actions', async () => {
+    const api = mockApi()
+    api.get.mockResolvedValue({ data: { campaign_id: 3 } })
+    const appendChild = vi.spyOn(document.body, 'appendChild').mockImplementation(() => document.body)
+    const removeChild = vi.spyOn(document.body, 'removeChild').mockImplementation(() => document.body)
+    const click = vi.fn()
+    vi.spyOn(document, 'createElement').mockImplementation(
+      () => ({ click, href: '', download: '', rel: '' }) as unknown as HTMLAnchorElement,
+    )
+    const createObjectURL = vi.fn(() => 'blob:mock')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
+
+    const client = createDocumentCampaignApi(api as never)
+    await client.downloadEvidencePack(3)
+    expect(api.get).toHaveBeenCalledWith('/api/v1/document-campaigns/campaigns/3/evidence-pack', {
+      responseType: 'json',
+    })
+    expect(click).toHaveBeenCalled()
+
+    client.askAssignmentQuestion(5, { title: 'Clarification', body: 'What does section 2 mean?' })
+    expect(api.post).toHaveBeenCalledWith('/api/v1/document-campaigns/assignments/5/questions', {
+      title: 'Clarification',
+      body: 'What does section 2 mean?',
+    })
+
+    client.replyQuestion(7, { body: 'See page 4.' })
+    expect(api.post).toHaveBeenCalledWith('/api/v1/document-campaigns/questions/7/reply', {
+      body: 'See page 4.',
+    })
+
+    client.resolveQuestion(7)
+    expect(api.post).toHaveBeenCalledWith('/api/v1/document-campaigns/questions/7/resolve')
+
+    appendChild.mockRestore()
+    removeChild.mockRestore()
+    vi.unstubAllGlobals()
   })
 })

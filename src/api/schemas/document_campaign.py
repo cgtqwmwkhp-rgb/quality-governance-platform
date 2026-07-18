@@ -251,3 +251,80 @@ class CompleteAssignmentResponse(BaseModel):
     id: int
     status: str
     completed_at: Optional[datetime] = None
+
+
+# =============================================================================
+# Reminder defaults, compliance, evidence, question inbox
+# =============================================================================
+
+
+class ReminderDefaultsResponse(BaseModel):
+    reminder_hours: List[int]
+
+
+class ReminderDefaultsUpdateRequest(BaseModel):
+    reminder_hours: List[int] = Field(..., min_length=1)
+
+
+class ComplianceSummaryItem(BaseModel):
+    campaign_id: int
+    document_id: int
+    document_title: str
+    title: Optional[str] = None
+    status: str
+    assigned: int
+    completed: int
+    pending: int
+    overdue: int
+    completion_rate: float
+    quiz_pass_count: int
+    reminder_offsets_hours: List[int] = Field(default_factory=list)
+    launched_at: Optional[datetime] = None
+    due_within_days: int
+
+
+class ComplianceSummaryResponse(BaseModel):
+    items: List[ComplianceSummaryItem]
+    total: int
+
+
+class QuestionInboxItem(BaseModel):
+    document_id: int
+    document_title: str
+    thread_id: int
+    thread_title: Optional[str] = None
+    status: str
+    created_at: datetime
+    created_by_id: int
+    latest_message_preview: Optional[str] = None
+
+
+class QuestionInboxResponse(BaseModel):
+    items: List[QuestionInboxItem]
+    total: int
+
+
+class AskAssignmentQuestionRequest(BaseModel):
+    title: Optional[str] = None
+    body: str = Field(..., min_length=1)
+
+
+class QuestionThreadResponse(BaseModel):
+    id: int
+    document_id: int
+    title: Optional[str] = None
+    status: str
+    created_by_id: int
+    created_at: datetime
+
+
+class QuestionReplyRequest(BaseModel):
+    body: str = Field(..., min_length=1)
+
+
+class QuestionMessageResponse(BaseModel):
+    id: int
+    thread_id: int
+    author_id: int
+    body: str
+    created_at: datetime
