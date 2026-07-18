@@ -75,7 +75,7 @@ async def test_list_risks_includes_trend_and_updated_at():
     )
     user = SimpleNamespace(tenant_id=1)
 
-    result = await list_risks(current_user=user, db=db, skip=0, limit=50)
+    result = await list_risks(current_user=user, db=db, search=None, skip=0, limit=50)
 
     assert result["total"] == 1
     item = result["items"][0]
@@ -97,7 +97,7 @@ async def test_list_risks_trend_null_when_not_persisted():
     )
     user = SimpleNamespace(tenant_id=1)
 
-    result = await list_risks(current_user=user, db=db, skip=0, limit=50)
+    result = await list_risks(current_user=user, db=db, search=None, skip=0, limit=50)
     item = result["items"][0]
     assert item["trend"] is None
     assert item["updated_at"] is None

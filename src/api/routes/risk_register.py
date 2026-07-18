@@ -217,6 +217,7 @@ async def list_risks(
     category: Optional[str] = Query(None),
     department: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    search: Optional[str] = Query(None, description="Match reference, title, or owner (ilike)"),
     min_score: Optional[int] = Query(None, ge=1, le=25),
     outside_appetite: Optional[bool] = Query(None),
     residual_likelihood: Optional[int] = Query(None, ge=1, le=5),
@@ -246,6 +247,16 @@ async def list_risks(
         base_stmt = base_stmt.where(EnterpriseRisk.department == department)
     if status:
         base_stmt = base_stmt.where(EnterpriseRisk.status == status)
+    search_q = search if isinstance(search, str) else None
+    if search_q and search_q.strip():
+        needle = f"%{search_q.strip()}%"
+        base_stmt = base_stmt.where(
+            or_(
+                EnterpriseRisk.reference.ilike(needle),
+                EnterpriseRisk.title.ilike(needle),
+                EnterpriseRisk.risk_owner_name.ilike(needle),
+            )
+        )
     if min_score:
         base_stmt = base_stmt.where(EnterpriseRisk.residual_score >= min_score)
     if outside_appetite:

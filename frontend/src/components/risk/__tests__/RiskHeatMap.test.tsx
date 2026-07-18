@@ -126,6 +126,25 @@ describe('RiskHeatMap', () => {
     )
   })
 
+  it('allows selecting empty cells and exposes verify hooks', () => {
+    const onCellSelect = vi.fn()
+    renderHeatMap({
+      onCellSelect,
+      selectedCell: { likelihood: 5, impact: 5 },
+    })
+    const emptyCell = screen.getByTestId('risk-heatmap-cell-5-5')
+    expect(emptyCell).toHaveAttribute('data-empty', 'true')
+    expect(emptyCell).toHaveAttribute('data-risk-count', '0')
+    expect(emptyCell.getAttribute('role')).toBeNull()
+    expect(emptyCell.tagName).toBe('BUTTON')
+    fireEvent.click(emptyCell)
+    expect(onCellSelect).toHaveBeenCalledWith(expect.objectContaining({ risk_count: 0 }))
+    expect(screen.getByTestId('risk-heatmap-detail-empty-cell')).toBeInTheDocument()
+    expect(screen.getByTestId('risk-heatmap-detail-header')).toHaveTextContent(
+      'Almost Certain × Catastrophic',
+    )
+  })
+
   it('shows compact scrollable detail rail when a cell is selected', () => {
     const onOpenRisk = vi.fn()
     renderHeatMap({

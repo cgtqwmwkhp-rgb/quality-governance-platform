@@ -342,6 +342,16 @@ export interface RiskRegisterImportPreviewRow {
   status: string
 }
 
+export interface RiskRegisterImportActionPlanPreviewRow {
+  row: number
+  action: 'create' | 'update'
+  action_id: string
+  risk_reference: string
+  title: string
+  status: string
+  match_key?: string | null
+}
+
 export interface RiskRegisterImportReport {
   dry_run: boolean
   total_rows: number
@@ -352,7 +362,14 @@ export interface RiskRegisterImportReport {
   ok: boolean
   errors: RiskRegisterImportRowError[]
   preview: RiskRegisterImportPreviewRow[]
+  /** True only when Action Plan sheet is absent from the workbook. */
   action_plan_skipped?: boolean
+  action_plan_total_rows?: number
+  action_plan_creates?: number
+  action_plan_updates?: number
+  action_plan_error_rows?: number
+  action_plan_errors?: RiskRegisterImportRowError[]
+  action_plan_preview?: RiskRegisterImportActionPlanPreviewRow[]
 }
 
 export interface RiskRegisterImportCommitResult {
@@ -360,6 +377,9 @@ export interface RiskRegisterImportCommitResult {
   updated_count: number
   created_risk_ids: number[]
   updated_risk_ids: number[]
+  capa_created_count?: number
+  capa_updated_count?: number
+  capa_created_ids?: number[]
   report: RiskRegisterImportReport
 }
 
