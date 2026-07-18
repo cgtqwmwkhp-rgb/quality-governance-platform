@@ -18,6 +18,8 @@ import {
   Clock,
   Webhook,
   Loader2,
+  Megaphone,
+  MessageSquare,
 } from 'lucide-react'
 import { auditTrailApi, contractsApi } from '../../api/client'
 import { formConfigApi } from '../../api/formConfigClient'
@@ -84,6 +86,20 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: <Bell className="w-6 h-6" />,
     href: '/admin/notifications',
     color: 'bg-pink-100 text-pink-600',
+  },
+  {
+    title: 'Campaign Compliance',
+    description: 'Document campaign completion and reminders',
+    icon: <Megaphone className="w-6 h-6" />,
+    href: '/admin/campaign-compliance',
+    color: 'bg-amber-100 text-amber-700',
+  },
+  {
+    title: 'HSEC Inbox',
+    description: 'Answer engineer questions on assigned reads',
+    icon: <MessageSquare className="w-6 h-6" />,
+    href: '/admin/hsec-inbox',
+    color: 'bg-indigo-100 text-indigo-600',
   },
   {
     title: 'Partner Webhooks',

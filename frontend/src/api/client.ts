@@ -2715,9 +2715,12 @@ export const documentControlApi = createDocumentControlApi(api)
 export type {
   CampaignAudienceType,
   CampaignGroup,
+  CampaignComplianceRow,
   CreateCampaignPayload,
   DocumentCampaign,
   LaunchCampaignResponse,
+  QuestionInboxThread,
+  ReminderDefaults,
 } from './documentCampaignClient'
 
 // ============ Policy Acknowledgments API ============
