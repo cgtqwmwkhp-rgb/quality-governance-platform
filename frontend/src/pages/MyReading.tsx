@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { BookOpen, CheckCircle2, ExternalLink, Loader2, Search } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { BookOpen, CheckCircle2, ChevronDown, ExternalLink, Loader2, Search } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import {
+  documentCampaignApi,
   getApiErrorMessage,
   policyAcknowledgmentsApi,
+  type DocumentCampaignAssignment,
+  type DocumentCampaignQuiz,
+  type DocumentCampaignQuizAnswer,
+  type DocumentCampaignQuizResult,
   type PolicyAcknowledgment,
 } from '../api/client'
 import { toast } from '../contexts/ToastContext'
@@ -12,6 +18,7 @@ import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Input } from '../components/ui/Input'
+import { Textarea } from '../components/ui/Textarea'
 import {
   Select,
   SelectContent,
@@ -26,31 +33,73 @@ const reportFailure = (err: unknown): string => {
   return message
 }
 
+type ReadingItem =
+  | { source: 'policy'; item: PolicyAcknowledgment }
+  | { source: 'campaign'; item: DocumentCampaignAssignment }
+
+const isQuizRequired = (assignment: DocumentCampaignAssignment) =>
+  assignment.quiz_required ?? assignment.requires_quiz ?? false
+
+const quizQuestionLabel = (question: DocumentCampaignQuiz['questions'][number], index: number) =>
+  question.question_text ?? question.question ?? `Question ${index + 1}`
+
+const isOpenQuestion = (question: DocumentCampaignQuiz['questions'][number]) =>
+  ['open_text', 'text'].includes(question.question_type ?? question.type ?? '')
+
 export default function MyReading() {
-  const [items, setItems] = useState<PolicyAcknowledgment[]>([])
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const [policyItems, setPolicyItems] = useState<PolicyAcknowledgment[]>([])
+  const [campaignItems, setCampaignItems] = useState<DocumentCampaignAssignment[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [acknowledgingId, setAcknowledgingId] = useState<number | null>(null)
+  const [openingCampaignId, setOpeningCampaignId] = useState<number | null>(null)
+  const [expandedCampaignId, setExpandedCampaignId] = useState<number | null>(null)
+  const [quizLoadingId, setQuizLoadingId] = useState<number | null>(null)
+  const [quizzes, setQuizzes] = useState<Record<number, DocumentCampaignQuiz>>({})
+  const [quizAnswers, setQuizAnswers] = useState<Record<number, Record<number, string>>>({})
+  const [quizResults, setQuizResults] = useState<Record<number, DocumentCampaignQuizResult>>({})
+  const [submittingQuizId, setSubmittingQuizId] = useState<number | null>(null)
+  const [acceptanceStatements, setAcceptanceStatements] = useState<Record<number, string>>({})
+  const [signatures, setSignatures] = useState<Record<number, string>>({})
+  const [completingCampaignId, setCompletingCampaignId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
-  const loadPending = useCallback(async () => {
+  const loadAssignments = useCallback(async () => {
     setLoading(true)
     setError(null)
-    try {
-      const response = await policyAcknowledgmentsApi.listMyPending()
-      setItems(response.data.items ?? [])
-    } catch (err) {
-      setError(reportFailure(err))
-      setItems([])
-    } finally {
-      setLoading(false)
+    const [policies, campaigns] = await Promise.allSettled([
+      policyAcknowledgmentsApi.listMyPending(),
+      documentCampaignApi.listMyAssignments(),
+    ])
+
+    if (policies.status === 'fulfilled') {
+      setPolicyItems(policies.value.data.items ?? [])
+    } else {
+      setPolicyItems([])
     }
+    if (campaigns.status === 'fulfilled') {
+      setCampaignItems(campaigns.value.data.items ?? [])
+    } else {
+      setCampaignItems([])
+    }
+    if (policies.status === 'rejected' || campaigns.status === 'rejected') {
+      const failedRequest =
+        policies.status === 'rejected'
+          ? policies.reason
+          : campaigns.status === 'rejected'
+            ? campaigns.reason
+            : null
+      setError(reportFailure(failedRequest))
+    }
+    setLoading(false)
   }, [])
 
   useEffect(() => {
-    void loadPending()
-  }, [loadPending])
+    void loadAssignments()
+  }, [loadAssignments])
 
   const handleOpen = async (item: PolicyAcknowledgment) => {
     try {
@@ -68,7 +117,7 @@ export default function MyReading() {
         acceptance_statement: 'I have read and understood this document.',
       })
       toast.success('Acknowledgment recorded')
-      setItems((prev) => prev.filter((i) => i.id !== item.id))
+      setPolicyItems((prev) => prev.filter((i) => i.id !== item.id))
     } catch (err) {
       reportFailure(err)
     } finally {
@@ -76,16 +125,136 @@ export default function MyReading() {
     }
   }
 
+  const handleOpenCampaign = async (item: DocumentCampaignAssignment) => {
+    setOpeningCampaignId(item.id)
+    try {
+      await documentCampaignApi.openAssignment(item.id)
+      setCampaignItems((prev) =>
+        prev.map((assignment) =>
+          assignment.id === item.id ? { ...assignment, status: 'opened' } : assignment,
+        ),
+      )
+      navigate(`/documents/${item.document_id}`)
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setOpeningCampaignId(null)
+    }
+  }
+
+  const handleToggleCampaignComplete = async (item: DocumentCampaignAssignment) => {
+    if (expandedCampaignId === item.id) {
+      setExpandedCampaignId(null)
+      return
+    }
+    setExpandedCampaignId(item.id)
+    setAcceptanceStatements((prev) => ({
+      ...prev,
+      [item.id]:
+        prev[item.id] ?? t('my_reading.acceptance_default'),
+    }))
+    if (!isQuizRequired(item) || quizzes[item.id]) return
+
+    setQuizLoadingId(item.id)
+    try {
+      const response = await documentCampaignApi.getAssignmentQuiz(item.id)
+      setQuizzes((prev) => ({ ...prev, [item.id]: response.data }))
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setQuizLoadingId(null)
+    }
+  }
+
+  const handleSubmitQuiz = async (item: DocumentCampaignAssignment) => {
+    const quiz = quizzes[item.id]
+    if (!quiz) return
+    const values = quizAnswers[item.id] ?? {}
+    const unanswered = quiz.questions.some((question, index) => !values[question.question_index ?? index]?.trim())
+    if (unanswered) {
+      toast.error(t('my_reading.complete_all_quiz_questions'))
+      return
+    }
+    const answers: DocumentCampaignQuizAnswer[] = quiz.questions.map((question, index) => {
+      const questionIndex = question.question_index ?? index
+      const answer = values[questionIndex]
+      return isOpenQuestion(question)
+        ? { question_index: questionIndex, text_answer: answer }
+        : { question_index: questionIndex, selected_option: answer }
+    })
+
+    setSubmittingQuizId(item.id)
+    try {
+      const response = await documentCampaignApi.submitQuiz(item.id, answers)
+      setQuizResults((prev) => ({ ...prev, [item.id]: response.data }))
+      toast.success(
+        (response.data.passed ?? response.data.quiz_passed)
+          ? t('my_reading.quiz_passed')
+          : t('my_reading.quiz_submitted'),
+      )
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setSubmittingQuizId(null)
+    }
+  }
+
+  const handleCompleteCampaign = async (item: DocumentCampaignAssignment) => {
+    const quizResult = quizResults[item.id]
+    if (isQuizRequired(item) && !(quizResult?.passed ?? quizResult?.quiz_passed ?? item.quiz_passed)) {
+      toast.error(t('my_reading.pass_quiz_before_completing'))
+      return
+    }
+    const acceptanceStatement = acceptanceStatements[item.id]?.trim()
+    if (!acceptanceStatement) {
+      toast.error(t('my_reading.acceptance_required'))
+      return
+    }
+    setCompletingCampaignId(item.id)
+    try {
+      const response = await documentCampaignApi.completeAssignment(item.id, {
+        acceptance_statement: acceptanceStatement,
+        ...(signatures[item.id]?.trim() ? { signature_data: signatures[item.id].trim() } : {}),
+      })
+      setCampaignItems((prev) =>
+        prev.map((assignment) =>
+          assignment.id === item.id
+            ? { ...assignment, ...response.data, status: response.data.status || 'completed' }
+            : assignment,
+        ),
+      )
+      setExpandedCampaignId(null)
+      toast.success(t('my_reading.completed_successfully'))
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setCompletingCampaignId(null)
+    }
+  }
+
+  const items = useMemo<ReadingItem[]>(
+    () => [
+      ...policyItems.map((item): ReadingItem => ({ source: 'policy', item })),
+      ...campaignItems.map((item): ReadingItem => ({ source: 'campaign', item })),
+    ],
+    [campaignItems, policyItems],
+  )
+
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return items.filter((item) => {
+    return items.filter(({ item, source }) => {
       if (statusFilter !== 'all' && item.status !== statusFilter) return false
       if (!q) return true
-      return (
-        String(item.policy_id).includes(q) ||
-        (item.policy_version ?? '').toLowerCase().includes(q) ||
-        (item.status ?? '').toLowerCase().includes(q)
-      )
+      if (source === 'policy') {
+        return (
+          String(item.policy_id).includes(q) ||
+          (item.policy_version ?? '').toLowerCase().includes(q) ||
+          (item.status ?? '').toLowerCase().includes(q)
+        )
+      }
+      return [item.document_id, item.document_title, item.campaign_title, item.status]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q))
     })
   }, [items, search, statusFilter])
 
@@ -102,7 +271,7 @@ export default function MyReading() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">My Reading</h1>
         <p className="text-muted-foreground mt-1">
-          Pending document reads and acknowledgments assigned to you
+          {t('my_reading.subtitle')}
         </p>
       </div>
 
@@ -111,8 +280,8 @@ export default function MyReading() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search pending reads"
-            aria-label="Search pending reads"
+            placeholder={t('my_reading.search_placeholder')}
+            aria-label={t('my_reading.search_placeholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10"
@@ -122,20 +291,21 @@ export default function MyReading() {
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger
             className="w-full sm:w-48"
-            aria-label="Filter by status"
+            aria-label={t('my_reading.filter_by_status')}
             data-testid="my-reading-status-filter"
           >
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder={t('my_reading.status')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="opened">Opened</SelectItem>
-            <SelectItem value="overdue">Overdue</SelectItem>
+            <SelectItem value="all">{t('my_reading.all_statuses')}</SelectItem>
+            <SelectItem value="pending">{t('my_reading.pending')}</SelectItem>
+            <SelectItem value="opened">{t('my_reading.opened')}</SelectItem>
+            <SelectItem value="completed">{t('my_reading.completed')}</SelectItem>
+            <SelectItem value="overdue">{t('my_reading.overdue')}</SelectItem>
           </SelectContent>
         </Select>
         <Button type="button" variant="outline" data-testid="my-reading-filter-apply">
-          Filter
+          {t('my_reading.filter')}
         </Button>
       </div>
 
@@ -148,56 +318,206 @@ export default function MyReading() {
       {filteredItems.length === 0 ? (
         <EmptyState
           icon={<BookOpen className="w-8 h-8 text-muted-foreground" />}
-          title={items.length === 0 ? 'All caught up' : 'No matching reads'}
+          title={items.length === 0 ? t('my_reading.all_caught_up') : t('my_reading.no_matching_reads')}
           description={
             items.length === 0
-              ? 'You have no pending reads at the moment.'
-              : 'Clear or change the filters to see pending acknowledgments.'
+              ? t('my_reading.empty_description')
+              : t('my_reading.no_matching_description')
           }
         />
       ) : (
         <div className="space-y-3">
-          {filteredItems.map((item) => (
-            <Card key={item.id} className="p-4">
+          {filteredItems.map(({ source, item }) => (
+            <Card key={`${source}-${item.id}`} className="p-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <Badge variant="submitted">{item.status}</Badge>
-                    {item.policy_version && (
+                    <Badge variant="outline">
+                      {source === 'policy' ? t('my_reading.source_policy') : t('my_reading.source_campaign')}
+                    </Badge>
+                    {source === 'policy' && item.policy_version && (
                       <span className="text-xs text-muted-foreground">v{item.policy_version}</span>
                     )}
+                    {source === 'campaign' && item.document_version && (
+                      <span className="text-xs text-muted-foreground">v{item.document_version}</span>
+                    )}
                   </div>
-                  <p className="font-medium text-foreground">Policy #{item.policy_id}</p>
+                  <p className="font-medium text-foreground">
+                    {source === 'policy'
+                      ? `Policy #${item.policy_id}`
+                      : item.document_title ?? `${t('my_reading.document')} #${item.document_id}`}
+                  </p>
+                  {source === 'campaign' && item.campaign_title && (
+                    <p className="text-sm text-muted-foreground">{item.campaign_title}</p>
+                  )}
                   <p className="text-sm text-muted-foreground">
-                    Due {new Date(item.due_date).toLocaleDateString()}
+                    {t('my_reading.due')} {item.due_date ? new Date(item.due_date).toLocaleDateString() : t('my_reading.not_set')}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={() => void handleOpen(item)}>
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Open / Read
-                  </Button>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={`/documents/${item.policy_id}?tab=qa`}>
-                      Q&A
-                    </Link>
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => void handleAcknowledge(item)}
-                    disabled={acknowledgingId === item.id}
-                    data-testid={`my-reading-acknowledge-${item.id}`}
-                    aria-label={`Acknowledge policy ${item.policy_id}`}
-                  >
-                    {acknowledgingId === item.id ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4 mr-2" />
-                    )}
-                    Acknowledge
-                  </Button>
+                  {source === 'policy' ? (
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => void handleOpen(item)}>
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        {t('my_reading.open_read')}
+                      </Button>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/documents/${item.policy_id}?tab=qa`}>Q&A</Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => void handleAcknowledge(item)}
+                        disabled={acknowledgingId === item.id}
+                        data-testid={`my-reading-acknowledge-${item.id}`}
+                        aria-label={`Acknowledge policy ${item.policy_id}`}
+                      >
+                        {acknowledgingId === item.id ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4 mr-2" />
+                        )}
+                        {t('my_reading.acknowledge')}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void handleOpenCampaign(item)}
+                        disabled={openingCampaignId === item.id}
+                      >
+                        {openingCampaignId === item.id ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                        )}
+                        {t('my_reading.open_read')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => void handleToggleCampaignComplete(item)}
+                        disabled={item.status === 'completed'}
+                        aria-expanded={expandedCampaignId === item.id}
+                      >
+                        <ChevronDown className="w-4 h-4 mr-2" />
+                        {item.status === 'completed' ? t('my_reading.completed') : t('my_reading.complete')}
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
+              {source === 'campaign' && expandedCampaignId === item.id && (
+                <div className="mt-5 border-t pt-5 space-y-5" data-testid={`campaign-complete-${item.id}`}>
+                  {isQuizRequired(item) && (
+                    <section className="space-y-3">
+                      <div>
+                        <h2 className="font-medium">{t('my_reading.quiz')}</h2>
+                        {quizzes[item.id]?.pass_mark != null && (
+                          <p className="text-sm text-muted-foreground">
+                            {t('my_reading.pass_mark', { score: quizzes[item.id].pass_mark })}
+                          </p>
+                        )}
+                      </div>
+                      {quizLoadingId === item.id ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                      ) : (
+                        quizzes[item.id]?.questions.map((question, index) => {
+                          const questionIndex = question.question_index ?? index
+                          const answer = quizAnswers[item.id]?.[questionIndex] ?? ''
+                          return (
+                            <fieldset key={questionIndex} className="space-y-2">
+                              <legend className="text-sm font-medium">{quizQuestionLabel(question, index)}</legend>
+                              {isOpenQuestion(question) ? (
+                                <Textarea
+                                  value={answer}
+                                  onChange={(event) =>
+                                    setQuizAnswers((prev) => ({
+                                      ...prev,
+                                      [item.id]: { ...prev[item.id], [questionIndex]: event.target.value },
+                                    }))
+                                  }
+                                  aria-label={quizQuestionLabel(question, index)}
+                                />
+                              ) : (
+                                <div className="space-y-2">
+                                  {(question.options ?? []).map((option) => (
+                                    <label key={option} className="flex items-center gap-2 text-sm">
+                                      <input
+                                        type="radio"
+                                        name={`quiz-${item.id}-${questionIndex}`}
+                                        value={option}
+                                        checked={answer === option}
+                                        onChange={(event) =>
+                                          setQuizAnswers((prev) => ({
+                                            ...prev,
+                                            [item.id]: { ...prev[item.id], [questionIndex]: event.target.value },
+                                          }))
+                                        }
+                                      />
+                                      {option}
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
+                            </fieldset>
+                          )
+                        })
+                      )}
+                      {quizResults[item.id] && (
+                        <p className="text-sm font-medium" role="status">
+                          {t('my_reading.quiz_score', {
+                            score: quizResults[item.id].score ?? quizResults[item.id].quiz_score ?? 0,
+                          })}{' '}
+                          — {(quizResults[item.id].passed ?? quizResults[item.id].quiz_passed)
+                            ? t('my_reading.passed')
+                            : t('my_reading.not_passed')}
+                        </p>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void handleSubmitQuiz(item)}
+                        disabled={quizLoadingId === item.id || submittingQuizId === item.id}
+                      >
+                        {submittingQuizId === item.id && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                        {t('my_reading.submit_quiz')}
+                      </Button>
+                    </section>
+                  )}
+                  <section className="space-y-3">
+                    <label className="block text-sm font-medium" htmlFor={`acceptance-${item.id}`}>
+                      {t('my_reading.acceptance_statement')}
+                    </label>
+                    <Textarea
+                      id={`acceptance-${item.id}`}
+                      value={acceptanceStatements[item.id] ?? ''}
+                      onChange={(event) =>
+                        setAcceptanceStatements((prev) => ({ ...prev, [item.id]: event.target.value }))
+                      }
+                    />
+                    <label className="block text-sm font-medium" htmlFor={`signature-${item.id}`}>
+                      {t('my_reading.signature_optional')}
+                    </label>
+                    <Input
+                      id={`signature-${item.id}`}
+                      value={signatures[item.id] ?? ''}
+                      onChange={(event) => setSignatures((prev) => ({ ...prev, [item.id]: event.target.value }))}
+                      placeholder={t('my_reading.signature_placeholder')}
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => void handleCompleteCampaign(item)}
+                      disabled={completingCampaignId === item.id}
+                    >
+                      {completingCampaignId === item.id && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                      {t('my_reading.complete_assignment')}
+                    </Button>
+                  </section>
+                </div>
+              )}
             </Card>
           ))}
         </div>
