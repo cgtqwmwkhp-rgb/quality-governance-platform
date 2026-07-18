@@ -1072,6 +1072,58 @@ export default function UVDBAudits() {
         </div>
       </div>
 
+      {/* Always-visible list controls (also used on Audit history tab) */}
+      <div
+        className="mb-4 flex flex-col sm:flex-row gap-3"
+        data-testid="uvdb-global-filters"
+      >
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            type="search"
+            placeholder={t('uvdb.search_placeholder')}
+            aria-label={t('uvdb.search_placeholder')}
+            value={auditSearch}
+            onChange={(e) => setAuditSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                setActiveTab('audits')
+                void loadData()
+              }
+            }}
+            data-testid="uvdb-global-search"
+            className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-transparent"
+          />
+        </div>
+        <select
+          value={auditStatusFilter}
+          onChange={(e) => {
+            setAuditStatusFilter(e.target.value)
+            setActiveTab('audits')
+          }}
+          className="px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:ring-2 focus:ring-ring"
+          aria-label="Filter by status"
+          data-testid="uvdb-global-status-filter"
+        >
+          <option value="">All Statuses</option>
+          <option value="completed">Completed</option>
+          <option value="in_progress">In Progress</option>
+          <option value="scheduled">Scheduled</option>
+        </select>
+        <button
+          type="button"
+          className="flex items-center justify-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg transition-colors"
+          onClick={() => {
+            setActiveTab('audits')
+            void loadData()
+          }}
+          data-testid="uvdb-global-filter-apply"
+        >
+          <Filter className="w-4 h-4" />
+          {t('uvdb.filter')}
+        </button>
+      </div>
+
       {/* Tabs */}
       <div className="flex gap-2 mb-6 border-b border-border pb-2 overflow-x-auto">
         {[

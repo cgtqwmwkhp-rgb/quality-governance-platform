@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BookOpen, CheckCircle2, ExternalLink, Loader2 } from 'lucide-react'
+import { BookOpen, CheckCircle2, ExternalLink, Loader2, Search } from 'lucide-react'
 import {
   getApiErrorMessage,
   policyAcknowledgmentsApi,
@@ -11,6 +11,14 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { EmptyState } from '../components/ui/EmptyState'
+import { Input } from '../components/ui/Input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/Select'
 
 const reportFailure = (err: unknown): string => {
   const message = getApiErrorMessage(err)
@@ -23,6 +31,8 @@ export default function MyReading() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [acknowledgingId, setAcknowledgingId] = useState<number | null>(null)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
 
   const loadPending = useCallback(async () => {
     setLoading(true)
@@ -66,6 +76,19 @@ export default function MyReading() {
     }
   }
 
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return items.filter((item) => {
+      if (statusFilter !== 'all' && item.status !== statusFilter) return false
+      if (!q) return true
+      return (
+        String(item.policy_id).includes(q) ||
+        (item.policy_version ?? '').toLowerCase().includes(q) ||
+        (item.status ?? '').toLowerCase().includes(q)
+      )
+    })
+  }, [items, search, statusFilter])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -75,12 +98,45 @@ export default function MyReading() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in" data-testid="my-reading-page">
       <div>
         <h1 className="text-2xl font-bold text-foreground">My Reading</h1>
         <p className="text-muted-foreground mt-1">
           Pending document reads and acknowledgments assigned to you
         </p>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3" data-testid="my-reading-filters">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Search pending reads"
+            aria-label="Search pending reads"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+            data-testid="my-reading-search"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger
+            className="w-full sm:w-48"
+            aria-label="Filter by status"
+            data-testid="my-reading-status-filter"
+          >
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="opened">Opened</SelectItem>
+            <SelectItem value="overdue">Overdue</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button type="button" variant="outline" data-testid="my-reading-filter-apply">
+          Filter
+        </Button>
       </div>
 
       {error && (
@@ -89,15 +145,19 @@ export default function MyReading() {
         </div>
       )}
 
-      {items.length === 0 ? (
+      {filteredItems.length === 0 ? (
         <EmptyState
           icon={<BookOpen className="w-8 h-8 text-muted-foreground" />}
-          title="All caught up"
-          description="You have no pending reads at the moment."
+          title={items.length === 0 ? 'All caught up' : 'No matching reads'}
+          description={
+            items.length === 0
+              ? 'You have no pending reads at the moment.'
+              : 'Clear or change the filters to see pending acknowledgments.'
+          }
         />
       ) : (
         <div className="space-y-3">
-          {items.map((item) => (
+          {filteredItems.map((item) => (
             <Card key={item.id} className="p-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
@@ -115,7 +175,7 @@ export default function MyReading() {
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" onClick={() => void handleOpen(item)}>
                     <ExternalLink className="w-4 h-4 mr-2" />
-                    Open
+                    Open / Read
                   </Button>
                   <Button variant="outline" size="sm" asChild>
                     <Link to={`/documents/${item.policy_id}?tab=qa`}>
@@ -126,6 +186,8 @@ export default function MyReading() {
                     size="sm"
                     onClick={() => void handleAcknowledge(item)}
                     disabled={acknowledgingId === item.id}
+                    data-testid={`my-reading-acknowledge-${item.id}`}
+                    aria-label={`Acknowledge policy ${item.policy_id}`}
                   >
                     {acknowledgingId === item.id ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />

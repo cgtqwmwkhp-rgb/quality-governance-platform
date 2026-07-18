@@ -27,6 +27,8 @@ const LOOKUP_CATEGORIES = [
   { key: 'severity_levels', label: 'Severity Levels' },
   { key: 'departments', label: 'Departments' },
   { key: 'locations', label: 'Locations' },
+  { key: 'tools', label: 'Tools' },
+  { key: 'assets', label: 'Assets' },
   { key: WORKFORCE_ROLES_LOOKUP_CATEGORY, label: 'Workforce Roles' },
 ] as const
 
@@ -45,6 +47,7 @@ export default function LookupTables() {
       LOOKUP_CATEGORIES.map((c) => [c.key, { total: null, loading: true, error: false }]),
     ),
   )
+  const [hubFilter, setHubFilter] = useState<string>('all')
   const [editorCategory, setEditorCategory] = useState<(typeof LOOKUP_CATEGORIES)[number] | null>(
     null,
   )
@@ -54,6 +57,11 @@ export default function LookupTables() {
   const [newCode, setNewCode] = useState('')
   const [newLabel, setNewLabel] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const visibleCategories =
+    hubFilter === 'all'
+      ? LOOKUP_CATEGORIES
+      : LOOKUP_CATEGORIES.filter((c) => c.key === hubFilter)
 
   const refreshCounts = useCallback(async () => {
     await Promise.all(
@@ -142,8 +150,29 @@ export default function LookupTables() {
         </p>
       </div>
 
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+        <label htmlFor="lookup-hub-filter" className="text-sm font-medium text-muted-foreground">
+          {t('admin.lookups.category_filter', 'Category')}
+        </label>
+        <select
+          id="lookup-hub-filter"
+          value={hubFilter}
+          onChange={(e) => setHubFilter(e.target.value)}
+          aria-label={t('admin.lookups.category_filter', 'Category')}
+          data-testid="lookup-hub-category-filter"
+          className="w-full sm:w-64 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+        >
+          <option value="all">{t('admin.lookups.all_categories', 'All categories')}</option>
+          {LOOKUP_CATEGORIES.map((cat) => (
+            <option key={cat.key} value={cat.key}>
+              {cat.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {LOOKUP_CATEGORIES.map((cat) => {
+        {visibleCategories.map((cat) => {
           const state = counts[cat.key]
           const notConfigured = !state?.error && !state?.loading && state?.total === 0
           const countLabel = state?.loading

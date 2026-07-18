@@ -79,6 +79,7 @@ function StatCard({
   trend,
   link,
   subtitle,
+  testId,
 }: {
   title: string
   value: string | number
@@ -87,6 +88,7 @@ function StatCard({
   trend?: number
   link?: string
   subtitle?: string
+  testId?: string
 }) {
   const variantStyles = {
     default: 'bg-card border-border',
@@ -107,11 +109,17 @@ function StatCard({
   }
 
   const content = (
-    <Card hoverable className={cn('p-5 transition-all', variantStyles[variant])}>
+    <Card
+      hoverable
+      className={cn('p-5 transition-all', variantStyles[variant])}
+      data-testid={testId}
+    >
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm font-medium text-muted-foreground">{title}</p>
-          <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
+          <p className="mt-1 text-2xl font-bold text-foreground" data-testid={testId ? `${testId}-value` : undefined}>
+            {value}
+          </p>
           {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
           {trend !== undefined && (
             <p
@@ -621,7 +629,7 @@ export default function Dashboard() {
       </div>
 
       {/* Primary Stats Row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4" data-testid="dashboard-kpi-row">
         <StatCard
           title="Open Incidents"
           value={stats.incidents.open}
@@ -630,6 +638,7 @@ export default function Dashboard() {
           trend={stats.incidents.trend}
           link="/incidents"
           subtitle={`${stats.incidents.critical} critical`}
+          testId="dashboard-kpi-incidents"
         />
         <StatCard
           title="Open RTAs"
@@ -638,6 +647,7 @@ export default function Dashboard() {
           variant="warning"
           trend={stats.rtas.trend}
           link="/rtas"
+          testId="dashboard-kpi-rtas"
         />
         <StatCard
           title="Open Complaints"
@@ -647,6 +657,7 @@ export default function Dashboard() {
           trend={stats.complaints.trend}
           link="/complaints"
           subtitle={`${stats.complaints.overdue} overdue`}
+          testId="dashboard-kpi-complaints"
         />
         <StatCard
           title="Overdue Actions"
@@ -656,6 +667,7 @@ export default function Dashboard() {
           trend={stats.actions.trend}
           link="/actions"
           subtitle={`${stats.actions.dueSoon} due soon`}
+          testId="dashboard-kpi-actions"
         />
         <AssetHealthHubTile />
       </div>
@@ -681,7 +693,7 @@ export default function Dashboard() {
       ) : null}
 
       {/* Secondary Row: Audits, Risks, Carbon */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="dashboard-kpi-secondary">
         <StatCard
           title="Audit Score (Avg)"
           value={`${stats.audits.avgScore}%`}
@@ -690,6 +702,7 @@ export default function Dashboard() {
           trend={stats.audits.trend}
           link="/audits"
           subtitle={`${stats.audits.completed} completed this year`}
+          testId="dashboard-kpi-audits"
         />
         <StatCard
           title="High Risks"
@@ -698,6 +711,7 @@ export default function Dashboard() {
           variant="destructive"
           link="/risk-register"
           subtitle={`${stats.risks.outsideAppetite} outside appetite`}
+          testId="dashboard-kpi-risks"
         />
         <StatCard
           title="Carbon (tCO₂e/FTE)"
@@ -707,6 +721,7 @@ export default function Dashboard() {
           trend={stats.carbon.trend}
           link="/planet-mark"
           subtitle={`${stats.carbon.totalEmissions} total tCO₂e`}
+          testId="dashboard-kpi-carbon"
         />
       </div>
 

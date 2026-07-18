@@ -31,7 +31,13 @@ describe('LookupTables configure CTA', () => {
     mockList.mockReset()
     mockCreate.mockReset()
     mockList.mockImplementation(async (category: string) => {
-      if (category === 'departments' || category === 'locations' || category === 'workforce_roles') {
+      if (
+        category === 'departments' ||
+        category === 'locations' ||
+        category === 'workforce_roles' ||
+        category === 'tools' ||
+        category === 'assets'
+      ) {
         return { items: [], total: 0 }
       }
       return {
@@ -81,6 +87,16 @@ describe('LookupTables configure CTA', () => {
     expect(screen.getByTestId('lookup-workforce-roles-hints')).toHaveTextContent(
       'engineer, field_engineer, supervisor, process_scheduler',
     )
+  })
+
+  it('exposes tools and assets lookup categories on the hub', async () => {
+    render(<LookupTables />)
+
+    expect(await screen.findByTestId('lookup-card-tools')).toBeInTheDocument()
+    expect(screen.getByTestId('lookup-card-assets')).toBeInTheDocument()
+    expect(screen.getByTestId('lookup-count-tools')).toHaveTextContent('Not configured')
+    expect(screen.getByTestId('lookup-count-assets')).toHaveTextContent('Not configured')
+    expect(screen.getByTestId('lookup-hub-category-filter')).toBeInTheDocument()
   })
 
   it('opens workforce_roles editor and shows standard code hints when empty', async () => {
