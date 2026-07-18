@@ -2686,6 +2686,20 @@ export type {
 
 export const knowledgeBankApi = createKnowledgeBankApi(api)
 
+// ============ Document Campaigns API ============
+
+export type {
+  DocumentCampaignAssignment,
+  DocumentCampaignAssignmentListResponse,
+  DocumentCampaignQuiz,
+  DocumentCampaignQuizQuestion,
+  DocumentCampaignQuizAnswer,
+  DocumentCampaignQuizResult,
+  CompleteDocumentCampaignAssignmentRequest,
+} from './documentCampaignClient'
+
+export const documentCampaignApi = createDocumentCampaignApi(api)
+
 // ============ Document Control API ============
 
 export type {
@@ -2698,8 +2712,6 @@ export type {
 
 export const documentControlApi = createDocumentControlApi(api)
 
-// ============ Document Campaign API ============
-
 export type {
   CampaignAudienceType,
   CampaignGroup,
@@ -2707,8 +2719,6 @@ export type {
   DocumentCampaign,
   LaunchCampaignResponse,
 } from './documentCampaignClient'
-
-export const documentCampaignApi = createDocumentCampaignApi(api)
 
 // ============ Policy Acknowledgments API ============
 
