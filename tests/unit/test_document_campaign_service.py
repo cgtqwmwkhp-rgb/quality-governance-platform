@@ -630,14 +630,6 @@ class TestProcessDueReminders:
     @pytest.mark.asyncio
     async def test_skips_reminder_when_snoozed_but_still_marks_overdue(self):
         now = datetime.now(timezone.utc)
-        campaign = SimpleNamespace(
-            id=1,
-            tenant_id=1,
-            status=CampaignStatus.ACTIVE,
-            document_id=99,
-            launched_at=now - timedelta(hours=48),
-            reminder_offsets_hours=[24],
-        )
         assignment = SimpleNamespace(
             id=10,
             campaign_id=1,
@@ -648,26 +640,35 @@ class TestProcessDueReminders:
             last_reminder_at=None,
             snooze_until=now + timedelta(hours=12),
         )
+        campaign = SimpleNamespace(
+            id=1,
+            tenant_id=1,
+            document_id=99,
+            status=CampaignStatus.ACTIVE,
+            reminder_offsets_hours=[24],
+            created_by_id=5,
+            launched_by_id=6,
+        )
 
-        campaigns_result = MagicMock()
-        campaigns_result.scalars.return_value.all.return_value = [campaign]
-        assignments_result = MagicMock()
-        assignments_result.scalars.return_value.all.return_value = [assignment]
+        pending_result = MagicMock()
+        pending_result.all.return_value = [(assignment, campaign)]
+        users_result = MagicMock()
+        users_result.scalars.return_value.all.return_value = []
 
         db = SimpleNamespace(
-            execute=AsyncMock(side_effect=[campaigns_result, assignments_result]),
+            execute=AsyncMock(side_effect=[pending_result, users_result]),
+            add=MagicMock(),
             commit=AsyncMock(),
         )
         service = DocumentCampaignService(db)
-        service._notify_and_email_reminders = AsyncMock()
+        service._document_title = AsyncMock(return_value="Policy")
 
-        counts = await service.process_due_reminders()
+        counts = await service.process_due_reminders(now=now)
 
         assert assignment.status == AssignmentStatus.OVERDUE
-        assert counts["overdue_marked"] == 1
+        assert counts["overdue_escalated"] == 1
         assert counts["reminders_sent"] == 0
         assert assignment.reminders_sent == 0
-        service._notify_and_email_reminders.assert_not_called()
 
 
 # =============================================================================

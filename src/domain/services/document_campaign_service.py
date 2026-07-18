@@ -848,7 +848,7 @@ class DocumentCampaignService:
 
     @staticmethod
     def _is_snoozed(assignment: CampaignAssignment, now: datetime) -> bool:
-        snooze_until = assignment.snooze_until
+        snooze_until = getattr(assignment, "snooze_until", None)
         if snooze_until is None:
             return False
         if snooze_until.tzinfo is None:
