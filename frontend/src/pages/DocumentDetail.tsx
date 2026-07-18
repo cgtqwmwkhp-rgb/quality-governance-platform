@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -44,6 +44,17 @@ import {
   buildDocumentsExceptionsHref,
   DOCUMENT_CONTROL_GOLDEN_THREAD_PATH,
 } from './documentsDownstreamHelpers'
+import {
+  isProposedEvidenceLink,
+  parseEvidenceQuote,
+} from './documentEvidenceSnippetHelpers'
+import {
+  isQuizAiFallback,
+  normalizeQuestionCountInput,
+  sanitizeQuestionCount,
+} from './documentQuizHelpers'
+
+const DocumentPdfPreview = lazy(() => import('../components/DocumentPdfPreview'))
 
 interface LibraryDocument {
   id: number
@@ -137,7 +148,8 @@ export default function DocumentDetail() {
   const [quizDraft, setQuizDraft] = useState<QuizDraft | null>(null)
   const [quizGenerating, setQuizGenerating] = useState(false)
   const [quizApproving, setQuizApproving] = useState(false)
-  const [questionCount, setQuestionCount] = useState(5)
+  const [quizAiFallback, setQuizAiFallback] = useState(false)
+  const [questionCountInput, setQuestionCountInput] = useState('5')
   const [passMark, setPassMark] = useState(70)
   const [includeMcq, setIncludeMcq] = useState(true)
   const [includeOpen, setIncludeOpen] = useState(true)
@@ -146,6 +158,7 @@ export default function DocumentDetail() {
   const [threads, setThreads] = useState<DiscussionThread[]>([])
   const [threadMessages, setThreadMessages] = useState<Record<number, DiscussionMessage[]>>({})
   const [activeThreadId, setActiveThreadId] = useState<number | null>(null)
+  const [messagesLoading, setMessagesLoading] = useState(false)
   const [newThreadTitle, setNewThreadTitle] = useState('')
   const [messageBody, setMessageBody] = useState('')
   const [useAiDraft, setUseAiDraft] = useState(false)
@@ -157,6 +170,12 @@ export default function DocumentDetail() {
   const [versionsError, setVersionsError] = useState<string | null>(null)
   const [revising, setRevising] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [showInlinePreview, setShowInlinePreview] = useState(false)
+
+  const questionCount = useMemo(
+    () => sanitizeQuestionCount(questionCountInput),
+    [questionCountInput],
+  )
 
   const proposedLinks = useMemo(
     () => evidence.filter((l) => l.status === 'proposed' || l.status === 'needs_review'),
@@ -215,11 +234,27 @@ export default function DocumentDetail() {
     try {
       const response = await knowledgeBankApi.listThreads(documentId)
       setThreads(response.data)
+      if (response.data.length > 0) {
+        setActiveThreadId((prev) => prev ?? response.data[0].id)
+      }
     } catch (err) {
       setPartialLoad(true)
       reportFailure(err)
     }
   }, [documentId])
+
+  const loadThreadMessages = useCallback(async (threadId: number) => {
+    setMessagesLoading(true)
+    try {
+      const response = await knowledgeBankApi.listMessages(threadId)
+      setThreadMessages((prev) => ({ ...prev, [threadId]: response.data }))
+    } catch (err) {
+      setPartialLoad(true)
+      reportFailure(err)
+    } finally {
+      setMessagesLoading(false)
+    }
+  }, [])
 
   const loadImpacts = useCallback(async () => {
     try {
@@ -238,6 +273,21 @@ export default function DocumentDetail() {
     void loadImpacts()
     void loadVersions()
   }, [loadDocument, loadEvidence, loadThreads, loadImpacts, loadVersions])
+
+  useEffect(() => {
+    if (activeThreadId == null) return
+    void loadThreadMessages(activeThreadId)
+  }, [activeThreadId, loadThreadMessages])
+
+  const resolveSignedUrl = useCallback(async (download = false) => {
+    if (!document) return null
+    const response = await api.get<{ signed_url: string }>(
+      `/api/v1/documents/${document.id}/signed-url`,
+      { params: { download } },
+    )
+    const rawUrl = response.data.signed_url
+    return new URL(rawUrl, api.defaults.baseURL || window.location.origin).toString()
+  }, [document])
 
   const handleReviseVersion = async (changeSummary: string, isMajor: boolean) => {
     if (!documentId) return
@@ -286,11 +336,17 @@ export default function DocumentDetail() {
   const handleOpenPreview = async (download = false) => {
     if (!document) return
     try {
-      const response = await api.get<{ url: string }>(
-        `/api/v1/documents/${document.id}/signed-url`,
-        { params: { download } },
-      )
-      window.open(response.data.url, '_blank', 'noopener,noreferrer')
+      const signedUrl = await resolveSignedUrl(download)
+      if (!signedUrl) return
+      if (download) {
+        const link = window.document.createElement('a')
+        link.href = signedUrl
+        link.target = '_blank'
+        link.rel = 'noopener noreferrer'
+        link.click()
+        return
+      }
+      window.open(signedUrl, '_blank', 'noopener,noreferrer')
     } catch (err) {
       reportFailure(err)
     }
@@ -357,6 +413,7 @@ export default function DocumentDetail() {
 
   const handleGenerateQuiz = async () => {
     setQuizGenerating(true)
+    setQuizAiFallback(false)
     try {
       const response = await knowledgeBankApi.generateQuiz(documentId, {
         question_count: questionCount,
@@ -366,7 +423,13 @@ export default function DocumentDetail() {
         auto_approve_if_quality: autoApproveQuiz,
       })
       setQuizDraft(response.data)
-      toast.success('Quiz draft generated')
+      const fallback = isQuizAiFallback(response.data.questions, questionCount)
+      setQuizAiFallback(fallback)
+      if (fallback) {
+        toast.error(t('documents.detail.quiz_ai_fallback'))
+      } else {
+        toast.success('Quiz draft generated')
+      }
     } catch (err) {
       reportFailure(err)
     } finally {
@@ -576,12 +639,37 @@ export default function DocumentDetail() {
                 Preview
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
               <p className="text-sm text-muted-foreground">{document.file_name}</p>
-              <Button variant="outline" size="sm" onClick={() => void handleOpenPreview(false)}>
-                <ExternalLink className="w-4 h-4 mr-2" />
-                Open document
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => void handleOpenPreview(false)}>
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Open document
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowInlinePreview((prev) => !prev)}
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  {showInlinePreview ? 'Hide inline preview' : 'Show inline preview'}
+                </Button>
+              </div>
+              {showInlinePreview ? (
+                <Suspense
+                  fallback={
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                    </div>
+                  }
+                >
+                  <DocumentPdfPreview
+                    documentId={document.id}
+                    fileType={document.file_type}
+                    fileName={document.file_name}
+                  />
+                </Suspense>
+              ) : null}
             </CardContent>
           </Card>
         </TabsContent>
@@ -642,8 +730,8 @@ export default function DocumentDetail() {
           ) : (
             <div className="space-y-3">
               {evidence.map((link) => {
-                const isProposed =
-                  link.status === 'proposed' || link.status === 'needs_review'
+                const isProposed = isProposedEvidenceLink(link)
+                const evidenceQuote = isProposed ? parseEvidenceQuote(link) : null
                 return (
                   <Card key={link.id} className="p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -660,9 +748,27 @@ export default function DocumentDetail() {
                         {link.title && (
                           <p className="font-medium text-foreground">{link.title}</p>
                         )}
-                        {link.rationale && (
+                        {isProposed && evidenceQuote?.snippet ? (
+                          <blockquote
+                            className="border-l-2 border-primary/40 pl-3 text-sm italic text-foreground"
+                            data-testid="proposed-evidence-snippet"
+                          >
+                            &ldquo;{evidenceQuote.snippet}&rdquo;
+                            {evidenceQuote.page != null ? (
+                              <span className="block not-italic text-xs text-muted-foreground mt-1">
+                                {t('documents.detail.evidence_page', { page: evidenceQuote.page })}
+                              </span>
+                            ) : null}
+                          </blockquote>
+                        ) : null}
+                        {(!isProposed || !evidenceQuote?.snippet) && link.rationale ? (
                           <p className="text-sm text-muted-foreground">{link.rationale}</p>
-                        )}
+                        ) : null}
+                        {isProposed && evidenceQuote?.rationaleWithoutQuote ? (
+                          <p className="text-sm text-muted-foreground">
+                            {evidenceQuote.rationaleWithoutQuote}
+                          </p>
+                        ) : null}
                         {link.confidence != null && (
                           <p className="text-xs text-muted-foreground">
                             Confidence: {(link.confidence * 100).toFixed(0)}%
@@ -735,6 +841,15 @@ export default function DocumentDetail() {
         </TabsContent>
 
         <TabsContent value="quiz" className="mt-4 space-y-4">
+          {quizAiFallback ? (
+            <div
+              className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground"
+              role="alert"
+              data-testid="quiz-ai-fallback-banner"
+            >
+              {t('documents.detail.quiz_ai_fallback')}
+            </div>
+          ) : null}
           <Card className="p-4 space-y-4">
             <h3 className="font-medium text-foreground">Generate comprehension quiz</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -744,11 +859,18 @@ export default function DocumentDetail() {
                 </label>
                 <Input
                   id="gkb-question-count"
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   min={1}
                   max={30}
-                  value={questionCount}
-                  onChange={(e) => setQuestionCount(Number(e.target.value))}
+                  value={questionCountInput}
+                  onChange={(e) =>
+                    setQuestionCountInput(normalizeQuestionCountInput(e.target.value))
+                  }
+                  onBlur={() =>
+                    setQuestionCountInput(String(sanitizeQuestionCount(questionCountInput)))
+                  }
                 />
               </div>
               <div>
@@ -870,7 +992,10 @@ export default function DocumentDetail() {
                     <button
                       key={thread.id}
                       type="button"
-                      onClick={() => setActiveThreadId(thread.id)}
+                      onClick={() => {
+                        setActiveThreadId(thread.id)
+                        void loadThreadMessages(thread.id)
+                      }}
                       className={cn(
                         'w-full text-left rounded-lg px-3 py-2 text-sm transition-colors',
                         activeThreadId === thread.id
@@ -887,7 +1012,11 @@ export default function DocumentDetail() {
                 {activeThreadId ? (
                   <>
                     <div className="space-y-2 max-h-64 overflow-y-auto">
-                      {(threadMessages[activeThreadId] ?? []).length === 0 ? (
+                      {messagesLoading ? (
+                        <div className="flex justify-center py-4">
+                          <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                        </div>
+                      ) : (threadMessages[activeThreadId] ?? []).length === 0 ? (
                         <p className="text-sm text-muted-foreground">No messages yet.</p>
                       ) : (
                         (threadMessages[activeThreadId] ?? []).map((msg) => (

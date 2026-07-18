@@ -50,4 +50,10 @@ describe('createKnowledgeBankApi listExceptions', () => {
     createKnowledgeBankApi(api as never).rejectLink(9)
     expect(api.post).toHaveBeenCalledWith('/api/v1/knowledge-bank/evidence/9/reject')
   })
+
+  it('loads discussion messages for a thread', () => {
+    const api = mockApi()
+    createKnowledgeBankApi(api as never).listMessages(12)
+    expect(api.get).toHaveBeenCalledWith('/api/v1/knowledge-bank/discussions/12/messages')
+  })
 })

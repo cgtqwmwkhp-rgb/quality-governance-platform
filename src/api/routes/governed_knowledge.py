@@ -999,6 +999,47 @@ async def post_discussion_message(
     )
 
 
+@router.get(
+    "/discussions/{thread_id}/messages",
+    response_model=list[DiscussionMessageResponse],
+)
+async def list_discussion_messages(
+    thread_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:read"))],
+):
+    """List messages for a document discussion thread."""
+    tenant_id = _tenant_id_for(current_user)
+    thread_result = await db.execute(
+        select(DocumentDiscussionThread).where(
+            DocumentDiscussionThread.id == thread_id,
+            DocumentDiscussionThread.tenant_id == tenant_id,
+        )
+    )
+    thread = thread_result.scalar_one_or_none()
+    if not thread:
+        raise NotFoundError("Discussion thread not found")
+
+    messages_result = await db.execute(
+        select(DocumentDiscussionMessage)
+        .where(DocumentDiscussionMessage.thread_id == thread_id)
+        .order_by(DocumentDiscussionMessage.created_at.asc())
+    )
+    messages = messages_result.scalars().all()
+
+    return [
+        DiscussionMessageResponse(
+            id=message.id,
+            thread_id=message.thread_id,
+            author_id=message.author_id,
+            body=message.body,
+            is_ai_draft=message.is_ai_draft,
+            created_at=message.created_at.isoformat(),
+        )
+        for message in messages
+    ]
+
+
 # =============================================================================
 # REGULATORY WATCH
 # =============================================================================

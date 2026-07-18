@@ -16,6 +16,8 @@ export interface KnowledgeEvidenceLink {
   rationale: string | null
   title: string | null
   notes: string | null
+  evidence_snippet?: string | null
+  source_page?: number | null
   signal_type?: string | null
   created_at: string
   created_by_email: string | null
@@ -251,6 +253,9 @@ export function createKnowledgeBankApi(api: AxiosInstance) {
 
     createThread: (documentId: number, body: { title?: string; version?: string }) =>
       api.post<DiscussionThread>(`${base}/documents/${documentId}/discussions`, body),
+
+    listMessages: (threadId: number) =>
+      api.get<DiscussionMessage[]>(`${base}/discussions/${threadId}/messages`),
 
     postMessage: (threadId: number, body: { body: string; use_ai_draft?: boolean }) =>
       api.post<DiscussionMessage>(`${base}/discussions/${threadId}/messages`, body),
