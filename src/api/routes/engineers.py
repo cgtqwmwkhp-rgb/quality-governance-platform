@@ -114,10 +114,11 @@ async def _linked_user_summary(db: DbSession, user_id: Optional[int]) -> Optiona
         return None
     result = await db.execute(select(User).where(User.id == user_id))
     linked = result.scalar_one_or_none()
-    if linked is None:
+    # Defensive: mocks / unexpected row shapes must not break engineer list/get.
+    if linked is None or not hasattr(linked, "email") or not getattr(linked, "id", None):
         return None
     full_name = (getattr(linked, "full_name", None) or "").strip() or None
-    return LinkedUserSummary(id=linked.id, email=linked.email, full_name=full_name)
+    return LinkedUserSummary(id=int(linked.id), email=str(linked.email), full_name=full_name)
 
 
 async def _engineer_response(db: DbSession, engineer: Engineer) -> EngineerResponse:
