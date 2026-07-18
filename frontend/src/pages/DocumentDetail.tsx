@@ -53,6 +53,7 @@ import {
   normalizeQuestionCountInput,
   sanitizeQuestionCount,
 } from './documentQuizHelpers'
+import { DocumentCampaignPanel } from './DocumentCampaignPanel'
 
 const DocumentPdfPreview = lazy(() => import('../components/DocumentPdfPreview'))
 
@@ -588,7 +589,7 @@ export default function DocumentDetail() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="evidence">Standards & Evidence</TabsTrigger>
           <TabsTrigger value="versions">Versions</TabsTrigger>
-          <TabsTrigger value="quiz">Share & Quiz</TabsTrigger>
+          <TabsTrigger value="quiz">{t('documents.detail.tab_share_quiz_compliance')}</TabsTrigger>
           <TabsTrigger value="qa">Q&A</TabsTrigger>
           <TabsTrigger value="watch">Watch</TabsTrigger>
         </TabsList>
@@ -1022,6 +1023,11 @@ export default function DocumentDetail() {
               </div>
             </Card>
           )}
+
+          <DocumentCampaignPanel
+            documentId={documentId}
+            hasApprovedQuiz={quizDraft?.status === 'approved'}
+          />
         </TabsContent>
 
         <TabsContent value="qa" className="mt-4 space-y-4">

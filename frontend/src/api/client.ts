@@ -33,6 +33,7 @@ import { createSignaturesApi } from './signaturesClient'
 import { createLookupsApi } from './lookupsClient'
 import { createKnowledgeBankApi } from './knowledgeBankClient'
 import { createDocumentControlApi } from './documentControlClient'
+import { createDocumentCampaignApi } from './documentCampaignClient'
 import {
   beginGlobalLoading,
   endGlobalLoading,
@@ -2696,6 +2697,18 @@ export type {
 } from './documentControlClient'
 
 export const documentControlApi = createDocumentControlApi(api)
+
+// ============ Document Campaign API ============
+
+export type {
+  CampaignAudienceType,
+  CampaignGroup,
+  CreateCampaignPayload,
+  DocumentCampaign,
+  LaunchCampaignResponse,
+} from './documentCampaignClient'
+
+export const documentCampaignApi = createDocumentCampaignApi(api)
 
 // ============ Policy Acknowledgments API ============
 
