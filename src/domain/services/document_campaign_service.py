@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
@@ -1410,6 +1410,149 @@ class DocumentCampaignService:
             },
             "assignments": assignment_rows,
             "exported_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    async def list_campaign_roster(
+        self,
+        *,
+        tenant_id: int,
+        campaign_id: int,
+        status: Optional[str] = None,
+        q: Optional[str] = None,
+        opened: Optional[bool] = None,
+        quiz_passed: Optional[bool] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """Paginated assignee roster for HSEQ document results / central compliance."""
+        campaign = await self.get_campaign(tenant_id=tenant_id, campaign_id=campaign_id)
+        limit = max(1, min(limit, 200))
+        offset = max(0, offset)
+
+        base_filters = [
+            CampaignAssignment.campaign_id == campaign_id,
+            CampaignAssignment.tenant_id == tenant_id,
+        ]
+        if status:
+            try:
+                status_enum = AssignmentStatus(status.lower())
+            except ValueError as exc:
+                raise BadRequestError(f"Invalid assignment status: {status}") from exc
+            base_filters.append(CampaignAssignment.status == status_enum)
+        if opened is True:
+            base_filters.append(CampaignAssignment.first_opened_at.is_not(None))
+        elif opened is False:
+            base_filters.append(CampaignAssignment.first_opened_at.is_(None))
+        if quiz_passed is True:
+            base_filters.append(CampaignAssignment.quiz_passed.is_(True))
+        elif quiz_passed is False:
+            base_filters.append(CampaignAssignment.quiz_passed.is_(False))
+
+        join_filters = list(base_filters)
+        if q and q.strip():
+            needle = f"%{q.strip().lower()}%"
+            join_filters.append(
+                or_(
+                    func.lower(User.email).like(needle),
+                    func.lower(User.first_name).like(needle),
+                    func.lower(User.last_name).like(needle),
+                )
+            )
+
+        count_result = await self.db.execute(
+            select(func.count(CampaignAssignment.id))
+            .select_from(CampaignAssignment)
+            .join(User, User.id == CampaignAssignment.user_id)
+            .where(and_(*join_filters))
+        )
+        total = int(count_result.scalar_one() or 0)
+
+        rows_result = await self.db.execute(
+            select(CampaignAssignment, User)
+            .join(User, User.id == CampaignAssignment.user_id)
+            .where(and_(*join_filters))
+            .order_by(User.last_name, User.first_name)
+            .offset(offset)
+            .limit(limit)
+        )
+
+        items: List[Dict[str, Any]] = []
+        for assignment, user in rows_result.all():
+            status_value = (
+                assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status)
+            )
+            items.append(
+                {
+                    "assignment_id": assignment.id,
+                    "user_id": user.id,
+                    "user_email": user.email,
+                    "user_name": user.full_name,
+                    "status": status_value,
+                    "assigned_at": assignment.assigned_at.isoformat() if assignment.assigned_at else None,
+                    "due_at": assignment.due_at.isoformat() if assignment.due_at else None,
+                    "first_opened_at": (
+                        assignment.first_opened_at.isoformat() if assignment.first_opened_at else None
+                    ),
+                    "completed_at": assignment.completed_at.isoformat() if assignment.completed_at else None,
+                    "quiz_score": assignment.quiz_score,
+                    "quiz_passed": assignment.quiz_passed,
+                    "quiz_attempts": assignment.quiz_attempts or 0,
+                    "reminders_sent": assignment.reminders_sent or 0,
+                    "last_reminder_at": (
+                        assignment.last_reminder_at.isoformat() if assignment.last_reminder_at else None
+                    ),
+                }
+            )
+
+        summary_counts = await self._compliance_summary(campaign_id)
+        opened_result = await self.db.execute(
+            select(func.count(CampaignAssignment.id)).where(
+                CampaignAssignment.campaign_id == campaign_id,
+                CampaignAssignment.tenant_id == tenant_id,
+                CampaignAssignment.first_opened_at.is_not(None),
+            )
+        )
+        opened_count = int(opened_result.scalar_one() or 0)
+        quiz_pass_result = await self.db.execute(
+            select(func.count(CampaignAssignment.id)).where(
+                CampaignAssignment.campaign_id == campaign_id,
+                CampaignAssignment.tenant_id == tenant_id,
+                CampaignAssignment.quiz_passed.is_(True),
+            )
+        )
+        quiz_fail_result = await self.db.execute(
+            select(func.count(CampaignAssignment.id)).where(
+                CampaignAssignment.campaign_id == campaign_id,
+                CampaignAssignment.tenant_id == tenant_id,
+                CampaignAssignment.quiz_passed.is_(False),
+            )
+        )
+        quiz_pass_count = int(quiz_pass_result.scalar_one() or 0)
+        quiz_fail_count = int(quiz_fail_result.scalar_one() or 0)
+        assigned = int(summary_counts["total_assigned"])
+        open_rate = round((opened_count / assigned * 100), 1) if assigned > 0 else 0.0
+
+        return {
+            "campaign_id": campaign.id,
+            "document_id": campaign.document_id,
+            "require_quiz": bool(campaign.require_quiz),
+            "items": items,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "summary": {
+                "assigned": assigned,
+                "completed": summary_counts["completed"],
+                "pending": summary_counts["pending"],
+                "overdue": summary_counts["overdue"],
+                "expired": summary_counts["expired"],
+                "opened": opened_count,
+                "not_opened": max(assigned - opened_count, 0),
+                "quiz_pass_count": quiz_pass_count,
+                "quiz_fail_count": quiz_fail_count,
+                "completion_rate": summary_counts["completion_rate"],
+                "open_rate": open_rate,
+            },
         }
 
     # ==================== Question inbox (HSEQ) ====================

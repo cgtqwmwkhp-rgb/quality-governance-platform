@@ -4,9 +4,9 @@ Engineer groups, document campaigns (read/quiz/sign-off), audience launch,
 and the per-engineer assignment APIs (open, quiz, complete) used by "My Reading".
 """
 
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.api.deps import CurrentUser, DbSession, require_permission
@@ -19,6 +19,9 @@ from src.api.schemas.document_campaign import (
     CampaignCreateRequestFE,
     CampaignListResponse,
     CampaignResponse,
+    CampaignRosterItem,
+    CampaignRosterResponse,
+    CampaignRosterSummary,
     CompleteAssignmentRequest,
     CompleteAssignmentResponse,
     ComplianceSummaryItem,
@@ -221,6 +224,42 @@ async def compliance_by_group(
         campaign_id=campaign_id,
         items=[GroupComplianceItem(**row) for row in rows],
         total=len(rows),
+    )
+
+
+@router.get("/campaigns/{campaign_id}/roster", response_model=CampaignRosterResponse)
+async def list_campaign_roster(
+    campaign_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+    status_filter: Optional[str] = Query(None, alias="status"),
+    q: Optional[str] = Query(None),
+    opened: Optional[bool] = Query(None),
+    quiz_passed: Optional[bool] = Query(None),
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """Paginated who-read / who-scored roster for a campaign (HSEQ admin)."""
+    service = DocumentCampaignService(db)
+    payload = await service.list_campaign_roster(
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        campaign_id=campaign_id,
+        status=status_filter,
+        q=q,
+        opened=opened,
+        quiz_passed=quiz_passed,
+        limit=limit,
+        offset=offset,
+    )
+    return CampaignRosterResponse(
+        campaign_id=payload["campaign_id"],
+        document_id=payload["document_id"],
+        require_quiz=payload["require_quiz"],
+        items=[CampaignRosterItem(**row) for row in payload["items"]],
+        total=payload["total"],
+        limit=payload["limit"],
+        offset=payload["offset"],
+        summary=CampaignRosterSummary(**payload["summary"]),
     )
 
 

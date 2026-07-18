@@ -11,6 +11,10 @@ describe('resolveDocumentDetailTab', () => {
     expect(resolveDocumentDetailTab('evidence')).toBe('evidence')
   })
 
+  it('opens Campaign results when tab=campaign-results', () => {
+    expect(resolveDocumentDetailTab('campaign-results')).toBe('campaign-results')
+  })
+
   it('falls back to overview for missing or unknown tabs', () => {
     expect(resolveDocumentDetailTab(null)).toBe('overview')
     expect(resolveDocumentDetailTab('nope')).toBe('overview')

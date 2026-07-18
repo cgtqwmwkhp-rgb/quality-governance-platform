@@ -1041,3 +1041,104 @@ class TestSpawnReackCampaign:
         added_campaign = db.add.call_args[0][0]
         assert added_campaign.status == CampaignStatus.DRAFT
         assert added_campaign.title == "Re-acknowledgment: Annual read"
+
+
+# =============================================================================
+# Campaign roster (Wave 1 results)
+# =============================================================================
+
+
+class TestListCampaignRoster:
+    @pytest.mark.asyncio
+    async def test_returns_filtered_rows_and_summary(self):
+        now = datetime.now(timezone.utc)
+        campaign = SimpleNamespace(
+            id=9,
+            document_id=3,
+            require_quiz=True,
+        )
+        assignment = SimpleNamespace(
+            id=1,
+            status=AssignmentStatus.OVERDUE,
+            assigned_at=now,
+            due_at=now,
+            first_opened_at=None,
+            completed_at=None,
+            quiz_score=None,
+            quiz_passed=None,
+            quiz_attempts=0,
+            reminders_sent=2,
+            last_reminder_at=now,
+        )
+        user = SimpleNamespace(
+            id=5,
+            email="alex@example.com",
+            full_name="Alex Engineer",
+            first_name="Alex",
+            last_name="Engineer",
+        )
+
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 1
+        rows_result = MagicMock()
+        rows_result.all.return_value = [(assignment, user)]
+        opened_result = MagicMock()
+        opened_result.scalar_one.return_value = 0
+        quiz_pass_result = MagicMock()
+        quiz_pass_result.scalar_one.return_value = 0
+        quiz_fail_result = MagicMock()
+        quiz_fail_result.scalar_one.return_value = 1
+
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[
+                    count_result,
+                    rows_result,
+                    opened_result,
+                    quiz_pass_result,
+                    quiz_fail_result,
+                ]
+            )
+        )
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+        service._compliance_summary = AsyncMock(
+            return_value={
+                "total_assigned": 4,
+                "completed": 1,
+                "pending": 1,
+                "overdue": 2,
+                "expired": 0,
+                "completion_rate": 25.0,
+            }
+        )
+
+        payload = await service.list_campaign_roster(
+            tenant_id=1,
+            campaign_id=9,
+            status="overdue",
+            q="alex",
+            opened=False,
+            limit=50,
+            offset=0,
+        )
+
+        assert payload["campaign_id"] == 9
+        assert payload["document_id"] == 3
+        assert payload["total"] == 1
+        assert payload["items"][0]["user_email"] == "alex@example.com"
+        assert payload["items"][0]["status"] == "overdue"
+        assert payload["items"][0]["reminders_sent"] == 2
+        assert payload["summary"]["assigned"] == 4
+        assert payload["summary"]["overdue"] == 2
+        assert payload["summary"]["open_rate"] == 0.0
+        assert payload["summary"]["quiz_fail_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_status(self):
+        db = SimpleNamespace(execute=AsyncMock())
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=SimpleNamespace(id=1, document_id=2, require_quiz=False))
+
+        with pytest.raises(BadRequestError, match="Invalid assignment status"):
+            await service.list_campaign_roster(tenant_id=1, campaign_id=1, status="nope")

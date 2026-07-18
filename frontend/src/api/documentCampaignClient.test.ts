@@ -71,6 +71,15 @@ describe('createDocumentCampaignApi', () => {
     expect(api.get).toHaveBeenCalledWith('/api/v1/document-campaigns/question-inbox')
   })
 
+  it('lists campaign roster with filters', () => {
+    const api = mockApi()
+    const client = createDocumentCampaignApi(api as never)
+    client.listCampaignRoster(9, { status: 'overdue', q: 'alex', opened: true, limit: 50 })
+    expect(api.get).toHaveBeenCalledWith('/api/v1/document-campaigns/campaigns/9/roster', {
+      params: { status: 'overdue', q: 'alex', opened: true, limit: 50 },
+    })
+  })
+
   it('handles evidence export and question actions', async () => {
     const api = mockApi()
     api.get.mockResolvedValue({ data: { campaign_id: 3 } })
