@@ -66,6 +66,7 @@ from src.domain.models.audit import (
 from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
 from src.domain.services.audit_service import AuditService
+from src.domain.services.audit_scoring_service import AuditScoringService
 from src.domain.services.external_audit_intake_template_resolver import (
     ExternalAuditIntakeTemplateResolver,
     IntakeTemplateResolution,
@@ -1297,9 +1298,21 @@ async def create_response(
         )
         raise BadRequestError("Response already exists for this question. Use PATCH to update.")
 
+    question_result = await db.execute(select(AuditQuestion).where(AuditQuestion.id == response_data.question_id))
+    question = question_result.scalar_one_or_none()
+    if not question:
+        _record_audit_endpoint_event(
+            "POST /api/v1/audits/runs/{id}/responses",
+            404,
+            (time.perf_counter() - started) * 1000,
+            "question_not_found",
+        )
+        raise NotFoundError("Audit question not found")
+
+    payload = AuditScoringService.apply_derived_scores(question, response_data.model_dump())
     response = AuditResponse(
         run_id=run_id,
-        **response_data.model_dump(),
+        **payload,
     )
 
     db.add(response)

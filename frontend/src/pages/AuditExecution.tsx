@@ -75,6 +75,7 @@ interface AuditQuestion {
   type: string
   required: boolean
   weight: number
+  maxScore?: number
   options?: { id: string; label: string; value: string; score?: number }[]
   evidenceRequired: boolean
   guidance?: string
@@ -215,6 +216,46 @@ export function canAdvancePastFailEvidenceGate(
   response: FailEvidenceResponse | undefined,
 ): boolean {
   return !isFailEvidenceGateActive(question, response)
+}
+
+export function scorePayloadForQuestion(
+  question: Pick<AuditQuestion, 'type' | 'weight' | 'maxScore' | 'positiveAnswer'>,
+  response: Pick<QuestionResponse, 'response'>,
+): { score: number; max_score: number } {
+  const maxScore = question.maxScore ?? question.weight ?? 1
+  if (response.response === null || response.response === undefined) {
+    return { score: 0, max_score: maxScore }
+  }
+  if (question.type === 'pass_fail' || question.type === 'yes_no') {
+    const positiveVal =
+      question.positiveAnswer === 'no'
+        ? question.type === 'pass_fail'
+          ? 'fail'
+          : 'no'
+        : question.type === 'pass_fail'
+          ? 'pass'
+          : 'yes'
+    return {
+      score: response.response === positiveVal ? maxScore : 0,
+      max_score: maxScore,
+    }
+  }
+  if (question.type === 'yes_no_na') {
+    const positiveVal = question.positiveAnswer === 'no' ? 'no' : 'yes'
+    const ok = response.response === positiveVal || response.response === 'na'
+    return { score: ok ? maxScore : 0, max_score: maxScore }
+  }
+  if (question.type.startsWith('scale_')) {
+    const max = question.type === 'scale_1_5' ? 5 : 10
+    return {
+      score: (Number(response.response) / max) * maxScore,
+      max_score: maxScore,
+    }
+  }
+  if (typeof response.response === 'number') {
+    return { score: Number(response.response), max_score: maxScore }
+  }
+  return { score: maxScore, max_score: maxScore }
 }
 
 export function shouldShowFailEvidencePanel(
@@ -714,6 +755,7 @@ export default function AuditExecution() {
                 type: mapBackendQuestionType(q),
                 required: q.is_required,
                 weight: q.weight,
+                maxScore: q.max_score ?? q.weight ?? 1,
                 options: q.options?.map((o) => ({
                   id: o.value,
                   label: o.label,
@@ -994,9 +1036,15 @@ export default function AuditExecution() {
         const hasPhotos = (resp.evidenceAssetIds?.length ?? 0) > 0
         if (resp.response === null && !resp.notes && !hasPhotos) continue
 
+        const question = allQuestions.find((candidate) => candidate.id === questionId)
+        const scored = question
+          ? scorePayloadForQuestion(question, resp)
+          : { score: undefined, max_score: undefined }
         const payload = {
           response_value: serializeResponse(resp.response),
           notes: resp.notes || undefined,
+          ...(scored.score !== undefined ? { score: scored.score } : {}),
+          ...(scored.max_score !== undefined ? { max_score: scored.max_score } : {}),
           ...(hasPhotos
             ? { response_json: buildEvidenceResponseJson(resp.evidenceAssetIds || []) }
             : {}),
@@ -1223,29 +1271,9 @@ export default function AuditExecution() {
         if (!response) return
 
         totalWeight += question.weight
-
-        if (question.type === 'pass_fail' || question.type === 'yes_no') {
-          const positiveVal =
-            question.positiveAnswer === 'no'
-              ? question.type === 'pass_fail'
-                ? 'fail'
-                : 'no'
-              : question.type === 'pass_fail'
-                ? 'pass'
-                : 'yes'
-          if (response.response === positiveVal) {
-            achievedWeight += question.weight
-          }
-        } else if (question.type === 'yes_no_na') {
-          const positiveVal = question.positiveAnswer === 'no' ? 'no' : 'yes'
-          if (response.response === positiveVal || response.response === 'na') {
-            achievedWeight += question.weight
-          }
-        } else if (question.type.startsWith('scale_')) {
-          const max = question.type === 'scale_1_5' ? 5 : 10
-          achievedWeight += (Number(response.response) / max) * question.weight
-        } else if (question.weight > 0) {
-          achievedWeight += question.weight
+        const { score, max_score } = scorePayloadForQuestion(question, response)
+        if (max_score > 0) {
+          achievedWeight += (score / max_score) * question.weight
         }
       })
     })

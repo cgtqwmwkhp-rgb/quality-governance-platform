@@ -7,6 +7,74 @@ import pytest
 from src.domain.services.audit_scoring_service import AuditScoringService, ScoreResult
 
 
+class TestDeriveResponseScore:
+    def test_yes_no_positive_derives_full_score_and_max(self):
+        question = SimpleNamespace(
+            question_type="yes_no",
+            max_score=1.0,
+            weight=1.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=None,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_value="yes",
+        )
+        assert score == 1.0
+        assert max_score == 1.0
+
+    def test_yes_no_negative_derives_zero(self):
+        question = SimpleNamespace(
+            question_type="yes_no",
+            max_score=2.0,
+            weight=2.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=None,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_value="no",
+        )
+        assert score == 0.0
+        assert max_score == 2.0
+
+    def test_apply_derived_scores_fills_missing_fields(self):
+        question = SimpleNamespace(
+            question_type="pass_fail",
+            max_score=1.0,
+            weight=1.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=None,
+        )
+        enriched = AuditScoringService.apply_derived_scores(
+            question,
+            {"question_id": 1, "response_value": "pass"},
+        )
+        assert enriched["score"] == 1.0
+        assert enriched["max_score"] == 1.0
+
+    def test_client_supplied_scores_win(self):
+        question = SimpleNamespace(
+            question_type="yes_no",
+            max_score=1.0,
+            weight=1.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=None,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_value="yes",
+            score=0.5,
+            max_score=2.0,
+        )
+        assert score == 0.5
+        assert max_score == 2.0
+
+
 class TestScoreResult:
     def test_score_result_creation(self):
         sr = ScoreResult(total_score=80.0, max_score=100.0, score_percentage=80.0)

@@ -361,6 +361,7 @@ export interface AuditResponseUpdate {
   response_value?: string
   response_json?: Record<string, unknown> | null
   score?: number
+  max_score?: number
   notes?: string
 }
 
