@@ -73,6 +73,7 @@ def test_investigation_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/investigations.py")
     assert "investigation:create" in perms
     assert "investigation:update" in perms
+    assert "investigation:approve_customer_omit" in perms
 
 
 def test_document_write_routes_require_permission():

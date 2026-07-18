@@ -71,6 +71,7 @@ vi.mock('../investigation/InvestigationTimeline', () => ({
   }) => (
     <div data-testid="investigation-timeline-panel">
       <span data-testid="investigation-timeline-current-filter">{timelineFilter}</span>
+      <div data-testid="investigation-activity-spine">activity spine</div>
       <button
         type="button"
         data-testid="investigation-timeline-set-status"
@@ -497,5 +498,81 @@ describe('InvestigationDetail', () => {
     await waitFor(() => {
       expect(screen.getByText('packs unavailable')).toBeInTheDocument()
     })
+  })
+
+  it('shows live CAPA handoff strip and interactive status workflow (Wave 2)', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-capa-handoff-strip')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('investigation-status-workflow')).toBeInTheDocument()
+    expect(screen.getByTestId('investigation-workflow-in_progress')).toBeInTheDocument()
+    expect(screen.getByTestId('investigation-capa-count')).toBeInTheDocument()
+  })
+
+  it('offers Create CAPA from root cause on RCA tab (Wave 2)', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'RCA' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-rca-create-capa')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('investigation-rca-create-capa'))
+    expect(screen.getByTestId('investigation-actions-panel')).toBeInTheDocument()
+  })
+
+  it('jumps from closure blocker to CAPA by action_key (Wave 2)', async () => {
+    client.investigationsApi.getClosureValidation.mockResolvedValue({
+      data: {
+        can_close: false,
+        reasons: ['OPEN_ACTIONS_REMAIN'],
+        open_work_count: 1,
+        open_work: [
+          {
+            kind: 'investigation_action',
+            id: 12,
+            reference_number: 'INV-ACT-2026-0012',
+            title: 'Replace guard',
+            status: 'open',
+            action_key: 'investigation_action:12',
+            unblock_hint: 'Complete or cancel this action on the Actions tab.',
+          },
+        ],
+      },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('closure-blocker-jump-investigation_action:12')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('closure-blocker-jump-investigation_action:12'))
+    expect(screen.getByTestId('investigation-actions-panel')).toBeInTheDocument()
+  })
+
+  it('shows customer-pack omit controls on Report sections (SEV-C)', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Collision investigation' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-hsg245-report-sections')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('report-section-omit-request-event-details')).toBeInTheDocument()
+    expect(screen.getByTestId('report-section-omit-approve-event-details')).toBeInTheDocument()
   })
 })

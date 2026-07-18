@@ -41,6 +41,7 @@ from src.domain.models.investigation import (
     InvestigationTemplate,
 )
 from src.domain.models.user import User
+from src.domain.services.investigation_service import InvestigationService
 
 logger = logging.getLogger(__name__)
 
@@ -272,6 +273,18 @@ async def get_investigation_timeline(
                 "id": e.id,
                 "event_type": e.event_type,
                 "field_path": e.field_path,
+                "old_value": (
+                    e.old_value
+                    if isinstance(e.old_value, str)
+                    else (str(e.old_value) if e.old_value is not None else None)
+                ),
+                "new_value": (
+                    e.new_value
+                    if isinstance(e.new_value, str)
+                    else (str(e.new_value) if e.new_value is not None else None)
+                ),
+                "actor_id": e.actor_id,
+                "event_metadata": e.event_metadata,
                 "version": e.version,
                 "created_at": e.created_at,
             }
@@ -282,6 +295,116 @@ async def get_investigation_timeline(
         "page_size": page_size,
         "pages": math.ceil(total / page_size) if total else 1,
         "investigation_id": investigation_id,
+    }
+
+
+class ManualTimelineEntryRequest(BaseModel):
+    """Investigator-authored append-only timeline note."""
+
+    content: str = Field(..., min_length=1, max_length=5000)
+
+
+@router.post(
+    "/{investigation_id:int}/timeline",
+    response_model=dict,
+    status_code=201,
+)
+async def add_manual_timeline_entry(
+    investigation_id: int,
+    payload: ManualTimelineEntryRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("investigation:update"))],
+):
+    """Append a MANUAL_ENTRY revision event (system audit events remain immutable)."""
+    investigation = await _get_investigation_or_404(investigation_id, db, current_user)
+    event = await InvestigationService.create_revision_event(
+        db=db,
+        investigation=investigation,
+        event_type="MANUAL_ENTRY",
+        actor_id=current_user.id,
+        field_path="timeline.manual",
+        new_value=payload.content.strip(),
+        metadata={"source": "manual_timeline"},
+    )
+    await db.commit()
+    await db.refresh(event)
+    return {
+        "id": event.id,
+        "event_type": event.event_type,
+        "field_path": event.field_path,
+        "new_value": event.new_value if isinstance(event.new_value, str) else str(event.new_value),
+        "actor_id": event.actor_id,
+        "created_at": event.created_at.isoformat() if event.created_at else None,
+    }
+
+
+class CustomerPackOmitRequest(BaseModel):
+    """Request or revoke omit of a report section from customer packs."""
+
+    section_id: str = Field(..., min_length=1, max_length=100)
+    omit_requested: bool = True
+    reason: Optional[str] = Field(None, max_length=2000)
+
+
+class CustomerPackOmitApproveRequest(BaseModel):
+    """Approve a pending customer-pack section omit (RBAC)."""
+
+    section_id: str = Field(..., min_length=1, max_length=100)
+    reason: Optional[str] = Field(None, max_length=2000)
+
+
+@router.post("/{investigation_id:int}/customer-pack-omit")
+async def request_customer_pack_omit(
+    investigation_id: int,
+    payload: CustomerPackOmitRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("investigation:update"))],
+):
+    """Request (or revoke) omit of a section from customer packs. Approval required to hide."""
+    investigation = await _get_investigation_or_404(investigation_id, db, current_user)
+    if payload.omit_requested and not (payload.reason or "").strip():
+        raise BadRequestError("Reason is required when requesting customer-pack omit")
+    meta = await InvestigationService.set_customer_pack_omit(
+        db,
+        investigation=investigation,
+        section_id=payload.section_id.strip(),
+        omit_requested=payload.omit_requested,
+        reason=(payload.reason or "").strip() or None,
+        actor_id=current_user.id,
+        approve=False,
+    )
+    return {
+        "investigation_id": investigation_id,
+        "section_id": payload.section_id.strip(),
+        "visibility": meta,
+        "customer_pack_visibility": InvestigationService.get_customer_pack_visibility(investigation),
+    }
+
+
+@router.post("/{investigation_id:int}/customer-pack-omit/approve")
+async def approve_customer_pack_omit(
+    investigation_id: int,
+    payload: CustomerPackOmitApproveRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("investigation:approve_customer_omit"))],
+):
+    """Approve a pending section omit (H&S Advisor / Admin)."""
+    investigation = await _get_investigation_or_404(investigation_id, db, current_user)
+    meta = await InvestigationService.set_customer_pack_omit(
+        db,
+        investigation=investigation,
+        section_id=payload.section_id.strip(),
+        omit_requested=True,
+        reason=(payload.reason or "").strip() or None,
+        actor_id=current_user.id,
+        approve=True,
+        approver_id=current_user.id,
+    )
+    return {
+        "investigation_id": investigation_id,
+        "section_id": payload.section_id.strip(),
+        "visibility": meta,
+        "customer_pack_visibility": InvestigationService.get_customer_pack_visibility(investigation),
     }
 
 
@@ -478,11 +601,15 @@ async def list_investigations(
     entity_type: Optional[str] = Query(None, description="Filter by entity type"),
     entity_id: Optional[int] = Query(None, description="Filter by entity ID"),
     status: Optional[str] = Query(None, description="Filter by status"),
+    q: Optional[str] = Query(
+        None,
+        description="Smart search across reference/title/description, comments, actions/CAPA, people",
+    ),
 ):
     """List investigation runs with pagination.
 
     Returns investigations in deterministic order (created_at DESC, id ASC).
-    Can filter by entity_type, entity_id, and status.
+    Can filter by entity_type, entity_id, status, and optional smart-search `q`.
     """
     request_id = request.headers.get("X-Request-ID", "N/A")
 
@@ -506,6 +633,9 @@ async def list_investigations(
             query = query.where(InvestigationRun.status == status_enum)
         except ValueError:
             raise BadRequestError(f"Invalid status: {status}")
+
+    if q and q.strip():
+        query = InvestigationService.apply_smart_search_filter(query, q.strip())
 
     # Deterministic ordering: created_at DESC, id ASC
     query = query.order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
@@ -1199,6 +1329,13 @@ async def generate_customer_pack(
 
     if not investigation:
         raise NotFoundError(f"Investigation {investigation_id} not found")
+
+    pending = InvestigationService.pending_customer_omits(investigation)
+    if pending:
+        raise BadRequestError(
+            "Customer pack cannot be generated while section omits are pending approval: "
+            + ", ".join(pending)
+        )
 
     # Get linked evidence assets
     from src.domain.models.evidence_asset import EvidenceAsset
