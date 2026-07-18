@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.exceptions import BadRequestError, ValidationError
 from src.domain.models.capa import CAPAAction, CAPASource
 from src.domain.models.risk_register import EnterpriseRisk, RiskAppetiteStatement
-from src.domain.services.risk_service import RiskService, RiskScoringEngine
+from src.domain.services.risk_service import RiskScoringEngine, RiskService
 
 RISK_REGISTER_SHEET = "Risk Register"
 ACTION_PLAN_SHEET = "Action Plan"
