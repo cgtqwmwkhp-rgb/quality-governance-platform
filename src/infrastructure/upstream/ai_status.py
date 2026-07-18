@@ -161,8 +161,8 @@ def get_ocr_ops_capabilities() -> dict[str, Any]:
             "legacy_ack": "/api/v1/health/meta/ocr-artifacts/ack",
         },
         "e4_non_goal": (
-            "Azure Document Intelligence production enablement (E4) is out of scope. "
-            "Dispute/ack stubs record human overrides only; they never re-run OCR providers."
+            "Dispute/ack stubs record human overrides only; they never re-run OCR providers. "
+            "Azure DI production traffic is gated by AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD."
         ),
     }
 
@@ -224,25 +224,26 @@ def get_ocr_providers_readiness() -> dict[str, Any]:
             ),
         },
         "library_documents": {
-            "ocr_configured": mistral_configured,
+            "ocr_configured": mistral_configured or bool(azure_di.get("enabled_in_prod")),
             "index_jobs_async": True,
-            "azure_di_enabled_in_prod": False,
-            "azure_di_used": False,
+            "azure_di_enabled_in_prod": bool(azure_di.get("enabled_in_prod")),
+            "azure_di_used": bool(azure_di.get("used_in_library")),
             "native_extraction_always_available": True,
             "note": (
                 "Library uploads use native extraction first; Mistral OCR supplements thin or "
-                "empty native text when configured. Index jobs run OCR → chunk → Voyage → Pinecone "
-                "via Celery. Azure DI is not used for library until E4 DPO sign-off and a "
-                "dedicated QGP Document Intelligence resource is provisioned (not Jobsheet's DI)."
+                "empty native text when configured. When AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD "
+                "is set with a dedicated QGP Document Intelligence resource (never Jobsheet's DI), "
+                "Azure DI provides failover for thin/failed OCR. Index jobs run OCR → chunk → "
+                "Voyage → Pinecone via Celery."
             ),
         },
         "circuits": ai.get("circuits", {}),
         "ocr_ping": ai.get("ocr_ping"),
         "e4_non_goal": (
-            "Azure Document Intelligence is not enabled in production. "
-            "azure_di.enabled_in_prod is always false on meta/readiness probes until E4 DPO "
-            "sign-off. Library DI requires a dedicated QGP resource — never the Jobsheet DI "
-            "endpoint. azure_di.* fields report env-var presence only; no outbound DI calls from probes."
+            "Azure DI uses a dedicated QGP Document Intelligence resource — never Jobsheet's DI. "
+            "azure_di.enabled_in_prod / used_in_library follow credentials + "
+            "AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD. Meta/readiness probes never transmit "
+            "document content to Azure DI."
         ),
         "capabilities": get_ocr_ops_capabilities(),
     }

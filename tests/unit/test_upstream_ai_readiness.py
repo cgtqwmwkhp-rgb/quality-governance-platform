@@ -82,16 +82,21 @@ def test_ocr_providers_readiness_includes_azure_di(monkeypatch):
     assert "di.example.azure.com" not in str(result)
 
 
-def test_ocr_providers_meta_azure_di_prod_flag_does_not_enable_in_meta(monkeypatch):
-    """DS-1b: prod enable env must not flip enabled_in_prod on meta/readiness."""
+def test_ocr_providers_meta_azure_di_prod_flag_enables_when_configured(monkeypatch):
+    """DS-1b: after DPO sign-off, credentials + ENABLE_PROD honestly enable meta flags."""
     monkeypatch.setenv("AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT", "https://di.example.azure.com/")
     monkeypatch.setenv("AZURE_DOCUMENT_INTELLIGENCE_KEY", "azure-key")
     monkeypatch.setenv("AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD", "true")
 
-    azure = get_ocr_providers_readiness()["providers"]["azure_di"]
+    result = get_ocr_providers_readiness()
+    azure = result["providers"]["azure_di"]
     assert azure["prod_enable_flag_set"] is True
-    assert azure["enabled_in_prod"] is False
-    assert azure["used_in_prod"] is False
+    assert azure["enabled_in_prod"] is True
+    assert azure["used_in_prod"] is True
+    assert azure["used_in_library"] is True
+    assert result["library_documents"]["azure_di_enabled_in_prod"] is True
+    assert result["library_documents"]["azure_di_used"] is True
+    assert "azure-key" not in str(result)
 
 
 def test_ocr_providers_readiness_all_configured(monkeypatch):
