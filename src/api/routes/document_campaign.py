@@ -24,8 +24,6 @@ from src.api.schemas.document_campaign import (
     ComplianceSummaryResponse,
     GroupComplianceItem,
     GroupComplianceResponse,
-    SnoozeAssignmentRequest,
-    SnoozeAssignmentResponse,
     GroupCreateRequest,
     GroupListResponse,
     GroupMembersRequest,
@@ -41,6 +39,8 @@ from src.api.schemas.document_campaign import (
     QuizSubmitResponse,
     ReminderDefaultsResponse,
     ReminderDefaultsUpdateRequest,
+    SnoozeAssignmentRequest,
+    SnoozeAssignmentResponse,
 )
 from src.api.utils.tenant import require_tenant_id
 from src.domain.models.document_campaign import DocumentCampaign, EngineerGroup
