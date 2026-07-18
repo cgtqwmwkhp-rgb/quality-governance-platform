@@ -159,16 +159,16 @@ The platform supports multiple AI providers for ISO Compliance auto-tagging and 
 
 | Variable | Description | KV Secret Name | Required |
 |----------|-------------|----------------|---------|
-| `AI_PROVIDER` | Active provider: `genspark` \| `anthropic` \| `openai` \| `mistral` \| `gemini` | — | Recommended |
-| `GENSPARK_API_KEY` | Genspark.ai API key (recommended — world-class ISO analysis) | `GENSPARK-API-KEY` | For Genspark |
+| `AI_PROVIDER` | Active provider: `anthropic` \| `openai` \| `genspark` (legacy) | — | Recommended: `anthropic` |
+| `GENSPARK_API_KEY` | Genspark.ai API key (legacy — do not use for quizzes) | `GENSPARK-API-KEY` | Legacy only |
 | `GENSPARK_MODEL` | Primary Genspark model | — | `claude-opus-4-6-1m` |
 | `GENSPARK_FAST_MODEL` | Fast Genspark model for light tasks | — | `claude-sonnet-4-6` |
-| `ANTHROPIC_API_KEY` | Anthropic Claude API key (fallback) | `ANTHROPIC-API-KEY` | For Anthropic |
+| `ANTHROPIC_API_KEY` | Anthropic Claude API key (primary for quizzes / analysis) | `ANTHROPIC-API-KEY` | Primary |
 | `OPENAI_API_KEY` | OpenAI API key (secondary fallback) | `OPENAI-API-KEY` | For OpenAI |
 | `MISTRAL_API_KEY` | Mistral API key (OCR + AI tasks) | `MISTRAL-API-KEY` | For Mistral OCR |
 | `GOOGLE_GEMINI_API_KEY` | Google Gemini API key | `GOOGLE-GEMINI-API-KEY` | For Gemini |
 
-**Provider selection priority (automatic):** Genspark → Anthropic → OpenAI. Set `AI_PROVIDER` to override.
+**Provider selection priority (automatic):** Anthropic → OpenAI → Genspark (legacy). Set `AI_PROVIDER` to override.
 
 **Registering Genspark key in Azure Key Vault:**
 ```bash
