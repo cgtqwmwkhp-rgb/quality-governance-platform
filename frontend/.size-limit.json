@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "161 kB",
+    "limit": "162 kB",
     "gzip": true,
-    "name": "index: 158\u2192161 kB \u2014 wave2 portal ask/document URL (+2.35 kB over 158)"
+    "name": "index: 161→162 kB — campaign results W1 roster i18n (+~1 kB over 161)"
   },
   {
     "path": "dist/assets/vendor-*.js",
