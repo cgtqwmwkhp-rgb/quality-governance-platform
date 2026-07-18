@@ -245,14 +245,16 @@ export function scorePayloadForQuestion(
         : question.type === 'pass_fail'
           ? 'pass'
           : 'yes'
+    const answer = String(response.response).trim().toLowerCase()
     return {
-      score: response.response === positiveVal ? maxScore : 0,
+      score: answer === positiveVal ? maxScore : 0,
       max_score: maxScore,
     }
   }
   if (question.type === 'yes_no_na') {
     const positiveVal = question.positiveAnswer === 'no' ? 'no' : 'yes'
-    const ok = response.response === positiveVal || response.response === 'na'
+    const answer = String(response.response).trim().toLowerCase()
+    const ok = answer === positiveVal || answer === 'na'
     return { score: ok ? maxScore : 0, max_score: maxScore }
   }
   if (question.type.startsWith('scale_')) {
