@@ -40,8 +40,16 @@ def action_key_for(storage_kind: str, row_id: int) -> str:
     return f"{storage_kind}:{row_id}"
 
 
+def normalize_action_key(key: str) -> str:
+    """Accept bare numeric ids as capa:{id} (legacy / UAT deep links like /actions/2)."""
+    k = (key or "").strip()
+    if k.isdigit():
+        return action_key_for(STORAGE_CAPA, int(k))
+    return k
+
+
 def parse_action_key(key: str) -> tuple[str, int]:
-    key = key.strip()
+    key = normalize_action_key(key)
     if ":" not in key:
         raise ValueError("action_key must be '<kind>:<id>'")
     kind, _, rest = key.partition(":")

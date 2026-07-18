@@ -403,6 +403,8 @@ describe('Actions My Work / Overdue server filters', () => {
 
     expect(await screen.findByTestId('actions-summary-unavailable')).toBeInTheDocument()
     expect(mockToastError).toHaveBeenCalled()
+    // Heroes stay mounted (counts as —) so Overdue|Due controls remain findable.
+    expect(screen.getByTestId('actions-hero-overdue')).toHaveAttribute('aria-label', 'Overdue')
   })
 })
 
@@ -478,7 +480,7 @@ describe('Actions Running Sheet create bridge', () => {
       </MemoryRouter>,
     )
 
-    await user.click(await screen.findByRole('button', { name: 'New Action' }))
+    await user.click(await screen.findByTestId('actions-create'))
     await user.type(screen.getByPlaceholderText('Action title...'), 'Follow up')
     await user.type(screen.getByPlaceholderText('Describe the action required...'), 'Details')
     await user.type(screen.getByPlaceholderText('e.g., 42'), '42')
@@ -565,7 +567,7 @@ describe('Actions Round 2 polish — honesty & a11y', () => {
     mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: true } })
   })
 
-  it('shows error retry instead of hero zeros when list load fails', async () => {
+  it('keeps chrome + heroes when list load fails (inline retry)', async () => {
     mockSummary.mockResolvedValue({ data: { total: 9, by_display_status: { open: 9 } } })
     mockList.mockRejectedValue(new Error('500 server'))
 
@@ -576,11 +578,12 @@ describe('Actions Round 2 polish — honesty & a11y', () => {
     )
 
     expect(await screen.findByText('Try Again')).toBeInTheDocument()
-    expect(screen.queryByTestId('actions-hero-board')).not.toBeInTheDocument()
-    expect(screen.queryByText('9')).not.toBeInTheDocument()
+    expect(screen.getByTestId('actions-hero-board')).toBeInTheDocument()
+    expect(screen.getByTestId('actions-search')).toBeInTheDocument()
+    expect(screen.getByTestId('actions-status-filter')).toBeInTheDocument()
   })
 
-  it('closes create dialog on Escape and returns focus to New Action trigger', async () => {
+  it('closes create dialog on Escape and returns focus to Create Action trigger', async () => {
     mockSummary.mockResolvedValue({ data: { total: 0, by_display_status: {} } })
     mockList.mockResolvedValue({ data: { items: [] } })
 
@@ -591,7 +594,7 @@ describe('Actions Round 2 polish — honesty & a11y', () => {
       </MemoryRouter>,
     )
 
-    const trigger = await screen.findByRole('button', { name: 'New Action' })
+    const trigger = await screen.findByTestId('actions-create')
     await user.click(trigger)
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
@@ -751,7 +754,7 @@ describe('Actions Round 3 polish — CUJ honesty & upstream links', () => {
       </MemoryRouter>,
     )
 
-    await user.click(await screen.findByRole('button', { name: 'New Action' }))
+    await user.click(await screen.findByTestId('actions-create'))
     expect(await screen.findByTestId('actions-create-next-steps')).toHaveTextContent(
       'Assignee and completion are saved on the action profile',
     )

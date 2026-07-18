@@ -91,15 +91,35 @@ const SUPPORTED_EVIDENCE_MIME_TYPES = [
   'audio/ogg',
 ]
 
+/** Bare numeric /actions/:id deep links (UAT) resolve as capa:{id}. */
+function resolveActionLookupKey(raw: string): string {
+  const k = raw.trim()
+  if (/^\d+$/.test(k)) return `capa:${k}`
+  return k
+}
+
+function dueDateInputValue(iso: string | undefined | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) {
+    const m = /^(\d{4}-\d{2}-\d{2})/.exec(iso)
+    return m ? m[1] : ''
+  }
+  return d.toISOString().slice(0, 10)
+}
+
 export default function ActionDetail() {
   const { t } = useTranslation()
   const { id } = useParams()
-  const key = parseActionDetailId(id)
+  const key = resolveActionLookupKey(parseActionDetailId(id))
   const [action, setAction] = useState<ApiAction | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [statusDraft, setStatusDraft] = useState<string>('')
+  const [titleDraft, setTitleDraft] = useState('')
+  const [dueDraft, setDueDraft] = useState('')
+  const [assigneeDraft, setAssigneeDraft] = useState('')
   const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
 
   const [notes, setNotes] = useState<ActionOwnerNote[]>([])
@@ -154,6 +174,9 @@ export default function ActionDetail() {
       const res = await actionsApi.getByKey(key.trim())
       setAction(res.data)
       setStatusDraft(res.data.display_status || res.data.status)
+      setTitleDraft(res.data.title || '')
+      setDueDraft(dueDateInputValue(res.data.due_date))
+      setAssigneeDraft(res.data.assigned_to_email || res.data.owner_email || '')
       await fetchNotesAndEvidence(res.data.action_key, true)
     } catch (e: unknown) {
       setError(getApiErrorMessage(e, 'Could not load this action.'))
@@ -212,20 +235,47 @@ export default function ActionDetail() {
     }
   }, [action])
 
-  const saveStatus = async () => {
+  const patchAction = async (payload: ActionUpdate, successText: string) => {
     if (!action) return
     setSaving(true)
     setError(null)
+    setInlineMessage(null)
     try {
-      const payload: ActionUpdate = { status: statusDraft }
       const res = await actionsApi.update(action.id, action.source_type, payload)
       setAction(res.data)
       setStatusDraft(res.data.display_status || res.data.status)
+      setTitleDraft(res.data.title || '')
+      setDueDraft(dueDateInputValue(res.data.due_date))
+      setAssigneeDraft(res.data.assigned_to_email || res.data.owner_email || '')
+      setInlineMessage({ tone: 'success', text: successText })
     } catch (e: unknown) {
-      setError(getApiErrorMessage(e, 'Update failed. Check permissions and status value.'))
+      const msg = getApiErrorMessage(e, 'Update failed. Check permissions and values.')
+      setError(msg)
+      setInlineMessage({ tone: 'error', text: msg })
     } finally {
       setSaving(false)
     }
+  }
+
+  const saveStatus = async () => {
+    await patchAction({ status: statusDraft }, 'Status updated.')
+  }
+
+  const saveTitle = async () => {
+    const next = titleDraft.trim()
+    if (!next) {
+      setInlineMessage({ tone: 'error', text: 'Title is required.' })
+      return
+    }
+    await patchAction({ title: next.slice(0, 300) }, 'Title saved.')
+  }
+
+  const saveDueDate = async () => {
+    if (!dueDraft) {
+      setInlineMessage({ tone: 'error', text: 'Choose a due date.' })
+      return
+    }
+    await patchAction({ due_date: dueDraft }, 'Due date saved.')
   }
 
   const submitNote = async () => {
@@ -390,6 +440,8 @@ export default function ActionDetail() {
   }
 
   const statusDirty = statusDraft !== (action.display_status || action.status)
+  const titleDirty = titleDraft.trim() !== (action.title || '').trim()
+  const dueDirty = dueDraft !== dueDateInputValue(action.due_date)
   const isCapa = action.action_key.startsWith('capa:') || action.source_type === 'capa'
   const sourceLink = getActionSourceLink(action.source_type, action.source_id)
 
@@ -430,14 +482,44 @@ export default function ActionDetail() {
             {copyFlash === 'link' ? 'Copied' : 'Copy link'}
           </Button>
         </div>
-        <h1 className="text-2xl font-bold text-foreground mt-1">{action.title}</h1>
+        <div className="mt-3 space-y-2">
+          <label
+            htmlFor="action-detail-title"
+            className="block text-sm font-medium text-foreground"
+          >
+            Title
+          </label>
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <Input
+              id="action-detail-title"
+              data-testid="action-detail-title"
+              aria-label="Title"
+              value={titleDraft}
+              onChange={(e) => setTitleDraft(e.target.value.slice(0, 300))}
+              maxLength={300}
+              className="text-lg font-semibold"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={saveTitle}
+              disabled={saving || !titleDirty}
+              aria-label="Update title"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+              Update
+            </Button>
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2 mt-2">
           <Badge variant="secondary">{action.source_type}</Badge>
           <Badge variant="outline">{action.display_status}</Badge>
           <Badge variant="outline">raw: {action.status}</Badge>
           {action.priority ? (
-            <Badge variant="outline">priority: {action.priority}</Badge>
-          ) : null}
+            <Badge variant="outline">Priority: {action.priority}</Badge>
+          ) : (
+            <Badge variant="outline">Priority</Badge>
+          )}
           {sourceLink ? (
             <Button
               variant="outline"
@@ -477,31 +559,8 @@ export default function ActionDetail() {
             </Button>
           </div>
         ) : null}
-        <dl className="mt-3 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
-          {action.due_date ? (
-            <div>
-              <dt className="inline font-medium text-foreground/80">Due</dt>{' '}
-              <dd className="inline">
-                {new Date(action.due_date).toLocaleString(undefined, {
-                  dateStyle: 'medium',
-                  timeStyle: undefined,
-                })}
-              </dd>
-            </div>
-          ) : null}
-          {action.owner_email ? (
-            <div>
-              <dt className="inline font-medium text-foreground/80">Owner</dt>{' '}
-              <dd className="inline">{action.owner_email}</dd>
-            </div>
-          ) : null}
-          {action.assigned_to_email ? (
-            <div>
-              <dt className="inline font-medium text-foreground/80">Assignee</dt>{' '}
-              <dd className="inline">{action.assigned_to_email}</dd>
-            </div>
-          ) : null}
-          {action.completed_at ? (
+        {action.completed_at ? (
+          <dl className="mt-3 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
             <div>
               <dt className="inline font-medium text-foreground/80">Completed</dt>{' '}
               <dd className="inline">
@@ -511,8 +570,8 @@ export default function ActionDetail() {
                 })}
               </dd>
             </div>
-          ) : null}
-        </dl>
+          </dl>
+        ) : null}
         {action.completion_notes?.trim() ? (
           <div className="mt-3 rounded-md border border-border bg-muted/20 p-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -762,7 +821,7 @@ export default function ActionDetail() {
 
           <div className="border-t border-border pt-4 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium text-foreground">Update status</p>
+              <p className="text-sm font-medium text-foreground">Status</p>
               {statusDirty ? (
                 <Badge variant="outline" className="text-amber-800 dark:text-amber-200 border-amber-600/40">
                   Unsaved change
@@ -772,28 +831,36 @@ export default function ActionDetail() {
             <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
               <div className="flex-1">
                 <Select value={statusDraft} onValueChange={setStatusDraft}>
-                  <SelectTrigger>
+                  <SelectTrigger
+                    aria-label="Status"
+                    data-testid="action-detail-status"
+                  >
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="open">open</SelectItem>
-                    <SelectItem value="in_progress">in_progress</SelectItem>
-                    <SelectItem value="pending_verification">pending_verification</SelectItem>
-                    <SelectItem value="completed">completed</SelectItem>
-                    <SelectItem value="cancelled">cancelled</SelectItem>
-                    <SelectItem value="closed">closed (CAPA)</SelectItem>
-                    <SelectItem value="verification">verification (CAPA)</SelectItem>
-                    <SelectItem value="overdue">overdue (CAPA)</SelectItem>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="pending_verification">Pending verification</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectItem value="closed">Closed (CAPA)</SelectItem>
+                    <SelectItem value="verification">Verification (CAPA)</SelectItem>
+                    <SelectItem value="overdue">Overdue (CAPA)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <Button type="button" onClick={saveStatus} disabled={saving || !statusDirty}>
+              <Button
+                type="button"
+                onClick={saveStatus}
+                disabled={saving || !statusDirty}
+                aria-label="Update status"
+              >
                 {saving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Save className="w-4 h-4 mr-1" />
                 )}
-                Save
+                Update
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -801,9 +868,45 @@ export default function ActionDetail() {
             </p>
           </div>
 
+          <div className="border-t border-border pt-4 space-y-3">
+            <label
+              htmlFor="action-detail-due"
+              className="block text-sm font-medium text-foreground"
+            >
+              Due date
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+              <Input
+                id="action-detail-due"
+                type="date"
+                data-testid="action-detail-due"
+                aria-label="Due date"
+                value={dueDraft}
+                onChange={(e) => setDueDraft(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={saveDueDate}
+                disabled={saving || !dueDirty}
+                aria-label="Update due date"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                Update
+              </Button>
+            </div>
+          </div>
+
           <div className="border-t border-border pt-4">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Assignee email (optional)
+            <label
+              htmlFor="action-detail-assignee"
+              className="block text-sm font-medium text-foreground"
+            >
+              Assignee / Owner
+            </label>
+            <p className="text-xs text-muted-foreground mt-1">
+              Responsible person email (optional)
             </p>
             {isCapa && emailConfigured === false ? (
               <div
@@ -824,15 +927,16 @@ export default function ActionDetail() {
               className="flex flex-col sm:flex-row gap-2 mt-2"
               onSubmit={async (e) => {
                 e.preventDefault()
-                const fd = new FormData(e.currentTarget)
-                const email = String(fd.get('email') || '').trim()
+                const email = assigneeDraft.trim()
                 if (!email || !action) return
                 setSaving(true)
+                setInlineMessage(null)
                 try {
                   const res = await actionsApi.update(action.id, action.source_type, {
                     assigned_to_email: email,
                   })
                   setAction(res.data)
+                  setAssigneeDraft(res.data.assigned_to_email || res.data.owner_email || email)
                   setInlineMessage({
                     tone: 'success',
                     text:
@@ -850,8 +954,18 @@ export default function ActionDetail() {
                 }
               }}
             >
-              <Input name="email" type="email" placeholder="user@company.com" className="flex-1" />
-              <Button type="submit" variant="secondary" disabled={saving}>
+              <Input
+                id="action-detail-assignee"
+                name="email"
+                type="email"
+                placeholder="user@company.com"
+                className="flex-1"
+                value={assigneeDraft}
+                onChange={(e) => setAssigneeDraft(e.target.value)}
+                aria-label="Assignee owner responsible"
+                data-testid="action-detail-assignee"
+              />
+              <Button type="submit" variant="secondary" disabled={saving} aria-label="Assign owner">
                 Assign
               </Button>
             </form>

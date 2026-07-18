@@ -25,6 +25,7 @@ from src.api.routes._action_unified import (
     capa_api_source_type,
     capa_enum_from_api_filter,
     display_status_for,
+    normalize_action_key,
     parse_action_key,
 )
 from src.api.schemas.error_codes import ErrorCode
@@ -183,12 +184,17 @@ class ActionsViewCountsResponse(BaseModel):
 class ActionOwnerNoteCreate(BaseModel):
     """Request body for appending owner commentary."""
 
-    key: str = Field(..., min_length=3, max_length=80, description="Unified action_key")
+    key: str = Field(
+        ...,
+        min_length=1,
+        max_length=80,
+        description="Unified action_key (bare numeric ids normalize to capa:{id})",
+    )
     body: str = Field(..., min_length=1, max_length=16000)
 
     @model_validator(mode="after")
     def strip_key_and_body(self) -> "ActionOwnerNoteCreate":
-        k = self.key.strip()
+        k = normalize_action_key(self.key)
         b = self.body.strip()
         if len(k) < 3:
             raise ValueError("key is too short after trimming whitespace")
@@ -1711,7 +1717,11 @@ async def load_action_response_by_key(
 async def get_action_by_key(
     db: DbSession,
     current_user: CurrentUser,
-    key: str = Query(..., min_length=3, description="Stable key e.g. capa:12, incident_action:4"),
+    key: str = Query(
+        ...,
+        min_length=1,
+        description="Stable key e.g. capa:12, incident_action:4 (bare digits → capa:{id})",
+    ),
 ) -> ActionResponse:
     """Resolve an action by its action_key (no source_type guesswork)."""
     return await load_action_response_by_key(db, current_user.tenant_id, key)
@@ -1721,7 +1731,11 @@ async def get_action_by_key(
 async def list_action_owner_notes(
     db: DbSession,
     current_user: CurrentUser,
-    key: str = Query(..., min_length=3, description="Unified action_key"),
+    key: str = Query(
+        ...,
+        min_length=1,
+        description="Unified action_key (bare digits → capa:{id})",
+    ),
     limit: int = Query(100, ge=1, le=200, description="Max notes to return (newest first)"),
 ) -> ActionOwnerNoteListResponse:
     """List time-stamped owner commentary for an action (newest first)."""

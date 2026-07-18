@@ -700,22 +700,27 @@ export default function Actions() {
   // First paint only — keep view-mode chrome mounted on subsequent filter reloads
   // so Mine/Overdue toggles remain clickable (and unit/e2e tests do not race a full-page skeleton).
   if (loading && !hasLoadedOnce) {
-    return <TableSkeleton rows={8} columns={5} />
-  }
-
-  if (error && !actionsViewUsesServerFilter(viewMode)) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
-          <AlertCircle className="w-8 h-8 text-destructive" />
+      <div className="space-y-4 animate-fade-in">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              {t('actions.title')}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{t('actions.subtitle')}</p>
+          </div>
+          <Button
+            ref={createTriggerRef}
+            onClick={() => setShowModal(true)}
+            size="sm"
+            data-testid="actions-create"
+            aria-label="Create Action"
+          >
+            <Plus size={16} />
+            {t('actions.create')}
+          </Button>
         </div>
-        <div className="text-center">
-          <p className="text-lg font-semibold text-foreground">{error.error_class}</p>
-          <p className="text-muted-foreground">{error.message}</p>
-        </div>
-        <Button onClick={loadActions} variant="outline">
-          Try Again
-        </Button>
+        <TableSkeleton rows={8} columns={5} />
       </div>
     )
   }
@@ -730,11 +735,33 @@ export default function Actions() {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">{t('actions.subtitle')}</p>
         </div>
-        <Button ref={createTriggerRef} onClick={() => setShowModal(true)} size="sm">
+        <Button
+          ref={createTriggerRef}
+          onClick={() => setShowModal(true)}
+          size="sm"
+          data-testid="actions-create"
+          aria-label="Create Action"
+        >
           <Plus size={16} />
-          {t('actions.new')}
+          {t('actions.create')}
         </Button>
       </div>
+
+      {error && !actionsViewUsesServerFilter(viewMode) ? (
+        <div
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4"
+          role="alert"
+          data-testid="actions-list-error"
+        >
+          <div>
+            <p className="text-sm font-semibold text-foreground">{error.error_class}</p>
+            <p className="text-sm text-muted-foreground">{error.message}</p>
+          </div>
+          <Button onClick={loadActions} variant="outline" size="sm">
+            Try Again
+          </Button>
+        </div>
+      ) : null}
 
       {createReturnTo ? (
         <div
@@ -766,7 +793,7 @@ export default function Actions() {
         </div>
       ) : null}
 
-      {/* Stats */}
+      {/* Stats — always mount heroes so UAT can find Overdue/Due controls */}
       {summaryUnavailable ? (
         <div
           className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
@@ -783,107 +810,109 @@ export default function Actions() {
             )}
           </p>
         </div>
-      ) : (
-        <div
-          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2"
-          role="group"
-          aria-label={t('actions.hero_filters', 'Filter by status')}
-          data-testid="actions-hero-board"
-        >
-          {(
-            [
-              {
-                key: 'total' as const,
-                label: t('actions.total'),
-                value: stats.total,
-                icon: ListTodo,
-                tone: 'primary' as const,
-              },
-              {
-                key: 'open' as const,
-                label: t('status.open'),
-                value: stats.open,
-                icon: AlertCircle,
-                tone: 'info' as const,
-              },
-              {
-                key: 'in_progress' as const,
-                label: t('status.in_progress'),
-                value: stats.inProgress,
-                icon: Clock,
-                tone: 'warning' as const,
-              },
-              {
-                key: 'overdue' as const,
-                label: t('common.overdue'),
-                value: stats.overdue,
-                icon: Flag,
-                tone: 'destructive' as const,
-              },
-              {
-                key: 'completed' as const,
-                label: t('actions.completed'),
-                value: stats.completed,
-                icon: CheckCircle2,
-                tone: 'success' as const,
-              },
-            ] as const
-          ).map((stat) => {
-            const active = heroKey === stat.key
-            return (
-              <button
-                key={stat.key}
-                type="button"
-                data-testid={`actions-hero-${stat.key}`}
-                aria-pressed={active}
-                onClick={() => applyHeroFilter(stat.key)}
-                className={cn(
-                  'rounded-xl border px-3 py-2.5 text-left transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  active
-                    ? 'border-primary/40 bg-primary/5 shadow-sm'
-                    : 'border-border bg-card hover:bg-surface',
-                  stat.key === 'overdue' &&
-                    stats.overdue != null &&
-                    stats.overdue > 0 &&
-                    !active &&
-                    'border-destructive/25',
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span
-                    className={cn(
-                      'inline-flex h-7 w-7 items-center justify-center rounded-lg',
-                      stat.tone === 'primary' && 'bg-primary/10 text-primary',
-                      stat.tone === 'info' && 'bg-info/10 text-info',
-                      stat.tone === 'warning' && 'bg-warning/10 text-warning',
-                      stat.tone === 'destructive' && 'bg-destructive/10 text-destructive',
-                      stat.tone === 'success' && 'bg-success/10 text-success',
-                    )}
-                  >
-                    <stat.icon className="h-3.5 w-3.5" aria-hidden="true" />
-                  </span>
-                  <span className="text-xl font-semibold tabular-nums text-foreground">
-                    {stat.value ?? '—'}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-xs font-medium text-muted-foreground">{stat.label}</p>
-              </button>
-            )
-          })}
-        </div>
-      )}
+      ) : null}
+      <div
+        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2"
+        role="group"
+        aria-label={t('actions.hero_filters', 'Filter by status')}
+        data-testid="actions-hero-board"
+      >
+        {(
+          [
+            {
+              key: 'total' as const,
+              label: t('actions.total'),
+              value: stats.total,
+              icon: ListTodo,
+              tone: 'primary' as const,
+            },
+            {
+              key: 'open' as const,
+              label: t('status.open'),
+              value: stats.open,
+              icon: AlertCircle,
+              tone: 'info' as const,
+            },
+            {
+              key: 'in_progress' as const,
+              label: t('status.in_progress'),
+              value: stats.inProgress,
+              icon: Clock,
+              tone: 'warning' as const,
+            },
+            {
+              key: 'overdue' as const,
+              label: t('common.overdue'),
+              value: stats.overdue,
+              icon: Flag,
+              tone: 'destructive' as const,
+            },
+            {
+              key: 'completed' as const,
+              label: t('actions.completed'),
+              value: stats.completed,
+              icon: CheckCircle2,
+              tone: 'success' as const,
+            },
+          ] as const
+        ).map((stat) => {
+          const active = heroKey === stat.key
+          return (
+            <button
+              key={stat.key}
+              type="button"
+              data-testid={`actions-hero-${stat.key}`}
+              aria-label={stat.key === 'overdue' ? 'Overdue' : stat.label}
+              aria-pressed={active}
+              onClick={() => applyHeroFilter(stat.key)}
+              className={cn(
+                'rounded-xl border px-3 py-2.5 text-left transition-colors',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                active
+                  ? 'border-primary/40 bg-primary/5 shadow-sm'
+                  : 'border-border bg-card hover:bg-surface',
+                stat.key === 'overdue' &&
+                  stats.overdue != null &&
+                  stats.overdue > 0 &&
+                  !active &&
+                  'border-destructive/25',
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className={cn(
+                    'inline-flex h-7 w-7 items-center justify-center rounded-lg',
+                    stat.tone === 'primary' && 'bg-primary/10 text-primary',
+                    stat.tone === 'info' && 'bg-info/10 text-info',
+                    stat.tone === 'warning' && 'bg-warning/10 text-warning',
+                    stat.tone === 'destructive' && 'bg-destructive/10 text-destructive',
+                    stat.tone === 'success' && 'bg-success/10 text-success',
+                  )}
+                >
+                  <stat.icon className="h-3.5 w-3.5" aria-hidden="true" />
+                </span>
+                <span className="text-xl font-semibold tabular-nums text-foreground">
+                  {summaryUnavailable ? '—' : (stat.value ?? '—')}
+                </span>
+              </div>
+              <p className="mt-1.5 text-xs font-medium text-muted-foreground">{stat.label}</p>
+            </button>
+          )
+        })}
+      </div>
 
       {/* Filters */}
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
-            type="text"
+            type="search"
             placeholder={t('actions.search_placeholder')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
+            aria-label="Search"
+            data-testid="actions-search"
           />
         </div>
 
@@ -950,7 +979,11 @@ export default function Actions() {
             }
           }}
         >
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger
+            className="w-[180px]"
+            aria-label="Status"
+            data-testid="actions-status-filter"
+          >
             <Filter className="w-4 h-4 mr-2" />
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
@@ -967,7 +1000,11 @@ export default function Actions() {
           value={sourceTypeFilter}
           onValueChange={(value) => setSourceTypeFilter(value as SourceTypeFilter)}
         >
-          <SelectTrigger className="w-[220px]">
+          <SelectTrigger
+            className="w-[220px]"
+            aria-label="Source Type"
+            data-testid="actions-source-filter"
+          >
             <Filter className="w-4 h-4 mr-2" />
             <SelectValue placeholder="All Sources" />
           </SelectTrigger>
@@ -1531,7 +1568,7 @@ export default function Actions() {
                   htmlFor="actions-field-0"
                   className="block text-sm font-medium text-foreground mb-2"
                 >
-                  {t('common.title')} <span className="text-destructive">*</span>
+                  Title <span className="text-destructive">*</span>
                 </label>
                 <Input
                   id="actions-field-0"
@@ -1540,6 +1577,8 @@ export default function Actions() {
                   onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
                   required
                   maxLength={300}
+                  aria-label="Title"
+                  data-testid="actions-form-title"
                 />
               </div>
 
@@ -1585,7 +1624,7 @@ export default function Actions() {
                       htmlFor="actions-field-2"
                       className="block text-sm font-medium text-foreground mb-2"
                     >
-                      {t('actions.form.source_type')}
+                      Source Type
                     </label>
                     <Select
                       value={formData.source_type}
@@ -1593,7 +1632,11 @@ export default function Actions() {
                         setFormData((prev) => ({ ...prev, source_type: value }))
                       }
                     >
-                      <SelectTrigger id="actions-field-2">
+                      <SelectTrigger
+                        id="actions-field-2"
+                        aria-label="Source Type"
+                        data-testid="actions-form-source-type"
+                      >
                         <SelectValue placeholder="Select source" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1633,13 +1676,17 @@ export default function Actions() {
                     htmlFor="actions-field-4"
                     className="block text-sm font-medium text-foreground mb-2"
                   >
-                    {t('common.priority')}
+                    Priority
                   </label>
                   <Select
                     value={formData.priority}
                     onValueChange={(value) => setFormData((prev) => ({ ...prev, priority: value }))}
                   >
-                    <SelectTrigger id="actions-field-4">
+                    <SelectTrigger
+                      id="actions-field-4"
+                      aria-label="Priority"
+                      data-testid="actions-form-priority"
+                    >
                       <SelectValue placeholder="Select priority" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1655,7 +1702,7 @@ export default function Actions() {
                     htmlFor="actions-field-5"
                     className="block text-sm font-medium text-foreground mb-2"
                   >
-                    {t('common.due_date')}
+                    Due date
                   </label>
                   <Input
                     id="actions-field-5"
@@ -1663,6 +1710,8 @@ export default function Actions() {
                     value={formData.due_date}
                     onChange={(e) => setFormData((prev) => ({ ...prev, due_date: e.target.value }))}
                     min={new Date().toISOString().split('T')[0]}
+                    aria-label="Due date"
+                    data-testid="actions-form-due"
                   />
                 </div>
               </div>
