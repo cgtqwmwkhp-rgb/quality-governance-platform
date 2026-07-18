@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.api.schemas.document_campaign import SpawnReackCampaignResponse
 from src.api.utils.tenant import require_tenant_id
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.document import (
@@ -32,12 +33,11 @@ from src.domain.models.document import (
     IndexJob,
     SensitivityLevel,
 )
-from src.api.schemas.document_campaign import SpawnReackCampaignResponse
 from src.domain.models.user import User
 from src.domain.services.document_ai_service import VectorSearchService
+from src.domain.services.document_campaign_service import DocumentCampaignService
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
-from src.domain.services.document_campaign_service import DocumentCampaignService
 from src.domain.services.document_version_service import (
     assert_library_metadata_editable,
     document_version_service,
