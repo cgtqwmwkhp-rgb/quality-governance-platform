@@ -305,7 +305,7 @@ class Settings(BaseSettings):
     azure_document_intelligence_enable_prod: bool = False
 
     # AI provider selection and Genspark.ai configuration
-    # Priority: genspark > anthropic > openai (override with AI_PROVIDER env var)
+    # Priority: anthropic > openai > genspark-legacy (override with AI_PROVIDER env var)
     ai_provider: str = ""
     genspark_api_key: str = ""
     genspark_model: str = "claude-opus-4-6-1m"

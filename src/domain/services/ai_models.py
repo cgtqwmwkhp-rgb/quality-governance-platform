@@ -57,10 +57,8 @@ class AIConfig:
     azure_openai_key: str = ""
     azure_openai_deployment: str = ""
     anthropic_api_key: str = ""
-    anthropic_model: str = "claude-3-opus-20240229"
-    # Genspark.ai — OpenAI-compatible proxy at https://api.genspark.ai
-    # Primary model: claude-opus-4-6-1m (deep reasoning for ISO analysis)
-    # Fast model:    claude-sonnet-4-6   (quick classification tasks)
+    anthropic_model: str = "claude-sonnet-4-5"
+    # Genspark retained as optional legacy client only (not primary).
     genspark_api_key: str = ""
     genspark_model: str = "claude-opus-4-6-1m"
     genspark_fast_model: str = "claude-sonnet-4-6"
@@ -70,26 +68,44 @@ class AIConfig:
     @classmethod
     def from_env(cls) -> "AIConfig":
         """Load configuration from environment variables."""
-        provider_str = os.getenv("AI_PROVIDER", "openai")
-        # Auto-upgrade to Genspark if a key is present and provider not explicitly set
+        provider_str = (os.getenv("AI_PROVIDER") or "").strip().lower()
         genspark_key = os.getenv("GENSPARK_API_KEY", "")
-        if genspark_key and provider_str == "openai" and not os.getenv("OPENAI_API_KEY"):
-            provider_str = "genspark"
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+        openai_key = os.getenv("OPENAI_API_KEY", "")
+
+        # Default / auto: Anthropic → OpenAI → Genspark (legacy). Explicit AI_PROVIDER wins.
+        if not provider_str or provider_str == "auto":
+            if anthropic_key:
+                provider_str = "anthropic"
+            elif openai_key:
+                provider_str = "openai"
+            elif genspark_key:
+                provider_str = "genspark"
+            else:
+                provider_str = "openai"
 
         try:
             provider = AIProvider(provider_str)
         except ValueError:
-            provider = AIProvider.GENSPARK if genspark_key else AIProvider.OPENAI
+            provider = (
+                AIProvider.ANTHROPIC
+                if anthropic_key
+                else AIProvider.OPENAI
+                if openai_key
+                else AIProvider.GENSPARK
+                if genspark_key
+                else AIProvider.OPENAI
+            )
 
         return cls(
             provider=provider,
-            openai_api_key=os.getenv("OPENAI_API_KEY", ""),
-            openai_model=os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview"),
+            openai_api_key=openai_key,
+            openai_model=os.getenv("OPENAI_MODEL", "gpt-4o"),
             azure_openai_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
             azure_openai_key=os.getenv("AZURE_OPENAI_KEY", ""),
             azure_openai_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", ""),
-            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
-            anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-3-opus-20240229"),
+            anthropic_api_key=anthropic_key,
+            anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5"),
             genspark_api_key=genspark_key,
             genspark_model=os.getenv("GENSPARK_MODEL", "claude-opus-4-6-1m"),
             genspark_fast_model=os.getenv("GENSPARK_FAST_MODEL", "claude-sonnet-4-6"),
@@ -413,16 +429,12 @@ def get_ai_client(config: Optional[AIConfig] = None) -> AIClient:
     Factory: return the best available AI client given the environment config.
 
     Priority:
-      1. Genspark  — if GENSPARK_API_KEY is set  (richest ISO analysis capability)
-      2. Anthropic  — if ANTHROPIC_API_KEY is set
-      3. OpenAI     — if OPENAI_API_KEY is set
+      1. Anthropic — quizzes, ISO analysis, document Q&A (preferred)
+      2. OpenAI    — fallback LLM + embeddings helper
+      3. Genspark  — legacy only (broken hostname in current prod config)
       4. OpenAI stub (will fail at HTTP time, but allows startup without a key)
     """
     config = config or AIConfig.from_env()
-
-    if config.provider == AIProvider.GENSPARK and config.genspark_api_key:
-        logger.info("AI client: Genspark.ai (model=%s)", config.genspark_model)
-        return GenspaarkClient(config)
 
     if config.provider == AIProvider.ANTHROPIC and config.anthropic_api_key:
         logger.info("AI client: Anthropic (model=%s)", config.anthropic_model)
@@ -432,16 +444,20 @@ def get_ai_client(config: Optional[AIConfig] = None) -> AIClient:
         logger.info("AI client: OpenAI (model=%s)", config.openai_model)
         return OpenAIClient(config)
 
-    # Fallback: try any key that is available regardless of declared provider
-    if config.genspark_api_key:
-        logger.info("AI client: Genspark.ai (fallback, key present)")
+    if config.provider == AIProvider.GENSPARK and config.genspark_api_key:
+        logger.info("AI client: Genspark.ai (model=%s)", config.genspark_model)
         return GenspaarkClient(config)
+
+    # Fallback: prefer direct providers over Genspark regardless of declared provider
     if config.anthropic_api_key:
         logger.info("AI client: Anthropic (fallback, key present)")
         return AnthropicClient(config)
     if config.openai_api_key:
         logger.info("AI client: OpenAI (fallback, key present)")
         return OpenAIClient(config)
+    if config.genspark_api_key:
+        logger.info("AI client: Genspark.ai (legacy fallback, key present)")
+        return GenspaarkClient(config)
 
     logger.warning("AI client: no API key found; returning OpenAI stub (calls will fail)")
     return OpenAIClient(config)

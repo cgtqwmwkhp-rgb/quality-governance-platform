@@ -542,6 +542,8 @@ jobs:
           MISTRAL_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name MISTRAL-API-KEY --query value -o tsv 2>/dev/null || true)
           GEMINI_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name GOOGLE-GEMINI-API-KEY --query value -o tsv 2>/dev/null || true)
           GENSPARK_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name GENSPARK-API-KEY --query value -o tsv 2>/dev/null || true)
+          ANTHROPIC_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name ANTHROPIC-API-KEY --query value -o tsv 2>/dev/null || true)
+          OPENAI_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name OPENAI-API-KEY --query value -o tsv 2>/dev/null || true)
           AZURE_DI_ENDPOINT_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name AZURE-DOCUMENT-INTELLIGENCE-ENDPOINT --query value -o tsv 2>/dev/null || true)
           AZURE_DI_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name AZURE-DOCUMENT-INTELLIGENCE-KEY --query value -o tsv 2>/dev/null || true)
           VOYAGE_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name VOYAGE-API-KEY --query value -o tsv 2>/dev/null || true)
@@ -589,7 +591,10 @@ jobs:
               GENSPARK_API_KEY="${GENSPARK_API_KEY_VAL}" \
               GENSPARK_MODEL="claude-opus-4-6-1m" \
               GENSPARK_FAST_MODEL="claude-sonnet-4-6" \
-              AI_PROVIDER="genspark" \
+              ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY_VAL}" \
+              ANTHROPIC_MODEL="claude-sonnet-4-5" \
+              OPENAI_API_KEY="${OPENAI_API_KEY_VAL}" \
+              AI_PROVIDER="anthropic" \
               AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT="${AZURE_DI_ENDPOINT_VAL}" \
               AZURE_DOCUMENT_INTELLIGENCE_KEY="${AZURE_DI_KEY_VAL}" \
               AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD="true" \
@@ -618,6 +623,10 @@ jobs:
                   AZURE_DOCUMENT_INTELLIGENCE_KEY="${AZURE_DI_KEY_VAL}" \
                   AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD="true" \
                   MISTRAL_API_KEY="${MISTRAL_API_KEY_VAL}" \
+                  ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY_VAL}" \
+                  ANTHROPIC_MODEL="claude-sonnet-4-5" \
+                  OPENAI_API_KEY="${OPENAI_API_KEY_VAL}" \
+                  AI_PROVIDER="anthropic" \
                 --output none || true
             fi
           done
