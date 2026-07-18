@@ -958,6 +958,7 @@ class TestBuildEvidencePackCsv:
             quiz_score=100,
             quiz_passed=True,
             signature_data="sig-data",
+            signature_disposition="signed",
             ip_address="192.168.1.1",
         )
         campaign = SimpleNamespace(id=9, tenant_id=1, document_id=3)
@@ -974,6 +975,8 @@ class TestBuildEvidencePackCsv:
         assert "user_email,status" in csv_content
         assert "engineer@example.com" in csv_content
         assert "192.168.1.1" in csv_content
+        assert "signature_disposition" in csv_content
+        assert ",signed," in csv_content
         assert ",True," in csv_content or ",true," in csv_content.lower()
 
 

@@ -37,19 +37,19 @@ import {
   quizAttemptsRemaining,
   quizQuestionLabel,
   resolveSignatureDisposition,
+  resolveAssignmentDocumentUrl,
   shouldRenderOpenQuestion,
   showQuestionGate,
   type QuestionGateChoice,
   type SignChoice,
 } from './campaignReadingHelpers'
 
-async function resolveDocumentSignedUrl(documentId: number): Promise<string> {
-  const response = await api.get<{ signed_url: string }>(
-    `/api/v1/documents/${documentId}/signed-url`,
-    { params: { download: false } },
+async function openAssignmentDocument(assignmentId: number): Promise<string> {
+  return resolveAssignmentDocumentUrl(
+    assignmentId,
+    documentCampaignApi.getAssignmentDocumentUrl,
+    api.defaults.baseURL,
   )
-  const rawUrl = response.data.signed_url
-  return new URL(rawUrl, api.defaults.baseURL || window.location.origin).toString()
 }
 
 const reportFailure = (err: unknown): string => {
@@ -156,7 +156,7 @@ export default function MyReading() {
           assignment.id === item.id ? { ...assignment, status: 'opened' } : assignment,
         ),
       )
-      const signedUrl = await resolveDocumentSignedUrl(item.document_id)
+      const signedUrl = await openAssignmentDocument(item.id)
       window.open(signedUrl, '_blank', 'noopener,noreferrer')
     } catch (err) {
       reportFailure(err)

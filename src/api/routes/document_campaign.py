@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from src.api.deps import CurrentUser, DbSession, require_permission
 from src.api.schemas.document_campaign import (
     AskAssignmentQuestionRequest,
+    AssignmentDocumentUrlResponse,
     AssignmentOpenedResponse,
     AssignmentQuizResponse,
     AssignmentResponse,
@@ -494,6 +495,21 @@ async def open_assignment(
     service = DocumentCampaignService(db)
     assignment = await service.record_assignment_opened(user_id=current_user.id, assignment_id=assignment_id)
     return AssignmentOpenedResponse(message="Assignment opened recorded", first_opened_at=assignment.first_opened_at)
+
+
+@router.get("/assignments/{assignment_id}/document-url", response_model=AssignmentDocumentUrlResponse)
+async def get_assignment_document_url(
+    assignment_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Signed document URL for the assignee's active campaign assignment (RBAC-scoped)."""
+    service = DocumentCampaignService(db)
+    payload = await service.get_assignment_document_url(
+        user_id=current_user.id,
+        assignment_id=assignment_id,
+    )
+    return AssignmentDocumentUrlResponse(**payload)
 
 
 @router.get("/assignments/{assignment_id}/quiz", response_model=AssignmentQuizResponse)

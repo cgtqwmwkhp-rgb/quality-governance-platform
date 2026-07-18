@@ -110,3 +110,13 @@ export const canProceedToCompletionFields = (
   if (!questionSent) return false
   return signChoice !== null
 }
+
+export async function resolveAssignmentDocumentUrl(
+  assignmentId: number,
+  getAssignmentDocumentUrl: (id: number) => Promise<{ data: { signed_url: string } }>,
+  apiBaseUrl?: string,
+): Promise<string> {
+  const response = await getAssignmentDocumentUrl(assignmentId)
+  const rawUrl = response.data.signed_url
+  return new URL(rawUrl, apiBaseUrl || window.location.origin).toString()
+}

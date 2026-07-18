@@ -126,6 +126,15 @@ export interface CompleteDocumentCampaignAssignmentRequest {
   signature_disposition?: SignatureDisposition
 }
 
+export interface AssignmentDocumentUrlResponse {
+  assignment_id: number
+  document_id: number
+  signed_url: string
+  expires_in_seconds: number
+  filename: string
+  content_type?: string | null
+}
+
 
 export interface CompliancePassportAssignment {
   id: number
@@ -265,6 +274,8 @@ export function createDocumentCampaignApi(api: AxiosInstance) {
       api.get<DocumentCampaignAssignmentListResponse>(`${base}/my-assignments`),
     openAssignment: (assignmentId: number) =>
       api.post<DocumentCampaignAssignment>(`${base}/assignments/${assignmentId}/open`),
+    getAssignmentDocumentUrl: (assignmentId: number) =>
+      api.get<AssignmentDocumentUrlResponse>(`${base}/assignments/${assignmentId}/document-url`),
     getAssignmentQuiz: (assignmentId: number) =>
       api.get<DocumentCampaignQuiz>(`${base}/assignments/${assignmentId}/quiz`),
     submitQuiz: (assignmentId: number, answers: DocumentCampaignQuizAnswer[]) =>

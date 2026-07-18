@@ -14,7 +14,6 @@ import {
   api,
   documentCampaignApi,
   getApiErrorMessage,
-  knowledgeBankApi,
   type DocumentCampaignAssignment,
   type DocumentCampaignQuiz,
   type DocumentCampaignQuizResult,
@@ -38,6 +37,7 @@ import {
   quizAttemptsRemaining,
   quizQuestionLabel,
   resolveSignatureDisposition,
+  resolveAssignmentDocumentUrl,
   shouldRenderOpenQuestion,
   showQuestionGate,
   type QuestionGateChoice,
@@ -50,13 +50,12 @@ const reportFailure = (err: unknown): string => {
   return message
 }
 
-async function resolveDocumentSignedUrl(documentId: number): Promise<string> {
-  const response = await api.get<{ signed_url: string }>(
-    `/api/v1/documents/${documentId}/signed-url`,
-    { params: { download: false } },
+async function openAssignmentDocument(assignmentId: number): Promise<string> {
+  return resolveAssignmentDocumentUrl(
+    assignmentId,
+    documentCampaignApi.getAssignmentDocumentUrl,
+    api.defaults.baseURL,
   )
-  const rawUrl = response.data.signed_url
-  return new URL(rawUrl, api.defaults.baseURL || window.location.origin).toString()
 }
 
 function formatDue(due?: string | null): string | null {
@@ -152,7 +151,7 @@ export default function PortalReading() {
           assignment.id === item.id ? { ...assignment, status: 'opened' } : assignment,
         ),
       )
-      const signedUrl = await resolveDocumentSignedUrl(item.document_id)
+      const signedUrl = await openAssignmentDocument(item.id)
       window.open(signedUrl, '_blank', 'noopener,noreferrer')
     } catch (err) {
       reportFailure(err)
@@ -289,11 +288,10 @@ export default function PortalReading() {
     }
     setAskingQuestionId(item.id)
     try {
-      const threadResponse = await knowledgeBankApi.createThread(item.document_id, {
+      await documentCampaignApi.askAssignmentQuestion(item.id, {
         title: body.slice(0, 80),
-        version: item.document_version ?? undefined,
+        body,
       })
-      await knowledgeBankApi.postMessage(threadResponse.data.id, { body })
       setQuestionDrafts((prev) => ({ ...prev, [item.id]: '' }))
       setExpandedQuestionId(null)
       setQuestionsSent((prev) => ({ ...prev, [item.id]: true }))
