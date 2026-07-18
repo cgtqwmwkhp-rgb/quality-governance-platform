@@ -86,6 +86,14 @@ from src.domain.models.document_control import (
     DocumentTrainingLink,
     ObsoleteDocumentRecord,
 )
+from src.domain.models.document_campaign import (
+    AssignmentStatus,
+    CampaignAssignment,
+    CampaignStatus,
+    DocumentCampaign,
+    EngineerGroup,
+    EngineerGroupMember,
+)
 from src.domain.models.driver_profile import AcknowledgementStatus, DriverAcknowledgement, DriverProfile
 from src.domain.models.engineer import (
     CompetencyLifecycleState,
@@ -459,4 +467,11 @@ __all__ = [
     "DriverProfile",
     "DriverAcknowledgement",
     "AcknowledgementStatus",
+    # Document Campaigns (Engineer document read/quiz/sign-off spine)
+    "EngineerGroup",
+    "EngineerGroupMember",
+    "DocumentCampaign",
+    "CampaignAssignment",
+    "CampaignStatus",
+    "AssignmentStatus",
 ]
