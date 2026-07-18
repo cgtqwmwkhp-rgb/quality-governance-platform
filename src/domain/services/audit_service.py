@@ -1598,9 +1598,9 @@ class AuditService:
             q_result = await self.db.execute(select(AuditQuestion).where(AuditQuestion.id.in_(question_ids)))
             questions_by_id = {q.id: q for q in q_result.scalars().all()}
         for response in run.responses or []:
-            if response.score is not None and response.max_score is not None:
-                continue
             question = questions_by_id.get(response.question_id)
+            # Derive from the current answer only (ignore stored points) so cleared /
+            # unscored rows drop stale score pairs before run aggregation.
             score_value, max_score_value = AuditScoringService.derive_response_score(
                 question,
                 response_value=response.response_value,
@@ -1608,9 +1608,11 @@ class AuditService:
                 response_number=response.response_number,
                 response_bool=response.response_bool,
                 is_na=bool(response.is_na),
-                score=response.score,
-                max_score=response.max_score,
             )
+            if score_value is None and max_score_value is None:
+                response.score = None
+                response.max_score = None
+                continue
             if response.max_score is None and max_score_value is not None:
                 response.max_score = max_score_value
             if response.score is None and score_value is not None:
