@@ -8,10 +8,7 @@ import pytest
 
 from src.api.routes.engineers import link_engineer_user, unlink_engineer_user, update_engineer
 from src.api.schemas.engineer import EngineerLinkUserRequest, EngineerUpdate
-from src.domain.services.pams_technician_sync_service import (
-    MappedTechnician,
-    apply_mapped_technician_to_engineer,
-)
+from src.domain.services.pams_technician_sync_service import MappedTechnician, apply_mapped_technician_to_engineer
 
 NOW = datetime(2026, 7, 18, tzinfo=timezone.utc)
 
