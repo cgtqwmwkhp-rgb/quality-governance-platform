@@ -20,6 +20,7 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  Search,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
@@ -282,7 +283,7 @@ export default function RiskRegister() {
   const [summaryUnavailable, setSummaryUnavailable] = useState(false)
   const [heatmapUnavailable, setHeatmapUnavailable] = useState(false)
   const [auditLinksUnavailable, setAuditLinksUnavailable] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
+  const [showFilters, setShowFilters] = useState(true)
   const [auditOnly, setAuditOnly] = useState(searchParams.get('auditOnly') === '1')
   const [auditRefFilter, setAuditRefFilter] = useState(searchParams.get('auditRef') || '')
   const focusRiskId = Number(searchParams.get('riskId') || '')
@@ -295,6 +296,7 @@ export default function RiskRegister() {
   const [rejectNotes, setRejectNotes] = useState('')
   const [triageSubmitting, setTriageSubmitting] = useState(false)
   const [linkedAuditTargets, setLinkedAuditTargets] = useState<Record<string, LinkedAuditTarget>>({})
+  const [filterSearch, setFilterSearch] = useState(searchParams.get('q') || '')
   const [filterCategory, setFilterCategory] = useState(searchParams.get('category') || '')
   const [filterDepartment, setFilterDepartment] = useState(searchParams.get('department') || '')
   const [filterStatus, setFilterStatus] = useState(searchParams.get('status') || '')
@@ -330,6 +332,8 @@ export default function RiskRegister() {
     else next.delete('auditOnly')
     if (auditRefFilter) next.set('auditRef', auditRefFilter)
     else next.delete('auditRef')
+    if (filterSearch.trim()) next.set('q', filterSearch.trim())
+    else next.delete('q')
     if (filterCategory) next.set('category', filterCategory)
     else next.delete('category')
     if (filterDepartment) next.set('department', filterDepartment)
@@ -356,6 +360,7 @@ export default function RiskRegister() {
   }, [
     auditOnly,
     auditRefFilter,
+    filterSearch,
     filterCategory,
     filterDepartment,
     filterStatus,
@@ -374,6 +379,13 @@ export default function RiskRegister() {
       status: filterStatus || undefined,
     }),
     [filterCategory, filterDepartment, filterStatus],
+  )
+  const listFilters = useMemo(
+    () => ({
+      ...workspaceFilters,
+      search: filterSearch.trim() || undefined,
+    }),
+    [workspaceFilters, filterSearch],
   )
 
   const loadRisks = useCallback(async () => {
@@ -397,10 +409,10 @@ export default function RiskRegister() {
           : {}
       const listParams =
         registerMode === 'import_triage'
-          ? ({ limit: 100, suggestion_triage: 'pending' as const, ...workspaceFilters })
+          ? ({ limit: 100, suggestion_triage: 'pending' as const, ...listFilters })
           : ({
               limit: cellFilter ? 200 : 100,
-              ...workspaceFilters,
+              ...listFilters,
               ...bandParams,
             })
       const [risksResult, summaryResult, heatmapResult, pendingResult, trendsResult] =
@@ -660,7 +672,7 @@ export default function RiskRegister() {
     } finally {
       setLoading(false)
     }
-  }, [registerMode, workspaceFilters, cellFilter, scoreType])
+  }, [registerMode, workspaceFilters, listFilters, cellFilter, scoreType])
 
   useEffect(() => {
     void loadRisks()
@@ -863,11 +875,12 @@ export default function RiskRegister() {
     setImportBusy(true)
     try {
       const { data } = await riskRegisterApi.importCommit(importFile)
+      const capaCreated = data.capa_created_count ?? 0
       toast.success(
         t('risk_register.excel_import.toast_commit', {
           created: data.created_count,
           updated: data.updated_count,
-        }),
+        }) + (capaCreated > 0 ? ` Created ${capaCreated} CAPA action(s) from Action Plan.` : ''),
       )
       resetImportDialog()
       await loadRisks()
@@ -1113,12 +1126,31 @@ export default function RiskRegister() {
 
       {showFilters ? (
         <Card>
-          <CardContent className="flex flex-col gap-3 p-4">
+          <CardContent
+            className="flex flex-col gap-3 p-4"
+            data-testid="risk-filters-panel"
+            role="search"
+            aria-label="Risk register filters"
+          >
             <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+              <label className="relative flex min-w-[14rem] flex-1 items-center">
+                <Search className="pointer-events-none absolute left-3 h-4 w-4 text-muted-foreground" aria-hidden />
+                <input
+                  type="search"
+                  role="searchbox"
+                  value={filterSearch}
+                  onChange={(e) => setFilterSearch(e.target.value)}
+                  placeholder="Search reference, title, or owner"
+                  aria-label="Search risks"
+                  className="h-10 w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm"
+                  data-testid="risk-filter-search"
+                />
+              </label>
               <select
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
                 className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                aria-label="Filter by category"
                 data-testid="risk-filter-category"
               >
                 <option value="">All categories</option>
@@ -1133,6 +1165,7 @@ export default function RiskRegister() {
                 value={filterDepartment}
                 onChange={(e) => setFilterDepartment(e.target.value)}
                 placeholder="Department"
+                aria-label="Filter by department"
                 className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                 data-testid="risk-filter-department"
               />
@@ -1140,6 +1173,7 @@ export default function RiskRegister() {
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
                 className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                aria-label="Filter by status"
                 data-testid="risk-filter-status"
               >
                 <option value="">All statuses (excl. closed)</option>
@@ -1151,6 +1185,7 @@ export default function RiskRegister() {
               <Button
                 variant={auditOnly ? 'default' : 'secondary'}
                 onClick={() => setAuditOnly((prev) => !prev)}
+                data-testid="risk-filter-audit-only"
               >
                 Audit-origin only
               </Button>
@@ -1159,11 +1194,14 @@ export default function RiskRegister() {
                 value={auditRefFilter}
                 onChange={(e) => setAuditRefFilter(e.target.value)}
                 placeholder="Filter by audit reference"
+                aria-label="Filter by audit reference"
                 className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                data-testid="risk-filter-audit-ref"
               />
             </div>
             {(auditOnly ||
               auditRefFilter ||
+              filterSearch ||
               filterCategory ||
               filterDepartment ||
               filterStatus ||
@@ -1171,9 +1209,11 @@ export default function RiskRegister() {
               heroFilter !== 'all') && (
               <Button
                 variant="ghost"
+                data-testid="risk-filters-clear"
                 onClick={() => {
                   setAuditOnly(false)
                   setAuditRefFilter('')
+                  setFilterSearch('')
                   setFilterCategory('')
                   setFilterDepartment('')
                   setFilterStatus('')
@@ -1808,7 +1848,7 @@ export default function RiskRegister() {
                 navigate(`/risk-register/${id}`)
               }}
               onCellSelect={(cell) => {
-                if (cell.risk_count === 0) return
+                // Empty cells (risk_count=0) remain selectable for CUJ/verify + band filter.
                 setCellFilter((prev) =>
                   prev?.likelihood === cell.likelihood && prev?.impact === cell.impact
                     ? null
@@ -2005,8 +2045,36 @@ export default function RiskRegister() {
                 })}
               </p>
               {importReport.action_plan_skipped ? (
-                <p className="text-muted-foreground">{t('risk_register.excel_import.action_plan_skipped')}</p>
-              ) : null}
+                <p className="text-muted-foreground" data-testid="risk-import-action-plan-skipped">
+                  {t('risk_register.excel_import.action_plan_skipped', {
+                    defaultValue: 'Action Plan sheet not found — no CAPA rows to import.',
+                  })}
+                </p>
+              ) : (
+                <div className="space-y-1" data-testid="risk-import-action-plan-summary">
+                  <p>
+                    Action Plan → CAPA:{' '}
+                    {importReport.action_plan_total_rows ?? 0} row(s) —{' '}
+                    {importReport.action_plan_creates ?? 0} create,{' '}
+                    {importReport.action_plan_updates ?? 0} update,{' '}
+                    {importReport.action_plan_error_rows ?? 0} error(s)
+                    {importReport.dry_run ? ' (dry-run)' : ''}
+                  </p>
+                  {(importReport.action_plan_preview?.length ?? 0) > 0 ? (
+                    <ul
+                      className="max-h-32 overflow-y-auto rounded-md border border-input p-2 text-xs"
+                      data-testid="risk-import-action-plan-preview"
+                    >
+                      {importReport.action_plan_preview!.slice(0, 10).map((row) => (
+                        <li key={`${row.row}-${row.action_id}`}>
+                          {row.action === 'create' ? '+' : '~'} {row.action_id} → {row.risk_reference}
+                          {row.title ? ` — ${row.title}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              )}
               {importReport.errors.length > 0 ? (
                 <ul
                   className="max-h-40 overflow-y-auto rounded-md border border-destructive/30 bg-destructive/5 p-3 text-destructive"

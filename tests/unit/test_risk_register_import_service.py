@@ -14,15 +14,50 @@ from src.domain.exceptions import BadRequestError, ValidationError
 from src.domain.services.risk_register_import_service import RiskRegisterImportService
 
 
-def _workbook_bytes(rows: list[list[object]]) -> bytes:
+def _workbook_bytes(
+    rows: list[list[object]],
+    *,
+    action_plan_rows: list[list[object]] | None = None,
+) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "Risk Register"
     for row in rows:
         ws.append(row)
+    if action_plan_rows is not None:
+        ap = wb.create_sheet("Action Plan")
+        for row in action_plan_rows:
+            ap.append(row)
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+ACTION_PLAN_HEADER = [
+    "Action ID",
+    "Linked Risk Ref",
+    "Action Description",
+    "Owner",
+    "Cost (GBP)",
+    "Deadline",
+    "Status",
+    "Progress Notes",
+    "MatchKey",
+]
+
+
+def _valid_action_row(action_id: str = "A001", risk_ref: str = "PELR1") -> list[object]:
+    return [
+        action_id,
+        risk_ref,
+        "Create a process guide to support the process handover",
+        "James Anang",
+        0,
+        datetime(2025, 9, 29),
+        "In progress",
+        None,
+        f"{risk_ref}-1",
+    ]
 
 
 HEADER = [
@@ -132,6 +167,24 @@ async def test_dry_run_reports_create(valid_xlsx: bytes):
     assert report.creates == 1
     assert report.updates == 0
     assert report.preview[0]["reference"] == "PELR1"
+    assert report.action_plan_skipped is True
+
+
+@pytest.mark.asyncio
+async def test_dry_run_maps_action_plan_to_capa():
+    xlsx = _workbook_bytes(
+        [HEADER, _valid_data_row()],
+        action_plan_rows=[ACTION_PLAN_HEADER, _valid_action_row()],
+    )
+    service = _service_with_existing()
+    setattr(service, "_existing_capa_by_source_refs", AsyncMock(return_value={}))
+    report = await service.dry_run(xlsx, tenant_id=1)
+    assert report.ok is True
+    assert report.action_plan_skipped is False
+    assert report.action_plan_total_rows == 1
+    assert report.action_plan_creates == 1
+    assert report.action_plan_preview[0]["action_id"] == "A001"
+    assert report.action_plan_preview[0]["risk_reference"] == "PELR1"
 
 
 @pytest.mark.asyncio

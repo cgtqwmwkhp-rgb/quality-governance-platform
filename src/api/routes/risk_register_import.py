@@ -1,7 +1,8 @@
-"""Enterprise Risk Register XLSX import routes (RR-W4).
+"""Enterprise Risk Register XLSX import routes (RR-W4 + Action Plan→CAPA).
 
-Dry-run validates the Risk Register sheet without persisting.
-Commit re-validates then upserts EnterpriseRisk rows by PELR* reference.
+Dry-run validates the Risk Register sheet and Action Plan sheet (when present).
+Commit re-validates then upserts EnterpriseRisk rows by PELR* reference and
+creates/updates CAPA actions from Action Plan rows.
 """
 
 from __future__ import annotations

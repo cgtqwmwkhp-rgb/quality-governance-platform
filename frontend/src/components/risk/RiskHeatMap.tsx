@@ -394,7 +394,7 @@ export function RiskHeatMap({
                     const isSelected =
                       selectedCell?.likelihood === cell.likelihood &&
                       selectedCell?.impact === cell.impact
-                    const isHovered = hoverKey === key && cell.risk_count > 0
+                    const isHovered = hoverKey === key
                     const dimEmpty = focusMode !== 'none' && cell.risk_count === 0
                     const highlight =
                       (focusMode === 'appetite' && (cell.outside_appetite_count ?? 0) > 0) ||
@@ -422,16 +422,14 @@ export function RiskHeatMap({
                             backgroundColor: cell.color,
                             opacity,
                           }}
-                          aria-label={`${data.likelihood_labels[cell.likelihood]} by ${data.impact_labels[cell.impact]}, score ${cell.score}, ${cell.risk_count} risks`}
+                          aria-label={`${data.likelihood_labels[cell.likelihood]} by ${data.impact_labels[cell.impact]}, score ${cell.score}, ${cell.risk_count} risks${cell.risk_count === 0 ? ' (empty — selectable)' : ''}`}
                           aria-pressed={isSelected}
+                          data-risk-count={cell.risk_count}
+                          data-empty={cell.risk_count === 0 ? 'true' : 'false'}
                           data-testid={`risk-heatmap-cell-${cell.likelihood}-${cell.impact}`}
-                          onMouseEnter={() => {
-                            if (cell.risk_count > 0) setHoverKey(key)
-                          }}
+                          onMouseEnter={() => setHoverKey(key)}
                           onMouseLeave={() => setHoverKey(null)}
-                          onFocus={() => {
-                            if (cell.risk_count > 0) setHoverKey(key)
-                          }}
+                          onFocus={() => setHoverKey(key)}
                           onBlur={() => setHoverKey(null)}
                           onClick={() => onCellSelect(cell)}
                         >
@@ -458,12 +456,59 @@ export function RiskHeatMap({
           data-testid="risk-heatmap-detail-rail"
           aria-label={t('risk_register.heatmap.detail_rail_label')}
         >
-          {!selectedHeatMapCell || selectedHeatMapCell.risk_count === 0 ? (
+          {!selectedHeatMapCell ? (
             <div
               className="flex flex-1 items-center justify-center p-4 text-center text-sm text-muted-foreground"
               data-testid="risk-heatmap-detail-empty"
             >
               {t('risk_register.heatmap.select_cell_prompt')}
+            </div>
+          ) : selectedHeatMapCell.risk_count === 0 ? (
+            <div
+              className="flex flex-1 flex-col"
+              data-testid="risk-heatmap-detail-empty-cell"
+            >
+              <div
+                className="shrink-0 border-b border-border px-3 py-2.5"
+                data-testid="risk-heatmap-detail-header"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {data.likelihood_labels[selectedHeatMapCell.likelihood]} ×{' '}
+                      {data.impact_labels[selectedHeatMapCell.impact]}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {t('risk_register.n_risks', { count: 0 })}
+                      {' · '}
+                      {t('risk_register.score')} {selectedHeatMapCell.score}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-7 px-2 text-xs"
+                      data-testid="risk-heatmap-detail-show-register"
+                      onClick={() => onShowInRegister(selectedHeatMapCell)}
+                    >
+                      {t('risk_register.heatmap.show_in_register')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      data-testid="risk-heatmap-detail-clear"
+                      onClick={onClearCellFilter}
+                    >
+                      {t('risk_register.heatmap.clear_selection')}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-1 items-center justify-center p-4 text-center text-sm text-muted-foreground">
+                No risks in this likelihood × impact band. Selection still filters the register.
+              </div>
             </div>
           ) : (
             <>

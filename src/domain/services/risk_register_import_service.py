@@ -1,8 +1,8 @@
-"""Excel bulk import for Enterprise Risk Register (RR-W4).
+"""Excel bulk import for Enterprise Risk Register (RR-W4 + Action Plan→CAPA).
 
-Dry-run validates the Risk Register sheet and returns creates/updates/errors.
-Commit re-validates then upserts EnterpriseRisk rows preserving PELR* references.
-Action Plan sheet rows are intentionally skipped until CAPA W3 lands.
+Dry-run validates the Risk Register sheet and Action Plan sheet (when present).
+Commit upserts EnterpriseRisk rows (PELR*) then creates/updates CAPA actions from
+Action Plan rows linked by risk reference.
 """
 
 from __future__ import annotations
@@ -18,10 +18,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.exceptions import BadRequestError, ValidationError
+from src.domain.models.capa import CAPAAction, CAPASource
 from src.domain.models.risk_register import EnterpriseRisk, RiskAppetiteStatement
-from src.domain.services.risk_service import RiskScoringEngine
+from src.domain.services.risk_service import RiskService, RiskScoringEngine
 
 RISK_REGISTER_SHEET = "Risk Register"
+ACTION_PLAN_SHEET = "Action Plan"
 REFERENCE_PATTERN = re.compile(r"^PELR\d+$", re.IGNORECASE)
 
 HEADER_ALIASES: dict[str, str] = {
@@ -48,6 +50,18 @@ HEADER_ALIASES: dict[str, str] = {
     "next review": "next_review_date",
     "comments": "comments",
     "sortkey": "sort_key",
+}
+
+ACTION_PLAN_HEADER_ALIASES: dict[str, str] = {
+    "action id": "action_id",
+    "linked risk ref": "risk_reference",
+    "action description": "description",
+    "owner": "owner",
+    "cost (gbp)": "cost",
+    "deadline": "deadline",
+    "status": "status",
+    "progress notes": "progress_notes",
+    "matchkey": "match_key",
 }
 
 CATEGORY_MAP: dict[str, str] = {
@@ -111,6 +125,22 @@ class ValidatedImportRow:
 
 
 @dataclasses.dataclass
+class ValidatedActionPlanRow:
+    row: int
+    action: str  # create | update
+    action_id: str
+    risk_reference: str
+    title: str
+    description: str
+    status: str
+    match_key: str
+    owner: str | None = None
+    due_date: datetime | None = None
+    progress_notes: str | None = None
+    existing_capa_id: int | None = None
+
+
+@dataclasses.dataclass
 class ImportValidationReport:
     dry_run: bool
     total_rows: int
@@ -120,11 +150,21 @@ class ImportValidationReport:
     updates: int
     errors: list[RowError]
     preview: list[dict[str, Any]] = dataclasses.field(default_factory=list)
-    action_plan_skipped: bool = True
+    action_plan_skipped: bool = False
+    action_plan_total_rows: int = 0
+    action_plan_creates: int = 0
+    action_plan_updates: int = 0
+    action_plan_error_rows: int = 0
+    action_plan_errors: list[RowError] = dataclasses.field(default_factory=list)
+    action_plan_preview: list[dict[str, Any]] = dataclasses.field(default_factory=list)
 
     @property
     def ok(self) -> bool:
-        return self.error_rows == 0 and self.total_rows > 0
+        return (
+            self.error_rows == 0
+            and self.total_rows > 0
+            and self.action_plan_error_rows == 0
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -146,6 +186,20 @@ class ImportValidationReport:
             ],
             "preview": self.preview,
             "action_plan_skipped": self.action_plan_skipped,
+            "action_plan_total_rows": self.action_plan_total_rows,
+            "action_plan_creates": self.action_plan_creates,
+            "action_plan_updates": self.action_plan_updates,
+            "action_plan_error_rows": self.action_plan_error_rows,
+            "action_plan_errors": [
+                {
+                    "row": e.row,
+                    "code": e.code,
+                    "message": e.message,
+                    "field": e.field,
+                }
+                for e in self.action_plan_errors
+            ],
+            "action_plan_preview": self.action_plan_preview,
         }
 
 
@@ -156,6 +210,9 @@ class ImportCommitResult:
     created_risk_ids: list[int]
     updated_risk_ids: list[int]
     report: ImportValidationReport
+    capa_created_count: int = 0
+    capa_updated_count: int = 0
+    capa_created_ids: list[int] = dataclasses.field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -163,6 +220,9 @@ class ImportCommitResult:
             "updated_count": self.updated_count,
             "created_risk_ids": self.created_risk_ids,
             "updated_risk_ids": self.updated_risk_ids,
+            "capa_created_count": self.capa_created_count,
+            "capa_updated_count": self.capa_updated_count,
+            "capa_created_ids": self.capa_created_ids,
             "report": self.report.to_dict(),
         }
 
@@ -178,36 +238,35 @@ class RiskRegisterImportService:
         return str(value or "").strip().lower()
 
     @classmethod
-    def parse_xlsx(cls, content: bytes) -> list[dict[str, Any]]:
-        if not content:
-            raise BadRequestError("XLSX file is empty")
-        if len(content) > 5 * 1024 * 1024:
-            raise BadRequestError("XLSX file exceeds 5 MiB limit")
+    def _parse_sheet_rows(
+        cls,
+        workbook: Any,
+        sheet_name: str,
+        aliases: dict[str, str],
+        *,
+        required_fields: set[str],
+    ) -> list[dict[str, Any]]:
+        if sheet_name not in workbook.sheetnames:
+            raise BadRequestError(f"Workbook missing required sheet '{sheet_name}'")
 
-        try:
-            workbook = load_workbook(filename=io.BytesIO(content), read_only=True, data_only=True)
-        except Exception as exc:  # noqa: BLE001 — surface as client error
-            raise BadRequestError(f"Unable to read XLSX workbook: {exc}") from exc
-
-        if RISK_REGISTER_SHEET not in workbook.sheetnames:
-            raise BadRequestError(f"Workbook missing required sheet '{RISK_REGISTER_SHEET}'")
-
-        sheet = workbook[RISK_REGISTER_SHEET]
+        sheet = workbook[sheet_name]
         rows_iter = sheet.iter_rows(values_only=True)
         try:
             header_row = next(rows_iter)
         except StopIteration as exc:
-            raise BadRequestError(f"Sheet '{RISK_REGISTER_SHEET}' is empty") from exc
+            raise BadRequestError(f"Sheet '{sheet_name}' is empty") from exc
 
         column_map: dict[int, str] = {}
         for idx, raw_header in enumerate(header_row):
-            canonical = HEADER_ALIASES.get(cls._normalise_header(raw_header))
+            canonical = aliases.get(cls._normalise_header(raw_header))
             if canonical:
                 column_map[idx] = canonical
 
-        missing = {"reference", "title", "description"} - set(column_map.values())
+        missing = required_fields - set(column_map.values())
         if missing:
-            raise BadRequestError("Risk Register sheet missing required column(s): " + ", ".join(sorted(missing)))
+            raise BadRequestError(
+                f"{sheet_name} sheet missing required column(s): " + ", ".join(sorted(missing))
+            )
 
         parsed: list[dict[str, Any]] = []
         for row_number, raw_row in enumerate(rows_iter, start=2):
@@ -218,10 +277,50 @@ class RiskRegisterImportService:
                 if idx < len(raw_row):
                     row_data[field] = raw_row[idx]
             parsed.append(row_data)
-
-        if not parsed:
-            raise BadRequestError("Risk Register sheet contains no data rows")
         return parsed
+
+    @classmethod
+    def parse_workbook(cls, content: bytes) -> tuple[list[dict[str, Any]], list[dict[str, Any]] | None]:
+        """Return (register_rows, action_plan_rows_or_None).
+
+        ``None`` for Action Plan means the sheet is absent (honest skip).
+        Empty Action Plan sheet returns ``[]``.
+        """
+        if not content:
+            raise BadRequestError("XLSX file is empty")
+        if len(content) > 5 * 1024 * 1024:
+            raise BadRequestError("XLSX file exceeds 5 MiB limit")
+
+        try:
+            workbook = load_workbook(filename=io.BytesIO(content), read_only=True, data_only=True)
+        except Exception as exc:  # noqa: BLE001 — surface as client error
+            raise BadRequestError(f"Unable to read XLSX workbook: {exc}") from exc
+
+        register_rows = cls._parse_sheet_rows(
+            workbook,
+            RISK_REGISTER_SHEET,
+            HEADER_ALIASES,
+            required_fields={"reference", "title", "description"},
+        )
+        if not register_rows:
+            raise BadRequestError("Risk Register sheet contains no data rows")
+
+        if ACTION_PLAN_SHEET not in workbook.sheetnames:
+            return register_rows, None
+
+        action_rows = cls._parse_sheet_rows(
+            workbook,
+            ACTION_PLAN_SHEET,
+            ACTION_PLAN_HEADER_ALIASES,
+            required_fields={"action_id", "risk_reference", "description"},
+        )
+        return register_rows, action_rows
+
+    @classmethod
+    def parse_xlsx(cls, content: bytes) -> list[dict[str, Any]]:
+        """Backward-compatible: parse Risk Register sheet only."""
+        register_rows, _ = cls.parse_workbook(content)
+        return register_rows
 
     @staticmethod
     def _cell_text(value: Any) -> str:
@@ -264,10 +363,12 @@ class RiskRegisterImportService:
     def _parse_datetime(value: Any) -> datetime | None:
         if value is None or str(value).strip() == "":
             return None
+        text = str(value).strip()
+        if text.lower() in {"no deadline", "n/a", "na", "-"}:
+            return None
         if isinstance(value, datetime):
             dt = value
         else:
-            text = str(value).strip()
             try:
                 dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
             except ValueError:
@@ -306,6 +407,15 @@ class RiskRegisterImportService:
             return None
         return "\n\n".join(parts)
 
+    @staticmethod
+    def _action_title(description: str, action_id: str) -> str:
+        first_line = description.strip().splitlines()[0].strip() if description.strip() else ""
+        # Strip leading "1. " numbering commonly used in Action Plan rows.
+        cleaned = re.sub(r"^\d+\.\s*", "", first_line).strip()
+        if cleaned:
+            return cleaned[:255]
+        return f"Action {action_id}"
+
     async def _existing_references(self, references: set[str], tenant_id: int) -> dict[str, EnterpriseRisk]:
         if not references:
             return {}
@@ -316,6 +426,20 @@ class RiskRegisterImportService:
             )
         )
         return {risk.reference.upper(): risk for risk in result.scalars().all()}
+
+    async def _existing_capa_by_source_refs(
+        self, source_refs: set[str], tenant_id: int
+    ) -> dict[str, CAPAAction]:
+        if not source_refs:
+            return {}
+        result = await self.db.execute(
+            select(CAPAAction).where(
+                CAPAAction.tenant_id == tenant_id,
+                CAPAAction.source_type == CAPASource.RISK,
+                CAPAAction.source_reference.in_(sorted(source_refs)),
+            )
+        )
+        return {str(a.source_reference): a for a in result.scalars().all() if a.source_reference}
 
     async def _appetite_threshold(self, category: str) -> int:
         result = await self.db.execute(select(RiskAppetiteStatement).where(RiskAppetiteStatement.category == category))
@@ -492,9 +616,174 @@ class RiskRegisterImportService:
         )
         return report, validated
 
+    async def validate_action_plan_rows(
+        self,
+        rows: list[dict[str, Any]],
+        *,
+        tenant_id: int,
+        register_refs: set[str],
+    ) -> tuple[list[ValidatedActionPlanRow], list[RowError], int, int]:
+        """Validate Action Plan rows; resolve CAPA create vs update via MatchKey/Action ID."""
+        source_refs = {
+            self._cell_text(row.get("match_key")) or self._cell_text(row.get("action_id"))
+            for row in rows
+            if self._cell_text(row.get("match_key")) or self._cell_text(row.get("action_id"))
+        }
+        existing_capas = await self._existing_capa_by_source_refs(source_refs, tenant_id)
+        # Also resolve risks that already exist in DB (for dry-run when not creating in same file).
+        linked_refs = {
+            self._cell_text(row.get("risk_reference")).upper()
+            for row in rows
+            if self._cell_text(row.get("risk_reference"))
+        }
+        existing_risks = await self._existing_references(linked_refs, tenant_id)
+
+        errors: list[RowError] = []
+        validated: list[ValidatedActionPlanRow] = []
+        seen_keys: dict[str, int] = {}
+        creates = 0
+        updates = 0
+
+        for row in rows:
+            row_number = int(row["__row__"])
+            row_errors: list[RowError] = []
+            action_id = self._cell_text(row.get("action_id"))
+            risk_ref = self._cell_text(row.get("risk_reference")).upper()
+            description = self._cell_text(row.get("description"))
+            owner = self._cell_text(row.get("owner")) or None
+            status_raw = self._cell_text(row.get("status")) or "open"
+            match_key = self._cell_text(row.get("match_key")) or action_id
+            progress_notes = self._cell_text(row.get("progress_notes")) or None
+
+            if not action_id:
+                row_errors.append(
+                    RowError(row=row_number, field="action_id", code="REQUIRED", message="Action ID is required")
+                )
+            if not risk_ref:
+                row_errors.append(
+                    RowError(
+                        row=row_number,
+                        field="risk_reference",
+                        code="REQUIRED",
+                        message="Linked Risk Ref is required",
+                    )
+                )
+            elif not REFERENCE_PATTERN.match(risk_ref):
+                row_errors.append(
+                    RowError(
+                        row=row_number,
+                        field="risk_reference",
+                        code="INVALID_REFERENCE",
+                        message=f"Linked Risk Ref '{risk_ref}' must match PELR* pattern",
+                    )
+                )
+            elif risk_ref not in register_refs and risk_ref not in existing_risks:
+                row_errors.append(
+                    RowError(
+                        row=row_number,
+                        field="risk_reference",
+                        code="UNKNOWN_RISK_REF",
+                        message=(
+                            f"Linked Risk Ref '{risk_ref}' not found in Risk Register sheet "
+                            "or existing register"
+                        ),
+                    )
+                )
+            if not description or len(description) < 5:
+                row_errors.append(
+                    RowError(
+                        row=row_number,
+                        field="description",
+                        code="INVALID_DESCRIPTION",
+                        message="Action Description must be at least 5 characters",
+                    )
+                )
+            if match_key and match_key in seen_keys:
+                row_errors.append(
+                    RowError(
+                        row=row_number,
+                        field="match_key",
+                        code="DUPLICATE_IN_FILE",
+                        message=f"Duplicate MatchKey/Action ID '{match_key}' (also on row {seen_keys[match_key]})",
+                    )
+                )
+            else:
+                if match_key:
+                    seen_keys[match_key] = row_number
+
+            if row_errors:
+                errors.extend(row_errors)
+                continue
+
+            existing_capa = existing_capas.get(match_key)
+            action = "update" if existing_capa else "create"
+            if action == "create":
+                creates += 1
+            else:
+                updates += 1
+
+            title = self._action_title(description, action_id)
+            full_description = description
+            if progress_notes:
+                full_description = f"{description}\n\nProgress notes: {progress_notes}"
+            if owner:
+                full_description = f"{full_description}\n\nOwner (import): {owner}"
+
+            validated.append(
+                ValidatedActionPlanRow(
+                    row=row_number,
+                    action=action,
+                    action_id=action_id,
+                    risk_reference=risk_ref,
+                    title=title,
+                    description=full_description,
+                    status=status_raw,
+                    match_key=match_key,
+                    owner=owner,
+                    due_date=self._parse_datetime(row.get("deadline")),
+                    progress_notes=progress_notes,
+                    existing_capa_id=existing_capa.id if existing_capa else None,
+                )
+            )
+
+        return validated, errors, creates, updates
+
     async def dry_run(self, content: bytes, *, tenant_id: int) -> ImportValidationReport:
-        rows = self.parse_xlsx(content)
-        report, _ = await self.validate_rows(rows, tenant_id=tenant_id, dry_run=True)
+        register_rows, action_rows = self.parse_workbook(content)
+        report, validated = await self.validate_rows(register_rows, tenant_id=tenant_id, dry_run=True)
+        register_refs = {item.reference for item in validated} | {
+            self._cell_text(r.get("reference")).upper()
+            for r in register_rows
+            if self._cell_text(r.get("reference"))
+        }
+
+        if action_rows is None:
+            report.action_plan_skipped = True
+            return report
+
+        report.action_plan_skipped = False
+        ap_validated, ap_errors, ap_creates, ap_updates = await self.validate_action_plan_rows(
+            action_rows,
+            tenant_id=tenant_id,
+            register_refs=register_refs,
+        )
+        report.action_plan_total_rows = len(action_rows)
+        report.action_plan_creates = ap_creates
+        report.action_plan_updates = ap_updates
+        report.action_plan_errors = ap_errors
+        report.action_plan_error_rows = len({e.row for e in ap_errors})
+        report.action_plan_preview = [
+            {
+                "row": item.row,
+                "action": item.action,
+                "action_id": item.action_id,
+                "risk_reference": item.risk_reference,
+                "title": item.title,
+                "status": item.status,
+                "match_key": item.match_key,
+            }
+            for item in ap_validated[:50]
+        ]
         return report
 
     async def _apply_row(
@@ -572,6 +861,64 @@ class RiskRegisterImportService:
         self.db.add(risk)
         return risk, "create"
 
+    async def _apply_action_plan_row(
+        self,
+        item: ValidatedActionPlanRow,
+        *,
+        risk_by_ref: dict[str, EnterpriseRisk],
+        user_id: int,
+        tenant_id: int,
+    ) -> tuple[CAPAAction, str]:
+        risk = risk_by_ref.get(item.risk_reference)
+        if risk is None:
+            raise ValidationError(
+                f"Action Plan row {item.row}: risk {item.risk_reference} not resolved after register import",
+                code="RISK_REGISTER_IMPORT_ACTION_PLAN_UNRESOLVED",
+            )
+
+        risk_service = RiskService(self.db)
+
+        if item.action == "update" and item.existing_capa_id is not None:
+            result = await self.db.execute(
+                select(CAPAAction).where(
+                    CAPAAction.id == item.existing_capa_id,
+                    CAPAAction.tenant_id == tenant_id,
+                )
+            )
+            capa = result.scalar_one()
+            capa.title = item.title[:255]
+            capa.description = item.description
+            capa.source_id = risk.id
+            capa.source_type = CAPASource.RISK
+            capa.source_reference = item.match_key
+            capa.due_date = item.due_date
+            # Status normalisation via create helper path values
+            status_key = (item.status or "open").strip().lower().replace(" ", "_")
+            from src.domain.models.capa import CAPAStatus
+
+            if status_key in {"completed", "closed", "done"}:
+                capa.status = CAPAStatus.CLOSED
+            elif status_key in {"in_progress", "in-progress", "progress"}:
+                capa.status = CAPAStatus.IN_PROGRESS
+            elif status_key in {"verification", "verifying"}:
+                capa.status = CAPAStatus.VERIFICATION
+            else:
+                capa.status = CAPAStatus.OPEN
+            await self.db.flush()
+            return capa, "update"
+
+        capa = await risk_service.create_capa_action_for_risk(
+            risk,
+            title=item.title,
+            description=item.description,
+            created_by_id=user_id,
+            due_date=item.due_date,
+            status=item.status,
+            source_reference=item.match_key,
+            commit=False,
+        )
+        return capa, "create"
+
     async def commit(
         self,
         content: bytes,
@@ -579,8 +926,38 @@ class RiskRegisterImportService:
         user_id: int,
         tenant_id: int,
     ) -> ImportCommitResult:
-        rows = self.parse_xlsx(content)
-        report, validated = await self.validate_rows(rows, tenant_id=tenant_id, dry_run=False)
+        register_rows, action_rows = self.parse_workbook(content)
+        report, validated = await self.validate_rows(register_rows, tenant_id=tenant_id, dry_run=False)
+        register_refs = {item.reference for item in validated}
+
+        ap_validated: list[ValidatedActionPlanRow] = []
+        if action_rows is None:
+            report.action_plan_skipped = True
+        else:
+            report.action_plan_skipped = False
+            ap_validated, ap_errors, ap_creates, ap_updates = await self.validate_action_plan_rows(
+                action_rows,
+                tenant_id=tenant_id,
+                register_refs=register_refs,
+            )
+            report.action_plan_total_rows = len(action_rows)
+            report.action_plan_creates = ap_creates
+            report.action_plan_updates = ap_updates
+            report.action_plan_errors = ap_errors
+            report.action_plan_error_rows = len({e.row for e in ap_errors})
+            report.action_plan_preview = [
+                {
+                    "row": item.row,
+                    "action": item.action,
+                    "action_id": item.action_id,
+                    "risk_reference": item.risk_reference,
+                    "title": item.title,
+                    "status": item.status,
+                    "match_key": item.match_key,
+                }
+                for item in ap_validated[:50]
+            ]
+
         if not report.ok:
             raise ValidationError(
                 "Risk register import validation failed; fix row errors before commit",
@@ -590,13 +967,35 @@ class RiskRegisterImportService:
 
         created_ids: list[int] = []
         updated_ids: list[int] = []
+        risk_by_ref: dict[str, EnterpriseRisk] = {}
         for item in validated:
             risk, action = await self._apply_row(item, tenant_id=tenant_id, user_id=user_id)
             await self.db.flush()
+            risk_by_ref[item.reference] = risk
             if action == "create":
                 created_ids.append(risk.id)
             else:
                 updated_ids.append(risk.id)
+
+        # Ensure Action Plan can resolve risks that already existed but weren't in this file batch.
+        missing_refs = {ap.risk_reference for ap in ap_validated} - set(risk_by_ref)
+        if missing_refs:
+            existing = await self._existing_references(missing_refs, tenant_id)
+            risk_by_ref.update(existing)
+
+        capa_created_ids: list[int] = []
+        capa_updated_count = 0
+        for ap_item in ap_validated:
+            capa, action = await self._apply_action_plan_row(
+                ap_item,
+                risk_by_ref=risk_by_ref,
+                user_id=user_id,
+                tenant_id=tenant_id,
+            )
+            if action == "create":
+                capa_created_ids.append(capa.id)
+            else:
+                capa_updated_count += 1
 
         await self.db.commit()
 
@@ -609,11 +1008,21 @@ class RiskRegisterImportService:
             updates=len(updated_ids),
             errors=[],
             preview=report.preview,
+            action_plan_skipped=report.action_plan_skipped,
+            action_plan_total_rows=report.action_plan_total_rows,
+            action_plan_creates=len(capa_created_ids),
+            action_plan_updates=capa_updated_count,
+            action_plan_error_rows=0,
+            action_plan_errors=[],
+            action_plan_preview=report.action_plan_preview,
         )
         return ImportCommitResult(
             created_count=len(created_ids),
             updated_count=len(updated_ids),
             created_risk_ids=created_ids,
             updated_risk_ids=updated_ids,
+            capa_created_count=len(capa_created_ids),
+            capa_updated_count=capa_updated_count,
+            capa_created_ids=capa_created_ids,
             report=final_report,
         )

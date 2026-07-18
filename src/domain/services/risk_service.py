@@ -435,8 +435,14 @@ class RiskService:
         priority: str = "medium",
         due_date: Optional[datetime] = None,
         assigned_to_id: Optional[int] = None,
+        status: Optional[str] = None,
+        source_reference: Optional[str] = None,
+        commit: bool = True,
     ) -> Any:
-        """Create a CAPA bound to this risk and emit an activity event."""
+        """Create a CAPA bound to this risk and emit an activity event.
+
+        When ``commit=False`` (Excel Action Plan import), the caller owns the transaction.
+        """
         from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
         from src.domain.services.reference_number import ReferenceNumberService
 
@@ -450,20 +456,32 @@ class RiskService:
         else:
             capa_priority = CAPAPriority.MEDIUM
 
+        status_key = (status or "open").strip().lower().replace(" ", "_")
+        if status_key in {"completed", "closed", "done"}:
+            capa_status = CAPAStatus.CLOSED
+        elif status_key in {"in_progress", "in-progress", "progress"}:
+            capa_status = CAPAStatus.IN_PROGRESS
+        elif status_key in {"verification", "verifying"}:
+            capa_status = CAPAStatus.VERIFICATION
+        else:
+            capa_status = CAPAStatus.OPEN
+
         ref = await ReferenceNumberService.generate(self.db, "capa", CAPAAction)
         action = CAPAAction(
             reference_number=ref,
-            title=title,
+            title=title[:255],
             description=description,
             capa_type=CAPAType.CORRECTIVE,
-            status=CAPAStatus.OPEN,
+            status=capa_status,
             source_type=CAPASource.RISK,
             source_id=risk.id,
+            source_reference=source_reference,
             priority=capa_priority,
             tenant_id=risk.tenant_id,
             assigned_to_id=assigned_to_id,
             created_by_id=created_by_id,
             due_date=due_date,
+            completed_at=naive_utc_now() if capa_status == CAPAStatus.CLOSED else None,
         )
         self.db.add(action)
         await self.db.flush()
@@ -476,13 +494,15 @@ class RiskService:
                 "capa_id": action.id,
                 "reference_number": action.reference_number,
                 "title": title,
+                "source_reference": source_reference,
             },
             actor_id=created_by_id,
             created_at=naive_utc_now(),
         )
         self.db.add(activity)
-        await self.db.commit()
-        await self.db.refresh(action)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(action)
         return action
 
     async def update_risk_owner(

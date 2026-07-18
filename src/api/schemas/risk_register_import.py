@@ -1,4 +1,4 @@
-"""API schemas for Enterprise Risk Register XLSX import (RR-W4)."""
+"""API schemas for Enterprise Risk Register XLSX import (RR-W4 + Action Plan→CAPA)."""
 
 from typing import Any, List, Optional
 
@@ -24,6 +24,16 @@ class RiskRegisterImportPreviewRow(BaseModel):
     status: str = "active"
 
 
+class RiskRegisterImportActionPlanPreviewRow(BaseModel):
+    row: int
+    action: str
+    action_id: str
+    risk_reference: str
+    title: str
+    status: str = "open"
+    match_key: Optional[str] = None
+
+
 class RiskRegisterImportValidationReportResponse(BaseModel):
     dry_run: bool
     total_rows: int
@@ -34,7 +44,13 @@ class RiskRegisterImportValidationReportResponse(BaseModel):
     ok: bool
     errors: List[RiskRegisterImportRowError] = Field(default_factory=list)
     preview: List[RiskRegisterImportPreviewRow] = Field(default_factory=list)
-    action_plan_skipped: bool = True
+    action_plan_skipped: bool = False
+    action_plan_total_rows: int = 0
+    action_plan_creates: int = 0
+    action_plan_updates: int = 0
+    action_plan_error_rows: int = 0
+    action_plan_errors: List[RiskRegisterImportRowError] = Field(default_factory=list)
+    action_plan_preview: List[RiskRegisterImportActionPlanPreviewRow] = Field(default_factory=list)
 
 
 class RiskRegisterImportCommitResponse(BaseModel):
@@ -42,6 +58,9 @@ class RiskRegisterImportCommitResponse(BaseModel):
     updated_count: int
     created_risk_ids: List[int]
     updated_risk_ids: List[int]
+    capa_created_count: int = 0
+    capa_updated_count: int = 0
+    capa_created_ids: List[int] = Field(default_factory=list)
     report: RiskRegisterImportValidationReportResponse
 
 
