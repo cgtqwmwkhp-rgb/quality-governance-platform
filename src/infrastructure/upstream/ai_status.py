@@ -227,18 +227,22 @@ def get_ocr_providers_readiness() -> dict[str, Any]:
             "ocr_configured": mistral_configured,
             "index_jobs_async": True,
             "azure_di_enabled_in_prod": False,
+            "azure_di_used": False,
             "native_extraction_always_available": True,
             "note": (
                 "Library uploads use native extraction first; Mistral OCR supplements thin or "
                 "empty native text when configured. Index jobs run OCR → chunk → Voyage → Pinecone "
-                "via Celery. Azure DI remains disabled for library (E4 non-goal)."
+                "via Celery. Azure DI is not used for library until E4 DPO sign-off and a "
+                "dedicated QGP Document Intelligence resource is provisioned (not Jobsheet's DI)."
             ),
         },
         "circuits": ai.get("circuits", {}),
         "ocr_ping": ai.get("ocr_ping"),
         "e4_non_goal": (
             "Azure Document Intelligence is not enabled in production. "
-            "azure_di.* fields report env-var presence only; no outbound DI calls from probes."
+            "azure_di.enabled_in_prod is always false on meta/readiness probes until E4 DPO "
+            "sign-off. Library DI requires a dedicated QGP resource — never the Jobsheet DI "
+            "endpoint. azure_di.* fields report env-var presence only; no outbound DI calls from probes."
         ),
         "capabilities": get_ocr_ops_capabilities(),
     }

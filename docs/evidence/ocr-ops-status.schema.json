@@ -54,6 +54,11 @@
             "api_key_present": { "type": "boolean" },
             "status": { "type": "string" },
             "enabled_in_prod": { "const": false },
+            "prod_enable_flag_set": { "type": "boolean" },
+            "used_in_library": { "const": false },
+            "used_in_prod": { "const": false },
+            "resource_scope": { "const": "qgp_dedicated_required" },
+            "jobsheet_resource_allowed": { "const": false },
             "role": { "type": "string" },
             "capabilities": { "type": "array", "items": { "type": "string" } },
             "note": { "type": "string" }
