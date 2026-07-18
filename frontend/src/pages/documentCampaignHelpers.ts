@@ -38,7 +38,9 @@ export function formatCampaignReminderHours(
   labelForKey: (key: CampaignReminderPresetKey) => string,
 ): string {
   if (hours.length === 0) return '—'
-  const byHour = new Map(CAMPAIGN_REMINDER_PRESETS.map((preset) => [preset.hours, preset.key]))
+  const byHour = new Map<number, CampaignReminderPresetKey>(
+    CAMPAIGN_REMINDER_PRESETS.map((preset) => [preset.hours, preset.key]),
+  )
   return [...hours]
     .sort((a, b) => a - b)
     .map((hour) => {

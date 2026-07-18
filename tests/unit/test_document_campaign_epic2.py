@@ -7,8 +7,8 @@ import pytest
 
 from src.domain.models.document_campaign import DEFAULT_REMINDER_OFFSETS_HOURS
 from src.domain.services.document_campaign_service import (
-    CAMPAIGN_DEFAULT_REMINDER_SETTING_KEY,
     DocumentCampaignService,
+    _reminder_defaults_setting_key,
 )
 
 
@@ -51,7 +51,7 @@ class TestReminderDefaults:
 
         assert hours == [24, 168, 720]
         added = db.add.call_args[0][0]
-        assert added.key == CAMPAIGN_DEFAULT_REMINDER_SETTING_KEY
+        assert added.key == _reminder_defaults_setting_key(1)
         assert added.value_type == "json"
         db.commit.assert_awaited_once()
 

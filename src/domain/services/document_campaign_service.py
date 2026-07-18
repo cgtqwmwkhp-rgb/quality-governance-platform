@@ -891,7 +891,9 @@ class DocumentCampaignService:
                     "signature_present": bool(assignment.signature_data),
                     "ip_address": assignment.ip_address,
                     "reminders_sent": assignment.reminders_sent,
-                    "last_reminder_at": assignment.last_reminder_at.isoformat() if assignment.last_reminder_at else None,
+                    "last_reminder_at": (
+                        assignment.last_reminder_at.isoformat() if assignment.last_reminder_at else None
+                    ),
                 }
             )
 
