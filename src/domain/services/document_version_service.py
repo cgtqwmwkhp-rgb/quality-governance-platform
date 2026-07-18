@@ -109,10 +109,10 @@ LIBRARY_IMMUTABLE_METADATA_STATUSES = frozenset(
 )
 
 
-def assert_library_metadata_editable(status: str | None) -> None:
+def assert_library_metadata_editable(status: object | None) -> None:
     """Title/description edits on draft/working rows must not force a version bump."""
-    normalized = (status.value if hasattr(status, "value") else status) or ""
-    normalized = str(normalized).lower()
+    raw = getattr(status, "value", status)
+    normalized = str(raw or "").lower()
     if normalized in LIBRARY_IMMUTABLE_METADATA_STATUSES:
         raise BadRequestError(
             f"Document status '{normalized}' is read-only. Revise to open a draft before editing metadata."
