@@ -1,10 +1,18 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "155 kB",
+    "limit": "156 kB",
     "gzip": true,
-    "name": "index: 150→155 kB — shared main bundle after #1122 merge; BE spine does not add FE but gate tracks main dist"
+    "name": "index: 155\u2192156 kB \u2014 My Reading campaign journey (+282 B over 155)"
   },
-  { "path": "dist/assets/vendor-*.js", "limit": "200 kB", "gzip": true },
-  { "path": "dist/assets/index-*.css", "limit": "35 kB", "gzip": true }
+  {
+    "path": "dist/assets/vendor-*.js",
+    "limit": "200 kB",
+    "gzip": true
+  },
+  {
+    "path": "dist/assets/index-*.css",
+    "limit": "35 kB",
+    "gzip": true
+  }
 ]
