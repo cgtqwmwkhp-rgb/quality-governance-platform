@@ -314,7 +314,7 @@ export default function InvestigationActions({
               />
             </div>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-foreground">Assign To</label>
+              <span className="block text-sm font-medium text-foreground">Assign To</span>
               <EngineerPeoplePicker
                 valueLabel={actionForm.assigned_to}
                 requireLogin
