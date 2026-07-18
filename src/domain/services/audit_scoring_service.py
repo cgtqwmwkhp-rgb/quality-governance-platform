@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -96,6 +97,7 @@ class AuditScoringService:
                     getattr(question, "max_value", None) or getattr(question, "max_score", None) or resolved_max or 1
                 )
                 derived = (float(response_number) / max_value) * resolved_max if max_value else 0.0
+                derived = min(resolved_max, max(0.0, derived))
             elif answer not in {"", None}:
                 try:
                     num = float(answer)
@@ -110,6 +112,7 @@ class AuditScoringService:
                         or 1
                     )
                     derived = (num / max_value) * resolved_max if max_value else 0.0
+                    derived = min(resolved_max, max(0.0, derived))
             else:
                 derived = None
         elif question_type in {
@@ -173,11 +176,26 @@ class AuditScoringService:
         return ""
 
     @staticmethod
-    def _score_from_options(question: Any, answer: str, resolved_max: float) -> Optional[float]:
+    def _selected_option_values(answer: str) -> set[str]:
+        """Parse comma/JSON-array style multi-select answers into selected values."""
+        raw = (answer or "").strip()
+        if not raw:
+            return set()
+        if raw.startswith("["):
+            try:
+                parsed = json.loads(raw)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                parsed = None
+            if isinstance(parsed, list):
+                return {str(item).strip().lower() for item in parsed if str(item).strip()}
+        return {part.strip().lower() for part in raw.replace(";", ",").split(",") if part.strip()}
+
+    @classmethod
+    def _score_from_options(cls, question: Any, answer: str, resolved_max: float) -> Optional[float]:
         if not answer:
             return None
         options = getattr(question, "options_json", None) or getattr(question, "options", None) or []
-        selected = {part.strip().lower() for part in answer.replace(";", ",").split(",") if part.strip()}
+        selected = cls._selected_option_values(answer)
         if not selected:
             return None
 

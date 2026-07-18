@@ -256,9 +256,15 @@ export function scorePayloadForQuestion(
     return { score: ok ? maxScore : 0, max_score: maxScore }
   }
   if (question.type.startsWith('scale_')) {
-    const max = question.type === 'scale_1_5' ? 5 : 10
+    const scaleDefault = question.type === 'scale_1_5' ? 5 : 10
+    const max = question.maxValue ?? scaleDefault
+    const raw = Number(response.response)
+    if (!max || Number.isNaN(raw)) {
+      return { score: null, max_score: null }
+    }
+    const scaled = (raw / max) * maxScore
     return {
-      score: (Number(response.response) / max) * maxScore,
+      score: Math.min(maxScore, Math.max(0, scaled)),
       max_score: maxScore,
     }
   }

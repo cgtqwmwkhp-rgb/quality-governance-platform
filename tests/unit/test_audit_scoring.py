@@ -141,6 +141,41 @@ class TestDeriveResponseScore:
         assert score is None
         assert max_score is None
 
+    def test_numeric_score_capped_at_max(self):
+        question = SimpleNamespace(
+            question_type="numeric",
+            max_score=10.0,
+            weight=10.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=10.0,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_number=50,
+        )
+        assert score == 10.0
+        assert max_score == 10.0
+
+    def test_checklist_json_array_uses_option_scores(self):
+        question = SimpleNamespace(
+            question_type="checklist",
+            max_score=10.0,
+            weight=10.0,
+            positive_answer="yes",
+            options_json=[
+                {"label": "A", "value": "a", "score": 3},
+                {"label": "B", "value": "b", "score": 2},
+            ],
+            max_value=None,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_value='["a","b"]',
+        )
+        assert score == 5.0
+        assert max_score == 10.0
+
 
 class TestScoreResult:
     def test_score_result_creation(self):
