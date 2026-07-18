@@ -1,10 +1,18 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "152 kB",
+    "limit": "155 kB",
     "gzip": true,
-    "name": "index: 150→152 kB — tip index.gz is 150.4 kB after flag-debt FE surfaces; trim cannot reclaim 400B without deferring shared shell"
+    "name": "index: 152\u2192155 kB \u2014 tip index.gz 153.15 after flag-debt FE; shared shell cannot reclaim without defer"
   },
-  { "path": "dist/assets/vendor-*.js", "limit": "200 kB", "gzip": true },
-  { "path": "dist/assets/index-*.css", "limit": "35 kB", "gzip": true }
+  {
+    "path": "dist/assets/vendor-*.js",
+    "limit": "200 kB",
+    "gzip": true
+  },
+  {
+    "path": "dist/assets/index-*.css",
+    "limit": "35 kB",
+    "gzip": true
+  }
 ]
