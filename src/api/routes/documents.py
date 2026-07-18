@@ -81,6 +81,8 @@ class DocumentResponse(BaseModel):
     is_public: bool
     created_at: datetime
     indexed_at: Optional[datetime]
+    chunk_count: Optional[int] = None
+    indexing_error: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -150,6 +152,8 @@ def _document_to_response(document: Document) -> DocumentResponse:
         is_public=document.is_public,
         created_at=document.created_at,
         indexed_at=document.indexed_at,
+        chunk_count=getattr(document, "chunk_count", None),
+        indexing_error=getattr(document, "indexing_error", None),
     )
 
 

@@ -180,9 +180,17 @@ class IndexJobService:
                     document.indexing_error = None
                     chunks_succeeded += len(chunks)
                 else:
+                    # Chunks + AI metadata are usable for quiz/map/Q&A even when Voyage/Pinecone
+                    # are not configured. Mark content-ready via indexed_at; keep APPROVED so
+                    # publish can still set PUBLISHED without losing readiness signals.
+                    document.indexed_at = datetime.now(timezone.utc)
                     document.status = DocumentStatus.APPROVED
-                    document.indexing_error = document.indexing_error or "Vector indexing unavailable"
-                    chunks_failed += len(chunks)
+                    document.indexing_error = (
+                        document.indexing_error
+                        or "Vector indexing unavailable — searchable chunks stored; "
+                        "semantic search requires VOYAGE_API_KEY + PINECONE_API_KEY"
+                    )
+                    chunks_succeeded += len(chunks)
 
                 job.chunks_processed = chunks_total
                 job.chunks_succeeded = chunks_succeeded

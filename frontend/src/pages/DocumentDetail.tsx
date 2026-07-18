@@ -74,6 +74,8 @@ interface LibraryDocument {
   download_count: number
   created_at: string
   indexed_at?: string
+  chunk_count?: number
+  indexing_error?: string | null
 }
 
 interface LibraryVersionRow {
@@ -605,6 +607,9 @@ export default function DocumentDetail() {
                 <CardContent className="space-y-3">
                   <p className="font-medium text-foreground">{t(downstream.titleKey)}</p>
                   <p className="text-sm text-muted-foreground">{t(downstream.descriptionKey)}</p>
+                  {document.indexing_error ? (
+                    <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">{document.indexing_error}</p>
+                  ) : null}
                   <div className="flex flex-wrap gap-2">
                     {downstream.showExceptionsLink ? (
                       <Button variant="outline" size="sm" asChild>

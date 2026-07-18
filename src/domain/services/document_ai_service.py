@@ -76,19 +76,55 @@ When analyzing documents:
 Always respond with valid JSON matching the requested schema."""
 
     def __init__(self):
-        self.api_key = getattr(settings, "anthropic_api_key", None) or getattr(settings, "ANTHROPIC_API_KEY", None)
+        self.api_key = (getattr(settings, "anthropic_api_key", None) or "").strip()
         self.model = "claude-sonnet-4-20250514"
         self.base_url = "https://api.anthropic.com/v1"
 
     async def analyze_document(self, content: str, file_name: str, file_type: str) -> DocumentAnalysis:
         """Analyze document content and extract metadata.
 
-        Outbound Anthropic dials go through Preferred ``document_ai`` breaker.
+        Prefer Anthropic when configured; otherwise use the shared AI client
+        (Genspark on production) before falling back to local heuristics.
         """
 
         if not self.api_key:
-            logger.warning("No Anthropic API key configured, using fallback analysis")
-            return self._fallback_analysis(content, file_name)
+            try:
+                from src.domain.services.ai_models import get_ai_client
+
+                client = get_ai_client()
+                prompt = (
+                    "Analyze this governance document and return JSON only with keys: "
+                    "summary (2-3 sentences), tags (array), keywords (array), topics (array), "
+                    "confidence (0-1).\n\n"
+                    f"Document: {file_name}\nType: {file_type}\n\nContent:\n{content[:40000]}"
+                )
+                raw = await client.complete(
+                    prompt,
+                    system_prompt="You are an enterprise document analyst. Return valid JSON only.",
+                )
+                cleaned = (raw or "").strip()
+                if cleaned.startswith("```"):
+                    cleaned = re.sub(r"^```[a-z]*\n?", "", cleaned)
+                    cleaned = re.sub(r"\n?```$", "", cleaned)
+                payload = json.loads(cleaned)
+                return DocumentAnalysis(
+                    summary=str(payload.get("summary") or "")[:2000],
+                    document_type=str(payload.get("document_type") or "other"),
+                    category=str(payload.get("category") or ""),
+                    tags=list(payload.get("tags") or [])[:20],
+                    keywords=list(payload.get("keywords") or [])[:40],
+                    topics=list(payload.get("topics") or [])[:20],
+                    entities=payload.get("entities")
+                    if isinstance(payload.get("entities"), dict)
+                    else {"contacts": [], "assets": [], "procedures": [], "standards": []},
+                    sensitivity=str(payload.get("sensitivity") or "internal"),
+                    confidence=float(payload.get("confidence") or 0.7),
+                    has_tables=bool(payload.get("has_tables")),
+                    has_images=bool(payload.get("has_images")),
+                )
+            except Exception:
+                logger.warning("Shared AI analysis unavailable, using fallback analysis", exc_info=True)
+                return self._fallback_analysis(content, file_name)
 
         prompt = f"""Analyze this document and extract metadata.
 
@@ -451,7 +487,12 @@ class EmbeddingService:
     """Service for generating document embeddings."""
 
     def __init__(self):
-        self.voyage_api_key = getattr(settings, "voyage_api_key", None) or getattr(settings, "VOYAGE_API_KEY", None)
+        import os
+
+        self.voyage_api_key = (
+            (getattr(settings, "voyage_api_key", None) or "").strip()
+            or (os.getenv("VOYAGE_API_KEY") or "").strip()
+        )
         self.model = "voyage-large-2"
         self.base_url = "https://api.voyageai.com/v1"
 
@@ -520,9 +561,20 @@ class VectorSearchService:
     """Service for semantic search using Pinecone."""
 
     def __init__(self):
-        self.api_key = getattr(settings, "pinecone_api_key", None) or getattr(settings, "PINECONE_API_KEY", None)
-        self.index_name = getattr(settings, "pinecone_index", "qgp-documents")
-        self.environment = getattr(settings, "pinecone_environment", "gcp-starter")
+        import os
+
+        self.api_key = (
+            (getattr(settings, "pinecone_api_key", None) or "").strip()
+            or (os.getenv("PINECONE_API_KEY") or "").strip()
+        )
+        self.index_name = (
+            (getattr(settings, "pinecone_index", None) or "").strip()
+            or (os.getenv("PINECONE_INDEX") or "qgp-documents").strip()
+        )
+        self.environment = (
+            (getattr(settings, "pinecone_environment", None) or "").strip()
+            or (os.getenv("PINECONE_ENVIRONMENT") or "gcp-starter").strip()
+        )
         self.embedding_service = EmbeddingService()
 
     async def upsert_chunks(

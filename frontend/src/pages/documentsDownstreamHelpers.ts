@@ -10,19 +10,39 @@ export interface DocumentDownstreamView {
   showDocumentControlNote: boolean
 }
 
-export function resolveDocumentDownstreamPhase(status: string): DocumentDownstreamPhase {
+export function resolveDocumentDownstreamPhase(
+  status: string,
+  indexedAt?: string | null,
+  chunkCount?: number | null,
+  hasAiSummary?: boolean,
+): DocumentDownstreamPhase {
   if (status === 'processing') return 'processing'
-  if (status === 'indexed') return 'indexed'
   if (status === 'failed') return 'failed'
+  // Publish overwrites status to `published` but must not hide successful content indexing.
+  if (
+    status === 'indexed' ||
+    Boolean(indexedAt) ||
+    (typeof chunkCount === 'number' && chunkCount > 0) ||
+    Boolean(hasAiSummary)
+  ) {
+    return 'indexed'
+  }
   return 'other'
 }
 
 export function buildDocumentDownstreamView(doc: {
   id: number
   status: string
-  indexed_at?: string
+  indexed_at?: string | null
+  chunk_count?: number | null
+  ai_summary?: string | null
 }): DocumentDownstreamView {
-  const phase = resolveDocumentDownstreamPhase(doc.status)
+  const phase = resolveDocumentDownstreamPhase(
+    doc.status,
+    doc.indexed_at,
+    doc.chunk_count,
+    Boolean(doc.ai_summary && doc.ai_summary.trim()),
+  )
   switch (phase) {
     case 'processing':
       return {

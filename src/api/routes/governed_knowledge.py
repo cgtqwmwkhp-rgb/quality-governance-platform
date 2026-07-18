@@ -235,21 +235,25 @@ async def _get_evidence_link_or_404(db: DbSession, link_id: int, tenant_id: int)
 
 
 async def _document_text(db: DbSession, document: Document) -> str:
-    if document.ai_summary:
-        parts = [document.ai_summary]
-    else:
-        parts = [document.title, document.description or ""]
+    """Prefer full chunk body for quiz/map; summary alone is too thin for ISO evidence."""
     from src.domain.models.document import DocumentChunk
 
     chunk_result = await db.execute(
         select(DocumentChunk.content)
         .where(DocumentChunk.document_id == document.id)
         .order_by(DocumentChunk.chunk_index)
-        .limit(20)
+        .limit(80)
     )
     chunks = [row[0] for row in chunk_result.all() if row[0]]
+    parts: list[str] = []
     if chunks:
-        parts.append("\n".join(chunks))
+        parts.append("\n\n".join(chunks))
+    if document.ai_summary:
+        parts.append(f"SUMMARY:\n{document.ai_summary}")
+    if document.title:
+        parts.insert(0, document.title)
+    if document.description:
+        parts.append(document.description)
     return "\n\n".join(p for p in parts if p)
 
 

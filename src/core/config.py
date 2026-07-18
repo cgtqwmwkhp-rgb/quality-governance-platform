@@ -317,6 +317,12 @@ class Settings(BaseSettings):
     # OpenAI (tertiary AI provider)
     openai_api_key: str = ""
 
+    # Voyage + Pinecone (library semantic index / smart search)
+    voyage_api_key: str = ""
+    pinecone_api_key: str = ""
+    pinecone_index: str = "qgp-documents"
+    pinecone_environment: str = "gcp-starter"
+
     # OpenTelemetry / Azure Monitor
     otel_trace_sample_rate: Optional[float] = None
     applicationinsights_connection_string: str = ""
