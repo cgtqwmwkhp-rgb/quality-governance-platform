@@ -132,11 +132,13 @@ class AuditScoringService:
             has_answer = bool(answer) or response_text not in (None, "") or response_number is not None
             derived = resolved_max if has_answer else None
 
-        if score is not None:
-            return float(score), resolved_max
-        # Unanswered: leave both unset so notes-only rows don't enter the denominator.
+        # Unanswered: leave both unset so notes-only / cleared rows don't enter the
+        # denominator. A lone client score=0 must not override this (both score and
+        # max_score together still win via the early return above).
         if derived is None:
             return None, None
+        if score is not None:
+            return float(score), resolved_max
         return derived, resolved_max
 
     @classmethod
