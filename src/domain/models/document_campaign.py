@@ -8,17 +8,7 @@ import enum
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from sqlalchemy import (
-    JSON,
-    Boolean,
-    DateTime,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-    UniqueConstraint,
-    func,
-)
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import Base, CaseInsensitiveEnum, TimestampMixin

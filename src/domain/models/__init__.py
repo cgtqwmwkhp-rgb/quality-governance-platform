@@ -73,6 +73,14 @@ from src.domain.models.document import (
     DocumentVersion,
     IndexJob,
 )
+from src.domain.models.document_campaign import (
+    AssignmentStatus,
+    CampaignAssignment,
+    CampaignStatus,
+    DocumentCampaign,
+    EngineerGroup,
+    EngineerGroupMember,
+)
 
 # Document Control (Tier 1)
 from src.domain.models.document_control import (
@@ -85,14 +93,6 @@ from src.domain.models.document_control import (
     DocumentDistribution,
     DocumentTrainingLink,
     ObsoleteDocumentRecord,
-)
-from src.domain.models.document_campaign import (
-    AssignmentStatus,
-    CampaignAssignment,
-    CampaignStatus,
-    DocumentCampaign,
-    EngineerGroup,
-    EngineerGroupMember,
 )
 from src.domain.models.driver_profile import AcknowledgementStatus, DriverAcknowledgement, DriverProfile
 from src.domain.models.engineer import (
