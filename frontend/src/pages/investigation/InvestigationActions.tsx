@@ -67,6 +67,10 @@ interface InvestigationActionsProps {
   onUpdateActionStatus: (action: Action, newStatus: string, completionNotes?: string) => void
   /** Increment to open the create dialog (handoff CTA → Actions tab). */
   openCreateToken?: number
+  /** Prefill create dialog (e.g. RCA → Create CAPA from root cause). */
+  createPrefill?: Partial<ActionFormData> | null
+  /** Highlight / scroll to a blocking CAPA by action_key. */
+  focusActionKey?: string | null
   /** Investigation reference shown as locked parent in the create dialog. */
   parentLabel?: string
 }
@@ -92,6 +96,8 @@ export default function InvestigationActions({
   onCreateAction,
   onUpdateActionStatus,
   openCreateToken = 0,
+  createPrefill = null,
+  focusActionKey = null,
   parentLabel,
 }: InvestigationActionsProps) {
   const { t } = useTranslation()
@@ -109,8 +115,20 @@ export default function InvestigationActions({
     if (openCreateToken > 0) {
       setShowActionModal(true)
       setActionError(null)
+      if (createPrefill) {
+        setActionForm((prev) => ({ ...prev, ...INITIAL_FORM, ...createPrefill }))
+      }
     }
-  }, [openCreateToken])
+  }, [openCreateToken, createPrefill])
+
+  useEffect(() => {
+    if (!focusActionKey) return
+    const el = document.querySelector(`[data-action-key="${CSS.escape(focusActionKey)}"]`)
+    if (el instanceof HTMLElement) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.focus({ preventScroll: true })
+    }
+  }, [focusActionKey, actions])
 
   const handleCreateAction = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -172,10 +190,16 @@ export default function InvestigationActions({
           <div className="space-y-3">
             {actions.map((action) => {
               const statusKey = actionStatusKey(action)
+              const isFocused = Boolean(focusActionKey && action.action_key === focusActionKey)
               return (
               <Card
                 key={action.action_key || action.id}
-                className="p-4"
+                tabIndex={-1}
+                data-action-key={action.action_key || undefined}
+                className={cn(
+                  'p-4 outline-none',
+                  isFocused && 'ring-2 ring-primary border-primary/40',
+                )}
                 data-testid={`investigation-action-${action.action_key || action.id}`}
               >
                 <div className="flex items-start justify-between gap-4">

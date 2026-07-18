@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Upload,
@@ -17,6 +18,13 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../components/ui/Select'
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -24,14 +32,22 @@ import {
 } from '../../components/ui/Tooltip'
 import { cn } from '../../helpers/utils'
 
+const VISIBILITY_OPTIONS = [
+  { value: 'internal_only', label: 'Internal only' },
+  { value: 'internal_customer', label: 'Internal customer pack' },
+  { value: 'external_allowed', label: 'External customer pack' },
+  { value: 'public', label: 'Public' },
+] as const
+
 interface InvestigationEvidenceProps {
   evidenceAssets: EvidenceAsset[]
   evidenceLoading: boolean
   evidenceError: string | null
   uploadingEvidence: boolean
   deletingEvidenceId: number | null
-  onUploadEvidence: (file: File) => void
+  onUploadEvidence: (file: File, visibility: string) => void
   onDeleteEvidence: (assetId: number) => void
+  onUpdateVisibility: (assetId: number, visibility: string) => Promise<void>
   onRefresh: () => void
   onSetEvidenceError: (error: string | null) => void
 }
@@ -44,20 +60,35 @@ export default function InvestigationEvidence({
   deletingEvidenceId,
   onUploadEvidence,
   onDeleteEvidence,
+  onUpdateVisibility,
   onRefresh,
   onSetEvidenceError,
 }: InvestigationEvidenceProps) {
   const { t } = useTranslation()
+  const [uploadVisibility, setUploadVisibility] = useState('internal_customer')
+  const [updatingVisibilityId, setUpdatingVisibilityId] = useState<number | null>(null)
 
   return (
     <div className="space-y-6">
       {/* Upload Section */}
       <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
           <h3 className="text-lg font-semibold text-foreground">
             {t('investigations.evidence_register')}
           </h3>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Select value={uploadVisibility} onValueChange={setUploadVisibility}>
+              <SelectTrigger className="w-56" data-testid="evidence-upload-visibility">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {VISIBILITY_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <input
               type="file"
               id="evidence-upload"
@@ -73,7 +104,7 @@ export default function InvestigationEvidence({
               accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx"
               onChange={(e) => {
                 const file = e.target.files?.[0]
-                if (file) onUploadEvidence(file)
+                if (file) onUploadEvidence(file, uploadVisibility)
                 e.target.value = ''
               }}
               disabled={uploadingEvidence}
@@ -99,8 +130,8 @@ export default function InvestigationEvidence({
           </div>
         </div>
         <p className="text-sm text-muted-foreground">
-          Upload photos, videos, PDFs, or documents as evidence for this investigation. Maximum file
-          size: 50MB.
+          Upload photos, videos, PDFs, or documents as evidence. Choose report inclusion visibility
+          before upload (max 50MB).
         </p>
       </Card>
 
@@ -209,10 +240,33 @@ export default function InvestigationEvidence({
                   {asset.description}
                 </p>
               )}
-              <div className="flex items-center gap-2 mt-2">
-                <Badge variant="outline" className="text-xs">
-                  {asset.visibility.replace(/_/g, ' ')}
-                </Badge>
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                <Select
+                  value={asset.visibility}
+                  onValueChange={async (value) => {
+                    setUpdatingVisibilityId(asset.id)
+                    try {
+                      await onUpdateVisibility(asset.id, value)
+                    } finally {
+                      setUpdatingVisibilityId(null)
+                    }
+                  }}
+                  disabled={updatingVisibilityId === asset.id}
+                >
+                  <SelectTrigger
+                    className="h-8 w-48 text-xs"
+                    data-testid={`evidence-visibility-${asset.id}`}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VISIBILITY_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {asset.contains_pii && (
                   <Badge variant="destructive" className="text-xs">
                     Contains PII

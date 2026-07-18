@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import desc, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -22,10 +22,12 @@ from src.domain.exceptions import (
     StateTransitionError,
     ValidationError,
 )
+from src.domain.models.capa import CAPAAction, CAPASource
 from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule, EvidenceVisibility
 from src.domain.models.investigation import (
     AssignedEntityType,
     CustomerPackAudience,
+    InvestigationAction,
     InvestigationComment,
     InvestigationCustomerPack,
     InvestigationLevel,
@@ -34,6 +36,7 @@ from src.domain.models.investigation import (
     InvestigationStatus,
     InvestigationTemplate,
 )
+from src.domain.models.user import User
 from src.domain.services.investigation_structure_normalize import (
     build_run_data_json_from_rows,
     build_structure_json_from_rows,
@@ -550,90 +553,115 @@ class InvestigationService:
         db.add(event)
         return event
 
+    _CUSTOMER_PACK_IDENTITY_FIELDS = (
+        "reporter_name",
+        "reporter_email",
+        "driver_name",
+        "driver_email",
+        "complainant_name",
+        "complainant_email",
+        "investigator_name",
+        "reviewer_name",
+        "approver_name",
+        "persons_involved",
+        "witnesses",
+        "witness_names",
+        "first_responder",
+        "responsible_person",
+    )
+
     @classmethod
-    def generate_customer_pack(
+    def _investigation_pack_scalar(cls, value: Any, default: str) -> str:
+        if value is not None and hasattr(value, "value"):
+            return value.value
+        if value is not None:
+            return str(value)
+        return default
+
+    @classmethod
+    def _redact_customer_pack_field(
+        cls,
+        audience: CustomerPackAudience,
+        section_key: str,
+        field_id: str,
+        field_value: Any,
+        redaction_log: List[Dict[str, Any]],
+    ) -> Any:
+        if audience != CustomerPackAudience.EXTERNAL_CUSTOMER:
+            return field_value
+        if field_id not in cls._CUSTOMER_PACK_IDENTITY_FIELDS or not field_value:
+            return field_value
+
+        original_value = field_value
+        if "name" in field_id:
+            redacted_value = "[Name Redacted]"
+        elif "email" in field_id:
+            redacted_value = "[Email Redacted]"
+        else:
+            redacted_value = "[Redacted]"
+
+        redaction_log.append(
+            {
+                "field_path": f"{section_key}.{field_id}",
+                "redaction_type": "IDENTITY_REDACTION",
+                "original_type": type(original_value).__name__,
+            }
+        )
+        return redacted_value
+
+    @classmethod
+    def _build_customer_pack_sections(
         cls,
         investigation: InvestigationRun,
         audience: CustomerPackAudience,
-        evidence_assets: List[EvidenceAsset],
-        generated_by_id: int,
-        generated_by_role: Optional[str] = None,
-    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """Generate customer pack with redaction rules applied.
-
-        Returns:
-            Tuple of (pack_content, redaction_log, included_assets)
-        """
+        approved_omits: set[str],
+    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
         redaction_log: List[Dict[str, Any]] = []
-        included_assets: List[Dict[str, Any]] = []
-
-        if investigation.status is not None and hasattr(investigation.status, "value"):
-            status_val = investigation.status.value
-        elif investigation.status is not None:
-            status_val = str(investigation.status)
-        else:
-            status_val = "unknown"
-
-        if investigation.level is not None and hasattr(investigation.level, "value"):
-            level_val = investigation.level.value
-        elif investigation.level is not None:
-            level_val = str(investigation.level)
-        else:
-            level_val = "medium"
-
-        content: Dict[str, Any] = {
-            "investigation_reference": investigation.reference_number,
-            "title": investigation.title,
-            "status": status_val,
-            "level": level_val,
-            "sections": {},
-        }
-
+        sections: Dict[str, Any] = {}
         source_data: Dict[str, Any] = investigation.data if isinstance(investigation.data, dict) else {}
-        for section_id, section_data in source_data.get("sections", {}).items():
-            content["sections"][section_id] = {}  # type: ignore[index]  # TYPE-IGNORE: MYPY-1
 
+        for section_id, section_data in source_data.get("sections", {}).items():
+            section_key = str(section_id)
+            if section_key in approved_omits:
+                redaction_log.append(
+                    {
+                        "field_path": section_key,
+                        "redaction_type": "SECTION_OMIT_APPROVED",
+                        "original_type": "section",
+                    }
+                )
+                continue
+
+            sections[section_key] = {}
             if isinstance(section_data, dict):
                 for field_id, field_value in section_data.items():
-                    redacted = False
+                    sections[section_key][field_id] = cls._redact_customer_pack_field(
+                        audience,
+                        section_key,
+                        field_id,
+                        field_value,
+                        redaction_log,
+                    )
 
-                    if audience == CustomerPackAudience.EXTERNAL_CUSTOMER:
-                        identity_fields = [
-                            "reporter_name",
-                            "reporter_email",
-                            "driver_name",
-                            "driver_email",
-                            "complainant_name",
-                            "complainant_email",
-                            "investigator_name",
-                            "reviewer_name",
-                            "approver_name",
-                            "persons_involved",
-                            "witnesses",
-                            "witness_names",
-                            "first_responder",
-                            "responsible_person",
-                        ]
+        for section_key in approved_omits:
+            if section_key not in source_data.get("sections", {}):
+                redaction_log.append(
+                    {
+                        "field_path": section_key,
+                        "redaction_type": "SECTION_OMIT_APPROVED",
+                        "original_type": "section",
+                    }
+                )
 
-                        if field_id in identity_fields and field_value:
-                            original_value = field_value
-                            if "name" in field_id:
-                                field_value = "[Name Redacted]"
-                            elif "email" in field_id:
-                                field_value = "[Email Redacted]"
-                            else:
-                                field_value = "[Redacted]"
-                            redacted = True
-                            redaction_log.append(
-                                {
-                                    "field_path": f"{section_id}.{field_id}",
-                                    "redaction_type": "IDENTITY_REDACTION",
-                                    "original_type": type(original_value).__name__,
-                                }
-                            )
+        return sections, redaction_log
 
-                    content["sections"][section_id][field_id] = field_value  # type: ignore[index]  # TYPE-IGNORE: MYPY-1
-
+    @classmethod
+    def _build_customer_pack_included_assets(
+        cls,
+        audience: CustomerPackAudience,
+        evidence_assets: List[EvidenceAsset],
+    ) -> List[Dict[str, Any]]:
+        included_assets: List[Dict[str, Any]] = []
         for asset in evidence_assets:
             can_include = False
             exclusion_reason = None
@@ -650,9 +678,6 @@ class InvestigationService:
                 EvidenceVisibility.PUBLIC,
             ):
                 can_include = True
-                if audience == CustomerPackAudience.EXTERNAL_CUSTOMER:
-                    if asset.contains_pii or asset.redaction_required:
-                        pass
 
             included_assets.append(
                 {
@@ -666,7 +691,39 @@ class InvestigationService:
                     "redaction_required": asset.redaction_required,
                 }
             )
+        return included_assets
 
+    @classmethod
+    def generate_customer_pack(
+        cls,
+        investigation: InvestigationRun,
+        audience: CustomerPackAudience,
+        evidence_assets: List[EvidenceAsset],
+        generated_by_id: int,
+        generated_by_role: Optional[str] = None,
+    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Generate customer pack with redaction rules applied.
+
+        Returns:
+            Tuple of (pack_content, redaction_log, included_assets)
+        """
+        approved_omits = set(cls.approved_customer_omits(investigation))
+        sections, redaction_log = cls._build_customer_pack_sections(
+            investigation,
+            audience,
+            approved_omits,
+        )
+        content: Dict[str, Any] = {
+            "investigation_reference": investigation.reference_number,
+            "title": investigation.title,
+            "status": cls._investigation_pack_scalar(investigation.status, "unknown"),
+            "level": cls._investigation_pack_scalar(investigation.level, "medium"),
+            "sections": sections,
+        }
+        if approved_omits:
+            content["omitted_sections"] = sorted(approved_omits)
+
+        included_assets = cls._build_customer_pack_included_assets(audience, evidence_assets)
         return content, redaction_log, included_assets
 
     @classmethod
@@ -815,6 +872,211 @@ class InvestigationService:
         return investigation
 
     @classmethod
+    def apply_smart_search_filter(cls, query: Any, q: str) -> Any:
+        """Apply additive smart-search filter across inv content, actions, comments, people."""
+        term = (q or "").strip()
+        if not term:
+            return query
+        pattern = f"%{term}%"
+
+        comment_exists = exists(
+            select(InvestigationComment.id).where(
+                InvestigationComment.investigation_id == InvestigationRun.id,
+                InvestigationComment.deleted_at.is_(None),
+                InvestigationComment.content.ilike(pattern),
+            )
+        )
+        inv_action_exists = exists(
+            select(InvestigationAction.id).where(
+                InvestigationAction.investigation_id == InvestigationRun.id,
+                or_(
+                    InvestigationAction.title.ilike(pattern),
+                    InvestigationAction.description.ilike(pattern),
+                    InvestigationAction.reference_number.ilike(pattern),
+                ),
+            )
+        )
+        capa_exists = exists(
+            select(CAPAAction.id).where(
+                CAPAAction.source_type == CAPASource.INVESTIGATION,
+                CAPAAction.source_id == InvestigationRun.id,
+                or_(
+                    CAPAAction.title.ilike(pattern),
+                    CAPAAction.description.ilike(pattern),
+                    CAPAAction.reference_number.ilike(pattern),
+                ),
+            )
+        )
+        assignee_match = exists(
+            select(User.id).where(
+                User.id == InvestigationRun.assigned_to_user_id,
+                or_(
+                    User.email.ilike(pattern),
+                    User.first_name.ilike(pattern),
+                    User.last_name.ilike(pattern),
+                ),
+            )
+        )
+        reviewer_match = exists(
+            select(User.id).where(
+                User.id == InvestigationRun.reviewer_user_id,
+                or_(
+                    User.email.ilike(pattern),
+                    User.first_name.ilike(pattern),
+                    User.last_name.ilike(pattern),
+                ),
+            )
+        )
+        action_owner_match = exists(
+            select(InvestigationAction.id)
+            .join(User, User.id == InvestigationAction.owner_id)
+            .where(
+                InvestigationAction.investigation_id == InvestigationRun.id,
+                or_(
+                    User.email.ilike(pattern),
+                    User.first_name.ilike(pattern),
+                    User.last_name.ilike(pattern),
+                ),
+            )
+        )
+        capa_assignee_match = exists(
+            select(CAPAAction.id)
+            .join(User, User.id == CAPAAction.assigned_to_id)
+            .where(
+                CAPAAction.source_type == CAPASource.INVESTIGATION,
+                CAPAAction.source_id == InvestigationRun.id,
+                or_(
+                    User.email.ilike(pattern),
+                    User.first_name.ilike(pattern),
+                    User.last_name.ilike(pattern),
+                ),
+            )
+        )
+
+        return query.where(
+            or_(
+                InvestigationRun.reference_number.ilike(pattern),
+                InvestigationRun.title.ilike(pattern),
+                InvestigationRun.description.ilike(pattern),
+                comment_exists,
+                inv_action_exists,
+                capa_exists,
+                assignee_match,
+                reviewer_match,
+                action_owner_match,
+                capa_assignee_match,
+            )
+        )
+
+    @classmethod
+    def get_customer_pack_visibility(cls, investigation: InvestigationRun) -> Dict[str, Any]:
+        """Return per-section customer-pack visibility map from run data (no Alembic)."""
+        data: Dict[str, Any] = investigation.data if isinstance(investigation.data, dict) else {}
+        raw = data.get("customer_pack_visibility")
+        return dict(raw) if isinstance(raw, dict) else {}
+
+    @classmethod
+    def pending_customer_omits(cls, investigation: InvestigationRun) -> List[str]:
+        """Section ids requested for omit but not yet approved."""
+        visibility = cls.get_customer_pack_visibility(investigation)
+        pending: List[str] = []
+        for section_id, meta in visibility.items():
+            if not isinstance(meta, dict):
+                continue
+            if meta.get("omit_requested") and not meta.get("omit_approved"):
+                pending.append(str(section_id))
+        return pending
+
+    @classmethod
+    def approved_customer_omits(cls, investigation: InvestigationRun) -> List[str]:
+        """Section ids approved for omit from customer packs."""
+        visibility = cls.get_customer_pack_visibility(investigation)
+        approved: List[str] = []
+        for section_id, meta in visibility.items():
+            if not isinstance(meta, dict):
+                continue
+            if meta.get("omit_approved"):
+                approved.append(str(section_id))
+        return approved
+
+    @classmethod
+    async def set_customer_pack_omit(
+        cls,
+        db: AsyncSession,
+        *,
+        investigation: InvestigationRun,
+        section_id: str,
+        omit_requested: bool,
+        reason: Optional[str],
+        actor_id: int,
+        approve: bool = False,
+        approver_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Request or approve per-section customer-pack omit (stored on investigation.data)."""
+        data: Dict[str, Any] = dict(investigation.data) if isinstance(investigation.data, dict) else {}
+        visibility = dict(data.get("customer_pack_visibility") or {})
+        current = dict(visibility.get(section_id) or {})
+
+        if approve:
+            if not current.get("omit_requested"):
+                raise ValidationError(
+                    "Cannot approve omit that was not requested",
+                    code="OMIT_NOT_REQUESTED",
+                    details={"section_id": section_id},
+                )
+            current.update(
+                {
+                    "omit_requested": True,
+                    "omit_approved": True,
+                    "omit_reason": current.get("omit_reason") or reason,
+                    "omit_approved_by": approver_id or actor_id,
+                    "omit_approved_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            event_type = "CUSTOMER_OMIT_APPROVED"
+        elif omit_requested:
+            current.update(
+                {
+                    "omit_requested": True,
+                    "omit_approved": False,
+                    "omit_reason": reason or current.get("omit_reason") or "",
+                    "omit_requested_by": actor_id,
+                    "omit_requested_at": datetime.now(timezone.utc).isoformat(),
+                    "omit_approved_by": None,
+                    "omit_approved_at": None,
+                }
+            )
+            event_type = "CUSTOMER_OMIT_REQUESTED"
+        else:
+            current = {
+                "omit_requested": False,
+                "omit_approved": False,
+                "omit_reason": None,
+                "omit_revoked_by": actor_id,
+                "omit_revoked_at": datetime.now(timezone.utc).isoformat(),
+            }
+            event_type = "CUSTOMER_OMIT_REVOKED"
+
+        visibility[section_id] = current
+        data["customer_pack_visibility"] = visibility
+        investigation.data = data  # type: ignore[assignment]
+        investigation.updated_by_id = actor_id
+        investigation.version = int(investigation.version or 0) + 1
+
+        await cls.create_revision_event(
+            db=db,
+            investigation=investigation,
+            event_type=event_type,
+            actor_id=actor_id,
+            field_path=f"customer_pack_visibility.{section_id}",
+            new_value=current,
+            metadata={"section_id": section_id, "reason": reason},
+        )
+        await db.commit()
+        await db.refresh(investigation)
+        return current
+
+    @classmethod
     async def list_investigations(
         cls,
         db: AsyncSession,
@@ -823,6 +1085,7 @@ class InvestigationService:
         entity_type: Optional[str] = None,
         entity_id: Optional[int] = None,
         status_filter: Optional[str] = None,
+        q: Optional[str] = None,
         page: int = 1,
         page_size: int = 20,
     ) -> PaginatedResult:
@@ -867,6 +1130,9 @@ class InvestigationService:
                         "valid_statuses": [s.value for s in InvestigationStatus],
                     },
                 )
+
+        if q:
+            query = cls.apply_smart_search_filter(query, q)
 
         query = query.order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
         return await _paginate_query(db, query, page, page_size)
@@ -1311,6 +1577,14 @@ class InvestigationService:
             )
 
         investigation = await cls.get_investigation(db, investigation_id, tenant_id)
+
+        pending = cls.pending_customer_omits(investigation)
+        if pending:
+            raise ValidationError(
+                "Customer pack cannot be generated while section omits are pending approval",
+                code="CUSTOMER_OMIT_PENDING",
+                details={"pending_sections": pending},
+            )
 
         assets_query = select(EvidenceAsset).where(
             EvidenceAsset.linked_investigation_id == investigation_id,

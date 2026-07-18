@@ -144,6 +144,7 @@ _ADMIN_PERMS = ",".join(
         "investigation:create",
         "investigation:read",
         "investigation:update",
+        "investigation:approve_customer_omit",
         "document:create",
         "document:read",
         "document:update",

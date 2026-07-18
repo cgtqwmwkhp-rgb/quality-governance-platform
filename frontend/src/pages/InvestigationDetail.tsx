@@ -45,6 +45,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Card } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
 import {
   Dialog,
   DialogContent,
@@ -93,6 +94,13 @@ import {
   triggerPackDownload,
 } from './investigation/investigationReportHelpers'
 import { getReportSectionsForLevel } from './investigation/hsg245ReportSections'
+import {
+  addManualTimelineEntry,
+  approveCustomerPackOmit,
+  readCustomerPackVisibility,
+  requestCustomerPackOmit,
+  updateEvidenceVisibility,
+} from './investigation/investigationDetailApi'
 
 const TABS = [
   { id: 'summary', label: 'Summary', icon: FileText },
@@ -161,7 +169,15 @@ export default function InvestigationDetail() {
   const [actionsLoading, setActionsLoading] = useState(false)
   const [actionsLoadFailed, setActionsLoadFailed] = useState(false)
   const [openCreateActionToken, setOpenCreateActionToken] = useState(0)
+  const [createActionPrefill, setCreateActionPrefill] = useState<Partial<ActionFormData> | null>(
+    null,
+  )
+  const [focusActionKey, setFocusActionKey] = useState<string | null>(null)
   const [actionStatusFilter, setActionStatusFilter] = useState<string>('all')
+  const [addingManualTimeline, setAddingManualTimeline] = useState(false)
+  const [omitReasonDraft, setOmitReasonDraft] = useState<Record<string, string>>({})
+  const [omitBusySection, setOmitBusySection] = useState<string | null>(null)
+  const [lastRedactionLog, setLastRedactionLog] = useState<Record<string, unknown>[] | null>(null)
 
   const [summaryFindings, setSummaryFindings] = useState('')
   const [summaryConclusion, setSummaryConclusion] = useState('')
@@ -332,7 +348,7 @@ export default function InvestigationDetail() {
 
   // ── Handlers ─────────────────────────────────────────────
 
-  const handleUploadEvidence = async (file: File) => {
+  const handleUploadEvidence = async (file: File, visibility = 'internal_customer') => {
     if (!investigationId) return
     setUploadingEvidence(true)
     setEvidenceError(null)
@@ -341,14 +357,42 @@ export default function InvestigationDetail() {
         source_module: 'investigation',
         source_id: investigationId,
         title: file.name,
-        visibility: 'internal_customer',
+        visibility,
       })
       await loadEvidence()
+      if (activeTab === 'timeline') await loadTimeline()
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'uploadEvidence' })
       setEvidenceError(getApiErrorMessage(err))
     } finally {
       setUploadingEvidence(false)
+    }
+  }
+
+  const handleUpdateEvidenceVisibility = async (assetId: number, visibility: string) => {
+    try {
+      await updateEvidenceVisibility(assetId, visibility)
+      await loadEvidence()
+      toast.success(t('investigations.evidence.visibility_updated', 'Evidence visibility updated'))
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'updateEvidenceVisibility' })
+      setEvidenceError(getApiErrorMessage(err))
+      toast.error(getApiErrorMessage(err))
+    }
+  }
+
+  const handleAddManualTimeline = async (content: string) => {
+    if (!investigationId) return
+    setAddingManualTimeline(true)
+    try {
+      await addManualTimelineEntry(investigationId, content)
+      toast.success(t('investigations.timeline.manual_added', 'Timeline entry added'))
+      await loadTimeline()
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'addManualTimeline' })
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setAddingManualTimeline(false)
     }
   }
 
@@ -436,8 +480,11 @@ export default function InvestigationDetail() {
     try {
       const response = await investigationsApi.generatePack(investigationId, audience)
       triggerPackDownload(buildGeneratedPackDownload(response.data))
+      const log = response.data.redaction_log
+      setLastRedactionLog(Array.isArray(log) ? log : null)
       toast.success(t('investigations.report.generate_download_success'))
       await loadPacks()
+      await loadInvestigation()
     } catch (err: unknown) {
       trackError(err, { component: 'InvestigationDetail', action: 'generatePack' })
       const apiErr = err as { response?: { status?: number } }
@@ -634,8 +681,12 @@ export default function InvestigationDetail() {
   ])
 
   useEffect(() => {
-    if (activeTab === 'timeline') loadTimeline()
-  }, [timelineFilter, activeTab, loadTimeline])
+    if (activeTab !== 'timeline') return
+    loadTimeline()
+    loadComments()
+    loadEvidence()
+    loadPacks()
+  }, [timelineFilter, activeTab, loadTimeline, loadComments, loadEvidence, loadPacks])
   useEffect(() => {
     if (activeTab === 'actions') loadActions()
   }, [actionStatusFilter, activeTab, loadActions])
@@ -687,10 +738,78 @@ export default function InvestigationDetail() {
         })
       : getCapaLink('investigation', investigation.id)
 
-  const openCreateActionInTab = () => {
+  const openCreateActionInTab = (prefill?: Partial<ActionFormData> | null) => {
+    setCreateActionPrefill(prefill || null)
     setActiveTab('actions')
     setOpenCreateActionToken((n) => n + 1)
   }
+
+  const jumpToCapaBlocker = (actionKey?: string) => {
+    setFocusActionKey(actionKey || null)
+    setActiveTab('actions')
+  }
+
+  const handleCreateCapaFromRootCause = () => {
+    const root = (rcaData['root_cause'] || '').trim()
+    openCreateActionInTab({
+      title: root
+        ? t('investigations.rca.capa_from_root_title', 'CAPA: {{root}}', { root: root.slice(0, 80) })
+        : t('investigations.rca.capa_default_title', 'CAPA from root cause'),
+      description: [
+        root ? `Root cause: ${root}` : '',
+        rcaData['problem_statement'] ? `Problem: ${rcaData['problem_statement']}` : '',
+        rcaData['contributing_factors']
+          ? `Contributing factors: ${rcaData['contributing_factors']}`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+      priority: 'high',
+    })
+  }
+
+  const handleRequestOmit = async (sectionId: string, omitRequested: boolean) => {
+    if (!investigationId) return
+    setOmitBusySection(sectionId)
+    try {
+      await requestCustomerPackOmit(
+        investigationId,
+        sectionId,
+        omitRequested,
+        omitReasonDraft[sectionId],
+      )
+      toast.success(
+        omitRequested
+          ? t('investigations.report.omit_requested', 'Omit requested — awaiting approval')
+          : t('investigations.report.omit_revoked', 'Omit request cleared'),
+      )
+      await loadInvestigation()
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'requestOmit' })
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setOmitBusySection(null)
+    }
+  }
+
+  const handleApproveOmit = async (sectionId: string) => {
+    if (!investigationId) return
+    setOmitBusySection(sectionId)
+    try {
+      await approveCustomerPackOmit(investigationId, sectionId, omitReasonDraft[sectionId])
+      toast.success(t('investigations.report.omit_approved', 'Omit approved for customer pack'))
+      await loadInvestigation()
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'approveOmit' })
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setOmitBusySection(null)
+    }
+  }
+
+  const packVisibility = readCustomerPackVisibility(
+    (investigation?.data as Record<string, unknown>) || {},
+  )
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -701,7 +820,7 @@ export default function InvestigationDetail() {
         sourceLink={sourceLink}
       />
 
-      <Card className="p-5 border-primary/20 bg-primary/5">
+      <Card className="p-5 border-primary/20 bg-primary/5" data-testid="investigation-capa-handoff-strip">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-sm font-medium text-primary">
@@ -727,6 +846,7 @@ export default function InvestigationDetail() {
                   openCreateActionInTab()
                   return
                 }
+                // Open mode: deep-link to Actions list filtered to this investigation.
                 navigate(capaHref)
               }}
               disabled={actionsLoading}
@@ -742,6 +862,45 @@ export default function InvestigationDetail() {
               })}
             </Button>
           </div>
+        </div>
+        <div
+          className="mt-4 flex flex-wrap items-center gap-2"
+          data-testid="investigation-status-workflow"
+        >
+          {WORKFLOW_STATUSES.map((status, idx) => {
+            const currentIdx = WORKFLOW_STATUSES.indexOf(
+              investigation.status as (typeof WORKFLOW_STATUSES)[number],
+            )
+            const isCurrent = investigation.status === status
+            const isPast = currentIdx > idx
+            return (
+              <button
+                key={status}
+                type="button"
+                disabled={updatingStatus || investigation.status === 'closed'}
+                onClick={() => void handleStatusChange(status)}
+                className={cn(
+                  'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  isCurrent && 'border-primary bg-primary text-primary-foreground',
+                  isPast && !isCurrent && 'border-primary/30 bg-primary/10 text-primary',
+                  !isCurrent && !isPast && 'border-border text-muted-foreground hover:border-primary/40',
+                )}
+                data-testid={`investigation-workflow-${status}`}
+                aria-current={isCurrent ? 'step' : undefined}
+              >
+                {getStatusDisplay(status).label}
+              </button>
+            )
+          })}
+          {investigation.status !== 'closed' ? (
+            <span className="text-xs text-muted-foreground">
+              {t('investigations.meta.status_hint')}
+            </span>
+          ) : (
+            <Badge variant="outline" data-testid="investigation-workflow-closed">
+              {getStatusDisplay('closed').label}
+            </Badge>
+          )}
         </div>
         <div
           className="mt-4 pt-4 border-t border-primary/10 space-y-3"
@@ -1158,12 +1317,21 @@ export default function InvestigationDetail() {
                               className="text-xs text-muted-foreground"
                               data-testid={`closure-blocker-${item.id}`}
                             >
-                              <span className="font-mono text-foreground">{item.reference_number}</span>
-                              {' — '}
-                              {item.title}
-                              <span className="ml-1 capitalize">
-                                ({String(item.status || 'unknown').replace(/_/g, ' ')})
-                              </span>
+                              <button
+                                type="button"
+                                className="text-left underline-offset-2 hover:underline"
+                                onClick={() => jumpToCapaBlocker(item.action_key)}
+                                data-testid={`closure-blocker-jump-${item.action_key}`}
+                              >
+                                <span className="font-mono text-foreground">
+                                  {item.reference_number}
+                                </span>
+                                {' — '}
+                                {item.title}
+                                <span className="ml-1 capitalize">
+                                  ({String(item.status || 'unknown').replace(/_/g, ' ')})
+                                </span>
+                              </button>
                             </li>
                           ))}
                         </ul>
@@ -1176,7 +1344,9 @@ export default function InvestigationDetail() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setActiveTab('actions')}
+                          onClick={() =>
+                            jumpToCapaBlocker(closureValidation.open_work?.[0]?.action_key)
+                          }
                           data-testid="investigation-closure-go-actions"
                         >
                           <ListTodo className="w-3.5 h-3.5 mr-1.5" />
@@ -1233,10 +1403,23 @@ export default function InvestigationDetail() {
         {activeTab === 'timeline' && (
           <InvestigationTimeline
             timeline={timeline}
+            comments={comments}
+            actions={actions}
+            evidence={evidenceAssets}
+            packs={packs}
             timelineLoading={timelineLoading}
             timelineFilter={timelineFilter}
             onTimelineFilterChange={setTimelineFilter}
-            onRefresh={loadTimeline}
+            onRefresh={() => {
+              void loadTimeline()
+              void loadComments()
+              void loadActions()
+              void loadEvidence()
+              void loadPacks()
+            }}
+            onAddManualEntry={handleAddManualTimeline}
+            onJumpTab={(tab) => setActiveTab(tab)}
+            addingManual={addingManualTimeline}
           />
         )}
 
@@ -1249,6 +1432,7 @@ export default function InvestigationDetail() {
             deletingEvidenceId={deletingEvidenceId}
             onUploadEvidence={handleUploadEvidence}
             onDeleteEvidence={handleDeleteEvidence}
+            onUpdateVisibility={handleUpdateEvidenceVisibility}
             onRefresh={loadEvidence}
             onSetEvidenceError={setEvidenceError}
           />
@@ -1323,14 +1507,26 @@ export default function InvestigationDetail() {
               </div>
             </Card>
             <Card className="p-6 border-primary/20 bg-primary/5">
-              <h3 className="text-lg font-semibold text-foreground mb-4">
-                {t('investigations.root_cause')}
-              </h3>
+              <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
+                <h3 className="text-lg font-semibold text-foreground">
+                  {t('investigations.root_cause')}
+                </h3>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCreateCapaFromRootCause}
+                  data-testid="investigation-rca-create-capa"
+                >
+                  <ListTodo className="w-4 h-4 mr-2" />
+                  {t('investigations.rca.create_capa_from_root', 'Create CAPA from root cause')}
+                </Button>
+              </div>
               <Textarea
                 rows={3}
                 placeholder="Document the root cause based on your 5 Whys analysis..."
                 value={rcaData['root_cause'] || ''}
                 onChange={(e) => handleRcaFieldChange('root_cause', e.target.value)}
+                data-testid="investigation-root-cause-input"
               />
             </Card>
             <Card className="p-6">
@@ -1380,6 +1576,8 @@ export default function InvestigationDetail() {
             onCreateAction={handleCreateAction}
             onUpdateActionStatus={handleUpdateActionStatus}
             openCreateToken={openCreateActionToken}
+            createPrefill={createActionPrefill}
+            focusActionKey={focusActionKey}
             parentLabel={investigation.reference_number}
           />
         )}
@@ -1390,17 +1588,93 @@ export default function InvestigationDetail() {
               <h3 className="text-lg font-semibold text-foreground">HSG245 report scope</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 {String(investigation.level || 'medium').toUpperCase()} level sections required for this
-                investigation. HIGH investigations use the full, detailed analysis pack.
+                investigation. Request omit from customer pack; H&S Advisor/Admin approval required
+                (`investigation:approve_customer_omit`).
               </p>
               <div className="mt-4 space-y-3">
-                {getReportSectionsForLevel(investigation.level).map((section) => (
-                  <div key={section.id} className="rounded-lg border border-border p-3">
-                    <p className="font-medium text-foreground">{section.title}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{section.detail}</p>
-                  </div>
-                ))}
+                {getReportSectionsForLevel(investigation.level).map((section) => {
+                  const vis = packVisibility[section.id] || {}
+                  const pending = Boolean(vis.omit_requested && !vis.omit_approved)
+                  const approved = Boolean(vis.omit_approved)
+                  return (
+                    <div
+                      key={section.id}
+                      className="rounded-lg border border-border p-3 space-y-2"
+                      data-testid={`report-section-${section.id}`}
+                    >
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div>
+                          <p className="font-medium text-foreground">{section.title}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">{section.detail}</p>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className="text-xs"
+                          data-testid={`report-section-omit-status-${section.id}`}
+                        >
+                          {approved
+                            ? t('investigations.report.omit_status_approved', 'Omitted (approved)')
+                            : pending
+                              ? t('investigations.report.omit_status_pending', 'Omit pending approval')
+                              : t('investigations.report.omit_status_included', 'Included in pack')}
+                        </Badge>
+                      </div>
+                      <Textarea
+                        rows={2}
+                        placeholder={t(
+                          'investigations.report.omit_reason_placeholder',
+                          'Reason to omit from customer pack…',
+                        )}
+                        value={omitReasonDraft[section.id] ?? vis.omit_reason ?? ''}
+                        onChange={(e) =>
+                          setOmitReasonDraft((prev) => ({ ...prev, [section.id]: e.target.value }))
+                        }
+                        data-testid={`report-section-omit-reason-${section.id}`}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={omitBusySection === section.id}
+                          onClick={() =>
+                            void handleRequestOmit(section.id, !(pending || approved))
+                          }
+                          data-testid={`report-section-omit-request-${section.id}`}
+                        >
+                          {pending || approved
+                            ? t('investigations.report.omit_clear', 'Clear omit request')
+                            : t('investigations.report.omit_request', 'Omit from customer pack')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={omitBusySection === section.id || !pending || approved}
+                          onClick={() => void handleApproveOmit(section.id)}
+                          data-testid={`report-section-omit-approve-${section.id}`}
+                        >
+                          {t('investigations.report.omit_approve', 'Approve omit')}
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </Card>
+            {lastRedactionLog && lastRedactionLog.length > 0 ? (
+              <Card className="p-4" data-testid="investigation-report-redaction-log">
+                <h3 className="text-sm font-semibold text-foreground mb-2">
+                  {t('investigations.report.redaction_summary', 'Last generate redaction log')}
+                </h3>
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  {lastRedactionLog.slice(0, 12).map((entry, idx) => (
+                    <li key={idx}>
+                      {String((entry as { redaction_type?: string }).redaction_type || 'REDACTION')}
+                      {': '}
+                      {String((entry as { field_path?: string }).field_path || '—')}
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            ) : null}
             {packError && (
               <Card className="p-4 bg-destructive/10 border-destructive/30">
                 <div className="flex items-center gap-2 text-destructive">
