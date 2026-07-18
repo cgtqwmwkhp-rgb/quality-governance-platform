@@ -1333,8 +1333,7 @@ async def generate_customer_pack(
     pending = InvestigationService.pending_customer_omits(investigation)
     if pending:
         raise BadRequestError(
-            "Customer pack cannot be generated while section omits are pending approval: "
-            + ", ".join(pending)
+            "Customer pack cannot be generated while section omits are pending approval: " + ", ".join(pending)
         )
 
     # Get linked evidence assets
