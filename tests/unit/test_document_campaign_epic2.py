@@ -6,10 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.domain.models.document_campaign import DEFAULT_REMINDER_OFFSETS_HOURS
-from src.domain.services.document_campaign_service import (
-    DocumentCampaignService,
-    _reminder_defaults_setting_key,
-)
+from src.domain.services.document_campaign_service import DocumentCampaignService, _reminder_defaults_setting_key
 
 
 def _scalar_one_result(item):
