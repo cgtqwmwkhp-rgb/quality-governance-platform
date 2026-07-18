@@ -68,6 +68,7 @@ class TestCampaignNotificationHelpers:
             tenant_id=1,
             user_id=10,
             campaign_id=99,
+            assignment_id=55,
             document_id=7,
             doc_title="Fire Safety Policy",
             require_quiz=True,
@@ -76,6 +77,7 @@ class TestCampaignNotificationHelpers:
         assert kwargs["entity_type"] == ENTITY_TYPE_CAMPAIGN
         assert kwargs["type"] is NotificationType.ASSIGNMENT
         assert kwargs["title"] == "Document campaign assigned"
+        assert kwargs["action_url"] == "/portal/reading?assignment=55"
         assert "quiz" in kwargs["message"]
 
     def test_build_reminder_notification_uses_reminder_entity_type(self):
@@ -83,6 +85,7 @@ class TestCampaignNotificationHelpers:
             tenant_id=1,
             user_id=10,
             campaign_id=99,
+            assignment_id=55,
             document_id=7,
             doc_title="Fire Safety Policy",
             due_at=NOW + timedelta(days=7),
@@ -90,12 +93,14 @@ class TestCampaignNotificationHelpers:
         assert kwargs["entity_type"] == ENTITY_TYPE_CAMPAIGN_REMINDER
         assert kwargs["type"] is NotificationType.ACTION_DUE_SOON
         assert kwargs["title"] == "Document campaign reminder"
+        assert kwargs["action_url"] == "/portal/reading?assignment=55"
 
     def test_build_overdue_notification_varies_by_recipient_role(self):
         assignee_kwargs = build_overdue_notification_kwargs(
             tenant_id=1,
             user_id=10,
             campaign_id=99,
+            assignment_id=55,
             document_id=7,
             doc_title="Fire Safety Policy",
             assignee_user_id=10,
@@ -106,6 +111,7 @@ class TestCampaignNotificationHelpers:
             tenant_id=1,
             user_id=42,
             campaign_id=99,
+            assignment_id=55,
             document_id=7,
             doc_title="Fire Safety Policy",
             assignee_user_id=10,
@@ -115,6 +121,7 @@ class TestCampaignNotificationHelpers:
         assert assignee_kwargs["entity_type"] == ENTITY_TYPE_CAMPAIGN_OVERDUE
         assert assignee_kwargs["type"] is NotificationType.ACTION_OVERDUE
         assert assignee_kwargs["title"] == "Document campaign overdue"
+        assert assignee_kwargs["action_url"] == "/portal/reading?assignment=55"
         assert manager_kwargs["title"] == "Team member campaign overdue"
         assert "Alex Engineer" in manager_kwargs["message"]
 

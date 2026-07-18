@@ -522,7 +522,13 @@ async def submit_assignment_quiz(
         assignment_id=assignment_id,
         answers=[a.model_dump() for a in submit_data.answers],
     )
-    return QuizSubmitResponse(score=result.score, passed=result.passed, pass_mark=result.pass_mark)
+    return QuizSubmitResponse(
+        score=result.score,
+        passed=result.passed,
+        pass_mark=result.pass_mark,
+        quiz_attempts=result.quiz_attempts,
+        attempts_remaining=result.attempts_remaining,
+    )
 
 
 @router.post("/assignments/{assignment_id}/complete", response_model=CompleteAssignmentResponse)
@@ -543,6 +549,7 @@ async def complete_assignment(
         assignment_id=assignment_id,
         acceptance_statement=complete_data.acceptance_statement,
         signature_data=complete_data.signature_data,
+        signature_disposition=complete_data.signature_disposition,
         ip_address=ip_address,
         user_agent=user_agent,
     )

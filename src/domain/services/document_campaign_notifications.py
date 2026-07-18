@@ -17,8 +17,13 @@ ENTITY_TYPE_CAMPAIGN_OVERDUE = "document_campaign_overdue"
 _MANAGER_FIELD_NAMES = ("manager_id", "supervisor_id", "reports_to")
 
 
+def portal_assignment_action_url(assignment_id: int) -> str:
+    """In-app deep link to the portal reading flow for an assignment."""
+    return f"/portal/reading?assignment={assignment_id}"
+
+
 def user_display_name(user: Any, fallback_user_id: int) -> str:
-    """Human-readable assignee label for manager/HSEC overdue messages."""
+    """Human-readable assignee label for manager/HSEQ overdue messages."""
     if user is None:
         return f"User {fallback_user_id}"
     full_name = getattr(user, "full_name", None)
@@ -70,7 +75,7 @@ def reminder_due_now(
 
 
 def hsec_owner_user_ids(*, created_by_id: Optional[int], launched_by_id: Optional[int]) -> List[int]:
-    """De-duplicated HSEC owner ids (campaign creator / launcher)."""
+    """De-duplicated HSEQ owner ids (campaign creator / launcher)."""
     seen: Set[int] = set()
     ordered: List[int] = []
     for uid in (created_by_id, launched_by_id):
@@ -88,7 +93,7 @@ def overdue_escalation_recipients(
     created_by_id: Optional[int],
     launched_by_id: Optional[int],
 ) -> List[int]:
-    """Assignee + optional manager + HSEC owners, de-duplicated (assignee first)."""
+    """Assignee + optional manager + HSEQ owners, de-duplicated (assignee first)."""
     seen: Set[int] = set()
     ordered: List[int] = []
 
@@ -110,6 +115,7 @@ def build_assignment_notification_kwargs(
     tenant_id: int,
     user_id: int,
     campaign_id: int,
+    assignment_id: int,
     document_id: int,
     doc_title: str,
     require_quiz: bool,
@@ -125,7 +131,7 @@ def build_assignment_notification_kwargs(
         "message": message,
         "entity_type": ENTITY_TYPE_CAMPAIGN,
         "entity_id": str(campaign_id),
-        "action_url": f"/documents/{document_id}",
+        "action_url": portal_assignment_action_url(assignment_id),
         "sender_id": sender_id,
     }
 
@@ -135,6 +141,7 @@ def build_reminder_notification_kwargs(
     tenant_id: int,
     user_id: int,
     campaign_id: int,
+    assignment_id: int,
     document_id: int,
     doc_title: str,
     due_at,
@@ -149,7 +156,7 @@ def build_reminder_notification_kwargs(
         "message": f"Reminder: complete your assignment for '{doc_title}' by {due_label}.",
         "entity_type": ENTITY_TYPE_CAMPAIGN_REMINDER,
         "entity_id": str(campaign_id),
-        "action_url": f"/documents/{document_id}",
+        "action_url": portal_assignment_action_url(assignment_id),
         "extra_data": {"assignment_due_at": due_label},
     }
 
@@ -159,6 +166,7 @@ def build_overdue_notification_kwargs(
     tenant_id: int,
     user_id: int,
     campaign_id: int,
+    assignment_id: int,
     document_id: int,
     doc_title: str,
     assignee_user_id: int,
@@ -187,7 +195,7 @@ def build_overdue_notification_kwargs(
         "message": message,
         "entity_type": ENTITY_TYPE_CAMPAIGN_OVERDUE,
         "entity_id": str(campaign_id),
-        "action_url": f"/documents/{document_id}",
+        "action_url": portal_assignment_action_url(assignment_id),
         "extra_data": {
             "assignee_user_id": assignee_user_id,
             "recipient_role": recipient_role,

@@ -235,6 +235,8 @@ class QuizSubmitResponse(BaseModel):
     score: int
     passed: bool
     pass_mark: int
+    quiz_attempts: int = 0
+    attempts_remaining: int = 0
 
 
 # =============================================================================
@@ -245,6 +247,7 @@ class QuizSubmitResponse(BaseModel):
 class CompleteAssignmentRequest(BaseModel):
     acceptance_statement: str = Field(..., min_length=1)
     signature_data: Optional[str] = None
+    signature_disposition: Optional[str] = None
 
 
 class CompleteAssignmentResponse(BaseModel):

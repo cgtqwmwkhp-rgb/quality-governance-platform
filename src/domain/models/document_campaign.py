@@ -173,6 +173,7 @@ class CampaignAssignment(Base, TimestampMixin):
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     acceptance_statement: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     signature_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    signature_disposition: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     ip_address: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     user_agent: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
