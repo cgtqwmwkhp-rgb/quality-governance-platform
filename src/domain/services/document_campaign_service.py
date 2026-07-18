@@ -34,6 +34,15 @@ from src.domain.models.governed_knowledge import (
 )
 from src.domain.models.notification import Notification, NotificationPriority, NotificationType
 from src.domain.models.user import Role, User, user_roles
+from src.domain.services.document_campaign_notifications import (
+    build_assignment_notification_kwargs,
+    build_overdue_notification_kwargs,
+    build_reminder_notification_kwargs,
+    overdue_escalation_recipients,
+    overdue_recipient_role,
+    reminder_due_now,
+    user_display_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -491,7 +500,6 @@ class DocumentCampaignService:
             return 0
 
         doc_title = await self._document_title(tenant_id=campaign.tenant_id, document_id=campaign.document_id)
-        action_url = f"/documents/{campaign.document_id}"
         message = (
             f"You have been assigned to read{' and complete a quiz for' if campaign.require_quiz else ''} "
             f"'{doc_title}'."
@@ -502,16 +510,15 @@ class DocumentCampaignService:
             try:
                 self.db.add(
                     Notification(
-                        tenant_id=campaign.tenant_id,
-                        user_id=assignment.user_id,
-                        type=NotificationType.ASSIGNMENT,
-                        priority=NotificationPriority.MEDIUM,
-                        title="New document campaign assigned",
-                        message=message,
-                        entity_type="document_campaign",
-                        entity_id=str(campaign.id),
-                        action_url=action_url,
-                        sender_id=launched_by_id,
+                        **build_assignment_notification_kwargs(
+                            tenant_id=campaign.tenant_id,
+                            user_id=assignment.user_id,
+                            campaign_id=campaign.id,
+                            document_id=campaign.document_id,
+                            doc_title=doc_title,
+                            require_quiz=bool(campaign.require_quiz),
+                            sender_id=launched_by_id,
+                        )
                     )
                 )
                 notified_count += 1
@@ -578,6 +585,153 @@ class DocumentCampaignService:
     async def _user_email(self, user_id: int) -> Optional[str]:
         result = await self.db.execute(select(User.email).where(User.id == user_id))
         return result.scalar_one_or_none()
+
+    # ==================== Reminders + overdue escalation ====================
+
+    async def process_due_reminders(self, *, now: Optional[datetime] = None) -> Dict[str, int]:
+        """Send scheduled reminders and escalate overdue pending assignments.
+
+        Best-effort throughout — notification failures are logged and never abort
+        the sweep. Intended to be invoked from the Celery beat task.
+        """
+        current = now or datetime.now(timezone.utc)
+        results = {
+            "assignments_scanned": 0,
+            "reminders_sent": 0,
+            "overdue_escalated": 0,
+            "notifications_created": 0,
+        }
+
+        pending_result = await self.db.execute(
+            select(CampaignAssignment, DocumentCampaign)
+            .join(DocumentCampaign, DocumentCampaign.id == CampaignAssignment.campaign_id)
+            .where(
+                DocumentCampaign.status == CampaignStatus.ACTIVE,
+                CampaignAssignment.status == AssignmentStatus.PENDING,
+            )
+        )
+        rows = pending_result.all()
+        results["assignments_scanned"] = len(rows)
+        if not rows:
+            return results
+
+        user_ids = {assignment.user_id for assignment, _campaign in rows}
+        users_result = await self.db.execute(select(User).where(User.id.in_(user_ids)))
+        users_by_id = {user.id: user for user in users_result.scalars().all()}
+
+        doc_titles: Dict[int, str] = {}
+
+        for assignment, campaign in rows:
+            try:
+                due_at = assignment.due_at
+                if due_at.tzinfo is None:
+                    due_at = due_at.replace(tzinfo=timezone.utc)
+
+                if current > due_at:
+                    assignment.status = AssignmentStatus.OVERDUE
+                    results["overdue_escalated"] += 1
+
+                    doc_title = await self._cached_document_title(
+                        cache=doc_titles,
+                        tenant_id=campaign.tenant_id,
+                        document_id=campaign.document_id,
+                    )
+                    assignee = users_by_id.get(assignment.user_id)
+                    assignee_name = user_display_name(assignee, assignment.user_id)
+
+                    for recipient_id in overdue_escalation_recipients(
+                        assignee_user_id=assignment.user_id,
+                        assignee_user=assignee,
+                        created_by_id=campaign.created_by_id,
+                        launched_by_id=campaign.launched_by_id,
+                    ):
+                        role = overdue_recipient_role(
+                            recipient_user_id=recipient_id,
+                            assignee_user_id=assignment.user_id,
+                            assignee_user=assignee,
+                        )
+                        if self._add_campaign_notification(
+                            build_overdue_notification_kwargs(
+                                tenant_id=campaign.tenant_id,
+                                user_id=recipient_id,
+                                campaign_id=campaign.id,
+                                document_id=campaign.document_id,
+                                doc_title=doc_title,
+                                assignee_user_id=assignment.user_id,
+                                assignee_display_name=assignee_name,
+                                recipient_role=role,
+                            )
+                        ):
+                            results["notifications_created"] += 1
+                    continue
+
+                offsets = campaign.reminder_offsets_hours or DEFAULT_REMINDER_OFFSETS_HOURS
+                if not reminder_due_now(
+                    now=current,
+                    due_at=due_at,
+                    reminders_sent=assignment.reminders_sent,
+                    reminder_offsets_hours=offsets,
+                ):
+                    continue
+
+                if self._is_snoozed(assignment, current):
+                    continue
+
+                doc_title = await self._cached_document_title(
+                    cache=doc_titles,
+                    tenant_id=campaign.tenant_id,
+                    document_id=campaign.document_id,
+                )
+                if self._add_campaign_notification(
+                    build_reminder_notification_kwargs(
+                        tenant_id=campaign.tenant_id,
+                        user_id=assignment.user_id,
+                        campaign_id=campaign.id,
+                        document_id=campaign.document_id,
+                        doc_title=doc_title,
+                        due_at=due_at,
+                    )
+                ):
+                    results["notifications_created"] += 1
+                    results["reminders_sent"] += 1
+
+                assignment.reminders_sent += 1
+                assignment.last_reminder_at = current
+            except Exception:  # noqa: BLE001 - best-effort per assignment
+                logger.warning(
+                    "Campaign reminder/overdue processing failed for assignment %s",
+                    assignment.id,
+                    exc_info=True,
+                )
+
+        await self.db.commit()
+        return results
+
+    async def _cached_document_title(
+        self,
+        *,
+        cache: Dict[int, str],
+        tenant_id: int,
+        document_id: int,
+    ) -> str:
+        if document_id not in cache:
+            cache[document_id] = await self._document_title(tenant_id=tenant_id, document_id=document_id)
+        return cache[document_id]
+
+    def _add_campaign_notification(self, kwargs: Dict[str, Any]) -> bool:
+        """Best-effort notification insert. Returns True when queued."""
+        try:
+            self.db.add(Notification(**kwargs))
+            return True
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Failed to create campaign notification for user %s entity %s/%s",
+                kwargs.get("user_id"),
+                kwargs.get("entity_type"),
+                kwargs.get("entity_id"),
+                exc_info=True,
+            )
+            return False
 
     # ==================== Engineer-facing Assignment APIs ====================
 
@@ -830,110 +984,6 @@ class DocumentCampaignService:
 
         await self.db.commit()
         return normalized
-
-    # ==================== Scheduled reminders (Celery) ====================
-
-    async def process_due_reminders(self) -> Dict[str, int]:
-        """Process overdue marking and due reminder sends across all tenants."""
-        now = datetime.now(timezone.utc)
-        counts = {"reminders_sent": 0, "overdue_marked": 0, "campaigns_scanned": 0}
-
-        result = await self.db.execute(
-            select(DocumentCampaign).where(
-                DocumentCampaign.status == CampaignStatus.ACTIVE,
-                DocumentCampaign.launched_at.isnot(None),
-            )
-        )
-        campaigns = list(result.scalars().all())
-        counts["campaigns_scanned"] = len(campaigns)
-
-        for campaign in campaigns:
-            launched_at = campaign.launched_at
-            if launched_at is None:
-                continue
-            if launched_at.tzinfo is None:
-                launched_at = launched_at.replace(tzinfo=timezone.utc)
-
-            hours_since_launch = (now - launched_at).total_seconds() / 3600
-            sorted_offsets = sorted(campaign.reminder_offsets_hours or [])
-
-            assignments_result = await self.db.execute(
-                select(CampaignAssignment).where(
-                    CampaignAssignment.campaign_id == campaign.id,
-                    CampaignAssignment.status.in_([AssignmentStatus.PENDING, AssignmentStatus.OVERDUE]),
-                )
-            )
-            assignments = list(assignments_result.scalars().all())
-            reminders_to_send: List[CampaignAssignment] = []
-
-            for assignment in assignments:
-                due_at = assignment.due_at
-                if due_at is not None and due_at.tzinfo is None:
-                    due_at = due_at.replace(tzinfo=timezone.utc)
-
-                if assignment.status == AssignmentStatus.PENDING and due_at is not None and due_at < now:
-                    assignment.status = AssignmentStatus.OVERDUE
-                    counts["overdue_marked"] += 1
-
-                if assignment.reminders_sent < len(sorted_offsets):
-                    threshold = sorted_offsets[assignment.reminders_sent]
-                    if hours_since_launch >= threshold:
-                        if self._is_snoozed(assignment, now):
-                            continue
-                        assignment.reminders_sent += 1
-                        assignment.last_reminder_at = now
-                        counts["reminders_sent"] += 1
-                        reminders_to_send.append(assignment)
-
-            if reminders_to_send:
-                await self._notify_and_email_reminders(campaign=campaign, assignments=reminders_to_send)
-
-        await self.db.commit()
-        return counts
-
-    async def _notify_and_email_reminders(
-        self,
-        *,
-        campaign: DocumentCampaign,
-        assignments: List[CampaignAssignment],
-    ) -> None:
-        if not assignments:
-            return
-
-        doc_title = await self._document_title(tenant_id=campaign.tenant_id, document_id=campaign.document_id)
-        action_url = f"/documents/{campaign.document_id}"
-        message = f"Reminder: please complete your read/sign-off for '{doc_title}'."
-
-        for assignment in assignments:
-            try:
-                self.db.add(
-                    Notification(
-                        tenant_id=campaign.tenant_id,
-                        user_id=assignment.user_id,
-                        type=NotificationType.ASSIGNMENT,
-                        priority=NotificationPriority.MEDIUM,
-                        title="Document campaign reminder",
-                        message=message,
-                        entity_type="document_campaign",
-                        entity_id=str(campaign.id),
-                        action_url=action_url,
-                    )
-                )
-            except Exception:  # noqa: BLE001
-                logger.warning(
-                    "Failed to create reminder notification for user %s campaign %s",
-                    assignment.user_id,
-                    campaign.id,
-                    exc_info=True,
-                )
-
-        await self.db.commit()
-
-        await self._send_launch_emails(
-            assignments=assignments,
-            subject="Document campaign reminder",
-            html_content=f"<p>{message}</p>",
-        )
 
     # ==================== Compliance summary & evidence ====================
 
