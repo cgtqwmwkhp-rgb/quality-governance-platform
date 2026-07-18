@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.domain.exceptions import BadRequestError, NotFoundError
-from src.domain.models.document_campaign import AssignmentStatus
+from src.domain.models.document_campaign import AssignmentStatus, CampaignStatus
 from src.domain.services.document_campaign_notifications import portal_assignment_action_url
 from src.domain.services.document_campaign_service import DocumentCampaignService
 
@@ -142,6 +142,56 @@ class TestGetAssignmentDocumentUrl:
 
         with pytest.raises(NotFoundError):
             await service.get_assignment_document_url(user_id=10, assignment_id=7)
+
+
+class TestReminderEmailAfterCommit:
+    @pytest.mark.asyncio
+    async def test_sends_reminder_email_only_after_db_commit(self):
+        due_at = NOW + timedelta(hours=24)
+        assignment = SimpleNamespace(
+            id=7,
+            user_id=10,
+            tenant_id=1,
+            campaign_id=99,
+            status=AssignmentStatus.PENDING,
+            due_at=due_at,
+            reminders_sent=0,
+            last_reminder_at=None,
+            snooze_until=None,
+        )
+        campaign = SimpleNamespace(
+            id=99,
+            tenant_id=1,
+            document_id=42,
+            status=CampaignStatus.ACTIVE,
+            reminder_offsets_hours=[24],
+            created_by_id=5,
+            launched_by_id=6,
+        )
+        pending_result = MagicMock()
+        pending_result.all.return_value = [(assignment, campaign)]
+        users_result = MagicMock()
+        users_result.scalars.return_value.all.return_value = []
+
+        call_order: list[str] = []
+        commit = AsyncMock(side_effect=lambda: call_order.append("commit"))
+        send_email = AsyncMock(side_effect=lambda **_kwargs: call_order.append("email"))
+
+        db = SimpleNamespace(
+            execute=AsyncMock(side_effect=[pending_result, users_result]),
+            add=MagicMock(),
+            commit=commit,
+        )
+        service = DocumentCampaignService(db)
+        service._document_title = AsyncMock(return_value="Fire Safety Policy")
+        service._send_assignee_campaign_email = send_email
+
+        await service.process_due_reminders(now=NOW)
+
+        assert call_order == ["commit", "email"]
+        send_email.assert_awaited_once()
+        assert send_email.await_args.kwargs["user_id"] == 10
+        assert send_email.await_args.kwargs["subject"] == "Document campaign reminder"
 
 
 class TestBuildEvidencePackDisposition:

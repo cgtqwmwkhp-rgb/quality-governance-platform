@@ -771,6 +771,9 @@ class DocumentCampaignService:
             "overdue_escalated": 0,
             "notifications_created": 0,
         }
+        # Queue outbound mail until after commit (matches launch): email cannot roll back,
+        # so sending first risks duplicate CTAs if the sweep retries after a commit failure.
+        pending_emails: List[Dict[str, Any]] = []
 
         pending_result = await self.db.execute(
             select(CampaignAssignment, DocumentCampaign)
@@ -836,14 +839,16 @@ class DocumentCampaignService:
                             results["notifications_created"] += 1
                             if recipient_id == assignment.user_id:
                                 frontend_base = settings.frontend_url.rstrip("/")
-                                await self._send_assignee_campaign_email(
-                                    user_id=recipient_id,
-                                    subject="Document campaign overdue",
-                                    html_content=self._build_overdue_email_html(
-                                        doc_title=doc_title,
-                                        assignment_id=assignment.id,
-                                        frontend_base=frontend_base,
-                                    ),
+                                pending_emails.append(
+                                    {
+                                        "user_id": recipient_id,
+                                        "subject": "Document campaign overdue",
+                                        "html_content": self._build_overdue_email_html(
+                                            doc_title=doc_title,
+                                            assignment_id=assignment.id,
+                                            frontend_base=frontend_base,
+                                        ),
+                                    }
                                 )
                     continue
 
@@ -878,15 +883,17 @@ class DocumentCampaignService:
                     results["notifications_created"] += 1
                     results["reminders_sent"] += 1
                     frontend_base = settings.frontend_url.rstrip("/")
-                    await self._send_assignee_campaign_email(
-                        user_id=assignment.user_id,
-                        subject="Document campaign reminder",
-                        html_content=self._build_reminder_email_html(
-                            doc_title=doc_title,
-                            due_at=due_at,
-                            assignment_id=assignment.id,
-                            frontend_base=frontend_base,
-                        ),
+                    pending_emails.append(
+                        {
+                            "user_id": assignment.user_id,
+                            "subject": "Document campaign reminder",
+                            "html_content": self._build_reminder_email_html(
+                                doc_title=doc_title,
+                                due_at=due_at,
+                                assignment_id=assignment.id,
+                                frontend_base=frontend_base,
+                            ),
+                        }
                     )
 
                 assignment.reminders_sent += 1
@@ -899,6 +906,12 @@ class DocumentCampaignService:
                 )
 
         await self.db.commit()
+        for email in pending_emails:
+            await self._send_assignee_campaign_email(
+                user_id=email["user_id"],
+                subject=email["subject"],
+                html_content=email["html_content"],
+            )
         return results
 
     async def _cached_document_title(
