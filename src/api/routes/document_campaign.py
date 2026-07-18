@@ -6,7 +6,7 @@ and the per-engineer assignment APIs (open, quiz, complete) used by "My Reading"
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from src.api.deps import CurrentUser, DbSession, require_permission
@@ -22,6 +22,8 @@ from src.api.schemas.document_campaign import (
     CompleteAssignmentResponse,
     ComplianceSummaryItem,
     ComplianceSummaryResponse,
+    GroupComplianceItem,
+    GroupComplianceResponse,
     GroupCreateRequest,
     GroupListResponse,
     GroupMembersRequest,
@@ -37,6 +39,8 @@ from src.api.schemas.document_campaign import (
     QuizSubmitResponse,
     ReminderDefaultsResponse,
     ReminderDefaultsUpdateRequest,
+    SnoozeAssignmentRequest,
+    SnoozeAssignmentResponse,
 )
 from src.api.utils.tenant import require_tenant_id
 from src.domain.models.document_campaign import DocumentCampaign, EngineerGroup
@@ -196,6 +200,23 @@ async def list_compliance_summary(
     rows = await service.list_compliance_summary(tenant_id=require_tenant_id(current_user.tenant_id))
     items = [ComplianceSummaryItem(**row) for row in rows]
     return ComplianceSummaryResponse(items=items, total=len(items))
+
+
+@router.get("/compliance/{campaign_id}/by-group", response_model=GroupComplianceResponse)
+async def compliance_by_group(
+    campaign_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """Per-group compliance breakdown for campaigns with group audiences."""
+    service = DocumentCampaignService(db)
+    tenant_id = require_tenant_id(current_user.tenant_id)
+    rows = await service.compliance_by_group(tenant_id=tenant_id, campaign_id=campaign_id)
+    return GroupComplianceResponse(
+        campaign_id=campaign_id,
+        items=[GroupComplianceItem(**row) for row in rows],
+        total=len(rows),
+    )
 
 
 @router.get("/campaigns/{campaign_id}/evidence-pack")
@@ -523,3 +544,23 @@ async def complete_assignment(
     )
     status_value = assignment.status.value if hasattr(assignment.status, "value") else assignment.status
     return CompleteAssignmentResponse(id=assignment.id, status=status_value, completed_at=assignment.completed_at)
+
+
+@router.post("/assignments/{assignment_id}/snooze", response_model=SnoozeAssignmentResponse)
+async def snooze_assignment(
+    assignment_id: int,
+    snooze_data: SnoozeAssignmentRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Snooze reminders for the current user's pending/overdue assignment."""
+    service = DocumentCampaignService(db)
+    assignment = await service.snooze_assignment(
+        user_id=current_user.id,
+        assignment_id=assignment_id,
+        hours=snooze_data.hours,
+    )
+    snooze_until = assignment.snooze_until
+    if snooze_until is None:
+        raise HTTPException(status_code=500, detail="Snooze did not set snooze_until")
+    return SnoozeAssignmentResponse(id=assignment.id, snooze_until=snooze_until)

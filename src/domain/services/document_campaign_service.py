@@ -679,6 +679,100 @@ class DocumentCampaignService:
         await self.db.refresh(assignment)
         return assignment
 
+    async def snooze_assignment(self, *, user_id: int, assignment_id: int, hours: int) -> CampaignAssignment:
+        if hours < 1 or hours > 168:
+            raise BadRequestError("hours must be between 1 and 168")
+
+        assignment = await self._get_own_assignment(user_id=user_id, assignment_id=assignment_id)
+        if assignment.status not in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE):
+            raise BadRequestError("Only pending or overdue assignments can be snoozed")
+
+        assignment.snooze_until = datetime.now(timezone.utc) + timedelta(hours=hours)
+        await self.db.commit()
+        await self.db.refresh(assignment)
+        return assignment
+
+    @staticmethod
+    def _is_snoozed(assignment: CampaignAssignment, now: datetime) -> bool:
+        snooze_until = assignment.snooze_until
+        if snooze_until is None:
+            return False
+        if snooze_until.tzinfo is None:
+            snooze_until = snooze_until.replace(tzinfo=timezone.utc)
+        return snooze_until > now
+
+    @staticmethod
+    def _assignment_stats(assignments: List[CampaignAssignment]) -> Dict[str, Any]:
+        assigned = len(assignments)
+        completed = sum(1 for a in assignments if a.status == AssignmentStatus.COMPLETED)
+        pending = sum(1 for a in assignments if a.status == AssignmentStatus.PENDING)
+        overdue = sum(1 for a in assignments if a.status == AssignmentStatus.OVERDUE)
+        quiz_pass_count = sum(1 for a in assignments if a.quiz_passed is True)
+        completion_rate = round((completed / assigned * 100), 1) if assigned > 0 else 0.0
+        return {
+            "assigned": assigned,
+            "completed": completed,
+            "pending": pending,
+            "overdue": overdue,
+            "quiz_pass_count": quiz_pass_count,
+            "completion_rate": completion_rate,
+        }
+
+    async def compliance_by_group(self, *, tenant_id: int, campaign_id: int) -> List[Dict[str, Any]]:
+        campaign = await self.get_campaign(tenant_id=tenant_id, campaign_id=campaign_id)
+        group_ids = [int(gid) for gid in (campaign.audience_group_ids or [])]
+        if not group_ids:
+            return []
+
+        assignments_result = await self.db.execute(
+            select(CampaignAssignment).where(CampaignAssignment.campaign_id == campaign_id)
+        )
+        assignments = list(assignments_result.scalars().all())
+
+        groups_result = await self.db.execute(
+            select(EngineerGroup).where(
+                EngineerGroup.id.in_(group_ids),
+                EngineerGroup.tenant_id == tenant_id,
+            )
+        )
+        groups_by_id = {group.id: group for group in groups_result.scalars().all()}
+
+        members_result = await self.db.execute(
+            select(EngineerGroupMember.group_id, EngineerGroupMember.user_id).where(
+                EngineerGroupMember.group_id.in_(group_ids)
+            )
+        )
+        members_by_group: Dict[int, set[int]] = {gid: set() for gid in group_ids}
+        for group_id, user_id in members_result.all():
+            members_by_group.setdefault(group_id, set()).add(user_id)
+
+        rows: List[Dict[str, Any]] = []
+        grouped_user_ids: set[int] = set()
+        for group_id in group_ids:
+            user_ids = members_by_group.get(group_id, set())
+            grouped_user_ids.update(user_ids)
+            group = groups_by_id.get(group_id)
+            group_assignments = [a for a in assignments if a.user_id in user_ids]
+            rows.append(
+                {
+                    "group_id": group_id,
+                    "group_name": group.name if group else f"Group {group_id}",
+                    **self._assignment_stats(group_assignments),
+                }
+            )
+
+        ungrouped_assignments = [a for a in assignments if a.user_id not in grouped_user_ids]
+        if ungrouped_assignments:
+            rows.append(
+                {
+                    "group_id": None,
+                    "group_name": "Ungrouped",
+                    **self._assignment_stats(ungrouped_assignments),
+                }
+            )
+
+        return rows
+
     # ==================== Reminder defaults (SystemSetting) ====================
 
     async def get_reminder_defaults(self, *, tenant_id: int) -> List[int]:
@@ -784,6 +878,8 @@ class DocumentCampaignService:
                 if assignment.reminders_sent < len(sorted_offsets):
                     threshold = sorted_offsets[assignment.reminders_sent]
                     if hours_since_launch >= threshold:
+                        if self._is_snoozed(assignment, now):
+                            continue
                         assignment.reminders_sent += 1
                         assignment.last_reminder_at = now
                         counts["reminders_sent"] += 1
@@ -874,6 +970,7 @@ class DocumentCampaignService:
                     "overdue": summary["overdue"],
                     "completion_rate": summary["completion_rate"],
                     "quiz_pass_count": quiz_pass_count,
+                    "audience_group_ids": list(campaign.audience_group_ids or []),
                     "reminder_offsets_hours": list(campaign.reminder_offsets_hours or []),
                     "launched_at": campaign.launched_at,
                     "due_within_days": campaign.due_within_days,

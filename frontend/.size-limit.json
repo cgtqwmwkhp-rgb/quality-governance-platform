@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "157 kB",
+    "limit": "158 kB",
     "gzip": true,
-    "name": "index: 156\u2192157 kB \u2014 Campaign EPIC-2 admin/compliance/inbox (+916 B over 156)"
+    "name": "index: 157\u2192158 kB \u2014 wave1 snooze/compliance (+230 B over 157)"
   },
   {
     "path": "dist/assets/vendor-*.js",

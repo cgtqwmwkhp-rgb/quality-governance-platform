@@ -2696,6 +2696,16 @@ export type {
   DocumentCampaignQuizAnswer,
   DocumentCampaignQuizResult,
   CompleteDocumentCampaignAssignmentRequest,
+  CampaignComplianceRow,
+  GroupComplianceRow,
+  SnoozeAssignmentResponse,
+  CampaignAudienceType,
+  CampaignGroup,
+  CreateCampaignPayload,
+  DocumentCampaign,
+  LaunchCampaignResponse,
+  QuestionInboxThread,
+  ReminderDefaults,
 } from './documentCampaignClient'
 
 export const documentCampaignApi = createDocumentCampaignApi(api)
@@ -2711,18 +2721,6 @@ export type {
 } from './documentControlClient'
 
 export const documentControlApi = createDocumentControlApi(api)
-
-export type {
-  CampaignAudienceType,
-  CampaignGroup,
-  CampaignComplianceRow,
-  CreateCampaignPayload,
-  DocumentCampaign,
-  LaunchCampaignResponse,
-  QuestionInboxThread,
-  ReminderDefaults,
-} from './documentCampaignClient'
-
 // ============ Policy Acknowledgments API ============
 
 export interface PolicyAcknowledgment {

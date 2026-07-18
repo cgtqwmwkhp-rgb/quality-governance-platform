@@ -463,7 +463,7 @@ function App() {
                 <Route
                   path="admin"
                   element={
-                    <RequireRole allowed={['admin', 'manager']}>
+                    <RequireRole allowed={['admin', 'manager', 'hsec']}>
                       <AdminDashboard />
                     </RequireRole>
                   }

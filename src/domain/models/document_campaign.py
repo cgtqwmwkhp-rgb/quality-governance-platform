@@ -178,6 +178,7 @@ class CampaignAssignment(Base, TimestampMixin):
 
     reminders_sent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_reminder_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    snooze_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
 
     campaign: Mapped["DocumentCampaign"] = relationship("DocumentCampaign", back_populates="assignments")
 
