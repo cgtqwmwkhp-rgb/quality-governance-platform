@@ -874,25 +874,26 @@ class RiskRegisterImportService:
                     CAPAAction.tenant_id == tenant_id,
                 )
             )
-            capa: CAPAAction = result.scalar_one()
-            capa.title = item.title[:255]
-            capa.description = item.description
-            capa.source_id = int(risk.id)
-            capa.source_type = CAPASource.RISK
-            capa.source_reference = item.match_key
-            capa.due_date = item.due_date
+            capa = result.scalar_one()
+            # setattr avoids SQLAlchemy Column[] assignment mypy false positives
+            setattr(capa, "title", item.title[:255])
+            setattr(capa, "description", item.description)
+            setattr(capa, "source_id", int(risk.id))
+            setattr(capa, "source_type", CAPASource.RISK)
+            setattr(capa, "source_reference", item.match_key)
+            setattr(capa, "due_date", item.due_date)
             # Status normalisation via create helper path values
             status_key = (item.status or "open").strip().lower().replace(" ", "_")
             from src.domain.models.capa import CAPAStatus
 
             if status_key in {"completed", "closed", "done"}:
-                capa.status = CAPAStatus.CLOSED
+                setattr(capa, "status", CAPAStatus.CLOSED)
             elif status_key in {"in_progress", "in-progress", "progress"}:
-                capa.status = CAPAStatus.IN_PROGRESS
+                setattr(capa, "status", CAPAStatus.IN_PROGRESS)
             elif status_key in {"verification", "verifying"}:
-                capa.status = CAPAStatus.VERIFICATION
+                setattr(capa, "status", CAPAStatus.VERIFICATION)
             else:
-                capa.status = CAPAStatus.OPEN
+                setattr(capa, "status", CAPAStatus.OPEN)
             await self.db.flush()
             return capa, "update"
 
