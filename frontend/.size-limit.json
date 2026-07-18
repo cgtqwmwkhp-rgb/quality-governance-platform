@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "158 kB",
+    "limit": "161 kB",
     "gzip": true,
-    "name": "index: 157\u2192158 kB \u2014 wave1 snooze/compliance (+230 B over 157)"
+    "name": "index: 158\u2192161 kB \u2014 wave2 portal ask/document URL (+2.35 kB over 158)"
   },
   {
     "path": "dist/assets/vendor-*.js",

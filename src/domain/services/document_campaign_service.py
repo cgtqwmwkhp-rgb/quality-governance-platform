@@ -43,6 +43,7 @@ from src.domain.services.document_campaign_notifications import (
     build_reminder_notification_kwargs,
     overdue_escalation_recipients,
     overdue_recipient_role,
+    portal_assignment_action_url,
     reminder_due_now,
     user_display_name,
 )
@@ -593,8 +594,7 @@ class DocumentCampaignService:
     async def _generate_campaign_welcome_paragraph(self, *, doc_title: str, require_quiz: bool) -> str:
         """Best-effort AI welcome line for launch emails; falls back to static copy."""
         static = (
-            f"You have been assigned to read{' and complete a quiz for' if require_quiz else ''} "
-            f"'{doc_title}'."
+            f"You have been assigned to read{' and complete a quiz for' if require_quiz else ''} " f"'{doc_title}'."
         )
         try:
             from src.domain.services.document_ai_service import DocumentAIService
@@ -651,13 +651,62 @@ class DocumentCampaignService:
     ) -> str:
         reading_url = f"{frontend_base}/portal/reading?assignment={assignment_id}"
         work_url = f"{frontend_base}/portal/work"
-        steps = "read the document, complete the quiz, and sign your attestation" if require_quiz else (
-            "read the document and sign your attestation"
+        steps = (
+            "read the document, complete the quiz, and sign your attestation"
+            if require_quiz
+            else ("read the document and sign your attestation")
         )
         return f"""<p>{welcome_paragraph}</p>
 <p>Your assignment for <strong>{doc_title}</strong> is ready. Please {steps}.</p>
 <p><a href="{reading_url}">Open your reading assignment</a></p>
 <p><a href="{work_url}">View all portal work</a></p>"""
+
+    @staticmethod
+    def _build_reminder_email_html(
+        *,
+        doc_title: str,
+        due_at,
+        assignment_id: int,
+        frontend_base: str,
+    ) -> str:
+        reading_url = f"{frontend_base}{portal_assignment_action_url(assignment_id)}"
+        due_label = due_at.date().isoformat() if hasattr(due_at, "date") else str(due_at)
+        return f"""<p>Reminder: your assignment for <strong>{doc_title}</strong> is due by {due_label}.</p>
+<p><a href="{reading_url}">Open your reading assignment</a></p>"""
+
+    @staticmethod
+    def _build_overdue_email_html(
+        *,
+        doc_title: str,
+        assignment_id: int,
+        frontend_base: str,
+    ) -> str:
+        reading_url = f"{frontend_base}{portal_assignment_action_url(assignment_id)}"
+        return f"""<p>Your assignment for <strong>{doc_title}</strong> is now overdue. Please complete it as soon as possible.</p>
+<p><a href="{reading_url}">Open your reading assignment</a></p>"""
+
+    async def _send_assignee_campaign_email(
+        self,
+        *,
+        user_id: int,
+        subject: str,
+        html_content: str,
+    ) -> None:
+        """Best-effort email to a campaign assignee. Never raises."""
+        try:
+            from src.domain.services.email_service import EmailService
+
+            recipient = await self._user_email(user_id)
+            if not recipient:
+                return
+            email_service = EmailService()
+            await email_service.send_email(to=[recipient], subject=subject, html_content=html_content)
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Best-effort campaign email failed for user %s",
+                user_id,
+                exc_info=True,
+            )
 
     async def _send_launch_emails(
         self,
@@ -722,6 +771,9 @@ class DocumentCampaignService:
             "overdue_escalated": 0,
             "notifications_created": 0,
         }
+        # Queue outbound mail until after commit (matches launch): email cannot roll back,
+        # so sending first risks duplicate CTAs if the sweep retries after a commit failure.
+        pending_emails: List[Dict[str, Any]] = []
 
         pending_result = await self.db.execute(
             select(CampaignAssignment, DocumentCampaign)
@@ -785,6 +837,19 @@ class DocumentCampaignService:
                             )
                         ):
                             results["notifications_created"] += 1
+                            if recipient_id == assignment.user_id:
+                                frontend_base = settings.frontend_url.rstrip("/")
+                                pending_emails.append(
+                                    {
+                                        "user_id": recipient_id,
+                                        "subject": "Document campaign overdue",
+                                        "html_content": self._build_overdue_email_html(
+                                            doc_title=doc_title,
+                                            assignment_id=assignment.id,
+                                            frontend_base=frontend_base,
+                                        ),
+                                    }
+                                )
                     continue
 
                 offsets = campaign.reminder_offsets_hours or DEFAULT_REMINDER_OFFSETS_HOURS
@@ -817,6 +882,19 @@ class DocumentCampaignService:
                 ):
                     results["notifications_created"] += 1
                     results["reminders_sent"] += 1
+                    frontend_base = settings.frontend_url.rstrip("/")
+                    pending_emails.append(
+                        {
+                            "user_id": assignment.user_id,
+                            "subject": "Document campaign reminder",
+                            "html_content": self._build_reminder_email_html(
+                                doc_title=doc_title,
+                                due_at=due_at,
+                                assignment_id=assignment.id,
+                                frontend_base=frontend_base,
+                            ),
+                        }
+                    )
 
                 assignment.reminders_sent += 1
                 assignment.last_reminder_at = current
@@ -828,6 +906,12 @@ class DocumentCampaignService:
                 )
 
         await self.db.commit()
+        for email in pending_emails:
+            await self._send_assignee_campaign_email(
+                user_id=email["user_id"],
+                subject=email["subject"],
+                html_content=email["html_content"],
+            )
         return results
 
     async def _cached_document_title(
@@ -891,6 +975,54 @@ class DocumentCampaignService:
             await self.db.commit()
             await self.db.refresh(assignment)
         return assignment
+
+    async def get_assignment_document_url(
+        self,
+        *,
+        user_id: int,
+        assignment_id: int,
+        expires_in_seconds: int = 3600,
+    ) -> Dict[str, Any]:
+        """Return a signed document URL when the user owns an eligible campaign assignment."""
+        from src.infrastructure.storage import storage_service
+
+        assignment = await self._get_own_assignment(user_id=user_id, assignment_id=assignment_id)
+        if assignment.status not in (
+            AssignmentStatus.PENDING,
+            AssignmentStatus.OVERDUE,
+            AssignmentStatus.COMPLETED,
+        ):
+            raise BadRequestError("Document access is only available for owned campaign assignments")
+
+        campaign = await self.get_campaign(tenant_id=assignment.tenant_id, campaign_id=assignment.campaign_id)
+        doc_result = await self.db.execute(
+            select(Document).where(
+                Document.id == campaign.document_id,
+                Document.tenant_id == assignment.tenant_id,
+            )
+        )
+        document = doc_result.scalar_one_or_none()
+        if document is None:
+            raise NotFoundError("Document not found")
+
+        document.download_count += 1
+        document.last_accessed_at = datetime.now(timezone.utc)
+        await self.db.commit()
+
+        filename = document.file_name or "download"
+        signed_url = storage_service().get_signed_url(
+            storage_key=document.file_path,
+            expires_in_seconds=expires_in_seconds,
+            content_disposition=None,
+        )
+        return {
+            "assignment_id": assignment.id,
+            "document_id": document.id,
+            "signed_url": signed_url,
+            "expires_in_seconds": expires_in_seconds,
+            "filename": filename,
+            "content_type": document.mime_type,
+        }
 
     async def get_assignment_quiz(self, *, user_id: int, assignment_id: int) -> Dict[str, Any]:
         assignment = await self._get_own_assignment(user_id=user_id, assignment_id=assignment_id)
@@ -1249,6 +1381,7 @@ class DocumentCampaignService:
                     "quiz_attempts": assignment.quiz_attempts,
                     "acceptance_statement_present": bool(assignment.acceptance_statement),
                     "signature_present": bool(assignment.signature_data),
+                    "signature_disposition": assignment.signature_disposition,
                     "ip_address": assignment.ip_address,
                     "reminders_sent": assignment.reminders_sent,
                     "last_reminder_at": (
@@ -1493,6 +1626,7 @@ class DocumentCampaignService:
                 "quiz_score",
                 "quiz_passed",
                 "signature_present",
+                "signature_disposition",
                 "ip_address",
             ]
         )
@@ -1510,6 +1644,7 @@ class DocumentCampaignService:
                     assignment.quiz_score if assignment.quiz_score is not None else "",
                     assignment.quiz_passed if assignment.quiz_passed is not None else "",
                     bool(assignment.signature_data),
+                    assignment.signature_disposition or "",
                     assignment.ip_address or "",
                 ]
             )

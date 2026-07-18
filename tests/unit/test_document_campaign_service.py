@@ -13,13 +13,13 @@ import pytest
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.document_campaign import AssignmentStatus, CampaignAssignment, CampaignStatus
 from src.domain.models.governed_knowledge import QuizDraftStatus
+from src.domain.services.document_campaign_notifications import portal_assignment_action_url
 from src.domain.services.document_campaign_service import (
-    DocumentCampaignService,
     MAX_QUIZ_ATTEMPTS,
+    DocumentCampaignService,
     grade_quiz_answers,
     strip_quiz_answer_keys,
 )
-from src.domain.services.document_campaign_notifications import portal_assignment_action_url
 
 
 def _scalars_result(items):
@@ -958,6 +958,7 @@ class TestBuildEvidencePackCsv:
             quiz_score=100,
             quiz_passed=True,
             signature_data="sig-data",
+            signature_disposition="signed",
             ip_address="192.168.1.1",
         )
         campaign = SimpleNamespace(id=9, tenant_id=1, document_id=3)
@@ -974,6 +975,8 @@ class TestBuildEvidencePackCsv:
         assert "user_email,status" in csv_content
         assert "engineer@example.com" in csv_content
         assert "192.168.1.1" in csv_content
+        assert "signature_disposition" in csv_content
+        assert ",signed," in csv_content
         assert ",True," in csv_content or ",true," in csv_content.lower()
 
 

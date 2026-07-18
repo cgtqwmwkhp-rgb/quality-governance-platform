@@ -6,32 +6,28 @@ import PortalReading from '../PortalReading'
 
 const mockListMyAssignments = vi.fn()
 const mockOpenAssignment = vi.fn()
+const mockGetAssignmentDocumentUrl = vi.fn()
 const mockGetAssignmentQuiz = vi.fn()
 const mockSubmitQuiz = vi.fn()
 const mockCompleteAssignment = vi.fn()
-const mockCreateThread = vi.fn()
-const mockPostMessage = vi.fn()
-const mockApiGet = vi.fn()
+const mockAskAssignmentQuestion = vi.fn()
 const mockToastError = vi.fn()
 const mockToastSuccess = vi.fn()
 const mockAnnounce = vi.fn()
 const mockNavigate = vi.fn()
 
 vi.mock('../../api/client', () => ({
-  api: {
-    get: (...args: unknown[]) => mockApiGet(...args),
+  default: {
     defaults: { baseURL: 'http://localhost:8000' },
   },
   documentCampaignApi: {
     listMyAssignments: (...args: unknown[]) => mockListMyAssignments(...args),
     openAssignment: (...args: unknown[]) => mockOpenAssignment(...args),
+    getAssignmentDocumentUrl: (...args: unknown[]) => mockGetAssignmentDocumentUrl(...args),
     getAssignmentQuiz: (...args: unknown[]) => mockGetAssignmentQuiz(...args),
     submitQuiz: (...args: unknown[]) => mockSubmitQuiz(...args),
     completeAssignment: (...args: unknown[]) => mockCompleteAssignment(...args),
-  },
-  knowledgeBankApi: {
-    createThread: (...args: unknown[]) => mockCreateThread(...args),
-    postMessage: (...args: unknown[]) => mockPostMessage(...args),
+    askAssignmentQuestion: (...args: unknown[]) => mockAskAssignmentQuestion(...args),
   },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Request failed',
@@ -85,7 +81,7 @@ describe('PortalReading O-08', () => {
       },
     })
     mockOpenAssignment.mockResolvedValue({ data: { id: 7, status: 'opened' } })
-    mockApiGet.mockResolvedValue({
+    mockGetAssignmentDocumentUrl.mockResolvedValue({
       data: { signed_url: 'https://storage.example/doc.pdf?sig=abc' },
     })
     mockGetAssignmentQuiz.mockResolvedValue({
@@ -98,8 +94,7 @@ describe('PortalReading O-08', () => {
     })
     mockSubmitQuiz.mockResolvedValue({ data: { score: 100, passed: true, quiz_attempts: 1 } })
     mockCompleteAssignment.mockResolvedValue({ data: { id: 7, status: 'completed' } })
-    mockCreateThread.mockResolvedValue({ data: { id: 99 } })
-    mockPostMessage.mockResolvedValue({ data: { id: 1, body: 'Help?' } })
+    mockAskAssignmentQuestion.mockResolvedValue({ data: { id: 99 } })
   })
 
   it('loads assignments and renders mobile campaign cards', async () => {
@@ -119,9 +114,7 @@ describe('PortalReading O-08', () => {
 
     await waitFor(() => {
       expect(mockOpenAssignment).toHaveBeenCalledWith(7)
-      expect(mockApiGet).toHaveBeenCalledWith('/api/v1/documents/42/signed-url', {
-        params: { download: false },
-      })
+      expect(mockGetAssignmentDocumentUrl).toHaveBeenCalledWith(7)
       expect(openSpy).toHaveBeenCalledWith(
         'https://storage.example/doc.pdf?sig=abc',
         '_blank',
@@ -157,7 +150,7 @@ describe('PortalReading O-08', () => {
     )
   })
 
-  it('sends ask-question to knowledge bank thread', async () => {
+  it('sends ask-question via campaign assignment API', async () => {
     renderPage()
 
     await screen.findByTestId('portal-reading-assignment-7')
@@ -169,8 +162,10 @@ describe('PortalReading O-08', () => {
     await userEvent.click(screen.getByRole('button', { name: /Send question/i }))
 
     await waitFor(() => {
-      expect(mockCreateThread).toHaveBeenCalledWith(42, expect.objectContaining({ title: expect.any(String) }))
-      expect(mockPostMessage).toHaveBeenCalledWith(99, { body: 'What PPE is required on site?' })
+      expect(mockAskAssignmentQuestion).toHaveBeenCalledWith(7, {
+        title: 'What PPE is required on site?',
+        body: 'What PPE is required on site?',
+      })
     })
   })
 })

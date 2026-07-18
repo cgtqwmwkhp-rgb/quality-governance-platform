@@ -2,11 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookOpen, CheckCircle2, ChevronDown, Clock, ExternalLink, Loader2, MessageSquare, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import {
+import api, {
   documentCampaignApi,
   getApiErrorMessage,
   policyAcknowledgmentsApi,
-  api,
   type DocumentCampaignAssignment,
   type DocumentCampaignQuiz,
   type DocumentCampaignQuizResult,
@@ -37,19 +36,19 @@ import {
   quizAttemptsRemaining,
   quizQuestionLabel,
   resolveSignatureDisposition,
+  resolveAssignmentDocumentUrl,
   shouldRenderOpenQuestion,
   showQuestionGate,
   type QuestionGateChoice,
   type SignChoice,
 } from './campaignReadingHelpers'
 
-async function resolveDocumentSignedUrl(documentId: number): Promise<string> {
-  const response = await api.get<{ signed_url: string }>(
-    `/api/v1/documents/${documentId}/signed-url`,
-    { params: { download: false } },
+async function openAssignmentDocument(assignmentId: number): Promise<string> {
+  return resolveAssignmentDocumentUrl(
+    assignmentId,
+    documentCampaignApi.getAssignmentDocumentUrl,
+    api.defaults.baseURL,
   )
-  const rawUrl = response.data.signed_url
-  return new URL(rawUrl, api.defaults.baseURL || window.location.origin).toString()
 }
 
 const reportFailure = (err: unknown): string => {
@@ -150,13 +149,10 @@ export default function MyReading() {
   const handleOpenCampaign = async (item: DocumentCampaignAssignment) => {
     setOpeningCampaignId(item.id)
     try {
-      await documentCampaignApi.openAssignment(item.id)
-      setCampaignItems((prev) =>
-        prev.map((assignment) =>
-          assignment.id === item.id ? { ...assignment, status: 'opened' } : assignment,
-        ),
-      )
-      const signedUrl = await resolveDocumentSignedUrl(item.document_id)
+      if (item.status !== 'completed') {
+        await documentCampaignApi.openAssignment(item.id)
+      }
+      const signedUrl = await openAssignmentDocument(item.id)
       window.open(signedUrl, '_blank', 'noopener,noreferrer')
     } catch (err) {
       reportFailure(err)

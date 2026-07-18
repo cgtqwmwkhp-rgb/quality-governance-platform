@@ -200,6 +200,17 @@ class AssignmentOpenedResponse(BaseModel):
     first_opened_at: Optional[datetime] = None
 
 
+class AssignmentDocumentUrlResponse(BaseModel):
+    """Time-limited signed URL for a campaign assignee to read their document."""
+
+    assignment_id: int
+    document_id: int
+    signed_url: str
+    expires_in_seconds: int
+    filename: str
+    content_type: Optional[str] = None
+
+
 # =============================================================================
 # Quiz
 # =============================================================================
