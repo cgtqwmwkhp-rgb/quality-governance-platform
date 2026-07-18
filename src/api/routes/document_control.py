@@ -342,13 +342,7 @@ async def get_document_golden_thread(
     current_user: CurrentUser,
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Read the controlled-document → GKB evidence chain without inventing a FK.
-
-    ``controlled_documents`` has no library-document FK. This endpoint exposes
-    one unambiguous same-tenant candidate only, and labels it as unverified so
-    staff can inspect its real GKB evidence links without treating a title or
-    reference-number match as a governed relationship.
-    """
+    """Read the controlled-document → GKB evidence chain with honest FK state."""
     tenant_id = _tenant_id(current_user)
     document = (
         await db.execute(
@@ -363,37 +357,19 @@ async def get_document_golden_thread(
         raise NotFoundError("Document not found")
 
     from src.domain.models.compliance_evidence import ComplianceEvidenceLink
-    from src.domain.models.document import Document as LibraryDocument
+    from src.domain.services.gkb_control_library_link import resolve_library_for_controlled
 
-    candidates_result = await db.execute(
-        select(LibraryDocument)
-        .where(
-            LibraryDocument.tenant_id == tenant_id,
-            or_(
-                LibraryDocument.title == document.title,
-                LibraryDocument.reference_number == document.document_number,
-            ),
-        )
-        .order_by(LibraryDocument.id)
-        .limit(2)
-    )
-    candidates = list(candidates_result.scalars().all())
-    candidate = candidates[0] if len(candidates) == 1 else None
-    matching_fields: list[str] = []
-    if candidate:
-        if candidate.title == document.title:
-            matching_fields.append("title")
-        if candidate.reference_number == document.document_number:
-            matching_fields.append("reference_number")
+    library_doc, match = await resolve_library_for_controlled(db, document, tenant_id=tenant_id)
+    hard_fk_present = match.relationship_state == "linked" and document.library_document_id is not None
 
     evidence_links: list[dict[str, Any]] = []
-    if candidate:
+    if library_doc:
         evidence_result = await db.execute(
             select(ComplianceEvidenceLink)
             .where(
                 ComplianceEvidenceLink.tenant_id == tenant_id,
                 ComplianceEvidenceLink.entity_type == "document",
-                ComplianceEvidenceLink.entity_id == str(candidate.id),
+                ComplianceEvidenceLink.entity_id == str(library_doc.id),
                 ComplianceEvidenceLink.deleted_at.is_(None),
             )
             .order_by(ComplianceEvidenceLink.created_at.desc())
@@ -418,12 +394,41 @@ async def get_document_golden_thread(
         GoldenThreadContext(
             tenant_id=tenant_id,
             controlled_document_id=document.id,
-            library_document_id=candidate.id if candidate else None,
-            hard_fk_present=False,
+            library_document_id=library_doc.id if library_doc else None,
+            hard_fk_present=hard_fk_present,
             publish_event_requested=False,
         )
     )
-    candidate_state = "unverified_candidate" if candidate else ("ambiguous" if candidates else "not_found")
+
+    library_payload = (
+        {
+            "id": library_doc.id,
+            "reference_number": library_doc.reference_number,
+            "title": library_doc.title,
+            "version": library_doc.version,
+            "status": library_doc.status.value if hasattr(library_doc.status, "value") else str(library_doc.status),
+            "matching_fields": list(match.matching_fields),
+        }
+        if library_doc
+        else None
+    )
+
+    if hard_fk_present:
+        integrity_message = (
+            "This controlled document is hard-linked to the library document below. "
+            "Evidence links are recorded against the library row."
+        )
+    elif match.relationship_state == "unverified_candidate":
+        integrity_message = (
+            "The displayed library document is an unverified same-tenant candidate only — "
+            "no hard link exists yet. Its evidence links are not controlled-document evidence."
+        )
+    elif match.relationship_state == "ambiguous":
+        integrity_message = (
+            "More than one library document matches; no candidate or evidence links are displayed."
+        )
+    else:
+        integrity_message = "No library-document match exists for this controlled document."
 
     return {
         "controlled_document": {
@@ -432,33 +437,15 @@ async def get_document_golden_thread(
             "title": document.title,
             "current_version": document.current_version,
             "status": document.status,
+            "library_document_id": document.library_document_id,
         },
-        "library_document_candidate": (
-            {
-                "id": candidate.id,
-                "reference_number": candidate.reference_number,
-                "title": candidate.title,
-                "version": candidate.version,
-                "status": candidate.status.value if hasattr(candidate.status, "value") else str(candidate.status),
-                "matching_fields": matching_fields,
-            }
-            if candidate
-            else None
-        ),
+        "library_document": library_payload if hard_fk_present else None,
+        "library_document_candidate": library_payload if match.relationship_state == "unverified_candidate" else None,
         "evidence_links": evidence_links,
         "integrity": {
-            "relationship_state": candidate_state,
-            "hard_fk_present": False,
-            "message": (
-                "The displayed library document is an unverified same-tenant candidate; "
-                "its evidence links are not yet controlled-document evidence."
-                if candidate
-                else (
-                    "More than one library document matches; no candidate or evidence links are displayed."
-                    if candidates
-                    else "No library-document candidate matches this controlled document."
-                )
-            ),
+            "relationship_state": match.relationship_state,
+            "hard_fk_present": hard_fk_present,
+            "message": integrity_message,
         },
         "publish_plan": {
             "should_run": plan.should_run,

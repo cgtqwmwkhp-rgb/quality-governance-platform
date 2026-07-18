@@ -37,6 +37,13 @@ class ControlledDocument(Base):
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Golden thread — hard FK to library document (DS-5)
+    library_document_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # Classification
     document_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     category: Mapped[str] = mapped_column(String(100), nullable=False)

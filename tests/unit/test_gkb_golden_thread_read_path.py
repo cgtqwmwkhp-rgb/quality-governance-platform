@@ -30,6 +30,9 @@ class _Db:
     async def execute(self, _statement):
         return _Result(self.values.pop(0))
 
+    async def scalar(self, _statement):
+        return self.values.pop(0)
+
 
 @pytest.mark.asyncio
 async def test_golden_thread_exposes_unverified_candidate_evidence_with_honesty():
@@ -39,6 +42,7 @@ async def test_golden_thread_exposes_unverified_candidate_evidence_with_honesty(
         title="PPE Inspection Procedure",
         current_version="2.1",
         status="published",
+        library_document_id=None,
     )
     library = SimpleNamespace(
         id=44,
@@ -65,12 +69,55 @@ async def test_golden_thread_exposes_unverified_candidate_evidence_with_honesty(
         db=_Db([controlled, [library], [link]]),
     )
 
+    assert response["library_document"] is None
     assert response["library_document_candidate"]["id"] == 44
     assert response["library_document_candidate"]["matching_fields"] == ["title", "reference_number"]
     assert response["evidence_links"][0]["clause_id"] == "ISO9001:7.5"
     assert response["integrity"]["relationship_state"] == "unverified_candidate"
     assert response["integrity"]["hard_fk_present"] is False
     assert response["publish_plan"]["deny_reason"] == "hard_fk_absent"
+
+
+@pytest.mark.asyncio
+async def test_golden_thread_hard_fk_linked_library():
+    controlled = SimpleNamespace(
+        id=11,
+        document_number="PROC-11",
+        title="PPE Inspection Procedure",
+        current_version="2.1",
+        status="published",
+        library_document_id=44,
+    )
+    library = SimpleNamespace(
+        id=44,
+        reference_number="PROC-11",
+        title="PPE Inspection Procedure",
+        version="2.1",
+        status="approved",
+    )
+    link = SimpleNamespace(
+        id=99,
+        clause_id="ISO9001:7.5",
+        effective_status=SimpleNamespace(value="confirmed"),
+        signal_type=None,
+        scheme="iso9001",
+        confidence=0.95,
+        linked_by=SimpleNamespace(value="manual"),
+        title="PPE inspection record",
+        rationale="Controlled procedure supports documented information.",
+        created_at=None,
+    )
+    response = await get_document_golden_thread(
+        11,
+        current_user=SimpleNamespace(tenant_id=7),
+        db=_Db([controlled, library, [link]]),
+    )
+
+    assert response["library_document"]["id"] == 44
+    assert response["library_document_candidate"] is None
+    assert response["integrity"]["relationship_state"] == "linked"
+    assert response["integrity"]["hard_fk_present"] is True
+    assert response["publish_plan"]["documents_hard_fk_gap"] is False
 
 
 @pytest.mark.asyncio
@@ -81,6 +128,7 @@ async def test_golden_thread_hides_ambiguous_library_candidates():
         title="PPE Inspection Procedure",
         current_version="2.1",
         status="published",
+        library_document_id=None,
     )
     candidates = [
         SimpleNamespace(id=44, title="PPE Inspection Procedure"),

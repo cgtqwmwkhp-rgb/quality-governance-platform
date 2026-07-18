@@ -490,10 +490,20 @@ export default function DocumentControl() {
                   {goldenThread && (
                     <div className="space-y-3 border-t border-border pt-3 text-sm">
                       <p className="text-muted-foreground">{goldenThread.integrity.message}</p>
+                      {goldenThread.library_document && (
+                        <div>
+                          <p className="font-medium text-foreground">
+                            Linked library: {goldenThread.library_document.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Hard FK · v{goldenThread.library_document.version}
+                          </p>
+                        </div>
+                      )}
                       {goldenThread.library_document_candidate && (
                         <div>
                           <p className="font-medium text-foreground">
-                            Candidate: {goldenThread.library_document_candidate.title}
+                            Unverified candidate: {goldenThread.library_document_candidate.title}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             Matched on {goldenThread.library_document_candidate.matching_fields.join(' and ')}
@@ -514,8 +524,9 @@ export default function DocumentControl() {
                           ))}
                         </div>
                       )}
-                      {goldenThread.library_document_candidate && goldenThread.evidence_links.length === 0 && (
-                        <p className="text-muted-foreground">This candidate has no recorded GKB evidence links.</p>
+                      {(goldenThread.library_document || goldenThread.library_document_candidate) &&
+                        goldenThread.evidence_links.length === 0 && (
+                        <p className="text-muted-foreground">No GKB evidence links recorded for this library row.</p>
                       )}
                     </div>
                   )}

@@ -101,7 +101,15 @@ export interface ControlledDocumentGoldenThread {
   controlled_document: Pick<
     ControlledDocumentDetail,
     'id' | 'document_number' | 'title' | 'current_version' | 'status'
-  >
+  > & { library_document_id?: number | null }
+  library_document: {
+    id: number
+    reference_number: string | null
+    title: string
+    version: string
+    status: string
+    matching_fields: string[]
+  } | null
   library_document_candidate: {
     id: number
     reference_number: string | null
@@ -123,7 +131,7 @@ export interface ControlledDocumentGoldenThread {
     created_at: string | null
   }>
   integrity: {
-    relationship_state: 'unverified_candidate' | 'ambiguous' | 'not_found'
+    relationship_state: 'linked' | 'unverified_candidate' | 'ambiguous' | 'not_found'
     hard_fk_present: boolean
     message: string
   }
