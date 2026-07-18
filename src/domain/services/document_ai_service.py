@@ -114,9 +114,11 @@ Always respond with valid JSON matching the requested schema."""
                     tags=list(payload.get("tags") or [])[:20],
                     keywords=list(payload.get("keywords") or [])[:40],
                     topics=list(payload.get("topics") or [])[:20],
-                    entities=payload.get("entities")
-                    if isinstance(payload.get("entities"), dict)
-                    else {"contacts": [], "assets": [], "procedures": [], "standards": []},
+                    entities=(
+                        payload.get("entities")
+                        if isinstance(payload.get("entities"), dict)
+                        else {"contacts": [], "assets": [], "procedures": [], "standards": []}
+                    ),
                     sensitivity=str(payload.get("sensitivity") or "internal"),
                     confidence=float(payload.get("confidence") or 0.7),
                     has_tables=bool(payload.get("has_tables")),
@@ -489,10 +491,9 @@ class EmbeddingService:
     def __init__(self):
         import os
 
-        self.voyage_api_key = (
-            (getattr(settings, "voyage_api_key", None) or "").strip()
-            or (os.getenv("VOYAGE_API_KEY") or "").strip()
-        )
+        self.voyage_api_key = (getattr(settings, "voyage_api_key", None) or "").strip() or (
+            os.getenv("VOYAGE_API_KEY") or ""
+        ).strip()
         self.model = "voyage-large-2"
         self.base_url = "https://api.voyageai.com/v1"
 
@@ -563,18 +564,15 @@ class VectorSearchService:
     def __init__(self):
         import os
 
-        self.api_key = (
-            (getattr(settings, "pinecone_api_key", None) or "").strip()
-            or (os.getenv("PINECONE_API_KEY") or "").strip()
-        )
-        self.index_name = (
-            (getattr(settings, "pinecone_index", None) or "").strip()
-            or (os.getenv("PINECONE_INDEX") or "qgp-documents").strip()
-        )
-        self.environment = (
-            (getattr(settings, "pinecone_environment", None) or "").strip()
-            or (os.getenv("PINECONE_ENVIRONMENT") or "gcp-starter").strip()
-        )
+        self.api_key = (getattr(settings, "pinecone_api_key", None) or "").strip() or (
+            os.getenv("PINECONE_API_KEY") or ""
+        ).strip()
+        self.index_name = (getattr(settings, "pinecone_index", None) or "").strip() or (
+            os.getenv("PINECONE_INDEX") or "qgp-documents"
+        ).strip()
+        self.environment = (getattr(settings, "pinecone_environment", None) or "").strip() or (
+            os.getenv("PINECONE_ENVIRONMENT") or "gcp-starter"
+        ).strip()
         self.embedding_service = EmbeddingService()
 
     async def upsert_chunks(
