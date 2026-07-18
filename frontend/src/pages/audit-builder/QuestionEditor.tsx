@@ -87,8 +87,11 @@ export function computeQuestionTypeMenuPlacement(
   const width = opts.width ?? 256
   const spaceBelow = viewport.height - trigger.bottom - gap
   const spaceAbove = trigger.top - gap
-  const openUpward = spaceBelow < Math.min(menuMax, 280) && spaceAbove > spaceBelow
-  const available = Math.max(120, openUpward ? spaceAbove : spaceBelow)
+  // Prefer below with a clamped scrollable list; flip up only when below is
+  // below the minimum usable height and above has more room.
+  const minUsable = 120
+  const openUpward = spaceBelow < minUsable && spaceAbove > spaceBelow
+  const available = Math.max(minUsable, openUpward ? spaceAbove : spaceBelow)
   const listMaxHeight = Math.min(menuMax, available)
   const left = Math.min(Math.max(8, trigger.left), viewport.width - width - 8)
   const menuStyle: CSSProperties = openUpward
