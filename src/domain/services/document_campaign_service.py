@@ -1243,9 +1243,7 @@ class DocumentCampaignService:
         quiz_passed_count = 0
 
         for assignment, campaign, document in result.all():
-            status_value = (
-                assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status)
-            )
+            status_value = assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status)
             item = {
                 "id": assignment.id,
                 "campaign_id": campaign.id,
@@ -1317,9 +1315,7 @@ class DocumentCampaignService:
         )
 
         for assignment, email in result.all():
-            status_value = (
-                assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status)
-            )
+            status_value = assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status)
             writer.writerow(
                 [
                     email or "",
