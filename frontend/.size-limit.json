@@ -3,7 +3,7 @@
     "path": "dist/assets/index-*.js",
     "limit": "155 kB",
     "gzip": true,
-    "name": "index: 152→155 kB — tip index.gz 153.15 after flag-debt FE; shared shell cannot reclaim without defer"
+    "name": "index: 152\u2192155 kB \u2014 tip index.gz 153.15 after flag-debt FE; shared shell cannot reclaim without defer"
   },
   {
     "path": "dist/assets/vendor-*.js",
