@@ -105,6 +105,9 @@ def test_ocr_providers_meta_matches_fixture_shape(monkeypatch) -> None:
     assert result["providers"]["mistral"]["configured"] == fixture["providers"]["mistral"]["configured"]
     assert result["providers"]["gemini"]["configured"] == fixture["providers"]["gemini"]["configured"]
     assert result["external_audit_import"]["ocr_configured"] == fixture["external_audit_import"]["ocr_configured"]
+    assert "library_document_ocr" in result["providers"]["mistral"]["capabilities"]
+    assert result["library_documents"]["azure_di_enabled_in_prod"] is False
+    assert result["library_documents"]["index_jobs_async"] is True
 
 
 def test_readyz_includes_ocr_providers_summary(monkeypatch, client: TestClient) -> None:

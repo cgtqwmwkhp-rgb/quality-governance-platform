@@ -198,6 +198,7 @@ def get_ocr_providers_readiness() -> dict[str, Any]:
             "configured": mistral_configured,
             "capabilities": [
                 "external_audit_import_ocr",
+                "library_document_ocr",
                 "scanned_pdf_fallback",
                 "native_extraction_merge",
             ],
@@ -220,6 +221,17 @@ def get_ocr_providers_readiness() -> dict[str, Any]:
             "note": (
                 "Native PDF/DOCX/XLSX extraction runs without OCR keys. "
                 "Mistral OCR supplements scanned or image-heavy imports when configured."
+            ),
+        },
+        "library_documents": {
+            "ocr_configured": mistral_configured,
+            "index_jobs_async": True,
+            "azure_di_enabled_in_prod": False,
+            "native_extraction_always_available": True,
+            "note": (
+                "Library uploads use native extraction first; Mistral OCR supplements thin or "
+                "empty native text when configured. Index jobs run OCR → chunk → Voyage → Pinecone "
+                "via Celery. Azure DI remains disabled for library (E4 non-goal)."
             ),
         },
         "circuits": ai.get("circuits", {}),

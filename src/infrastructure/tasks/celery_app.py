@@ -80,6 +80,7 @@ CELERY_TASK_MODULES = (
     "src.infrastructure.tasks.cleanup_tasks",
     "src.infrastructure.tasks.competency_tasks",
     "src.infrastructure.tasks.dlq_replay",
+    "src.infrastructure.tasks.document_index_tasks",
     "src.infrastructure.tasks.email_tasks",
     "src.infrastructure.tasks.external_audit_import_tasks",
     "src.infrastructure.tasks.monitor_tasks",
