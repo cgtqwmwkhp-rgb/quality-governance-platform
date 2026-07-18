@@ -26,7 +26,7 @@ export default function HsecQuestionInbox() {
     setLoading(true)
     try {
       const response = await documentCampaignApi.listQuestionInbox()
-      setThreads(response.data ?? [])
+      setThreads(response.data.items ?? [])
     } catch (err) {
       toast.error(getApiErrorMessage(err, t('admin.hsec_inbox.load_error')))
       setThreads([])
@@ -120,7 +120,9 @@ export default function HsecQuestionInbox() {
                             {new Date(thread.created_at).toLocaleString()}
                           </span>
                         </div>
-                        <p className="font-medium text-foreground truncate">{thread.title}</p>
+                        <p className="font-medium text-foreground truncate">
+                          {thread.thread_title || thread.title || t('admin.hsec_inbox.untitled')}
+                        </p>
                         <p className="text-sm text-muted-foreground truncate">{thread.document_title}</p>
                       </div>
                       <ChevronDown
@@ -133,12 +135,14 @@ export default function HsecQuestionInbox() {
 
                     {expanded ? (
                       <div className="border-t border-border px-4 py-4 space-y-4">
-                        {thread.latest_message ? (
+                        {thread.latest_message_preview || thread.latest_message?.body ? (
                           <div className="rounded-lg bg-muted/50 px-3 py-2 text-sm">
                             <p className="text-xs text-muted-foreground mb-1">
                               {t('admin.hsec_inbox.latest_message')}
                             </p>
-                            <p className="whitespace-pre-wrap">{thread.latest_message.body}</p>
+                            <p className="whitespace-pre-wrap">
+                              {thread.latest_message_preview || thread.latest_message?.body}
+                            </p>
                           </div>
                         ) : (
                           <p className="text-sm text-muted-foreground">

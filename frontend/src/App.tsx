@@ -539,7 +539,7 @@ function App() {
                 <Route
                   path="admin/campaign-compliance"
                   element={
-                    <RequireRole allowed={['admin']}>
+                    <RequireRole allowed={['admin', 'manager']}>
                       <CampaignCompliance />
                     </RequireRole>
                   }
@@ -547,7 +547,7 @@ function App() {
                 <Route
                   path="admin/hsec-inbox"
                   element={
-                    <RequireRole allowed={['admin']}>
+                    <RequireRole allowed={['admin', 'manager']}>
                       <HsecQuestionInbox />
                     </RequireRole>
                   }

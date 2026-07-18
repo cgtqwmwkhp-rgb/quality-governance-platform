@@ -221,6 +221,7 @@
   "admin.campaign_compliance.evidence_export_error": "Could not download evidence pack.",
   "admin.campaign_compliance.load_error": "Could not load campaign compliance data.",
   "admin.campaign_compliance.empty": "No launched campaigns yet.",
+  "admin.hsec_inbox.untitled": "Untitled question",
   "admin.hsec_inbox.title": "HSEC Question Inbox",
   "admin.hsec_inbox.subtitle": "Reply to engineer questions on document campaign assignments",
   "admin.hsec_inbox.open_questions": "Open questions",

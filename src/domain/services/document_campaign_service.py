@@ -37,8 +37,13 @@ from src.domain.models.user import Role, User, user_roles
 
 logger = logging.getLogger(__name__)
 
-CAMPAIGN_DEFAULT_REMINDER_SETTING_KEY = "campaign.default_reminder_hours"
+CAMPAIGN_DEFAULT_REMINDER_SETTING_KEY_PREFIX = "campaign.default_reminder_hours"
 CAMPAIGN_DEFAULT_REMINDER_CATEGORY = "campaigns"
+
+
+def _reminder_defaults_setting_key(tenant_id: int) -> str:
+    """Tenant-scoped key — SystemSetting.key is globally unique."""
+    return f"{CAMPAIGN_DEFAULT_REMINDER_SETTING_KEY_PREFIX}.tenant.{tenant_id}"
 
 
 @dataclass(frozen=True)
@@ -649,10 +654,11 @@ class DocumentCampaignService:
     # ==================== Reminder defaults (SystemSetting) ====================
 
     async def get_reminder_defaults(self, *, tenant_id: int) -> List[int]:
+        setting_key = _reminder_defaults_setting_key(tenant_id)
         result = await self.db.execute(
             select(SystemSetting).where(
                 SystemSetting.tenant_id == tenant_id,
-                SystemSetting.key == CAMPAIGN_DEFAULT_REMINDER_SETTING_KEY,
+                SystemSetting.key == setting_key,
             )
         )
         setting = result.scalar_one_or_none()
@@ -663,7 +669,7 @@ class DocumentCampaignService:
             if isinstance(parsed, list) and all(isinstance(h, int) for h in parsed):
                 return sorted(parsed)
         except (json.JSONDecodeError, TypeError):
-            logger.warning("Invalid %s setting for tenant %s", CAMPAIGN_DEFAULT_REMINDER_SETTING_KEY, tenant_id)
+            logger.warning("Invalid %s setting for tenant %s", setting_key, tenant_id)
         return list(DEFAULT_REMINDER_OFFSETS_HOURS)
 
     async def set_reminder_defaults(
@@ -677,17 +683,18 @@ class DocumentCampaignService:
             raise BadRequestError("reminder_hours must be a non-empty list of non-negative integers")
 
         normalized = sorted(dict.fromkeys(int(h) for h in hours))
+        setting_key = _reminder_defaults_setting_key(tenant_id)
         result = await self.db.execute(
             select(SystemSetting).where(
                 SystemSetting.tenant_id == tenant_id,
-                SystemSetting.key == CAMPAIGN_DEFAULT_REMINDER_SETTING_KEY,
+                SystemSetting.key == setting_key,
             )
         )
         setting = result.scalar_one_or_none()
         if setting is None:
             setting = SystemSetting(
                 tenant_id=tenant_id,
-                key=CAMPAIGN_DEFAULT_REMINDER_SETTING_KEY,
+                key=setting_key,
                 value=json.dumps(normalized),
                 category=CAMPAIGN_DEFAULT_REMINDER_CATEGORY,
                 value_type="json",

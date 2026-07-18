@@ -49,7 +49,7 @@ export default function CampaignCompliance() {
     setComplianceLoading(true)
     try {
       const response = await documentCampaignApi.listCompliance()
-      setComplianceRows(response.data ?? [])
+      setComplianceRows(response.data.items ?? [])
     } catch (err) {
       toast.error(getApiErrorMessage(err, t('admin.campaign_compliance.load_error')))
       setComplianceRows([])
@@ -169,13 +169,13 @@ export default function CampaignCompliance() {
                 </thead>
                 <tbody>
                   {complianceRows.map((row) => (
-                    <tr key={row.id} className="border-b border-border last:border-0">
+                    <tr key={row.campaign_id} className="border-b border-border last:border-0">
                       <td className="py-3 pr-4">
                         <p className="font-medium text-foreground">
                           {row.title || row.document_title || `#${row.document_id}`}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {t('admin.campaign_compliance.campaign_id', { id: row.id })}
+                          {t('admin.campaign_compliance.campaign_id', { id: row.campaign_id })}
                         </p>
                       </td>
                       <td className="py-3 pr-4 capitalize">{row.status}</td>
@@ -186,10 +186,10 @@ export default function CampaignCompliance() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => void handleExportEvidence(row.id)}
-                          disabled={exportingId === row.id}
+                          onClick={() => void handleExportEvidence(row.campaign_id)}
+                          disabled={exportingId === row.campaign_id}
                         >
-                          {exportingId === row.id ? (
+                          {exportingId === row.campaign_id ? (
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                           ) : (
                             <Download className="w-4 h-4 mr-2" />

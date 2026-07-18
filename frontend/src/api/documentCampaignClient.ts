@@ -122,11 +122,11 @@ export interface ReminderDefaults {
 }
 
 export interface CampaignComplianceRow {
-  id: number
+  campaign_id: number
   document_id: number
   document_title: string
   status: string
-  total_assigned: number
+  assigned: number
   completed: number
   pending: number
   overdue: number
@@ -138,23 +138,27 @@ export interface CampaignComplianceRow {
   title?: string | null
 }
 
-export interface QuestionThreadMessage {
-  id?: number
-  body: string
-  created_at?: string
-  created_by_id?: number
-  author_id?: number
-}
-
 export interface QuestionInboxThread {
   thread_id: number
   document_id: number
   document_title: string
-  title: string
+  thread_title?: string | null
+  title?: string | null
   status: string
   created_at: string
   created_by_id: number
-  latest_message?: QuestionThreadMessage | null
+  latest_message_preview?: string | null
+  latest_message?: { body: string } | null
+}
+
+export interface ComplianceListResponse {
+  items: CampaignComplianceRow[]
+  total: number
+}
+
+export interface QuestionInboxListResponse {
+  items: QuestionInboxThread[]
+  total: number
 }
 
 export interface AskAssignmentQuestionPayload {
@@ -217,7 +221,7 @@ export function createDocumentCampaignApi(api: AxiosInstance) {
     getReminderDefaults: () => api.get<ReminderDefaults>(`${base}/reminder-defaults`),
     setReminderDefaults: (reminder_hours: number[]) =>
       api.put<ReminderDefaults>(`${base}/reminder-defaults`, { reminder_hours }),
-    listCompliance: () => api.get<CampaignComplianceRow[]>(`${base}/compliance`),
+    listCompliance: () => api.get<ComplianceListResponse>(`${base}/compliance`),
     downloadEvidencePack: async (campaignId: number) => {
       const response = await api.get(`${base}/campaigns/${campaignId}/evidence-pack`, {
         responseType: 'json',
@@ -228,7 +232,7 @@ export function createDocumentCampaignApi(api: AxiosInstance) {
       )
       return response
     },
-    listQuestionInbox: () => api.get<QuestionInboxThread[]>(`${base}/question-inbox`),
+    listQuestionInbox: () => api.get<QuestionInboxListResponse>(`${base}/question-inbox`),
     askAssignmentQuestion: (assignmentId: number, payload: AskAssignmentQuestionPayload) =>
       api.post(`${base}/assignments/${assignmentId}/questions`, payload),
     replyQuestion: (threadId: number, payload: ReplyQuestionPayload) =>
