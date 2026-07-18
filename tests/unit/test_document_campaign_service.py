@@ -13,13 +13,13 @@ import pytest
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.document_campaign import AssignmentStatus, CampaignAssignment, CampaignStatus
 from src.domain.models.governed_knowledge import QuizDraftStatus
+from src.domain.services.document_campaign_notifications import portal_assignment_action_url
 from src.domain.services.document_campaign_service import (
-    DocumentCampaignService,
     MAX_QUIZ_ATTEMPTS,
+    DocumentCampaignService,
     grade_quiz_answers,
     strip_quiz_answer_keys,
 )
-from src.domain.services.document_campaign_notifications import portal_assignment_action_url
 
 
 def _scalars_result(items):

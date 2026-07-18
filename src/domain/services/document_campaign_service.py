@@ -970,12 +970,16 @@ class DocumentCampaignService:
         assignment_id: int,
         expires_in_seconds: int = 3600,
     ) -> Dict[str, Any]:
-        """Return a signed document URL when the user owns an active campaign assignment."""
+        """Return a signed document URL when the user owns an eligible campaign assignment."""
         from src.infrastructure.storage import storage_service
 
         assignment = await self._get_own_assignment(user_id=user_id, assignment_id=assignment_id)
-        if assignment.status not in (AssignmentStatus.PENDING, AssignmentStatus.OVERDUE):
-            raise BadRequestError("Document access is only available for active assignments")
+        if assignment.status not in (
+            AssignmentStatus.PENDING,
+            AssignmentStatus.OVERDUE,
+            AssignmentStatus.COMPLETED,
+        ):
+            raise BadRequestError("Document access is only available for owned campaign assignments")
 
         campaign = await self.get_campaign(tenant_id=assignment.tenant_id, campaign_id=assignment.campaign_id)
         doc_result = await self.db.execute(

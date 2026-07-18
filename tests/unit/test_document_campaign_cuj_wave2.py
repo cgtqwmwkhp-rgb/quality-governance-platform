@@ -81,7 +81,7 @@ class TestGetAssignmentDocumentUrl:
         storage_mock.return_value.get_signed_url.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_rejects_completed_assignment(self):
+    async def test_returns_signed_url_for_completed_assignment(self):
         assignment = SimpleNamespace(
             id=7,
             user_id=10,
@@ -89,12 +89,48 @@ class TestGetAssignmentDocumentUrl:
             campaign_id=99,
             status=AssignmentStatus.COMPLETED,
         )
+        campaign = SimpleNamespace(id=99, document_id=42)
+        document = SimpleNamespace(
+            id=42,
+            file_name="policy.pdf",
+            file_path="tenant/42/policy.pdf",
+            mime_type="application/pdf",
+            download_count=0,
+            last_accessed_at=None,
+        )
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[
+                    MagicMock(scalar_one_or_none=lambda: assignment),
+                    MagicMock(scalar_one_or_none=lambda: document),
+                ]
+            ),
+            commit=AsyncMock(),
+        )
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+
+        with patch("src.infrastructure.storage.storage_service") as storage_mock:
+            storage_mock.return_value.get_signed_url.return_value = "https://storage.example/policy.pdf?sig=done"
+            result = await service.get_assignment_document_url(user_id=10, assignment_id=7)
+
+        assert result["signed_url"].endswith("sig=done")
+
+    @pytest.mark.asyncio
+    async def test_rejects_expired_assignment(self):
+        assignment = SimpleNamespace(
+            id=7,
+            user_id=10,
+            tenant_id=1,
+            campaign_id=99,
+            status=AssignmentStatus.EXPIRED,
+        )
         db = SimpleNamespace(
             execute=AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: assignment)),
         )
         service = DocumentCampaignService(db)
 
-        with pytest.raises(BadRequestError, match="active assignments"):
+        with pytest.raises(BadRequestError, match="owned campaign assignments"):
             await service.get_assignment_document_url(user_id=10, assignment_id=7)
 
     @pytest.mark.asyncio

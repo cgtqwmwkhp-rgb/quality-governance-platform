@@ -149,12 +149,9 @@ export default function MyReading() {
   const handleOpenCampaign = async (item: DocumentCampaignAssignment) => {
     setOpeningCampaignId(item.id)
     try {
-      await documentCampaignApi.openAssignment(item.id)
-      setCampaignItems((prev) =>
-        prev.map((assignment) =>
-          assignment.id === item.id ? { ...assignment, status: 'opened' } : assignment,
-        ),
-      )
+      if (item.status !== 'completed') {
+        await documentCampaignApi.openAssignment(item.id)
+      }
       const signedUrl = await openAssignmentDocument(item.id)
       window.open(signedUrl, '_blank', 'noopener,noreferrer')
     } catch (err) {

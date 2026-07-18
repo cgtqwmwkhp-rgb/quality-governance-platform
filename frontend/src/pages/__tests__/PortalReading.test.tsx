@@ -17,7 +17,7 @@ const mockAnnounce = vi.fn()
 const mockNavigate = vi.fn()
 
 vi.mock('../../api/client', () => ({
-  api: {
+  default: {
     defaults: { baseURL: 'http://localhost:8000' },
   },
   documentCampaignApi: {
