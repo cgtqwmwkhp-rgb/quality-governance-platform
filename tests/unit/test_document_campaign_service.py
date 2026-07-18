@@ -729,3 +729,153 @@ class TestComplianceByGroup:
         assert rows[0]["completed"] == 1
         assert rows[1]["group_name"] == "Ungrouped"
         assert rows[1]["pending"] == 1
+
+
+# Compliance passport (O-07)
+# =============================================================================
+
+
+class TestGetMyPassport:
+    @pytest.mark.asyncio
+    async def test_splits_outstanding_completed_and_stats(self):
+        now = datetime.now(timezone.utc)
+        outstanding_assignment = SimpleNamespace(
+            id=1,
+            status=AssignmentStatus.PENDING,
+            assigned_at=now,
+            due_at=now,
+            completed_at=None,
+            quiz_score=80,
+            quiz_passed=True,
+        )
+        completed_assignment = SimpleNamespace(
+            id=2,
+            status=AssignmentStatus.COMPLETED,
+            assigned_at=now,
+            due_at=now,
+            completed_at=now,
+            quiz_score=50,
+            quiz_passed=False,
+        )
+        campaign = SimpleNamespace(id=10, title="Safety read")
+        document = SimpleNamespace(id=5, title="Policy A")
+
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                return_value=SimpleNamespace(
+                    all=lambda: [
+                        (outstanding_assignment, campaign, document),
+                        (completed_assignment, campaign, document),
+                    ]
+                )
+            )
+        )
+        service = DocumentCampaignService(db)
+
+        result = await service.get_my_passport(tenant_id=1, user_id=7)
+
+        assert len(result["outstanding"]) == 1
+        assert len(result["completed"]) == 1
+        assert result["stats"]["total_assigned"] == 2
+        assert result["stats"]["completion_rate"] == 50.0
+        assert result["stats"]["quiz_pass_rate"] == 50.0
+
+
+# =============================================================================
+# Evidence CSV (O-09)
+# =============================================================================
+
+
+class TestBuildEvidencePackCsv:
+    @pytest.mark.asyncio
+    async def test_csv_includes_assignment_metadata(self):
+        now = datetime.now(timezone.utc)
+        assignment = SimpleNamespace(
+            status=AssignmentStatus.COMPLETED,
+            assigned_at=now,
+            due_at=now,
+            first_opened_at=now,
+            completed_at=now,
+            quiz_score=100,
+            quiz_passed=True,
+            signature_data="sig-data",
+            ip_address="192.168.1.1",
+        )
+        campaign = SimpleNamespace(id=9, tenant_id=1, document_id=3)
+
+        db = SimpleNamespace(
+            execute=AsyncMock(return_value=SimpleNamespace(all=lambda: [(assignment, "engineer@example.com")]))
+        )
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+
+        csv_content, filename = await service.build_evidence_pack_csv(tenant_id=1, campaign_id=9)
+
+        assert filename == "campaign-9-evidence-pack.csv"
+        assert "user_email,status" in csv_content
+        assert "engineer@example.com" in csv_content
+        assert "192.168.1.1" in csv_content
+        assert ",True," in csv_content or ",true," in csv_content.lower()
+
+
+# =============================================================================
+# Re-ack campaign spawn (O-10)
+# =============================================================================
+
+
+class TestSpawnReackCampaign:
+    @pytest.mark.asyncio
+    async def test_no_active_campaigns_returns_false(self):
+        db = SimpleNamespace(
+            execute=AsyncMock(return_value=SimpleNamespace(scalars=lambda: SimpleNamespace(first=lambda: None))),
+            add=MagicMock(),
+            commit=AsyncMock(),
+            refresh=AsyncMock(),
+        )
+        service = DocumentCampaignService(db)
+
+        result = await service.spawn_reack_campaign(document_id=5, tenant_id=1, actor_id=2)
+
+        assert result["spawned"] is False
+        assert result["reason"] == "no_active_campaigns"
+
+    @pytest.mark.asyncio
+    async def test_creates_draft_from_active_campaign(self):
+        source = SimpleNamespace(
+            id=11,
+            title="Annual read",
+            due_within_days=14,
+            require_quiz=True,
+            require_sign=True,
+            reminder_offsets_hours=[24, 168],
+            audience_all_users=True,
+            audience_department=None,
+            audience_role=None,
+            audience_group_ids=None,
+            audience_user_ids=None,
+            quiz_draft_id=3,
+            quiz_questions=[{"type": "mcq", "question": "Q1"}],
+            quiz_pass_mark=80,
+        )
+
+        execute_results = [
+            SimpleNamespace(scalars=lambda: SimpleNamespace(first=lambda: source)),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
+        ]
+        db = SimpleNamespace(
+            execute=AsyncMock(side_effect=execute_results),
+            add=MagicMock(),
+            commit=AsyncMock(),
+            refresh=AsyncMock(),
+        )
+        service = DocumentCampaignService(db)
+        service._document_title = AsyncMock(return_value="Safety Policy")
+
+        result = await service.spawn_reack_campaign(document_id=5, tenant_id=1, actor_id=2)
+
+        assert result["spawned"] is True
+        assert result["source_campaign_id"] == 11
+        assert db.add.called
+        added_campaign = db.add.call_args[0][0]
+        assert added_campaign.status == CampaignStatus.DRAFT
+        assert added_campaign.title == "Re-acknowledgment: Annual read"

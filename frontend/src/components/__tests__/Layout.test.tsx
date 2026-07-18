@@ -105,7 +105,7 @@ describe('Layout', () => {
     )
 
     const hubs = [
-      ['nav.my_work', ['/actions', '/my-reading', '/workflows']],
+      ['nav.my_work', ['/actions', '/my-reading', '/my-compliance', '/workflows']],
       [
         'nav.safety_cases',
         [

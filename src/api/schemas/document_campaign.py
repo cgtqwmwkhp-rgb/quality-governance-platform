@@ -356,3 +356,43 @@ class GroupComplianceResponse(BaseModel):
     campaign_id: int
     items: List[GroupComplianceItem]
     total: int
+
+
+# =============================================================================
+# Compliance Passport (O-07)
+# =============================================================================
+
+
+class PassportAssignmentItem(BaseModel):
+    """Single assignment row on the engineer compliance passport."""
+
+    id: int
+    campaign_id: int
+    document_id: int
+    document_title: str
+    campaign_title: Optional[str] = None
+    status: str
+    assigned_at: datetime
+    due_at: datetime
+    completed_at: Optional[datetime] = None
+    quiz_score: Optional[int] = None
+    quiz_passed: Optional[bool] = None
+
+
+class PassportStats(BaseModel):
+    completion_rate: float
+    quiz_pass_rate: float
+    total_assigned: int
+
+
+class MyPassportResponse(BaseModel):
+    outstanding: List[PassportAssignmentItem]
+    completed: List[PassportAssignmentItem]
+    stats: PassportStats
+
+
+class SpawnReackCampaignResponse(BaseModel):
+    spawned: bool
+    campaign_id: Optional[int] = None
+    source_campaign_id: Optional[int] = None
+    reason: Optional[str] = None

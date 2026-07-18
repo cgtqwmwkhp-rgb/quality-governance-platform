@@ -42,6 +42,7 @@ const Documents = lazy(() => import('./pages/Documents'))
 const DocumentDetail = lazy(() => import('./pages/DocumentDetail'))
 const DocumentControl = lazy(() => import('./pages/DocumentControl'))
 const MyReading = lazy(() => import('./pages/MyReading'))
+const MyCompliancePassport = lazy(() => import('./pages/MyCompliancePassport'))
 const KnowledgeExceptions = lazy(() => import('./pages/KnowledgeExceptions'))
 const AuditTemplateLibrary = lazy(() => import('./pages/AuditTemplateLibrary'))
 const AuditTemplateBuilder = lazy(() => import('./pages/AuditTemplateBuilder'))
@@ -346,6 +347,7 @@ function App() {
                 <Route path="documents/:id" element={<DocumentDetail />} />
                 <Route path="document-control" element={<DocumentControl />} />
                 <Route path="my-reading" element={<MyReading />} />
+                <Route path="my-compliance" element={<MyCompliancePassport />} />
                 <Route path="knowledge-exceptions" element={<KnowledgeExceptions />} />
                 <Route path="policies" element={<Policies />} />
                 <Route path="risks" element={<RedirectToRiskRegister />} />

@@ -2706,6 +2706,9 @@ export type {
   LaunchCampaignResponse,
   QuestionInboxThread,
   ReminderDefaults,
+  CompliancePassportAssignment,
+  CompliancePassportResponse,
+  CompliancePassportStats,
 } from './documentCampaignClient'
 
 export const documentCampaignApi = createDocumentCampaignApi(api)

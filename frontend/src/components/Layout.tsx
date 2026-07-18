@@ -74,6 +74,11 @@ export default function Layout({ onLogout }: LayoutProps) {
       items: [
         { path: '/actions', icon: ListTodo, label: t('nav.actions') },
         { path: '/my-reading', icon: BookOpen, label: t('nav.my_reading', { defaultValue: 'My Reading' }) },
+        {
+          path: '/my-compliance',
+          icon: Award,
+          label: t('nav.my_compliance_passport', { defaultValue: 'Compliance Passport' }),
+        },
         { path: '/workflows', icon: GitBranch, label: t('nav.workflow_center') },
       ],
     },
