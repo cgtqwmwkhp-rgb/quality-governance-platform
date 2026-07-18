@@ -9,6 +9,7 @@ ISO 9001:2015 §7.5-aligned conventions:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -39,6 +40,29 @@ class VersionNumber:
     @property
     def label(self) -> str:
         return f"{self.major}.{self.minor}"
+
+
+_FILENAME_VERSION_HINT = re.compile(
+    r"[_\-\s]v(?P<major>\d+)\.(?P<minor>\d+)(?:[_\-\s\.]|$)",
+    re.IGNORECASE,
+)
+
+
+def parse_filename_version_hint(filename: str | None) -> VersionNumber | None:
+    """Advisory version hint from filename (e.g. ``Policy_v2.1.pdf``). Does not mutate state."""
+    if not filename:
+        return None
+    match = _FILENAME_VERSION_HINT.search(filename)
+    if not match:
+        return None
+    try:
+        major = int(match.group("major"))
+        minor = int(match.group("minor"))
+        if major < 1 or minor < 0:
+            return None
+        return VersionNumber(major=major, minor=minor)
+    except (TypeError, ValueError):
+        return None
 
 
 def parse_version(value: str | None) -> VersionNumber:
@@ -78,6 +102,21 @@ def assert_document_metadata_editable(status: str | None) -> None:
     normalized = (status or "").lower()
     if normalized in {"published", "active", "effective", "obsolete", "retired", "archived"}:
         raise BadRequestError(f"Document status '{normalized}' is read-only. Revise to open a draft before editing.")
+
+
+LIBRARY_IMMUTABLE_METADATA_STATUSES = frozenset(
+    {"published", "approved", "active", "superseded", "retired", "obsolete", "archived"}
+)
+
+
+def assert_library_metadata_editable(status: object | None) -> None:
+    """Title/description edits on draft/working rows must not force a version bump."""
+    raw = getattr(status, "value", status)
+    normalized = str(raw or "").lower()
+    if normalized in LIBRARY_IMMUTABLE_METADATA_STATUSES:
+        raise BadRequestError(
+            f"Document status '{normalized}' is read-only. Revise to open a draft before editing metadata."
+        )
 
 
 class DocumentVersionService:
@@ -492,6 +531,7 @@ class DocumentVersionService:
 
     @staticmethod
     def serialize_library_version(version: DocumentVersion) -> dict:
+        hint = parse_filename_version_hint(version.file_name)
         return {
             "id": version.id,
             "version_number": version.version_number,
@@ -501,6 +541,7 @@ class DocumentVersionService:
             "is_immutable": bool(version.is_immutable),
             "file_name": version.file_name,
             "file_size": version.file_size,
+            "filename_version_hint": hint.label if hint else None,
             "created_by_id": version.created_by_id,
             "created_at": version.created_at.isoformat() if version.created_at else None,
             "published_at": version.published_at.isoformat() if version.published_at else None,

@@ -47,6 +47,13 @@ def test_published_document_metadata_is_read_only():
     assert_document_metadata_editable("under_revision")
 
 
+def test_parse_filename_version_hint():
+    from src.domain.services.document_version_service import parse_filename_version_hint
+
+    assert parse_filename_version_hint("Manual_v2.1.pdf").label == "2.1"
+    assert parse_filename_version_hint("plain.pdf") is None
+
+
 def test_initial_controlled_version_matches_tip_honesty():
     from src.domain.services.document_version_service import document_version_service
 

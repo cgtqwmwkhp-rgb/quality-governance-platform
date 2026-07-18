@@ -86,6 +86,8 @@ interface LibraryVersionRow {
   read_only: boolean
   file_name: string
   file_size: number
+  filename_version_hint?: string | null
+  index_job_id?: number | null
   created_by_id?: number | null
   created_at?: string | null
   published_at?: string | null
@@ -170,6 +172,8 @@ export default function DocumentDetail() {
   const [versionsError, setVersionsError] = useState<string | null>(null)
   const [revising, setRevising] = useState(false)
   const [publishing, setPublishing] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [savingTitle, setSavingTitle] = useState(false)
   const [showInlinePreview, setShowInlinePreview] = useState(false)
 
   const questionCount = useMemo(
@@ -267,6 +271,17 @@ export default function DocumentDetail() {
   }, [documentId])
 
   useEffect(() => {
+    if (document) setTitleDraft(document.title)
+  }, [document])
+
+  const canEditTitle = useMemo(() => {
+    const status = (versionHistory?.status ?? document?.status ?? '').toLowerCase()
+    return !['published', 'approved', 'active', 'superseded', 'retired', 'obsolete', 'archived'].includes(
+      status,
+    )
+  }, [versionHistory?.status, document?.status])
+
+  useEffect(() => {
     void loadDocument()
     void loadEvidence()
     void loadThreads()
@@ -289,16 +304,19 @@ export default function DocumentDetail() {
     return new URL(rawUrl, api.defaults.baseURL || window.location.origin).toString()
   }, [document])
 
-  const handleReviseVersion = async (changeSummary: string, isMajor: boolean) => {
+  const handleReviseVersion = async (changeSummary: string, isMajor: boolean, file?: File | null) => {
     if (!documentId) return
     setRevising(true)
     try {
-      await api.post(`/api/v1/documents/${documentId}/versions`, {
-        change_notes: changeSummary,
-        change_type: 'revision',
-        is_major_version: isMajor,
+      const form = new FormData()
+      form.append('change_notes', changeSummary)
+      form.append('change_type', 'revision')
+      form.append('is_major_version', String(isMajor))
+      if (file) form.append('file', file)
+      await api.post(`/api/v1/documents/${documentId}/versions`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       })
-      toast.success('Revision draft opened')
+      toast.success(file ? 'Revision draft opened — re-index queued' : 'Revision draft opened')
       await loadVersions()
       await loadDocument()
     } catch (err) {
@@ -306,6 +324,20 @@ export default function DocumentDetail() {
       throw err
     } finally {
       setRevising(false)
+    }
+  }
+
+  const handleSaveTitle = async () => {
+    if (!documentId || !titleDraft.trim()) return
+    setSavingTitle(true)
+    try {
+      await api.patch(`/api/v1/documents/${documentId}`, { title: titleDraft.trim() })
+      toast.success('Title updated (no version bump)')
+      await loadDocument()
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setSavingTitle(false)
     }
   }
 
@@ -809,6 +841,29 @@ export default function DocumentDetail() {
         </TabsContent>
 
         <TabsContent value="versions" className="mt-4 space-y-4">
+          {canEditTitle && (
+            <Card className="p-4 space-y-3" data-testid="document-title-edit">
+              <h4 className="font-medium text-foreground">Document title</h4>
+              <p className="text-xs text-muted-foreground">
+                Edit the title on draft/working rows without opening a new version.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Input
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  data-testid="document-title-input"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => void handleSaveTitle()}
+                  disabled={savingTitle || !titleDraft.trim() || titleDraft.trim() === document.title}
+                  data-testid="document-title-save"
+                >
+                  {savingTitle ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save title'}
+                </Button>
+              </div>
+            </Card>
+          )}
           <DocumentVersionControlBar
             documentLabel={document.title}
             currentVersion={versionHistory?.current_version ?? document.version}

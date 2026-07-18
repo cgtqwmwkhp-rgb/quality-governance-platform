@@ -1053,7 +1053,7 @@
   "documents.downstream.processing.description": "Your document is processing. AI Exceptions and scheme mapping populate after indexing completes — empty downstream views mean not ready yet, not missing data.",
   "documents.downstream.processing.next_step": "Refresh this library after indexing completes, then open AI Exceptions for clause mapping review.",
   "documents.downstream.indexed.title": "Indexed — downstream signals available",
-  "documents.downstream.indexed.description": "This document is indexed. Review AI-detected clause mappings in AI Exceptions; controlled-document golden-thread evidence lives in Document Control.",
+  "documents.downstream.indexed.description": "This document is indexed. Review AI-detected clause mappings in AI Exceptions; controlled-document evidence chain inspection lives in Document Control (hard link when migrated).",
   "documents.downstream.failed.title": "Indexing failed",
   "documents.downstream.failed.description": "Automatic indexing did not complete. Re-upload or contact an admin — downstream AI Exceptions will stay empty until indexing succeeds.",
   "documents.downstream.other.title": "Downstream not ready",

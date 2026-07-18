@@ -36,7 +36,11 @@ from src.domain.models.user import User
 from src.domain.services.document_ai_service import VectorSearchService
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
-from src.domain.services.document_version_service import document_version_service
+from src.domain.services.document_version_service import (
+    assert_library_metadata_editable,
+    document_version_service,
+    parse_filename_version_hint,
+)
 from src.domain.services.index_job_service import IndexJobService, dispatch_index_job
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -158,6 +162,7 @@ class DocumentUploadResponse(BaseModel):
     status: str
     message: str
     index_job_id: Optional[int] = None
+    filename_version_hint: Optional[str] = None
 
 
 class DocumentReprocessResponse(BaseModel):
@@ -250,11 +255,18 @@ class DocumentSignedUrlResponse(BaseModel):
 
 
 class LibraryVersionCreate(BaseModel):
-    """Open a library document revision draft."""
+    """Open a library document revision draft (JSON fallback when no file upload)."""
 
     change_notes: str
     change_type: str = "revision"
     is_major_version: bool = False
+
+
+class LibraryDocumentPatch(BaseModel):
+    """Patch library metadata on draft/working rows without a version bump."""
+
+    title: Optional[str] = None
+    description: Optional[str] = None
 
 
 class LibraryVersionResponse(BaseModel):
@@ -269,6 +281,8 @@ class LibraryVersionResponse(BaseModel):
     read_only: bool
     file_name: str
     file_size: int
+    filename_version_hint: Optional[str] = None
+    index_job_id: Optional[int] = None
     created_by_id: Optional[int] = None
     created_at: Optional[str] = None
     published_at: Optional[str] = None
@@ -545,12 +559,15 @@ async def upload_document(
 
         track_metric("documents.uploaded")
 
+        hint = parse_filename_version_hint(file_name)
+
         return DocumentUploadResponse(
             id=doc.id,
             reference_number=_document_reference_number(doc),
             title=doc.title,
             status=doc.status.value,
             index_job_id=index_job.id if index_job else None,
+            filename_version_hint=hint.label if hint else None,
             message=(
                 "Document uploaded; indexing job queued" if dispatched else "Document uploaded and processing completed"
             ),
@@ -714,6 +731,57 @@ async def get_document(
     return _document_to_response(document)
 
 
+@router.patch("/{document_id}", response_model=DocumentResponse)
+async def patch_document_metadata(
+    document_id: int,
+    payload: LibraryDocumentPatch,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """Update title/description on draft/working rows without opening a new version."""
+    document = await _get_document_or_404(db, document_id, current_user)
+    assert_library_metadata_editable(document.status)
+
+    if payload.title is not None:
+        title = payload.title.strip()
+        if not title:
+            raise BadRequestError("Title cannot be empty")
+        document.title = title
+    if payload.description is not None:
+        document.description = payload.description
+
+    await db.commit()
+    await db.refresh(document)
+    return _document_to_response(document)
+
+
+async def _read_and_validate_revision_file(
+    file: UploadFile,
+) -> tuple[bytes, str, FileType, str]:
+    """Validate an uploaded revision file and return content + metadata."""
+    file_ext = file.filename.split(".")[-1].lower() if file.filename else ""
+    try:
+        file_type = FileType(file_ext)
+    except ValueError:
+        raise BadRequestError(f"Unsupported file type: {file_ext}. Supported: {[f.value for f in FileType]}")
+
+    content = await file.read()
+    file_size = len(content)
+    if file_size == 0:
+        raise BadRequestError("Uploaded file is empty")
+
+    max_file_size = 50 * 1024 * 1024
+    if file_size > max_file_size:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File size ({file_size // (1024 * 1024)}MB) exceeds maximum allowed size (50MB).",
+        )
+
+    safe_filename = _safe_filename(file.filename)
+    file_name = file.filename or safe_filename
+    return content, file_name, file_type, safe_filename
+
+
 @router.get("/{document_id}/signed-url", response_model=DocumentSignedUrlResponse)
 async def get_document_signed_url(
     document_id: int,
@@ -781,23 +849,76 @@ async def list_document_versions(
 )
 async def create_document_version(
     document_id: int,
-    payload: LibraryVersionCreate,
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("document:update"))],
+    change_notes: str = Form(...),
+    change_type: str = Form("revision"),
+    is_major_version: bool = Form(False),
+    file: UploadFile | None = File(None),
 ):
-    """Open a revision draft. Prior published versions remain read-only."""
+    """Open a revision draft with optional new file upload + re-index."""
     document = await _get_document_or_404(db, document_id, current_user)
+
+    file_name: str | None = None
+    file_path: str | None = None
+    file_size: int | None = None
+    index_job_id: int | None = None
+    content: bytes | None = None
+
+    if file is not None and file.filename:
+        content, file_name, file_type, safe_filename = await _read_and_validate_revision_file(file)
+        file_path = f"documents/{datetime.now(timezone.utc).strftime('%Y/%m')}/{uuid.uuid4()}/{safe_filename}"
+        file_size = len(content)
+        try:
+            await storage_service().upload(
+                storage_key=file_path,
+                content=content,
+                content_type=file.content_type or "application/octet-stream",
+                metadata={
+                    "document_id": str(document.id),
+                    "tenant_id": str(document.tenant_id),
+                    "uploaded_by": str(current_user.id),
+                    "file_name": file_name,
+                    "revision": "true",
+                },
+            )
+        except StorageError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to store revision file: {exc}",
+            ) from exc
+        document.file_type = file_type
+        document.mime_type = file.content_type
+
     version = await document_version_service.revise_library(
         db,
         document,
-        change_notes=payload.change_notes,
-        change_type=payload.change_type,
-        is_major_version=payload.is_major_version,
+        change_notes=change_notes,
+        change_type=change_type,
+        is_major_version=is_major_version,
+        file_name=file_name,
+        file_path=file_path,
+        file_size=file_size,
         created_by_id=current_user.id,
     )
+
+    if content is not None:
+        document.status = DocumentStatus.PROCESSING
+        document.indexing_error = None
+        index_job, _dispatched = await _enqueue_document_index_job(
+            db,
+            document,
+            content,
+            job_type="reindex",
+            current_user=current_user,
+        )
+        index_job_id = index_job.id
+
     await db.commit()
     await db.refresh(version)
-    return LibraryVersionResponse(**document_version_service.serialize_library_version(version))
+    payload = document_version_service.serialize_library_version(version)
+    payload["index_job_id"] = index_job_id
+    return LibraryVersionResponse(**payload)
 
 
 @router.post("/{document_id}/publish", response_model=LibraryVersionHistoryResponse)

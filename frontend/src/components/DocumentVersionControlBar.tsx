@@ -39,7 +39,7 @@ export interface DocumentVersionControlBarProps {
   canPublish?: boolean
   revising?: boolean
   publishing?: boolean
-  onRevise?: (changeSummary: string, isMajor: boolean) => Promise<void> | void
+  onRevise?: (changeSummary: string, isMajor: boolean, file?: File | null) => Promise<void> | void
   onPublish?: () => Promise<void> | void
   className?: string
 }
@@ -82,6 +82,7 @@ export function DocumentVersionControlBar({
   const [showRevise, setShowRevise] = useState(false)
   const [changeSummary, setChangeSummary] = useState('')
   const [isMajor, setIsMajor] = useState(false)
+  const [revisionFile, setRevisionFile] = useState<File | null>(null)
 
   const hasOpenDraft = useMemo(
     () => versions.some((v) => v.status === 'draft' && !v.is_immutable && !v.read_only),
@@ -110,9 +111,10 @@ export function DocumentVersionControlBar({
 
   const handleRevise = async () => {
     if (!onRevise || changeSummary.trim().length < 10) return
-    await onRevise(changeSummary.trim(), isMajor)
+    await onRevise(changeSummary.trim(), isMajor, revisionFile)
     setChangeSummary('')
     setIsMajor(false)
+    setRevisionFile(null)
     setShowRevise(false)
   }
 
@@ -208,6 +210,23 @@ export function DocumentVersionControlBar({
               />
               Major version bump (e.g. 1.0 → 2.0)
             </label>
+            <div className="space-y-1">
+              <label className="text-sm text-muted-foreground" htmlFor="version-revision-file">
+                Replacement file (optional — triggers re-index)
+              </label>
+              <input
+                id="version-revision-file"
+                type="file"
+                accept=".pdf,.doc,.docx,.xlsx,.xls,.csv,.md,.txt,.png,.jpg,.jpeg"
+                onChange={(e) => setRevisionFile(e.target.files?.[0] ?? null)}
+                data-testid="version-revision-file"
+              />
+              {revisionFile && (
+                <p className="text-xs text-muted-foreground" data-testid="version-filename-hint">
+                  Selected: {revisionFile.name}
+                </p>
+              )}
+            </div>
             <div className="flex gap-2">
               <Button
                 size="sm"
