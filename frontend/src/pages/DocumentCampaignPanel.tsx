@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Loader2, Megaphone, Rocket, Save } from 'lucide-react'
+import { Download, Loader2, Megaphone, Rocket, Save } from 'lucide-react'
 import {
   documentCampaignApi,
   getApiErrorMessage,
@@ -24,6 +25,8 @@ import {
   CAMPAIGN_REMINDER_PRESETS,
   canLaunchCampaign,
   defaultRequireQuiz,
+  formatCampaignReminderHours,
+  presetKeysFromReminderHours,
   type CampaignAudienceFormState,
   type CampaignReminderPresetKey,
 } from './documentCampaignHelpers'
@@ -33,7 +36,7 @@ interface DocumentCampaignPanelProps {
   hasApprovedQuiz: boolean
 }
 
-const DEFAULT_REMINDERS: CampaignReminderPresetKey[] = ['24h', '7d']
+const DEFAULT_REMINDERS: CampaignReminderPresetKey[] = ['24h', '7d', '14d', '1month']
 
 export function DocumentCampaignPanel({ documentId, hasApprovedQuiz }: DocumentCampaignPanelProps) {
   const { t } = useTranslation()
@@ -58,10 +61,20 @@ export function DocumentCampaignPanel({ documentId, hasApprovedQuiz }: DocumentC
   const [campaignsLoading, setCampaignsLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [launching, setLaunching] = useState(false)
+  const [exportingCampaignId, setExportingCampaignId] = useState<number | null>(null)
 
   useEffect(() => {
     setRequireQuiz(defaultRequireQuiz(hasApprovedQuiz))
   }, [hasApprovedQuiz])
+
+  const loadReminderDefaults = useCallback(async () => {
+    try {
+      const response = await documentCampaignApi.getReminderDefaults()
+      setReminderPresets(presetKeysFromReminderHours(response.data.reminder_hours ?? []))
+    } catch {
+      setReminderPresets(new Set(DEFAULT_REMINDERS))
+    }
+  }, [])
 
   const reminderHours = useMemo(
     () =>
@@ -101,7 +114,28 @@ export function DocumentCampaignPanel({ documentId, hasApprovedQuiz }: DocumentC
   useEffect(() => {
     void loadGroups()
     void loadCampaigns()
-  }, [loadGroups, loadCampaigns])
+    void loadReminderDefaults()
+  }, [loadGroups, loadCampaigns, loadReminderDefaults])
+
+  const ensureRemindersSelected = () => {
+    if (reminderHours.length === 0) {
+      toast.error(t('documents.detail.campaign_reminder_required'))
+      return false
+    }
+    return true
+  }
+
+  const handleExportEvidence = async (campaignId: number) => {
+    setExportingCampaignId(campaignId)
+    try {
+      await documentCampaignApi.downloadEvidencePack(campaignId)
+      toast.success(t('documents.detail.campaign_evidence_exported'))
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, t('documents.detail.campaign_evidence_export_error')))
+    } finally {
+      setExportingCampaignId(null)
+    }
+  }
 
   const toggleReminder = (key: CampaignReminderPresetKey) => {
     setReminderPresets((prev) => {
@@ -126,6 +160,7 @@ export function DocumentCampaignPanel({ documentId, hasApprovedQuiz }: DocumentC
       toast.error(t('documents.detail.campaign_quiz_required'))
       return
     }
+    if (!ensureRemindersSelected()) return
     setSaving(true)
     try {
       await documentCampaignApi.createCampaign(buildPayload())
@@ -143,6 +178,7 @@ export function DocumentCampaignPanel({ documentId, hasApprovedQuiz }: DocumentC
       toast.error(t('documents.detail.campaign_quiz_required'))
       return
     }
+    if (!ensureRemindersSelected()) return
     setLaunching(true)
     try {
       const createResponse = await documentCampaignApi.createCampaign(buildPayload())
@@ -219,6 +255,7 @@ export function DocumentCampaignPanel({ documentId, hasApprovedQuiz }: DocumentC
 
       <div className="space-y-2">
         <p className="text-sm text-muted-foreground">{t('documents.detail.campaign_reminders')}</p>
+        <p className="text-xs text-muted-foreground">{t('documents.detail.campaign_reminders_help')}</p>
         <div className="flex flex-wrap gap-4 text-sm">
           {CAMPAIGN_REMINDER_PRESETS.map((preset) => (
             <label key={preset.key} className="flex items-center gap-2">
@@ -329,9 +366,17 @@ export function DocumentCampaignPanel({ documentId, hasApprovedQuiz }: DocumentC
       </div>
 
       <div className="space-y-2">
-        <h4 className="text-sm font-medium text-foreground">
-          {t('documents.detail.campaign_existing_title')}
-        </h4>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 className="text-sm font-medium text-foreground">
+            {t('documents.detail.campaign_existing_title')}
+          </h4>
+          <Link
+            to="/admin/campaign-compliance"
+            className="text-sm text-primary hover:underline"
+          >
+            {t('documents.detail.campaign_compliance_link')}
+          </Link>
+        </div>
         {campaignsLoading ? (
           <div className="flex justify-center py-4">
             <Loader2 className="w-5 h-5 animate-spin text-primary" />
@@ -345,19 +390,47 @@ export function DocumentCampaignPanel({ documentId, hasApprovedQuiz }: DocumentC
                 key={campaign.id}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm"
               >
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-foreground">
-                    {t('documents.detail.campaign_row_label', { id: campaign.id })}
-                  </span>
-                  <Badge variant="secondary">{campaign.status}</Badge>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-foreground">
+                      {t('documents.detail.campaign_row_label', { id: campaign.id })}
+                    </span>
+                    <Badge variant="secondary">{campaign.status}</Badge>
+                  </div>
+                  {campaign.reminder_hours.length > 0 ? (
+                    <span className="text-xs text-muted-foreground">
+                      {t('documents.detail.campaign_reminders_selected', {
+                        reminders: formatCampaignReminderHours(campaign.reminder_hours, (key) =>
+                          t(`documents.detail.campaign_reminder_${key}`),
+                        ),
+                      })}
+                    </span>
+                  ) : null}
                 </div>
-                {campaign.assigned_count != null ? (
-                  <span className="text-muted-foreground">
-                    {t('documents.detail.campaign_assigned_count', {
-                      count: campaign.assigned_count,
-                    })}
-                  </span>
-                ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  {campaign.assigned_count != null ? (
+                    <span className="text-muted-foreground">
+                      {t('documents.detail.campaign_assigned_count', {
+                        count: campaign.assigned_count,
+                      })}
+                    </span>
+                  ) : null}
+                  {campaign.launched_at ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleExportEvidence(campaign.id)}
+                      disabled={exportingCampaignId === campaign.id}
+                    >
+                      {exportingCampaignId === campaign.id ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4 mr-2" />
+                      )}
+                      {t('documents.detail.campaign_export_evidence')}
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>

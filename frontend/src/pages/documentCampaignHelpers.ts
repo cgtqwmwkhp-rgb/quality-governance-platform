@@ -12,6 +12,42 @@ export const CAMPAIGN_REMINDER_PRESETS = [
 
 export type CampaignReminderPresetKey = (typeof CAMPAIGN_REMINDER_PRESETS)[number]['key']
 
+export const ALL_REMINDER_PRESET_KEYS: CampaignReminderPresetKey[] = [
+  '24h',
+  '7d',
+  '14d',
+  '1month',
+]
+
+export function presetKeysFromReminderHours(hours: number[]): Set<CampaignReminderPresetKey> {
+  const hourSet = new Set(hours)
+  const matched = CAMPAIGN_REMINDER_PRESETS.filter((preset) => hourSet.has(preset.hours)).map(
+    (preset) => preset.key,
+  )
+  return new Set(matched.length > 0 ? matched : ALL_REMINDER_PRESET_KEYS)
+}
+
+export function reminderHoursFromPresetKeys(keys: Set<CampaignReminderPresetKey>): number[] {
+  return CAMPAIGN_REMINDER_PRESETS.filter((preset) => keys.has(preset.key))
+    .map((preset) => preset.hours)
+    .sort((a, b) => a - b)
+}
+
+export function formatCampaignReminderHours(
+  hours: number[],
+  labelForKey: (key: CampaignReminderPresetKey) => string,
+): string {
+  if (hours.length === 0) return '—'
+  const byHour = new Map(CAMPAIGN_REMINDER_PRESETS.map((preset) => [preset.hours, preset.key]))
+  return [...hours]
+    .sort((a, b) => a - b)
+    .map((hour) => {
+      const key = byHour.get(hour)
+      return key ? labelForKey(key) : `${hour}h`
+    })
+    .join(', ')
+}
+
 export interface CampaignAudienceFormState {
   audienceType: CampaignAudienceType
   department: string

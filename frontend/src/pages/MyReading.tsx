@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { BookOpen, CheckCircle2, ChevronDown, ExternalLink, Loader2, Search } from 'lucide-react'
+import { BookOpen, CheckCircle2, ChevronDown, ExternalLink, Loader2, MessageSquare, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   documentCampaignApi,
@@ -64,6 +64,9 @@ export default function MyReading() {
   const [acceptanceStatements, setAcceptanceStatements] = useState<Record<number, string>>({})
   const [signatures, setSignatures] = useState<Record<number, string>>({})
   const [completingCampaignId, setCompletingCampaignId] = useState<number | null>(null)
+  const [questionTitles, setQuestionTitles] = useState<Record<number, string>>({})
+  const [questionBodies, setQuestionBodies] = useState<Record<number, string>>({})
+  const [askingQuestionId, setAskingQuestionId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
