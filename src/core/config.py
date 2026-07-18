@@ -170,6 +170,12 @@ class Settings(BaseSettings):
         azure_storage_configured = "yes" if (self.azure_storage_connection_string or "").strip() else "no"
         mistral_configured = "yes" if (self.mistral_api_key or "").strip() else "no"
         gemini_configured = "yes" if (self.google_gemini_api_key or "").strip() else "no"
+        azure_di_configured = (
+            "yes"
+            if (self.azure_document_intelligence_endpoint or "").strip()
+            and (self.azure_document_intelligence_key or "").strip()
+            else "no"
+        )
         genspark_configured = "yes" if (self.genspark_api_key or "").strip() else "no"
         ai_provider_effective = (self.ai_provider or "auto").strip()
 
@@ -184,6 +190,11 @@ class Settings(BaseSettings):
         logger.info("Configuration summary: application_insights_configured=%s", appinsights_configured)
         logger.info("Configuration summary: mistral_configured=%s", mistral_configured)
         logger.info("Configuration summary: gemini_configured=%s", gemini_configured)
+        logger.info("Configuration summary: azure_di_configured=%s", azure_di_configured)
+        logger.info(
+            "Configuration summary: azure_di_enable_prod=%s",
+            self.azure_document_intelligence_enable_prod,
+        )
         logger.info("Configuration summary: genspark_configured=%s", genspark_configured)
         logger.info("Configuration summary: ai_provider=%s", ai_provider_effective)
         logger.info("Configuration summary: external_audit_import_enabled=%s", self.external_audit_import_enabled)
@@ -287,6 +298,11 @@ class Settings(BaseSettings):
     mistral_api_base_url: str = "https://api.mistral.ai/v1"
     mistral_ocr_timeout_seconds: int = 120
     google_gemini_api_key: str = ""
+
+    # Azure Document Intelligence (DS-1b prep — E4 DPO gate; defaults OFF)
+    azure_document_intelligence_endpoint: str = ""
+    azure_document_intelligence_key: str = ""
+    azure_document_intelligence_enable_prod: bool = False
 
     # AI provider selection and Genspark.ai configuration
     # Priority: genspark > anthropic > openai (override with AI_PROVIDER env var)
