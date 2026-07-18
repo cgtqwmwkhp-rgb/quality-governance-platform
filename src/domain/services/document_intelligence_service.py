@@ -120,7 +120,7 @@ class DocumentIntelligenceService:
     def _azure_client(self) -> _AzureDiClient:
         if self._azure_di_client is not None:
             return self._azure_di_client
-        from src.infrastructure.external.azure_document_intelligence import AzureDocumentIntelligenceClient
+        from src.domain.services.azure_document_intelligence_service import AzureDocumentIntelligenceClient
 
         self._azure_di_client = AzureDocumentIntelligenceClient()
         return self._azure_di_client
