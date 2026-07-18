@@ -7,6 +7,7 @@
 - `tests/unit/test_document_campaign_service.py`
 - `frontend/src/api/documentCampaignClient.ts`
 - `frontend/src/api/documentCampaignClient.test.ts`
+- `frontend/src/api/client.ts` (re-export roster types only)
 - `frontend/src/pages/CampaignRosterPanel.tsx` (NEW)
 - `frontend/src/pages/DocumentCampaignResults.tsx` (NEW)
 - `frontend/src/pages/DocumentCampaignPanel.tsx`

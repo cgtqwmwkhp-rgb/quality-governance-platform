@@ -1478,9 +1478,7 @@ class DocumentCampaignService:
 
         items: List[Dict[str, Any]] = []
         for assignment, user in rows_result.all():
-            status_value = (
-                assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status)
-            )
+            status_value = assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status)
             items.append(
                 {
                     "assignment_id": assignment.id,
@@ -1490,9 +1488,7 @@ class DocumentCampaignService:
                     "status": status_value,
                     "assigned_at": assignment.assigned_at.isoformat() if assignment.assigned_at else None,
                     "due_at": assignment.due_at.isoformat() if assignment.due_at else None,
-                    "first_opened_at": (
-                        assignment.first_opened_at.isoformat() if assignment.first_opened_at else None
-                    ),
+                    "first_opened_at": (assignment.first_opened_at.isoformat() if assignment.first_opened_at else None),
                     "completed_at": assignment.completed_at.isoformat() if assignment.completed_at else None,
                     "quiz_score": assignment.quiz_score,
                     "quiz_passed": assignment.quiz_passed,
