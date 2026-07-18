@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { BookOpen, CheckCircle2, ChevronDown, ExternalLink, Loader2, MessageSquare, Search } from 'lucide-react'
+import { BookOpen, CheckCircle2, ChevronDown, Clock, ExternalLink, Loader2, MessageSquare, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   documentCampaignApi,
@@ -410,23 +410,6 @@ export default function MyReading() {
                         <ExternalLink className="w-4 h-4 mr-2" />
                         {t('my_reading.open_read')}
                       </Button>
-
-                      {(item.status === 'pending' || item.status === 'overdue') && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void handleSnoozeCampaign(item)}
-                          disabled={snoozingCampaignId === item.id}
-                          data-testid={`my-reading-snooze-${item.id}`}
-                        >
-                          {snoozingCampaignId === item.id ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          ) : (
-                            <Clock className="w-4 h-4 mr-2" />
-                          )}
-                          {t('my_reading.snooze_24h')}
-                        </Button>
-                      )}
                       <Button variant="outline" size="sm" asChild>
                         <Link to={`/documents/${item.policy_id}?tab=qa`}>Q&A</Link>
                       </Button>

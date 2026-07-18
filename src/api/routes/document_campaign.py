@@ -545,6 +545,7 @@ async def complete_assignment(
     status_value = assignment.status.value if hasattr(assignment.status, "value") else assignment.status
     return CompleteAssignmentResponse(id=assignment.id, status=status_value, completed_at=assignment.completed_at)
 
+
 @router.post("/assignments/{assignment_id}/snooze", response_model=SnoozeAssignmentResponse)
 async def snooze_assignment(
     assignment_id: int,
@@ -560,4 +561,3 @@ async def snooze_assignment(
         hours=snooze_data.hours,
     )
     return SnoozeAssignmentResponse(id=assignment.id, snooze_until=assignment.snooze_until)
-

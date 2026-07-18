@@ -330,6 +330,7 @@ class QuestionMessageResponse(BaseModel):
     body: str
     created_at: datetime
 
+
 class SnoozeAssignmentRequest(BaseModel):
     hours: int = Field(..., ge=1, le=168)
 
@@ -355,4 +356,3 @@ class GroupComplianceResponse(BaseModel):
     campaign_id: int
     items: List[GroupComplianceItem]
     total: int
-
