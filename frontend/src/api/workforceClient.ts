@@ -103,6 +103,8 @@ export interface EngineerProfile {
   department?: string
   site?: string
   is_active: boolean
+  notes?: string | null
+  qgp_profile_override?: boolean
   /** Present when EMP-LINK is live — optional for tolerant readers. */
   linked_user?: LinkedUserSummary | null
 }
@@ -115,6 +117,17 @@ export interface EngineerCreatePayload {
   role?: string
   department?: string
   site?: string
+}
+
+export interface EngineerUpdatePayload {
+  display_name?: string | null
+  employee_number?: string | null
+  job_title?: string | null
+  department?: string | null
+  site?: string | null
+  is_active?: boolean
+  notes?: string | null
+  qgp_profile_override?: boolean
 }
 
 export interface PamsTechnicianSyncResult {
@@ -394,6 +407,12 @@ export function createWorkforceApi(api: AxiosInstance) {
   getEngineer: (id: number) => api.get<EngineerProfile>(`/api/v1/engineers/${id}`),
   createEngineer: (data: EngineerCreatePayload) =>
     api.post<EngineerProfile>('/api/v1/engineers/', data),
+  updateEngineer: (id: number, data: EngineerUpdatePayload) =>
+    api.patch<EngineerProfile>(`/api/v1/engineers/${id}`, data),
+  linkEngineerUser: (id: number, userId: number) =>
+    api.post<EngineerProfile>(`/api/v1/engineers/${id}/link-user`, { user_id: userId }),
+  unlinkEngineerUser: (id: number) =>
+    api.post<EngineerProfile>(`/api/v1/engineers/${id}/unlink-user`),
   syncFromPams: (params?: { tenant_id?: number }) =>
     api.post<PamsTechnicianSyncResult>('/api/v1/engineers/sync-from-pams', undefined, { params }),
   getCompetencies: (engineerId: number) =>
