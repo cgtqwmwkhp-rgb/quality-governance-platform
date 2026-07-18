@@ -115,10 +115,7 @@ def build_assignment_notification_kwargs(
     require_quiz: bool,
     sender_id: Optional[int],
 ) -> Dict[str, Any]:
-    message = (
-        f"You have been assigned to read{' and complete a quiz for' if require_quiz else ''} "
-        f"'{doc_title}'."
-    )
+    message = f"You have been assigned to read{' and complete a quiz for' if require_quiz else ''} " f"'{doc_title}'."
     return {
         "tenant_id": tenant_id,
         "user_id": user_id,
@@ -173,10 +170,7 @@ def build_overdue_notification_kwargs(
         message = f"Your assignment for '{doc_title}' is now overdue. Please complete it as soon as possible."
     elif recipient_role == "manager":
         title = "Team member campaign overdue"
-        message = (
-            f"{assignee_display_name}'s assignment for '{doc_title}' is overdue. "
-            "Please follow up with them."
-        )
+        message = f"{assignee_display_name}'s assignment for '{doc_title}' is overdue. " "Please follow up with them."
     else:
         title = "Campaign assignment overdue"
         message = (
