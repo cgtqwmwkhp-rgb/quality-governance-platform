@@ -3181,6 +3181,10 @@
   "planet_mark.shell.years.ocr.field.reporting_period_label": "Reporting period",
   "planet_mark.shell.years.ocr.field.certification_status_cue": "Certification status cue",
   "investigations": {
+    "hero_filters": "Filter investigations by status",
+    "filter_status": "Status",
+    "filter_source": "Source",
+    "smart_search": "Search investigations, actions, people",
     "closure": {
       "closed_success": "Investigation closed",
       "close_cta": "Close investigation",

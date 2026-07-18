@@ -162,11 +162,12 @@ function parseEntityTypeParam(raw: string | null): EntityTypeFilter {
   return 'all'
 }
 
-function heroKeyFromStatusFilter(statusFilter: string): HeroKey {
+function heroKeyFromStatusFilter(statusFilter: string): HeroKey | null {
   if (statusFilter === 'in_progress') return 'in_progress'
   if (statusFilter === 'pending_review') return 'under_review'
   if (statusFilter === 'completed') return 'completed'
-  return 'total'
+  if (statusFilter === 'all') return 'total'
+  return null
 }
 
 /** Single backend status for API; multi-value filters (e.g. Open) omit status. */
@@ -604,6 +605,7 @@ export default function Investigations() {
   /** Unfiltered catalog for hero KPI counts (not narrowed by status/q). */
   const [catalog, setCatalog] = useState<Investigation[]>([])
   const [loading, setLoading] = useState(true)
+  const [initialLoading, setInitialLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState(() =>
     parseStatusFilterParam(searchParams.get('status')),
   )
@@ -615,6 +617,7 @@ export default function Investigations() {
   const [showModal, setShowModal] = useState(false)
   const [selectedInvestigation, setSelectedInvestigation] = useState<Investigation | null>(null)
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingQueryParamRef = useRef<string | null>(null)
 
   // Actions for selected investigation
   const [investigationActions, setInvestigationActions] = useState<ActionItem[]>([])
@@ -651,9 +654,13 @@ export default function Investigations() {
     const nextStatus = parseStatusFilterParam(searchParams.get('status'))
     const nextEntity = parseEntityTypeParam(searchParams.get('entityType'))
     const nextQ = searchParams.get('q') || ''
+    const isOwnUrlWrite = pendingQueryParamRef.current === nextQ.trim()
+    pendingQueryParamRef.current = null
     setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus))
     setEntityTypeFilter((prev) => (prev === nextEntity ? prev : nextEntity))
-    setSearchTerm((prev) => (prev === nextQ ? prev : nextQ))
+    if (!isOwnUrlWrite) {
+      setSearchTerm((prev) => (prev === nextQ ? prev : nextQ))
+    }
     setDebouncedQ((prev) => {
       const trimmed = nextQ.trim()
       return prev === trimmed ? prev : trimmed
@@ -671,6 +678,7 @@ export default function Investigations() {
     if (!q) next.delete('q')
     else next.set('q', q)
     if (next.toString() !== searchParams.toString()) {
+      pendingQueryParamRef.current = q
       setSearchParams(next, { replace: true })
     }
   }, [statusFilter, entityTypeFilter, debouncedQ, searchParams, setSearchParams])
@@ -711,6 +719,7 @@ export default function Investigations() {
       setInvestigations([])
     } finally {
       setLoading(false)
+      setInitialLoading(false)
     }
   }, [statusFilter, entityTypeFilter, debouncedQ])
 
@@ -879,7 +888,11 @@ export default function Investigations() {
     const needsClientStatus =
       statusFilter !== 'all' && (statusValues.length !== 1 || !apiStatusForFilter(statusFilter))
 
-    let rows = investigations.filter((inv) => {
+    const normalizedDebouncedQ = debouncedQ.trim().toLowerCase()
+    const useCatalogForPendingSearch =
+      catalog.length > 0 && (needle !== normalizedDebouncedQ || loading)
+    const source = useCatalogForPendingSearch ? catalog : investigations
+    const rows = source.filter((inv) => {
       if (entityTypeFilter !== 'all' && inv.assigned_entity_type !== entityTypeFilter) {
         return false
       }
@@ -897,30 +910,27 @@ export default function Investigations() {
     if (!needle) return rows
 
     const localFiltered = rows.filter((inv) => matchesLocalSmartSearch(inv, needle))
-    if (localFiltered.length > 0) return localFiltered
-    // Server narrowed via q (PR-5) with action/comment-only hits — trust API results.
-    if (debouncedQ && rows.length > 0 && rows.length < catalog.length) return rows
-    return []
+    return localFiltered
   }, [
     investigations,
-    catalog.length,
+    catalog,
     statusFilter,
     entityTypeFilter,
     searchTerm,
     debouncedQ,
+    loading,
   ])
 
   const stats = useMemo(() => {
-    const source = catalog.length > 0 ? catalog : investigations
     return {
-      total: source.length,
-      inProgress: source.filter((i) => i.status === 'in_progress').length,
-      underReview: source.filter((i) => i.status === 'under_review').length,
-      completed: source.filter((i) => i.status === 'completed').length,
+      total: catalog.length,
+      inProgress: catalog.filter((i) => i.status === 'in_progress').length,
+      underReview: catalog.filter((i) => i.status === 'under_review').length,
+      completed: catalog.filter((i) => i.status === 'completed').length,
     }
-  }, [catalog, investigations])
+  }, [catalog])
 
-  if (loading) {
+  if (initialLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -991,7 +1001,7 @@ export default function Investigations() {
             },
           ] as const
         ).map((stat) => {
-          const active = heroKey === stat.key
+          const active = heroKey !== null && heroKey === stat.key
           return (
             <button
               key={stat.key}
@@ -1092,7 +1102,11 @@ export default function Investigations() {
       </div>
 
       {/* Compact investigation work queue — report opens on the detail route */}
-      <div className="space-y-2" data-testid="investigations-list">
+      <div
+        className="space-y-2"
+        data-testid="investigations-list"
+        aria-busy={loading}
+      >
         {filteredInvestigations.length === 0 ? (
           <EmptyState
             icon={<FlaskConical className="w-8 h-8 text-muted-foreground" />}
