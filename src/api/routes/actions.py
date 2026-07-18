@@ -2065,15 +2065,18 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             action.completion_notes = action_data.completion_notes
 
     if action_data.due_date is not None:
-        try:
-            action.due_date = datetime.fromisoformat(action_data.due_date.replace("Z", "+00:00"))
-        except ValueError:
-            for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"]:
-                try:
-                    action.due_date = datetime.strptime(action_data.due_date, fmt)
-                    break
-                except ValueError:
-                    continue
+        if action_data.due_date == "":
+            action.due_date = None
+        else:
+            try:
+                action.due_date = datetime.fromisoformat(action_data.due_date.replace("Z", "+00:00"))
+            except ValueError:
+                for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"]:
+                    try:
+                        action.due_date = datetime.strptime(action_data.due_date, fmt)
+                        break
+                    except ValueError:
+                        continue
 
     bridge_result = None
     if isinstance(action, CAPAAction) and action_data.status is not None:

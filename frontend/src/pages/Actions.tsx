@@ -240,6 +240,7 @@ type HeroKey = 'total' | 'open' | 'in_progress' | 'overdue' | 'completed'
 
 function heroKeyFromFilters(viewMode: ViewMode, filterStatus: FilterStatus): HeroKey {
   if (viewMode === 'overdue' || viewMode === 'my_overdue') return 'overdue'
+  if (filterStatus === 'overdue') return 'overdue'
   if (filterStatus === 'open') return 'open'
   if (filterStatus === 'in_progress') return 'in_progress'
   if (filterStatus === 'completed') return 'completed'
@@ -911,6 +912,7 @@ export default function Actions() {
                   setFilterStatus('all')
                 } else if (mode === 'all') {
                   setHeroKey('total')
+                  setFilterStatus('all')
                 }
               }}
               disabled={loading}

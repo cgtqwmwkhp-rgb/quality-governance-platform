@@ -239,7 +239,7 @@ export default function ActionDetail() {
     setSaving(true)
     setInlineMessage(null)
     try {
-      const payload: ActionUpdate = { due_date: dueDraft || undefined }
+      const payload: ActionUpdate = { due_date: dueDraft || '' }
       const res = await actionsApi.update(action.id, action.source_type, payload)
       setAction(res.data)
       setDueDraft(res.data.due_date ? res.data.due_date.slice(0, 10) : '')
