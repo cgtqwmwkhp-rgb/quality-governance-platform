@@ -25,7 +25,6 @@ from src.domain.services.document_campaign_notifications import (
 )
 from src.domain.services.document_campaign_service import DocumentCampaignService
 
-
 NOW = datetime(2026, 7, 18, 12, 0, tzinfo=timezone.utc)
 
 
