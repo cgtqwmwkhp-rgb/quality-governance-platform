@@ -24,6 +24,30 @@ describe('documentsDownstreamHelpers', () => {
     expect(view.showDocumentControlNote).toBe(true)
   })
 
+  it('treats published docs with indexed_at as indexed (publish must not hide readiness)', () => {
+    const view = buildDocumentDownstreamView({
+      id: 22,
+      status: 'published',
+      indexed_at: '2026-07-18T12:00:00Z',
+      chunk_count: 12,
+    })
+    expect(view.phase).toBe('indexed')
+    expect(view.showExceptionsLink).toBe(true)
+  })
+
+  it('treats published docs with chunks but no indexed_at as content-ready', () => {
+    expect(resolveDocumentDownstreamPhase('published', null, 4)).toBe('indexed')
+  })
+
+  it('treats published docs with AI summary as content-ready for golden thread', () => {
+    const view = buildDocumentDownstreamView({
+      id: 33,
+      status: 'published',
+      ai_summary: 'This policy sets EDI obligations for Plantexpand Ltd.',
+    })
+    expect(view.phase).toBe('indexed')
+  })
+
   it('builds closed-loop AI Exceptions href for a library document', () => {
     expect(buildDocumentsExceptionsHref(11)).toContain('/knowledge-exceptions?')
     expect(buildDocumentsExceptionsHref(11)).toContain('entity_type=document')

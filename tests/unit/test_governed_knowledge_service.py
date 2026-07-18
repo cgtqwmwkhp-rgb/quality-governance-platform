@@ -190,7 +190,10 @@ class TestIsoMappingStub:
                 "standard": "iso9001",
                 "confidence": 88.0,
                 "title": "Competence",
-                "evidence_snippet": "training records",
+                "evidence_snippet": (
+                    "Staff competence and training programme records demonstrate "
+                    "role-based competence requirements under the quality management system."
+                ),
             }
         ]
         with patch(

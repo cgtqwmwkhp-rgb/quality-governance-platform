@@ -2679,10 +2679,13 @@ class ISOComplianceService:
             if score >= min_confidence:
                 matched_clauses[clause.id] = min(1.0, score)
 
-        # Convert to result list
+        # Convert to result list with grounded evidence snippets from the source text.
         results = []
         for clause_id, confidence in sorted(matched_clauses.items(), key=lambda x: x[1], reverse=True):
             clause = self.clauses[clause_id]
+            snippet = self._evidence_snippet_for_clause(content, clause)
+            if not snippet:
+                continue
             results.append(
                 {
                     "clause_id": clause.id,
@@ -2691,10 +2694,38 @@ class ISOComplianceService:
                     "standard": clause.standard.value,
                     "confidence": round(confidence * 100, 1),
                     "linked_by": "auto",
+                    "evidence_snippet": snippet,
                 }
             )
 
         return results[:10]  # Return top 10 matches
+
+    def _evidence_snippet_for_clause(self, content: str, clause: ISOClause) -> str:
+        """Extract a short quote/context sentence from content for a matched clause."""
+        if not content or not content.strip():
+            return ""
+        needles = [clause.title, *list(getattr(clause, "keywords", []) or [])]
+        sentences = re.split(r"(?<=[.!?])\s+|\n+", content)
+        for needle in needles:
+            needle_l = (needle or "").lower().strip()
+            if len(needle_l) < 4:
+                continue
+            for sentence in sentences:
+                s = " ".join(sentence.split())
+                if needle_l in s.lower() and len(s) >= 40:
+                    return s[:320]
+        # Fallback: densest nearby window around first keyword hit in body
+        content_l = content.lower()
+        for needle in needles:
+            needle_l = (needle or "").lower().strip()
+            idx = content_l.find(needle_l)
+            if idx >= 0:
+                start = max(0, idx - 80)
+                end = min(len(content), idx + 200)
+                window = " ".join(content[start:end].split())
+                if len(window) >= 40:
+                    return window[:320]
+        return ""
 
     async def ai_enhanced_tagging(self, content: str) -> List[Dict[str, Any]]:
         """
@@ -2733,9 +2764,10 @@ INSTRUCTIONS:
 6. Do NOT return clauses just because they share common words like "monitoring" or "risk".
 7. Return a valid JSON array ONLY — no other text.
 
-FORMAT: [{{"clause_id": "9001-7.2", "confidence": 85, "evidence_snippet": "brief quote from text"}}]
+FORMAT: [{{"clause_id": "9001-7.2", "confidence": 85, "evidence_snippet": "1-2 sentences with a direct quote from the text explaining why this clause applies"}}]
 
-Return only clauses with confidence >= 60. Maximum 15 results."""
+Return only clauses with confidence >= 60. Maximum 15 results.
+Each evidence_snippet MUST be at least 40 characters and MUST include a quote or paraphrase of specific document wording — never just the clause title."""
 
             # Fix: AIClient.complete() takes a prompt string directly; .analyze() takes (text, analysis_type)
             # Use .complete() for free-form prompt-based reasoning.

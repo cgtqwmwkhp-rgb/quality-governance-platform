@@ -294,13 +294,18 @@ class GovernedKnowledgeService:
             if not clause_id:
                 continue
             standard = result.get("standard", "iso9001")
+            snippet = (result.get("evidence_snippet") or "").strip()
+            title = (result.get("title") or "").strip()
+            # Reject one-word title-as-rationale theatre — require real evidence context.
+            if not snippet or len(snippet) < 40 or snippet.lower() == title.lower():
+                continue
             mappings.append(
                 SchemeMapping(
                     clause_id=clause_id,
                     scheme=standard,
                     confidence=float(result.get("confidence", 0)),
-                    rationale=result.get("evidence_snippet") or result.get("title") or "ISO auto-tag match",
-                    title=result.get("title"),
+                    rationale=snippet,
+                    title=title or None,
                 )
             )
         return mappings
@@ -800,51 +805,42 @@ class GovernedKnowledgeService:
         if include_open:
             prompt_types.append("open_ended")
 
-        prompt = f"""Generate {question_count} comprehension quiz questions from this document.
+        prompt = f"""Generate exactly {question_count} comprehension quiz questions grounded in THIS document.
 Question types: {', '.join(prompt_types) or 'multiple_choice'}.
+Rules:
+- Every question must be answerable from the document text (not generic compliance filler).
+- Prefer concrete policy obligations, dates, roles, and definitions from the source.
+- For mcq include 4 options and one correct_answer that matches an option.
 Return JSON array only:
 [{{"type": "mcq|open", "question": "...", "options": ["A","B","C","D"], "correct_answer": "...", "explanation": "..."}}]
 
 DOCUMENT:
-{content[:12000]}"""
+{content[:40000]}"""
 
         questions: list[dict[str, Any]] = []
         quality_score = 0.0
 
-        if self._ai_service.api_key:
-            try:
-                import httpx
+        try:
+            from src.domain.services.ai_models import get_ai_client
+            from src.domain.services.upstream_circuit_breaker import call_via_upstream_breaker
 
-                from src.domain.services.upstream_circuit_breaker import call_via_upstream_breaker
+            async def _do_call() -> str:
+                client = get_ai_client()
+                return await client.complete(
+                    prompt,
+                    system_prompt="You are a compliance training quiz author. Return valid JSON array only.",
+                    max_tokens=4096,
+                )
 
-                async def _do_call() -> dict:
-                    async with httpx.AsyncClient() as client:
-                        response = await client.post(
-                            "https://api.anthropic.com/v1/messages",
-                            headers={
-                                "x-api-key": self._ai_service.api_key,
-                                "anthropic-version": "2023-06-01",
-                                "content-type": "application/json",
-                            },
-                            json={
-                                "model": self._ai_service.model,
-                                "max_tokens": 4096,
-                                "system": "You are a compliance training quiz author. Return valid JSON only.",
-                                "messages": [{"role": "user", "content": prompt}],
-                            },
-                            timeout=90.0,
-                        )
-                        response.raise_for_status()
-                        return response.json()
-
-                data = await call_via_upstream_breaker("document_ai", _do_call)
-                text = data.get("content", [{}])[0].get("text", "[]")
-                match = re.search(r"\[[\s\S]*\]", text)
-                if match:
-                    questions = json.loads(match.group())
+            text = await call_via_upstream_breaker("document_ai", _do_call)
+            match = re.search(r"\[[\s\S]*\]", text or "")
+            if match:
+                parsed = json.loads(match.group())
+                if isinstance(parsed, list):
+                    questions = [q for q in parsed if isinstance(q, dict) and q.get("question")]
                     quality_score = min(1.0, len(questions) / max(question_count, 1))
-            except Exception:
-                logger.exception("Quiz generation via DocumentAIService failed")
+        except Exception:
+            logger.exception("Quiz generation via shared AI client failed")
 
         if not questions:
             questions = [
