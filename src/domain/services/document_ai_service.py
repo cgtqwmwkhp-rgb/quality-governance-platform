@@ -559,7 +559,7 @@ class EmbeddingService:
 
 
 class VectorSearchService:
-    """Service for semantic search using Pinecone."""
+    """Service for semantic search using Pinecone (serverless host preferred)."""
 
     def __init__(self):
         import os
@@ -571,9 +571,21 @@ class VectorSearchService:
             os.getenv("PINECONE_INDEX") or "qgp-documents"
         ).strip()
         self.environment = (getattr(settings, "pinecone_environment", None) or "").strip() or (
-            os.getenv("PINECONE_ENVIRONMENT") or "gcp-starter"
+            os.getenv("PINECONE_ENVIRONMENT") or "aped-4627-b74a"
         ).strip()
+        host = (getattr(settings, "pinecone_host", None) or "").strip() or (os.getenv("PINECONE_HOST") or "").strip()
+        if host:
+            self.base_url = host.rstrip("/")
+        else:
+            # Legacy pod-style host construction (pre-serverless)
+            self.base_url = f"https://{self.index_name}-{self.environment}.svc.pinecone.io"
         self.embedding_service = EmbeddingService()
+
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Api-Key": self.api_key,
+            "Content-Type": "application/json",
+        }
 
     async def upsert_chunks(
         self,
@@ -609,11 +621,8 @@ class VectorSearchService:
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"https://{self.index_name}-{self.environment}.svc.pinecone.io/vectors/upsert",
-                    headers={
-                        "Api-Key": self.api_key,
-                        "Content-Type": "application/json",
-                    },
+                    f"{self.base_url}/vectors/upsert",
+                    headers=self._headers(),
                     json={"vectors": vectors},
                     timeout=60.0,
                 )
@@ -646,11 +655,8 @@ class VectorSearchService:
 
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"https://{self.index_name}-{self.environment}.svc.pinecone.io/query",
-                    headers={
-                        "Api-Key": self.api_key,
-                        "Content-Type": "application/json",
-                    },
+                    f"{self.base_url}/query",
+                    headers=self._headers(),
                     json=body,
                     timeout=30.0,
                 )
@@ -673,12 +679,9 @@ class VectorSearchService:
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
-                    f"https://{self.index_name}-{self.environment}.svc.pinecone.io/vectors/delete",
-                    headers={
-                        "Api-Key": self.api_key,
-                        "Content-Type": "application/json",
-                    },
-                    json={"filter": {"document_id": document_id}},
+                    f"{self.base_url}/vectors/delete",
+                    headers=self._headers(),
+                    json={"filter": {"document_id": {"$eq": document_id}}},
                     timeout=30.0,
                 )
                 response.raise_for_status()
