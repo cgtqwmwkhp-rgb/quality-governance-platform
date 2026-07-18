@@ -273,6 +273,7 @@ async def readiness_check():
         "mistral_configured": ocr_meta["providers"]["mistral"]["configured"],
         "gemini_configured": ocr_meta["providers"]["gemini"]["configured"],
         "azure_di_configured": ocr_meta["providers"]["azure_di"]["configured"],
+        "azure_di_enabled_in_prod": False,
         "meta_endpoint": "/api/v1/meta/ocr-providers",
         "legacy_meta_endpoint": "/api/v1/health/meta/ocr-providers",
         "capabilities": ocr_meta.get("capabilities", {}),

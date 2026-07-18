@@ -1,6 +1,6 @@
 # OCR provider readiness (ops)
 
-Machine-readable OCR configuration honesty for external audit import and future dual-OCR paths.
+Machine-readable OCR configuration honesty for external audit import, library document indexing, and future dual-OCR paths.
 
 ## Endpoint
 
@@ -15,18 +15,41 @@ Machine-readable OCR configuration honesty for external audit import and future 
 
 | Provider | Env vars (presence only) | Role |
 |----------|--------------------------|------|
-| **mistral** | `MISTRAL_API_KEY`, `MISTRAL_OCR_TIMEOUT_SECONDS` | Primary OCR for scanned/image-heavy imports |
+| **mistral** | `MISTRAL_API_KEY`, `MISTRAL_OCR_TIMEOUT_SECONDS` | Primary OCR for scanned/image-heavy imports and library index jobs |
 | **gemini** | `GOOGLE_GEMINI_API_KEY` or `GEMINI_API_KEY` | Post-OCR review / analysis |
-| **azure_di** | `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT`, `AZURE_DOCUMENT_INTELLIGENCE_KEY` | Dual-OCR consensus scaffold (not prod-enabled) |
+| **azure_di** | `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT`, `AZURE_DOCUMENT_INTELLIGENCE_KEY`, `AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD` | Dual-OCR consensus scaffold (not prod-enabled) |
+
+## Library Azure DI (DS-1b prep)
+
+Library document OCR today uses **Mistral** only (`library_documents.ocr_configured` mirrors `MISTRAL_API_KEY` presence).
+
+Future library dual-OCR / Azure DI requires **both**:
+
+1. **E4 DPO sign-off** — privacy/DPIA gate before any production DI traffic.
+2. **Dedicated QGP Azure Document Intelligence resource** — provision a QGP-owned Cognitive Services account/endpoint. **Do not** point QGP at the Jobsheet Document Intelligence resource.
+
+Meta fields make this explicit:
+
+| Field | Value (prep lane) | Meaning |
+|-------|-------------------|---------|
+| `providers.azure_di.enabled_in_prod` | always `false` | DI is not live in prod from this lane |
+| `providers.azure_di.used_in_library` | `false` | Library paths do not call Azure DI |
+| `providers.azure_di.used_in_prod` | `false` | No prod OCR traffic via DI adapter |
+| `providers.azure_di.resource_scope` | `qgp_dedicated_required` | Ops must provision QGP DI, not reuse Jobsheet |
+| `providers.azure_di.jobsheet_resource_allowed` | `false` | Jobsheet DI endpoint must not be wired |
+| `providers.azure_di.prod_enable_flag_set` | env presence | Reports `AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD` only; does not enable prod |
+| `library_documents.azure_di_enabled_in_prod` | `false` | Library block mirrors DI prod gate |
+| `library_documents.azure_di_used` | `false` | Library index jobs use Mistral/native only |
 
 ## E4 DPO gate (explicit non-goal)
 
 - **Do not** enable Azure Document Intelligence in production from this lane.
-- `azure_di.configured` means both env vars are non-empty — **not** that DI is live.
-- `azure_di.enabled_in_prod` is always `false` in meta responses until E4 sign-off.
+- `azure_di.configured` means both endpoint + key env vars are non-empty — **not** that DI is live.
+- `azure_di.enabled_in_prod` is always `false` in meta/readiness responses until a future E4 cutover PR explicitly changes the contract.
+- `AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD` defaults OFF; credentials alone never enable OCR.
 - Meta and `/readyz` probes **never** dial Mistral, Gemini, or Azure DI.
 
-## Jobsheet /readyz honesty
+## QGP /readyz honesty
 
 - `ocr_ping.status` = `skipped` — connectivity is `unprobed`.
 - Circuit breaker metadata is included when registered in-process.
@@ -40,7 +63,17 @@ Machine-readable OCR configuration honesty for external audit import and future 
   "providers": {
     "mistral": { "configured": false, "api_key_present": false },
     "gemini": { "configured": false, "api_key_present": false },
-    "azure_di": { "configured": false, "enabled_in_prod": false }
+    "azure_di": {
+      "configured": false,
+      "enabled_in_prod": false,
+      "used_in_library": false,
+      "resource_scope": "qgp_dedicated_required",
+      "jobsheet_resource_allowed": false
+    }
+  },
+  "library_documents": {
+    "azure_di_enabled_in_prod": false,
+    "azure_di_used": false
   },
   "e4_non_goal": "Azure Document Intelligence is not enabled in production..."
 }
@@ -66,3 +99,4 @@ See `docs/ops/ocr-artifacts-dispute-ack.md` for dispute/ack runbook.
 1. **Import OCR failing with `not_configured`:** Check meta endpoint; set Key Vault refs for `MISTRAL_API_KEY`.
 2. **Review step skipped:** Ensure `GOOGLE_GEMINI_API_KEY` is present; partial config is expected until both keys exist.
 3. **Azure DI fields present but OCR unchanged:** Expected — E4 adapter is scaffold-only; no prod enablement.
+4. **Tempted to reuse Jobsheet DI endpoint:** Blocked by design — provision dedicated QGP DI per `resource_scope`.
