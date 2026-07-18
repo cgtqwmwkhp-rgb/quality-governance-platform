@@ -24,7 +24,7 @@ import {
   DialogDescription,
 } from '../../components/ui/Dialog'
 import { cn } from '../../helpers/utils'
-import { UserEmailSearch } from '../../components/UserEmailSearch'
+import { EngineerPeoplePicker } from '../../components/EngineerPeoplePicker'
 
 const ACTION_STATUS_OPTIONS = [
   { value: 'open', label: 'Open', className: 'bg-warning/10 text-warning' },
@@ -313,12 +313,21 @@ export default function InvestigationActions({
                 required
               />
             </div>
-            <UserEmailSearch
-              label="Assign To"
-              value={actionForm.assigned_to}
-              onChange={(email) => setActionForm({ ...actionForm, assigned_to: email })}
-              placeholder="Search by email..."
-            />
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-foreground">Assign To</label>
+              <EngineerPeoplePicker
+                valueLabel={actionForm.assigned_to}
+                requireLogin
+                onChange={(selection) =>
+                  setActionForm({
+                    ...actionForm,
+                    assigned_to: selection?.user?.email || selection?.label || '',
+                  })
+                }
+                placeholder="Search active employees…"
+                testId="investigation-action-assignee-picker"
+              />
+            </div>
             <div>
               <span className="block text-sm font-medium text-foreground mb-1">Priority</span>
               <Select
