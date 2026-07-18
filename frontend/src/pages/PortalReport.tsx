@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -59,14 +60,23 @@ const REPORT_TYPES = [
 export default function PortalReport() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [typeFilter, setTypeFilter] = useState('all')
+
+  const visibleTypes = useMemo(
+    () => (typeFilter === 'all' ? REPORT_TYPES : REPORT_TYPES.filter((type) => type.id === typeFilter)),
+    [typeFilter],
+  )
 
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen bg-surface" data-testid="portal-report-page">
       {/* Header */}
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
           <button
+            type="button"
             onClick={() => navigate('/portal')}
+            aria-label="Back to portal"
+            data-testid="portal-report-back"
             className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface hover:bg-muted transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-foreground" />
@@ -80,46 +90,74 @@ export default function PortalReport() {
 
       <main className="max-w-lg mx-auto px-4 sm:px-6 py-8">
         {/* Page Title */}
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground mb-2">{t('portal.what_reporting')}</h1>
           <p className="text-muted-foreground">{t('portal.select_report_type')}</p>
         </div>
 
+        <div className="mb-6 flex flex-col sm:flex-row gap-3" data-testid="portal-report-filters">
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            aria-label="Filter report type"
+            data-testid="portal-report-type-filter"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+          >
+            <option value="all">All report types</option>
+            {REPORT_TYPES.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.title}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            data-testid="portal-report-filter-apply"
+            className="px-3 py-2 rounded-lg border border-border bg-card text-sm text-foreground hover:bg-muted"
+          >
+            Filter
+          </button>
+        </div>
+
         {/* Report Type Options */}
         <div className="space-y-3">
-          {REPORT_TYPES.map((type) => (
+          {visibleTypes.map((type) => (
             <Card
               key={type.id}
               hoverable
-              className="p-4 cursor-pointer group"
+              className="p-0 overflow-hidden"
               data-testid={`report-${type.id}-card`}
-              onClick={() => navigate(type.path)}
             >
-              <div className="flex items-center gap-4">
-                {/* Icon */}
-                <div
-                  className={cn(
-                    'w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0',
-                    type.iconBg,
-                  )}
-                >
-                  <type.icon className={cn('w-7 h-7', type.iconColor)} />
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2">
-                    <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                      {type.title}
-                    </h3>
-                    <span className="text-xs text-muted-foreground">{type.subtitle}</span>
+              <button
+                type="button"
+                className="w-full p-4 text-left cursor-pointer group"
+                onClick={() => navigate(type.path)}
+                aria-label={`Report ${type.title}`}
+                data-testid={`report-${type.id}-cta`}
+              >
+                <div className="flex items-center gap-4">
+                  <div
+                    className={cn(
+                      'w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0',
+                      type.iconBg,
+                    )}
+                  >
+                    <type.icon className={cn('w-7 h-7', type.iconColor)} />
                   </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">{type.description}</p>
-                </div>
 
-                {/* Arrow */}
-                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all flex-shrink-0" />
-              </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2">
+                      <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                        {type.title}
+                      </h3>
+                      <span className="text-xs text-muted-foreground">{type.subtitle}</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-0.5">{type.description}</p>
+                  </div>
+
+                  <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all flex-shrink-0" />
+                </div>
+              </button>
             </Card>
           ))}
         </div>

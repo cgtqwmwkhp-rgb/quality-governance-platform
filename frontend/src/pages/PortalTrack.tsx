@@ -246,7 +246,7 @@ export default function PortalTrack() {
   const [myReports, setMyReports] = useState<ReportSummary[]>([])
   const [selectedReport, setSelectedReport] = useState<ReportDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [showManualSearch, setShowManualSearch] = useState(false)
+  const [typeFilter, setTypeFilter] = useState('all')
 
   const loadMyReports = useCallback(async () => {
     setIsLoadingMyReports(true)
@@ -532,14 +532,22 @@ export default function PortalTrack() {
     )
   }
 
+  const filteredReports =
+    typeFilter === 'all'
+      ? myReports
+      : myReports.filter((report) => report.report_type === typeFilter)
+
   // Render list view
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen bg-surface" data-testid="portal-track-page">
       {/* Header */}
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
           <button
+            type="button"
             onClick={() => navigate('/portal')}
+            aria-label="Back to portal"
+            data-testid="portal-track-back"
             className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface hover:bg-muted transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-foreground" />
@@ -564,6 +572,45 @@ export default function PortalTrack() {
               ? `Viewing reports for ${user?.name || user?.email}`
               : 'Sign in to see your submitted reports'}
           </p>
+        </div>
+
+        <div className="mb-6 space-y-3" data-testid="portal-track-filters">
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            aria-label="Filter by report type"
+            data-testid="portal-track-type-filter"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+          >
+            <option value="all">All report types</option>
+            <option value="incident">Incident</option>
+            <option value="near_miss">Near Miss</option>
+            <option value="complaint">Complaint</option>
+            <option value="rta">Road Traffic Collision</option>
+          </select>
+          <form onSubmit={handleSearch} className="flex gap-3">
+            <Input
+              type="search"
+              placeholder="Enter reference number (e.g., INC-2026-0001)"
+              aria-label="Search report by reference"
+              value={searchRef}
+              onChange={(e) => setSearchRef(e.target.value.toUpperCase())}
+              className="font-mono text-base"
+              data-testid="portal-track-search"
+            />
+            <Button
+              type="submit"
+              disabled={isSearching || !searchRef.trim()}
+              data-testid="portal-track-search-submit"
+              aria-label="Search"
+            >
+              {isSearching ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Search className="w-5 h-5" />
+              )}
+            </Button>
+          </form>
         </div>
 
         {/* User's Reports (if authenticated) */}
@@ -592,15 +639,22 @@ export default function PortalTrack() {
                 </div>
               </Card>
             ) : myReports.length > 0 ? (
-              <div className="space-y-3">
-                {myReports.map((report) => (
-                  <ReportListItem
-                    key={report.reference_number}
-                    report={report}
-                    onClick={() => handleReportClick(report)}
-                  />
-                ))}
-              </div>
+              filteredReports.length > 0 ? (
+                <div className="space-y-3">
+                  {filteredReports.map((report) => (
+                    <ReportListItem
+                      key={report.reference_number}
+                      report={report}
+                      onClick={() => handleReportClick(report)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <Card className="p-8 text-center">
+                  <h3 className="text-lg font-semibold text-foreground mb-2">No matching reports</h3>
+                  <p className="text-muted-foreground">Clear or change the type filter to see your reports.</p>
+                </Card>
+              )
             ) : !platformToken ? (
               // User is authenticated but missing platform token - needs re-login
               <Card className="p-8 text-center border-warning/20">
@@ -633,59 +687,12 @@ export default function PortalTrack() {
           </div>
         )}
 
-        {/* Manual Search Section */}
-        {(showManualSearch || !isAuthenticated) && (
-          <div className="space-y-4">
-            {isAuthenticated && (
-              <div className="flex items-center gap-4">
-                <div className="flex-1 h-px bg-border" />
-                <span className="text-xs text-muted-foreground uppercase tracking-wide">
-                  or search by reference
-                </span>
-                <div className="flex-1 h-px bg-border" />
-              </div>
-            )}
-
-            <form onSubmit={handleSearch}>
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <Input
-                    type="text"
-                    placeholder="Enter reference number (e.g., INC-2026-0001)"
-                    value={searchRef}
-                    onChange={(e) => setSearchRef(e.target.value.toUpperCase())}
-                    className="font-mono text-base"
-                  />
-                </div>
-                <Button type="submit" disabled={isSearching || !searchRef.trim()}>
-                  {isSearching ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Search className="w-5 h-5" />
-                  )}
-                </Button>
-              </div>
-            </form>
-
-            {error && (
-              <Card className="p-6 text-center border-destructive/20">
-                <XCircle className="w-12 h-12 text-destructive mx-auto mb-3" />
-                <h3 className="text-lg font-bold text-foreground mb-2">Not Found</h3>
-                <p className="text-muted-foreground">{error}</p>
-              </Card>
-            )}
-          </div>
-        )}
-
-        {/* Toggle Manual Search (if authenticated and has reports) */}
-        {isAuthenticated && myReports.length > 0 && !showManualSearch && (
-          <button
-            onClick={() => setShowManualSearch(true)}
-            className="w-full mt-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-2"
-          >
-            <Search className="w-4 h-4" />
-            Search for another report by reference number
-          </button>
+        {error && !selectedReport && (
+          <Card className="p-6 text-center border-destructive/20 mb-6">
+            <XCircle className="w-12 h-12 text-destructive mx-auto mb-3" />
+            <h3 className="text-lg font-bold text-foreground mb-2">Not Found</h3>
+            <p className="text-muted-foreground">{error}</p>
+          </Card>
         )}
 
         {/* Not Signed In - Show login prompt */}

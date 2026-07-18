@@ -221,7 +221,20 @@ export default function IMSDashboard() {
             Compliance hub orientation — jump to Standards, Evidence, or Monitoring for detail.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3 items-center">
+          <select
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value as ActiveTab)}
+            aria-label="Filter IMS section"
+            data-testid="ims-section-filter"
+            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+          >
+            <option value="overview">Overview</option>
+            <option value="mapping">Cross-Standard Mapping</option>
+            <option value="audit">Unified Audit Plan</option>
+            <option value="review">Management Review</option>
+            <option value="isms">ISO 27001 ISMS</option>
+          </select>
           <Button
             variant="outline"
             onClick={() => void fetchDashboard()}
@@ -229,6 +242,9 @@ export default function IMSDashboard() {
           >
             <RefreshCw className={cn('w-4 h-4 mr-2', dashLoading && 'animate-spin')} aria-hidden="true" />
             {t('ims.sync')}
+          </Button>
+          <Button type="button" variant="outline" data-testid="ims-filter-apply">
+            Filter
           </Button>
           <Button onClick={() => navigate('/compliance')}>
             <FileText className="w-4 h-4 mr-2" aria-hidden="true" />

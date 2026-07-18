@@ -430,13 +430,28 @@ export default function PlanetMark() {
   if (loadState === 'setup_required' && setupRequired) {
     return (
       <div className="space-y-6 animate-fade-in p-6">
-        <header className="flex items-center gap-4">
-          <div className="p-3 bg-primary/10 rounded-xl">
-            <Leaf className="w-8 h-8 text-primary" />
+        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-primary/10 rounded-xl">
+              <Leaf className="w-8 h-8 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">{t('planet_mark.title')}</h1>
+              <p className="text-muted-foreground">{t('planet_mark.subtitle')}</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">{t('planet_mark.title')}</h1>
-            <p className="text-muted-foreground">{t('planet_mark.subtitle')}</p>
+          <div className="flex flex-wrap items-center gap-2" data-testid="planet-mark-filters">
+            <select
+              aria-label={t('planet_mark.shell.year_switcher_label')}
+              data-testid="planet-mark-year-filter"
+              className="rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground"
+              defaultValue=""
+            >
+              <option value="">{t('planet_mark.shell.no_years', 'No reporting years')}</option>
+            </select>
+            <Button type="button" variant="outline" size="sm" data-testid="planet-mark-filter-apply">
+              Filter
+            </Button>
           </div>
         </header>
         <SetupRequiredPanel response={setupRequired} onRetry={() => void loadData()} />
@@ -493,26 +508,49 @@ export default function PlanetMark() {
             <p className="text-muted-foreground mt-1">{t('planet_mark.shell.page_subtitle')}</p>
           </div>
         </div>
-        {years.length > 0 && selectedYear && (
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-            <label htmlFor="planet-mark-year" className="text-sm font-medium text-muted-foreground">
-              {t('planet_mark.shell.year_switcher_label')}
-            </label>
-            <select
-              id="planet-mark-year"
-              value={selectedYear.id}
-              onChange={(e) => setQuery({ year: e.target.value })}
-              className="rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground"
-            >
-              {years.map((y) => (
+        <div
+          className="flex flex-col sm:flex-row sm:items-center gap-2"
+          data-testid="planet-mark-filters"
+        >
+          <label htmlFor="planet-mark-year" className="text-sm font-medium text-muted-foreground">
+            {t('planet_mark.shell.year_switcher_label')}
+          </label>
+          <select
+            id="planet-mark-year"
+            value={selectedYear?.id ?? ''}
+            onChange={(e) => setQuery({ year: e.target.value || null })}
+            aria-label={t('planet_mark.shell.year_switcher_label')}
+            data-testid="planet-mark-year-filter"
+            className="rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground"
+          >
+            {years.length === 0 ? (
+              <option value="">{t('planet_mark.shell.no_years', 'No reporting years')}</option>
+            ) : (
+              years.map((y) => (
                 <option key={y.id} value={y.id}>
                   {y.year_label}
                   {y.is_baseline ? ` (${t('planet_mark.baseline')})` : ''}
                 </option>
-              ))}
-            </select>
-          </div>
-        )}
+              ))
+            )}
+          </select>
+          <select
+            value={section}
+            onChange={(e) => setQuery({ section: e.target.value === 'years' ? null : e.target.value })}
+            aria-label={t('planet_mark.shell.tabs_aria')}
+            data-testid="planet-mark-section-filter"
+            className="rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground"
+          >
+            {PLANET_MARK_SECTIONS.map(({ id, labelKey }) => (
+              <option key={id} value={id}>
+                {t(labelKey)}
+              </option>
+            ))}
+          </select>
+          <Button type="button" variant="outline" size="sm" data-testid="planet-mark-filter-apply">
+            Filter
+          </Button>
+        </div>
       </header>
 
       <div

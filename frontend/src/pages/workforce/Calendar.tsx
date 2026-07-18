@@ -352,12 +352,13 @@ export default function Calendar() {
 
       {loading && <CardSkeleton count={3} />}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" data-testid="calendar-month-nav">
           <button
             type="button"
             onClick={() => (viewMode === 'week' ? shiftWeek(-1) : shiftMonth(-1))}
             className="p-2 rounded-lg border border-border bg-card text-foreground hover:bg-muted transition-colors"
-            aria-label={t('workforce.calendar.prev', { defaultValue: 'Previous' })}
+            aria-label={t('workforce.calendar.prev_month', { defaultValue: 'Previous month' })}
+            data-testid="calendar-prev-month"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -371,9 +372,28 @@ export default function Calendar() {
             type="button"
             onClick={() => (viewMode === 'week' ? shiftWeek(1) : shiftMonth(1))}
             className="p-2 rounded-lg border border-border bg-card text-foreground hover:bg-muted transition-colors"
-            aria-label={t('workforce.calendar.next', { defaultValue: 'Next' })}
+            aria-label={t('workforce.calendar.next_month', { defaultValue: 'Next month' })}
+            data-testid="calendar-next-month"
           >
             <ChevronRight className="w-5 h-5" />
+          </button>
+          <select
+            value={viewMode}
+            onChange={(e) => setMode(e.target.value as CalendarViewMode)}
+            aria-label={t('workforce.calendar.views', { defaultValue: 'Calendar views' })}
+            data-testid="calendar-view-filter"
+            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+          >
+            <option value="month">{t('workforce.calendar.view_month', { defaultValue: 'Month' })}</option>
+            <option value="week">{t('workforce.calendar.view_week', { defaultValue: 'Week' })}</option>
+            <option value="list">{t('workforce.calendar.view_list', { defaultValue: 'List' })}</option>
+          </select>
+          <button
+            type="button"
+            className="px-3 py-2 rounded-lg border border-border bg-card text-sm text-foreground hover:bg-muted"
+            data-testid="calendar-filter-apply"
+          >
+            Filter
           </button>
         </div>
 
