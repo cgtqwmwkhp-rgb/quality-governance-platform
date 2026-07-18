@@ -531,6 +531,7 @@ class DocumentCampaignService:
                 campaign.id,
                 exc_info=True,
             )
+            await self.db.rollback()
             return 0
 
         await self._send_launch_emails(
