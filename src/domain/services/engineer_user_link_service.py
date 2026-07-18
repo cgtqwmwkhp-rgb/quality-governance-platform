@@ -41,9 +41,7 @@ async def ensure_engineer_for_user_async(
     if effective_tenant is None:
         raise ValueError("tenant_id is required to ensure an engineer profile")
 
-    existing = (
-        await db.execute(select(Engineer).where(Engineer.user_id == user.id))
-    ).scalar_one_or_none()
+    existing = (await db.execute(select(Engineer).where(Engineer.user_id == user.id))).scalar_one_or_none()
     if existing is not None:
         return existing
 

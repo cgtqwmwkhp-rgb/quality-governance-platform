@@ -328,9 +328,7 @@ async def update_engineer(
 
     updates = data.model_dump(exclude_unset=True)
     if "user_id" in updates and updates["user_id"] != engineer.user_id:
-        raise BadRequestError(
-            "Engineer user assignment cannot be changed via update — use link-user / unlink-user"
-        )
+        raise BadRequestError("Engineer user assignment cannot be changed via update — use link-user / unlink-user")
     updates.pop("user_id", None)
     if "specialisations" in updates:
         updates["specialisations_json"] = updates.pop("specialisations")
@@ -382,9 +380,7 @@ async def link_engineer_user(
     if engineer is None:
         raise NotFoundError("Engineer not found")
 
-    target = await _validate_engineer_user_assignment(
-        db, user, data.user_id, allow_engineer_id=engineer.id
-    )
+    target = await _validate_engineer_user_assignment(db, user, data.user_id, allow_engineer_id=engineer.id)
     engineer.user_id = target.id
     if not (engineer.display_name and engineer.display_name.strip()):
         from src.domain.services.engineer_user_link_service import display_name_for_user
