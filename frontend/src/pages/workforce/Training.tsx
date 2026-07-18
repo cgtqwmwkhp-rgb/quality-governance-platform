@@ -47,7 +47,8 @@ export default function Training() {
       .then((res) => {
         const map: Record<number, string> = {}
         for (const e of res.data?.items || []) {
-          map[e.id] = e.employee_number || e.job_title || `#${e.id}`
+          map[e.id] =
+            e.display_name?.trim() || e.employee_number || e.job_title || `#${e.id}`
         }
         setEngineerMap(map)
       })

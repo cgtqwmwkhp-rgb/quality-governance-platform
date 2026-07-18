@@ -24,7 +24,7 @@ import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge, type BadgeVariant } from '../components/ui/Badge'
-import { UserEmailSearch } from '../components/UserEmailSearch'
+import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
 import {
   Dialog,
@@ -722,18 +722,25 @@ export default function Complaints() {
                           data-testid={`complaint-assign-${complaint.id}`}
                         >
                           <div className="flex flex-col gap-2 min-w-[220px]">
-                            <UserEmailSearch
-                              value={assigneeById[complaint.id]?.email || ''}
-                              onChange={(email, user) =>
+                            <EngineerPeoplePicker
+                              valueLabel={assigneeById[complaint.id]?.email || ''}
+                              requireLogin
+                              onChange={(selection) =>
                                 setAssigneeById((prev) => ({
                                   ...prev,
-                                  [complaint.id]: { email, user },
+                                  [complaint.id]: selection?.user
+                                    ? {
+                                        email: selection.user.email || selection.label,
+                                        user: selection.user,
+                                      }
+                                    : { email: '' },
                                 }))
                               }
                               placeholder={t(
                                 'complaints.triage.search_owner',
-                                'Search case owner…',
+                                'Search active employees…',
                               )}
+                              testId={`complaint-owner-picker-${complaint.id}`}
                             />
                             <Button
                               type="button"
@@ -870,19 +877,32 @@ export default function Complaints() {
                   placeholder={t('complaints.form.company_placeholder', 'Organisation (optional)')}
                 />
               </div>
-              <UserEmailSearch
-                label={t('complaints.form.about_staff', 'Who is the complaint about (staff)')}
-                value={subjectEmail}
-                onChange={(email, user) => {
-                  setSubjectEmail(email)
-                  setFormData({
-                    ...formData,
-                    subject_user_id: user?.id ?? null,
-                    subject_name: user?.full_name || formData.subject_name || email || '',
-                  })
-                }}
-                placeholder={t('complaints.form.about_staff_placeholder', 'Search staff by email…')}
-              />
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-foreground">
+                  {t('complaints.form.about_staff', 'Who is the complaint about (staff)')}
+                </label>
+                <EngineerPeoplePicker
+                  valueLabel={subjectEmail}
+                  requireLogin={false}
+                  onChange={(selection) => {
+                    setSubjectEmail(selection?.label || '')
+                    setFormData({
+                      ...formData,
+                      subject_user_id: selection?.user?.id ?? null,
+                      subject_name:
+                        selection?.label ||
+                        selection?.user?.full_name ||
+                        formData.subject_name ||
+                        '',
+                    })
+                  }}
+                  placeholder={t(
+                    'complaints.form.about_staff_placeholder',
+                    'Search employees (login optional)…',
+                  )}
+                  testId="complaint-subject-picker"
+                />
+              </div>
               <div>
                 <label
                   htmlFor="complaints-subject-name"

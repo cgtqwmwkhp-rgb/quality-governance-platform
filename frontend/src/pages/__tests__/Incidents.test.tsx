@@ -30,8 +30,15 @@ vi.mock('../../api/client', () => ({
   notificationsApi: {
     getDeliveryStatus: vi.fn().mockResolvedValue({ data: { email_configured: false } }),
   },
+  workforceApi: {
+    listEngineers: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Something went wrong',
+}))
+
+vi.mock('../../components/EngineerPeoplePicker', () => ({
+  EngineerPeoplePicker: () => <input data-testid="engineer-people-picker" />,
 }))
 
 vi.mock('../../utils/errorTracker', () => ({

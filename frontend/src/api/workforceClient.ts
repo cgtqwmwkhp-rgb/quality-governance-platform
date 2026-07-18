@@ -105,6 +105,7 @@ export interface EngineerProfile {
   is_active: boolean
   notes?: string | null
   qgp_profile_override?: boolean
+  /** Present when EMP-LINK is live — optional for tolerant readers. */
   linked_user?: LinkedUserSummary | null
 }
 

@@ -63,8 +63,30 @@ vi.mock('../../api/client', () => ({
   evidenceAssetsApi: {
     upload: (...args: unknown[]) => mockEvidenceUpload(...args),
   },
+  workforceApi: {
+    listEngineers: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Something went wrong',
+}))
+
+vi.mock('../../components/EngineerPeoplePicker', () => ({
+  EngineerPeoplePicker: ({
+    valueLabel,
+    onChange,
+    placeholder,
+  }: {
+    valueLabel?: string
+    onChange: (selection: null) => void
+    placeholder?: string
+  }) => (
+    <input
+      data-testid="engineer-people-picker"
+      value={valueLabel || ''}
+      placeholder={placeholder}
+      onChange={() => onChange(null)}
+    />
+  ),
 }))
 
 vi.mock('../../components/UserEmailSearch', () => ({

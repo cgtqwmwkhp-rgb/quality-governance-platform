@@ -146,6 +146,7 @@ describe('label helpers', () => {
   })
 
   it('formats engineer and requirement picker labels', () => {
+    expect(engineerPickerLabel({ id: 6, display_name: 'Turner, K' })).toBe('Turner, K')
     expect(engineerPickerLabel({ id: 7, employee_number: 'E-007' })).toBe('E-007')
     expect(engineerPickerLabel({ id: 8, job_title: 'Joiner' })).toBe('Joiner')
     expect(requirementPickerLabel({ id: 3, name: 'IPAF 3a' })).toBe('IPAF 3a')
