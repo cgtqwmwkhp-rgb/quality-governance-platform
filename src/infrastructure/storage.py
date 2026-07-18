@@ -454,15 +454,22 @@ class AzureBlobStorageService(BlobStorageService):
 def get_storage_service() -> BlobStorageService:
     """Get the appropriate storage service based on configuration.
 
-    Returns LocalFileStorageService in development, AzureBlobStorageService in production.
+    Prefer Azure Blob whenever a connection string is configured. Staging and
+    production must never fall back to local ``./storage`` (App Service cannot
+    mkdir that path — Permission denied / Errno 13).
     """
-    if settings.is_production:
+    connection_string = (settings.azure_storage_connection_string or "").strip()
+    if connection_string:
         return AzureBlobStorageService(
-            connection_string=settings.azure_storage_connection_string,
+            connection_string=connection_string,
             container_name=settings.azure_storage_container_name,
         )
-    else:
-        return LocalFileStorageService()
+    if settings.is_production or settings.is_staging:
+        raise StorageNotConfiguredError(
+            "Azure Storage connection string is required in staging/production "
+            "(local ./storage fallback is development-only)"
+        )
+    return LocalFileStorageService()
 
 
 # Singleton instance
