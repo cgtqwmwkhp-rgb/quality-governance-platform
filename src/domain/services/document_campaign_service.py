@@ -387,7 +387,7 @@ class DocumentCampaignService:
         tenant_id: int,
         campaign_id: int,
         launched_by_id: int,
-    ) -> Dict[str, int]:
+    ) -> Dict[str, Any]:
         campaign = await self.get_campaign(tenant_id=tenant_id, campaign_id=campaign_id)
         if campaign.status != CampaignStatus.DRAFT:
             raise BadRequestError("Only draft campaigns can be launched")

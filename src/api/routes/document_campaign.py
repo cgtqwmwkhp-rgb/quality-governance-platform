@@ -28,6 +28,7 @@ from src.api.schemas.document_campaign import (
     QuizSubmitRequest,
     QuizSubmitResponse,
 )
+from src.api.utils.tenant import require_tenant_id
 from src.domain.models.document_campaign import DocumentCampaign, EngineerGroup
 from src.domain.models.user import User
 from src.domain.services.document_campaign_service import DocumentCampaignService
@@ -86,7 +87,7 @@ async def create_group(
     """Create a reusable engineer group for targeting campaigns."""
     service = DocumentCampaignService(db)
     group = await service.create_group(
-        tenant_id=current_user.tenant_id,
+        tenant_id=require_tenant_id(current_user.tenant_id),
         created_by_id=current_user.id,
         name=group_data.name,
         description=group_data.description,
@@ -102,7 +103,7 @@ async def list_groups(
 ):
     """List engineer groups with member counts (bare list for FE)."""
     service = DocumentCampaignService(db)
-    rows = await service.list_groups(tenant_id=current_user.tenant_id)
+    rows = await service.list_groups(tenant_id=require_tenant_id(current_user.tenant_id))
     items = [_group_to_response(row["group"], row["member_count"]) for row in rows]
     return items
 
@@ -116,13 +117,14 @@ async def add_group_members(
 ):
     """Add members to an engineer group."""
     service = DocumentCampaignService(db)
+    tenant_id = require_tenant_id(current_user.tenant_id)
     group = await service.add_group_members(
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         group_id=group_id,
         user_ids=members_data.user_ids,
         added_by_id=current_user.id,
     )
-    rows = await service.list_groups(tenant_id=current_user.tenant_id)
+    rows = await service.list_groups(tenant_id=tenant_id)
     member_count = next((row["member_count"] for row in rows if row["group"].id == group.id), 0)
     return _group_to_response(group, member_count)
 
@@ -136,7 +138,9 @@ async def remove_group_member(
 ):
     """Remove a member from an engineer group."""
     service = DocumentCampaignService(db)
-    await service.remove_group_member(tenant_id=current_user.tenant_id, group_id=group_id, user_id=user_id)
+    await service.remove_group_member(
+        tenant_id=require_tenant_id(current_user.tenant_id), group_id=group_id, user_id=user_id
+    )
 
 
 # =============================================================================
@@ -152,18 +156,18 @@ async def create_campaign(
 ):
     """Create a document campaign in draft status."""
     service = DocumentCampaignService(db)
-    campaign_data = campaign_data.to_internal()
+    internal_data = campaign_data.to_internal()
     campaign = await service.create_campaign(
-        tenant_id=current_user.tenant_id,
+        tenant_id=require_tenant_id(current_user.tenant_id),
         created_by_id=current_user.id,
-        document_id=campaign_data.document_id,
-        quiz_draft_id=campaign_data.quiz_draft_id,
-        title=campaign_data.title,
-        due_within_days=campaign_data.due_within_days,
-        require_quiz=campaign_data.require_quiz,
-        require_sign=campaign_data.require_sign,
-        reminder_offsets_hours=campaign_data.reminder_offsets_hours,
-        audience=campaign_data.audience.model_dump(),
+        document_id=internal_data.document_id,
+        quiz_draft_id=internal_data.quiz_draft_id,
+        title=internal_data.title,
+        due_within_days=internal_data.due_within_days,
+        require_quiz=internal_data.require_quiz,
+        require_sign=internal_data.require_sign,
+        reminder_offsets_hours=internal_data.reminder_offsets_hours,
+        audience=internal_data.audience.model_dump(),
     )
     return _campaign_to_response(campaign)
 
@@ -177,7 +181,7 @@ async def launch_campaign(
     """Expand audience, create assignments, and notify engineers."""
     service = DocumentCampaignService(db)
     result = await service.launch_campaign(
-        tenant_id=current_user.tenant_id,
+        tenant_id=require_tenant_id(current_user.tenant_id),
         campaign_id=campaign_id,
         launched_by_id=current_user.id,
     )
@@ -186,7 +190,7 @@ async def launch_campaign(
         assigned_count=result["assigned_count"],
         notified_count=result.get("notified_count", 0),
         id=result["campaign_id"],
-        status=result.get("status", "active"),
+        status=str(result.get("status", "active")),
         launched_at=result.get("launched_at"),
     )
 
@@ -199,7 +203,9 @@ async def get_campaign(
 ):
     """Get a campaign with its compliance summary."""
     service = DocumentCampaignService(db)
-    data = await service.get_campaign_with_summary(tenant_id=current_user.tenant_id, campaign_id=campaign_id)
+    data = await service.get_campaign_with_summary(
+        tenant_id=require_tenant_id(current_user.tenant_id), campaign_id=campaign_id
+    )
     campaign = data.pop("campaign")
     return _campaign_to_response(campaign, data)
 
@@ -212,10 +218,11 @@ async def list_campaigns_for_document(
 ):
     """List campaigns for a document (bare list for FE #1146)."""
     service = DocumentCampaignService(db)
-    campaigns = await service.list_campaigns_for_document(tenant_id=current_user.tenant_id, document_id=document_id)
+    tenant_id = require_tenant_id(current_user.tenant_id)
+    campaigns = await service.list_campaigns_for_document(tenant_id=tenant_id, document_id=document_id)
     items = []
     for c in campaigns:
-        data = await service.get_campaign_with_summary(tenant_id=current_user.tenant_id, campaign_id=c.id)
+        data = await service.get_campaign_with_summary(tenant_id=tenant_id, campaign_id=c.id)
         data.pop("campaign", None)
         items.append(_campaign_to_response(c, data))
     return items
@@ -229,7 +236,9 @@ async def list_campaigns(
 ):
     """Alias: list campaigns for a document (wrapped)."""
     service = DocumentCampaignService(db)
-    campaigns = await service.list_campaigns_for_document(tenant_id=current_user.tenant_id, document_id=document_id)
+    campaigns = await service.list_campaigns_for_document(
+        tenant_id=require_tenant_id(current_user.tenant_id), document_id=document_id
+    )
     items = [_campaign_to_response(c) for c in campaigns]
     return CampaignListResponse(items=items, total=len(items))
 
@@ -246,7 +255,9 @@ async def get_my_assignments(
 ):
     """Get the current user's pending, overdue, and completed assignments."""
     service = DocumentCampaignService(db)
-    rows = await service.get_my_assignments(tenant_id=current_user.tenant_id, user_id=current_user.id)
+    rows = await service.get_my_assignments(
+        tenant_id=require_tenant_id(current_user.tenant_id), user_id=current_user.id
+    )
 
     items = []
     for row in rows:
