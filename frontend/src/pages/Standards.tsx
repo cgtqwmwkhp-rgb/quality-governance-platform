@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Search,
@@ -46,6 +46,7 @@ export function exceptionsHrefForClause(clauseNumber: string, standardCode?: str
 
 export default function Standards() {
   const { t } = useTranslation()
+  const [searchParams] = useSearchParams()
   const [standards, setStandards] = useState<Standard[]>([])
   const [selectedStandard, setSelectedStandard] = useState<Standard | null>(null)
   const [clauses, setClauses] = useState<Clause[]>([])
@@ -59,11 +60,21 @@ export default function Standards() {
   const [scanningKb, setScanningKb] = useState(false)
   const [opsCounts, setOpsCounts] = useState<Record<string, number>>({})
   const [opsCountsUnavailable, setOpsCountsUnavailable] = useState(false)
+  const [highlightClause, setHighlightClause] = useState<string | null>(null)
 
   useEffect(() => {
     loadStandards()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Deep-link from Audit Builder Assist Map: /standards?code=ISO9001&clause=7.2
+  useEffect(() => {
+    const clause = searchParams.get('clause')?.trim()
+    if (clause) {
+      setSearchTerm(clause)
+      setHighlightClause(clause)
+    }
+  }, [searchParams])
 
   const loadStandards = async () => {
     setError(null)
@@ -103,6 +114,25 @@ export default function Standards() {
       setLoading(false)
     }
   }
+
+  // After catalogue loads, honour Assist Map deep-link (?code=ISO9001&clause=7.2)
+  useEffect(() => {
+    if (loading || standards.length === 0) return
+    const codeParam = searchParams.get('code')?.trim().toUpperCase()
+    if (!codeParam) return
+    if (selectedStandard?.code?.toUpperCase().replace(/[:\s]/g, '') === codeParam.replace(/[:\s]/g, '')) {
+      return
+    }
+    const match = standards.find(
+      (s) =>
+        s.code?.toUpperCase() === codeParam ||
+        s.code?.toUpperCase().replace(/[:\s]/g, '') === codeParam.replace(/[:\s]/g, ''),
+    )
+    if (match) {
+      void loadClauses(match)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, standards, searchParams])
 
   const loadClauses = async (standard: Standard) => {
     setLoadingClauses(true)
@@ -174,6 +204,33 @@ export default function Standards() {
       s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.code.toLowerCase().includes(searchTerm.toLowerCase()),
   )
+
+  const clauseMatchesHighlight = (clauseNumber: string) => {
+    if (!highlightClause) return false
+    const a = clauseNumber.toLowerCase()
+    const b = highlightClause.toLowerCase()
+    return a === b || a.endsWith(`.${b}`) || a.includes(b) || b.includes(a)
+  }
+
+  // Expand / scroll to deep-linked clause once the tree loads
+  useEffect(() => {
+    if (!highlightClause || clauses.length === 0) return
+    const hit = clauses.find((c) => clauseMatchesHighlight(c.clause_number))
+    if (!hit) return
+    setExpanded((prev) => {
+      const next = { ...prev, [hit.id]: true }
+      if (hit.parent_clause_id) next[hit.parent_clause_id] = true
+      return next
+    })
+    // Defer so the expanded node is in the DOM
+    const t = window.setTimeout(() => {
+      document
+        .querySelector(`[data-clause-number="${CSS.escape(hit.clause_number)}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 50)
+    return () => window.clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightClause, clauses])
 
   // Group clauses by level
   const topLevelClauses = clauses.filter((c) => c.level === 1)
@@ -404,9 +461,17 @@ export default function Standards() {
                                   }
                                 : undefined
                             }
+                            data-clause-number={clause.clause_number}
+                            data-testid={
+                              clauseMatchesHighlight(clause.clause_number)
+                                ? `standards-clause-highlight-${clause.clause_number}`
+                                : undefined
+                            }
                             className={cn(
                               'flex items-center gap-3 p-4 rounded-xl transition-all duration-200',
                               hasChildren && 'cursor-pointer hover:bg-surface',
+                              clauseMatchesHighlight(clause.clause_number) &&
+                                'ring-2 ring-primary bg-primary/5',
                             )}
                           >
                             {hasChildren ? (
@@ -484,7 +549,17 @@ export default function Standards() {
                               {subClauses.map((subClause) => (
                                 <div
                                   key={`clause-${subClause.id}`}
-                                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface transition-colors"
+                                  data-clause-number={subClause.clause_number}
+                                  data-testid={
+                                    clauseMatchesHighlight(subClause.clause_number)
+                                      ? `standards-clause-highlight-${subClause.clause_number}`
+                                      : undefined
+                                  }
+                                  className={cn(
+                                    'flex items-center gap-3 p-3 rounded-lg hover:bg-surface transition-colors',
+                                    clauseMatchesHighlight(subClause.clause_number) &&
+                                      'ring-2 ring-primary bg-primary/5',
+                                  )}
                                 >
                                   <BookOpen className="w-4 h-4 text-muted-foreground" />
                                   <span className="font-mono text-xs text-primary">
