@@ -1428,9 +1428,9 @@ export default function ComplaintDetail() {
               />
             </div>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-foreground">
+              <span className="block text-sm font-medium text-foreground">
                 {t('complaints.detail.assign_to')}
-              </label>
+              </span>
               <EngineerPeoplePicker
                 valueLabel={actionForm.assigned_to}
                 requireLogin

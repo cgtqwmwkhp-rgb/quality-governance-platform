@@ -1383,9 +1383,9 @@ export default function IncidentDetail() {
               </Select>
             </div>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-foreground">
+              <span className="block text-sm font-medium text-foreground">
                 {t('incidents.detail.lead_investigator')}
-              </label>
+              </span>
               <EngineerPeoplePicker
                 valueLabel={investigationForm.lead_investigator}
                 requireLogin
@@ -1491,9 +1491,9 @@ export default function IncidentDetail() {
               />
             </div>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-foreground">
+              <span className="block text-sm font-medium text-foreground">
                 {t('incidents.detail.assign_to')}
-              </label>
+              </span>
               <EngineerPeoplePicker
                 valueLabel={actionForm.assigned_to}
                 requireLogin
