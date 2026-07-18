@@ -53,7 +53,7 @@ class Engineer(Base, TimestampMixin, AuditTrailMixin):
         index=True,
     )
     user_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         unique=True,
         index=True,
