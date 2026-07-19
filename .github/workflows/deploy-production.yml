@@ -637,7 +637,7 @@ jobs:
           az webapp config set \
             --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --startup-file "sh -c 'alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips \"*\"'" \
+            --startup-file "uvicorn src.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '*'" \
             --always-on true \
             --generic-configurations '{"healthCheckPath":"/healthz"}' \
             --output none

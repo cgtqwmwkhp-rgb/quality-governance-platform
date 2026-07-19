@@ -4,9 +4,9 @@
 - **Feature / Change name:** Hotfix — Governance Library category tree MissingGreenlet 500
 - **User goal:** Restore `GET /api/v1/document-categories` so Library pickers and filters load after W0 taxonomy migrations.
 - **Depends on:** Prod schema at `20260719_gov_lib_w3_review` (W0/W1/W3 applied).
-- **In scope:** Avoid Pydantic `from_attributes` walking SQLAlchemy `children` relationship; harden prod App Service startup to run `alembic upgrade head` before uvicorn.
-- **Out of scope:** Taxonomy content changes; FE redesign.
-- **Feature flag / kill switch:** N/A (bugfix + startup hardening).
+- **In scope:** Avoid Pydantic `from_attributes` walking SQLAlchemy `children` relationship.
+- **Out of scope:** Taxonomy content changes; FE redesign; App Service migrate-on-start (proven unsafe — alembic-before-uvicorn took prod to 503; keep ACI migration job as SSOT).
+- **Feature flag / kill switch:** N/A (bugfix).
 
 ## 2) Impact Map
 - **Frontend:** Library category filter/tree consumers stop receiving 500.
@@ -18,12 +18,12 @@
 
 ## 3) Compatibility & Data Safety
 - Additive behaviour fix only; nested children still assembled explicitly from flat rows.
-- Startup command becomes migrate-then-serve (matches staging pattern) so parallel Alembic heads cannot leave prod schema behind again.
+- Prod migrations remain the existing ACI `alembic upgrade head` step in deploy-production.yml (not App Service startup).
 
 ## 4) Acceptance Criteria
 - [x] AC-01: Category tree validation does not touch ORM `children` lazy relationship.
-- [x] AC-02: Prod deploy startup runs `alembic upgrade head` before uvicorn.
-- [x] AC-03: Focused unit coverage for tree assembly without relationship IO.
+- [x] AC-02: Focused unit coverage for tree assembly without relationship IO.
+- [x] AC-03: Deploy workflow keeps uvicorn-only startup (no alembic-on-start).
 
 ## 5) Testing Evidence
 - [x] Unit: `pytest tests/unit/test_gov_lib_category_tree_response.py`
@@ -38,13 +38,13 @@
 - **Owner:** Platform release operator
 - **Rollback steps:**
   1. Redeploy prior tip SHA with `force_deploy=true`.
-  2. If startup command regresses migrations, keep DB at current head (safe); only code rolls back.
+  2. DB stays at current head (safe); only code rolls back.
 
 ## 8) Observability & Operations
 - **Metrics:** Watch 5xx rate on `/api/v1/document-categories`.
 - **Logs:** MissingGreenlet on DocumentCategoryTreeNode should disappear.
 - **Alerts:** Existing API 5xx alerts.
-- **Runbook:** If categories 500 returns, check docker logs for greenlet/validation; confirm alembic head.
+- **Runbook:** If categories 500 returns, check docker logs for greenlet/validation; confirm alembic head via ACI migrate job.
 
 ## 9) Release Plan
 - **Staging:** N/A hotfix to prod tip after CI green.
