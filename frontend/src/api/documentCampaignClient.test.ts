@@ -139,4 +139,35 @@ describe('createDocumentCampaignApi', () => {
     removeChild.mockRestore()
     vi.unstubAllGlobals()
   })
+
+  it('downloads CSV and PDF evidence packs as blobs', async () => {
+    const api = mockApi()
+    api.get.mockResolvedValue({ data: new Blob(['csv']) })
+    const appendChild = vi.spyOn(document.body, 'appendChild').mockImplementation(() => document.body)
+    const removeChild = vi.spyOn(document.body, 'removeChild').mockImplementation(() => document.body)
+    const click = vi.fn()
+    vi.spyOn(document, 'createElement').mockImplementation(
+      () => ({ click, href: '', download: '', rel: '' }) as unknown as HTMLAnchorElement,
+    )
+    const createObjectURL = vi.fn(() => 'blob:mock')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
+
+    const client = createDocumentCampaignApi(api as never)
+    await client.downloadEvidencePackCsv(4)
+    expect(api.get).toHaveBeenCalledWith('/api/v1/document-campaigns/campaigns/4/evidence-pack.csv', {
+      responseType: 'blob',
+    })
+    expect(click).toHaveBeenCalled()
+
+    api.get.mockResolvedValue({ data: new Blob(['pdf']) })
+    await client.downloadEvidencePackPdf(4)
+    expect(api.get).toHaveBeenCalledWith('/api/v1/document-campaigns/campaigns/4/evidence-pack.pdf', {
+      responseType: 'blob',
+    })
+
+    appendChild.mockRestore()
+    removeChild.mockRestore()
+    vi.unstubAllGlobals()
+  })
 })

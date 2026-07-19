@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "163 kB",
+    "limit": "164 kB",
     "gzip": true,
-    "name": "index: 162→163 kB — campaign command W2 KPIs/chase/badges (+~268 B over 162)"
+    "name": "index: 163→164 kB — DEF-PDF evidence pack client (+~74 B over 163)"
   },
   {
     "path": "dist/assets/vendor-*.js",

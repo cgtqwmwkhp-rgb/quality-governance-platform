@@ -830,3 +830,22 @@ async def export_campaign_evidence_csv(
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/campaigns/{campaign_id}/evidence-pack.pdf")
+async def export_campaign_evidence_pdf(
+    campaign_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """PDF export of campaign assignment evidence (quiz/sign-off metadata)."""
+    service = DocumentCampaignService(db)
+    pdf_content, filename = await service.build_evidence_pack_pdf(
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        campaign_id=campaign_id,
+    )
+    return StreamingResponse(
+        iter([pdf_content]),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
