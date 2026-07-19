@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.domain.models.incident import IncidentSeverity
 from src.domain.exceptions import BadRequestError
+from src.domain.models.incident import IncidentSeverity
 from src.domain.services.incident_risk_links import (
     append_linked_risk_id,
     create_enterprise_risk_from_incident,
