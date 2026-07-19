@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { toast } from 'sonner'
-import { usersApi, type RoleDetail } from '@/api/client'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { getApiErrorMessage } from '@/utils/apiError'
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import {
+  getApiErrorMessage,
+  usersApi,
+  type RoleDetail,
+} from '../../api/client'
+import { toast } from '../../contexts/ToastContext'
+import { Button } from '../../components/ui/Button'
+import { Checkbox } from '../../components/ui/Checkbox'
+import { Input } from '../../components/ui/Input'
 
 const FACET_OPTIONS: { id: string; label: string; permissions: string[] }[] = [
   {
@@ -182,7 +185,7 @@ export default function LibraryRoles() {
               <p className="text-sm font-medium">Create role</p>
               <Input
                 value={newName}
-                onChange={(event) => setNewName(event.target.value)}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setNewName(event.target.value)}
                 placeholder="e.g. library_manager"
               />
               <Button type="button" onClick={() => void createRole()} disabled={saving}>
@@ -225,7 +228,9 @@ export default function LibraryRoles() {
                       <Checkbox
                         checked={draftPerms.includes(option.id)}
                         disabled={selected.is_system_role}
-                        onCheckedChange={(value) => togglePerm(option.id, value === true)}
+                        onCheckedChange={(value: boolean | 'indeterminate') =>
+                          togglePerm(option.id, value === true)
+                        }
                       />
                       <span>{option.label}</span>
                     </label>

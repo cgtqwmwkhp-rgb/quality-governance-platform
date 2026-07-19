@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
-import { toast } from 'sonner'
-import { documentCampaignApi, type CampaignGroup } from '@/api/client'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { getApiErrorMessage } from '@/utils/apiError'
+import { useCallback, useEffect, useState, type ChangeEvent } from 'react'
+import {
+  documentCampaignApi,
+  getApiErrorMessage,
+  type CampaignGroup,
+} from '../../api/client'
+import { toast } from '../../contexts/ToastContext'
+import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 
 export default function EngineerGroups() {
   const [groups, setGroups] = useState<CampaignGroup[]>([])
@@ -66,12 +69,12 @@ export default function EngineerGroups() {
         <p className="text-sm font-medium">Create group</p>
         <Input
           value={name}
-          onChange={(event) => setName(event.target.value)}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => setName(event.target.value)}
           placeholder="e.g. Field engineers — North"
         />
         <Input
           value={memberIds}
-          onChange={(event) => setMemberIds(event.target.value)}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => setMemberIds(event.target.value)}
           placeholder="Optional member user IDs (comma-separated)"
         />
         <Button type="button" onClick={() => void create()} disabled={saving}>
