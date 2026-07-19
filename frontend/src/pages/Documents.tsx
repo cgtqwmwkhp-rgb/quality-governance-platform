@@ -24,7 +24,7 @@ import {
   Brain,
   Zap,
 } from 'lucide-react'
-import api, { getApiErrorMessage } from '../api/client'
+import api, { documentCampaignApi, getApiErrorMessage, type CampaignComplianceRow } from '../api/client'
 import { toast } from '../contexts/ToastContext'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -46,6 +46,11 @@ import {
   buildDocumentsExceptionsHref,
   DOCUMENT_CONTROL_GOLDEN_THREAD_PATH,
 } from './documentsDownstreamHelpers'
+import {
+  buildCampaignResultsHref,
+  complianceRowByDocumentId,
+  formatCampaignHealthBadge,
+} from './documentCampaignHelpers'
 
 /** Surface operator-visible failures (banner + toast). Never silent. */
 const reportFailure = (
@@ -207,6 +212,9 @@ export default function Documents() {
     title: string
     status: string
   } | null>(null)
+  const [campaignComplianceByDoc, setCampaignComplianceByDoc] = useState<
+    Map<number, CampaignComplianceRow>
+  >(() => new Map())
 
   const loadData = useCallback(async (docType?: string, status?: string, listPage = 1) => {
     setLoadError(null)
@@ -301,6 +309,25 @@ export default function Documents() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const response = await documentCampaignApi.listCompliance()
+        if (!cancelled) {
+          setCampaignComplianceByDoc(complianceRowByDocumentId(response.data.items ?? []))
+        }
+      } catch {
+        if (!cancelled) {
+          setCampaignComplianceByDoc(new Map())
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     loadData(
@@ -883,6 +910,7 @@ export default function Documents() {
           ) : (
             filteredDocuments.map((doc) => {
               const FileIcon = getFileIcon(doc.file_type)
+              const campaignRow = campaignComplianceByDoc.get(doc.id)
               return (
                 <Card
                   key={doc.id}
@@ -894,11 +922,25 @@ export default function Documents() {
                     <FileIcon className="w-6 h-6 text-primary" />
                   </div>
 
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <span className="font-mono text-xs text-primary">{doc.reference_number}</span>
                     <Badge variant={getStatusVariant(doc.status) as any} className="text-[10px]">
                       {doc.status}
                     </Badge>
+                    {campaignRow ? (
+                      <Link
+                        to={buildCampaignResultsHref(doc.id, campaignRow.campaign_id)}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <Badge
+                          variant="outline"
+                          className="text-[10px]"
+                          data-testid={`document-campaign-badge-${doc.id}`}
+                        >
+                          {formatCampaignHealthBadge(campaignRow)}
+                        </Badge>
+                      </Link>
+                    ) : null}
                   </div>
                   <h2 className="font-semibold text-foreground truncate mb-1 text-base">{doc.title}</h2>
 
@@ -1012,6 +1054,7 @@ export default function Documents() {
               ) : (
                 filteredDocuments.map((doc) => {
                 const FileIcon = getFileIcon(doc.file_type)
+                const campaignRow = campaignComplianceByDoc.get(doc.id)
                 return (
                   <tr
                     key={doc.id}
@@ -1028,6 +1071,21 @@ export default function Documents() {
                           <p className="text-xs text-muted-foreground font-mono">
                             {doc.reference_number}
                           </p>
+                          {campaignRow ? (
+                            <Link
+                              to={buildCampaignResultsHref(doc.id, campaignRow.campaign_id)}
+                              onClick={(event) => event.stopPropagation()}
+                              className="mt-1 inline-block"
+                            >
+                              <Badge
+                                variant="outline"
+                                className="text-[10px]"
+                                data-testid={`document-campaign-badge-${doc.id}`}
+                              >
+                                {formatCampaignHealthBadge(campaignRow)}
+                              </Badge>
+                            </Link>
+                          ) : null}
                         </div>
                       </div>
                     </td>

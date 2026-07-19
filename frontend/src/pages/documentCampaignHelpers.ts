@@ -1,5 +1,6 @@
 import type {
   CampaignAudienceType,
+  CampaignComplianceRow,
   CreateCampaignPayload,
 } from '../api/documentCampaignClient'
 
@@ -108,4 +109,26 @@ export function canLaunchCampaign(requireQuiz: boolean, hasApprovedQuiz: boolean
 
 export function defaultRequireQuiz(hasApprovedQuiz: boolean): boolean {
   return hasApprovedQuiz
+}
+
+export function buildCampaignResultsHref(documentId: number, campaignId: number): string {
+  return `/documents/${documentId}?tab=campaign-results&campaignId=${campaignId}`
+}
+
+export function formatCampaignHealthBadge(row: CampaignComplianceRow): string {
+  return `Campaign ${Math.round(row.completion_rate)}% · ${row.overdue} overdue`
+}
+
+/** One compliance row per document — prefer the campaign with the most assignees. */
+export function complianceRowByDocumentId(
+  rows: CampaignComplianceRow[],
+): Map<number, CampaignComplianceRow> {
+  const map = new Map<number, CampaignComplianceRow>()
+  for (const row of rows) {
+    const existing = map.get(row.document_id)
+    if (!existing || row.assigned > existing.assigned) {
+      map.set(row.document_id, row)
+    }
+  }
+  return map
 }

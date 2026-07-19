@@ -311,6 +311,9 @@ class IndexJob(Base, TimestampMixin):
     # Progress
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    documents_processed: Mapped[int] = mapped_column(Integer, default=0)
+    documents_succeeded: Mapped[int] = mapped_column(Integer, default=0)
+    documents_failed: Mapped[int] = mapped_column(Integer, default=0)
     chunks_processed: Mapped[int] = mapped_column(Integer, default=0)
     chunks_succeeded: Mapped[int] = mapped_column(Integer, default=0)
     chunks_failed: Mapped[int] = mapped_column(Integer, default=0)

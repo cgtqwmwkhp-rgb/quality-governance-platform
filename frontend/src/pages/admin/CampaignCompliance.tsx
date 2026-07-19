@@ -19,6 +19,9 @@ import {
   type CampaignReminderPresetKey,
 } from '../documentCampaignHelpers'
 import { CampaignRosterPanel } from '../CampaignRosterPanel'
+import { CampaignCommandKpis } from '../CampaignCommandKpis'
+import { CampaignAnalyticsPanel } from '../CampaignAnalyticsPanel'
+import { CampaignPeopleChase } from '../CampaignPeopleChase'
 
 export default function CampaignCompliance() {
   const { t } = useTranslation()
@@ -171,6 +174,18 @@ export default function CampaignCompliance() {
             )}
             {t('admin.campaign_compliance.save_defaults')}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold">{t('campaigns.command.title', 'Campaign command')}</h2>
+          <p className="text-sm text-muted-foreground">
+            {t('campaigns.command.subtitle', 'Portfolio KPIs and recent completion activity.')}
+          </p>
+        </CardHeader>
+        <CardContent>
+          <CampaignCommandKpis />
         </CardContent>
       </Card>
 
@@ -329,6 +344,12 @@ export default function CampaignCompliance() {
                               ) : null}
                               <div>
                                 <p className="mb-2 text-sm font-medium text-foreground">
+                                  {t('campaigns.analytics.panel_title', 'Campaign analytics')}
+                                </p>
+                                <CampaignAnalyticsPanel campaignId={row.campaign_id} compact />
+                              </div>
+                              <div>
+                                <p className="mb-2 text-sm font-medium text-foreground">
                                   {t(
                                     'admin.campaign_compliance.roster_title',
                                     'Who has read / scored',
@@ -346,6 +367,12 @@ export default function CampaignCompliance() {
               </table>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6">
+          <CampaignPeopleChase />
         </CardContent>
       </Card>
     </div>

@@ -418,6 +418,90 @@ class GroupComplianceResponse(BaseModel):
 
 
 # =============================================================================
+# Campaign effectiveness analytics (Wave 2)
+# =============================================================================
+
+
+class ComplianceOverviewSeriesPoint(BaseModel):
+    date: str
+    completed: int
+    opened: int
+    overdue: int
+
+
+class ComplianceOverviewResponse(BaseModel):
+    active_campaigns: int
+    total_assignments: int
+    completed_assignments: int
+    overall_completion_rate: float
+    overdue_count: int
+    quiz_fail_count: int
+    unanswered_hseq_count: int
+    open_rate: float
+    series: List[ComplianceOverviewSeriesPoint]
+
+
+class CampaignAnalyticsFunnel(BaseModel):
+    assigned: int
+    opened: int
+    quiz_attempted: int
+    quiz_passed: int
+    completed: int
+
+
+class ScoreHistogramBucket(BaseModel):
+    bucket: str
+    count: int
+
+
+class AttemptsDistributionItem(BaseModel):
+    attempts: int
+    count: int
+
+
+class TimeToCompleteHours(BaseModel):
+    p50: Optional[float] = None
+    p90: Optional[float] = None
+
+
+class CampaignAnalyticsResponse(BaseModel):
+    campaign_id: int
+    document_id: int
+    require_quiz: bool
+    funnel: CampaignAnalyticsFunnel
+    score_histogram: List[ScoreHistogramBucket]
+    attempts_distribution: List[AttemptsDistributionItem]
+    time_to_complete_hours: TimeToCompleteHours
+    reminder_sent_total: int
+    summary: CampaignRosterSummary
+
+
+class CompliancePeopleItem(BaseModel):
+    assignment_id: int
+    campaign_id: int
+    document_id: int
+    document_title: str
+    user_id: int
+    user_name: str
+    user_email: str
+    status: str
+    quiz_score: Optional[int] = None
+    quiz_passed: Optional[bool] = None
+    quiz_attempts: int = 0
+    first_opened_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    due_at: Optional[str] = None
+    reminders_sent: int = 0
+
+
+class CompliancePeopleResponse(BaseModel):
+    items: List[CompliancePeopleItem]
+    total: int
+    limit: int
+    offset: int
+
+
+# =============================================================================
 # Compliance Passport (O-07)
 # =============================================================================
 

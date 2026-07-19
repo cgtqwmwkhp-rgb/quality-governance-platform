@@ -246,6 +246,36 @@ describe('KnowledgeExceptions honesty (KE-W1)', () => {
     fireEvent.click(screen.getByTestId('exception-detail-toggle-11'))
     expect(screen.getByTestId('exception-detail-panel-11')).toHaveTextContent(/AI confidence: 90%/)
   })
+
+  it('shows clear-filters CTA when filtered inbox is empty', async () => {
+    mockList.mockResolvedValue({ data: [] })
+    const KnowledgeExceptions = (await import('../KnowledgeExceptions')).default
+    render(
+      <MemoryRouter initialEntries={['/knowledge-exceptions?entity_type=incident']}>
+        <Routes>
+          <Route path="/knowledge-exceptions" element={<KnowledgeExceptions />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('No matches for filters')).toBeInTheDocument()
+    expect(screen.getByTestId('exceptions-empty-clear-filters')).toBeInTheDocument()
+  })
+
+  it('shows standards deep-link when inbox is clear', async () => {
+    mockList.mockResolvedValue({ data: [] })
+    const KnowledgeExceptions = (await import('../KnowledgeExceptions')).default
+    render(
+      <MemoryRouter initialEntries={['/knowledge-exceptions']}>
+        <Routes>
+          <Route path="/knowledge-exceptions" element={<KnowledgeExceptions />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Inbox clear')).toBeInTheDocument()
+    expect(screen.getByTestId('exceptions-empty-open-standards')).toHaveAttribute('href', '/standards')
+  })
 })
 
 describe('exceptions inbox URL sync', () => {
