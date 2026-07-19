@@ -41,15 +41,15 @@ from src.domain.services.document_campaign_service import DocumentCampaignServic
 from src.domain.services.document_category_service import allocate_pel_doc_ref
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
+from src.domain.services.document_library_campaign_offer_service import (
+    build_campaign_offer_for_document,
+    offer_campaign_from_document,
+)
 from src.domain.services.document_library_filing_service import (
     assert_library_read_access,
     filing_defaults_for_category,
     find_duplicate_approved_candidates,
     load_filing_category,
-)
-from src.domain.services.document_library_campaign_offer_service import (
-    build_campaign_offer_for_document,
-    offer_campaign_from_document,
 )
 from src.domain.services.document_library_lifecycle_service import approve_document, reject_review, submit_for_review
 from src.domain.services.document_version_service import (
