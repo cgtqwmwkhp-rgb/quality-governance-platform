@@ -1217,7 +1217,7 @@
   "admin.campaign_compliance.open_document": "Document results",
   "admin.campaign_compliance.roster_title": "Who has read / scored",
   "admin.campaign_compliance.group_breakdown": "By group",
-  "documents.detail.campaign_title": "Launch compliance campaign",
+  "documents.detail.campaign_title": "Launch HSEQ reading campaign",
   "documents.detail.campaign_due_days": "Due within (days)",
   "documents.detail.campaign_require_quiz": "Require quiz",
   "documents.detail.campaign_require_sign": "Require sign-off",

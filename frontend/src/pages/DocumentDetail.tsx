@@ -98,6 +98,17 @@ interface LibraryVersionRow {
   published_by_id?: number | null
 }
 
+interface CampaignOffer {
+  eligible: boolean
+  reason?: string | null
+  document_id: number
+  pel_doc_ref?: string | null
+  suggested_title?: string
+  ui_label?: string
+  existing_draft_campaign_id?: number | null
+  existing_active_campaign_id?: number | null
+}
+
 interface LibraryVersionHistory {
   document_id: number
   current_version: string
@@ -105,6 +116,7 @@ interface LibraryVersionHistory {
   published_version?: string | null
   working_version?: string | null
   versions: LibraryVersionRow[]
+  campaign_offer?: CampaignOffer | null
 }
 
 const reportFailure = (err: unknown): string => {
@@ -182,6 +194,9 @@ export default function DocumentDetail() {
   const [titleDraft, setTitleDraft] = useState('')
   const [savingTitle, setSavingTitle] = useState(false)
   const [showInlinePreview, setShowInlinePreview] = useState(false)
+  const [lifecycleBusy, setLifecycleBusy] = useState(false)
+  const [campaignOffer, setCampaignOffer] = useState<CampaignOffer | null>(null)
+  const [offeringCampaign, setOfferingCampaign] = useState(false)
 
   const questionCount = useMemo(
     () => sanitizeQuestionCount(questionCountInput),
@@ -360,6 +375,86 @@ export default function DocumentDetail() {
       reportFailure(err)
     } finally {
       setPublishing(false)
+    }
+  }
+
+  const docStatus = (versionHistory?.status ?? document?.status ?? '').toLowerCase()
+
+  const handleSubmitForReview = async () => {
+    if (!documentId) return
+    setLifecycleBusy(true)
+    try {
+      await api.post(`/api/v1/documents/${documentId}/submit`)
+      toast.success('Submitted for HSEQ review')
+      setCampaignOffer(null)
+      await loadVersions()
+      await loadDocument()
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setLifecycleBusy(false)
+    }
+  }
+
+  const handleApproveDocument = async () => {
+    if (!documentId) return
+    setLifecycleBusy(true)
+    try {
+      const response = await api.post<LibraryVersionHistory>(`/api/v1/documents/${documentId}/approve`)
+      setVersionHistory(response.data)
+      const offer = response.data.campaign_offer ?? null
+      setCampaignOffer(offer?.eligible ? offer : null)
+      toast.success('Document approved')
+      await loadDocument()
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setLifecycleBusy(false)
+    }
+  }
+
+  const handleRejectDocument = async () => {
+    if (!documentId) return
+    setLifecycleBusy(true)
+    try {
+      await api.post(`/api/v1/documents/${documentId}/reject`, { review_notes: null })
+      toast.success('Returned to draft')
+      setCampaignOffer(null)
+      await loadVersions()
+      await loadDocument()
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setLifecycleBusy(false)
+    }
+  }
+
+  const handleAcceptCampaignOffer = async () => {
+    if (!documentId || !campaignOffer?.eligible) return
+    setOfferingCampaign(true)
+    try {
+      const response = await api.post<{
+        offered: boolean
+        campaign_id?: number
+        reason?: string | null
+      }>(`/api/v1/documents/${documentId}/offer-campaign`, {
+        title: campaignOffer.suggested_title,
+        launch: false,
+      })
+      const campaignId = response.data.campaign_id
+      toast.success(
+        response.data.offered
+          ? 'HSEQ reading campaign draft created — refine & launch in the Campaign tab'
+          : 'Draft HSEQ campaign already exists — open the Campaign tab',
+      )
+      setCampaignOffer(null)
+      if (campaignId) {
+        navigate(`/documents/${documentId}?tab=quiz&campaignId=${campaignId}`)
+      }
+    } catch (err) {
+      reportFailure(err)
+    } finally {
+      setOfferingCampaign(false)
     }
   }
 
@@ -576,7 +671,26 @@ export default function DocumentDetail() {
             {document.category ? ` · ${document.category}` : ''} · v{document.version}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {['draft', 'indexed', 'rejected'].includes(docStatus) ? (
+            <Button onClick={() => void handleSubmitForReview()} disabled={lifecycleBusy}>
+              {lifecycleBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Submit for HSEQ review
+            </Button>
+          ) : null}
+          {docStatus === 'under_review' ? (
+            <>
+              <Button onClick={() => void handleApproveDocument()} disabled={lifecycleBusy}>
+                {lifecycleBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : (
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                )}
+                Approve
+              </Button>
+              <Button variant="outline" onClick={() => void handleRejectDocument()} disabled={lifecycleBusy}>
+                Reject
+              </Button>
+            </>
+          ) : null}
           <Button variant="outline" onClick={() => void handleOpenPreview(false)}>
             <Eye className="w-4 h-4 mr-2" />
             Preview
@@ -587,6 +701,30 @@ export default function DocumentDetail() {
           </Button>
         </div>
       </div>
+
+      {campaignOffer?.eligible ? (
+        <Card className="p-4 border-primary/30 bg-primary/5" data-testid="hseq-campaign-offer">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium text-foreground">
+                {campaignOffer.ui_label ?? 'HSEQ reading campaign'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Offer a DocumentCampaign so staff can read and acknowledge this approved document.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => setCampaignOffer(null)} disabled={offeringCampaign}>
+                Not now
+              </Button>
+              <Button onClick={() => void handleAcceptCampaignOffer()} disabled={offeringCampaign}>
+                {offeringCampaign ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Create draft campaign
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       <Tabs defaultValue={defaultTab} key={defaultTab}>
         <TabsList className="flex flex-wrap h-auto gap-1">

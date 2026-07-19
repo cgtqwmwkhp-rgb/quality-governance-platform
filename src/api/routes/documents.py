@@ -41,6 +41,10 @@ from src.domain.services.document_campaign_service import DocumentCampaignServic
 from src.domain.services.document_category_service import allocate_pel_doc_ref
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
+from src.domain.services.document_library_campaign_offer_service import (
+    build_campaign_offer_for_document,
+    offer_campaign_from_document,
+)
 from src.domain.services.document_library_filing_service import (
     assert_library_read_access,
     filing_defaults_for_category,
@@ -366,6 +370,29 @@ class LibraryVersionResponse(BaseModel):
     published_by_id: Optional[int] = None
 
 
+class CampaignOfferAudience(BaseModel):
+    audience_type: str = "all_users"
+
+
+class CampaignOfferResponse(BaseModel):
+    """Additive HSEQ campaign offer after library approve (Wave W4a)."""
+
+    eligible: bool
+    reason: Optional[str] = None
+    document_id: int
+    pel_doc_ref: Optional[str] = None
+    access_level: str = "all_staff"
+    is_statutory: bool = False
+    suggested_title: str
+    default_audience: CampaignOfferAudience = CampaignOfferAudience()
+    default_due_within_days: int = 14
+    require_sign: bool = True
+    require_quiz: bool = False
+    existing_active_campaign_id: Optional[int] = None
+    existing_draft_campaign_id: Optional[int] = None
+    ui_label: str = "HSEQ reading campaign"
+
+
 class LibraryVersionHistoryResponse(BaseModel):
     """Version history for a library document."""
 
@@ -375,6 +402,27 @@ class LibraryVersionHistoryResponse(BaseModel):
     published_version: Optional[str] = None
     working_version: Optional[str] = None
     versions: list[LibraryVersionResponse]
+    campaign_offer: Optional[CampaignOfferResponse] = None
+
+
+class OfferCampaignRequest(BaseModel):
+    """Confirm optional HSEQ DocumentCampaign after approve."""
+
+    title: Optional[str] = None
+    due_within_days: int = 14
+    require_quiz: bool = False
+    require_sign: bool = True
+    audience_type: str = "all_users"
+    launch: bool = False
+
+
+class OfferCampaignResponse(BaseModel):
+    offered: bool
+    campaign_id: Optional[int] = None
+    status: Optional[str] = None
+    launched: bool = False
+    assigned_count: int = 0
+    reason: Optional[str] = None
 
 
 @dataclass
@@ -1267,6 +1315,7 @@ async def approve_document_version(
         version_id=version_id,
     )
     await db.commit()
+    await db.refresh(document)
     versions = await document_version_service.list_library_versions(
         db,
         document_id,
@@ -1274,6 +1323,11 @@ async def approve_document_version(
         is_superuser=bool(getattr(current_user, "is_superuser", False)),
     )
     serialized = [document_version_service.serialize_library_version(v) for v in versions]
+    offer = await build_campaign_offer_for_document(
+        db,
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        document=document,
+    )
     return LibraryVersionHistoryResponse(
         document_id=document.id,
         current_version=document.version,
@@ -1284,7 +1338,33 @@ async def approve_document_version(
         ),
         working_version=next((v["version_number"] for v in serialized if v["status"] == "draft"), None),
         versions=[LibraryVersionResponse(**v) for v in serialized],
+        campaign_offer=CampaignOfferResponse(**offer),
     )
+
+
+@router.post("/{document_id}/offer-campaign", response_model=OfferCampaignResponse)
+async def offer_document_campaign(
+    document_id: int,
+    payload: OfferCampaignRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """Create a draft HSEQ DocumentCampaign for an approved filed document (optional launch)."""
+    document = await _get_document_or_404(db, document_id, current_user, enforce_acl=True)
+    result = await offer_campaign_from_document(
+        db,
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        document=document,
+        actor_id=current_user.id,
+        actor=current_user,
+        title=payload.title,
+        due_within_days=payload.due_within_days,
+        require_quiz=payload.require_quiz,
+        require_sign=payload.require_sign,
+        audience_type=payload.audience_type,
+        launch=payload.launch,
+    )
+    return OfferCampaignResponse(**result)
 
 
 @router.post("/{document_id}/reject", response_model=LibraryLifecycleResponse)
