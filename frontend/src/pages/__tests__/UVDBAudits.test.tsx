@@ -9,6 +9,7 @@ const mockListAudits = vi.fn()
 const mockGetIsoMapping = vi.fn()
 const mockGetAudit = vi.fn()
 const mockCreateAudit = vi.fn()
+const mockDownloadProtocolPack = vi.fn()
 const mockCreateApiError = vi.fn()
 const mockGetReconciliation = vi.fn()
 
@@ -33,6 +34,7 @@ vi.mock('../../api/client', () => ({
     getISOMapping: (...args: unknown[]) => mockGetIsoMapping(...args),
     getAudit: (...args: unknown[]) => mockGetAudit(...args),
     createAudit: (...args: unknown[]) => mockCreateAudit(...args),
+    downloadProtocolPack: (...args: unknown[]) => mockDownloadProtocolPack(...args),
   },
   externalAuditImportsApi: {
     getReconciliation: (...args: unknown[]) => mockGetReconciliation(...args),
@@ -292,7 +294,8 @@ describe('UVDBAudits', () => {
     expect(screen.getByTestId('uvdb-section-scores')).toBeInTheDocument()
   })
 
-  it('keeps protocol export honesty on the export section without faking downloads', async () => {
+  it('enables protocol export downloads on the export section', async () => {
+    mockDownloadProtocolPack.mockResolvedValue({ data: new Blob(['{}']) })
     const UVDBAudits = (await import('../UVDBAudits')).default
     render(
       <MemoryRouter initialEntries={['/uvdb?section=export']}>
@@ -304,7 +307,18 @@ describe('UVDBAudits', () => {
     expect(screen.getByTestId('uvdb-export-protocol-honesty')).toHaveTextContent(
       'uvdb.shell.export_honesty',
     )
-    expect(screen.getByTestId('uvdb-export-protocol')).toBeDisabled()
+    expect(screen.getByTestId('uvdb-export-protocol-json')).toBeEnabled()
+    expect(screen.getByTestId('uvdb-export-protocol-xlsx')).toBeEnabled()
+
+    fireEvent.click(screen.getByTestId('uvdb-export-protocol-json'))
+    await waitFor(() => {
+      expect(mockDownloadProtocolPack).toHaveBeenCalledWith('json')
+    })
+
+    fireEvent.click(screen.getByTestId('uvdb-export-protocol-xlsx'))
+    await waitFor(() => {
+      expect(mockDownloadProtocolPack).toHaveBeenCalledWith('xlsx')
+    })
   })
 
   it('links to import review only when a real audit run id is available', async () => {

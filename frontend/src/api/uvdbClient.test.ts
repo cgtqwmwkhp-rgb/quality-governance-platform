@@ -24,6 +24,40 @@ describe('createUvdbApi', () => {
     expect(get).toHaveBeenCalledWith('/api/v1/uvdb/audits/9/responses')
   })
 
+  it('downloads protocol pack as authenticated blob export', async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: new Blob(['{"pack_version":"uvdb-protocol-1.0"}']),
+      headers: { 'content-disposition': 'attachment; filename="uvdb-protocol-pack-2026-07-19.json"' },
+    })
+    const api = { get } as any
+    const uvdb = createUvdbApi(api)
+    const appendChild = vi.spyOn(document.body, 'appendChild').mockImplementation(() => document.body)
+    const removeChild = vi.spyOn(document.body, 'removeChild').mockImplementation(() => document.body)
+    const click = vi.fn()
+    vi.spyOn(document, 'createElement').mockImplementation(
+      () => ({ click, href: '', download: '', rel: '' }) as unknown as HTMLAnchorElement,
+    )
+    const createObjectURL = vi.fn(() => 'blob:uvdb-pack')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
+
+    await uvdb.downloadProtocolPack('json')
+    expect(get).toHaveBeenCalledWith('/api/v1/uvdb/protocol/export', {
+      params: { format: 'json' },
+      responseType: 'blob',
+    })
+    expect(click).toHaveBeenCalled()
+
+    await uvdb.downloadProtocolPack('xlsx')
+    expect(get).toHaveBeenCalledWith('/api/v1/uvdb/protocol/export', {
+      params: { format: 'xlsx' },
+      responseType: 'blob',
+    })
+
+    appendChild.mockRestore()
+    removeChild.mockRestore()
+  })
+
   it('lists audits with optional filters and creates audits', async () => {
     const get = vi.fn().mockResolvedValue({ data: { audits: [] } })
     const post = vi.fn().mockResolvedValue({ data: { id: 1 } })

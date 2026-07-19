@@ -25,6 +25,12 @@ class TestPlanetMarkRouteHarness:
         paths = _router_paths(router)
         assert any("/years" in path for path in paths)
 
+    def test_planet_mark_export_route_registered(self):
+        from src.api.routes.planet_mark import router
+
+        paths = _router_paths(router)
+        assert any("/years/{year_id}/export" in path for path in paths)
+
 
 class TestUvdbRouteHarness:
     def test_uvdb_dashboard_route_registered(self):
@@ -50,6 +56,12 @@ class TestUvdbRouteHarness:
 
         paths = _router_paths(router)
         assert any("/iso-mapping" in path or "/protocol" in path for path in paths)
+
+    def test_uvdb_protocol_export_route_registered(self):
+        from src.api.routes.uvdb import router
+
+        paths = _router_paths(router)
+        assert any("/protocol/export" in path for path in paths)
 
     def test_uvdb_router_exposes_core_contract_surface(self):
         from src.api.routes.uvdb import router

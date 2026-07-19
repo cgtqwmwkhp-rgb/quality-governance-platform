@@ -322,7 +322,7 @@ describe('planetMarkHelpers PM-W3 export + initiatives', () => {
     const body = JSON.parse(pack.body)
     expect(body.export_kind).toBe('json_pack')
     expect(body.pdf_note).toMatch(/PDF/)
-    expect(body.xlsx_note).toMatch(/XLSX/)
+    expect(body.xlsx_note).toMatch(/xlsx/i)
   })
 
   it('maps initiative to createAction payload', () => {
