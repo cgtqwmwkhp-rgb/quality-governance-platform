@@ -110,3 +110,25 @@ Manual smoke:
 
 1. Revert squash commit on `main`
 2. Redeploy previous SHA
+
+## 8) Release Plan
+1. Squash-merge when CI green
+2. Tip smoke `/compliance` and `/ims` section pills + `?section=` deep links
+
+## 9) Rollback Plan
+1. Revert squash commit on `main`
+2. Redeploy previous SHA
+- **Rollback steps:** revert PR squash merge
+- **Owner:** Platform / HSEQ engineering
+
+## 10) Evidence Pack (links)
+- CI run(s): Linked after PR creation
+- Vitest: 30/30 local for ComplianceEvidence + IMSDashboard shell tests
+
+# Gate Checklist (must be complete before merge)
+- [x] **Gate 0:** Scope lock + AC defined + Change Ledger complete
+- [x] **Gate 1:** Exclusive allowlist respected
+- [ ] **Gate 2:** CI green
+- [ ] **Gate 3:** Staging verification complete
+- [ ] **Gate 4:** Canary healthy (if used)
+- [x] **Gate 5:** Production verification plan ready
