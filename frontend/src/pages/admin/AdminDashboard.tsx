@@ -21,7 +21,7 @@ import {
   Megaphone,
   MessageSquare,
 } from 'lucide-react'
-import { auditTrailApi, contractsApi } from '../../api/client'
+import { auditTrailApi, contractsApi, libraryReviewApi } from '../../api/client'
 import { formConfigApi } from '../../api/formConfigClient'
 import { Card } from '../../components/ui/Card'
 import { cn } from '../../helpers/utils'
@@ -156,10 +156,11 @@ export default function AdminDashboard() {
     setActivityUnavailable(false)
 
     try {
-      const [formsRes, contractsRes, trailRes] = await Promise.allSettled([
+      const [formsRes, contractsRes, trailRes, librarySummaryRes] = await Promise.allSettled([
         formConfigApi.listTemplates({ page_size: 1, is_active: true }),
         contractsApi.list(true),
         auditTrailApi.list({ page: 1, per_page: 5 }),
+        libraryReviewApi.getDashboardSummary(),
       ])
 
       const formsTotal =
@@ -170,6 +171,7 @@ export default function AdminDashboard() {
         contractsRes.status === 'fulfilled'
           ? contractsRes.value.total ?? contractsRes.value.items?.length ?? 0
           : null
+      const librarySummary = librarySummaryRes.status === 'fulfilled' ? librarySummaryRes.value.data : null
 
       if (formsRes.status === 'rejected') {
         captureAdminLoadError(
@@ -189,6 +191,13 @@ export default function AdminDashboard() {
         captureAdminLoadError(
           trailRes.reason,
           { component: 'AdminDashboard', action: 'loadActivity' },
+          '',
+        )
+      }
+      if (librarySummaryRes.status === 'rejected') {
+        captureAdminLoadError(
+          librarySummaryRes.reason,
+          { component: 'AdminDashboard', action: 'loadLibrarySummary' },
           '',
         )
       }
@@ -217,18 +226,37 @@ export default function AdminDashboard() {
           unavailable: contractsTotal === null,
         },
         {
-          label: t('admin.dashboard.stat_submissions_today', 'Submissions Today'),
-          value: '—',
-          change: t('admin.dashboard.stat_not_wired', 'Not wired yet'),
+          label: t('admin.dashboard.stat_statutory_documents', 'Statutory Documents'),
+          value: librarySummary === null ? '—' : String(librarySummary.statutory_documents),
+          change:
+            librarySummary === null
+              ? t('admin.dashboard.stat_unavailable', 'Count unavailable')
+              : t('admin.dashboard.stat_hseq_live', 'Live HSEQ library count'),
           trend: 'neutral',
-          icon: <Activity className="w-5 h-5" />,
+          icon: <Shield className="w-5 h-5" />,
+          unavailable: librarySummary === null,
         },
         {
-          label: t('admin.dashboard.stat_pending_actions', 'Pending Actions'),
-          value: '—',
-          change: t('admin.dashboard.stat_not_wired', 'Not wired yet'),
-          trend: 'neutral',
+          label: t('admin.dashboard.stat_overdue_reviews', 'Overdue Reviews'),
+          value: librarySummary === null ? '—' : String(librarySummary.overdue_reviews),
+          change:
+            librarySummary === null
+              ? t('admin.dashboard.stat_unavailable', 'Count unavailable')
+              : t('admin.dashboard.stat_requires_hseq_attention', 'Requires HSEQ attention'),
+          trend: librarySummary && librarySummary.overdue_reviews > 0 ? 'down' : 'neutral',
           icon: <Clock className="w-5 h-5" />,
+          unavailable: librarySummary === null,
+        },
+        {
+          label: t('admin.dashboard.stat_open_review_packs', 'Open Review Packs'),
+          value: librarySummary === null ? '—' : String(librarySummary.open_review_packs),
+          change:
+            librarySummary === null
+              ? t('admin.dashboard.stat_unavailable', 'Count unavailable')
+              : t('admin.dashboard.stat_hseq_live', 'Live HSEQ library count'),
+          trend: 'neutral',
+          icon: <ClipboardList className="w-5 h-5" />,
+          unavailable: librarySummary === null,
         },
       ])
 
@@ -259,7 +287,7 @@ export default function AdminDashboard() {
         setActivityUnavailable(true)
       }
 
-      if (formsTotal === null || contractsTotal === null) {
+      if (formsTotal === null || contractsTotal === null || librarySummary === null) {
         setLoadError(
           t(
             'admin.dashboard.load_unavailable',

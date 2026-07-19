@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -334,4 +334,89 @@ async def horizons(
         "overdue": overdue_rows,
         "due": due_rows,
         "upcoming": upcoming_rows,
+    }
+
+
+async def dashboard_summary(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    now: Optional[datetime] = None,
+) -> dict[str, Any]:
+    """Return the small, tenant-scoped Library / HSEQ dashboard summary."""
+    current = _as_utc(now or datetime.now(timezone.utc))
+    horizons_data = await horizons(db, tenant_id=tenant_id, months=3, now=current)
+
+    statutory_count = await db.scalar(
+        select(func.count()).select_from(Document).where(
+            Document.tenant_id == tenant_id,
+            Document.category_id.is_not(None),
+            Document.is_statutory.is_(True),
+        )
+    )
+    open_packs = await db.scalar(
+        select(func.count()).select_from(LibraryReviewPack).where(
+            LibraryReviewPack.tenant_id == tenant_id,
+            LibraryReviewPack.status == ReviewPackStatus.OPEN,
+        )
+    )
+
+    return {
+        "as_of": current.isoformat(),
+        "statutory_documents": statutory_count or 0,
+        "overdue_reviews": horizons_data["counts"]["overdue"],
+        "open_review_packs": open_packs or 0,
+    }
+
+
+async def dependency_map(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    pel_doc_ref: str,
+) -> dict[str, Any]:
+    """Map a PEL document reference to its current tip and immutable history."""
+    document = await db.scalar(
+        select(Document).where(
+            Document.tenant_id == tenant_id,
+            Document.pel_doc_ref == pel_doc_ref,
+        )
+    )
+    if document is None:
+        raise NotFoundError(f"Document with PEL reference {pel_doc_ref} not found")
+
+    from src.domain.models.document import DocumentVersion
+
+    result = await db.execute(
+        select(DocumentVersion)
+        .where(
+            DocumentVersion.tenant_id == tenant_id,
+            DocumentVersion.document_id == document.id,
+        )
+        .order_by(DocumentVersion.created_at.desc())
+    )
+    versions = list(result.scalars().all())
+    current_version = next((version for version in versions if version.version_number == document.version), None)
+
+    def serialize(version: DocumentVersion) -> dict[str, Any]:
+        return {
+            "id": version.id,
+            "version_number": version.version_number,
+            "status": version.status,
+            "published_at": version.published_at.isoformat() if version.published_at else None,
+            "change_notes": version.change_notes,
+        }
+
+    return {
+        "pel_doc_ref": document.pel_doc_ref,
+        "document_id": document.id,
+        "title": document.title,
+        "current_tip": {
+            "version_number": document.version,
+            "status": document.status.value if hasattr(document.status, "value") else str(document.status),
+            "published_at": current_version.published_at.isoformat()
+            if current_version and current_version.published_at
+            else None,
+        },
+        "superseded_history": [serialize(version) for version in versions if version.status == "superseded"],
     }

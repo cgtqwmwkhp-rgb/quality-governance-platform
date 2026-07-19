@@ -79,3 +79,34 @@ class HorizonsResponse(BaseModel):
     overdue: list[HorizonDocumentRow]
     due: list[HorizonDocumentRow]
     upcoming: list[HorizonDocumentRow]
+
+
+class DashboardSummaryResponse(BaseModel):
+    """Small Library / HSEQ dashboard counts."""
+
+    as_of: str
+    statutory_documents: int
+    overdue_reviews: int
+    open_review_packs: int
+
+
+class DependencyVersionRow(BaseModel):
+    id: int
+    version_number: str
+    status: str
+    published_at: Optional[str] = None
+    change_notes: Optional[str] = None
+
+
+class DependencyCurrentTip(BaseModel):
+    version_number: str
+    status: str
+    published_at: Optional[str] = None
+
+
+class DependencyMapResponse(BaseModel):
+    pel_doc_ref: str
+    document_id: int
+    title: str
+    current_tip: DependencyCurrentTip
+    superseded_history: list[DependencyVersionRow]
