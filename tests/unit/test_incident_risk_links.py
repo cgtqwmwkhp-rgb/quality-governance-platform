@@ -4,10 +4,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from src.domain.exceptions import BadRequestError
 from src.domain.models.incident import IncidentSeverity
 from src.domain.services.incident_risk_links import (
     append_linked_risk_id,
+    create_enterprise_risk_from_incident,
     default_impact_for_incident,
+    find_existing_enterprise_risk_for_incident,
     incident_risk_source,
     map_treatment_strategy,
     parse_incident_id_from_risk_context,
@@ -131,3 +134,47 @@ async def test_resolve_fk_safe_owner_id_returns_none_when_missing() -> None:
     db.execute = AsyncMock(return_value=_Result())
     owner = await resolve_fk_safe_owner_id(db, preferred_owner_id=99, fallback_user_id=7)
     assert owner is None
+
+
+@pytest.mark.asyncio
+async def test_find_existing_enterprise_risk_for_incident_by_linked_id() -> None:
+    class _Result:
+        def __init__(self, value):
+            self._value = value
+
+        def scalar_one_or_none(self):
+            return self._value
+
+    existing = object()
+    incident = _IncidentStub()
+    incident.id = 11
+    incident.reference_number = "INC-11"
+    incident.linked_risk_ids = "42"
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=_Result(existing))
+    found = await find_existing_enterprise_risk_for_incident(db, incident=incident)
+    assert found is existing
+
+
+@pytest.mark.asyncio
+async def test_create_enterprise_risk_requires_tenant() -> None:
+    incident = _IncidentStub()
+    incident.id = 11
+    incident.reference_number = "INC-11"
+    incident.tenant_id = None
+    incident.owner_id = None
+    incident.department = None
+    incident.location = None
+    db = AsyncMock()
+    with pytest.raises(BadRequestError, match="no tenant"):
+        await create_enterprise_risk_from_incident(
+            db,
+            incident=incident,
+            actor_user_id=1,
+            title="Risk",
+            description="Desc",
+            likelihood=4,
+            impact=4,
+            category="safety",
+            treatment_strategy="mitigate",
+        )

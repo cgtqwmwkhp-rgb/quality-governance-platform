@@ -37,16 +37,21 @@ def validate_incident_transition(current: str, target: str) -> None:
     """Validate a status transition for an incident.
 
     Raises StateTransitionError if the transition is not allowed.
+    Same-status updates are a no-op (PATCH edit forms always re-send status).
     """
+    current_raw = getattr(current, "value", current)
+    target_raw = getattr(target, "value", target)
     try:
-        current_status = IncidentStatus(current)
-        target_status = IncidentStatus(target)
+        current_status = IncidentStatus(current_raw)
+        target_status = IncidentStatus(target_raw)
     except ValueError:
+        return
+    if current_status == target_status:
         return
     allowed = INCIDENT_TRANSITIONS.get(current_status, set())
     if target_status not in allowed:
         raise StateTransitionError(
-            f"Cannot transition from '{current}' to '{target}'",
+            f"Cannot transition from '{current_status.value}' to '{target_status.value}'",
             details={"allowed": sorted(s.value for s in allowed)},
         )
 

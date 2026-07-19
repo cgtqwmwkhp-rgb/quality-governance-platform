@@ -262,11 +262,28 @@ export default function IncidentDetail() {
     if (!incident) return
     setSaving(true)
     try {
-      const response = await incidentsApi.update(incident.id, editForm)
+      // Omit unchanged status so no-op edits never hit transition validation.
+      const payload: IncidentUpdate = { ...editForm }
+      if (payload.status === incident.status) {
+        delete payload.status
+      }
+      const response = await incidentsApi.update(incident.id, payload)
       setIncident(response.data)
+      setEditForm({
+        title: response.data.title,
+        description: response.data.description,
+        incident_type: response.data.incident_type,
+        severity: response.data.severity,
+        status: response.data.status,
+        location: response.data.location,
+        department: response.data.department,
+        asset_id: response.data.asset_id ?? null,
+      })
       setIsEditing(false)
+      toast.success(t('incidents.detail.save_success', 'Incident updated'))
     } catch (err) {
       trackError(err, { component: 'IncidentDetail', action: 'updateIncident' })
+      toast.error(getApiErrorMessage(err, t('incidents.detail.save_failed', 'Could not save incident')))
     } finally {
       setSaving(false)
     }
@@ -830,12 +847,20 @@ export default function IncidentDetail() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="open">{t('incidents.detail.status_open')}</SelectItem>
+                          <SelectItem value="reported">
+                            {t('incidents.detail.status_reported', 'Reported')}
+                          </SelectItem>
                           <SelectItem value="under_investigation">
                             {t('incidents.detail.status_under_investigation')}
                           </SelectItem>
                           <SelectItem value="pending_actions">
                             {t('incidents.detail.status_pending_actions')}
+                          </SelectItem>
+                          <SelectItem value="actions_in_progress">
+                            {t('incidents.detail.status_actions_in_progress', 'Actions in progress')}
+                          </SelectItem>
+                          <SelectItem value="pending_review">
+                            {t('incidents.detail.status_pending_review', 'Pending review')}
                           </SelectItem>
                           <SelectItem value="closed">
                             {t('incidents.detail.status_closed')}
