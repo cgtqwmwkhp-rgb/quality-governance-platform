@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   imsDashboardApi,
@@ -43,6 +43,13 @@ import {
   isDemoSchemeReviewSource,
 } from './imsMapHonesty'
 import {
+  IMS_DEFAULT_SECTION,
+  IMS_SECTIONS,
+  imsSectionQueryValue,
+  parseImsSection,
+  type ImsSectionId,
+} from './imsDashboardHelpers'
+import {
   Button,
   Card,
   CardContent,
@@ -53,8 +60,6 @@ import {
   TableSkeleton,
 } from '../components/ui'
 
-type ActiveTab = 'overview' | 'mapping' | 'audit' | 'review' | 'isms'
-
 type ComplianceHubDestination = {
   id: string
   title?: string
@@ -64,7 +69,7 @@ type ComplianceHubDestination = {
   icon: React.ElementType
   colorBg: string
   path?: string
-  tab?: ActiveTab
+  tab?: ImsSectionId
 }
 
 const complianceHubDestinations: ComplianceHubDestination[] = [
@@ -113,7 +118,8 @@ const complianceHubDestinations: ComplianceHubDestination[] = [
 export default function IMSDashboard() {
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const [activeTab, setActiveTab] = useState<ActiveTab>('overview')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const section = parseImsSection(searchParams.get('section'))
 
   // Live dashboard data
   const [dashData, setDashData] = useState<IMSDashboardResponse | null>(null)
@@ -152,15 +158,43 @@ export default function IMSDashboard() {
     }
   }, [])
 
+  const setQuery = useCallback(
+    (patch: Record<string, string | null>) => {
+      const next = new URLSearchParams(searchParams)
+      Object.entries(patch).forEach(([key, value]) => {
+        if (
+          value == null ||
+          value === '' ||
+          (key === 'section' && value === IMS_DEFAULT_SECTION)
+        ) {
+          if (key === 'section' && value === IMS_DEFAULT_SECTION) next.delete(key)
+          else if (value == null || value === '') next.delete(key)
+          else next.set(key, value)
+        } else {
+          next.set(key, value)
+        }
+      })
+      setSearchParams(next, { replace: true })
+    },
+    [searchParams, setSearchParams],
+  )
+
+  const setSection = useCallback(
+    (nextSection: ImsSectionId) => {
+      setQuery({ section: imsSectionQueryValue(nextSection) })
+    },
+    [setQuery],
+  )
+
   useEffect(() => {
     void fetchDashboard()
   }, [fetchDashboard])
 
   useEffect(() => {
-    if (activeTab === 'mapping' && mappings.length === 0 && !mappingsLoading) {
+    if (section === 'mapping' && mappings.length === 0 && !mappingsLoading) {
       void fetchMappings()
     }
-  }, [activeTab, fetchMappings, mappings.length, mappingsLoading])
+  }, [section, fetchMappings, mappings.length, mappingsLoading])
 
   // ISMS domain metadata
   const liveStandards = dashData?.standards ?? []
@@ -176,7 +210,7 @@ export default function IMSDashboard() {
       return
     }
     if (destination.tab) {
-      setActiveTab(destination.tab)
+      setSection(destination.tab)
     }
   }
 
@@ -316,17 +350,17 @@ export default function IMSDashboard() {
         </div>
         <div className="flex flex-wrap gap-3 items-center">
           <select
-            value={activeTab}
-            onChange={(e) => setActiveTab(e.target.value as ActiveTab)}
-            aria-label="Filter IMS section"
+            value={section}
+            onChange={(e) => setSection(e.target.value as ImsSectionId)}
+            aria-label={t('ims.shell.tabs_aria')}
             data-testid="ims-section-filter"
-            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+            className="rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground"
           >
-            <option value="overview">Overview</option>
-            <option value="mapping">Cross-Standard Mapping</option>
-            <option value="audit">Unified Audit Plan</option>
-            <option value="review">Management Review</option>
-            <option value="isms">ISO 27001 ISMS</option>
+            {IMS_SECTIONS.map(({ id, labelKey }) => (
+              <option key={id} value={id}>
+                {t(labelKey)}
+              </option>
+            ))}
           </select>
           <Button
             variant="outline"
@@ -475,35 +509,35 @@ export default function IMSDashboard() {
         )}
       </div>
 
-      {/* Tab Bar */}
-      <div className="flex gap-2 border-b border-border pb-2 overflow-x-auto" role="tablist" aria-label="IMS sections">
-        {([
-          { id: 'overview', label: 'Overview', icon: BarChart3 },
-          { id: 'mapping', label: 'Cross-Standard Mapping', icon: Link2 },
-          { id: 'audit', label: 'Unified Audit Plan', icon: ClipboardList },
-          { id: 'review', label: 'Management Review', icon: Users },
-          { id: 'isms', label: 'ISO 27001 ISMS', icon: Lock },
-        ] as { id: ActiveTab; label: string; icon: React.ElementType }[]).map((tab) => {
-          const Icon = tab.icon
-          return (
-            <Button
-              key={tab.id}
-              variant={activeTab === tab.id ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setActiveTab(tab.id)}
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              className="flex-shrink-0"
-            >
-              <Icon className="w-4 h-4 mr-2" aria-hidden="true" />
-              {tab.label}
-            </Button>
-          )
-        })}
+      {/* Section pills */}
+      <div
+        className="flex bg-surface rounded-xl p-1 border border-border overflow-x-auto"
+        role="tablist"
+        aria-label={t('ims.shell.tabs_aria')}
+      >
+        {IMS_SECTIONS.map(({ id, labelKey, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={section === id}
+            onClick={() => setSection(id)}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap',
+              section === id
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Icon className="w-4 h-4" aria-hidden="true" />
+            {t(labelKey)}
+          </button>
+        ))}
       </div>
 
       {/* ── Overview Tab ── */}
-      {activeTab === 'overview' && (
+      {section === 'overview' && (
+        <div data-testid="ims-section-overview">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card data-testid="ims-overview-kpi-card">
             <CardHeader>
@@ -599,10 +633,12 @@ export default function IMSDashboard() {
             </CardContent>
           </Card>
         </div>
+        </div>
       )}
 
       {/* ── Cross-Standard Mapping Tab ── */}
-      {activeTab === 'mapping' && (
+      {section === 'mapping' && (
+        <div data-testid="ims-section-mapping">
         <Card data-testid="ims-map-w1-panel">
           <CardHeader>
             <CardTitle>{t('ims.map_w1.title')}</CardTitle>
@@ -702,10 +738,12 @@ export default function IMSDashboard() {
             )}
           </CardContent>
         </Card>
+        </div>
       )}
 
       {/* ── Unified Audit Plan Tab ── */}
-      {activeTab === 'audit' && (
+      {section === 'audit' && (
+        <div data-testid="ims-section-audit">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
@@ -773,10 +811,12 @@ export default function IMSDashboard() {
             )}
           </CardContent>
         </Card>
+        </div>
       )}
 
       {/* ── Management Review Tab ── */}
-      {activeTab === 'review' && (
+      {section === 'review' && (
+        <div data-testid="ims-section-review">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2">
             <CardHeader>
@@ -887,10 +927,12 @@ export default function IMSDashboard() {
             </CardContent>
           </Card>
         </div>
+        </div>
       )}
 
       {/* ── ISO 27001 ISMS Tab ── */}
-      {activeTab === 'isms' && (
+      {section === 'isms' && (
+        <div data-testid="ims-section-isms">
         <div className="space-y-6">
           {dashLoading ? (
             <Card>
@@ -1041,8 +1083,8 @@ export default function IMSDashboard() {
                             className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border hover:border-border-strong transition-colors cursor-pointer"
                             role="button"
                             tabIndex={0}
-                            onClick={() => setActiveTab('isms')}
-                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setActiveTab('isms') }}
+                            onClick={() => setSection('isms')}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSection('isms') }}
                           >
                             <div className="flex items-center gap-3">
                               <div className="p-2 bg-muted rounded-lg">
@@ -1189,6 +1231,7 @@ export default function IMSDashboard() {
               }
             />
           )}
+        </div>
         </div>
       )}
     </div>
