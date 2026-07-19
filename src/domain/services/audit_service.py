@@ -32,6 +32,7 @@ from src.domain.models.audit import (
     AuditStatus,
     AuditTemplate,
     FindingStatus,
+    TemplateVersion,
     audit_finding_risks,
 )
 from src.domain.models.audit_log import AuditEvent
@@ -107,6 +108,34 @@ _FINDING_JSON_REMAPS: dict[str, str] = {
 }
 
 _CHOICE_QUESTION_TYPES = {"radio", "dropdown", "checkbox"}
+
+# Question types with execution UI and/or API normalization in this slice.
+_EXECUTABLE_QUESTION_TYPES = frozenset(
+    {
+        "text",
+        "textarea",
+        "number",
+        "checkbox",
+        "radio",
+        "dropdown",
+        "date",
+        "datetime",
+        "signature",
+        "photo",
+        "rating",
+        "yes_no",
+        "pass_fail",
+        "score",
+        "numeric",
+        "select",
+        "multi_select",
+        "multi_choice",
+        "checklist",
+    }
+)
+
+# Rejected at publish until execution + persistence are implemented.
+_UNSUPPORTED_PUBLISH_QUESTION_TYPES = frozenset({"file"})
 
 _QUESTION_CLONE_FIELDS = (
     "question_text",
@@ -411,6 +440,17 @@ class AuditService:
                     raise ValidationError("Every question must include question text before publishing")
                 if (question.weight or 0) <= 0:
                     raise ValidationError(f"Question '{question.question_text}' must have a weight greater than zero")
+                question_type = (question.question_type or "").strip().lower()
+                if question_type in _UNSUPPORTED_PUBLISH_QUESTION_TYPES:
+                    raise ValidationError(
+                        f"Question '{question.question_text}' uses unsupported type "
+                        f"'{question.question_type}' for publish; remove it or change type"
+                    )
+                if question_type and question_type not in _EXECUTABLE_QUESTION_TYPES:
+                    raise ValidationError(
+                        f"Question '{question.question_text}' uses unknown type "
+                        f"'{question.question_type}' and cannot be published"
+                    )
                 if question.question_type in _CHOICE_QUESTION_TYPES:
                     options = question.options_json or []
                     if len(options) < 2:
@@ -426,6 +466,87 @@ class AuditService:
                             raise ValidationError(
                                 f"Question '{question.question_text}' contains an incomplete answer option"
                             )
+
+    @staticmethod
+    def _build_template_version_snapshot(template: AuditTemplate) -> dict[str, Any]:
+        """Immutable question graph captured at publish time."""
+
+        def _question_snapshot(question: AuditQuestion) -> dict[str, Any]:
+            return {
+                "id": question.id,
+                "section_id": question.section_id,
+                "question_text": question.question_text,
+                "question_type": question.question_type,
+                "description": question.description,
+                "help_text": question.help_text,
+                "is_required": question.is_required,
+                "allow_na": question.allow_na,
+                "is_active": question.is_active,
+                "max_score": question.max_score,
+                "weight": question.weight,
+                "options_json": question.options_json,
+                "min_value": question.min_value,
+                "max_value": question.max_value,
+                "evidence_requirements_json": question.evidence_requirements_json,
+                "conditional_logic_json": question.conditional_logic_json,
+                "positive_answer": question.positive_answer,
+                "failure_triggers_action": question.failure_triggers_action,
+                "risk_weight": question.risk_weight,
+                "risk_category": question.risk_category,
+                "criticality": (
+                    question.criticality.value if hasattr(question.criticality, "value") else question.criticality
+                ),
+                "sort_order": question.sort_order,
+            }
+
+        sections = []
+        for section in template.sections or []:
+            sections.append(
+                {
+                    "id": section.id,
+                    "title": section.title,
+                    "description": section.description,
+                    "sort_order": section.sort_order,
+                    "weight": section.weight,
+                    "questions": [_question_snapshot(q) for q in (section.questions or [])],
+                }
+            )
+
+        return {
+            "template_id": template.id,
+            "version": template.version,
+            "name": template.name,
+            "description": template.description,
+            "category": template.category,
+            "audit_type": template.audit_type,
+            "scoring_method": template.scoring_method,
+            "passing_score": template.passing_score,
+            "auto_create_findings": template.auto_create_findings,
+            "sections": sections,
+            "questions": [_question_snapshot(q) for q in (template.questions or [])],
+        }
+
+    @classmethod
+    def _missing_required_question_ids(
+        cls,
+        *,
+        questions: list[AuditQuestion],
+        responses: list[AuditResponse],
+    ) -> list[int]:
+        response_by_question = {response.question_id: response for response in responses}
+        missing: list[int] = []
+        for question in questions:
+            if not getattr(question, "is_active", True):
+                continue
+            if not getattr(question, "is_required", True):
+                continue
+            response = response_by_question.get(question.id)
+            if response is None or not AuditScoringService.response_is_answered(response):
+                missing.append(question.id)
+                continue
+            if not AuditScoringService.evidence_requirements_met(question, response):
+                missing.append(question.id)
+        return sorted(missing)
 
     # ==================================================================
     # Template methods
@@ -666,6 +787,19 @@ class AuditService:
         question_count = len(template.questions)
 
         template.is_published = True
+        # Freeze the publish-time question graph. Completion still evaluates live
+        # AuditQuestion rows by response.question_id (see Change Ledger gap);
+        # snapshot is the durable audit trail for mid-run drift investigations.
+        self.db.add(
+            TemplateVersion(
+                template_id=template.id,
+                version_number=template.version,
+                change_summary="Published template snapshot",
+                snapshot_json=self._build_template_version_snapshot(template),
+                created_by_id=actor_user_id,
+                tenant_id=tenant_id,
+            )
+        )
         await self.db.flush()
         await self.db.refresh(template)
 
@@ -1591,6 +1725,32 @@ class AuditService:
         if run.status != AuditStatus.IN_PROGRESS:
             raise ValidationError("Only in-progress runs can be completed")
 
+        template = run.template
+        if template is None:
+            template_result = await self.db.execute(select(AuditTemplate).where(AuditTemplate.id == run.template_id))
+            template = template_result.scalar_one_or_none()
+
+        question_result = await self.db.execute(
+            select(AuditQuestion).where(
+                AuditQuestion.template_id == run.template_id,
+                AuditQuestion.is_active == True,  # noqa: E712
+            )
+        )
+        active_questions = list(question_result.scalars().all())
+        missing_question_ids = self._missing_required_question_ids(
+            questions=active_questions,
+            responses=list(run.responses or []),
+        )
+        if missing_question_ids:
+            raise ValidationError(
+                "All required audit questions must be answered before completion",
+                details={
+                    "run_id": run.id,
+                    "template_id": run.template_id,
+                    "missing_question_ids": missing_question_ids,
+                },
+            )
+
         # Backfill score/max_score when clients omit them (execution UI historically did).
         question_ids = [r.question_id for r in (run.responses or []) if r.question_id]
         questions_by_id: dict[int, AuditQuestion] = {}
@@ -1623,10 +1783,6 @@ class AuditService:
         run.max_score = score.max_score
         run.score_percentage = score.score_percentage
 
-        template = run.template
-        if template is None:
-            template_result = await self.db.execute(select(AuditTemplate).where(AuditTemplate.id == run.template_id))
-            template = template_result.scalar_one_or_none()
         if template and template.passing_score is not None:
             run.passed = run.score_percentage >= template.passing_score
 
@@ -1726,6 +1882,7 @@ class AuditService:
             "response_text": response.response_text,
             "response_number": response.response_number,
             "response_bool": response.response_bool,
+            "response_json": response.response_json,
             "is_na": response.is_na,
             **update_data,
         }

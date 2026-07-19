@@ -234,3 +234,41 @@ async def test_complete_run_materializes_finding_capa_and_risk(
     assert action.reference_number in (risks[0].linked_actions or [])
     assert finding.risk_ids_json == [risks[0].id]
     assert await _junction_risk_ids(test_session, finding.id) == [risks[0].id]
+
+
+async def test_complete_run_requires_all_required_questions(
+    client,
+    test_session: AsyncSession,
+    auth_headers: dict[str, str],
+) -> None:
+    """Required-question gate blocks completion when answers are missing."""
+    run, _ = await _inspection_run(test_session, with_failed_response=False)
+    section = AuditSection(
+        template_id=run.template_id,
+        title="Required gate",
+        sort_order=1,
+    )
+    test_session.add(section)
+    await test_session.flush()
+    question = AuditQuestion(
+        template_id=run.template_id,
+        section_id=section.id,
+        question_text="Is the control in place?",
+        question_type="yes_no",
+        positive_answer="yes",
+        is_required=True,
+        risk_weight=3,
+        failure_triggers_action=True,
+        sort_order=1,
+    )
+    test_session.add(question)
+    await test_session.commit()
+
+    blocked = await client.post(
+        f"/api/v1/audits/runs/{run.id}/complete",
+        headers=auth_headers,
+    )
+    assert blocked.status_code == 400, blocked.text
+    payload = blocked.json()
+    details = payload.get("error", {}).get("details") or payload.get("details") or {}
+    assert question.id in (details.get("missing_question_ids") or [])

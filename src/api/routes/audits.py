@@ -1201,7 +1201,7 @@ async def complete_run(
             (time.perf_counter() - started) * 1000,
             "invalid_status_transition",
         )
-        raise BadRequestError(str(exc))
+        raise BadRequestError(exc.message, details=exc.details)
 
     await db.commit()
     await db.refresh(run)

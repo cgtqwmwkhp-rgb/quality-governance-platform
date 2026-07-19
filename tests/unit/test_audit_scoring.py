@@ -177,6 +177,105 @@ class TestDeriveResponseScore:
         assert max_score == 10.0
 
 
+class TestAnswerIntegrityHelpers:
+    def test_response_is_answered_honors_core_fields(self):
+        answered = SimpleNamespace(
+            is_na=False,
+            response_value="yes",
+            response_text=None,
+            response_number=None,
+            response_bool=None,
+            response_date=None,
+            response_json=None,
+        )
+        assert AuditScoringService.response_is_answered(answered) is True
+
+        empty = SimpleNamespace(
+            is_na=False,
+            response_value=None,
+            response_text=None,
+            response_number=None,
+            response_bool=None,
+            response_date=None,
+            response_json=None,
+        )
+        assert AuditScoringService.response_is_answered(empty) is False
+
+        na = SimpleNamespace(
+            is_na=True,
+            response_value=None,
+            response_text=None,
+            response_number=None,
+            response_bool=None,
+            response_date=None,
+            response_json=None,
+        )
+        assert AuditScoringService.response_is_answered(na) is True
+
+    def test_response_is_answered_json_array_and_selected(self):
+        array_answer = SimpleNamespace(
+            is_na=False,
+            response_value='["a","b"]',
+            response_text=None,
+            response_number=None,
+            response_bool=None,
+            response_date=None,
+            response_json=None,
+        )
+        assert AuditScoringService.response_is_answered(array_answer) is True
+
+        selected = SimpleNamespace(
+            is_na=False,
+            response_value=None,
+            response_text=None,
+            response_number=None,
+            response_bool=None,
+            response_date=None,
+            response_json={"selected": ["partial"]},
+        )
+        assert AuditScoringService.response_is_answered(selected) is True
+
+    def test_response_is_answered_evidence_asset_ids(self):
+        photo = SimpleNamespace(
+            is_na=False,
+            response_value=None,
+            response_text=None,
+            response_number=None,
+            response_bool=None,
+            response_date=None,
+            response_json={"evidence_asset_ids": [12, 34]},
+        )
+        assert AuditScoringService.response_is_answered(photo) is True
+
+    def test_evidence_requirements_met_uses_evidence_asset_ids(self):
+        question = SimpleNamespace(
+            evidence_requirements_json={
+                "required": True,
+                "require_photo": True,
+                "min_attachments": 2,
+            }
+        )
+        missing = SimpleNamespace(response_json={"evidence_asset_ids": [1]})
+        complete = SimpleNamespace(response_json={"evidence_asset_ids": [1, 2]})
+        assert AuditScoringService.evidence_requirements_met(question, missing) is False
+        assert AuditScoringService.evidence_requirements_met(question, complete) is True
+
+    def test_evidence_requirements_met_signature_only(self):
+        question = SimpleNamespace(
+            evidence_requirements_json={
+                "required": True,
+                "require_signature": True,
+                "min_attachments": 1,
+            }
+        )
+        legacy = SimpleNamespace(response_json={"signature": "data:image/png;base64,abc"})
+        asset = SimpleNamespace(response_json={"evidence_asset_ids": [99]})
+        missing = SimpleNamespace(response_json={})
+        assert AuditScoringService.evidence_requirements_met(question, legacy) is True
+        assert AuditScoringService.evidence_requirements_met(question, asset) is True
+        assert AuditScoringService.evidence_requirements_met(question, missing) is False
+
+
 class TestScoreResult:
     def test_score_result_creation(self):
         sr = ScoreResult(total_score=80.0, max_score=100.0, score_percentage=80.0)
