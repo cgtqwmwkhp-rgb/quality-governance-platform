@@ -74,9 +74,7 @@ async def test_publish_writes_template_version_snapshot(
     assert publish.status_code == 200, publish.text
 
     test_session.expire_all()
-    versions = await test_session.execute(
-        select(TemplateVersion).where(TemplateVersion.template_id == template.id)
-    )
+    versions = await test_session.execute(select(TemplateVersion).where(TemplateVersion.template_id == template.id))
     version = versions.scalar_one()
     assert version.version_number == template.version
     assert any(q["id"] == question.id for q in version.snapshot_json["questions"])
