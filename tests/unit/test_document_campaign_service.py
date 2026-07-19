@@ -12,7 +12,7 @@ import pytest
 
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.document_campaign import AssignmentStatus, CampaignAssignment, CampaignStatus
-from src.domain.models.governed_knowledge import QuizDraftStatus
+from src.domain.models.governed_knowledge import DiscussionThreadStatus, QuizDraftStatus
 from src.domain.services.document_campaign_notifications import portal_assignment_action_url
 from src.domain.services.document_campaign_service import (
     MAX_QUIZ_ATTEMPTS,
@@ -1288,6 +1288,129 @@ class TestListCampaignRoster:
         with pytest.raises(BadRequestError, match="Invalid assignment status"):
             await service.list_campaign_roster(tenant_id=1, campaign_id=1, status="nope")
 
+    @pytest.mark.asyncio
+    async def test_includes_review_needed_and_disposition_fields(self):
+        now = datetime.now(timezone.utc)
+        campaign = SimpleNamespace(id=9, document_id=3, require_quiz=True)
+        assignment = SimpleNamespace(
+            id=1,
+            status=AssignmentStatus.COMPLETED,
+            assigned_at=now,
+            due_at=now,
+            first_opened_at=now,
+            completed_at=now,
+            quiz_score=40,
+            quiz_passed=False,
+            quiz_attempts=1,
+            quiz_review_needed=True,
+            signature_disposition="signature_deferred_pending_answer",
+            reminders_sent=0,
+            last_reminder_at=None,
+        )
+        user = SimpleNamespace(id=5, email="alex@example.com", full_name="Alex Engineer")
+
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 1
+        rows_result = MagicMock()
+        rows_result.all.return_value = [(assignment, user)]
+        opened_result = MagicMock()
+        opened_result.scalar_one.return_value = 1
+        quiz_pass_result = MagicMock()
+        quiz_pass_result.scalar_one.return_value = 0
+        quiz_fail_result = MagicMock()
+        quiz_fail_result.scalar_one.return_value = 1
+
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[count_result, rows_result, opened_result, quiz_pass_result, quiz_fail_result]
+            )
+        )
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+        service._compliance_summary = AsyncMock(
+            return_value={
+                "total_assigned": 1,
+                "completed": 1,
+                "pending": 0,
+                "overdue": 0,
+                "expired": 0,
+                "completion_rate": 100.0,
+            }
+        )
+
+        payload = await service.list_campaign_roster(
+            tenant_id=1,
+            campaign_id=9,
+            review_needed=True,
+            disposition="signature_deferred_pending_answer",
+        )
+
+        assert payload["items"][0]["quiz_review_needed"] is True
+        assert payload["items"][0]["signature_disposition"] == "signature_deferred_pending_answer"
+
+    @pytest.mark.asyncio
+    async def test_defaults_review_needed_and_disposition_when_absent(self):
+        """Older rows without the columns populated should surface safe defaults."""
+        now = datetime.now(timezone.utc)
+        campaign = SimpleNamespace(id=9, document_id=3, require_quiz=False)
+        assignment = SimpleNamespace(
+            id=1,
+            status=AssignmentStatus.PENDING,
+            assigned_at=now,
+            due_at=now,
+            first_opened_at=None,
+            completed_at=None,
+            quiz_score=None,
+            quiz_passed=None,
+            quiz_attempts=0,
+            reminders_sent=0,
+            last_reminder_at=None,
+        )
+        user = SimpleNamespace(id=5, email="alex@example.com", full_name="Alex Engineer")
+
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 1
+        rows_result = MagicMock()
+        rows_result.all.return_value = [(assignment, user)]
+        opened_result = MagicMock()
+        opened_result.scalar_one.return_value = 0
+        quiz_pass_result = MagicMock()
+        quiz_pass_result.scalar_one.return_value = 0
+        quiz_fail_result = MagicMock()
+        quiz_fail_result.scalar_one.return_value = 0
+
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[count_result, rows_result, opened_result, quiz_pass_result, quiz_fail_result]
+            )
+        )
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+        service._compliance_summary = AsyncMock(
+            return_value={
+                "total_assigned": 1,
+                "completed": 0,
+                "pending": 1,
+                "overdue": 0,
+                "expired": 0,
+                "completion_rate": 0.0,
+            }
+        )
+
+        payload = await service.list_campaign_roster(tenant_id=1, campaign_id=9)
+
+        assert payload["items"][0]["quiz_review_needed"] is False
+        assert payload["items"][0]["signature_disposition"] is None
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_disposition_filter(self):
+        db = SimpleNamespace(execute=AsyncMock())
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=SimpleNamespace(id=1, document_id=2, require_quiz=False))
+
+        with pytest.raises(BadRequestError, match="Invalid signature disposition"):
+            await service.list_campaign_roster(tenant_id=1, campaign_id=1, disposition="bogus")
+
 
 # =============================================================================
 # Campaign effectiveness analytics (Wave 2)
@@ -1553,3 +1676,216 @@ class TestListCompliancePeople:
 
         with pytest.raises(BadRequestError, match="status must be overdue or quiz_fail"):
             await service.list_compliance_people(tenant_id=1, status="pending")
+
+
+# =============================================================================
+# Deferred-sign loop: resolve -> reopen -> sign (CUJ-POLISH Slice B)
+# =============================================================================
+
+
+class TestResolveQuestionNotifiesDeferredAssignee:
+    @pytest.mark.asyncio
+    async def test_resolve_question_notifies_assignee_with_deferred_signature(self):
+        thread = SimpleNamespace(id=42, document_id=7, created_by_id=5, status=DiscussionThreadStatus.OPEN)
+        assignment = SimpleNamespace(id=101, campaign_id=9, signature_disposition="signature_deferred_pending_answer")
+
+        db = SimpleNamespace(commit=AsyncMock(), refresh=AsyncMock())
+        service = DocumentCampaignService(db)
+        service._get_thread = AsyncMock(return_value=thread)
+        service._find_pending_signature_assignment = AsyncMock(return_value=assignment)
+        service._document_title = AsyncMock(return_value="Safety Policy")
+        service._add_campaign_notification = MagicMock(return_value=True)
+
+        result_thread = await service.resolve_question(tenant_id=1, thread_id=42, resolver_id=3)
+
+        assert result_thread.status == DiscussionThreadStatus.RESOLVED
+        service._add_campaign_notification.assert_called_once()
+        kwargs = service._add_campaign_notification.call_args[0][0]
+        assert kwargs["user_id"] == 5
+        assert kwargs["action_url"] == "/portal/reading?assignment=101"
+
+    @pytest.mark.asyncio
+    async def test_resolve_question_skips_notification_when_no_pending_signature(self):
+        thread = SimpleNamespace(id=42, document_id=7, created_by_id=5, status=DiscussionThreadStatus.OPEN)
+        db = SimpleNamespace(commit=AsyncMock(), refresh=AsyncMock())
+        service = DocumentCampaignService(db)
+        service._get_thread = AsyncMock(return_value=thread)
+        service._find_pending_signature_assignment = AsyncMock(return_value=None)
+        service._add_campaign_notification = MagicMock()
+
+        result_thread = await service.resolve_question(tenant_id=1, thread_id=42, resolver_id=3)
+
+        assert result_thread.status == DiscussionThreadStatus.RESOLVED
+        service._add_campaign_notification.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_resolve_question_survives_notification_lookup_failure(self):
+        """Resolving must succeed even if the best-effort notification lookup blows up."""
+        thread = SimpleNamespace(id=42, document_id=7, created_by_id=5, status=DiscussionThreadStatus.OPEN)
+        db = SimpleNamespace(commit=AsyncMock(), refresh=AsyncMock())
+        service = DocumentCampaignService(db)
+        service._get_thread = AsyncMock(return_value=thread)
+        service._find_pending_signature_assignment = AsyncMock(side_effect=RuntimeError("boom"))
+
+        result_thread = await service.resolve_question(tenant_id=1, thread_id=42, resolver_id=3)
+
+        assert result_thread.status == DiscussionThreadStatus.RESOLVED
+
+
+class TestRequestAssignmentSignature:
+    @pytest.mark.asyncio
+    async def test_returns_notified_true_when_assignment_pending(self):
+        thread = SimpleNamespace(id=42, document_id=7, created_by_id=5, status=DiscussionThreadStatus.RESOLVED)
+        assignment = SimpleNamespace(id=101, campaign_id=9, signature_disposition="signature_deferred_pending_answer")
+        db = SimpleNamespace(commit=AsyncMock())
+        service = DocumentCampaignService(db)
+        service._get_thread = AsyncMock(return_value=thread)
+        service._find_pending_signature_assignment = AsyncMock(return_value=assignment)
+        service._document_title = AsyncMock(return_value="Safety Policy")
+        service._add_campaign_notification = MagicMock(return_value=True)
+
+        result = await service.request_assignment_signature(tenant_id=1, thread_id=42, requested_by_id=3)
+
+        assert result == {"notified": True, "assignment_id": 101}
+
+    @pytest.mark.asyncio
+    async def test_returns_notified_false_when_no_pending_assignment(self):
+        thread = SimpleNamespace(id=42, document_id=7, created_by_id=5, status=DiscussionThreadStatus.RESOLVED)
+        db = SimpleNamespace()
+        service = DocumentCampaignService(db)
+        service._get_thread = AsyncMock(return_value=thread)
+        service._find_pending_signature_assignment = AsyncMock(return_value=None)
+
+        result = await service.request_assignment_signature(tenant_id=1, thread_id=42, requested_by_id=3)
+
+        assert result == {"notified": False, "assignment_id": None}
+
+
+class TestSignDeferredAssignment:
+    @pytest.mark.asyncio
+    async def test_transitions_deferred_to_signed(self):
+        assignment = SimpleNamespace(
+            id=1,
+            user_id=7,
+            status=AssignmentStatus.COMPLETED,
+            signature_disposition="signature_deferred_pending_answer",
+            signature_data=None,
+            ip_address=None,
+            user_agent=None,
+        )
+        db = SimpleNamespace(
+            execute=AsyncMock(return_value=_scalar_one_result(assignment)),
+            commit=AsyncMock(),
+            refresh=AsyncMock(),
+        )
+        service = DocumentCampaignService(db)
+
+        result = await service.sign_deferred_assignment(
+            user_id=7,
+            assignment_id=1,
+            signature_data="Alex Engineer",
+            ip_address="10.0.0.1",
+            user_agent="pytest-agent",
+        )
+
+        assert result.signature_disposition == "signed"
+        assert result.signature_data == "Alex Engineer"
+        assert result.ip_address == "10.0.0.1"
+        assert result.user_agent == "pytest-agent"
+
+    @pytest.mark.asyncio
+    async def test_rejects_when_assignment_not_completed(self):
+        assignment = SimpleNamespace(id=1, user_id=7, status=AssignmentStatus.PENDING, signature_disposition=None)
+        db = SimpleNamespace(execute=AsyncMock(return_value=_scalar_one_result(assignment)))
+        service = DocumentCampaignService(db)
+
+        with pytest.raises(BadRequestError, match="Only a completed assignment"):
+            await service.sign_deferred_assignment(user_id=7, assignment_id=1, signature_data="x")
+
+    @pytest.mark.asyncio
+    async def test_rejects_when_disposition_not_deferred(self):
+        assignment = SimpleNamespace(id=1, user_id=7, status=AssignmentStatus.COMPLETED, signature_disposition="signed")
+        db = SimpleNamespace(execute=AsyncMock(return_value=_scalar_one_result(assignment)))
+        service = DocumentCampaignService(db)
+
+        with pytest.raises(BadRequestError, match="Only a deferred signature"):
+            await service.sign_deferred_assignment(user_id=7, assignment_id=1, signature_data="x")
+
+    @pytest.mark.asyncio
+    async def test_rejects_blank_signature(self):
+        assignment = SimpleNamespace(
+            id=1,
+            user_id=7,
+            status=AssignmentStatus.COMPLETED,
+            signature_disposition="signature_deferred_pending_answer",
+        )
+        db = SimpleNamespace(execute=AsyncMock(return_value=_scalar_one_result(assignment)))
+        service = DocumentCampaignService(db)
+
+        with pytest.raises(BadRequestError, match="signature_data is required"):
+            await service.sign_deferred_assignment(user_id=7, assignment_id=1, signature_data="   ")
+
+    @pytest.mark.asyncio
+    async def test_rejects_other_users_assignment(self):
+        assignment = SimpleNamespace(
+            id=1,
+            user_id=7,
+            status=AssignmentStatus.COMPLETED,
+            signature_disposition="signature_deferred_pending_answer",
+        )
+        db = SimpleNamespace(execute=AsyncMock(return_value=_scalar_one_result(assignment)))
+        service = DocumentCampaignService(db)
+
+        with pytest.raises(NotFoundError):
+            await service.sign_deferred_assignment(user_id=999, assignment_id=1, signature_data="x")
+
+
+class TestListQuestionInboxIncludesSignatureContext:
+    @pytest.mark.asyncio
+    async def test_includes_assignment_id_and_disposition_when_pending(self):
+        thread = SimpleNamespace(
+            id=42,
+            document_id=7,
+            created_by_id=5,
+            title="Question about scope",
+            status=DiscussionThreadStatus.OPEN,
+            created_at=datetime.now(timezone.utc),
+        )
+        threads_result = MagicMock()
+        threads_result.all.return_value = [(thread, "Safety Policy")]
+        latest_message_result = MagicMock()
+        latest_message_result.scalar_one_or_none.return_value = "What about visitors?"
+
+        db = SimpleNamespace(execute=AsyncMock(side_effect=[threads_result, latest_message_result]))
+        service = DocumentCampaignService(db)
+        assignment = SimpleNamespace(id=101, campaign_id=9, signature_disposition="signature_deferred_pending_answer")
+        service._find_pending_signature_assignment = AsyncMock(return_value=assignment)
+
+        items = await service.list_question_inbox(tenant_id=1)
+
+        assert items[0]["assignment_id"] == 101
+        assert items[0]["signature_disposition"] == "signature_deferred_pending_answer"
+
+    @pytest.mark.asyncio
+    async def test_omits_assignment_context_when_no_pending_signature(self):
+        thread = SimpleNamespace(
+            id=42,
+            document_id=7,
+            created_by_id=5,
+            title="Question about scope",
+            status=DiscussionThreadStatus.OPEN,
+            created_at=datetime.now(timezone.utc),
+        )
+        threads_result = MagicMock()
+        threads_result.all.return_value = [(thread, "Safety Policy")]
+        latest_message_result = MagicMock()
+        latest_message_result.scalar_one_or_none.return_value = None
+
+        db = SimpleNamespace(execute=AsyncMock(side_effect=[threads_result, latest_message_result]))
+        service = DocumentCampaignService(db)
+        service._find_pending_signature_assignment = AsyncMock(return_value=None)
+
+        items = await service.list_question_inbox(tenant_id=1)
+
+        assert items[0]["assignment_id"] is None
+        assert items[0]["signature_disposition"] is None
