@@ -143,6 +143,8 @@ describe('createDocumentCampaignApi', () => {
   it('downloads CSV and PDF evidence packs as blobs', async () => {
     const api = mockApi()
     api.get.mockResolvedValue({ data: new Blob(['csv']) })
+    const appendChild = vi.spyOn(document.body, 'appendChild').mockImplementation(() => document.body)
+    const removeChild = vi.spyOn(document.body, 'removeChild').mockImplementation(() => document.body)
     const click = vi.fn()
     vi.spyOn(document, 'createElement').mockImplementation(
       () => ({ click, href: '', download: '', rel: '' }) as unknown as HTMLAnchorElement,
@@ -164,6 +166,8 @@ describe('createDocumentCampaignApi', () => {
       responseType: 'blob',
     })
 
+    appendChild.mockRestore()
+    removeChild.mockRestore()
     vi.unstubAllGlobals()
   })
 })
