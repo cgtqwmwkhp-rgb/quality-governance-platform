@@ -85,7 +85,8 @@ describe('Login', () => {
     expect(screen.getByTestId('email-input')).toBeInTheDocument()
     expect(screen.getByTestId('password-input')).toBeInTheDocument()
     expect(screen.getByTestId('login-submit-btn')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Sign In' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Quality Governance Platform' })).toBeInTheDocument()
+    expect(screen.getByText('Planexpand Limited')).toBeInTheDocument()
   })
 
   it('allows typing into email and password fields', async () => {

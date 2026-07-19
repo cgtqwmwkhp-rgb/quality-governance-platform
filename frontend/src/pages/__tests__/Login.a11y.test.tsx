@@ -85,7 +85,8 @@ describe('Login page accessibility (real page /login)', () => {
   it('renders the real Login form without critical axe violations', async () => {
     const { container } = render(<Login onLogin={onLogin} />, { wrapper: Wrapper })
 
-    expect(screen.getByRole('heading', { name: 'Sign In' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Quality Governance Platform' })).toBeInTheDocument()
+    expect(screen.getByText('Planexpand Limited')).toBeInTheDocument()
     expect(screen.getByTestId('email-input')).toBeInTheDocument()
     expect(screen.getByTestId('password-input')).toBeInTheDocument()
 
