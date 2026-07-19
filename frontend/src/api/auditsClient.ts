@@ -342,6 +342,7 @@ export interface AuditResponse {
   question_id: number
   response_value?: string
   response_json?: Record<string, unknown> | null
+  is_na?: boolean
   score?: number
   max_score?: number
   notes?: string
@@ -352,6 +353,7 @@ export interface AuditResponseCreate {
   question_id: number
   response_value?: string | null
   response_json?: Record<string, unknown> | null
+  is_na?: boolean
   score?: number | null
   max_score?: number | null
   notes?: string | null
@@ -360,6 +362,7 @@ export interface AuditResponseCreate {
 export interface AuditResponseUpdate {
   response_value?: string | null
   response_json?: Record<string, unknown> | null
+  is_na?: boolean
   score?: number | null
   max_score?: number | null
   notes?: string | null

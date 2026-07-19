@@ -33,11 +33,17 @@ import {
 } from '../services/auditDraftStore'
 import {
   auditQuestionEvidenceDescription,
-  buildEvidenceResponseJson,
   dataUrlToFile,
   extractEvidenceAssetIds,
   signatureUploadFilename,
 } from './auditExecutionPhotoEvidence'
+import {
+  buildAuditResponseSavePayload,
+  formatMissingQuestionsMessage,
+  parseMissingQuestionIdsFromError,
+  responseRowIsEmpty,
+} from './auditAnswerIntegrity'
+import { toast } from '../contexts/ToastContext'
 
 // ============================================================================
 // TYPES
@@ -704,6 +710,7 @@ export default function AuditExecution() {
   const [stayOnCompletionProof, setStayOnCompletionProof] = useState(false)
   const [autoAdvancePending, setAutoAdvancePending] = useState(false)
   const [failEvidenceGateError, setFailEvidenceGateError] = useState(false)
+  const [highlightedQuestionId, setHighlightedQuestionId] = useState<string | null>(null)
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const evidenceCaptureRef = useRef<HTMLButtonElement>(null)
 
@@ -872,12 +879,23 @@ export default function AuditExecution() {
         for (const r of runData.responses || []) {
           const qId = String(r.question_id)
           const qType = questionTypeMap[qId] || 'text_short'
-          const assetIds = extractEvidenceAssetIds(
-            (r as { response_json?: unknown }).response_json,
-          )
+          const raw = r as {
+            is_na?: boolean
+            response_json?: { selected?: string | string[] }
+          }
+          const responseJson = raw.response_json || {}
+          const assetIds = extractEvidenceAssetIds(responseJson)
+          let parsed: ResponseType = raw.is_na
+            ? 'na'
+            : parseResponseValue(r.response_value, qType)
+          if (qType === 'checklist' && Array.isArray(responseJson.selected)) {
+            parsed = responseJson.selected.map(String)
+          } else if (qType === 'multi_choice' && typeof responseJson.selected === 'string') {
+            parsed = responseJson.selected
+          }
           existingResponses[qId] = {
             questionId: qId,
-            response: parseResponseValue(r.response_value, qType),
+            response: parsed,
             notes: r.notes || undefined,
             timestamp: r.created_at,
             evidenceAssetIds: assetIds,
@@ -1113,6 +1131,22 @@ export default function AuditExecution() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
+  const navigateToQuestion = (questionId: string) => {
+    if (!audit) return
+    for (let sectionIndex = 0; sectionIndex < audit.sections.length; sectionIndex += 1) {
+      const questionIndex = audit.sections[sectionIndex].questions.findIndex(
+        (question) => question.id === questionId,
+      )
+      if (questionIndex >= 0) {
+        setCurrentSectionIndex(sectionIndex)
+        setCurrentQuestionIndex(questionIndex)
+        setShowSummary(false)
+        setHighlightedQuestionId(questionId)
+        return
+      }
+    }
+  }
+
   const saveAllResponses = async (): Promise<boolean> => {
     if (!runIdNum) return false
 
@@ -1122,27 +1156,13 @@ export default function AuditExecution() {
       const updatedIdMap = { ...responseIdMap }
 
       for (const [questionId, resp] of Object.entries(responses)) {
-        const hasPhotos = (resp.evidenceAssetIds?.length ?? 0) > 0
         const existingId = updatedIdMap[questionId]
-        const isEmpty = resp.response === null && !resp.notes && !hasPhotos
+        const isEmpty = responseRowIsEmpty(resp)
         // Skip brand-new empty rows, but still PATCH clears for previously saved answers.
         if (isEmpty && !existingId) continue
 
         const question = allQuestions.find((candidate) => candidate.id === questionId)
-        const scored = question
-          ? scorePayloadForQuestion(question, resp)
-          : { score: null, max_score: null }
-        const payload = {
-          // Explicit null clears a previously saved answer (undefined would omit the field).
-          response_value: serializeResponse(resp.response) ?? null,
-          notes: resp.notes || null,
-          // Persist scores only for real answers; send null on update to clear stale points.
-          score: scored.score,
-          max_score: scored.max_score,
-          ...(hasPhotos
-            ? { response_json: buildEvidenceResponseJson(resp.evidenceAssetIds || []) }
-            : {}),
-        }
+        const payload = buildAuditResponseSavePayload(resp, question, scorePayloadForQuestion)
 
         if (existingId) {
           await auditsApi.updateResponse(existingId, payload)
@@ -1231,6 +1251,15 @@ export default function AuditExecution() {
         risks: responseCount('risks_count', 'risks_created') ?? linkedRiskIds.size,
       })
     } catch (err) {
+      const missingQuestionIds = parseMissingQuestionIdsFromError(err)
+      if (missingQuestionIds.length > 0) {
+        const message = formatMissingQuestionsMessage(missingQuestionIds.length)
+        toast.error(message)
+        setError(message)
+        setShowSummary(false)
+        navigateToQuestion(String(missingQuestionIds[0]))
+        return
+      }
       setError(getApiErrorMessage(err))
     } finally {
       setSaving(false)
@@ -1384,6 +1413,9 @@ export default function AuditExecution() {
   const updateResponse = (updates: Partial<Omit<QuestionResponse, 'questionId' | 'timestamp'>>) => {
     if (runCompleted) return
     dirtyRef.current = true
+    if (highlightedQuestionId === currentQuestion.id) {
+      setHighlightedQuestionId(null)
+    }
     setResponses((prev) => ({
       ...prev,
       [currentQuestion.id]: {
@@ -2167,7 +2199,13 @@ export default function AuditExecution() {
           )}
 
           {/* Question Card */}
-          <div className="bg-card/50 border border-border rounded-3xl overflow-hidden">
+          <div
+            className={`bg-card/50 border rounded-3xl overflow-hidden ${
+              highlightedQuestionId === currentQuestion.id
+                ? 'border-destructive ring-2 ring-destructive/60'
+                : 'border-border'
+            }`}
+          >
             {/* Question Header */}
             <div className={`bg-gradient-to-r ${currentSection.color} p-0.5`}>
               <div className="bg-card p-4">

@@ -10,6 +10,58 @@ import type { AuditQuestionCreate, AuditQuestionUpdate, EvidenceRequirement } fr
 import { generateId, createNewSection, SECTION_COLORS } from './types'
 import { fromApiQuestionType, toApiQuestionType } from './questionTypeRegistry'
 
+/** Backend question types executable in AuditExecution (mirrors PR-A publish gate). */
+export const EXECUTABLE_QUESTION_TYPES = [
+  'text',
+  'textarea',
+  'number',
+  'checkbox',
+  'radio',
+  'dropdown',
+  'date',
+  'datetime',
+  'signature',
+  'photo',
+  'rating',
+  'yes_no',
+  'pass_fail',
+  'score',
+] as const
+
+/** Rejected at publish until execution + persistence exist. */
+export const UNSUPPORTED_PUBLISH_QUESTION_TYPES = ['file'] as const
+
+export function isPublishableQuestionType(questionType: string | undefined | null): boolean {
+  if (!questionType) return false
+  if ((UNSUPPORTED_PUBLISH_QUESTION_TYPES as readonly string[]).includes(questionType)) {
+    return false
+  }
+  return (EXECUTABLE_QUESTION_TYPES as readonly string[]).includes(questionType)
+}
+
+export function getUnpublishableQuestionIssues(sections: Section[]): string[] {
+  const issues: string[] = []
+  sections.forEach((section, sectionIndex) => {
+    section.questions.forEach((question, questionIndex) => {
+      let apiType: string
+      try {
+        apiType = toApiQuestionType(question.type).questionType
+      } catch {
+        issues.push(
+          `${section.title || `Section ${sectionIndex + 1}`}, question ${questionIndex + 1}: unknown question type.`,
+        )
+        return
+      }
+      if (!isPublishableQuestionType(apiType)) {
+        issues.push(
+          `${section.title || `Section ${sectionIndex + 1}`}, question ${questionIndex + 1}: "${apiType}" is not publishable (execution support missing).`,
+        )
+      }
+    })
+  })
+  return issues
+}
+
 type BackendQuestion = {
   id: number
   question_text: string
