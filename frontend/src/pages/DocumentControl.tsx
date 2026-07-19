@@ -385,6 +385,15 @@ export default function DocumentControl() {
                 icon={<FileText className="w-8 h-8 text-muted-foreground" />}
                 title="No controlled documents"
                 description="Create a draft shell to start the controlled document workflow."
+                action={
+                  <Button
+                    onClick={() => setShowCreate(true)}
+                    data-testid="document-control-empty-new-draft"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    New draft
+                  </Button>
+                }
               />
             ) : (
               documents.map((doc) => (

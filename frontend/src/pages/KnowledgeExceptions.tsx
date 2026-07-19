@@ -419,6 +419,24 @@ export default function KnowledgeExceptions() {
     }
   }, [navigate, returnTo])
 
+  const hasActiveFilters =
+    statusFilter !== 'inbox' ||
+    entityTypeFilter !== 'all' ||
+    signalTypeFilter !== 'all' ||
+    !!clauseFilter ||
+    !!standardFilter ||
+    operationalFromUrl
+
+  const clearFilters = useCallback(() => {
+    setStatusFilter('inbox')
+    setEntityTypeFilter('all')
+    setSignalTypeFilter('all')
+    setSelectedIds([])
+    const next = new URLSearchParams()
+    if (returnTo) next.set('returnTo', returnTo)
+    setSearchParams(next, { replace: true })
+  }, [returnTo, setSearchParams])
+
   const toggleAll = () => {
     setSelectedIds(
       allSelected ? [] : actionableRows.map((row) => row.primary.id),
@@ -675,15 +693,27 @@ export default function KnowledgeExceptions() {
       {error ? null : visibleRows.length === 0 ? (
         <EmptyState
           icon={<CheckCircle2 className="w-8 h-8 text-success" />}
-          title={
-            statusFilter !== 'inbox' || entityTypeFilter !== 'all' || signalTypeFilter !== 'all'
-              ? 'No matches for filters'
-              : 'Inbox clear'
-          }
+          title={hasActiveFilters ? 'No matches for filters' : 'Inbox clear'}
           description={
-            statusFilter !== 'inbox' || entityTypeFilter !== 'all' || signalTypeFilter !== 'all'
+            hasActiveFilters
               ? 'Server returned no exceptions for these filters on the current inbox page (≤200). This is not a global zero.'
               : 'No proposed or needs-review evidence links at this time.'
+          }
+          action={
+            hasActiveFilters ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={clearFilters}
+                data-testid="exceptions-empty-clear-filters"
+              >
+                Clear filters
+              </Button>
+            ) : (
+              <Button variant="outline" asChild data-testid="exceptions-empty-open-standards">
+                <Link to="/standards">Open standards map</Link>
+              </Button>
+            )
           }
         />
       ) : (
