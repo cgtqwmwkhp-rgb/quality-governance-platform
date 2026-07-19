@@ -67,7 +67,7 @@ export function formatMissingQuestionsMessage(missingCount: number): string {
   return `${missingCount} required questions still need answers. Jumped to the first missing question.`
 }
 
-type SavePayloadQuestion = {
+export type SavePayloadQuestion = {
   type: string
   weight: number
   maxScore?: number

@@ -39,6 +39,7 @@ import {
 } from './auditExecutionPhotoEvidence'
 import {
   buildAuditResponseSavePayload,
+  type SavePayloadQuestion,
   formatMissingQuestionsMessage,
   parseMissingQuestionIdsFromError,
   responseRowIsEmpty,
@@ -226,11 +227,8 @@ export function canAdvancePastFailEvidenceGate(
 }
 
 export function scorePayloadForQuestion(
-  question: Pick<
-    AuditQuestion,
-    'type' | 'weight' | 'maxScore' | 'maxValue' | 'positiveAnswer' | 'options'
-  >,
-  response: Pick<QuestionResponse, 'response'>,
+  question: SavePayloadQuestion,
+  response: { response: unknown },
 ): { score: number | null; max_score: number | null } {
   const maxScore = question.maxScore ?? question.weight ?? 1
   // Notes/photos / cleared fields must not contribute 0/max to run totals.
@@ -1155,7 +1153,9 @@ export default function AuditExecution() {
         if (isEmpty && !existingId) continue
 
         const question = allQuestions.find((candidate) => candidate.id === questionId)
-        const payload = buildAuditResponseSavePayload(resp, question, scorePayloadForQuestion)
+        const payload = buildAuditResponseSavePayload(resp, question as SavePayloadQuestion | undefined, (q, r) =>
+          scorePayloadForQuestion(q, r),
+        )
 
         if (existingId) {
           await auditsApi.updateResponse(existingId, payload)
