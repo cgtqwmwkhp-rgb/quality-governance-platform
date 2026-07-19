@@ -85,6 +85,26 @@ export interface UVDBIsoMappingResponse {
   mappings: UVDBIsoMappingRecord[]
 }
 
+export type UVDBProtocolExportFormat = 'json' | 'xlsx'
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.rel = 'noopener'
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  URL.revokeObjectURL(url)
+}
+
+function filenameFromContentDisposition(header: string | undefined, fallback: string): string {
+  if (!header) return fallback
+  const match = /filename="([^"]+)"/i.exec(header)
+  return match?.[1] ?? fallback
+}
+
 /**
  * UVDB Achilles Audit API client.
  * Endpoints: /api/v1/uvdb/*
@@ -102,6 +122,27 @@ export function createUvdbApi(api: AxiosInstance) {
    */
   getProtocol: () =>
     api.get<{ sections: UVDBSectionRecord[]; total_questions: number }>('/api/v1/uvdb/protocol'),
+
+  /**
+   * Download authenticated UVDB B2 protocol pack (JSON or XLSX).
+   */
+  downloadProtocolPack: async (format: UVDBProtocolExportFormat = 'json') => {
+    const response = await api.get<Blob>('/api/v1/uvdb/protocol/export', {
+      params: { format },
+      responseType: 'blob',
+    })
+    const fallback = `uvdb-protocol-pack-${new Date().toISOString().slice(0, 10)}.${format}`
+    const filename = filenameFromContentDisposition(
+      response.headers['content-disposition'],
+      fallback,
+    )
+    const mimeType =
+      format === 'xlsx'
+        ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        : 'application/json'
+    triggerBlobDownload(new Blob([response.data], { type: mimeType }), filename)
+    return response
+  },
 
   /**
    * List all UVDB sections.

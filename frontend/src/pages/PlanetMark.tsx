@@ -35,7 +35,6 @@ import { cn } from '../helpers/utils'
 import {
   PLANET_MARK_SECTIONS,
   buildHotspotInitiatives,
-  buildPlanetMarkExportPack,
   buildPlanetMarkTrendsViewModel,
   buildPlanetMarkYearsViewModel,
   findPriorReportingYear,
@@ -46,7 +45,6 @@ import {
   parsePlanetMarkSection,
   resolveSelectedYearId,
   sortReportingYearsDesc,
-  triggerPlanetMarkPackDownload,
   type PlanetMarkHotspotInitiative,
 } from './planetMarkHelpers'
 import { buildMonthlyEvidenceHonestyViewModel } from './planetMarkMonthlyEvidenceHonesty'
@@ -108,6 +106,8 @@ export default function PlanetMark() {
   const [trendsLoading, setTrendsLoading] = useState(false)
   const [creatingInitiativeId, setCreatingInitiativeId] = useState<string | null>(null)
   const [initiativeError, setInitiativeError] = useState<string | null>(null)
+  const [exportLoadingFormat, setExportLoadingFormat] = useState<'json' | 'xlsx' | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
   const [isCreatingYear, setIsCreatingYear] = useState(false)
   const [yearEvidence, setYearEvidence] = useState<PlanetMarkEvidenceRecord[]>([])
   const [setupYearForm, setSetupYearForm] = useState({
@@ -298,15 +298,17 @@ export default function PlanetMark() {
   }, [years, yearParam, setQuery])
 
 
-  const handleExportPack = () => {
+  const handleExportPack = async (format: 'json' | 'xlsx') => {
     if (!selectedYear) return
-    const payload = buildPlanetMarkExportPack({
-      year: selectedYear,
-      scope3: scope3Current,
-      actions,
-      initiatives,
-    })
-    triggerPlanetMarkPackDownload(payload)
+    setExportLoadingFormat(format)
+    setExportError(null)
+    try {
+      await planetMarkApi.downloadExportPack(selectedYear.id, format)
+    } catch (err) {
+      setExportError(getApiErrorMessage(err, t('planet_mark.shell.export_failed')))
+    } finally {
+      setExportLoadingFormat(null)
+    }
   }
 
   const handleAddInitiative = async (initiative: PlanetMarkHotspotInitiative) => {
@@ -1137,18 +1139,43 @@ export default function PlanetMark() {
                       <p className="text-sm text-muted-foreground" data-testid="planet-mark-export-honesty">
                         {t('planet_mark.shell.export_honesty')}
                       </p>
+                      {exportError ? (
+                        <p className="text-sm text-destructive" data-testid="planet-mark-export-error">
+                          {exportError}
+                        </p>
+                      ) : null}
                       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                         <p className="text-sm text-muted-foreground flex-1">
                           {t('planet_mark.shell.export_ready', { year: selectedYear.year_label })}
                         </p>
-                        <Button
-                          variant="outline"
-                          data-testid="planet-mark-export-json"
-                          onClick={handleExportPack}
-                        >
-                          <Download className="w-4 h-4" />
-                          {t('planet_mark.export_report')}
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            data-testid="planet-mark-export-json"
+                            disabled={exportLoadingFormat != null}
+                            onClick={() => void handleExportPack('json')}
+                          >
+                            {exportLoadingFormat === 'json' ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Download className="w-4 h-4" />
+                            )}
+                            {t('planet_mark.export_json')}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            data-testid="planet-mark-export-xlsx"
+                            disabled={exportLoadingFormat != null}
+                            onClick={() => void handleExportPack('xlsx')}
+                          >
+                            {exportLoadingFormat === 'xlsx' ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Download className="w-4 h-4" />
+                            )}
+                            {t('planet_mark.export_xlsx')}
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ) : (
