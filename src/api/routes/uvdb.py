@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
@@ -33,6 +34,7 @@ from src.domain.models.uvdb_achilles import (
     UVDBQuestion,
     UVDBSection,
 )
+from src.domain.services.uvdb_protocol_export_service import build_protocol_export, build_protocol_structure_payload
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -493,26 +495,28 @@ class KPICreate(BaseModel):
 @router.get("/protocol", response_model=dict)
 async def get_protocol_structure(current_user: CurrentUser) -> dict[str, Any]:
     """Get the complete UVDB B2 Audit Protocol structure"""
-    return {
-        "protocol_name": "UVDB Verify B2 Audit Protocol",
-        "version": "V11.2",
-        "reference": "UVDB-QS-003",
-        "description": "Comprehensive supply chain qualification audit for UK utilities sector",
-        "sections": UVDB_B2_SECTIONS,
-        "total_sections": len(UVDB_B2_SECTIONS),
-        "scoring": {
-            "0": "Non-Compliant - No evidence or systems in place",
-            "1": "Partially Compliant - Some evidence but gaps identified",
-            "2": "Largely Compliant - Minor improvements needed",
-            "3": "Compliant - Full evidence and effective implementation",
+    return build_protocol_structure_payload(UVDB_B2_SECTIONS)
+
+
+@router.get("/protocol/export")
+async def export_protocol_pack(
+    current_user: CurrentUser,
+    export_format: str = Query(default="json", alias="format", description="Export format: json or xlsx"),
+) -> Response:
+    """Download the UVDB B2 protocol pack for offline review."""
+    body, filename, media_type = build_protocol_export(
+        UVDB_B2_SECTIONS,
+        export_format=export_format,  # type: ignore[arg-type]
+        exported_by=getattr(current_user, "email", None),
+    )
+    return Response(
+        content=body,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-UVDB-Protocol-Pack-Version": "uvdb-protocol-1.0",
         },
-        "iso_cross_mapping": {
-            "1.1": "ISO 9001:2015 (Quality Management)",
-            "1.2": "ISO 45001:2018 (OH&S Management)",
-            "1.3": "ISO 14001:2015 (Environmental Management)",
-            "2.3": "ISO 27001:2022 (Information Security)",
-        },
-    }
+    )
 
 
 @router.get("/sections", response_model=dict)

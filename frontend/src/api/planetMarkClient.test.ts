@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createPlanetMarkApi } from './planetMarkClient'
+import { createPlanetMarkApi, triggerPlanetMarkBlobDownload } from './planetMarkClient'
 
 function mockApi() {
   return {
@@ -110,5 +110,54 @@ describe('createPlanetMarkApi', () => {
       { timeout: 120_000 },
     )
     expect(api.patch).toHaveBeenCalled()
+  })
+
+  it('downloads export packs with blob response', async () => {
+    const api = mockApi()
+    api.get.mockResolvedValue({
+      data: new Blob(['{"export_kind":"json_pack"}']),
+      headers: { 'content-disposition': 'attachment; filename="planet-mark-export-YE2026.json"' },
+    })
+    const appendChild = vi.spyOn(document.body, 'appendChild').mockImplementation(() => document.body)
+    const removeChild = vi.spyOn(document.body, 'removeChild').mockImplementation(() => document.body)
+    const click = vi.fn()
+    vi.spyOn(document, 'createElement').mockImplementation(
+      () => ({ click, href: '', download: '', rel: '' }) as unknown as HTMLAnchorElement,
+    )
+    const createObjectURL = vi.fn(() => 'blob:mock')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
+
+    const pm = createPlanetMarkApi(api as never)
+    await pm.downloadExportPack(5, 'json')
+    expect(api.get).toHaveBeenCalledWith('/api/v1/planet-mark/years/5/export', {
+      params: { format: 'json' },
+      responseType: 'blob',
+    })
+    expect(click).toHaveBeenCalled()
+
+    appendChild.mockRestore()
+    removeChild.mockRestore()
+    vi.unstubAllGlobals()
+  })
+
+  it('triggerPlanetMarkBlobDownload saves a blob link', () => {
+    const click = vi.fn()
+    vi.spyOn(document, 'createElement').mockImplementation(
+      () => ({ click, href: '', download: '', rel: '' }) as unknown as HTMLAnchorElement,
+    )
+    const appendChild = vi.spyOn(document.body, 'appendChild').mockImplementation(() => document.body)
+    const removeChild = vi.spyOn(document.body, 'removeChild').mockImplementation(() => document.body)
+    const createObjectURL = vi.fn(() => 'blob:pm')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
+
+    triggerPlanetMarkBlobDownload(new Blob(['x']), 'planet-mark.json')
+    expect(createObjectURL).toHaveBeenCalled()
+    expect(click).toHaveBeenCalled()
+
+    appendChild.mockRestore()
+    removeChild.mockRestore()
+    vi.unstubAllGlobals()
   })
 })

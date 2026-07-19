@@ -46,6 +46,29 @@ class TestPlanetMarkApiContracts:
             else:
                 assert "categories" in scope3_payload
 
+    async def test_planet_mark_export_contract(self, client, auth_headers):
+        json_response = await client.get(
+            "/api/v1/planet-mark/years/1/export?format=json",
+            headers=auth_headers,
+        )
+        assert json_response.status_code in (200, 404)
+        if json_response.status_code == 200:
+            assert json_response.headers["content-type"].startswith("application/json")
+            assert "attachment" in json_response.headers.get("content-disposition", "")
+            payload = json_response.json()
+            assert payload.get("export_kind") == "json_pack"
+            assert "reporting_year" in payload
+
+        xlsx_response = await client.get(
+            "/api/v1/planet-mark/years/1/export?format=xlsx",
+            headers=auth_headers,
+        )
+        assert xlsx_response.status_code in (200, 404)
+        if xlsx_response.status_code == 200:
+            content_type = xlsx_response.headers["content-type"]
+            assert "spreadsheetml" in content_type or "octet-stream" in content_type
+            assert len(xlsx_response.content) > 100
+
 
 class TestUvdbApiContracts:
     async def test_uvdb_dashboard_contract(self, client, auth_headers):
