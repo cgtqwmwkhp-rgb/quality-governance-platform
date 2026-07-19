@@ -45,8 +45,14 @@ class QuickReportCreate(BaseModel):
     location: Optional[str] = Field(None, max_length=200, description="Where did it occur?")
     severity: str = Field(default="medium", description="Severity: low, medium, high, critical")
 
-    # Reporter info (optional for anonymous)
+    # Reporter info (optional for anonymous). complainant_name is accepted as an alias
+    # for complaint intake clients that use the staff-schema field name.
     reporter_name: Optional[str] = Field(None, max_length=100)
+    complainant_name: Optional[str] = Field(
+        None,
+        max_length=200,
+        description="Alias for reporter_name on complaint submissions",
+    )
     reporter_email: Optional[EmailStr] = None
     reporter_phone: Optional[str] = Field(None, max_length=20)
     department: Optional[str] = Field(None, max_length=100)
@@ -59,6 +65,54 @@ class QuickReportCreate(BaseModel):
     reporter_submission: Optional[dict[str, Any]] = Field(
         None,
         description="Immutable snapshot of reporter-entered intake data for investigator views",
+    )
+
+
+def resolve_portal_display_name(
+    report: "QuickReportCreate",
+    reporter_submission: Optional[dict[str, Any]] = None,
+) -> Optional[str]:
+    """Resolve a non-null display name for portal intake entities.
+
+    Anonymous submissions always map to ``Anonymous``. Non-anonymous submissions
+    accept ``reporter_name``, ``complainant_name``, or common snapshot keys.
+    """
+    if report.is_anonymous:
+        return "Anonymous"
+    snapshot = reporter_submission if isinstance(reporter_submission, dict) else {}
+    candidates = (
+        report.reporter_name,
+        report.complainant_name,
+        snapshot.get("reporter_name"),
+        snapshot.get("complainant_name"),
+        snapshot.get("person_name"),
+        snapshot.get("employee_name"),
+    )
+    for value in candidates:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def require_portal_display_name(
+    report: "QuickReportCreate",
+    reporter_submission: Optional[dict[str, Any]] = None,
+) -> str:
+    """Return a display name or raise 422 when a non-anonymous name is missing."""
+    name = resolve_portal_display_name(report, reporter_submission)
+    if name:
+        return name
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=api_error(
+            ErrorCode.VALIDATION_ERROR,
+            "reporter_name is required unless is_anonymous=true "
+            "(complainant_name is also accepted for complaint submissions)",
+            details={
+                "fields": ["reporter_name", "complainant_name"],
+                "report_type": report.report_type,
+            },
+        ),
     )
 
 
@@ -289,6 +343,7 @@ def build_incident_portal_fields(
     ) or datetime.now(timezone.utc)
     witness_names = reporter_submission.get("witness_names")
     medical_assistance = str(reporter_submission.get("medical_assistance") or "").strip().lower()
+    display_name = require_portal_display_name(report, reporter_submission)
 
     return {
         "incident_type": IncidentType.OTHER,
@@ -298,9 +353,9 @@ def build_incident_portal_fields(
         "department": report.department,
         "incident_date": incident_occurred_at,
         "reported_date": datetime.now(timezone.utc),
-        "reporter_name": (report.reporter_name if not report.is_anonymous else "Anonymous"),
+        "reporter_name": display_name,
         "reporter_email": report.reporter_email if not report.is_anonymous else None,
-        "people_involved": reporter_submission.get("person_name") or report.reporter_name,
+        "people_involved": reporter_submission.get("person_name") or display_name,
         "witnesses": witness_names if isinstance(witness_names, str) else None,
         "first_aid_given": medical_assistance not in {"", "none"},
         "emergency_services_called": medical_assistance == "ambulance",
@@ -318,12 +373,13 @@ def build_complaint_portal_fields(
     tenant_id: Optional[int] = None,
 ) -> dict[str, Any]:
     resolved_tenant_id = tenant_id if tenant_id is not None else get_default_portal_tenant_id()
+    display_name = require_portal_display_name(report, reporter_submission)
     return {
         "complaint_type": ComplaintType.OTHER,
         "priority": complaint_priority,
         "status": ComplaintStatus.RECEIVED,
         "received_date": datetime.now(timezone.utc),
-        "complainant_name": (report.reporter_name if not report.is_anonymous else "Anonymous"),
+        "complainant_name": display_name,
         "complainant_email": (report.reporter_email if not report.is_anonymous else None),
         "complainant_phone": (report.reporter_phone if not report.is_anonymous else None),
         "department": report.department,
@@ -361,6 +417,7 @@ def build_rta_portal_fields(
             ]
         }
 
+    display_name = require_portal_display_name(report, reporter_submission)
     return {
         "severity": rta_severity,
         "status": RTAStatus.REPORTED,
@@ -372,9 +429,9 @@ def build_rta_portal_fields(
         "road_conditions": reporter_submission.get("road_condition"),
         "company_vehicle_registration": vehicle_registration,
         "company_vehicle_damage": reporter_submission.get("damage_description"),
-        "reporter_name": (report.reporter_name if not report.is_anonymous else "Anonymous"),
+        "reporter_name": display_name,
         "reporter_email": report.reporter_email if not report.is_anonymous else None,
-        "driver_name": (report.reporter_name if not report.is_anonymous else "Anonymous"),
+        "driver_name": display_name,
         "driver_email": report.reporter_email if not report.is_anonymous else None,
         "third_parties": (
             {"parties": third_party_entries} if isinstance(third_party_entries, list) and third_party_entries else None
@@ -402,8 +459,21 @@ def build_rta_portal_fields(
 
 async def commit_portal_record(db: DbSession, record_label: str) -> None:
     """Persist a portal record with an explicit configuration failure on schema drift."""
+    from sqlalchemy.exc import IntegrityError
+
     try:
         await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        # NOT NULL / FK violations must never surface as INTERNAL_ERROR 500.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                f"Portal {record_label} submission failed validation "
+                "(required identity fields such as reporter_name/complainant_name).",
+            ),
+        ) from exc
     except (ProgrammingError, OperationalError) as exc:
         await db.rollback()
         raise HTTPException(
@@ -587,11 +657,12 @@ async def submit_quick_report(
             "critical": "CRITICAL",
         }
         priority = priority_map.get(report.severity.lower(), "MEDIUM")
+        display_name = require_portal_display_name(report, reporter_submission)
 
         # Create Near Miss record
         near_miss = NearMiss(
             reference_number=ref_number,
-            reporter_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
+            reporter_name=display_name,
             reporter_email=report.reporter_email if not report.is_anonymous else None,
             contract=report.department or "Not specified",
             location=report.location or "Not specified",
