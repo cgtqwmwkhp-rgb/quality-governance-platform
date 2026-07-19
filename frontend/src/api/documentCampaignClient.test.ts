@@ -71,6 +71,27 @@ describe('createDocumentCampaignApi', () => {
     expect(api.get).toHaveBeenCalledWith('/api/v1/document-campaigns/question-inbox')
   })
 
+  it('loads wave 2 analytics endpoints', () => {
+    const api = mockApi()
+    const client = createDocumentCampaignApi(api as never)
+
+    client.getComplianceOverview()
+    expect(api.get).toHaveBeenCalledWith('/api/v1/document-campaigns/compliance/overview')
+
+    client.getCampaignAnalytics(12)
+    expect(api.get).toHaveBeenCalledWith('/api/v1/document-campaigns/campaigns/12/analytics')
+
+    client.listCompliancePeople({ status: 'overdue', q: 'alex', limit: 25, offset: 0 })
+    expect(api.get).toHaveBeenCalledWith('/api/v1/document-campaigns/compliance/people', {
+      params: { status: 'overdue', q: 'alex', limit: 25, offset: 0 },
+    })
+
+    client.listCompliancePeople({ status: 'quiz_fail' })
+    expect(api.get).toHaveBeenCalledWith('/api/v1/document-campaigns/compliance/people', {
+      params: { status: 'quiz_fail' },
+    })
+  })
+
   it('lists campaign roster with filters', () => {
     const api = mockApi()
     const client = createDocumentCampaignApi(api as never)

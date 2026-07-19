@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "162 kB",
+    "limit": "163 kB",
     "gzip": true,
-    "name": "index: 161→162 kB — campaign results W1 roster i18n (+~1 kB over 161)"
+    "name": "index: 162→163 kB — campaign command W2 KPIs/chase/badges (+~268 B over 162)"
   },
   {
     "path": "dist/assets/vendor-*.js",

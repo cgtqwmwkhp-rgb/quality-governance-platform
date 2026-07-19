@@ -285,6 +285,81 @@ export interface ComplianceListResponse {
   total: number
 }
 
+export interface ComplianceOverviewSeriesPoint {
+  date: string
+  completed: number
+  opened: number
+  overdue: number
+}
+
+export interface ComplianceOverviewResponse {
+  active_campaigns: number
+  total_assignments: number
+  completed_assignments: number
+  overall_completion_rate: number
+  overdue_count: number
+  quiz_fail_count: number
+  unanswered_hseq_count: number
+  open_rate: number
+  series: ComplianceOverviewSeriesPoint[]
+}
+
+export type ScoreHistogramBucket = '0-19' | '20-39' | '40-59' | '60-79' | '80-100'
+
+export interface CampaignAnalyticsFunnel {
+  assigned: number
+  opened: number
+  quiz_attempted: number
+  quiz_passed: number
+  completed: number
+}
+
+export interface CampaignAnalyticsResponse {
+  campaign_id: number
+  document_id: number
+  require_quiz: boolean
+  funnel: CampaignAnalyticsFunnel
+  score_histogram: { bucket: ScoreHistogramBucket; count: number }[]
+  attempts_distribution: { attempts: number; count: number }[]
+  time_to_complete_hours: { p50: number | null; p90: number | null }
+  reminder_sent_total: number
+  summary?: CampaignRosterSummary
+}
+
+export type CompliancePeopleStatus = 'overdue' | 'quiz_fail'
+
+export interface CompliancePeopleRow {
+  assignment_id: number
+  campaign_id: number
+  document_id: number
+  document_title: string
+  user_id: number
+  user_name: string
+  user_email: string
+  status: string
+  quiz_score?: number | null
+  quiz_passed?: boolean | null
+  quiz_attempts: number
+  first_opened_at?: string | null
+  completed_at?: string | null
+  due_at?: string | null
+  reminders_sent: number
+}
+
+export interface CompliancePeopleQuery {
+  status: CompliancePeopleStatus
+  q?: string
+  limit?: number
+  offset?: number
+}
+
+export interface CompliancePeopleResponse {
+  items: CompliancePeopleRow[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export interface QuestionInboxListResponse {
   items: QuestionInboxThread[]
   total: number
@@ -353,6 +428,11 @@ export function createDocumentCampaignApi(api: AxiosInstance) {
     setReminderDefaults: (reminder_hours: number[]) =>
       api.put<ReminderDefaults>(`${base}/reminder-defaults`, { reminder_hours }),
     listCompliance: () => api.get<ComplianceListResponse>(`${base}/compliance`),
+    getComplianceOverview: () => api.get<ComplianceOverviewResponse>(`${base}/compliance/overview`),
+    listCompliancePeople: (params: CompliancePeopleQuery) =>
+      api.get<CompliancePeopleResponse>(`${base}/compliance/people`, { params }),
+    getCampaignAnalytics: (campaignId: number) =>
+      api.get<CampaignAnalyticsResponse>(`${base}/campaigns/${campaignId}/analytics`),
     listCampaignRoster: (campaignId: number, params?: CampaignRosterQuery) =>
       api.get<CampaignRosterResponse>(`${base}/campaigns/${campaignId}/roster`, { params }),
     downloadEvidencePack: async (campaignId: number) => {
