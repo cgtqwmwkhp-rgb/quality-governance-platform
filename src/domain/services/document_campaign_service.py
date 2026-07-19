@@ -10,7 +10,9 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+
+from fpdf import FPDF
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -2195,10 +2197,25 @@ class DocumentCampaignService:
             },
         }
 
-    # ==================== Evidence CSV export (O-09) ====================
+    # ==================== Evidence export (O-09 / DEF-PDF) ====================
 
-    async def build_evidence_pack_csv(self, *, tenant_id: int, campaign_id: int) -> Tuple[str, str]:
-        """Build CSV evidence pack for a campaign (assignments + quiz/sign-off metadata)."""
+    _EVIDENCE_PACK_COLUMNS: Sequence[str] = (
+        "user_email",
+        "status",
+        "assigned_at",
+        "due_at",
+        "first_opened_at",
+        "completed_at",
+        "quiz_score",
+        "quiz_passed",
+        "signature_present",
+        "signature_disposition",
+        "ip_address",
+    )
+
+    async def _fetch_evidence_pack_rows(
+        self, *, tenant_id: int, campaign_id: int
+    ) -> Tuple[DocumentCampaign, List[Tuple[CampaignAssignment, Optional[str]]]]:
         campaign = await self.get_campaign(tenant_id=tenant_id, campaign_id=campaign_id)
 
         result = await self.db.execute(
@@ -2210,45 +2227,76 @@ class DocumentCampaignService:
             )
             .order_by(User.email)
         )
+        return campaign, list(result.all())
+
+    @staticmethod
+    def _evidence_pack_row_values(assignment: CampaignAssignment, email: Optional[str]) -> List[Any]:
+        status_value = assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status)
+        return [
+            email or "",
+            status_value,
+            assignment.assigned_at.isoformat() if assignment.assigned_at else "",
+            assignment.due_at.isoformat() if assignment.due_at else "",
+            assignment.first_opened_at.isoformat() if assignment.first_opened_at else "",
+            assignment.completed_at.isoformat() if assignment.completed_at else "",
+            assignment.quiz_score if assignment.quiz_score is not None else "",
+            assignment.quiz_passed if assignment.quiz_passed is not None else "",
+            bool(assignment.signature_data),
+            assignment.signature_disposition or "",
+            assignment.ip_address or "",
+        ]
+
+    async def build_evidence_pack_csv(self, *, tenant_id: int, campaign_id: int) -> Tuple[str, str]:
+        """Build CSV evidence pack for a campaign (assignments + quiz/sign-off metadata)."""
+        campaign, rows = await self._fetch_evidence_pack_rows(tenant_id=tenant_id, campaign_id=campaign_id)
 
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(
-            [
-                "user_email",
-                "status",
-                "assigned_at",
-                "due_at",
-                "first_opened_at",
-                "completed_at",
-                "quiz_score",
-                "quiz_passed",
-                "signature_present",
-                "signature_disposition",
-                "ip_address",
-            ]
-        )
+        writer.writerow(list(self._EVIDENCE_PACK_COLUMNS))
 
-        for assignment, email in result.all():
-            status_value = assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status)
-            writer.writerow(
-                [
-                    email or "",
-                    status_value,
-                    assignment.assigned_at.isoformat() if assignment.assigned_at else "",
-                    assignment.due_at.isoformat() if assignment.due_at else "",
-                    assignment.first_opened_at.isoformat() if assignment.first_opened_at else "",
-                    assignment.completed_at.isoformat() if assignment.completed_at else "",
-                    assignment.quiz_score if assignment.quiz_score is not None else "",
-                    assignment.quiz_passed if assignment.quiz_passed is not None else "",
-                    bool(assignment.signature_data),
-                    assignment.signature_disposition or "",
-                    assignment.ip_address or "",
-                ]
-            )
+        for assignment, email in rows:
+            writer.writerow(self._evidence_pack_row_values(assignment, email))
 
         filename = f"campaign-{campaign.id}-evidence-pack.csv"
         return output.getvalue(), filename
+
+    async def build_evidence_pack_pdf(self, *, tenant_id: int, campaign_id: int) -> Tuple[bytes, str]:
+        """Build PDF evidence pack for a campaign (same rows as CSV + campaign header)."""
+        campaign, rows = await self._fetch_evidence_pack_rows(tenant_id=tenant_id, campaign_id=campaign_id)
+        doc_title = await self._document_title(tenant_id=tenant_id, document_id=campaign.document_id)
+        status_value = campaign.status.value if hasattr(campaign.status, "value") else str(campaign.status)
+        generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+        pdf = FPDF(orientation="L", unit="mm", format="A4")
+        pdf.set_auto_page_break(auto=True, margin=12)
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.cell(0, 8, "Campaign Evidence Pack", ln=True)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(0, 6, f"Campaign ID: {campaign.id}", ln=True)
+        pdf.cell(0, 6, f"Document: {doc_title} (#{campaign.document_id})", ln=True)
+        if campaign.title:
+            pdf.cell(0, 6, f"Campaign title: {campaign.title}", ln=True)
+        pdf.cell(0, 6, f"Status: {status_value}", ln=True)
+        pdf.cell(0, 6, f"Generated: {generated_at}", ln=True)
+        pdf.ln(4)
+
+        col_widths = [38, 18, 28, 28, 28, 28, 14, 14, 18, 24, 22]
+        row_height = 6
+        pdf.set_font("Helvetica", "B", 7)
+        for idx, column in enumerate(self._EVIDENCE_PACK_COLUMNS):
+            pdf.cell(col_widths[idx], row_height, column, border=1)
+        pdf.ln()
+
+        pdf.set_font("Helvetica", "", 6)
+        for assignment, email in rows:
+            values = [str(value) for value in self._evidence_pack_row_values(assignment, email)]
+            for idx, value in enumerate(values):
+                pdf.cell(col_widths[idx], row_height, value[:48], border=1)
+            pdf.ln()
+
+        filename = f"campaign-{campaign.id}-evidence-pack.pdf"
+        return pdf.output(), filename
 
     # ==================== Re-ack on new version (O-10) ====================
 

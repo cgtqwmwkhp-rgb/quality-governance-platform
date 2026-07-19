@@ -27,7 +27,7 @@ export function DocumentCampaignResults({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(initialCampaignId)
-  const [exporting, setExporting] = useState(false)
+  const [exporting, setExporting] = useState<'json' | 'csv' | 'pdf' | null>(null)
 
   const loadCampaigns = useCallback(async () => {
     setLoading(true)
@@ -60,18 +60,24 @@ export function DocumentCampaignResults({
 
   const selected = campaigns.find((c) => c.id === selectedId) ?? null
 
-  const handleExport = async () => {
+  const handleExport = async (format: 'json' | 'csv' | 'pdf') => {
     if (!selected) return
-    setExporting(true)
+    setExporting(format)
     try {
-      await documentCampaignApi.downloadEvidencePack(selected.id)
+      if (format === 'csv') {
+        await documentCampaignApi.downloadEvidencePackCsv(selected.id)
+      } else if (format === 'pdf') {
+        await documentCampaignApi.downloadEvidencePackPdf(selected.id)
+      } else {
+        await documentCampaignApi.downloadEvidencePack(selected.id)
+      }
       toast.success(t('documents.detail.campaign_evidence_exported', 'Evidence pack downloaded'))
     } catch (err) {
       toast.error(
         getApiErrorMessage(err, t('documents.detail.campaign_evidence_export_error', 'Export failed')),
       )
     } finally {
-      setExporting(false)
+      setExporting(null)
     }
   }
 
@@ -157,15 +163,41 @@ export function DocumentCampaignResults({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => void handleExport()}
-              disabled={!selected || exporting}
+              onClick={() => void handleExport('json')}
+              disabled={!selected || exporting !== null}
             >
-              {exporting ? (
+              {exporting === 'json' ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <Download className="mr-2 h-4 w-4" />
               )}
               {t('campaigns.results.export', 'Export evidence')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleExport('csv')}
+              disabled={!selected || exporting !== null}
+            >
+              {exporting === 'csv' ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              {t('campaigns.results.export_csv', 'Export CSV')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleExport('pdf')}
+              disabled={!selected || exporting !== null}
+            >
+              {exporting === 'pdf' ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              {t('campaigns.results.export_pdf', 'Export PDF')}
             </Button>
           </div>
         </CardHeader>

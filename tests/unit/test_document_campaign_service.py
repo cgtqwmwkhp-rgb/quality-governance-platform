@@ -980,6 +980,44 @@ class TestBuildEvidencePackCsv:
         assert ",True," in csv_content or ",true," in csv_content.lower()
 
 
+class TestBuildEvidencePackPdf:
+    @pytest.mark.asyncio
+    async def test_pdf_includes_assignment_metadata(self):
+        now = datetime.now(timezone.utc)
+        assignment = SimpleNamespace(
+            status=AssignmentStatus.COMPLETED,
+            assigned_at=now,
+            due_at=now,
+            first_opened_at=now,
+            completed_at=now,
+            quiz_score=100,
+            quiz_passed=True,
+            signature_data="sig-data",
+            signature_disposition="signed",
+            ip_address="192.168.1.1",
+        )
+        campaign = SimpleNamespace(
+            id=9,
+            tenant_id=1,
+            document_id=3,
+            title="Annual read",
+            status=CampaignStatus.ACTIVE,
+        )
+
+        db = SimpleNamespace(
+            execute=AsyncMock(return_value=SimpleNamespace(all=lambda: [(assignment, "engineer@example.com")]))
+        )
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+        service._document_title = AsyncMock(return_value="Safety Policy")
+
+        pdf_bytes, filename = await service.build_evidence_pack_pdf(tenant_id=1, campaign_id=9)
+
+        assert filename == "campaign-9-evidence-pack.pdf"
+        assert pdf_bytes.startswith(b"%PDF")
+        assert len(pdf_bytes) > 500
+
+
 # =============================================================================
 # Re-ack campaign spawn (O-10)
 # =============================================================================

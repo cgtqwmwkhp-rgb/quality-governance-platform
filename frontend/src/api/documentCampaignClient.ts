@@ -374,10 +374,7 @@ export interface ReplyQuestionPayload {
   body: string
 }
 
-function triggerJsonDownload(data: unknown, filename: string): void {
-  const blob = new Blob([JSON.stringify(data, null, 2)], {
-    type: 'application/json;charset=utf-8',
-  })
+function triggerBlobDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
@@ -387,6 +384,15 @@ function triggerJsonDownload(data: unknown, filename: string): void {
   anchor.click()
   document.body.removeChild(anchor)
   URL.revokeObjectURL(url)
+}
+
+function triggerJsonDownload(data: unknown, filename: string): void {
+  triggerBlobDownload(
+    new Blob([JSON.stringify(data, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    }),
+    filename,
+  )
 }
 
 export function createDocumentCampaignApi(api: AxiosInstance) {
@@ -457,10 +463,21 @@ export function createDocumentCampaignApi(api: AxiosInstance) {
       api.get<GroupComplianceListResponse>(`${base}/compliance/${campaignId}/by-group`),
     getMyPassport: () => api.get<CompliancePassportResponse>(`${base}/my-passport`),
 
-    downloadEvidencePackCsv: (campaignId: number) =>
-      api.get<Blob>(`${base}/campaigns/${campaignId}/evidence-pack.csv`, {
+    downloadEvidencePackCsv: async (campaignId: number) => {
+      const response = await api.get<Blob>(`${base}/campaigns/${campaignId}/evidence-pack.csv`, {
         responseType: 'blob',
-      }),
+      })
+      triggerBlobDownload(response.data, `campaign-${campaignId}-evidence-pack.csv`)
+      return response
+    },
+
+    downloadEvidencePackPdf: async (campaignId: number) => {
+      const response = await api.get<Blob>(`${base}/campaigns/${campaignId}/evidence-pack.pdf`, {
+        responseType: 'blob',
+      })
+      triggerBlobDownload(response.data, `campaign-${campaignId}-evidence-pack.pdf`)
+      return response
+    },
 
     spawnReackCampaign: (documentId: number) =>
       api.post<{ spawned: boolean; campaign_id?: number; source_campaign_id?: number; reason?: string }>(
