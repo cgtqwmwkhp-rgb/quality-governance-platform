@@ -4,6 +4,7 @@ import { render, screen } from '@testing-library/react'
 const mockListTemplates = vi.fn()
 const mockContractsList = vi.fn()
 const mockAuditList = vi.fn()
+const mockLibrarySummary = vi.fn()
 
 vi.mock('../../../api/formConfigClient', () => ({
   formConfigApi: {
@@ -20,6 +21,9 @@ vi.mock('../../../api/client', async () => {
     },
     auditTrailApi: {
       list: (...args: unknown[]) => mockAuditList(...args),
+    },
+    libraryReviewApi: {
+      getDashboardSummary: (...args: unknown[]) => mockLibrarySummary(...args),
     },
   }
 })
@@ -49,10 +53,14 @@ describe('AdminDashboard soft-fail honesty', () => {
     mockListTemplates.mockReset()
     mockContractsList.mockReset()
     mockAuditList.mockReset()
+    mockLibrarySummary.mockReset()
 
     mockListTemplates.mockResolvedValue({ items: [], total: 3, page: 1, page_size: 1 })
     mockContractsList.mockResolvedValue({ items: [], total: 2 })
     mockAuditList.mockResolvedValue({ data: { items: [], total: 0, page: 1, per_page: 5 } })
+    mockLibrarySummary.mockResolvedValue({
+      data: { statutory_documents: 4, overdue_reviews: 1, open_review_packs: 2 },
+    })
   })
 
   it('renders partial dashboard when contracts API fails instead of crashing', async () => {
@@ -66,5 +74,17 @@ describe('AdminDashboard soft-fail honesty', () => {
     expect(screen.getByText('3')).toBeInTheDocument()
     expect(screen.getAllByText('—').length).toBeGreaterThan(0)
     expect(screen.getByText('Quick Actions')).toBeInTheDocument()
+  })
+
+  it('renders live HSEQ library dashboard tiles', async () => {
+    render(<AdminDashboard />)
+
+    expect(await screen.findByText('Statutory Documents')).toBeInTheDocument()
+    expect(screen.getByText('Overdue Reviews')).toBeInTheDocument()
+    expect(screen.getByText('Open Review Packs')).toBeInTheDocument()
+    expect(screen.getByText('4')).toBeInTheDocument()
+    expect(screen.getByText('1')).toBeInTheDocument()
+    expect(screen.getAllByText('2').length).toBeGreaterThanOrEqual(2)
+    expect(mockLibrarySummary).toHaveBeenCalled()
   })
 })

@@ -1610,6 +1610,37 @@ export const imsDashboardApi = {
   getDashboard: () => api.get<IMSDashboardResponse>('/api/v1/ims/dashboard'),
 }
 
+export interface LibraryDashboardSummary {
+  as_of: string
+  statutory_documents: number
+  overdue_reviews: number
+  open_review_packs: number
+}
+
+export interface LibraryDependencyMap {
+  pel_doc_ref: string
+  document_id: number
+  title: string
+  current_tip: {
+    version_number: string
+    status: string
+    published_at?: string | null
+  }
+  superseded_history: {
+    id: number
+    version_number: string
+    status: string
+    published_at?: string | null
+    change_notes?: string | null
+  }[]
+}
+
+export const libraryReviewApi = {
+  getDashboardSummary: () => api.get<LibraryDashboardSummary>('/api/v1/library-review/dashboard-summary'),
+  getDependencyMap: (pelDocRef: string) =>
+    api.get<LibraryDependencyMap>(`/api/v1/library-review/dependencies/${encodeURIComponent(pelDocRef)}`),
+}
+
 // ============ ISO 27001 ISMS API ============
 
 export interface IsmsApiDashboard {

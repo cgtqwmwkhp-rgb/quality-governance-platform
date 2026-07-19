@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, Query
 
 from src.api.dependencies import DbSession, require_permission
 from src.api.schemas.library_review import (
+    DashboardSummaryResponse,
+    DependencyMapResponse,
     DispositionRequest,
     FindingResponse,
     HorizonScanResponse,
@@ -59,6 +61,29 @@ def _pack_response(pack) -> PackResponse:
         internal_inputs=pack.internal_inputs,
         findings=[_finding_response(f) for f in findings],
     )
+
+
+@router.get("/dashboard-summary", response_model=DashboardSummaryResponse)
+async def get_dashboard_summary(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:read"))],
+) -> DashboardSummaryResponse:
+    """Return statutory, overdue-review, and open-pack counts for Library / HSEQ tiles."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    data = await review_service.dashboard_summary(db, tenant_id=tenant_id)
+    return DashboardSummaryResponse(**data)
+
+
+@router.get("/dependencies/{pel_doc_ref}", response_model=DependencyMapResponse)
+async def get_dependency_map(
+    pel_doc_ref: str,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:read"))],
+) -> DependencyMapResponse:
+    """Return the current document tip plus its immutable superseded history."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    data = await review_service.dependency_map(db, tenant_id=tenant_id, pel_doc_ref=pel_doc_ref)
+    return DependencyMapResponse(**data)
 
 
 @router.get("/horizons", response_model=HorizonsResponse)
