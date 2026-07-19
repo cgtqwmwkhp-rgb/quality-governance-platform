@@ -127,6 +127,8 @@ class TestRiskService:
             risk = await service.create_risk({"title": "Test", "tenant_id": 1})
 
         assert created_kwargs["reference"] == "RISK-0006"
+        assert created_kwargs["status"] == "active"
+        assert risk.next_review_date.tzinfo is None
 
     @pytest.mark.asyncio
     async def test_update_risk_assessment_not_found(self, service):

@@ -325,7 +325,7 @@ async def create_risk(
     service = RiskService(db)
     data = risk_data.model_dump()
     data["tenant_id"] = current_user.tenant_id
-    risk = await service.create_risk(data)
+    risk = await service.create_risk(data, created_by=current_user.id)
 
     return {
         "id": risk.id,

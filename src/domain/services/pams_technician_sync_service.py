@@ -117,10 +117,14 @@ def map_pams_technician_row(row: Mapping[str, Any]) -> MappedTechnician | None:
     if phone:
         notes_parts.append(f"PAMS phone: {phone}")
 
-    short_name = _clean_str(row.get("short_name"))
+    # Prefer explicit payroll/employee fields. Never use short_name/firstname —
+    # PAMS short_name is often a first name (PX-051: employee_number showed "Keith").
     employee_number = str(pams_id)
-    if short_name:
-        employee_number = short_name[:50]
+    for key in ("employee_number", "employee_no", "payroll_number", "staff_number", "staff_id"):
+        candidate = _clean_str(row.get(key), max_len=50)
+        if candidate:
+            employee_number = candidate
+            break
 
     return MappedTechnician(
         pams_id=pams_id,

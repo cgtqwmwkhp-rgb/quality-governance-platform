@@ -4,11 +4,13 @@ Provides CRUD operations for KRIs, measurements, alerts,
 and risk score tracking.
 """
 
+import logging
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import and_, func, select
+from sqlalchemy.exc import ProgrammingError, SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.kri import (
@@ -32,7 +34,14 @@ from src.domain.models.kri import KeyRiskIndicator, KRIAlert, KRIMeasurement, Ri
 from src.domain.models.user import User
 from src.domain.services.risk_scoring import KRIService, RiskScoringService
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/kri", tags=["Key Risk Indicators"])
+
+
+def _kri_response(kri: KeyRiskIndicator) -> KRIResponse:
+    """Serialize ORM → response without from_orm (Pydantic v2)."""
+    return KRIResponse.model_validate(kri)
 
 
 # =============================================================================
@@ -46,7 +55,11 @@ async def list_kris(
     current_user: CurrentUser,
     category: Optional[str] = Query(None, description="Filter by category"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    status: Optional[str] = Query(None, description="Filter by current status"),
+    status_filter: Optional[str] = Query(
+        None,
+        alias="status",
+        description="Filter by current status",
+    ),
 ):
     """List all KRIs with optional filtering."""
     query = select(KeyRiskIndicator).where(KeyRiskIndicator.tenant_id == current_user.tenant_id)
@@ -56,21 +69,35 @@ async def list_kris(
         filters.append(KeyRiskIndicator.category == category)
     if is_active is not None:
         filters.append(KeyRiskIndicator.is_active == is_active)
-    if status:
-        filters.append(KeyRiskIndicator.current_status == status)
+    if status_filter:
+        filters.append(KeyRiskIndicator.current_status == status_filter)
 
     if filters:
         query = query.where(and_(*filters))
 
     query = query.order_by(KeyRiskIndicator.category, KeyRiskIndicator.code)
 
-    result = await db.execute(query)
-    kris = result.scalars().all()
+    try:
+        result = await db.execute(query)
+        kris = result.scalars().all()
+    except ProgrammingError:
+        # Missing legacy_key_risk_indicators (migration lag) must not 500 the risk suite.
+        logger.exception("GET /kri failed — legacy KRI table unavailable")
+        await db.rollback()
+        return KRIListResponse(items=[], total=0)
+    except SQLAlchemyError:
+        logger.exception("GET /kri query failed")
+        await db.rollback()
+        raise
 
-    return KRIListResponse(
-        items=[KRIResponse.from_orm(k) for k in kris],
-        total=len(kris),
-    )
+    items: list[KRIResponse] = []
+    for kri in kris:
+        try:
+            items.append(_kri_response(kri))
+        except Exception:
+            logger.warning("Skipping KRI id=%s — response validation failed", getattr(kri, "id", None))
+
+    return KRIListResponse(items=items, total=len(items))
 
 
 @router.post("", response_model=KRIResponse, status_code=status.HTTP_201_CREATED)
@@ -91,7 +118,7 @@ async def create_kri(
         raise BadRequestError("KRI code already exists")
 
     kri = KeyRiskIndicator(
-        **kri_data.dict(),
+        **kri_data.model_dump(),
         created_by_id=current_user.id,
         tenant_id=current_user.tenant_id,
     )
@@ -99,7 +126,7 @@ async def create_kri(
     await db.commit()
     await db.refresh(kri)
 
-    return KRIResponse.from_orm(kri)
+    return _kri_response(kri)
 
 
 @router.get("/dashboard", response_model=KRIDashboardResponse)
@@ -146,7 +173,7 @@ async def get_kri(
     if not kri:
         raise NotFoundError("KRI not found")
 
-    return KRIResponse.from_orm(kri)
+    return _kri_response(kri)
 
 
 @router.patch("/{kri_id}", response_model=KRIResponse)
@@ -168,7 +195,7 @@ async def update_kri(
     if not kri:
         raise NotFoundError("KRI not found")
 
-    update_data = kri_data.dict(exclude_unset=True)
+    update_data = kri_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(kri, field, value)
 
@@ -177,7 +204,7 @@ async def update_kri(
     await db.commit()
     await db.refresh(kri)
 
-    return KRIResponse.from_orm(kri)
+    return _kri_response(kri)
 
 
 @router.delete("/{kri_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -243,7 +270,7 @@ async def get_kri_measurements(
     measurements = result.scalars().all()
 
     return KRIMeasurementListResponse(
-        items=[KRIMeasurementResponse.from_orm(m) for m in measurements],
+        items=[KRIMeasurementResponse.model_validate(m) for m in measurements],
         total=len(measurements),
     )
 
@@ -273,7 +300,7 @@ async def get_pending_alerts(
     alerts = result.scalars().all()
 
     return KRIAlertListResponse(
-        items=[KRIAlertResponse.from_orm(a) for a in alerts],
+        items=[KRIAlertResponse.model_validate(a) for a in alerts],
         total=len(alerts),
     )
 
