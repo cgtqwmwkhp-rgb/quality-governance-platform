@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "164 kB",
+    "limit": "165 kB",
     "gzip": true,
-    "name": "index: 163→164 kB — DEF-PDF evidence pack client (+~74 B over 163)"
+    "name": "index: 164\u2192165 kB \u2014 PX-002 incident save toast i18n (+~57 B over 164)"
   },
   {
     "path": "dist/assets/vendor-*.js",

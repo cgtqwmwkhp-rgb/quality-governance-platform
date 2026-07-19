@@ -10,6 +10,7 @@
 - `frontend/src/pages/__tests__/IncidentDetail.test.tsx`
 - `frontend/src/i18n/locales/en.json`
 - `frontend/src/i18n/locales/cy.json`
+- `frontend/.size-limit.json`
 - `scripts/governance/pr_body_uat_a1_incident_409.md`
 
 ## 1) Summary
