@@ -364,13 +364,6 @@ function parseResponseValue(value: string | undefined | null, questionType: stri
   return value
 }
 
-function serializeResponse(response: ResponseType): string | undefined {
-  if (response === null || response === undefined) return undefined
-  if (typeof response === 'number') return String(response)
-  if (Array.isArray(response)) return JSON.stringify(response)
-  return String(response)
-}
-
 // ============================================================================
 // COMPONENTS
 // ============================================================================
