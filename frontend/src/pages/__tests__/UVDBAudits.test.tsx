@@ -188,11 +188,8 @@ describe('UVDBAudits', () => {
 
     expect(await screen.findByText('UVDB-2026-0001')).toBeInTheDocument()
 
-    const mappingTab = screen
-      .getAllByRole('button')
-      .find((button) => button.textContent?.includes('uvdb.tab.iso_mapping'))
-    expect(mappingTab).toBeTruthy()
-    fireEvent.click(mappingTab!)
+    const mappingTab = screen.getByRole('tab', { name: /uvdb.shell.section.mapping/i })
+    fireEvent.click(mappingTab)
 
     expect(await screen.findByText('Information security controls')).toBeInTheDocument()
     await waitFor(() => {
@@ -277,19 +274,37 @@ describe('UVDBAudits', () => {
     expect(await screen.findAllByText('0%')).not.toHaveLength(0)
   })
 
-  it('presents protocol, scores, history and ISO mappings as clear specialist sections', async () => {
+  it('presents scores, protocol, history, mapping and export as Planet Mark-style sections', async () => {
     const UVDBAudits = (await import('../UVDBAudits')).default
     renderPage(<UVDBAudits />)
 
     expect(
       await screen.findByRole('heading', { name: 'Scores and audit health' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'uvdb.tab.scores' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'uvdb.tab.protocol' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'uvdb.tab.audit_history' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'uvdb.tab.iso_mapping' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'uvdb.export_protocol' })).toBeDisabled()
-    expect(screen.getByTestId('uvdb-export-protocol-honesty')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /uvdb.shell.section.scores/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(screen.getByRole('tab', { name: /uvdb.shell.section.protocol/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /uvdb.shell.section.audits/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /uvdb.shell.section.mapping/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /uvdb.shell.section.export/i })).toBeInTheDocument()
+    expect(screen.getByTestId('uvdb-section-scores')).toBeInTheDocument()
+  })
+
+  it('keeps protocol export honesty on the export section without faking downloads', async () => {
+    const UVDBAudits = (await import('../UVDBAudits')).default
+    render(
+      <MemoryRouter initialEntries={['/uvdb?section=export']}>
+        <UVDBAudits />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('uvdb-section-export')).toBeInTheDocument()
+    expect(screen.getByTestId('uvdb-export-protocol-honesty')).toHaveTextContent(
+      'uvdb.shell.export_honesty',
+    )
+    expect(screen.getByTestId('uvdb-export-protocol')).toBeDisabled()
   })
 
   it('links to import review only when a real audit run id is available', async () => {
@@ -328,7 +343,7 @@ describe('UVDBAudits', () => {
     const UVDBAudits = (await import('../UVDBAudits')).default
     renderPage(<UVDBAudits />)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'uvdb.tab.audit_history' }))
+    fireEvent.click(await screen.findByRole('tab', { name: /uvdb.shell.section.audits/i }))
 
     const links = screen.getAllByRole('link', { name: 'Import review' })
     expect(links).toHaveLength(1)
@@ -521,13 +536,13 @@ describe('UVDBAudits', () => {
     expect(await screen.findByText('No audit history yet')).toBeInTheDocument()
     expect(screen.getByText('Not scored')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'uvdb.tab.protocol' }))
+    fireEvent.click(screen.getByRole('tab', { name: /uvdb.shell.section.protocol/i }))
     expect(screen.getByText('Protocol sections unavailable')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'uvdb.tab.audit_history' }))
+    fireEvent.click(screen.getByRole('tab', { name: /uvdb.shell.section.audits/i }))
     expect(screen.getByText('No audits yet')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'uvdb.tab.iso_mapping' }))
+    fireEvent.click(screen.getByRole('tab', { name: /uvdb.shell.section.mapping/i }))
     expect(screen.getByText('No ISO cross-mapping data is available yet.')).toBeInTheDocument()
   })
 
