@@ -35,9 +35,9 @@ from src.domain.models.document import (
 )
 from src.domain.models.location import Location
 from src.domain.models.user import User
-from src.domain.services.document_category_service import allocate_pel_doc_ref
 from src.domain.services.document_ai_service import VectorSearchService
 from src.domain.services.document_campaign_service import DocumentCampaignService
+from src.domain.services.document_category_service import allocate_pel_doc_ref
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
 from src.domain.services.document_version_service import (

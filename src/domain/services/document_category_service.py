@@ -21,11 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.models.document_library import DocumentCategory, DocumentTag, PelDocRefCounter
-from src.domain.services.document_category_seed_data import (
-    EXPECTED_CATEGORY_COUNT,
-    TAG_SEED,
-    load_taxonomy_categories,
-)
+from src.domain.services.document_category_seed_data import EXPECTED_CATEGORY_COUNT, TAG_SEED, load_taxonomy_categories
 
 
 @dataclass

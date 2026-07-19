@@ -138,9 +138,7 @@ class TestSeedDocumentCategoriesIdempotency:
         assert len(tags) == len(TAG_SEED)
 
     @pytest.mark.asyncio
-    async def test_reseed_reasserts_deactivation_even_if_manually_reactivated(
-        self, isolated_db_session: AsyncSession
-    ):
+    async def test_reseed_reasserts_deactivation_even_if_manually_reactivated(self, isolated_db_session: AsyncSession):
         """A prior manual reactivation of 06.04 must not survive a reseed."""
         await seed_document_categories(isolated_db_session)
         await isolated_db_session.commit()
@@ -167,8 +165,10 @@ class TestSeedDocumentCategoriesIdempotency:
 
         assert result.counters_created == 73
         level2_ids = (
-            await isolated_db_session.execute(select(DocumentCategory.id).where(DocumentCategory.level == 2))
-        ).scalars().all()
+            (await isolated_db_session.execute(select(DocumentCategory.id).where(DocumentCategory.level == 2)))
+            .scalars()
+            .all()
+        )
         counter_ids = (await isolated_db_session.execute(select(PelDocRefCounter.category_id))).scalars().all()
         assert set(level2_ids) == set(counter_ids)
 
