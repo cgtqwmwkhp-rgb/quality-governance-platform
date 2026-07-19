@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
-import { BrowserRouter } from 'react-router-dom'
+import { BrowserRouter, MemoryRouter } from 'react-router-dom'
 
 const mockListStandards = vi.fn()
 const mockListClauses = vi.fn()
@@ -25,6 +25,22 @@ vi.mock('../../contexts/ToastContext', () => ({
     success: (...args: unknown[]) => mockToastSuccess(...args),
     info: vi.fn(),
   },
+}))
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      const labels: Record<string, string> = {
+        'compliance.evidence.shell.section.clauses': 'Clause View',
+        'compliance.evidence.shell.section.evidence': 'Evidence List',
+        'compliance.evidence.shell.section.gaps': 'Gap Analysis',
+        'compliance.evidence.shell.section.imported': 'Imported Audits',
+        'compliance.evidence.shell.tabs_aria': 'ISO compliance sections',
+      }
+      return labels[key] ?? key
+    },
+  }),
+  initReactI18next: { type: '3rdParty', init: () => {} },
 }))
 
 vi.mock('../../api/client', () => ({
@@ -553,5 +569,48 @@ describe('ComplianceEvidence', () => {
       'href',
       '/actions?clause=7.5',
     )
+  })
+
+  it('renders Planet Mark-style section pills with default clauses section', async () => {
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+
+    render(
+      <MemoryRouter initialEntries={['/compliance']}>
+        <ComplianceEvidence />
+      </MemoryRouter>,
+    )
+
+    await screen.findByText('Fully Covered')
+
+    expect(screen.getByRole('tab', { name: /Clause View/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('compliance-evidence-section-clauses')).toBeInTheDocument()
+    expect(screen.getByTestId('compliance-evidence-section-filter')).toBeInTheDocument()
+  })
+
+  it('routes ?section= gaps to gap analysis panel', async () => {
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+
+    render(
+      <MemoryRouter initialEntries={['/compliance?section=gaps']}>
+        <ComplianceEvidence />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('compliance-evidence-section-gaps')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Gap Analysis/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText(/Gap Analysis — Clauses Needing Evidence/i)).toBeInTheDocument()
+  })
+
+  it('routes ?section= imported to imported audits panel with honest empty state', async () => {
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+
+    render(
+      <MemoryRouter initialEntries={['/compliance?section=imported']}>
+        <ComplianceEvidence />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('compliance-evidence-section-imported')).toBeInTheDocument()
+    expect(screen.getByText(/No imported ISO audits/i)).toBeInTheDocument()
   })
 })
