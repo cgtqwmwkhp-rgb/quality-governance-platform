@@ -94,6 +94,9 @@ from src.domain.models.document_control import (
     DocumentTrainingLink,
     ObsoleteDocumentRecord,
 )
+
+# Governance Library taxonomy (Wave W0)
+from src.domain.models.document_library import DocumentCategory, DocumentTag, PelDocRefCounter
 from src.domain.models.driver_profile import AcknowledgementStatus, DriverAcknowledgement, DriverProfile
 from src.domain.models.engineer import (
     CompetencyLifecycleState,
@@ -363,6 +366,10 @@ __all__ = [
     "DocumentTrainingLink",
     "DocumentAccessLog",
     "ObsoleteDocumentRecord",
+    # Governance Library taxonomy (Wave W0)
+    "DocumentCategory",
+    "DocumentTag",
+    "PelDocRefCounter",
     # ISO 27001 Information Security (Tier 1)
     "InformationAsset",
     "ISO27001Control",
