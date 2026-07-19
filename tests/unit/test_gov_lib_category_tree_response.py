@@ -5,7 +5,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from pydantic import ValidationError
 
 from src.api.routes.document_categories import (
     DocumentCategoryResponse,
@@ -30,11 +29,21 @@ class _Result:
         return _Scalars(self._rows)
 
 
+class _OrmCategory:
+    """Minimal ORM stand-in with a hostile children relationship."""
+
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    @property
+    def children(self):
+        raise RuntimeError("lazy children load attempted")
+
+
 @pytest.mark.asyncio
 async def test_category_tree_builds_without_orm_children_access():
-    """TreeNode validation must not read SQLAlchemy relationship attributes."""
-
-    section = SimpleNamespace(
+    section = _OrmCategory(
         id=1,
         taxonomy_id="01",
         parent_id=None,
@@ -50,8 +59,7 @@ async def test_category_tree_builds_without_orm_children_access():
         retention_rule=None,
         active=True,
     )
-
-    child = SimpleNamespace(
+    child = _OrmCategory(
         id=2,
         taxonomy_id="01.01",
         parent_id=1,
@@ -67,13 +75,6 @@ async def test_category_tree_builds_without_orm_children_access():
         retention_rule=None,
         active=True,
     )
-
-    # If the route validates TreeNode directly from ORM, accessing .children
-    # would raise. Simulate that failure mode and prove flat validation works.
-    def _boom(_self):
-        raise RuntimeError("lazy children load attempted")
-
-    type(section).children = property(_boom)  # type: ignore[attr-defined]
 
     with pytest.raises(Exception):
         DocumentCategoryTreeNode.model_validate(section, from_attributes=True)
