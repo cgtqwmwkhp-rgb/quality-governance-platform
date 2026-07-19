@@ -34,7 +34,8 @@ def _resolve_portal_display_name(data: dict, *, is_anonymous: bool) -> str:
     """Map reporter_name / complainant_name for portal entity NOT NULL columns."""
     if is_anonymous:
         return "Anonymous"
-    snapshot = data.get("reporter_submission") if isinstance(data.get("reporter_submission"), dict) else {}
+    raw_snapshot = data.get("reporter_submission")
+    snapshot: dict = raw_snapshot if isinstance(raw_snapshot, dict) else {}
     for key in (
         "reporter_name",
         "complainant_name",
