@@ -39,9 +39,7 @@ class TestDriftPatternDetection(TestCase):
 def test_example():
     response = client.get("__API__/users")
     assert response.status_code == 200
-""".replace(
-                "__API__", "/api"
-            )
+""".replace("__API__", "/api")
             f.write(fixture)
             f.flush()
 
@@ -68,13 +66,11 @@ def test_example():
     def test_versioned_api_path_allowed(self):
         """Versioned /api/v1/ paths MUST NOT be flagged."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 def test_example():
     response = client.get("/api/v1/users")
     assert response.status_code == 200
-"""
-            )
+""")
             f.flush()
 
             violations = scan_file(Path(f.name), set())
@@ -86,13 +82,11 @@ def test_example():
     def test_versioned_api_v2_allowed(self):
         """Other versions like /api/v2/ MUST also be allowed."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 def test_example():
     response = client.get("/api/v2/users")
     assert response.status_code == 200
-"""
-            )
+""")
             f.flush()
 
             violations = scan_file(Path(f.name), set())
@@ -104,8 +98,7 @@ def test_example():
     def test_health_endpoint_allowed(self):
         """Health endpoints MUST NOT be flagged."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 def test_health():
     response = client.get("/healthz")
     assert response.status_code == 200
@@ -113,8 +106,7 @@ def test_health():
 def test_ready():
     response = client.get("/readyz")
     assert response.status_code == 200
-"""
-            )
+""")
             f.flush()
 
             violations = scan_file(Path(f.name), set())
@@ -155,9 +147,7 @@ class TestAllowlistHandling(TestCase):
 def test_legacy():
     response = client.get("__API__/legacy/endpoint")
     assert response.status_code == 200
-""".replace(
-                "__API__", "/api"
-            )
+""".replace("__API__", "/api")
             f.write(fixture)
             f.flush()
 
@@ -179,9 +169,7 @@ class TestViolationOutput(TestCase):
 line2
 response = client.get("__API__/users")
 line4
-""".replace(
-                "__API__", "/api"
-            )
+""".replace("__API__", "/api")
             f.write(fixture)
             f.flush()
 
@@ -226,9 +214,7 @@ valid4 = "/readyz"
 # Invalid paths
 invalid1 = "__API__/users"
 invalid2 = "__API__/policies"
-""".replace(
-                "__API__", "/api"
-            )
+""".replace("__API__", "/api")
             f.write(fixture)
             f.flush()
 
