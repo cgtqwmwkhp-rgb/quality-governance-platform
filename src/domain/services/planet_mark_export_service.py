@@ -158,15 +158,12 @@ class PlanetMarkExportService:
             for action in action_rows
         ]
 
-        period = (
-            f"{year.period_start.strftime('%d %b %Y')} - {year.period_end.strftime('%d %b %Y')}"
-        )
+        period = f"{year.period_start.strftime('%d %b %Y')} - {year.period_end.strftime('%d %b %Y')}"
 
         return {
             "export_kind": "json_pack",
             "pdf_note": (
-                "Branded PDF pack is a follow-on — JSON and XLSX packs are live from the "
-                "authenticated export API."
+                "Branded PDF pack is a follow-on — JSON and XLSX packs are live from the " "authenticated export API."
             ),
             "xlsx_note": "Use ?format=xlsx on the export endpoint for the spreadsheet pack.",
             "generated_at": datetime.now(timezone.utc).isoformat(),
