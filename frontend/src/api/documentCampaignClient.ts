@@ -126,6 +126,8 @@ export interface DocumentCampaignAssignment {
   campaign_id?: number
   campaign_title?: string | null
   document_id: number
+  /** Controlled document → policy library link; used to dedupe legacy policy-ack rows. */
+  linked_policy_id?: number | null
   document_title?: string | null
   document_version?: string | null
   status: string

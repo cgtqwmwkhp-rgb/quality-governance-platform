@@ -3,6 +3,7 @@ import type {
   DocumentCampaignQuiz,
   DocumentCampaignQuizAnswer,
   DocumentCampaignQuizResult,
+  PolicyAcknowledgment,
   SignatureDisposition,
 } from '../api/client'
 
@@ -120,3 +121,70 @@ export async function resolveAssignmentDocumentUrl(
   const rawUrl = response.data.signed_url
   return new URL(rawUrl, apiBaseUrl || window.location.origin).toString()
 }
+
+/** Campaign assignments that still require engineer action (SSOT for reading queue). */
+export const isActiveCampaignAssignment = (assignment: DocumentCampaignAssignment): boolean =>
+  assignment.status !== 'completed'
+
+/**
+ * True when a legacy policy-ack row refers to the same controlled document as an active campaign.
+ * Matches document_id (legacy UI conflation) and linked_policy_id when present on the assignment.
+ */
+export const policyAckMatchesCampaignDocument = (
+  policyAck: PolicyAcknowledgment,
+  assignment: DocumentCampaignAssignment,
+): boolean => {
+  if (!isActiveCampaignAssignment(assignment)) return false
+  if (assignment.document_id === policyAck.policy_id) return true
+  if (
+    assignment.linked_policy_id != null &&
+    assignment.linked_policy_id === policyAck.policy_id
+  ) {
+    return true
+  }
+  return false
+}
+
+export const findCampaignAssignmentForPolicyAck = (
+  policyAck: PolicyAcknowledgment,
+  campaigns: DocumentCampaignAssignment[],
+): DocumentCampaignAssignment | undefined =>
+  campaigns.find((assignment) => policyAckMatchesCampaignDocument(policyAck, assignment))
+
+export type SuppressedPolicyAck = {
+  policyAck: PolicyAcknowledgment
+  campaignAssignmentId: number
+}
+
+/** Prefer campaign assignments; hide policy-ack cards that duplicate active campaign work. */
+export const partitionReadingQueue = (
+  policyAcks: PolicyAcknowledgment[],
+  campaigns: DocumentCampaignAssignment[],
+): {
+  activeCampaigns: DocumentCampaignAssignment[]
+  visiblePolicyAcks: PolicyAcknowledgment[]
+  suppressedPolicyAcks: SuppressedPolicyAck[]
+} => {
+  const activeCampaigns = campaigns.filter(isActiveCampaignAssignment)
+  const visiblePolicyAcks: PolicyAcknowledgment[] = []
+  const suppressedPolicyAcks: SuppressedPolicyAck[] = []
+
+  for (const policyAck of policyAcks) {
+    const match = findCampaignAssignmentForPolicyAck(policyAck, activeCampaigns)
+    if (match) {
+      suppressedPolicyAcks.push({ policyAck, campaignAssignmentId: match.id })
+    } else {
+      visiblePolicyAcks.push(policyAck)
+    }
+  }
+
+  return { activeCampaigns, visiblePolicyAcks, suppressedPolicyAcks }
+}
+
+export const unifiedReadingQueueCount = (
+  activeCampaigns: DocumentCampaignAssignment[],
+  visiblePolicyAcks: PolicyAcknowledgment[],
+): number => activeCampaigns.length + visiblePolicyAcks.length
+
+export const portalCampaignReadingHref = (assignmentId: number): string =>
+  `/portal/reading?assignment=${assignmentId}`

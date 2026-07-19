@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Award,
   Leaf,
@@ -63,6 +64,13 @@ import {
 import { cn } from '../helpers/utils'
 import { getImportReviewPath } from '../components/audit-import/importReviewHelpers'
 import { toast } from '../contexts/ToastContext'
+import {
+  COMPLIANCE_EVIDENCE_DEFAULT_SECTION,
+  COMPLIANCE_EVIDENCE_SECTIONS,
+  complianceEvidenceSectionQueryValue,
+  parseComplianceEvidenceSection,
+  type ComplianceEvidenceSectionId,
+} from './complianceEvidenceHelpers'
 
 /**
  * Maps entity_type values (as stored in ComplianceEvidenceLink) to valid SPA routes.
@@ -203,14 +211,15 @@ const standardProgressClass: Record<string, string> = {
 }
 
 export default function ComplianceEvidence() {
-  const [searchParams] = useSearchParams()
+  const { t } = useTranslation()
+  const [searchParams, setSearchParams] = useSearchParams()
   const clauseFromUrl = (searchParams.get('clause') || '').trim()
   const standardFromUrl = (searchParams.get('standard') || '').trim()
+  const section = parseComplianceEvidenceSection(searchParams.get('section'))
 
   const [selectedStandard, setSelectedStandard] = useState<string | 'all'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedClauses, setExpandedClauses] = useState<Set<string>>(new Set())
-  const [viewMode, setViewMode] = useState<'clauses' | 'evidence' | 'gaps' | 'imported'>('clauses')
   const [selectedClauseId, setSelectedClauseId] = useState<string | null>(null)
   const [showAutoTagger, setShowAutoTagger] = useState(false)
   const [autoTagText, setAutoTagText] = useState('')
@@ -252,6 +261,34 @@ export default function ComplianceEvidence() {
   // caused by the auto-select logic inside loadData itself setting selectedClauseId).
   const selectedClauseIdRef = useRef<string | null>(null)
 
+  const setQuery = useCallback(
+    (patch: Record<string, string | null>) => {
+      const next = new URLSearchParams(searchParams)
+      Object.entries(patch).forEach(([key, value]) => {
+        if (
+          value == null ||
+          value === '' ||
+          (key === 'section' && value === COMPLIANCE_EVIDENCE_DEFAULT_SECTION)
+        ) {
+          if (key === 'section' && value === COMPLIANCE_EVIDENCE_DEFAULT_SECTION) next.delete(key)
+          else if (value == null || value === '') next.delete(key)
+          else next.set(key, value)
+        } else {
+          next.set(key, value)
+        }
+      })
+      setSearchParams(next, { replace: true })
+    },
+    [searchParams, setSearchParams],
+  )
+
+  const setSection = useCallback(
+    (nextSection: ComplianceEvidenceSectionId) => {
+      setQuery({ section: complianceEvidenceSectionQueryValue(nextSection) })
+    },
+    [setQuery],
+  )
+
   // Debounce search query to avoid firing an API call on every keystroke
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 350)
@@ -285,9 +322,9 @@ export default function ComplianceEvidence() {
     )
     if (match) {
       setSelectedClauseId(match.id)
-      setViewMode('clauses')
+      setSection('clauses')
     }
-  }, [clauseFromUrl, clauses])
+  }, [clauseFromUrl, clauses, setSection])
 
   useEffect(() => {
     let cancelled = false
@@ -373,7 +410,7 @@ export default function ComplianceEvidence() {
   }, [debouncedSearchQuery, selectedStandard])
 
   useEffect(() => {
-    if (viewMode !== 'imported') return
+    if (section !== 'imported') return
     let cancelled = false
     const loadImported = async () => {
       setLoadingImported(true)
@@ -396,7 +433,7 @@ export default function ComplianceEvidence() {
     }
     void loadImported()
     return () => { cancelled = true }
-  }, [viewMode])
+  }, [section])
 
   const selectedClause = useMemo(
     () => clauses.find((clause) => clause.id === selectedClauseId) ?? null,
@@ -765,7 +802,20 @@ export default function ComplianceEvidence() {
             </Link>
           </div>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap" data-testid="compliance-evidence-filters">
+          <select
+            value={section}
+            onChange={(e) => setSection(e.target.value as ComplianceEvidenceSectionId)}
+            aria-label={t('compliance.evidence.shell.tabs_aria')}
+            data-testid="compliance-evidence-section-filter"
+            className="rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground"
+          >
+            {COMPLIANCE_EVIDENCE_SECTIONS.map(({ id, labelKey }) => (
+              <option key={id} value={id}>
+                {t(labelKey)}
+              </option>
+            ))}
+          </select>
           <Button onClick={() => setShowAutoTagger(true)}>
             <Sparkles className="w-4 h-4 mr-2" aria-hidden="true" />
             AI Auto-Tagger
@@ -931,27 +981,30 @@ export default function ComplianceEvidence() {
         </div>
       )}
 
-      {/* View Mode Tabs & Search Toolbar */}
+      {/* Section pills & search toolbar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex bg-secondary rounded-lg p-1" role="tablist" aria-label="Compliance views">
-          {[
-            { id: 'clauses', label: 'Clause View', icon: BookOpen },
-            { id: 'evidence', label: 'Evidence List', icon: FileText },
-            { id: 'gaps', label: 'Gap Analysis', icon: AlertTriangle },
-            { id: 'imported', label: 'Imported Audits', icon: ClipboardCheck },
-          ].map((tab) => (
-            <Button
-              key={tab.id}
-              variant={viewMode === tab.id ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode(tab.id as typeof viewMode)}
+        <div
+          className="flex bg-surface rounded-xl p-1 border border-border overflow-x-auto"
+          role="tablist"
+          aria-label={t('compliance.evidence.shell.tabs_aria')}
+        >
+          {COMPLIANCE_EVIDENCE_SECTIONS.map(({ id, labelKey, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
               role="tab"
-              aria-selected={viewMode === tab.id}
-              className="flex items-center gap-2"
+              aria-selected={section === id}
+              onClick={() => setSection(id)}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap',
+                section === id
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
             >
-              <tab.icon className="w-4 h-4" aria-hidden="true" />
-              {tab.label}
-            </Button>
+              <Icon className="w-4 h-4" aria-hidden="true" />
+              {t(labelKey)}
+            </button>
           ))}
         </div>
 
@@ -989,8 +1042,8 @@ export default function ComplianceEvidence() {
         {/* Left Panel */}
         <Card className="lg:col-span-2 max-h-[70vh] overflow-y-auto">
           <CardContent className="p-6">
-            {viewMode === 'clauses' && (
-              <>
+            {section === 'clauses' && (
+              <div data-testid="compliance-evidence-section-clauses">
                 <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                   <BookOpen className="w-5 h-5 text-primary" aria-hidden="true" />
                   Clause Structure
@@ -1017,11 +1070,11 @@ export default function ComplianceEvidence() {
                       </div>
                     ))
                   : renderClauseTree(undefined, 0, selectedStandard)}
-              </>
+              </div>
             )}
 
-            {viewMode === 'evidence' && (
-              <>
+            {section === 'evidence' && (
+              <div data-testid="compliance-evidence-section-evidence">
                 <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                   <FileText className="w-5 h-5 text-primary" aria-hidden="true" />
                   All Evidence
@@ -1114,11 +1167,11 @@ export default function ComplianceEvidence() {
                     })}
                   </div>
                 )}
-              </>
+              </div>
             )}
 
-            {viewMode === 'imported' && (
-              <>
+            {section === 'imported' && (
+              <div data-testid="compliance-evidence-section-imported">
                 <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                   <ClipboardCheck className="w-5 h-5 text-primary" aria-hidden="true" />
                   Imported ISO Audits
@@ -1202,11 +1255,11 @@ export default function ComplianceEvidence() {
                     ))}
                   </div>
                 )}
-              </>
+              </div>
             )}
 
-            {viewMode === 'gaps' && (
-              <>
+            {section === 'gaps' && (
+              <div data-testid="compliance-evidence-section-gaps">
                 <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-destructive" aria-hidden="true" />
                   Gap Analysis — Clauses Needing Evidence
@@ -1264,7 +1317,7 @@ export default function ComplianceEvidence() {
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   setSelectedClauseId(clause.clause_id)
-                                  setViewMode('clauses')
+                                  setSection('clauses')
                                 }}
                               >
                                 <Sparkles className="w-3 h-3 mr-1" aria-hidden="true" /> Review Mappings
@@ -1275,7 +1328,7 @@ export default function ComplianceEvidence() {
                       })}
                   </div>
                 )}
-              </>
+              </div>
             )}
           </CardContent>
         </Card>
