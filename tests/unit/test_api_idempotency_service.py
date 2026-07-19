@@ -34,8 +34,14 @@ def test_hash_payload_is_stable_for_model_dump():
 @pytest.mark.asyncio
 async def test_begin_without_key_is_noop():
     db = AsyncMock()
-    assert await begin_idempotent_create(db, tenant_id=1, scope=SCOPE_INCIDENT_CREATE, idempotency_key=None, payload={}) is None
-    assert await begin_idempotent_create(db, tenant_id=1, scope=SCOPE_INCIDENT_CREATE, idempotency_key="  ", payload={}) is None
+    assert (
+        await begin_idempotent_create(db, tenant_id=1, scope=SCOPE_INCIDENT_CREATE, idempotency_key=None, payload={})
+        is None
+    )
+    assert (
+        await begin_idempotent_create(db, tenant_id=1, scope=SCOPE_INCIDENT_CREATE, idempotency_key="  ", payload={})
+        is None
+    )
     db.execute.assert_not_awaited()
 
 

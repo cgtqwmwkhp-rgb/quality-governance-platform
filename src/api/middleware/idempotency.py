@@ -128,9 +128,7 @@ def _response_from_cache(cached_response: dict) -> Response:
     body_content = cached_response["body"]
     if cached_response.get("headers", {}).get("X-Idempotency-Body-Encoding") == "base64":
         body_content = _base64.b64decode(body_content)
-        response_headers = {
-            k: v for k, v in cached_response["headers"].items() if k != "X-Idempotency-Body-Encoding"
-        }
+        response_headers = {k: v for k, v in cached_response["headers"].items() if k != "X-Idempotency-Body-Encoding"}
     else:
         response_headers = cached_response.get("headers") or {}
         body_content = body_content.encode("utf-8") if isinstance(body_content, str) else body_content
@@ -232,9 +230,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     return _conflict_response(idempotency_key)
 
                 if cached_response.get("status") == "processing":
-                    waited = await _wait_for_cached_response(
-                        redis_client, redis_key, payload_hash, idempotency_key
-                    )
+                    waited = await _wait_for_cached_response(redis_client, redis_key, payload_hash, idempotency_key)
                     if waited is not None:
                         return waited
                     # Timed out waiting — fall through without a second create if claim fails
@@ -243,9 +239,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     return _response_from_cache(cached_response)
 
             # Claim the key before executing so concurrent retries cannot double-create
-            placeholder = json.dumps(
-                {"status": "processing", "payload_hash": payload_hash}
-            ).encode("utf-8")
+            placeholder = json.dumps({"status": "processing", "payload_hash": payload_hash}).encode("utf-8")
             claimed = await redis_client.set(redis_key, placeholder, nx=True, ex=_IDEMPOTENCY_TTL_S)
             if not claimed:
                 cached_response = await _parse_cached(redis_client, redis_key)
@@ -255,9 +249,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     if "body" in cached_response and "status_code" in cached_response:
                         return _response_from_cache(cached_response)
                     if cached_response.get("status") == "processing":
-                        waited = await _wait_for_cached_response(
-                            redis_client, redis_key, payload_hash, idempotency_key
-                        )
+                        waited = await _wait_for_cached_response(redis_client, redis_key, payload_hash, idempotency_key)
                         if waited is not None:
                             return waited
 
