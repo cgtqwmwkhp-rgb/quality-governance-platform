@@ -555,9 +555,13 @@ async def complete_assessment(
     if score_result.outcome in ("fail", "conditional"):
         failed_questions = []
         for resp in run.responses:
-            verdict_val = (
-                resp.verdict.value if hasattr(resp.verdict, "value") else str(resp.verdict) if resp.verdict else None
-            )
+            verdict = resp.verdict
+            if verdict is None:
+                verdict_val = None
+            elif hasattr(verdict, "value"):
+                verdict_val = verdict.value
+            else:
+                verdict_val = str(verdict)
             if verdict_val == "not_competent":
                 q = next((q for q in template.questions if q.id == resp.question_id), None)
                 q_text = q.question_text if q else "Unknown"
