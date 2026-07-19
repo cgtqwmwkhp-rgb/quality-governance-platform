@@ -14,8 +14,18 @@ import {
   quizQuestionLabel,
   resolveSignatureDisposition,
   shouldRenderOpenQuestion,
+  isActiveCampaignAssignment,
+  policyAckMatchesCampaignDocument,
+  partitionReadingQueue,
+  unifiedReadingQueueCount,
+  portalCampaignReadingHref,
+  findCampaignAssignmentForPolicyAck,
 } from '../campaignReadingHelpers'
-import type { DocumentCampaignAssignment, DocumentCampaignQuiz } from '../../api/client'
+import type {
+  DocumentCampaignAssignment,
+  DocumentCampaignQuiz,
+  PolicyAcknowledgment,
+} from '../../api/client'
 
 describe('campaignReadingHelpers', () => {
   it('detects quiz requirement from alternate flags', () => {
@@ -91,5 +101,46 @@ describe('campaignReadingHelpers', () => {
     expect(canProceedToCompletionFields('no', null, false)).toBe(true)
     expect(canProceedToCompletionFields('yes', 'defer', true)).toBe(true)
     expect(canProceedToCompletionFields('yes', null, true)).toBe(false)
+  })
+
+  it('treats only non-completed campaigns as active', () => {
+    expect(isActiveCampaignAssignment({ status: 'pending' } as DocumentCampaignAssignment)).toBe(true)
+    expect(isActiveCampaignAssignment({ status: 'completed' } as DocumentCampaignAssignment)).toBe(false)
+  })
+
+  it('matches policy acks to campaigns via linked_policy_id or legacy document_id', () => {
+    const policyAck = { id: 1, policy_id: 99 } as PolicyAcknowledgment
+    const linkedMatch = {
+      id: 10,
+      document_id: 501,
+      linked_policy_id: 99,
+      status: 'opened',
+    } as DocumentCampaignAssignment
+    const legacyMatch = { id: 11, document_id: 99, status: 'pending' } as DocumentCampaignAssignment
+    const completed = { id: 12, document_id: 99, status: 'completed' } as DocumentCampaignAssignment
+
+    expect(policyAckMatchesCampaignDocument(policyAck, linkedMatch)).toBe(true)
+    expect(policyAckMatchesCampaignDocument(policyAck, legacyMatch)).toBe(true)
+    expect(policyAckMatchesCampaignDocument(policyAck, completed)).toBe(false)
+    expect(findCampaignAssignmentForPolicyAck(policyAck, [completed, linkedMatch])?.id).toBe(10)
+  })
+
+  it('partitionReadingQueue suppresses duplicate policy acks when campaign exists', () => {
+    const policyAcks = [
+      { id: 1, policy_id: 99 } as PolicyAcknowledgment,
+      { id: 2, policy_id: 77 } as PolicyAcknowledgment,
+    ]
+    const campaigns = [
+      { id: 10, document_id: 501, linked_policy_id: 99, status: 'pending' } as DocumentCampaignAssignment,
+    ]
+
+    const queue = partitionReadingQueue(policyAcks, campaigns)
+    expect(queue.activeCampaigns).toHaveLength(1)
+    expect(queue.visiblePolicyAcks.map((item) => item.id)).toEqual([2])
+    expect(queue.suppressedPolicyAcks).toEqual([
+      { policyAck: policyAcks[0], campaignAssignmentId: 10 },
+    ])
+    expect(unifiedReadingQueueCount(queue.activeCampaigns, queue.visiblePolicyAcks)).toBe(2)
+    expect(portalCampaignReadingHref(10)).toBe('/portal/reading?assignment=10')
   })
 })

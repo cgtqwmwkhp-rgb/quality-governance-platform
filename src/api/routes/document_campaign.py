@@ -503,6 +503,7 @@ async def get_my_assignments(
                 id=assignment.id,
                 campaign_id=campaign.id,
                 document_id=document.id,
+                linked_policy_id=document.linked_policy_id,
                 document_title=document.title,
                 campaign_title=campaign.title,
                 status=status_value,

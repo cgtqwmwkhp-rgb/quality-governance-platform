@@ -37,6 +37,7 @@ import {
   quizQuestionLabel,
   resolveSignatureDisposition,
   resolveAssignmentDocumentUrl,
+  partitionReadingQueue,
   shouldRenderOpenQuestion,
   showQuestionGate,
   type QuestionGateChoice,
@@ -327,13 +328,13 @@ export default function MyReading() {
     }
   }
 
-  const items = useMemo<ReadingItem[]>(
-    () => [
-      ...policyItems.map((item): ReadingItem => ({ source: 'policy', item })),
-      ...campaignItems.map((item): ReadingItem => ({ source: 'campaign', item })),
-    ],
-    [campaignItems, policyItems],
-  )
+  const items = useMemo<ReadingItem[]>(() => {
+    const { activeCampaigns, visiblePolicyAcks } = partitionReadingQueue(policyItems, campaignItems)
+    return [
+      ...visiblePolicyAcks.map((item): ReadingItem => ({ source: 'policy', item })),
+      ...activeCampaigns.map((item): ReadingItem => ({ source: 'campaign', item })),
+    ]
+  }, [campaignItems, policyItems])
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase()
