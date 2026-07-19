@@ -16,7 +16,6 @@ from src.domain.services.uvdb_protocol_export_service import (
     build_protocol_structure_payload,
 )
 
-
 SAMPLE_SECTIONS = [
     {
         "number": "1",
