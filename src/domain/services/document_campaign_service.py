@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from fpdf import FPDF
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -2343,6 +2342,11 @@ class DocumentCampaignService:
 
     async def build_evidence_pack_pdf(self, *, tenant_id: int, campaign_id: int) -> Tuple[bytes, str]:
         """Build PDF evidence pack for a campaign (same rows as CSV + campaign header)."""
+        try:
+            from fpdf import FPDF
+        except ModuleNotFoundError as exc:  # pragma: no cover - lockfile/runtime guard
+            raise BadRequestError("PDF export unavailable: fpdf2 is not installed in this environment") from exc
+
         campaign, rows = await self._fetch_evidence_pack_rows(tenant_id=tenant_id, campaign_id=campaign_id)
         doc_title = await self._document_title(tenant_id=tenant_id, document_id=campaign.document_id)
         status_value = campaign.status.value if hasattr(campaign.status, "value") else str(campaign.status)
