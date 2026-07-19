@@ -57,16 +57,26 @@ async def test_create_assessment_run_retries_reference_conflict(monkeypatch):
         AsyncMock(return_value={"approved": True, "reason": None}),
     )
 
-    async def _refresh(run):
-        run.id = "assessment-run-1"
+    runs: list = []
+
+    def _add(run):
+        runs.append(run)
+        run.id = run.id or "assessment-run-1"
         run.template_version = 1
         run.created_at = datetime.now(timezone.utc)
         run.updated_at = datetime.now(timezone.utc)
 
+    flush_calls = {"n": 0}
+
+    async def _flush():
+        flush_calls["n"] += 1
+        if flush_calls["n"] == 1:
+            raise _reference_conflict("assessment_runs")
+
     db = types.SimpleNamespace(
-        add=lambda _: None,
-        commit=AsyncMock(side_effect=[_reference_conflict("assessment_runs"), None]),
-        refresh=AsyncMock(side_effect=_refresh),
+        add=_add,
+        flush=AsyncMock(side_effect=_flush),
+        commit=AsyncMock(),
         rollback=AsyncMock(),
     )
     user = types.SimpleNamespace(id=7, tenant_id=1)
@@ -79,7 +89,8 @@ async def test_create_assessment_run_retries_reference_conflict(monkeypatch):
 
     assert result.reference_number == "ASM-2026-0002"
     assert db.rollback.await_count == 1
-    assert db.commit.await_count == 2
+    assert db.commit.await_count == 1
+    assert db.flush.await_count == 2
 
 
 @pytest.mark.asyncio

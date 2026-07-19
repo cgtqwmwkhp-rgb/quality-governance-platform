@@ -77,8 +77,10 @@ async def test_complete_assessment_reuses_existing_competency_record(monkeypatch
             ]
         ),
         add=Mock(),
+        flush=AsyncMock(),
         commit=AsyncMock(),
         refresh=AsyncMock(),
+        rollback=AsyncMock(),
     )
     user = types.SimpleNamespace(id=42, tenant_id=1, is_superuser=False, roles=[])
 
@@ -95,8 +97,8 @@ async def test_complete_assessment_reuses_existing_competency_record(monkeypatch
         AsyncMock(),
     )
     monkeypatch.setattr(
-        "src.api.routes.assessments.AssessmentRunResponse.model_validate",
-        lambda run_obj: run_obj,
+        "src.api.routes.assessments._to_assessment_run_response",
+        lambda run_obj, **_extra: run_obj,
     )
     monkeypatch.setattr(
         "src.api.routes.assessments.resolve_reassessment_interval_days",
@@ -109,6 +111,8 @@ async def test_complete_assessment_reuses_existing_competency_record(monkeypatch
     assert existing_competency.state == CompetencyLifecycleState.ACTIVE
     assert existing_competency.outcome == "pass"
     db.add.assert_not_called()
+    db.flush.assert_awaited()
+    db.commit.assert_awaited()
 
 
 @pytest.mark.asyncio

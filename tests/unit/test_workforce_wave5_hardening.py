@@ -72,6 +72,7 @@ async def test_create_assessment_response_persists_run_tenant(monkeypatch):
         add=Mock(),
         commit=AsyncMock(),
         refresh=AsyncMock(),
+        rollback=AsyncMock(),
     )
     user = types.SimpleNamespace(id=42, tenant_id=7, is_superuser=False, roles=[])
     monkeypatch.setattr("src.api.routes.assessments._assert_assessment_access", AsyncMock())
@@ -240,11 +241,11 @@ async def test_update_induction_response_rejects_engineer_understanding_changes(
 
 @pytest.mark.asyncio
 async def test_get_assessment_run_does_not_lock_read_query(monkeypatch):
-    run = types.SimpleNamespace(id="asm-run-3", responses=[])
+    run = types.SimpleNamespace(id="asm-run-3", responses=[], status=AssessmentStatus.IN_PROGRESS)
     db = types.SimpleNamespace(execute=AsyncMock(return_value=_FakeResult(run)))
     user = types.SimpleNamespace(id=42, tenant_id=7, is_superuser=False, roles=[])
     monkeypatch.setattr("src.api.routes.assessments._assert_assessment_access", AsyncMock())
-    monkeypatch.setattr("src.api.routes.assessments.AssessmentRunResponse.model_validate", lambda run_obj: run_obj)
+    monkeypatch.setattr("src.api.routes.assessments._to_assessment_run_response", lambda run_obj, **_e: run_obj)
 
     await get_assessment_run("asm-run-3", db, user)
 
