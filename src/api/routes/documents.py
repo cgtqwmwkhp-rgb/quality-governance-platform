@@ -33,7 +33,9 @@ from src.domain.models.document import (
     IndexJob,
     SensitivityLevel,
 )
+from src.domain.models.location import Location
 from src.domain.models.user import User
+from src.domain.services.document_category_service import allocate_pel_doc_ref
 from src.domain.services.document_ai_service import VectorSearchService
 from src.domain.services.document_campaign_service import DocumentCampaignService
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
@@ -69,6 +71,9 @@ class DocumentResponse(BaseModel):
     file_size: int
     document_type: str
     category: Optional[str]
+    category_id: Optional[int] = None
+    pel_doc_ref: Optional[str] = None
+    site_location_id: Optional[int] = None
     department: Optional[str]
     sensitivity: str
     status: str
@@ -140,6 +145,9 @@ def _document_to_response(document: Document) -> DocumentResponse:
         file_size=document.file_size,
         document_type=_enum_value(document.document_type),
         category=document.category,
+        category_id=getattr(document, "category_id", None),
+        pel_doc_ref=getattr(document, "pel_doc_ref", None),
+        site_location_id=getattr(document, "site_location_id", None),
         department=document.department,
         sensitivity=_enum_value(document.sensitivity),
         status=_enum_value(document.status),
@@ -169,6 +177,7 @@ class DocumentUploadResponse(BaseModel):
     message: str
     index_job_id: Optional[int] = None
     filename_version_hint: Optional[str] = None
+    pel_doc_ref: Optional[str] = None
 
 
 class DocumentReprocessResponse(BaseModel):
@@ -524,11 +533,31 @@ async def upload_document(
     category: str = Form(None),
     department: str = Form(None),
     sensitivity: str = Form("internal"),
+    category_id: Optional[int] = Form(None),
+    site_location_id: Optional[int] = Form(None),
 ):
-    """Upload and process a new document."""
+    """Upload and process a new document.
+
+    `category_id` (Governance Library taxonomy, Wave W0) is optional and
+    separate from the legacy free-text `category` string: when provided, a
+    `pel_doc_ref` (PEL-<SECTION>-<SUB>-<SEQ>) is atomically allocated
+    alongside the existing `reference_number` (DOC-YYYY-####).
+    `site_location_id` binds the document to an existing `Location`
+    (site/workshop) — no separate Site table.
+    """
 
     if current_user.tenant_id is None:
         raise BadRequestError("Tenant context required to upload documents")
+
+    # `category_id`/`site_location_id` default to `Form(None)` sentinel objects
+    # (not literal `None`) when this coroutine is invoked directly rather than
+    # via FastAPI's request pipeline (e.g. in unit tests) — normalize with an
+    # `isinstance` check rather than `is not None` so both call styles behave.
+    category_id = category_id if isinstance(category_id, int) else None
+    site_location_id = site_location_id if isinstance(site_location_id, int) else None
+
+    if site_location_id is not None and await db.get(Location, site_location_id) is None:
+        raise BadRequestError(f"Location {site_location_id} not found")
 
     # Validate file type
     file_ext = file.filename.split(".")[-1].lower() if file.filename else ""
@@ -559,6 +588,14 @@ async def upload_document(
     try:
         reference_number = await ReferenceNumberService.generate(db, "document", Document)
 
+        # Governance Library taxonomy (Wave W0): allocated only once file
+        # validation above has passed, so a rejected upload never burns a
+        # PEL sequence number. Gaps are acceptable (see reference_scheme in
+        # specs/governance-library/taxonomy.json); duplicates are not.
+        pel_doc_ref: Optional[str] = None
+        if category_id is not None:
+            pel_doc_ref = await allocate_pel_doc_ref(db, category_id)
+
         # Create document record
         doc = Document(
             title=title,
@@ -581,6 +618,9 @@ async def upload_document(
             status=DocumentStatus.PROCESSING,
             version="1.0",
             reference_number=reference_number,
+            category_id=category_id,
+            pel_doc_ref=pel_doc_ref,
+            site_location_id=site_location_id,
             created_by_id=current_user.id,
             tenant_id=current_user.tenant_id,
         )
@@ -645,6 +685,7 @@ async def upload_document(
             status=doc.status.value,
             index_job_id=index_job.id if index_job else None,
             filename_version_hint=hint.label if hint else None,
+            pel_doc_ref=getattr(doc, "pel_doc_ref", None),
             message=(
                 "Document uploaded; indexing job queued" if dispatched else "Document uploaded and processing completed"
             ),
@@ -783,6 +824,8 @@ async def list_documents(
     search: Optional[str] = None,
     document_type: Optional[str] = None,
     category: Optional[str] = None,
+    category_id: Optional[int] = None,
+    site_location_id: Optional[int] = None,
     department: Optional[str] = None,
     status: Optional[str] = None,
     is_indexed: Optional[bool] = None,
@@ -808,6 +851,10 @@ async def list_documents(
         query = query.where(Document.document_type == document_type)
     if category:
         query = query.where(Document.category == category)
+    if category_id is not None:
+        query = query.where(Document.category_id == category_id)
+    if site_location_id is not None:
+        query = query.where(Document.site_location_id == site_location_id)
     if department:
         query = query.where(Document.department == department)
     if status:

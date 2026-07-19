@@ -147,6 +147,20 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     linked_policy_id: Mapped[Optional[int]] = mapped_column(ForeignKey("policies.id"), nullable=True)
     linked_standard_id: Mapped[Optional[int]] = mapped_column(ForeignKey("standards.id"), nullable=True)
 
+    # Governance Library taxonomy (Wave W0) — sits alongside `reference_number`
+    # (DOC-YYYY-####). `pel_doc_ref` is a separate, atomically-allocated
+    # reference (PEL-<SECTION>-<SUB>-<SEQ>); see
+    # src.domain.services.document_category_service.allocate_pel_doc_ref.
+    category_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("document_categories.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    pel_doc_ref: Mapped[Optional[str]] = mapped_column(String(30), unique=True, nullable=True, index=True)
+
+    # Site/workshop binding — reuses the existing Location model (no new Site table).
+    site_location_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     # Ownership
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 

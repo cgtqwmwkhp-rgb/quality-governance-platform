@@ -22,6 +22,8 @@
     "audit_templates": "Audit template library; may include global/shared templates",
     "template_versions": "Child of audit_templates",
     "template_asset_types": "Template\u2194asset-type junction for shared templates",
-    "failed_tasks": "Platform Celery DLQ — failures may be global/system tasks without a resolvable tenant at persist time (writer does not require tenant_id)"
+    "failed_tasks": "Platform Celery DLQ — failures may be global/system tasks without a resolvable tenant at persist time (writer does not require tenant_id)",
+    "document_categories": "Governance Library taxonomy (Wave W0) — shared/global category catalog seeded from specs/governance-library/taxonomy.json; owner: Governance/Quality platform team",
+    "document_tags": "Governance Library tag vocabulary (Wave W0) — shared/global tag catalog; owner: Governance/Quality platform team"
   }
 }

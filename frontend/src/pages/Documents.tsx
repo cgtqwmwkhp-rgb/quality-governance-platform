@@ -35,7 +35,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
@@ -89,6 +91,17 @@ interface Document {
   indexed_at?: string
 }
 
+interface DocumentCategoryOption {
+  id: number
+  taxonomy_id: string
+  name: string
+  ref_prefix: string
+}
+
+interface DocumentCategorySection extends DocumentCategoryOption {
+  children: DocumentCategoryOption[]
+}
+
 interface DocumentStats {
   total_documents: number
   indexed_documents: number
@@ -111,6 +124,7 @@ type ViewMode = 'grid' | 'list'
 const UPLOAD_TIMEOUT_MS = 120000
 const ALL_TYPES_VALUE = 'all-types'
 const ALL_STATUS_VALUE = 'all-status'
+const ALL_CATEGORIES_VALUE = 'all-categories'
 const PAGE_SIZE = 50
 
 function parseListPage(raw: string | null): number {
@@ -130,10 +144,17 @@ function parseDocumentStatusFilter(raw: string | null): string {
   return value
 }
 
+function parseDocumentCategoryFilter(raw: string | null): string {
+  const value = raw?.trim()
+  if (!value || value === ALL_CATEGORIES_VALUE || !/^\d+$/.test(value)) return ALL_CATEGORIES_VALUE
+  return value
+}
+
 function buildDocumentsListSearch(params: {
   q: string
   status: string
   type: string
+  category: string
   page: number
 }): string {
   const next = new URLSearchParams()
@@ -141,6 +162,7 @@ function buildDocumentsListSearch(params: {
   if (q) next.set('q', q)
   if (params.status !== ALL_STATUS_VALUE) next.set('status', params.status)
   if (params.type !== ALL_TYPES_VALUE) next.set('type', params.type)
+  if (params.category !== ALL_CATEGORIES_VALUE) next.set('category', params.category)
   if (params.page > 1) next.set('page', String(params.page))
   return next.toString()
 }
@@ -199,6 +221,10 @@ export default function Documents() {
   const [filterStatus, setFilterStatus] = useState<string>(() =>
     parseDocumentStatusFilter(searchParams.get('status')),
   )
+  const [filterCategory, setFilterCategory] = useState<string>(() =>
+    parseDocumentCategoryFilter(searchParams.get('category')),
+  )
+  const [categorySections, setCategorySections] = useState<DocumentCategorySection[]>([])
   const [page, setPage] = useState(() => parseListPage(searchParams.get('page')))
   const [loadError, setLoadError] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -216,7 +242,7 @@ export default function Documents() {
     Map<number, CampaignComplianceRow>
   >(() => new Map())
 
-  const loadData = useCallback(async (docType?: string, status?: string, listPage = 1) => {
+  const loadData = useCallback(async (docType?: string, status?: string, listPage = 1, categoryId?: string) => {
     setLoadError(null)
     setPartialLoadWarning(null)
     setDocsUnavailable(false)
@@ -228,6 +254,7 @@ export default function Documents() {
       })
       if (docType) params.set('document_type', docType)
       if (status) params.set('status', status)
+      if (categoryId) params.set('category_id', categoryId)
       const [docsResult, statsResult] = await Promise.allSettled([
         api.get(`/api/v1/documents/?${params}`),
         api.get('/api/v1/documents/stats/overview'),
@@ -284,19 +311,22 @@ export default function Documents() {
     const nextQ = searchParams.get('q') || ''
     const nextStatus = parseDocumentStatusFilter(searchParams.get('status'))
     const nextType = parseDocumentTypeFilter(searchParams.get('type'))
+    const nextCategory = parseDocumentCategoryFilter(searchParams.get('category'))
     const nextPage = parseListPage(searchParams.get('page'))
     setSearchTerm((prev) => (prev === nextQ ? prev : nextQ))
     setFilterStatus((prev) => (prev === nextStatus ? prev : nextStatus))
     setFilterType((prev) => (prev === nextType ? prev : nextType))
+    setFilterCategory((prev) => (prev === nextCategory ? prev : nextCategory))
     setPage((prev) => (prev === nextPage ? prev : nextPage))
   }, [searchParams])
 
-  // Keep q/status/type/page in the URL (omit defaults); replace history entry.
+  // Keep q/status/type/category/page in the URL (omit defaults); replace history entry.
   useEffect(() => {
     const desired = buildDocumentsListSearch({
       q: searchTerm,
       status: filterStatus,
       type: filterType,
+      category: filterCategory,
       page,
     })
     if (desired !== searchParams.toString()) {
@@ -304,11 +334,32 @@ export default function Documents() {
         replace: true,
       })
     }
-  }, [searchTerm, filterStatus, filterType, page, searchParams, setSearchParams])
+  }, [searchTerm, filterStatus, filterType, filterCategory, page, searchParams, setSearchParams])
 
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Governance Library taxonomy (Wave W0) — active categories only, for the filter dropdown.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const response = await api.get('/api/v1/document-categories/')
+        if (!cancelled) {
+          setCategorySections(response.data.sections ?? [])
+        }
+      } catch (err) {
+        trackError(err, { component: 'Documents', action: 'load-categories' })
+        if (!cancelled) {
+          setCategorySections([])
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -334,8 +385,9 @@ export default function Documents() {
       filterType === ALL_TYPES_VALUE ? undefined : filterType,
       filterStatus === ALL_STATUS_VALUE ? undefined : filterStatus,
       page,
+      filterCategory === ALL_CATEGORIES_VALUE ? undefined : filterCategory,
     )
-  }, [filterType, filterStatus, page, loadData])
+  }, [filterType, filterStatus, filterCategory, page, loadData])
 
   const handleSemanticSearch = useCallback(async (query: string) => {
     if (query.length < 3) {
@@ -454,6 +506,7 @@ export default function Documents() {
         filterType === ALL_TYPES_VALUE ? undefined : filterType,
         filterStatus === ALL_STATUS_VALUE ? undefined : filterStatus,
         page,
+        filterCategory === ALL_CATEGORIES_VALUE ? undefined : filterCategory,
       )
       setShowUploadModal(false)
     } catch (err) {
@@ -774,6 +827,33 @@ export default function Documents() {
               <SelectItem value="approved">Approved</SelectItem>
               <SelectItem value="processing">Processing</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={filterCategory}
+            onValueChange={(value) => {
+              setFilterCategory(value)
+              setPage(1)
+            }}
+          >
+            <SelectTrigger className="w-[180px]" aria-label="Filter by governance library category">
+              <SelectValue placeholder="All Categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_CATEGORIES_VALUE}>All Categories</SelectItem>
+              {categorySections.map((section) => (
+                <SelectGroup key={section.id}>
+                  <SelectLabel>
+                    {section.taxonomy_id} {section.name}
+                  </SelectLabel>
+                  {section.children.map((subcategory) => (
+                    <SelectItem key={subcategory.id} value={String(subcategory.id)}>
+                      {subcategory.taxonomy_id} {subcategory.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
             </SelectContent>
           </Select>
 
