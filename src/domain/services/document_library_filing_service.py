@@ -147,23 +147,21 @@ def compute_retention_until(category: DocumentCategory, approved_at: datetime) -
     return base + timedelta(days=years * 365)
 
 
-def assert_library_read_access(document: Document, user: User) -> None:
-    """404-not-403: hide existence when ACL denies read (Wave W1/W2 bridge)."""
-    if getattr(user, "is_superuser", False):
-        return
+def assert_library_read_access(
+    document: Document,
+    user: User,
+    *,
+    taxonomy_id: str | None = None,
+) -> None:
+    """404-not-403: hide existence when ACL denies read (Wave W1/W2).
 
-    access = getattr(document, "access_level", None) or "all_staff"
-    if access == "all_staff":
-        return
-    if access == "managers":
-        if user.has_permission("document:update") or user.has_permission("admin:manage"):
-            return
-        raise NotFoundError("Document not found")
-    if access == "restricted":
-        if user.has_permission("admin:manage"):
-            return
-        raise NotFoundError("Document not found")
+    Restricted categories (02.08 / 06.03 / 11.03) require
+    ``document:restricted:{oh|driver|breach}`` (or ``admin:manage``).
+    """
+    from src.domain.services.document_library_rbac import user_can_read_library_document
 
+    if user_can_read_library_document(document, user, taxonomy_id=taxonomy_id):
+        return
     raise NotFoundError("Document not found")
 
 

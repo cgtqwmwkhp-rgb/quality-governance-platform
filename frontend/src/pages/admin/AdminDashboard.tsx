@@ -102,6 +102,20 @@ const QUICK_ACTIONS: QuickAction[] = [
     color: 'bg-indigo-100 text-indigo-600',
   },
   {
+    title: 'Library roles',
+    description: 'Staff / manager / admin facets and restricted category gates',
+    icon: <Users className="w-6 h-6" />,
+    href: '/admin/library-roles',
+    color: 'bg-violet-100 text-violet-700',
+  },
+  {
+    title: 'Engineer groups',
+    description: 'Campaign audience groups for HSEQ launches',
+    icon: <Users className="w-6 h-6" />,
+    href: '/admin/engineer-groups',
+    color: 'bg-emerald-100 text-emerald-700',
+  },
+  {
     title: 'Partner Webhooks',
     description: 'Manage partner event subscriptions',
     icon: <Webhook className="w-6 h-6" />,

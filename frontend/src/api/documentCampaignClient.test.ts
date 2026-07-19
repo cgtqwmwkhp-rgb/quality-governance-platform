@@ -18,9 +18,9 @@ describe('createDocumentCampaignApi', () => {
 
   it('creates a group with member ids', () => {
     const api = mockApi()
-    createDocumentCampaignApi(api as never).createGroup('HSEC team', [1, 2, 3])
+    createDocumentCampaignApi(api as never).createGroup('HSEQ team', [1, 2, 3])
     expect(api.post).toHaveBeenCalledWith('/api/v1/document-campaigns/groups', {
-      name: 'HSEC team',
+      name: 'HSEQ team',
       member_user_ids: [1, 2, 3],
     })
   })

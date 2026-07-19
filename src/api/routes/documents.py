@@ -398,6 +398,17 @@ def _scope_stmt_to_current_tenant(stmt, tenant_column, current_user: CurrentUser
     return stmt.where(tenant_column == tenant_id)
 
 
+async def _taxonomy_id_for_document(db: DbSession, document: Document) -> str | None:
+    """Resolve DocumentCategory.taxonomy_id for restricted ACL mapping."""
+    category_id = getattr(document, "category_id", None)
+    if category_id is None:
+        return None
+    from src.domain.models.document_library import DocumentCategory
+
+    result = await db.execute(select(DocumentCategory.taxonomy_id).where(DocumentCategory.id == category_id))
+    return result.scalar_one_or_none()
+
+
 async def _get_document_or_404(
     db: DbSession,
     document_id: int,
@@ -413,7 +424,10 @@ async def _get_document_or_404(
     if not document:
         raise NotFoundError("Document not found")
     if enforce_acl:
-        assert_library_read_access(document, current_user)
+        taxonomy_id = None
+        if (getattr(document, "access_level", None) or "") == "restricted":
+            taxonomy_id = await _taxonomy_id_for_document(db, document)
+        assert_library_read_access(document, current_user, taxonomy_id=taxonomy_id)
     return document
 
 
@@ -965,14 +979,41 @@ async def list_documents(
     query = query.offset((page - 1) * page_size).limit(page_size)
 
     result = await db.execute(query)
-    documents = result.scalars().all()
+    documents = list(result.scalars().all())
+
+    # Wave W2: omit ACL-denied rows from list (same rules as get/signed-url).
+    from src.domain.models.document_library import DocumentCategory
+    from src.domain.services.document_library_rbac import user_can_read_library_document
+
+    restricted_cat_ids = {
+        d.category_id
+        for d in documents
+        if d.category_id is not None and (getattr(d, "access_level", None) or "") == "restricted"
+    }
+    taxonomy_by_cat: dict[int, str] = {}
+    if restricted_cat_ids:
+        cat_rows = await db.execute(
+            select(DocumentCategory.id, DocumentCategory.taxonomy_id).where(DocumentCategory.id.in_(restricted_cat_ids))
+        )
+        taxonomy_by_cat = {row[0]: row[1] for row in cat_rows.all()}
+
+    visible: list[Document] = []
+    hidden = 0
+    for doc in documents:
+        tax = taxonomy_by_cat.get(doc.category_id) if doc.category_id else None
+        if user_can_read_library_document(doc, current_user, taxonomy_id=tax):
+            visible.append(doc)
+        else:
+            hidden += 1
+
+    adjusted_total = max(0, total - hidden)
 
     return DocumentListResponse(
-        items=[_document_to_response(d) for d in documents],
-        total=total,
+        items=[_document_to_response(d) for d in visible],
+        total=adjusted_total,
         page=page,
         page_size=page_size,
-        pages=(total + page_size - 1) // page_size if total else 0,
+        pages=(adjusted_total + page_size - 1) // page_size if adjusted_total else 0,
     )
 
 
