@@ -218,3 +218,86 @@ class AuditScoringService:
             return min(resolved_max, sum(matched_scores))
         # Answered without option metadata — credit full points.
         return resolved_max
+
+    @classmethod
+    def response_is_answered(cls, response: Any) -> bool:
+        """Return True when a response satisfies the answer-integrity gate."""
+        if getattr(response, "is_na", False):
+            return True
+        if getattr(response, "response_number", None) is not None:
+            return True
+        if getattr(response, "response_bool", None) is not None:
+            return True
+        if getattr(response, "response_date", None) is not None:
+            return True
+
+        response_value = getattr(response, "response_value", None)
+        if response_value not in (None, ""):
+            if cls._looks_like_json_array(str(response_value)):
+                return bool(cls._selected_option_values(str(response_value)))
+            return bool(str(response_value).strip())
+
+        if cls._as_str(getattr(response, "response_text", None)).strip():
+            return True
+
+        payload = getattr(response, "response_json", None) or {}
+        if isinstance(payload, dict):
+            if cls._evidence_asset_ids(payload):
+                return True
+            selected = payload.get("selected")
+            if isinstance(selected, list) and selected:
+                return True
+            if isinstance(selected, str) and selected.strip():
+                return True
+            if payload.get("signature"):
+                return True
+        return False
+
+    @classmethod
+    def evidence_requirements_met(cls, question: Any, response: Any) -> bool:
+        """Return True when photo/signature/min-attachment evidence rules are satisfied."""
+        requirements = getattr(question, "evidence_requirements_json", None) or {}
+        if not isinstance(requirements, dict) or not requirements.get("required"):
+            return True
+
+        payload = getattr(response, "response_json", None) or {}
+        if not isinstance(payload, dict):
+            payload = {}
+
+        asset_ids = cls._evidence_asset_ids(payload)
+        if requirements.get("require_photo") and not asset_ids:
+            return False
+        if requirements.get("require_signature") and not asset_ids and not payload.get("signature"):
+            return False
+
+        min_attachments = int(requirements.get("min_attachments") or 0)
+        if min_attachments > 0 and len(asset_ids) < min_attachments:
+            if requirements.get("require_signature") and not requirements.get("require_photo"):
+                return bool(payload.get("signature")) or bool(asset_ids)
+            return False
+        return True
+
+    @staticmethod
+    def _as_str(value: Any) -> str:
+        if value is None:
+            return ""
+        return str(value)
+
+    @staticmethod
+    def _looks_like_json_array(value: str) -> bool:
+        return value.strip().startswith("[")
+
+    @classmethod
+    def _evidence_asset_ids(cls, payload: dict[str, Any]) -> list[int]:
+        raw = payload.get("evidence_asset_ids")
+        if not isinstance(raw, list):
+            return []
+        ids: list[int] = []
+        for item in raw:
+            try:
+                asset_id = int(item)
+            except (TypeError, ValueError):
+                continue
+            if asset_id > 0:
+                ids.append(asset_id)
+        return ids

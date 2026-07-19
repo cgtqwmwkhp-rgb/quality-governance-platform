@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from src.api.routes.audits import create_run, create_template, get_template, publish_template, update_template
 from src.api.schemas.audit import AuditRunCreate, AuditTemplateCreate, AuditTemplateUpdate
-from src.domain.models.audit import AuditQuestion, AuditRun, AuditSection, AuditTemplate
+from src.domain.models.audit import AuditQuestion, AuditRun, AuditSection, AuditTemplate, TemplateVersion
 from src.domain.models.user import User
 from tests.factories import UserFactory
 
@@ -22,6 +22,8 @@ async def isolated_db_session():
         await conn.run_sync(AuditSection.__table__.create)
         await conn.run_sync(AuditQuestion.__table__.create)
         await conn.run_sync(AuditRun.__table__.create)
+        # publish_template persists TemplateVersion snapshots
+        await conn.run_sync(TemplateVersion.__table__.create)
 
     async with session_factory() as session:
         yield session
