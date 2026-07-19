@@ -191,7 +191,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
     - Falls back gracefully if Redis is unavailable
     """
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next):  # noqa: C901
         if request.method not in _IDEMPOTENT_METHODS:
             return await call_next(request)
 
