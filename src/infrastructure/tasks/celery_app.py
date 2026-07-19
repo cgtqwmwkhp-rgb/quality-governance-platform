@@ -92,6 +92,7 @@ CELERY_TASK_MODULES = (
     "src.infrastructure.tasks.sms_tasks",
     "src.infrastructure.tasks.webhook_tasks",
     "src.infrastructure.tasks.regulatory_watch_tasks",
+    "src.infrastructure.tasks.library_review_tasks",
 )
 
 celery_app = Celery(
@@ -182,6 +183,14 @@ celery_app.conf.beat_schedule = {
     "process-campaign-reminders": {
         "task": "src.infrastructure.tasks.document_campaign_tasks.process_campaign_reminders",
         "schedule": crontab(minute=15),  # Every hour at :15
+    },
+    "check-library-review-reminders": {
+        "task": "src.infrastructure.tasks.library_review_tasks.check_library_review_reminders",
+        "schedule": crontab(hour=7, minute=45),  # Daily at 07:45 UTC
+    },
+    "run-library-horizon-scan-daily": {
+        "task": "src.infrastructure.tasks.library_review_tasks.run_library_horizon_scan",
+        "schedule": crontab(hour=8, minute=0),  # Daily sweep of open packs (stub provider)
     },
 }
 

@@ -51,6 +51,7 @@ from src.api.routes import (
     iso27001,
     kri,
     legal_holds,
+    library_review,
     loler_inspections,
     near_miss,
     notifications,
@@ -114,6 +115,7 @@ router.include_router(policies.router, prefix="/policies", tags=["Policy Library
 router.include_router(documents.router, prefix="/documents", tags=["Document Library"])
 # Governance Library taxonomy (Wave W0) — category tree + tag vocabulary
 router.include_router(document_categories.router, prefix="/document-categories", tags=["Governance Library Taxonomy"])
+router.include_router(library_review.router, prefix="/library-review", tags=["Governance Library Review"])
 router.include_router(global_search.router, prefix="/search", tags=["Global Search"])
 router.include_router(employee_portal.router, prefix="/portal", tags=["Employee Portal"])
 router.include_router(compliance.router, prefix="/compliance", tags=["ISO Compliance & Evidence"])

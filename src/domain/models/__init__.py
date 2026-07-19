@@ -187,6 +187,15 @@ from src.domain.models.iso27001 import (
     SupplierSecurityAssessment,
 )
 from src.domain.models.legal_hold import LegalHoldStatus, MatterLegalHold
+
+# Governance Library review packs (Wave W3)
+from src.domain.models.library_review import (
+    FindingDisposition,
+    HorizonProvider,
+    LibraryRegulatoryFinding,
+    LibraryReviewPack,
+    ReviewPackStatus,
+)
 from src.domain.models.location import Location, LocationKind
 from src.domain.models.loler import LOLERDefect, LOLERDefectCategory, LOLERExamination, LOLERExaminationType
 from src.domain.models.partner_webhook import (
@@ -370,6 +379,12 @@ __all__ = [
     "DocumentCategory",
     "DocumentTag",
     "PelDocRefCounter",
+    # Governance Library review packs (Wave W3)
+    "LibraryReviewPack",
+    "LibraryRegulatoryFinding",
+    "ReviewPackStatus",
+    "FindingDisposition",
+    "HorizonProvider",
     # ISO 27001 Information Security (Tier 1)
     "InformationAsset",
     "ISO27001Control",
