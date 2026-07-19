@@ -120,12 +120,14 @@ async def get_document_category_tree(
     children_by_parent: dict[int, list[DocumentCategoryResponse]] = {}
 
     for category in categories:
+        # Validate via the flat response first so Pydantic never touches the
+        # SQLAlchemy `children` relationship (lazy IO outside the async greenlet).
+        flat = DocumentCategoryResponse.model_validate(category, from_attributes=True)
         if category.level == 1:
-            sections_by_id[category.id] = DocumentCategoryTreeNode.model_validate(category, from_attributes=True)
+            sections_by_id[category.id] = DocumentCategoryTreeNode(**flat.model_dump(), children=[])
         else:
-            node = DocumentCategoryResponse.model_validate(category, from_attributes=True)
             if category.parent_id is not None:
-                children_by_parent.setdefault(category.parent_id, []).append(node)
+                children_by_parent.setdefault(category.parent_id, []).append(flat)
 
     sections = list(sections_by_id.values())
     for section in sections:
