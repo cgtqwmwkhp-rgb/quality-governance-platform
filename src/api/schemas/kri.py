@@ -89,7 +89,9 @@ class KRIResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-    @field_validator("category", "unit", "data_source", "current_status", "trend_direction", "measurement_frequency", mode="before")
+    @field_validator(
+        "category", "unit", "data_source", "current_status", "trend_direction", "measurement_frequency", mode="before"
+    )
     @classmethod
     def _enum_to_str(cls, value: Any) -> Any:
         if value is None:
