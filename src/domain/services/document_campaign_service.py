@@ -40,6 +40,7 @@ from src.domain.models.user import Role, User, user_roles
 from src.domain.services.document_campaign_notifications import (
     build_assignment_notification_kwargs,
     build_overdue_notification_kwargs,
+    build_question_resolved_notification_kwargs,
     build_reminder_notification_kwargs,
     overdue_escalation_recipients,
     overdue_recipient_role,
@@ -1505,6 +1506,8 @@ class DocumentCampaignService:
         q: Optional[str] = None,
         opened: Optional[bool] = None,
         quiz_passed: Optional[bool] = None,
+        review_needed: Optional[bool] = None,
+        disposition: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
     ) -> Dict[str, Any]:
@@ -1531,6 +1534,14 @@ class DocumentCampaignService:
             base_filters.append(CampaignAssignment.quiz_passed.is_(True))
         elif quiz_passed is False:
             base_filters.append(CampaignAssignment.quiz_passed.is_(False))
+        if review_needed is True:
+            base_filters.append(CampaignAssignment.quiz_review_needed.is_(True))
+        elif review_needed is False:
+            base_filters.append(CampaignAssignment.quiz_review_needed.is_(False))
+        if disposition:
+            if disposition not in VALID_SIGNATURE_DISPOSITIONS:
+                raise BadRequestError(f"Invalid signature disposition: {disposition}")
+            base_filters.append(CampaignAssignment.signature_disposition == disposition)
 
         join_filters = list(base_filters)
         if q and q.strip():
@@ -1577,6 +1588,8 @@ class DocumentCampaignService:
                     "quiz_score": assignment.quiz_score,
                     "quiz_passed": assignment.quiz_passed,
                     "quiz_attempts": assignment.quiz_attempts or 0,
+                    "quiz_review_needed": bool(getattr(assignment, "quiz_review_needed", False)),
+                    "signature_disposition": getattr(assignment, "signature_disposition", None),
                     "reminders_sent": assignment.reminders_sent or 0,
                     "last_reminder_at": (
                         assignment.last_reminder_at.isoformat() if assignment.last_reminder_at else None
@@ -1966,6 +1979,34 @@ class DocumentCampaignService:
 
     # ==================== Question inbox (HSEQ) ====================
 
+    async def _find_pending_signature_assignment(
+        self,
+        *,
+        tenant_id: int,
+        user_id: int,
+        document_id: int,
+    ) -> Optional[CampaignAssignment]:
+        """Most recent assignment awaiting the assignee's signature for this document.
+
+        Covers both the deferred (no signature yet) and signed-pending-HSEQ
+        (signature captured, awaiting answer) dispositions.
+        """
+        result = await self.db.execute(
+            select(CampaignAssignment)
+            .join(DocumentCampaign, DocumentCampaign.id == CampaignAssignment.campaign_id)
+            .where(
+                CampaignAssignment.tenant_id == tenant_id,
+                CampaignAssignment.user_id == user_id,
+                DocumentCampaign.document_id == document_id,
+                CampaignAssignment.signature_disposition.in_(
+                    [SIGNATURE_DISPOSITION_DEFERRED, SIGNATURE_DISPOSITION_SIGNED_PENDING_HSEQ]
+                ),
+            )
+            .order_by(CampaignAssignment.completed_at.desc().nullslast(), CampaignAssignment.id.desc())
+            .limit(1)
+        )
+        return result.scalars().first()
+
     async def list_question_inbox(self, *, tenant_id: int) -> List[Dict[str, Any]]:
         campaign_doc_ids = (
             select(DocumentCampaign.document_id)
@@ -1995,6 +2036,11 @@ class DocumentCampaignService:
             )
             latest_preview = latest_result.scalar_one_or_none()
             status_value = thread.status.value if hasattr(thread.status, "value") else str(thread.status)
+            pending_assignment = await self._find_pending_signature_assignment(
+                tenant_id=tenant_id,
+                user_id=thread.created_by_id,
+                document_id=thread.document_id,
+            )
             items.append(
                 {
                     "document_id": thread.document_id,
@@ -2005,6 +2051,8 @@ class DocumentCampaignService:
                     "created_at": thread.created_at,
                     "created_by_id": thread.created_by_id,
                     "latest_message_preview": (latest_preview[:200] if latest_preview else None),
+                    "assignment_id": pending_assignment.id if pending_assignment else None,
+                    "signature_disposition": (pending_assignment.signature_disposition if pending_assignment else None),
                 }
             )
         return items
@@ -2068,7 +2116,84 @@ class DocumentCampaignService:
         thread.status = DiscussionThreadStatus.RESOLVED
         await self.db.commit()
         await self.db.refresh(thread)
+
+        # Best-effort: nudge an assignee whose signature was deferred pending this
+        # answer so they know they can reopen their assignment and sign now.
+        try:
+            await self._notify_deferred_signature_assignee(tenant_id=tenant_id, thread=thread)
+        except Exception:  # noqa: BLE001 - resolving the thread must not fail on this
+            logger.warning(
+                "Failed to notify deferred-signature assignee for thread %s",
+                thread_id,
+                exc_info=True,
+            )
         return thread
+
+    async def _notify_deferred_signature_assignee(
+        self, *, tenant_id: int, thread: DocumentDiscussionThread
+    ) -> Optional[int]:
+        """Queue a best-effort notification; returns the notified assignment id, if any."""
+        assignment = await self._find_pending_signature_assignment(
+            tenant_id=tenant_id,
+            user_id=thread.created_by_id,
+            document_id=thread.document_id,
+        )
+        if assignment is None:
+            return None
+
+        doc_title = await self._document_title(tenant_id=tenant_id, document_id=thread.document_id)
+        notified = self._add_campaign_notification(
+            build_question_resolved_notification_kwargs(
+                tenant_id=tenant_id,
+                user_id=thread.created_by_id,
+                campaign_id=assignment.campaign_id,
+                assignment_id=assignment.id,
+                document_id=thread.document_id,
+                doc_title=doc_title,
+            )
+        )
+        if not notified:
+            return None
+        await self.db.commit()
+        return assignment.id
+
+    async def request_assignment_signature(
+        self, *, tenant_id: int, thread_id: int, requested_by_id: int
+    ) -> Dict[str, Any]:
+        """HSEQ-initiated nudge: re-send the reopen-to-sign notification on demand."""
+        thread = await self._get_thread(tenant_id=tenant_id, thread_id=thread_id)
+        assignment_id = await self._notify_deferred_signature_assignee(tenant_id=tenant_id, thread=thread)
+        return {"notified": assignment_id is not None, "assignment_id": assignment_id}
+
+    async def sign_deferred_assignment(
+        self,
+        *,
+        user_id: int,
+        assignment_id: int,
+        signature_data: str,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+    ) -> CampaignAssignment:
+        """Complete a previously-deferred signature once the assignee's question is answered."""
+        assignment = await self._get_own_assignment(user_id=user_id, assignment_id=assignment_id)
+
+        if assignment.status != AssignmentStatus.COMPLETED:
+            raise BadRequestError("Only a completed assignment can have its signature completed")
+        if assignment.signature_disposition != SIGNATURE_DISPOSITION_DEFERRED:
+            raise BadRequestError("Only a deferred signature can be completed via this endpoint")
+        if not signature_data or not signature_data.strip():
+            raise BadRequestError("signature_data is required")
+
+        assignment.signature_data = signature_data
+        assignment.signature_disposition = SIGNATURE_DISPOSITION_SIGNED
+        if ip_address is not None:
+            assignment.ip_address = ip_address
+        if user_agent is not None:
+            assignment.user_agent = user_agent
+
+        await self.db.commit()
+        await self.db.refresh(assignment)
+        return assignment
 
     async def reply_question(
         self,
