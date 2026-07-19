@@ -74,6 +74,7 @@ class CampaignCreateRequestFE(BaseModel):
     audience_group_id: Optional[int] = None
     audience_user_ids: Optional[List[int]] = None
     audience: Optional[AudienceSpec] = None
+    competence_asset_type_id: Optional[int] = None
 
     def to_internal(self) -> "CampaignCreateRequest":
         hours = self.reminder_offsets_hours or self.reminder_hours
@@ -99,6 +100,7 @@ class CampaignCreateRequestFE(BaseModel):
             require_sign=self.require_sign,
             reminder_offsets_hours=hours,
             audience=aud,
+            competence_asset_type_id=self.competence_asset_type_id,
         )
 
 
@@ -113,6 +115,13 @@ class CampaignCreateRequest(BaseModel):
     require_sign: bool = True
     reminder_offsets_hours: Optional[List[int]] = None
     audience: AudienceSpec
+    competence_asset_type_id: Optional[int] = None
+
+
+class CampaignUpdateRequest(BaseModel):
+    """Partial update for draft campaigns (optional competence gate asset type)."""
+
+    competence_asset_type_id: Optional[int] = None
 
 
 class CampaignResponse(BaseModel):
@@ -126,6 +135,7 @@ class CampaignResponse(BaseModel):
     due_within_days: int
     require_quiz: bool
     require_sign: bool
+    competence_asset_type_id: Optional[int] = None
     reminder_offsets_hours: List[int] = Field(default_factory=list)
     reminder_hours: List[int] = Field(default_factory=list)
     assigned_count: Optional[int] = None

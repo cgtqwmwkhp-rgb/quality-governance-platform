@@ -123,6 +123,11 @@ class DocumentCampaign(Base, TimestampMixin):
     quiz_questions: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     quiz_pass_mark: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
+    # O-12: optional workforce competence gate on assignment completion (default unset = no gate).
+    competence_asset_type_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("asset_types.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     launched_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     launched_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

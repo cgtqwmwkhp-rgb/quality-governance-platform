@@ -48,6 +48,7 @@ from src.domain.services.document_campaign_notifications import (
     user_display_name,
 )
 from src.domain.services.feature_flag_service import FeatureFlagService
+from src.domain.services.governance_service import GovernanceService
 
 logger = logging.getLogger(__name__)
 
@@ -273,6 +274,7 @@ class DocumentCampaignService:
         require_sign: bool = True,
         reminder_offsets_hours: Optional[List[int]] = None,
         audience: Optional[Dict[str, Any]] = None,
+        competence_asset_type_id: Optional[int] = None,
     ) -> DocumentCampaign:
         audience = audience or {}
 
@@ -324,9 +326,27 @@ class DocumentCampaignService:
             audience_user_ids=list(audience["user_ids"]) if audience.get("user_ids") else None,
             quiz_questions=quiz_questions,
             quiz_pass_mark=quiz_pass_mark,
+            competence_asset_type_id=competence_asset_type_id,
             created_by_id=created_by_id,
         )
         self.db.add(campaign)
+        await self.db.commit()
+        await self.db.refresh(campaign)
+        return campaign
+
+    async def update_campaign(
+        self,
+        *,
+        tenant_id: int,
+        campaign_id: int,
+        competence_asset_type_id: Optional[int] = None,
+        competence_asset_type_id_set: bool = False,
+    ) -> DocumentCampaign:
+        campaign = await self.get_campaign(tenant_id=tenant_id, campaign_id=campaign_id)
+        if campaign.status != CampaignStatus.DRAFT:
+            raise BadRequestError("Only draft campaigns can be updated")
+        if competence_asset_type_id_set:
+            campaign.competence_asset_type_id = competence_asset_type_id
         await self.db.commit()
         await self.db.refresh(campaign)
         return campaign
@@ -1090,6 +1110,63 @@ class DocumentCampaignService:
         )
         return (result.scalar_one() or 0) > 0
 
+    async def _enforce_complete_competence_gate_if_enabled(
+        self,
+        *,
+        user_id: int,
+        tenant_id: int,
+        campaign: DocumentCampaign,
+    ) -> None:
+        """O-12: block assignment completion when workforce competence gate is not cleared."""
+        if not settings.campaign_complete_competence_gate_enabled:
+            return
+
+        flag_service = FeatureFlagService(self.db)
+        if not await flag_service.is_enabled(
+            settings.campaign_complete_competence_gate_feature_flag,
+            tenant_id=str(tenant_id),
+            user_id=str(user_id),
+        ):
+            return
+
+        asset_type_id = campaign.competence_asset_type_id
+        if asset_type_id is None:
+            logger.info(
+                "O-12 competence gate skipped: campaign %s has no competence_asset_type_id",
+                campaign.id,
+            )
+            return
+
+        from src.domain.models.engineer import Engineer
+
+        engineer_id = await self.db.scalar(
+            select(Engineer.id).where(
+                Engineer.user_id == user_id,
+                or_(Engineer.tenant_id == tenant_id, Engineer.tenant_id.is_(None)),
+            )
+        )
+        if engineer_id is None:
+            logger.info(
+                "O-12 competence gate skipped: no Engineer linked to user_id=%s tenant_id=%s",
+                user_id,
+                tenant_id,
+            )
+            return
+
+        gate = await GovernanceService.check_competency_gate(
+            self.db,
+            engineer_id=engineer_id,
+            asset_type_id=asset_type_id,
+            tenant_id=tenant_id,
+        )
+        if gate.get("cleared"):
+            return
+
+        reason = gate.get("reason") or "Competency requirements not met for this campaign"
+        raise BadRequestError(
+            f"Cannot complete assignment: {reason}. " "Complete the required competency assessment before signing off."
+        )
+
     async def complete_assignment(
         self,
         *,
@@ -1104,9 +1181,11 @@ class DocumentCampaignService:
         assignment = await self._get_own_assignment(user_id=user_id, assignment_id=assignment_id)
         campaign = await self.get_campaign(tenant_id=assignment.tenant_id, campaign_id=assignment.campaign_id)
 
-        # O-12 scaffold: when campaign_complete_competence_gate_enabled + feature flag are on,
-        # call GovernanceService.check_competency_gate for the linked engineer before completion.
-        # See settings.campaign_complete_competence_gate_* and MyCompliancePassport / workforce spine.
+        await self._enforce_complete_competence_gate_if_enabled(
+            user_id=user_id,
+            tenant_id=assignment.tenant_id,
+            campaign=campaign,
+        )
 
         if campaign.require_quiz and not assignment.quiz_passed:
             raise BadRequestError("Quiz must be passed before completing this assignment")
@@ -2198,6 +2277,7 @@ class DocumentCampaignService:
             audience_user_ids=list(source.audience_user_ids) if source.audience_user_ids else None,
             quiz_questions=source.quiz_questions,
             quiz_pass_mark=source.quiz_pass_mark,
+            competence_asset_type_id=source.competence_asset_type_id,
             created_by_id=actor_id,
         )
         self.db.add(campaign)
