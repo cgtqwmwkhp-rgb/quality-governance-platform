@@ -12,6 +12,7 @@ const mockCreateReportingYear = vi.fn()
 const mockCreateAction = vi.fn()
 const mockListEvidence = vi.fn()
 const mockIngestMsXlsx = vi.fn()
+const mockDownloadExportPack = vi.fn()
 const mockCreateApiError = vi.fn()
 
 vi.mock('react-i18next', () => ({
@@ -40,6 +41,7 @@ vi.mock('../../api/client', () => ({
     createAction: (...args: unknown[]) => mockCreateAction(...args),
     listEvidence: (...args: unknown[]) => mockListEvidence(...args),
     ingestMsXlsx: (...args: unknown[]) => mockIngestMsXlsx(...args),
+    downloadExportPack: (...args: unknown[]) => mockDownloadExportPack(...args),
   },
   getApiErrorMessage: (_err: unknown, fallback = 'failed') => fallback,
   ErrorClass: {
@@ -377,21 +379,17 @@ describe('PlanetMark shell', () => {
     expect(screen.getByText('planet_mark.shell.empty.trends_desc')).toBeInTheDocument()
   })
 
-  it('exposes export section and downloads JSON pack (not dead window.open)', async () => {
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    const createObjectURL = vi.fn(() => 'blob:planet-mark-pack')
-    const revokeObjectURL = vi.fn()
-    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL })
+  it('exposes export section and downloads JSON pack via authenticated API', async () => {
+    mockDownloadExportPack.mockResolvedValue({ data: new Blob(['{}']) })
 
     renderPlanetMark('/planet-mark?year=1&section=export')
 
     expect(await screen.findByTestId('planet-mark-section-export')).toBeInTheDocument()
     expect(screen.getByTestId('planet-mark-export-honesty')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('planet-mark-export-json'))
-    expect(createObjectURL).toHaveBeenCalled()
-    expect(clickSpy).toHaveBeenCalled()
-    clickSpy.mockRestore()
-    vi.unstubAllGlobals()
+    await waitFor(() => {
+      expect(mockDownloadExportPack).toHaveBeenCalledWith(1, 'json')
+    })
   })
 
   it('shows hotspot initiatives and wires Add as Improve action', async () => {

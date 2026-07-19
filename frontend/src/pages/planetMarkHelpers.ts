@@ -452,7 +452,7 @@ export interface PlanetMarkExportPackPayload {
   body: string
 }
 
-/** Client-side JSON export pack — PDF/XLSX are not wired (dead window.open URL removed). */
+/** Client-side JSON export pack builder — mirrors server export shape for tests/helpers. */
 export function buildPlanetMarkExportPack(input: {
   year: PlanetMarkReportingYearRecord
   scope3: PlanetMarkScope3Response | null
@@ -464,8 +464,8 @@ export function buildPlanetMarkExportPack(input: {
   const pack = {
     export_kind: 'json_pack',
     pdf_note:
-      'Branded PDF pack is not wired yet — this JSON pack is the authoritative Planet Mark export today.',
-    xlsx_note: 'XLSX pack export is a follow-on.',
+      'Branded PDF pack is a follow-on — JSON and XLSX packs are live from the authenticated export API.',
+    xlsx_note: 'Use ?format=xlsx on the export endpoint for the spreadsheet pack.',
     generated_at: new Date().toISOString(),
     reporting_year: {
       id: year.id,
