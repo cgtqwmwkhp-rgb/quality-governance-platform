@@ -33,9 +33,6 @@ async def test_export_protocol_pack_xlsx_attachment() -> None:
 
     response = await export_protocol_pack(current_user, export_format="xlsx")
 
-    assert (
-        response.media_type
-        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    assert response.media_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     assert response.headers["content-disposition"].endswith('.xlsx"')
     assert len(response.body) > 1000

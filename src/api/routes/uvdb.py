@@ -23,10 +23,6 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.setup_required import setup_required_response
 from src.domain.exceptions import NotFoundError
-from src.domain.services.uvdb_protocol_export_service import (
-    build_protocol_export,
-    build_protocol_structure_payload,
-)
 from src.domain.models.audit import AuditRun
 from src.domain.models.external_audit_import import ExternalAuditImportJob
 from src.domain.models.user import User
@@ -38,6 +34,7 @@ from src.domain.models.uvdb_achilles import (
     UVDBQuestion,
     UVDBSection,
 )
+from src.domain.services.uvdb_protocol_export_service import build_protocol_export, build_protocol_structure_payload
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
