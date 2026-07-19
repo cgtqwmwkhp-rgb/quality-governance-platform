@@ -2,8 +2,39 @@
  * Planet Mark / carbon API client extracted from `client.ts` (Path-to-10 FE lane).
  * Instantiated from `client.ts` with the shared axios instance to avoid cycles.
  */
-import type { AxiosInstance } from 'axios'
+import type { AxiosInstance, AxiosResponse } from 'axios'
 import type { SetupRequiredResponse } from '../components/ui/SetupRequiredPanel'
+
+export type PlanetMarkExportFormat = 'json' | 'xlsx'
+
+function parseContentDispositionFilename(header: string | undefined, fallback: string): string {
+  if (!header) return fallback
+  const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(header)
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1])
+    } catch {
+      return utf8Match[1]
+    }
+  }
+  const plainMatch = /filename="?([^";]+)"?/i.exec(header)
+  return plainMatch?.[1] ?? fallback
+}
+
+export function triggerPlanetMarkBlobDownload(
+  blob: Blob,
+  filename: string,
+): void {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.rel = 'noopener'
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  URL.revokeObjectURL(url)
+}
 
 // ============ Planet Mark Types ============
 
@@ -548,6 +579,28 @@ export function createPlanetMarkApi(api: AxiosInstance) {
       body,
       { timeout: 60_000 },
     ),
+
+  /**
+   * Download an authenticated JSON or XLSX export pack for a reporting year.
+   */
+  downloadExportPack: async (
+    yearId: number,
+    format: PlanetMarkExportFormat = 'json',
+  ): Promise<AxiosResponse<Blob>> => {
+    const response = await api.get<Blob>(`/api/v1/planet-mark/years/${yearId}/export`, {
+      params: { format },
+      responseType: 'blob',
+    })
+    const fallback = `planet-mark-export-${yearId}-${new Date().toISOString().slice(0, 10)}.${format}`
+    const disposition = response.headers['content-disposition'] as string | undefined
+    const filename = parseContentDispositionFilename(disposition, fallback)
+    const mimeType =
+      format === 'xlsx'
+        ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        : 'application/json'
+    triggerPlanetMarkBlobDownload(new Blob([response.data], { type: mimeType }), filename)
+    return response
+  },
   }
 }
 

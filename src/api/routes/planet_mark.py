@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from pydantic.functional_validators import AfterValidator
 from sqlalchemy import desc, func, select
@@ -37,6 +38,7 @@ from src.domain.models.planet_mark import (
     UtilityMeterReading,
 )
 from src.domain.models.user import User
+from src.domain.services.planet_mark_export_service import PlanetMarkExportService, export_pack_filename
 
 logger = logging.getLogger(__name__)
 _audit_logger = logging.getLogger("planet_mark.audit")
@@ -455,6 +457,45 @@ async def get_reporting_year(
             "expiry_date": year.expiry_date.isoformat() if year.expiry_date else None,
         },
     }
+
+
+@router.get("/years/{year_id}/export")
+async def export_reporting_year_pack(
+    year_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    export_format: str = Query("json", alias="format", pattern="^(json|xlsx)$"),
+) -> StreamingResponse:
+    """Download an authenticated JSON or XLSX export pack for a reporting year."""
+    service = PlanetMarkExportService(db)
+    try:
+        pack = await service.assemble_pack(year_id=year_id, tenant_id=current_user.tenant_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Reporting year not found") from None
+
+    year_label = str(pack["reporting_year"]["year_label"])
+    if export_format == "xlsx":
+        content = service.build_xlsx_bytes(pack)
+        filename = export_pack_filename(year_label, "xlsx")
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    else:
+        content = service.build_json_bytes(pack)
+        filename = export_pack_filename(year_label, "json")
+        media_type = "application/json"
+
+    _audit(
+        "export_pack",
+        current_user.tenant_id,
+        current_user.id,
+        year_id=year_id,
+        format=export_format,
+    )
+
+    return StreamingResponse(
+        iter([content]),
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ============ Emission Sources ============
