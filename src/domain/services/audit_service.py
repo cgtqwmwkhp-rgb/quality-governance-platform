@@ -494,7 +494,9 @@ class AuditService:
                 "risk_weight": question.risk_weight,
                 "risk_category": question.risk_category,
                 "criticality": (
-                    question.criticality.value if hasattr(question.criticality, "value") else question.criticality
+                    question.criticality.value
+                    if question.criticality is not None and hasattr(question.criticality, "value")
+                    else question.criticality
                 ),
                 "sort_order": question.sort_order,
             }
