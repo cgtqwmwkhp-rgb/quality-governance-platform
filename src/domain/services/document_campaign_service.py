@@ -1555,6 +1555,337 @@ class DocumentCampaignService:
             },
         }
 
+    @staticmethod
+    def _is_quiz_fail(*, require_quiz: bool, quiz_attempts: int, quiz_passed: Optional[bool]) -> bool:
+        """True when quiz is required and the assignee failed or exhausted attempts."""
+        if not require_quiz:
+            return False
+        attempts = quiz_attempts or 0
+        if attempts >= MAX_QUIZ_ATTEMPTS and quiz_passed is not True:
+            return True
+        if attempts > 0 and quiz_passed is False:
+            return True
+        return False
+
+    @staticmethod
+    def _percentile(values: List[float], percentile: float) -> Optional[float]:
+        if len(values) < 2:
+            return None
+        ordered = sorted(values)
+        rank = (len(ordered) - 1) * (percentile / 100.0)
+        lower = int(rank)
+        upper = min(lower + 1, len(ordered) - 1)
+        weight = rank - lower
+        return round(ordered[lower] * (1 - weight) + ordered[upper] * weight, 2)
+
+    @staticmethod
+    def _iso_date(dt: Optional[datetime]) -> Optional[str]:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.date().isoformat()
+
+    async def get_compliance_overview(self, *, tenant_id: int) -> Dict[str, Any]:
+        """Tenant-wide HSEQ campaign effectiveness overview for the command centre."""
+        active_result = await self.db.execute(
+            select(func.count(DocumentCampaign.id)).where(
+                DocumentCampaign.tenant_id == tenant_id,
+                DocumentCampaign.status == CampaignStatus.ACTIVE,
+            )
+        )
+        active_campaigns = int(active_result.scalar_one() or 0)
+
+        rows_result = await self.db.execute(
+            select(CampaignAssignment, DocumentCampaign)
+            .join(DocumentCampaign, DocumentCampaign.id == CampaignAssignment.campaign_id)
+            .where(CampaignAssignment.tenant_id == tenant_id)
+        )
+        rows = rows_result.all()
+
+        total_assignments = len(rows)
+        completed_assignments = 0
+        overdue_count = 0
+        quiz_fail_count = 0
+        unanswered_hseq_count = 0
+        opened_count = 0
+
+        today = datetime.now(timezone.utc).date()
+        series_dates = [(today - timedelta(days=offset)).isoformat() for offset in range(13, -1, -1)]
+        series_buckets: Dict[str, Dict[str, int]] = {
+            day: {"completed": 0, "opened": 0, "overdue": 0} for day in series_dates
+        }
+
+        for assignment, campaign in rows:
+            if assignment.status == AssignmentStatus.COMPLETED:
+                completed_assignments += 1
+            if assignment.status == AssignmentStatus.OVERDUE:
+                overdue_count += 1
+            if assignment.first_opened_at is not None:
+                opened_count += 1
+            if self._is_quiz_fail(
+                require_quiz=bool(campaign.require_quiz),
+                quiz_attempts=assignment.quiz_attempts or 0,
+                quiz_passed=assignment.quiz_passed,
+            ):
+                quiz_fail_count += 1
+            disposition = assignment.signature_disposition or ""
+            if disposition in (
+                SIGNATURE_DISPOSITION_SIGNED_PENDING_HSEQ,
+                SIGNATURE_DISPOSITION_DEFERRED,
+            ):
+                unanswered_hseq_count += 1
+
+            completed_day = self._iso_date(assignment.completed_at)
+            if completed_day in series_buckets:
+                series_buckets[completed_day]["completed"] += 1
+
+            opened_day = self._iso_date(assignment.first_opened_at)
+            if opened_day in series_buckets:
+                series_buckets[opened_day]["opened"] += 1
+
+            due_day = self._iso_date(assignment.due_at)
+            if due_day in series_buckets and assignment.status == AssignmentStatus.OVERDUE:
+                series_buckets[due_day]["overdue"] += 1
+
+        overall_completion_rate = (
+            round((completed_assignments / total_assignments * 100), 1) if total_assignments > 0 else 0.0
+        )
+        open_rate = round((opened_count / total_assignments * 100), 1) if total_assignments > 0 else 0.0
+
+        return {
+            "active_campaigns": active_campaigns,
+            "total_assignments": total_assignments,
+            "completed_assignments": completed_assignments,
+            "overall_completion_rate": overall_completion_rate,
+            "overdue_count": overdue_count,
+            "quiz_fail_count": quiz_fail_count,
+            "unanswered_hseq_count": unanswered_hseq_count,
+            "open_rate": open_rate,
+            "series": [
+                {
+                    "date": day,
+                    "completed": series_buckets[day]["completed"],
+                    "opened": series_buckets[day]["opened"],
+                    "overdue": series_buckets[day]["overdue"],
+                }
+                for day in series_dates
+            ],
+        }
+
+    async def get_campaign_analytics(self, *, tenant_id: int, campaign_id: int) -> Dict[str, Any]:
+        """Per-campaign funnel, score distribution, and completion timing."""
+        campaign = await self.get_campaign(tenant_id=tenant_id, campaign_id=campaign_id)
+
+        assignments_result = await self.db.execute(
+            select(CampaignAssignment).where(
+                CampaignAssignment.campaign_id == campaign_id,
+                CampaignAssignment.tenant_id == tenant_id,
+            )
+        )
+        assignments = list(assignments_result.scalars().all())
+
+        assigned = len(assignments)
+        opened = sum(1 for a in assignments if a.first_opened_at is not None)
+        quiz_attempted = sum(1 for a in assignments if (a.quiz_attempts or 0) > 0 or a.quiz_passed is not None)
+        quiz_passed = sum(1 for a in assignments if a.quiz_passed is True)
+        completed = sum(1 for a in assignments if a.status == AssignmentStatus.COMPLETED)
+
+        histogram_defs = [
+            ("0-19", 0, 19),
+            ("20-39", 20, 39),
+            ("40-59", 40, 59),
+            ("60-79", 60, 79),
+            ("80-100", 80, 100),
+        ]
+        histogram_counts = {label: 0 for label, _, _ in histogram_defs}
+        for assignment in assignments:
+            if assignment.quiz_score is None:
+                continue
+            score = assignment.quiz_score
+            for label, low, high in histogram_defs:
+                if low <= score <= high:
+                    histogram_counts[label] += 1
+                    break
+
+        attempts_counts: Dict[int, int] = {0: 0, 1: 0, 2: 0, 3: 0}
+        for assignment in assignments:
+            attempts = assignment.quiz_attempts or 0
+            bucket = 3 if attempts >= 3 else attempts
+            attempts_counts[bucket] = attempts_counts.get(bucket, 0) + 1
+
+        completion_hours: List[float] = []
+        for assignment in assignments:
+            if assignment.completed_at is None:
+                continue
+            start = assignment.first_opened_at or assignment.assigned_at
+            if start is None:
+                continue
+            start_dt = start if start.tzinfo else start.replace(tzinfo=timezone.utc)
+            completed_dt = (
+                assignment.completed_at
+                if assignment.completed_at.tzinfo
+                else assignment.completed_at.replace(tzinfo=timezone.utc)
+            )
+            completion_hours.append((completed_dt - start_dt).total_seconds() / 3600.0)
+
+        reminder_sent_total = sum(a.reminders_sent or 0 for a in assignments)
+
+        summary_counts = await self._compliance_summary(campaign_id)
+        opened_result = await self.db.execute(
+            select(func.count(CampaignAssignment.id)).where(
+                CampaignAssignment.campaign_id == campaign_id,
+                CampaignAssignment.tenant_id == tenant_id,
+                CampaignAssignment.first_opened_at.is_not(None),
+            )
+        )
+        opened_count = int(opened_result.scalar_one() or 0)
+        quiz_pass_result = await self.db.execute(
+            select(func.count(CampaignAssignment.id)).where(
+                CampaignAssignment.campaign_id == campaign_id,
+                CampaignAssignment.tenant_id == tenant_id,
+                CampaignAssignment.quiz_passed.is_(True),
+            )
+        )
+        quiz_fail_result = await self.db.execute(
+            select(func.count(CampaignAssignment.id)).where(
+                CampaignAssignment.campaign_id == campaign_id,
+                CampaignAssignment.tenant_id == tenant_id,
+                CampaignAssignment.quiz_passed.is_(False),
+            )
+        )
+        quiz_pass_count = int(quiz_pass_result.scalar_one() or 0)
+        quiz_fail_count = int(quiz_fail_result.scalar_one() or 0)
+        assigned_total = int(summary_counts["total_assigned"])
+        open_rate = round((opened_count / assigned_total * 100), 1) if assigned_total > 0 else 0.0
+
+        return {
+            "campaign_id": campaign.id,
+            "document_id": campaign.document_id,
+            "require_quiz": bool(campaign.require_quiz),
+            "funnel": {
+                "assigned": assigned,
+                "opened": opened,
+                "quiz_attempted": quiz_attempted,
+                "quiz_passed": quiz_passed,
+                "completed": completed,
+            },
+            "score_histogram": [{"bucket": label, "count": histogram_counts[label]} for label, _, _ in histogram_defs],
+            "attempts_distribution": [{"attempts": k, "count": v} for k, v in sorted(attempts_counts.items())],
+            "time_to_complete_hours": {
+                "p50": self._percentile(completion_hours, 50),
+                "p90": self._percentile(completion_hours, 90),
+            },
+            "reminder_sent_total": reminder_sent_total,
+            "summary": {
+                "assigned": assigned_total,
+                "completed": summary_counts["completed"],
+                "pending": summary_counts["pending"],
+                "overdue": summary_counts["overdue"],
+                "expired": summary_counts["expired"],
+                "opened": opened_count,
+                "not_opened": max(assigned_total - opened_count, 0),
+                "quiz_pass_count": quiz_pass_count,
+                "quiz_fail_count": quiz_fail_count,
+                "completion_rate": summary_counts["completion_rate"],
+                "open_rate": open_rate,
+            },
+        }
+
+    async def list_compliance_people(
+        self,
+        *,
+        tenant_id: int,
+        status: str,
+        q: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """Cross-campaign chase list for overdue assignees or quiz failures."""
+        status_key = (status or "").strip().lower()
+        if status_key not in ("overdue", "quiz_fail"):
+            raise BadRequestError("status must be overdue or quiz_fail")
+
+        limit = max(1, min(limit, 200))
+        offset = max(0, offset)
+
+        base_filters = [CampaignAssignment.tenant_id == tenant_id]
+        if status_key == "overdue":
+            base_filters.append(CampaignAssignment.status == AssignmentStatus.OVERDUE)
+        else:
+            base_filters.append(DocumentCampaign.require_quiz.is_(True))
+            base_filters.append(
+                or_(
+                    and_(
+                        CampaignAssignment.quiz_attempts > 0,
+                        CampaignAssignment.quiz_passed.is_(False),
+                    ),
+                    and_(
+                        CampaignAssignment.quiz_attempts >= MAX_QUIZ_ATTEMPTS,
+                        CampaignAssignment.quiz_passed.is_not(True),
+                    ),
+                )
+            )
+
+        join_filters = list(base_filters)
+        if q and q.strip():
+            needle = f"%{q.strip().lower()}%"
+            join_filters.append(
+                or_(
+                    func.lower(User.email).like(needle),
+                    func.lower(User.first_name).like(needle),
+                    func.lower(User.last_name).like(needle),
+                )
+            )
+
+        count_result = await self.db.execute(
+            select(func.count(CampaignAssignment.id))
+            .select_from(CampaignAssignment)
+            .join(DocumentCampaign, DocumentCampaign.id == CampaignAssignment.campaign_id)
+            .join(User, User.id == CampaignAssignment.user_id)
+            .join(Document, Document.id == DocumentCampaign.document_id)
+            .where(and_(*join_filters))
+        )
+        total = int(count_result.scalar_one() or 0)
+
+        rows_result = await self.db.execute(
+            select(CampaignAssignment, DocumentCampaign, Document, User)
+            .join(DocumentCampaign, DocumentCampaign.id == CampaignAssignment.campaign_id)
+            .join(Document, Document.id == DocumentCampaign.document_id)
+            .join(User, User.id == CampaignAssignment.user_id)
+            .where(and_(*join_filters))
+            .order_by(CampaignAssignment.due_at, User.last_name, User.first_name)
+            .offset(offset)
+            .limit(limit)
+        )
+
+        items: List[Dict[str, Any]] = []
+        for assignment, _campaign, document, user in rows_result.all():
+            status_value = assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status)
+            items.append(
+                {
+                    "assignment_id": assignment.id,
+                    "campaign_id": assignment.campaign_id,
+                    "document_id": document.id,
+                    "document_title": document.title or f"Document #{document.id}",
+                    "user_id": user.id,
+                    "user_name": user.full_name,
+                    "user_email": user.email,
+                    "status": status_value,
+                    "quiz_score": assignment.quiz_score,
+                    "quiz_passed": assignment.quiz_passed,
+                    "quiz_attempts": assignment.quiz_attempts or 0,
+                    "first_opened_at": (
+                        assignment.first_opened_at.isoformat() if assignment.first_opened_at else None
+                    ),
+                    "completed_at": assignment.completed_at.isoformat() if assignment.completed_at else None,
+                    "due_at": assignment.due_at.isoformat() if assignment.due_at else None,
+                    "reminders_sent": assignment.reminders_sent or 0,
+                }
+            )
+
+        return {"items": items, "total": total, "limit": limit, "offset": offset}
+
     # ==================== Question inbox (HSEQ) ====================
 
     async def list_question_inbox(self, *, tenant_id: int) -> List[Dict[str, Any]]:
