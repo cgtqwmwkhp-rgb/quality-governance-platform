@@ -155,6 +155,27 @@ async def list_document_tags(
     return [DocumentTagResponse.model_validate(t, from_attributes=True) for t in result.scalars().all()]
 
 
+class LibraryRbacCatalogResponse(BaseModel):
+    """Wave W2 — facet bundles + restricted taxonomy → permission map."""
+
+    facets: dict[str, list[str]]
+    restricted_taxonomy_permissions: dict[str, str]
+
+
+@router.get("/rbac-catalog", response_model=LibraryRbacCatalogResponse)
+async def get_library_rbac_catalog(
+    current_user: CurrentUser,
+) -> LibraryRbacCatalogResponse:
+    """Return staff/manager/admin facet bundles and restricted category gates."""
+    del current_user
+    from src.domain.services.document_library_rbac import RESTRICTED_TAXONOMY_PERMISSIONS, facet_permission_bundles
+
+    return LibraryRbacCatalogResponse(
+        facets=facet_permission_bundles(),
+        restricted_taxonomy_permissions=dict(RESTRICTED_TAXONOMY_PERMISSIONS),
+    )
+
+
 @router.post("/reseed", response_model=SeedResultResponse)
 async def reseed_document_categories(
     db: DbSession,

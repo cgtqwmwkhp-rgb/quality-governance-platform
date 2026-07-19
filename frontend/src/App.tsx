@@ -108,6 +108,8 @@ const NotificationSettings = lazy(() => import('./pages/admin/NotificationSettin
 const CampaignCompliance = lazy(() => import('./pages/admin/CampaignCompliance'))
 const HsecQuestionInbox = lazy(() => import('./pages/admin/HsecQuestionInbox'))
 const PartnerWebhooks = lazy(() => import('./pages/admin/PartnerWebhooks'))
+const LibraryRoles = lazy(() => import('./pages/admin/LibraryRoles'))
+const EngineerGroups = lazy(() => import('./pages/admin/EngineerGroups'))
 const RequireRole = lazy(() => import('./components/RequireRole'))
 
 function PageLoader() {
@@ -553,6 +555,22 @@ function App() {
                   element={
                     <RequireRole allowed={['admin', 'manager']}>
                       <HsecQuestionInbox />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/library-roles"
+                  element={
+                    <RequireRole allowed={['admin']} requireSuperuser>
+                      <LibraryRoles />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/engineer-groups"
+                  element={
+                    <RequireRole allowed={['admin', 'manager']}>
+                      <EngineerGroups />
                     </RequireRole>
                   }
                 />

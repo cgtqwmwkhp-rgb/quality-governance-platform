@@ -399,7 +399,7 @@ export function createDocumentCampaignApi(api: AxiosInstance) {
   const base = '/api/v1/document-campaigns'
 
   return {
-    // HSEC launch (#1146)
+    // HSEQ launch (#1146)
     listGroups: () => api.get<CampaignGroup[]>(`${base}/groups`),
     createGroup: (name: string, member_user_ids: number[]) =>
       api.post<CampaignGroup>(`${base}/groups`, { name, member_user_ids }),

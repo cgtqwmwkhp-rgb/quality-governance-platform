@@ -45,7 +45,11 @@ describe('createUsersApi', () => {
     expect(api.patch).toHaveBeenCalledWith('/api/v1/users/9', { first_name: 'C' })
     expect(api.delete).toHaveBeenCalledWith('/api/v1/users/9')
     expect(api.get).toHaveBeenCalledWith('/api/v1/users/roles/', undefined)
-    expect(api.post).toHaveBeenCalledWith('/api/v1/users/roles/', { name: 'r', permissions: ['p'] })
+    expect(api.post).toHaveBeenCalledWith('/api/v1/users/roles/', {
+      name: 'r',
+      description: undefined,
+      permissions: JSON.stringify(['p']),
+    })
     expect(api.patch).toHaveBeenCalledWith('/api/v1/users/roles/3', { name: 'r2' })
   })
 })
