@@ -43,23 +43,9 @@ class TestReferenceNumberGuard:
             headers=auth_headers,
         )
 
-        # Assert 403 status
-        assert response.status_code == 403
-
-        # Assert canonical error envelope (supports both flat and nested formats)
-        data = response.json()
-        error = data.get("error", data)
-        error_code = error.get("code", error.get("error_code", ""))
-        message = error.get("message", "")
-        request_id = error.get("request_id", data.get("request_id", ""))
-
-        assert error_code, "Error code should be present"
-        assert message, "Error message should be present"
-        assert request_id, "Request ID should be present"
-        assert len(request_id) > 0
-
-        # Assert message contains permission requirement
-        assert "policy:set_reference_number" in message
+        # W5 policy write freeze wins before reference-number RBAC
+        assert response.status_code == 410
+        assert "frozen" in response.text.lower()
 
     @pytest.mark.asyncio
     async def test_authorized_explicit_reference_number_succeeds(
@@ -104,15 +90,9 @@ class TestReferenceNumberGuard:
             headers=auth_headers,
         )
 
-        # Assert 201 status
-        if response.status_code == 403:
-            pytest.skip("Explicit reference-number permission contract not enabled in this environment")
-        assert response.status_code == 201
-
-        # Assert policy was created with the explicit reference_number
-        data = response.json()
-        assert data["reference_number"].startswith("POL-AUTH-")
-        assert data["title"] == "Test Policy with Explicit Reference"
+        # W5 policy write freeze wins even for authorized callers
+        assert response.status_code == 410
+        assert "frozen" in response.text.lower()
 
     @pytest.mark.asyncio
     async def test_auto_generated_reference_number_no_permission_required(
@@ -141,11 +121,6 @@ class TestReferenceNumberGuard:
             headers=auth_headers,
         )
 
-        # Assert 201 status
-        assert response.status_code == 201
-
-        # Assert policy was created with auto-generated reference_number
-        data = response.json()
-        assert "reference_number" in data
-        assert data["reference_number"].startswith("POL-2026-")
-        assert data["title"] == "Test Policy with Auto Reference"
+        # W5 policy write freeze wins before auto reference generation
+        assert response.status_code == 410
+        assert "frozen" in response.text.lower()

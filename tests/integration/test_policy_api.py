@@ -12,8 +12,8 @@ from tests.factories import PolicyFactory
 
 
 @pytest.mark.asyncio
-async def test_create_policy(client: AsyncClient, test_user: User, auth_headers: dict):
-    """Test creating a new policy."""
+async def test_create_policy_is_frozen(client: AsyncClient, test_user: User, auth_headers: dict):
+    """Legacy policy creation directs users to the Governance Library."""
     policy_data = {
         "title": "Test Policy",
         "description": "This is a test policy",
@@ -27,16 +27,9 @@ async def test_create_policy(client: AsyncClient, test_user: User, auth_headers:
         headers=auth_headers,
     )
 
-    assert response.status_code == 201
-    data = response.json()
-    assert data["title"] == "Test Policy"
-    assert data["description"] == "This is a test policy"
-    assert data["document_type"] == "policy"
-    assert data["status"] == "draft"
-    assert "id" in data
-    assert "reference_number" in data
-    assert "created_at" in data
-    assert "updated_at" in data
+    assert response.status_code == 410
+    error = response.json().get("error", response.json())
+    assert "Governance Library" in error.get("message", error.get("detail", ""))
 
 
 @pytest.mark.asyncio
@@ -184,8 +177,8 @@ async def test_list_policies_pagination(
 
 
 @pytest.mark.asyncio
-async def test_update_policy(client: AsyncClient, test_user: User, auth_headers: dict, test_session):
-    """Test updating a policy."""
+async def test_update_policy_is_frozen(client: AsyncClient, test_user: User, auth_headers: dict, test_session):
+    """Legacy policy updates are frozen without mutating the existing row."""
     policy = PolicyFactory.build(
         title="Original Title",
         description="Original description",
@@ -210,16 +203,14 @@ async def test_update_policy(client: AsyncClient, test_user: User, auth_headers:
         headers=auth_headers,
     )
 
-    assert response.status_code == 200
-    data = response.json()
-    assert data["title"] == "Updated Title"
-    assert data["status"] == "approved"
-    assert data["description"] == "Original description"
+    assert response.status_code == 410
+    await test_session.refresh(policy)
+    assert policy.title == "Original Title"
 
 
 @pytest.mark.asyncio
-async def test_update_policy_not_found(client: AsyncClient, auth_headers: dict):
-    """Test updating a non-existent policy returns 404."""
+async def test_update_policy_not_found_is_still_frozen(client: AsyncClient, auth_headers: dict):
+    """Freeze takes precedence over legacy policy lookup."""
     update_data = {"title": "Updated Title"}
 
     response = await client.put(
@@ -228,12 +219,12 @@ async def test_update_policy_not_found(client: AsyncClient, auth_headers: dict):
         headers=auth_headers,
     )
 
-    assert response.status_code == 404
+    assert response.status_code == 410
 
 
 @pytest.mark.asyncio
-async def test_delete_policy(client: AsyncClient, test_user: User, auth_headers: dict, test_session):
-    """Test deleting a policy."""
+async def test_delete_policy_is_frozen(client: AsyncClient, test_user: User, auth_headers: dict, test_session):
+    """Legacy policy deletion is frozen without mutating the existing row."""
     policy = PolicyFactory.build(
         title="Policy to Delete",
         document_type=DocumentType.POLICY,
@@ -252,29 +243,27 @@ async def test_delete_policy(client: AsyncClient, test_user: User, auth_headers:
         headers=auth_headers,
     )
 
-    assert response.status_code in (200, 204)
+    assert response.status_code == 410
 
     result = await test_session.execute(select(Policy).where(Policy.id == policy_id))
     deleted_policy = result.scalar_one_or_none()
-    if deleted_policy is not None:
-        assert getattr(deleted_policy, "deleted_at", None) is not None or deleted_policy.status == "archived"
+    assert deleted_policy is not None
 
 
 @pytest.mark.asyncio
-async def test_delete_policy_not_found(client: AsyncClient, auth_headers: dict):
-    """Test deleting a non-existent policy returns 404."""
+async def test_delete_policy_not_found_is_still_frozen(client: AsyncClient, auth_headers: dict):
+    """Freeze takes precedence over legacy policy lookup."""
     response = await client.delete(
         "/api/v1/policies/99999",
         headers=auth_headers,
     )
 
-    assert response.status_code == 404
+    assert response.status_code == 410
 
 
 @pytest.mark.asyncio
-async def test_full_crud_flow(client: AsyncClient, test_user: User, auth_headers: dict, test_session):
-    """Test the full CRUD flow: create -> get -> list -> update -> delete."""
-    # 1. Create
+async def test_full_crud_flow_is_frozen(client: AsyncClient, test_user: User, auth_headers: dict, test_session):
+    """Legacy CRUD cannot begin; Governance Library is the write path."""
     create_data = {
         "title": "CRUD Test Policy",
         "description": "Testing full CRUD flow",
@@ -287,57 +276,6 @@ async def test_full_crud_flow(client: AsyncClient, test_user: User, auth_headers
         json=create_data,
         headers=auth_headers,
     )
-    assert create_response.status_code == 201
-    policy_id = create_response.json()["id"]
-
-    # 2. Get
-    get_response = await client.get(
-        f"/api/v1/policies/{policy_id}",
-        headers=auth_headers,
-    )
-    assert get_response.status_code == 200
-    assert get_response.json()["title"] == "CRUD Test Policy"
-
-    # 3. List
-    list_response = await client.get(
-        "/api/v1/policies",
-        headers=auth_headers,
-    )
-    assert list_response.status_code == 200
-    if not any(item["id"] == policy_id for item in list_response.json()["items"]):
-        # Fallback when default pagination excludes the newly created item.
-        fetch_response = await client.get(f"/api/v1/policies/{policy_id}", headers=auth_headers)
-        assert fetch_response.status_code == 200
-
-    # 4. Update
-    update_data = {"title": "Updated CRUD Test Policy"}
-    update_response = await client.put(
-        f"/api/v1/policies/{policy_id}",
-        json=update_data,
-        headers=auth_headers,
-    )
-    assert update_response.status_code == 200
-    assert update_response.json()["title"] == "Updated CRUD Test Policy"
-
-    # 5. Delete
-    delete_response = await client.delete(
-        f"/api/v1/policies/{policy_id}",
-        headers=auth_headers,
-    )
-    assert delete_response.status_code in (200, 204)
-
-    # 6. Verify deletion (Hard Delete)
-    get_after_delete = await client.get(
-        f"/api/v1/policies/{policy_id}",
-        headers=auth_headers,
-    )
-    assert get_after_delete.status_code in (404, 410)
-
-    from sqlalchemy import select
-
-    from src.domain.models.policy import Policy
-
-    db_check = await test_session.execute(select(Policy).where(Policy.id == policy_id))
-    row = db_check.scalar_one_or_none()
-    if row is not None:
-        assert getattr(row, "deleted_at", None) is not None or row.status == "archived"
+    assert create_response.status_code == 410
+    error = create_response.json().get("error", create_response.json())
+    assert "HSEQ Campaigns" in error.get("message", error.get("detail", ""))

@@ -38,9 +38,11 @@ reinterpreted onto QGP's SQLAlchemy/Alembic/FastAPI stack.
 
 - Review packs / AI horizon scan (SPEC.md §7.3) — thin backend landed in Wave W3
   (`/api/v1/library-review`, stub horizon provider); FE + live providers deferred.
-- Disposal queue (SPEC.md §8) — not implemented; retention rules are
-  carried as informational text on `document_categories.retention_rule`
-  only, not automated.
+- Disposal queue (SPEC.md §8) — Wave W5 adds an admin-only dry-run queue at
+  `GET /api/v1/documents/admin/disposal`. It lists only inactive lifecycle
+  documents with an explicit, elapsed `retention_until`, and carries each
+  category's `retention_rule` as provenance. Hard disposal is separately
+  gated by `LIBRARY_DISPOSAL_EXECUTE=false` by default.
 - Full Entra ID / Azure Blob rebuild — QGP already has its own auth and
   storage layers; this wave reuses them instead of the spec pack's platform
   assumptions.

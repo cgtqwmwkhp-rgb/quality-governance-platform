@@ -1,9 +1,9 @@
 /**
  * Real axe coverage for the Policies CUJ page (/policies), not a route stub.
- * Covers the populated register and the create-policy dialog.
+ * Covers the populated register and the W5 migration guidance (create path removed).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import Policies from '../Policies'
@@ -74,18 +74,19 @@ describe('Policies page accessibility (real page /policies)', () => {
     await expectNoA11yViolations(container)
   })
 
-  it('opens the real create-policy dialog without axe violations', async () => {
-    const { baseElement } = render(<Policies />, { wrapper: Wrapper })
+  it('shows migration guidance without a create-policy control and without axe violations', async () => {
+    const { container } = render(<Policies />, { wrapper: Wrapper })
 
     await waitFor(() => {
       expect(screen.getByText('POL-001')).toBeInTheDocument()
     })
-    fireEvent.click(screen.getByRole('button', { name: 'policies.new' }))
 
-    await waitFor(() => {
-      expect(screen.getByRole('dialog')).toBeInTheDocument()
-    })
+    expect(screen.queryByRole('button', { name: 'policies.new' })).not.toBeInTheDocument()
+    expect(screen.getByText(/Policy CRUD is frozen/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Governance Library' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Document Control' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'HSEQ Campaigns' })).toBeInTheDocument()
 
-    await expectNoA11yViolations(baseElement)
+    await expectNoA11yViolations(container)
   })
 })

@@ -480,9 +480,11 @@ class TestDocumentControlE2E:
             json=policy_data,
             headers=auth_headers,
         )
-        # TODO: Remove 404 when endpoint is implemented
-        assert create_response.status_code in [200, 201, 422, 404]
-        if create_response.status_code in [200, 201]:
+        # W5: legacy Policy CRUD is frozen (410). Read paths remain available.
+        assert create_response.status_code in [200, 201, 410, 422, 404]
+        if create_response.status_code == 410:
+            assert "frozen" in create_response.text.lower()
+        elif create_response.status_code in [200, 201]:
             created = create_response.json()
             assert "id" in created or "reference" in created
 
