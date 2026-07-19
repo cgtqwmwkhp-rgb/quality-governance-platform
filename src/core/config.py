@@ -327,6 +327,10 @@ class Settings(BaseSettings):
     # OpenAI (tertiary AI provider)
     openai_api_key: str = ""
 
+    # Governance Library Wave W3 — horizon scan provider (stub|anthropic|openai|perplexity)
+    library_horizon_provider: str = "stub"
+    perplexity_api_key: str = ""
+
     # Voyage + Pinecone (library semantic index / smart search)
     voyage_api_key: str = ""
     pinecone_api_key: str = ""

@@ -36,7 +36,8 @@ reinterpreted onto QGP's SQLAlchemy/Alembic/FastAPI stack.
 
 ## Out of scope for W0 (tracked as follow-ups)
 
-- Review packs / AI horizon scan (SPEC.md §7.3) — not implemented.
+- Review packs / AI horizon scan (SPEC.md §7.3) — thin backend landed in Wave W3
+  (`/api/v1/library-review`, stub horizon provider); FE + live providers deferred.
 - Disposal queue (SPEC.md §8) — not implemented; retention rules are
   carried as informational text on `document_categories.retention_rule`
   only, not automated.
