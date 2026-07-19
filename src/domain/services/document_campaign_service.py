@@ -2226,7 +2226,10 @@ class DocumentCampaignService:
             )
             .order_by(User.email)
         )
-        return campaign, list(result.all())
+        rows: List[Tuple[CampaignAssignment, Optional[str]]] = [
+            (assignment, email) for assignment, email in result.all()
+        ]
+        return campaign, rows
 
     @staticmethod
     def _evidence_pack_row_values(assignment: CampaignAssignment, email: Optional[str]) -> List[Any]:
@@ -2270,14 +2273,14 @@ class DocumentCampaignService:
         pdf.set_auto_page_break(auto=True, margin=12)
         pdf.add_page()
         pdf.set_font("Helvetica", "B", 14)
-        pdf.cell(0, 8, "Campaign Evidence Pack", ln=True)
+        pdf.cell(0, 8, "Campaign Evidence Pack", new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "", 10)
-        pdf.cell(0, 6, f"Campaign ID: {campaign.id}", ln=True)
-        pdf.cell(0, 6, f"Document: {doc_title} (#{campaign.document_id})", ln=True)
+        pdf.cell(0, 6, f"Campaign ID: {campaign.id}", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, f"Document: {doc_title} (#{campaign.document_id})", new_x="LMARGIN", new_y="NEXT")
         if campaign.title:
-            pdf.cell(0, 6, f"Campaign title: {campaign.title}", ln=True)
-        pdf.cell(0, 6, f"Status: {status_value}", ln=True)
-        pdf.cell(0, 6, f"Generated: {generated_at}", ln=True)
+            pdf.cell(0, 6, f"Campaign title: {campaign.title}", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, f"Status: {status_value}", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, f"Generated: {generated_at}", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(4)
 
         col_widths = [38, 18, 28, 28, 28, 28, 14, 14, 18, 24, 22]
