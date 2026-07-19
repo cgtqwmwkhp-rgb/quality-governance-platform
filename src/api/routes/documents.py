@@ -31,13 +31,25 @@ from src.domain.models.document import (
     DocumentType,
     FileType,
     IndexJob,
+    LibraryDocumentAccessLog,
     SensitivityLevel,
 )
 from src.domain.models.location import Location
 from src.domain.models.user import User
+from src.domain.services.document_category_service import allocate_pel_doc_ref
+from src.domain.services.document_library_filing_service import (
+    assert_library_read_access,
+    filing_defaults_for_category,
+    find_duplicate_approved_candidates,
+    load_filing_category,
+)
+from src.domain.services.document_library_lifecycle_service import (
+    approve_document,
+    reject_review,
+    submit_for_review,
+)
 from src.domain.services.document_ai_service import VectorSearchService
 from src.domain.services.document_campaign_service import DocumentCampaignService
-from src.domain.services.document_category_service import allocate_pel_doc_ref
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
 from src.domain.services.document_version_service import (
@@ -74,6 +86,11 @@ class DocumentResponse(BaseModel):
     category_id: Optional[int] = None
     pel_doc_ref: Optional[str] = None
     site_location_id: Optional[int] = None
+    access_level: Optional[str] = None
+    is_statutory: bool = False
+    retention_until: Optional[datetime] = None
+    duplicate_warning: bool = False
+    duplicate_warning_detail: Optional[list] = None
     department: Optional[str]
     sensitivity: str
     status: str
@@ -148,6 +165,11 @@ def _document_to_response(document: Document) -> DocumentResponse:
         category_id=getattr(document, "category_id", None),
         pel_doc_ref=getattr(document, "pel_doc_ref", None),
         site_location_id=getattr(document, "site_location_id", None),
+        access_level=getattr(document, "access_level", None),
+        is_statutory=bool(getattr(document, "is_statutory", False)),
+        retention_until=getattr(document, "retention_until", None),
+        duplicate_warning=bool(getattr(document, "duplicate_warning", False)),
+        duplicate_warning_detail=_coerce_json_list(getattr(document, "duplicate_warning_detail", None)),
         department=document.department,
         sensitivity=_enum_value(document.sensitivity),
         status=_enum_value(document.status),
@@ -178,6 +200,8 @@ class DocumentUploadResponse(BaseModel):
     index_job_id: Optional[int] = None
     filename_version_hint: Optional[str] = None
     pel_doc_ref: Optional[str] = None
+    duplicate_warning: bool = False
+    duplicate_warning_detail: Optional[list] = None
 
 
 class DocumentReprocessResponse(BaseModel):
@@ -312,6 +336,20 @@ class LibraryDocumentPatch(BaseModel):
     description: Optional[str] = None
 
 
+class LibraryRejectRequest(BaseModel):
+    """Reject a document under review back to draft."""
+
+    review_notes: Optional[str] = None
+
+
+class LibraryLifecycleResponse(BaseModel):
+    """Lifecycle transition result."""
+
+    document_id: int
+    status: str
+    message: str
+
+
 class LibraryVersionResponse(BaseModel):
     """Library document version row."""
 
@@ -368,6 +406,8 @@ async def _get_document_or_404(
     db: DbSession,
     document_id: int,
     current_user: CurrentUser,
+    *,
+    enforce_acl: bool = True,
 ) -> Document:
     """Load a document visible to the current user or raise 404."""
     query = select(Document).where(Document.id == document_id)
@@ -376,7 +416,30 @@ async def _get_document_or_404(
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document not found")
+    if enforce_acl:
+        assert_library_read_access(document, current_user)
     return document
+
+
+async def _log_library_access(
+    db: DbSession,
+    document: Document,
+    current_user: CurrentUser,
+    action: str,
+    *,
+    action_details: str | None = None,
+) -> None:
+    db.add(
+        LibraryDocumentAccessLog(
+            tenant_id=document.tenant_id,
+            document_id=document.id,
+            user_id=getattr(current_user, "id", None),
+            user_name=getattr(current_user, "full_name", "Unknown"),
+            action=action,
+            action_details=action_details,
+            timestamp=datetime.now(timezone.utc),
+        )
+    )
 
 
 def _safe_filename(filename: Optional[str]) -> str:
@@ -588,13 +651,40 @@ async def upload_document(
     try:
         reference_number = await ReferenceNumberService.generate(db, "document", Document)
 
-        # Governance Library taxonomy (Wave W0): allocated only once file
-        # validation above has passed, so a rejected upload never burns a
-        # PEL sequence number. Gaps are acceptable (see reference_scheme in
-        # specs/governance-library/taxonomy.json); duplicates are not.
+        filing_category = None
         pel_doc_ref: Optional[str] = None
+        access_level: Optional[str] = None
+        is_statutory = False
+        duplicate_warning = False
+        duplicate_warning_detail: Optional[list] = None
+        initial_status = DocumentStatus.PROCESSING
+
         if category_id is not None:
+            filing_category = await load_filing_category(db, category_id)
             pel_doc_ref = await allocate_pel_doc_ref(db, category_id)
+            defaults = filing_defaults_for_category(filing_category)
+            access_level = defaults.access_level
+            is_statutory = defaults.is_statutory
+            initial_status = DocumentStatus.DRAFT
+
+            dupes = await find_duplicate_approved_candidates(
+                db,
+                tenant_id=current_user.tenant_id,
+                category_id=category_id,
+                site_location_id=site_location_id,
+                title=title,
+            )
+            if dupes:
+                duplicate_warning = True
+                duplicate_warning_detail = [
+                    {
+                        "document_id": d.document_id,
+                        "title": d.title,
+                        "reference_number": d.reference_number,
+                        "pel_doc_ref": d.pel_doc_ref,
+                    }
+                    for d in dupes
+                ]
 
         # Create document record
         doc = Document(
@@ -615,12 +705,16 @@ async def upload_document(
                 if sensitivity in [s.value for s in SensitivityLevel]
                 else SensitivityLevel.INTERNAL
             ),
-            status=DocumentStatus.PROCESSING,
+            status=initial_status,
             version="1.0",
             reference_number=reference_number,
             category_id=category_id,
             pel_doc_ref=pel_doc_ref,
             site_location_id=site_location_id,
+            access_level=access_level,
+            is_statutory=is_statutory,
+            duplicate_warning=duplicate_warning,
+            duplicate_warning_detail=duplicate_warning_detail,
             created_by_id=current_user.id,
             tenant_id=current_user.tenant_id,
         )
@@ -686,6 +780,8 @@ async def upload_document(
             index_job_id=index_job.id if index_job else None,
             filename_version_hint=hint.label if hint else None,
             pel_doc_ref=getattr(doc, "pel_doc_ref", None),
+            duplicate_warning=bool(getattr(doc, "duplicate_warning", False)),
+            duplicate_warning_detail=_coerce_json_list(getattr(doc, "duplicate_warning_detail", None)),
             message=(
                 "Document uploaded; indexing job queued" if dispatched else "Document uploaded and processing completed"
             ),
@@ -897,6 +993,7 @@ async def get_document(
     # Increment view count
     document.view_count += 1
     document.last_accessed_at = datetime.now(timezone.utc)
+    await _log_library_access(db, document, current_user, "view")
     await db.commit()
 
     return _document_to_response(document)
@@ -965,6 +1062,12 @@ async def get_document_signed_url(
     document = await _get_document_or_404(db, document_id, current_user)
     document.download_count += 1
     document.last_accessed_at = datetime.now(timezone.utc)
+    await _log_library_access(
+        db,
+        document,
+        current_user,
+        "download" if download else "view",
+    )
     await db.commit()
 
     filename = document.file_name or "download"
@@ -1090,6 +1193,86 @@ async def create_document_version(
     payload = document_version_service.serialize_library_version(version)
     payload["index_job_id"] = index_job_id
     return LibraryVersionResponse(**payload)
+
+
+@router.post("/{document_id}/submit", response_model=LibraryLifecycleResponse)
+async def submit_document_for_review(
+    document_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """Submit a filed draft for governance review (draft → under_review)."""
+    document = await _get_document_or_404(db, document_id, current_user, enforce_acl=False)
+    await submit_for_review(db, document)
+    await db.commit()
+    await db.refresh(document)
+    status = document.status.value if hasattr(document.status, "value") else str(document.status)
+    return LibraryLifecycleResponse(
+        document_id=document.id,
+        status=status,
+        message="Document submitted for review",
+    )
+
+
+@router.post("/{document_id}/approve", response_model=LibraryVersionHistoryResponse)
+async def approve_document_version(
+    document_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+    version_id: Optional[int] = Query(None),
+):
+    """Approve under-review document (no self-approve); supersedes prior PEL ref matches."""
+    document = await _get_document_or_404(db, document_id, current_user, enforce_acl=False)
+    await approve_document(
+        db,
+        document,
+        approved_by_id=current_user.id,
+        version_id=version_id,
+    )
+    await db.commit()
+    versions = await document_version_service.list_library_versions(
+        db,
+        document_id,
+        tenant_id=getattr(current_user, "tenant_id", None),
+        is_superuser=bool(getattr(current_user, "is_superuser", False)),
+    )
+    serialized = [document_version_service.serialize_library_version(v) for v in versions]
+    return LibraryVersionHistoryResponse(
+        document_id=document.id,
+        current_version=document.version,
+        status=document.status.value if hasattr(document.status, "value") else str(document.status),
+        published_version=next(
+            (v["version_number"] for v in serialized if v["status"] in ("published", "approved")),
+            None,
+        ),
+        working_version=next((v["version_number"] for v in serialized if v["status"] == "draft"), None),
+        versions=[LibraryVersionResponse(**v) for v in serialized],
+    )
+
+
+@router.post("/{document_id}/reject", response_model=LibraryLifecycleResponse)
+async def reject_document_review(
+    document_id: int,
+    payload: LibraryRejectRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """Reject under-review document back to draft."""
+    document = await _get_document_or_404(db, document_id, current_user, enforce_acl=False)
+    await reject_review(
+        db,
+        document,
+        reviewer_id=current_user.id,
+        review_notes=payload.review_notes,
+    )
+    await db.commit()
+    await db.refresh(document)
+    status = document.status.value if hasattr(document.status, "value") else str(document.status)
+    return LibraryLifecycleResponse(
+        document_id=document.id,
+        status=status,
+        message="Document returned to draft",
+    )
 
 
 @router.post("/{document_id}/publish", response_model=LibraryVersionHistoryResponse)
