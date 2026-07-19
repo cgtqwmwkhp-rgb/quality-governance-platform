@@ -5,7 +5,7 @@ REST endpoints for competency assessment runs and responses.
 
 import logging
 from datetime import datetime, timezone
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -52,6 +52,66 @@ def _is_workforce_admin(user: CurrentUser) -> bool:
     return bool(getattr(user, "is_superuser", False) or "admin" in role_names)
 
 
+def _enum_str(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    return value.value if hasattr(value, "value") else str(value)
+
+
+def _loaded_collection(obj: Any, attr: str) -> list:
+    """Return a relationship collection without triggering async lazy-load.
+
+    Accessing unloaded SQLAlchemy relationships under AsyncSession raises
+    MissingGreenlet (HTTP 500). Prefer whatever is already present in
+    ``__dict__`` (e.g. after selectinload); otherwise treat as empty.
+    """
+    state = getattr(obj, "__dict__", {})
+    if attr in state:
+        return list(state[attr] or [])
+    return []
+
+
+def _to_assessment_run_response(run: AssessmentRun, **extra: Any) -> AssessmentRunResponse:
+    """Serialize an assessment run without lazy-loading relationships."""
+    responses = [AssessmentResponseResponse.model_validate(r) for r in _loaded_collection(run, "responses")]
+    return AssessmentRunResponse(
+        id=run.id,
+        reference_number=run.reference_number,
+        template_id=run.template_id,
+        template_version=run.template_version if run.template_version is not None else 1,
+        engineer_id=run.engineer_id,
+        supervisor_id=run.supervisor_id,
+        asset_type_id=run.asset_type_id,
+        asset_id=run.asset_id,
+        title=run.title,
+        location=run.location,
+        notes=run.notes,
+        latitude=run.latitude,
+        longitude=run.longitude,
+        status=_enum_str(run.status) or AssessmentStatus.DRAFT.value,
+        scheduled_date=run.scheduled_date,
+        started_at=run.started_at,
+        completed_at=run.completed_at,
+        outcome=_enum_str(run.outcome),
+        overall_notes=run.overall_notes,
+        debrief_notes=run.debrief_notes,
+        debrief_signature=run.debrief_signature,
+        debrief_signed_at=run.debrief_signed_at,
+        responses=responses,
+        tenant_id=run.tenant_id,
+        created_at=run.created_at,
+        updated_at=run.updated_at,
+        **extra,
+    )
+
+
+def _validation_error(message: str, *, details: dict[str, Any] | None = None) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=api_error(ErrorCode.VALIDATION_ERROR, message, details=details),
+    )
+
+
 async def _assessment_engineer_user_id(db: AsyncSession, engineer_id: int) -> int | None:
     return await db.scalar(select(Engineer.user_id).where(Engineer.id == engineer_id))
 
@@ -60,6 +120,10 @@ def _missing_assessment_question_ids(run: AssessmentRun, template: AuditTemplate
     expected_question_ids = {q.id for q in template.questions if getattr(q, "is_active", True)}
     answered_question_ids = {r.question_id for r in run.responses if getattr(r, "verdict", None) is not None}
     return sorted(expected_question_ids - answered_question_ids)
+
+
+def _is_soft_deleted(run: AssessmentRun) -> bool:
+    return run.status == AssessmentStatus.CANCELLED
 
 
 async def _assert_assessment_access(
@@ -141,6 +205,25 @@ async def _generate_assessment_reference_number(db: AsyncSession) -> str:
     return f"{pattern}{seq:04d}"
 
 
+async def _get_assessment_run_or_404(
+    db: AsyncSession,
+    user: CurrentUser,
+    run_id: str,
+    *,
+    with_responses: bool = False,
+    include_soft_deleted: bool = False,
+) -> AssessmentRun:
+    query = select(AssessmentRun).where(AssessmentRun.id == run_id)
+    if with_responses:
+        query = query.options(selectinload(AssessmentRun.responses))
+    query = apply_tenant_filter(query, AssessmentRun, user.tenant_id)
+    result = await db.execute(query)
+    run = result.scalar_one_or_none()
+    if run is None or (not include_soft_deleted and _is_soft_deleted(run)):
+        raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
+    return run
+
+
 @router.get("/", response_model=AssessmentRunListResponse)
 async def list_assessment_runs(
     db: DbSession,
@@ -166,6 +249,9 @@ async def list_assessment_runs(
         query = query.where(AssessmentRun.engineer_id == engineer_id)
     if status is not None:
         query = query.where(AssessmentRun.status == status)
+    else:
+        # Soft-deleted runs use cancelled status; hide them unless explicitly filtered.
+        query = query.where(AssessmentRun.status != AssessmentStatus.CANCELLED)
     if asset_type_id is not None:
         query = query.where(AssessmentRun.asset_type_id == asset_type_id)
 
@@ -177,7 +263,7 @@ async def list_assessment_runs(
     pages = (total + page_size - 1) // page_size if total > 0 else 0
 
     return AssessmentRunListResponse(
-        items=[AssessmentRunResponse.model_validate(r) for r in items],
+        items=[_to_assessment_run_response(r) for r in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -191,7 +277,11 @@ async def create_assessment_run(
     db: DbSession,
     user: Annotated[User, Depends(require_permission("assessment:create"))],
 ):
-    """Create an assessment run. Reference number is auto-generated as ASM-YYYY-NNNN."""
+    """Create an assessment run. Reference number is auto-generated as ASM-YYYY-NNNN.
+
+    Transactional: the row is committed only after a successful response payload is
+    built. Failures roll back so clients never see a 500 with a phantom draft.
+    """
     supervisor_check = await GovernanceService.validate_supervisor(
         db,
         user.id,
@@ -199,17 +289,11 @@ async def create_assessment_run(
         tenant_id=user.tenant_id,
     )
     if not supervisor_check["valid"]:
-        raise HTTPException(
-            status_code=400,
-            detail=api_error(ErrorCode.VALIDATION_ERROR, "Supervisor validation failed"),
-        )
+        raise _validation_error(supervisor_check.get("reason") or "Supervisor validation failed")
 
     template_check = await GovernanceService.check_template_approval(db, data.template_id, tenant_id=user.tenant_id)
     if not template_check["approved"]:
-        raise HTTPException(
-            status_code=400,
-            detail=api_error(ErrorCode.VALIDATION_ERROR, "Template approval check failed"),
-        )
+        raise _validation_error(template_check.get("reason") or "Template approval check failed")
 
     for attempt in range(_REFERENCE_RETRY_LIMIT):
         reference_number = await _generate_assessment_reference_number(db)
@@ -229,14 +313,24 @@ async def create_assessment_run(
         )
         db.add(run)
         try:
+            # Flush allocates defaults/PK inside the open transaction; commit only
+            # after serialization succeeds so a response-build failure cannot leave
+            # a phantom draft (PX-054).
+            await db.flush()
+            response = _to_assessment_run_response(run)
             await db.commit()
-            await db.refresh(run)
-            return AssessmentRunResponse.model_validate(run)
+            return response
         except IntegrityError as exc:
             await db.rollback()
             if "reference_number" in str(exc).lower() and attempt < (_REFERENCE_RETRY_LIMIT - 1):
                 logger.warning("Retrying assessment reference allocation after conflict", exc_info=exc)
                 continue
+            raise _validation_error(
+                "Assessment create failed due to invalid or conflicting references",
+                details={"constraint": str(getattr(exc, "orig", exc))},
+            )
+        except Exception:
+            await db.rollback()
             raise
 
     raise HTTPException(
@@ -252,14 +346,9 @@ async def get_assessment_run(
     user: CurrentUser,
 ):
     """Get an assessment run by ID."""
-    query = select(AssessmentRun).options(selectinload(AssessmentRun.responses)).where(AssessmentRun.id == run_id)
-    query = apply_tenant_filter(query, AssessmentRun, user.tenant_id)
-    result = await db.execute(query)
-    run = result.scalar_one_or_none()
-    if run is None:
-        raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
+    run = await _get_assessment_run_or_404(db, user, run_id, with_responses=True)
     await _assert_assessment_access(db, user, run, allow_engineer_read=True)
-    return AssessmentRunResponse.model_validate(run)
+    return _to_assessment_run_response(run)
 
 
 @router.patch("/{run_id}", response_model=AssessmentRunResponse)
@@ -270,12 +359,7 @@ async def update_assessment_run(
     user: Annotated[User, Depends(require_permission("assessment:update"))],
 ):
     """Update an assessment run."""
-    query = select(AssessmentRun).where(AssessmentRun.id == run_id)
-    query = apply_tenant_filter(query, AssessmentRun, user.tenant_id)
-    result = await db.execute(query)
-    run = result.scalar_one_or_none()
-    if run is None:
-        raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
+    run = await _get_assessment_run_or_404(db, user, run_id)
     await _assert_assessment_access(db, user, run)
 
     updates = data.model_dump(exclude_unset=True)
@@ -289,9 +373,40 @@ async def update_assessment_run(
         )
     for k, v in updates.items():
         setattr(run, k, v)
-    await db.commit()
-    await db.refresh(run)
-    return AssessmentRunResponse.model_validate(run)
+    try:
+        await db.flush()
+        response = _to_assessment_run_response(run)
+        await db.commit()
+        return response
+    except Exception:
+        await db.rollback()
+        raise
+
+
+@router.delete("/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_assessment_run(
+    run_id: str,
+    db: DbSession,
+    user: Annotated[User, Depends(require_permission("assessment:update"))],
+):
+    """Soft-delete an assessment run by marking it cancelled.
+
+    Uses cancelled status (no schema migration) so phantom drafts from failed
+    creates can be cleaned up via DELETE without 405.
+    """
+    run = await _get_assessment_run_or_404(db, user, run_id, include_soft_deleted=True)
+    await _assert_assessment_access(db, user, run)
+
+    if _is_soft_deleted(run):
+        return None
+
+    run.status = AssessmentStatus.CANCELLED
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    return None
 
 
 @router.post("/{run_id}/start", response_model=AssessmentRunResponse)
@@ -306,12 +421,7 @@ async def start_assessment(
     - ``COMPETENCY_GATE_MODE=soft`` (default): start proceeds; warning fields returned
     - ``COMPETENCY_GATE_MODE=hard``: start blocked with COMPETENCY_GATE_BLOCKED
     """
-    query = select(AssessmentRun).where(AssessmentRun.id == run_id)
-    query = apply_tenant_filter(query, AssessmentRun, user.tenant_id)
-    result = await db.execute(query)
-    run = result.scalar_one_or_none()
-    if run is None:
-        raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
+    run = await _get_assessment_run_or_404(db, user, run_id, with_responses=True)
     await _assert_assessment_access(db, user, run)
     if run.status != AssessmentStatus.DRAFT:
         raise HTTPException(
@@ -328,18 +438,21 @@ async def start_assessment(
 
     run.status = AssessmentStatus.IN_PROGRESS
     run.started_at = datetime.now(timezone.utc)
-    await db.commit()
-    await db.refresh(run)
-    response = AssessmentRunResponse.model_validate(run)
-    if gate is not None:
-        response = response.model_copy(
-            update={
+    try:
+        await db.flush()
+        extras: dict[str, Any] = {}
+        if gate is not None:
+            extras = {
                 "competency_gate_cleared": bool(gate.get("cleared")),
                 "competency_gate_reason": gate.get("reason"),
                 "competency_gate_mode": gate.get("mode"),
             }
-        )
-    return response
+        response = _to_assessment_run_response(run, **extras)
+        await db.commit()
+        return response
+    except Exception:
+        await db.rollback()
+        raise
 
 
 @router.post("/{run_id}/complete", response_model=AssessmentRunResponse)
@@ -349,12 +462,7 @@ async def complete_assessment(
     user: Annotated[User, Depends(require_permission("assessment:update"))],
 ):
     """Complete an assessment and run CompetencyScoringService."""
-    query = select(AssessmentRun).options(selectinload(AssessmentRun.responses)).where(AssessmentRun.id == run_id)
-    query = apply_tenant_filter(query, AssessmentRun, user.tenant_id)
-    result = await db.execute(query)
-    run = result.scalar_one_or_none()
-    if run is None:
-        raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
+    run = await _get_assessment_run_or_404(db, user, run_id, with_responses=True)
     await _assert_assessment_access(db, user, run)
 
     if run.status not in (AssessmentStatus.DRAFT, AssessmentStatus.IN_PROGRESS):
@@ -363,7 +471,7 @@ async def complete_assessment(
             detail=api_error(
                 ErrorCode.INVALID_STATE_TRANSITION,
                 "Assessment cannot be completed from current status",
-                details={"current_status": run.status.value},
+                details={"current_status": _enum_str(run.status)},
             ),
         )
 
@@ -379,30 +487,22 @@ async def complete_assessment(
     score_result = CompetencyScoringService.score_assessment(run.responses, template.questions)
     missing_question_ids = _missing_assessment_question_ids(run, template)
     if missing_question_ids:
-        raise HTTPException(
-            status_code=400,
-            detail=api_error(
-                ErrorCode.VALIDATION_ERROR,
-                "All active assessment questions must be answered before completion",
-                details={
-                    "run_id": run.id,
-                    "template_id": run.template_id,
-                    "missing_question_ids": missing_question_ids,
-                },
-            ),
+        raise _validation_error(
+            "All active assessment questions must be answered before completion",
+            details={
+                "run_id": run.id,
+                "template_id": run.template_id,
+                "missing_question_ids": missing_question_ids,
+            },
         )
     if score_result.scorable_items == 0:
-        raise HTTPException(
-            status_code=400,
-            detail=api_error(
-                ErrorCode.VALIDATION_ERROR,
-                "At least one competency item must be assessed before completing assessment",
-                details={
-                    "run_id": run.id,
-                    "response_count": len(run.responses),
-                    "scorable_items": score_result.scorable_items,
-                },
-            ),
+        raise _validation_error(
+            "At least one competency item must be assessed before completing assessment",
+            details={
+                "run_id": run.id,
+                "response_count": len(run.responses),
+                "scorable_items": score_result.scorable_items,
+            },
         )
     run.status = AssessmentStatus.COMPLETED
     run.completed_at = datetime.now(timezone.utc)
@@ -455,9 +555,13 @@ async def complete_assessment(
     if score_result.outcome in ("fail", "conditional"):
         failed_questions = []
         for resp in run.responses:
-            verdict_val = (
-                resp.verdict.value if hasattr(resp.verdict, "value") else str(resp.verdict) if resp.verdict else None,
-            )
+            verdict = resp.verdict
+            if verdict is None:
+                verdict_val = None
+            elif hasattr(verdict, "value"):
+                verdict_val = verdict.value
+            else:
+                verdict_val = str(verdict)
             if verdict_val == "not_competent":
                 q = next((q for q in template.questions if q.id == resp.question_id), None)
                 q_text = q.question_text if q else "Unknown"
@@ -493,9 +597,14 @@ async def complete_assessment(
     except Exception:
         logger.exception("Failed to send assessment completion notification for run %s", run.id)
 
-    await db.commit()
-    await db.refresh(run)
-    return AssessmentRunResponse.model_validate(run)
+    try:
+        await db.flush()
+        response = _to_assessment_run_response(run)
+        await db.commit()
+        return response
+    except Exception:
+        await db.rollback()
+        raise
 
 
 @router.post(
@@ -510,12 +619,7 @@ async def create_assessment_response(
     user: Annotated[User, Depends(require_permission("assessment:update"))],
 ):
     """Create an assessment response for a run."""
-    query = select(AssessmentRun).where(AssessmentRun.id == run_id)
-    query = apply_tenant_filter(query, AssessmentRun, user.tenant_id)
-    result = await db.execute(query)
-    run = result.scalar_one_or_none()
-    if run is None:
-        raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
+    run = await _get_assessment_run_or_404(db, user, run_id)
     await _assert_assessment_access(db, user, run)
 
     if run.status == AssessmentStatus.COMPLETED or run.status == AssessmentStatus.CANCELLED:
@@ -535,16 +639,19 @@ async def create_assessment_response(
         )
     )
     if question_id is None:
-        raise HTTPException(
-            status_code=400,
-            detail=api_error(
-                ErrorCode.VALIDATION_ERROR,
-                "Question does not belong to this assessment template",
-                details={"run_id": run.id, "template_id": run.template_id, "question_id": data.question_id},
-            ),
+        raise _validation_error(
+            "Question does not belong to this assessment template",
+            details={"run_id": run.id, "template_id": run.template_id, "question_id": data.question_id},
         )
 
-    verdict_val = CompetencyVerdict(data.verdict) if data.verdict else None
+    try:
+        verdict_val = CompetencyVerdict(data.verdict) if data.verdict else None
+    except ValueError as exc:
+        raise _validation_error(
+            "Invalid competency verdict",
+            details={"verdict": data.verdict},
+        ) from exc
+
     existing_query = select(AssessmentResponse).where(
         AssessmentResponse.run_id == run_id,
         AssessmentResponse.question_id == data.question_id,
@@ -568,9 +675,19 @@ async def create_assessment_response(
         response.supervisor_notes = data.supervisor_notes
         response.tenant_id = run.tenant_id
 
-    await db.commit()
-    await db.refresh(response)
-    return AssessmentResponseResponse.model_validate(response)
+    try:
+        await db.commit()
+        await db.refresh(response)
+        return AssessmentResponseResponse.model_validate(response)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise _validation_error(
+            "Assessment response could not be saved",
+            details={"constraint": str(getattr(exc, "orig", exc))},
+        ) from exc
+    except Exception:
+        await db.rollback()
+        raise
 
 
 @router.patch("/responses/{response_id}", response_model=AssessmentResponseResponse)
@@ -594,12 +711,7 @@ async def update_assessment_response(
             detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment response not found"),
         )
 
-    query_run = select(AssessmentRun).where(AssessmentRun.id == response.run_id)
-    query_run = apply_tenant_filter(query_run, AssessmentRun, user.tenant_id)
-    run_result = await db.execute(query_run)
-    run = run_result.scalar_one_or_none()
-    if run is None:
-        raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
+    run = await _get_assessment_run_or_404(db, user, response.run_id)
     updates = data.model_dump(exclude_unset=True)
     await _assert_assessment_response_update_access(db, user, run, updates)
     if run.status in (AssessmentStatus.COMPLETED, AssessmentStatus.CANCELLED):
@@ -612,10 +724,20 @@ async def update_assessment_response(
         )
 
     if "verdict" in updates and updates["verdict"] is not None:
-        updates["verdict"] = CompetencyVerdict(updates["verdict"])
+        try:
+            updates["verdict"] = CompetencyVerdict(updates["verdict"])
+        except ValueError as exc:
+            raise _validation_error(
+                "Invalid competency verdict",
+                details={"verdict": updates["verdict"]},
+            ) from exc
     for k, v in updates.items():
         setattr(response, k, v)
     response.tenant_id = run.tenant_id
-    await db.commit()
-    await db.refresh(response)
-    return AssessmentResponseResponse.model_validate(response)
+    try:
+        await db.commit()
+        await db.refresh(response)
+        return AssessmentResponseResponse.model_validate(response)
+    except Exception:
+        await db.rollback()
+        raise

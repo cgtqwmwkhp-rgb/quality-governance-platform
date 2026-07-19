@@ -213,7 +213,9 @@ async def test_start_assessment_wires_soft_gate(monkeypatch):
     db = types.SimpleNamespace(
         execute=AsyncMock(return_value=_Result()),
         commit=AsyncMock(),
+        flush=AsyncMock(),
         refresh=AsyncMock(),
+        rollback=AsyncMock(),
     )
     user = types.SimpleNamespace(id=2, tenant_id=1, roles=[types.SimpleNamespace(name="supervisor")])
 
@@ -237,6 +239,7 @@ async def test_start_assessment_wires_soft_gate(monkeypatch):
     assert result.competency_gate_cleared is False
     assert result.competency_gate_mode == "soft"
     assert "reassessment" in (result.competency_gate_reason or "")
+    db.flush.assert_awaited()
     db.commit.assert_awaited()
 
 
