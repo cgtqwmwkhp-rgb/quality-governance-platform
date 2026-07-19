@@ -161,6 +161,13 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
         ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
+    # Governance Library filing (Wave W1) — defaults from category on create.
+    access_level: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # all_staff|managers|restricted
+    is_statutory: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    retention_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    duplicate_warning: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    duplicate_warning_detail: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+
     # Ownership
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
@@ -299,6 +306,26 @@ class DocumentVersion(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<DocumentVersion(id={self.id}, doc_id={self.document_id}, v='{self.version_number}')>"
+
+
+# =============================================================================
+# LIBRARY ACCESS LOG (Wave W1)
+# =============================================================================
+
+
+class LibraryDocumentAccessLog(Base):
+    """Audit trail for library document view/download via signed URLs."""
+
+    __tablename__ = "library_document_access_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    user_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)  # view, download
+    action_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
 
 
 # =============================================================================

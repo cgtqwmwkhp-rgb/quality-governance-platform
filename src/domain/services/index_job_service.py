@@ -13,6 +13,34 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 from src.domain.models.document import Document, DocumentChunk, DocumentStatus, IndexJob, IndexJobStatus
+
+GOVERNANCE_LIFECYCLE_STATUSES = frozenset(
+    {
+        DocumentStatus.DRAFT,
+        DocumentStatus.UNDER_REVIEW,
+        DocumentStatus.APPROVED,
+        DocumentStatus.PUBLISHED,
+        DocumentStatus.SUPERSEDED,
+        DocumentStatus.REJECTED,
+        DocumentStatus.ARCHIVED,
+        DocumentStatus.RETIRED,
+        DocumentStatus.OBSOLETE,
+    }
+)
+
+
+def _apply_post_index_status(document: Document, target_status: DocumentStatus) -> None:
+    """Preserve governance lifecycle status for filed documents (Wave W1)."""
+    if getattr(document, "category_id", None) is not None:
+        current = document.status
+        if current in GOVERNANCE_LIFECYCLE_STATUSES:
+            return
+        if current == DocumentStatus.PROCESSING:
+            document.status = DocumentStatus.DRAFT
+            return
+    document.status = target_status
+
+
 from src.domain.models.user import User
 from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
 from src.domain.services.document_intelligence_service import DocumentIntelligenceService
@@ -245,9 +273,11 @@ class IndexJobService:
 
                 text_content = extraction.text.strip()
                 if extraction.hard_ocr_failure or not text_content:
-                    document.status = DocumentStatus.FAILED if extraction.hard_ocr_failure else DocumentStatus.APPROVED
                     if extraction.hard_ocr_failure:
+                        document.status = DocumentStatus.FAILED
                         document.indexing_error = extraction.note or "OCR extraction failed"
+                    else:
+                        _apply_post_index_status(document, DocumentStatus.APPROVED)
                     await self._append_error(
                         job,
                         f"Document {document_id}: no searchable text extracted",
@@ -320,7 +350,7 @@ class IndexJobService:
                     },
                 ):
                     document.indexed_at = datetime.now(timezone.utc)
-                    document.status = DocumentStatus.INDEXED
+                    _apply_post_index_status(document, DocumentStatus.INDEXED)
                     document.indexing_error = None
                     chunks_succeeded += len(chunks)
                 else:
@@ -328,7 +358,7 @@ class IndexJobService:
                     # are not configured. Mark content-ready via indexed_at; keep APPROVED so
                     # publish can still set PUBLISHED without losing readiness signals.
                     document.indexed_at = datetime.now(timezone.utc)
-                    document.status = DocumentStatus.APPROVED
+                    _apply_post_index_status(document, DocumentStatus.APPROVED)
                     document.indexing_error = (
                         document.indexing_error
                         or "Vector indexing unavailable — searchable chunks stored; "
