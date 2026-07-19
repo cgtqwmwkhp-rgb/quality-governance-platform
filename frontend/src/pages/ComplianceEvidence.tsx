@@ -117,10 +117,7 @@ const getEntityRoute = (entityType: string, entityId?: string): string => {
 }
 
 /** Surface operator-visible failures (banner + toast). Never silent. */
-const reportFailure = (
-  err: unknown,
-  setError: (message: string | null) => void,
-): string => {
+const reportFailure = (err: unknown, setError: (message: string | null) => void): string => {
   const message = getApiErrorMessage(err)
   setError(message)
   toast.error(message)
@@ -227,7 +224,9 @@ export default function ComplianceEvidence() {
   const [useAiTagging, setUseAiTagging] = useState(true)
   const [autoTagging, setAutoTagging] = useState(false)
   // Deep analysis (5-stage Genspark pipeline)
-  const [deepAnalysisResult, setDeepAnalysisResult] = useState<MultiStageAnalysisResult | null>(null)
+  const [deepAnalysisResult, setDeepAnalysisResult] = useState<MultiStageAnalysisResult | null>(
+    null,
+  )
   const [deepAnalyzing, setDeepAnalyzing] = useState(false)
   const [showDeepAnalysis, setShowDeepAnalysis] = useState(false)
   // Statement of Applicability
@@ -296,7 +295,9 @@ export default function ComplianceEvidence() {
   }, [searchQuery])
 
   const canonicalDataWarning = useMemo(
-    () => standards.find((standard) => standard.canonical_data_degraded)?.canonical_data_message ?? null,
+    () =>
+      standards.find((standard) => standard.canonical_data_degraded)?.canonical_data_message ??
+      null,
     [standards],
   )
 
@@ -324,7 +325,7 @@ export default function ComplianceEvidence() {
       setSelectedClauseId(match.id)
       setSection('clauses')
     }
-  }, [clauseFromUrl, clauses, setSection])
+  }, [clauseFromUrl, clauses])
 
   useEffect(() => {
     let cancelled = false
@@ -404,9 +405,9 @@ export default function ComplianceEvidence() {
     return () => {
       cancelled = true
     }
-  // selectedClauseId intentionally excluded: read via selectedClauseIdRef to prevent
-  // the auto-select logic from causing a second fetch on every clause change.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // selectedClauseId intentionally excluded: read via selectedClauseIdRef to prevent
+    // the auto-select logic from causing a second fetch on every clause change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearchQuery, selectedStandard])
 
   useEffect(() => {
@@ -432,7 +433,9 @@ export default function ComplianceEvidence() {
       }
     }
     void loadImported()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [section])
 
   const selectedClause = useMemo(
@@ -466,9 +469,7 @@ export default function ComplianceEvidence() {
         if (!cancelled) {
           setMappings([])
           setMappingsUnavailable(true)
-          toast.error(
-            `Cross-standard mappings unavailable: ${getApiErrorMessage(err)}`,
-          )
+          toast.error(`Cross-standard mappings unavailable: ${getApiErrorMessage(err)}`)
         }
       } finally {
         if (!cancelled) {
@@ -485,25 +486,24 @@ export default function ComplianceEvidence() {
   }, [selectedClause])
 
   const complianceStats = useMemo(() => {
-    return standards.reduce<Record<string, { total: number; covered: number; partial: number; gaps: number }>>(
-      (acc, standard) => {
-        const byStandard = coverage?.by_standard?.[standard.id]
-        const total = standard.clause_count
-        // Source truth from backend by_standard when available; fall back to standard fields.
-        // by_standard uses the same full/partial semantics as the main coverage formula.
-        const covered = byStandard?.covered ?? standard.covered_clauses
-        const partial = byStandard?.partial_coverage ?? 0
-        const gaps = total - covered - partial
-        acc[standard.id] = {
-          total,
-          covered,
-          partial,
-          gaps: Math.max(gaps, 0),
-        }
-        return acc
-      },
-      {},
-    )
+    return standards.reduce<
+      Record<string, { total: number; covered: number; partial: number; gaps: number }>
+    >((acc, standard) => {
+      const byStandard = coverage?.by_standard?.[standard.id]
+      const total = standard.clause_count
+      // Source truth from backend by_standard when available; fall back to standard fields.
+      // by_standard uses the same full/partial semantics as the main coverage formula.
+      const covered = byStandard?.covered ?? standard.covered_clauses
+      const partial = byStandard?.partial_coverage ?? 0
+      const gaps = total - covered - partial
+      acc[standard.id] = {
+        total,
+        covered,
+        partial,
+        gaps: Math.max(gaps, 0),
+      }
+      return acc
+    }, {})
   }, [coverage, standards])
 
   const clauseDetailsById = useMemo(() => {
@@ -740,12 +740,19 @@ export default function ComplianceEvidence() {
                   )}
                 />
 
-                <StandardIcon className={standardTreeIconClass[clause.standard] ?? 'w-4 h-4 text-primary flex-shrink-0'} aria-hidden="true" />
+                <StandardIcon
+                  className={
+                    standardTreeIconClass[clause.standard] ?? 'w-4 h-4 text-primary flex-shrink-0'
+                  }
+                  aria-hidden="true"
+                />
 
                 <span className="text-sm font-medium text-muted-foreground flex-shrink-0">
                   {clause.clause_number}
                 </span>
-                <span className="text-sm text-foreground flex-grow min-w-0 truncate">{clause.title}</span>
+                <span className="text-sm text-foreground flex-grow min-w-0 truncate">
+                  {clause.title}
+                </span>
 
                 {evidence.length > 0 && (
                   <Badge variant="secondary" className="flex items-center gap-1 flex-shrink-0">
@@ -775,7 +782,10 @@ export default function ComplianceEvidence() {
           <p className="text-muted-foreground mt-1">
             Live repository for compliance evidence, clause coverage, and cross-standard mappings
           </p>
-          <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="compliance-evidence-hub-links">
+          <div
+            className="mt-2 flex flex-wrap items-center gap-2"
+            data-testid="compliance-evidence-hub-links"
+          >
             {!loading && failedSources.length === 0 && !error && (
               <Badge variant="secondary" data-testid="compliance-live-badge">
                 Live data
@@ -802,7 +812,10 @@ export default function ComplianceEvidence() {
             </Link>
           </div>
         </div>
-        <div className="flex items-center gap-3 flex-wrap" data-testid="compliance-evidence-filters">
+        <div
+          className="flex items-center gap-3 flex-wrap"
+          data-testid="compliance-evidence-filters"
+        >
           <select
             value={section}
             onChange={(e) => setSection(e.target.value as ComplianceEvidenceSectionId)}
@@ -827,13 +840,20 @@ export default function ComplianceEvidence() {
             title="Generate ISO 27001:2022 Annex A Evidence SoA (evidence-derived from live links)"
           >
             {loadingSoA ? (
-              <span className="w-4 h-4 mr-2 border-2 border-primary/30 border-t-primary rounded-full animate-spin" aria-hidden="true" />
+              <span
+                className="w-4 h-4 mr-2 border-2 border-primary/30 border-t-primary rounded-full animate-spin"
+                aria-hidden="true"
+              />
             ) : (
               <CheckSquare className="w-4 h-4 mr-2" aria-hidden="true" />
             )}
             Annex A SoA
           </Button>
-          <Button variant="outline" onClick={handleDownloadAuditPack} title="Download full ISO audit evidence pack">
+          <Button
+            variant="outline"
+            onClick={handleDownloadAuditPack}
+            title="Download full ISO audit evidence pack"
+          >
             <Download className="w-4 h-4 mr-2" aria-hidden="true" />
             Audit Pack
           </Button>
@@ -842,19 +862,28 @@ export default function ComplianceEvidence() {
 
       {/* Alerts */}
       {error && (
-        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
           {error}
         </div>
       )}
 
       {partialLoadWarning && !error && (
-        <div role="status" className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
+        <div
+          role="status"
+          className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning"
+        >
           {partialLoadWarning}
         </div>
       )}
 
       {canonicalDataWarning && (
-        <div role="status" className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning flex items-start gap-3">
+        <div
+          role="status"
+          className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning flex items-start gap-3"
+        >
           <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" aria-hidden="true" />
           <div>
             <p className="font-medium">Compliance data is running in degraded mode</p>
@@ -867,7 +896,11 @@ export default function ComplianceEvidence() {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <Card key={i}><CardContent className="p-6"><TableSkeleton rows={3} columns={1} /></CardContent></Card>
+            <Card key={i}>
+              <CardContent className="p-6">
+                <TableSkeleton rows={3} columns={1} />
+              </CardContent>
+            </Card>
           ))}
         </div>
       ) : standards.length === 0 ? (
@@ -918,7 +951,10 @@ export default function ComplianceEvidence() {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div className={standardBgClass[standard.id] ?? 'p-2 rounded-lg bg-primary/20'}>
-                      <Icon className={standardIconClass[standard.id] ?? 'w-5 h-5 text-primary'} aria-hidden="true" />
+                      <Icon
+                        className={standardIconClass[standard.id] ?? 'w-5 h-5 text-primary'}
+                        aria-hidden="true"
+                      />
                     </div>
                     <div>
                       <h3 className="font-bold text-foreground">{standard.code}</h3>
@@ -937,12 +973,11 @@ export default function ComplianceEvidence() {
                     className={
                       scoreUnavailable
                         ? 'text-lg font-bold text-muted-foreground'
-                        : standardPercentageClass[standard.id] ?? 'text-2xl font-bold text-primary'
+                        : (standardPercentageClass[standard.id] ??
+                          'text-2xl font-bold text-primary')
                     }
                     aria-label={
-                      scoreUnavailable
-                        ? 'Coverage unavailable'
-                        : `${percentage}% compliance`
+                      scoreUnavailable ? 'Coverage unavailable' : `${percentage}% compliance`
                     }
                     data-testid={`compliance-score-${standard.id}`}
                   >
@@ -1010,7 +1045,10 @@ export default function ComplianceEvidence() {
 
         <div className="flex items-center gap-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" aria-hidden="true" />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none"
+              aria-hidden="true"
+            />
             <Input
               type="text"
               placeholder="Search clauses or keywords..."
@@ -1056,20 +1094,22 @@ export default function ComplianceEvidence() {
                     title="No clauses found"
                     description="Adjust the standard filter or search query to see clauses."
                   />
-                ) : selectedStandard === 'all'
-                  ? standards.map((standard) => (
-                      <div key={standard.id} className="mb-6">
-                        <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                          {React.createElement(standardIcons[standard.id], {
-                            className: `w-4 h-4 text-${standardColors[standard.id]}-400`,
-                            'aria-hidden': 'true',
-                          })}
-                          {standard.code}
-                        </h3>
-                        {renderClauseTree(undefined, 0, standard.id)}
-                      </div>
-                    ))
-                  : renderClauseTree(undefined, 0, selectedStandard)}
+                ) : selectedStandard === 'all' ? (
+                  standards.map((standard) => (
+                    <div key={standard.id} className="mb-6">
+                      <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                        {React.createElement(standardIcons[standard.id], {
+                          className: `w-4 h-4 text-${standardColors[standard.id]}-400`,
+                          'aria-hidden': 'true',
+                        })}
+                        {standard.code}
+                      </h3>
+                      {renderClauseTree(undefined, 0, standard.id)}
+                    </div>
+                  ))
+                ) : (
+                  renderClauseTree(undefined, 0, selectedStandard)
+                )}
               </div>
             )}
 
@@ -1101,7 +1141,10 @@ export default function ComplianceEvidence() {
                           className="p-4 bg-surface hover:bg-muted rounded-lg transition-colors border border-border"
                         >
                           <div className="flex items-start gap-3">
-                            <div className={`p-2 rounded-lg ${config.color} flex-shrink-0`} aria-hidden="true">
+                            <div
+                              className={`p-2 rounded-lg ${config.color} flex-shrink-0`}
+                              aria-hidden="true"
+                            >
                               <Icon className="w-4 h-4 text-white" />
                             </div>
                             <div className="flex-grow min-w-0">
@@ -1110,30 +1153,44 @@ export default function ComplianceEvidence() {
                                   {evidence.title ?? `${config.label} ${evidence.entity_id}`}
                                 </h4>
                                 {evidence.linked_by !== 'manual' && (
-                                  <Badge variant="secondary" className="flex items-center gap-1 flex-shrink-0">
+                                  <Badge
+                                    variant="secondary"
+                                    className="flex items-center gap-1 flex-shrink-0"
+                                  >
                                     <Sparkles className="w-3 h-3" aria-hidden="true" />
                                     {evidence.linked_by} {evidence.confidence ?? ''}%
                                   </Badge>
                                 )}
                               </div>
                               <p className="text-sm text-muted-foreground mb-2">
-                                {evidence.notes ?? `${config.label} linked to clause ${evidence.clause_id}`}
+                                {evidence.notes ??
+                                  `${config.label} linked to clause ${evidence.clause_id}`}
                               </p>
                               <div className="flex items-center gap-2 flex-wrap">
                                 {(() => {
-                                  const clause = clauses.find((item) => item.id === evidence.clause_id)
+                                  const clause = clauses.find(
+                                    (item) => item.id === evidence.clause_id,
+                                  )
                                   if (!clause) return null
                                   const clauseBadgeClass: Record<string, string> = {
-                                    iso9001: 'text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full',
-                                    iso14001: 'text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full',
-                                    iso45001: 'text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded-full',
-                                    iso27001: 'text-xs bg-purple-500/20 text-purple-400 px-2 py-1 rounded-full',
-                                    planetmark: 'text-xs bg-teal-500/20 text-teal-400 px-2 py-1 rounded-full',
+                                    iso9001:
+                                      'text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full',
+                                    iso14001:
+                                      'text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full',
+                                    iso45001:
+                                      'text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded-full',
+                                    iso27001:
+                                      'text-xs bg-purple-500/20 text-purple-400 px-2 py-1 rounded-full',
+                                    planetmark:
+                                      'text-xs bg-teal-500/20 text-teal-400 px-2 py-1 rounded-full',
                                     uvdb: 'text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-full',
                                   }
                                   return (
                                     <span
-                                      className={clauseBadgeClass[clause.standard] ?? 'text-xs bg-primary/20 text-primary px-2 py-1 rounded-full'}
+                                      className={
+                                        clauseBadgeClass[clause.standard] ??
+                                        'text-xs bg-primary/20 text-primary px-2 py-1 rounded-full'
+                                      }
                                     >
                                       {clause.clause_number}
                                     </span>
@@ -1210,14 +1267,17 @@ export default function ComplianceEvidence() {
                                 {Math.round(record.score_percentage)}%
                               </span>
                             )}
-                            <div className={cn(
-                              'text-xs mt-1 px-2 py-0.5 rounded-full inline-block',
-                              record.outcome_status === 'pass' || record.outcome_status === 'approved'
-                                ? 'bg-success/20 text-success'
-                                : record.outcome_status === 'fail'
-                                  ? 'bg-destructive/20 text-destructive'
-                                  : 'bg-warning/20 text-warning',
-                            )}>
+                            <div
+                              className={cn(
+                                'text-xs mt-1 px-2 py-0.5 rounded-full inline-block',
+                                record.outcome_status === 'pass' ||
+                                  record.outcome_status === 'approved'
+                                  ? 'bg-success/20 text-success'
+                                  : record.outcome_status === 'fail'
+                                    ? 'bg-destructive/20 text-destructive'
+                                    : 'bg-warning/20 text-warning',
+                              )}
+                            >
                               {record.outcome_status || record.status}
                             </div>
                           </div>
@@ -1302,9 +1362,20 @@ export default function ComplianceEvidence() {
                             }}
                           >
                             <div className="flex items-center gap-3">
-                              <XCircle className="w-5 h-5 text-destructive flex-shrink-0" aria-hidden="true" />
-                              <Icon className={standardTreeIconClass[clause.standard] ?? 'w-4 h-4 text-primary flex-shrink-0'} aria-hidden="true" />
-                              <span className="font-medium text-foreground">{clause.clause_number}</span>
+                              <XCircle
+                                className="w-5 h-5 text-destructive flex-shrink-0"
+                                aria-hidden="true"
+                              />
+                              <Icon
+                                className={
+                                  standardTreeIconClass[clause.standard] ??
+                                  'w-4 h-4 text-primary flex-shrink-0'
+                                }
+                                aria-hidden="true"
+                              />
+                              <span className="font-medium text-foreground">
+                                {clause.clause_number}
+                              </span>
                               <span className="text-muted-foreground truncate">{clause.title}</span>
                             </div>
                             <p className="text-sm text-muted-foreground mt-2 ml-12">
@@ -1320,7 +1391,8 @@ export default function ComplianceEvidence() {
                                   setSection('clauses')
                                 }}
                               >
-                                <Sparkles className="w-3 h-3 mr-1" aria-hidden="true" /> Review Mappings
+                                <Sparkles className="w-3 h-3 mr-1" aria-hidden="true" /> Review
+                                Mappings
                               </Button>
                             </div>
                           </div>
@@ -1358,12 +1430,16 @@ export default function ComplianceEvidence() {
                         className: `w-5 h-5 text-${standardColors[selectedClause.standard]}-400`,
                         'aria-hidden': 'true',
                       })}
-                      <span className="font-bold text-foreground">{selectedClause.clause_number}</span>
+                      <span className="font-bold text-foreground">
+                        {selectedClause.clause_number}
+                      </span>
                       <Badge variant="secondary">
                         {standards.find((s) => s.id === selectedClause.standard)?.code}
                       </Badge>
                     </div>
-                    <h3 className="text-base font-medium text-foreground mb-2">{selectedClause.title}</h3>
+                    <h3 className="text-base font-medium text-foreground mb-2">
+                      {selectedClause.title}
+                    </h3>
                     <p className="text-sm text-muted-foreground">{selectedClause.description}</p>
                   </div>
 
@@ -1371,7 +1447,9 @@ export default function ComplianceEvidence() {
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">Keywords</h4>
                     {selectedClause.keywords.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No keywords recorded for this clause.</p>
+                      <p className="text-sm text-muted-foreground">
+                        No keywords recorded for this clause.
+                      </p>
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {selectedClause.keywords.map((keyword, i) => (
@@ -1385,7 +1463,9 @@ export default function ComplianceEvidence() {
 
                   {/* Coverage Status */}
                   <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-2">Coverage Status</h4>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-2">
+                      Coverage Status
+                    </h4>
                     {(() => {
                       const status = getCoverageStatus(selectedClause.id)
                       const evidence = getEvidenceForClause(selectedClause.id)
@@ -1486,7 +1566,8 @@ export default function ComplianceEvidence() {
                           className="text-xs text-primary hover:underline inline-flex items-center gap-1"
                           data-testid="clause-link-audits"
                         >
-                          Open related Audits <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
+                          Open related Audits{' '}
+                          <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
                         </Link>
                         <Link
                           to={`/ims?standard=${encodeURIComponent(selectedClause.standard)}&clause=${encodeURIComponent(selectedClause.clause_number)}`}
@@ -1520,7 +1601,10 @@ export default function ComplianceEvidence() {
                               key={evidence.id}
                               className="p-3 bg-surface rounded-lg flex items-center gap-3 border border-border hover:border-border-strong transition-colors"
                             >
-                              <div className={`p-1.5 rounded ${config.color} flex-shrink-0`} aria-hidden="true">
+                              <div
+                                className={`p-1.5 rounded ${config.color} flex-shrink-0`}
+                                aria-hidden="true"
+                              >
                                 <Icon className="w-3 h-3 text-white" />
                               </div>
                               <div className="flex-grow min-w-0">
@@ -1561,7 +1645,9 @@ export default function ComplianceEvidence() {
 
                   {/* Cross-Standard Mappings */}
                   <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-2">Cross-Standard Mappings</h4>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-2">
+                      Cross-Standard Mappings
+                    </h4>
                     {loadingMappings ? (
                       <TableSkeleton rows={3} columns={1} />
                     ) : mappings.length > 0 ? (
@@ -1575,8 +1661,8 @@ export default function ComplianceEvidence() {
                               <div className="min-w-0">
                                 <p className="text-sm text-foreground">
                                   {mapping.primary_standard} {mapping.primary_clause}{' '}
-                                  <span aria-hidden="true">→</span>{' '}
-                                  {mapping.mapped_standard} {mapping.mapped_clause}
+                                  <span aria-hidden="true">→</span> {mapping.mapped_standard}{' '}
+                                  {mapping.mapped_clause}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
                                   {mapping.mapping_type} • strength {mapping.mapping_strength}
@@ -1589,7 +1675,9 @@ export default function ComplianceEvidence() {
                               )}
                             </div>
                             {mapping.mapping_notes && (
-                              <p className="mt-2 text-xs text-muted-foreground">{mapping.mapping_notes}</p>
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                {mapping.mapping_notes}
+                              </p>
                             )}
                           </div>
                         ))}
@@ -1602,7 +1690,8 @@ export default function ComplianceEvidence() {
                       >
                         <p className="text-sm text-warning font-medium">Mappings unavailable</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Cross-standard mappings could not be loaded. This is not the same as having zero mappings.
+                          Cross-standard mappings could not be loaded. This is not the same as
+                          having zero mappings.
                         </p>
                       </div>
                     ) : (
@@ -1650,9 +1739,9 @@ export default function ComplianceEvidence() {
           </DialogHeader>
 
           <p className="text-muted-foreground text-sm">
-            Paste any text (policy, procedure, audit finding, etc.) and the system will
-            identify relevant ISO clauses. AI mode uses LLM reasoning for higher accuracy;
-            keyword mode is instant.
+            Paste any text (policy, procedure, audit finding, etc.) and the system will identify
+            relevant ISO clauses. AI mode uses LLM reasoning for higher accuracy; keyword mode is
+            instant.
           </p>
 
           <Textarea
@@ -1705,7 +1794,10 @@ export default function ComplianceEvidence() {
             >
               {autoTagging ? (
                 <>
-                  <span className="w-4 h-4 mr-2 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
+                  <span
+                    className="w-4 h-4 mr-2 border-2 border-white/30 border-t-white rounded-full animate-spin"
+                    aria-hidden="true"
+                  />
                   {useAiTagging ? 'AI reasoning...' : 'Scanning...'}
                 </>
               ) : (
@@ -1723,7 +1815,10 @@ export default function ComplianceEvidence() {
             >
               {deepAnalyzing ? (
                 <>
-                  <span className="w-4 h-4 mr-2 border-2 border-primary/30 border-t-primary rounded-full animate-spin" aria-hidden="true" />
+                  <span
+                    className="w-4 h-4 mr-2 border-2 border-primary/30 border-t-primary rounded-full animate-spin"
+                    aria-hidden="true"
+                  />
                   Analyzing...
                 </>
               ) : (
@@ -1745,30 +1840,48 @@ export default function ComplianceEvidence() {
               </div>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {autoTagResults.map((clause) => {
-                  const deepResult = deepAnalysisResult?.primary_results.find(r => r.clause_id === clause.id)
+                  const deepResult = deepAnalysisResult?.primary_results.find(
+                    (r) => r.clause_id === clause.id,
+                  )
                   const Icon = standardIcons[clause.standard]
                   return (
                     <div
                       key={clause.id}
                       className="p-3 bg-surface rounded-lg flex items-start gap-3 border border-border"
                     >
-                      <Icon className={standardResultIconClass[clause.standard] ?? 'w-5 h-5 text-primary flex-shrink-0 mt-0.5'} aria-hidden="true" />
+                      <Icon
+                        className={
+                          standardResultIconClass[clause.standard] ??
+                          'w-5 h-5 text-primary flex-shrink-0 mt-0.5'
+                        }
+                        aria-hidden="true"
+                      />
                       <div className="flex-grow min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-foreground">{clause.clause_number}</span>
-                          <span className="text-muted-foreground text-sm truncate">{clause.title}</span>
+                          <span className="font-medium text-foreground">
+                            {clause.clause_number}
+                          </span>
+                          <span className="text-muted-foreground text-sm truncate">
+                            {clause.title}
+                          </span>
                           {deepResult?.evidence_quality && (
-                            <span className={cn(
-                              'text-xs px-1.5 py-0.5 rounded font-medium',
-                              deepResult.evidence_quality_code === 'TYPE_1' ? 'bg-success/10 text-success' :
-                              deepResult.evidence_quality_code === 'TYPE_2' ? 'bg-info/10 text-info' :
-                              'bg-muted text-muted-foreground'
-                            )}>
+                            <span
+                              className={cn(
+                                'text-xs px-1.5 py-0.5 rounded font-medium',
+                                deepResult.evidence_quality_code === 'TYPE_1'
+                                  ? 'bg-success/10 text-success'
+                                  : deepResult.evidence_quality_code === 'TYPE_2'
+                                    ? 'bg-info/10 text-info'
+                                    : 'bg-muted text-muted-foreground',
+                              )}
+                            >
                               {deepResult.evidence_quality}
                             </span>
                           )}
                           {deepResult?.confidence && (
-                            <span className="text-xs text-muted-foreground">{deepResult.confidence}%</span>
+                            <span className="text-xs text-muted-foreground">
+                              {deepResult.confidence}%
+                            </span>
                           )}
                         </div>
                         {deepResult?.evidence_snippet && (
@@ -1812,7 +1925,11 @@ export default function ComplianceEvidence() {
           {linkingClause && (
             <div className="border border-primary/30 rounded-lg p-4 bg-primary/5 space-y-3">
               <p className="text-sm font-medium text-foreground">
-                Link <span className="text-primary">{linkingClause.clause_number} {linkingClause.title}</span> to an entity
+                Link{' '}
+                <span className="text-primary">
+                  {linkingClause.clause_number} {linkingClause.title}
+                </span>{' '}
+                to an entity
               </p>
               <div className="flex gap-2">
                 <Select value={linkEntityType} onValueChange={setLinkEntityType}>
@@ -1821,7 +1938,9 @@ export default function ComplianceEvidence() {
                   </SelectTrigger>
                   <SelectContent>
                     {Object.keys(evidenceTypeConfig).map((t) => (
-                      <SelectItem key={t} value={t}>{evidenceTypeConfig[t].label}</SelectItem>
+                      <SelectItem key={t} value={t}>
+                        {evidenceTypeConfig[t].label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -1840,14 +1959,19 @@ export default function ComplianceEvidence() {
                 aria-label="Link title"
               />
               <div className="flex gap-2 justify-end">
-                <Button size="sm" variant="ghost" onClick={() => setLinkingClause(null)}>Cancel</Button>
+                <Button size="sm" variant="ghost" onClick={() => setLinkingClause(null)}>
+                  Cancel
+                </Button>
                 <Button
                   size="sm"
                   disabled={!linkEntityId.trim() || persistingLink}
                   onClick={handlePersistLink}
                 >
                   {persistingLink ? (
-                    <span className="w-3 h-3 mr-1 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
+                    <span
+                      className="w-3 h-3 mr-1 border-2 border-white/30 border-t-white rounded-full animate-spin"
+                      aria-hidden="true"
+                    />
                   ) : null}
                   Save Link
                 </Button>
@@ -1864,16 +1988,21 @@ export default function ComplianceEvidence() {
               </h3>
               <div className="grid grid-cols-3 gap-3 mb-3 text-center">
                 <div className="bg-surface rounded p-2">
-                  <div className="text-lg font-bold text-foreground">{deepAnalysisResult.total_clauses_matched}</div>
+                  <div className="text-lg font-bold text-foreground">
+                    {deepAnalysisResult.total_clauses_matched}
+                  </div>
                   <div className="text-xs text-muted-foreground">Clauses matched</div>
                 </div>
                 <div className="bg-surface rounded p-2">
-                  <div className="text-lg font-bold text-foreground">{deepAnalysisResult.standards_covered.length}</div>
+                  <div className="text-lg font-bold text-foreground">
+                    {deepAnalysisResult.standards_covered.length}
+                  </div>
                   <div className="text-xs text-muted-foreground">Standards covered</div>
                 </div>
                 <div className="bg-surface rounded p-2">
                   <div className="text-lg font-bold text-foreground">
-                    {deepAnalysisResult.stages.stage_3_cross_standard?.cross_standard_matches.length ?? 0}
+                    {deepAnalysisResult.stages.stage_3_cross_standard?.cross_standard_matches
+                      .length ?? 0}
                   </div>
                   <div className="text-xs text-muted-foreground">Cross-standard links</div>
                 </div>
@@ -1906,26 +2035,40 @@ export default function ComplianceEvidence() {
             <div className="flex flex-col gap-4 overflow-hidden min-h-0 flex-1">
               <div className="flex items-center justify-between flex-shrink-0">
                 <p className="text-sm text-muted-foreground">{soaData.summary}</p>
-                <Button size="sm" variant="outline" onClick={() => {
-                  const blob = new Blob([JSON.stringify(soaData, null, 2)], { type: 'application/json' })
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url
-                  a.download = `soa-iso27001-${new Date().toISOString().slice(0, 10)}.json`
-                  document.body.appendChild(a)
-                  a.click()
-                  document.body.removeChild(a)
-                  URL.revokeObjectURL(url)
-                }}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const blob = new Blob([JSON.stringify(soaData, null, 2)], {
+                      type: 'application/json',
+                    })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `soa-iso27001-${new Date().toISOString().slice(0, 10)}.json`
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    URL.revokeObjectURL(url)
+                  }}
+                >
                   <Download className="w-4 h-4 mr-1" aria-hidden="true" />
                   Export
                 </Button>
               </div>
               <div className="grid grid-cols-3 gap-3 text-center text-sm">
                 {[
-                  { label: 'Implemented', value: soaData.statistics.implemented, color: 'text-success' },
+                  {
+                    label: 'Implemented',
+                    value: soaData.statistics.implemented,
+                    color: 'text-success',
+                  },
                   { label: 'Partial', value: soaData.statistics.partial, color: 'text-warning' },
-                  { label: 'Gap', value: soaData.statistics.not_implemented, color: 'text-destructive' },
+                  {
+                    label: 'Gap',
+                    value: soaData.statistics.not_implemented,
+                    color: 'text-destructive',
+                  },
                 ].map(({ label, value, color }) => (
                   <div key={label} className="bg-surface rounded p-3 border border-border">
                     <div className={cn('text-2xl font-bold', color)}>{value}</div>
@@ -1939,9 +2082,11 @@ export default function ComplianceEvidence() {
                     key={control.clause_id}
                     className={cn(
                       'p-3 rounded-lg border text-sm',
-                      control.implementation_status === 'Implemented' ? 'border-success/30 bg-success/5' :
-                      control.implementation_status === 'Partially Implemented' ? 'border-warning/30 bg-warning/5' :
-                      'border-destructive/20 bg-destructive/5',
+                      control.implementation_status === 'Implemented'
+                        ? 'border-success/30 bg-success/5'
+                        : control.implementation_status === 'Partially Implemented'
+                          ? 'border-warning/30 bg-warning/5'
+                          : 'border-destructive/20 bg-destructive/5',
                     )}
                   >
                     <div className="flex items-start gap-3">
@@ -1953,16 +2098,21 @@ export default function ComplianceEvidence() {
                           <span className="font-medium text-foreground">{control.title}</span>
                           <Badge
                             variant={
-                              control.implementation_status === 'Implemented' ? 'resolved' :
-                              control.implementation_status === 'Partially Implemented' ? 'in-progress' :
-                              'destructive'
+                              control.implementation_status === 'Implemented'
+                                ? 'resolved'
+                                : control.implementation_status === 'Partially Implemented'
+                                  ? 'in-progress'
+                                  : 'destructive'
                             }
                             className="text-xs"
                           >
                             {control.implementation_status}
                           </Badge>
                           {control.evidence_count > 0 && (
-                            <span className="text-xs text-muted-foreground">{control.evidence_count} evidence item{control.evidence_count !== 1 ? 's' : ''}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {control.evidence_count} evidence item
+                              {control.evidence_count !== 1 ? 's' : ''}
+                            </span>
                           )}
                         </div>
                         {control.justification && (
