@@ -2345,9 +2345,7 @@ class DocumentCampaignService:
         try:
             from fpdf import FPDF
         except ModuleNotFoundError as exc:  # pragma: no cover - lockfile/runtime guard
-            raise BadRequestError(
-                "PDF export unavailable: fpdf2 is not installed in this environment"
-            ) from exc
+            raise BadRequestError("PDF export unavailable: fpdf2 is not installed in this environment") from exc
 
         campaign, rows = await self._fetch_evidence_pack_rows(tenant_id=tenant_id, campaign_id=campaign_id)
         doc_title = await self._document_title(tenant_id=tenant_id, document_id=campaign.document_id)

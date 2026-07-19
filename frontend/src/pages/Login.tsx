@@ -209,26 +209,33 @@ export default function Login({ onLogin }: LoginProps) {
 
   // Pre-warm the backend on mount so cold-start latency is absorbed before
   // the user actually submits credentials or returns from SSO redirect.
-  // Retries silently to handle Azure App Service cold-start (503 until ready).
+  // Uses /api/v1/health (versioned) rather than /healthz. While the App Service
+  // is returning platform 503 HTML (no CORS headers), the browser still logs a
+  // CORS console warning — that is expected during outage/cold-start and is
+  // swallowed here so login UX is unaffected.
   useEffect(() => {
     let cancelled = false
     const warmUp = async () => {
       for (let attempt = 0; attempt < 3; attempt++) {
         if (cancelled) return
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => controller.abort(), 8_000)
         try {
-          // CORS mode (default): no-cors + CORP same-origin on the API causes
-          // Chrome ERR_BLOCKED_BY_RESPONSE.NotSameOrigin on cross-origin warmup.
-          await fetch(`${API_BASE}/healthz`, {
+          const res = await fetch(`${API_BASE}/api/v1/health`, {
             method: 'GET',
             credentials: 'omit',
+            signal: controller.signal,
           })
-          return
+          if (res.ok) return
         } catch {
-          if (attempt < 2) await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt))
+          // Network / CORS-during-503 / abort — retry quietly
+        } finally {
+          window.clearTimeout(timer)
         }
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt))
       }
     }
-    warmUp()
+    void warmUp()
     return () => { cancelled = true }
   }, [])
 
