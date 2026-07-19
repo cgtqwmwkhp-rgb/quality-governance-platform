@@ -1875,9 +1875,7 @@ class DocumentCampaignService:
                     "quiz_score": assignment.quiz_score,
                     "quiz_passed": assignment.quiz_passed,
                     "quiz_attempts": assignment.quiz_attempts or 0,
-                    "first_opened_at": (
-                        assignment.first_opened_at.isoformat() if assignment.first_opened_at else None
-                    ),
+                    "first_opened_at": (assignment.first_opened_at.isoformat() if assignment.first_opened_at else None),
                     "completed_at": assignment.completed_at.isoformat() if assignment.completed_at else None,
                     "due_at": assignment.due_at.isoformat() if assignment.due_at else None,
                     "reminders_sent": assignment.reminders_sent or 0,
