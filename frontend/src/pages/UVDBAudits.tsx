@@ -23,7 +23,6 @@ import {
   Calendar,
   Award,
   ClipboardList,
-  Link2,
   XCircle,
   ExternalLink,
   Eye,
