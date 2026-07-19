@@ -28,19 +28,45 @@
 ## 3) Compatibility & Data Safety
 - #1158 `derive_response_score` / `apply_derived_scores` unchanged
 - Evidence checks use `response_json.evidence_asset_ids` (tip spine)
-- Breaking: runs that previously completed with missing required answers now 400 (intentional fail-closed)
+- **Compatibility strategy:** fail-closed completion
+- **Breaking changes:** runs that previously completed with missing required answers now 400 (intentional)
 - Rollback: revert commit
 
-## 4) Acceptance Criteria
-- [x] Required unanswered → complete 400 + missing_question_ids
-- [x] Evidence-required photo/signature gated via evidence_asset_ids
-- [x] publish rejects unsupported types; writes snapshot_json
-- [x] Unit tests for helpers + gate; integration cases added (Postgres CI)
-- [x] Freeze-eval gap documented
+## 4) Acceptance Criteria (AC)
+- [x] AC-01: Required unanswered → complete 400 + missing_question_ids
+- [x] AC-02: Evidence-required photo/signature gated via evidence_asset_ids
+- [x] AC-03: publish rejects unsupported types; writes snapshot_json
 
 ## 5) Testing Evidence
 - [x] 31 unit tests passed locally
 - [ ] CI green — this PR
 
-## 6) Follow-on
-- PR-B: AuditExecution persist is_na / evidence_asset_ids; FE jump-to-missing; templateHelpers publishable types
+## 6) Critical Journeys Verified (CUJ)
+- [x] CUJ-01: Incomplete required questions cannot complete a run
+- [x] CUJ-02: Publish stores template_versions.snapshot_json
+
+## 7) Observability & Ops
+- Error details: `details.missing_question_ids` on 400 complete
+- Doc: `docs/audit/ANSWER_INTEGRITY_FREEZE_GAP.md`
+
+## 8) Release Plan
+1. Squash-merge when CI green
+2. Tip smoke: complete run with missing required → 400; full answers → complete OK
+
+## 9) Rollback Plan
+1. Revert squash commit on `main`
+2. Redeploy previous SHA
+
+## 10) Evidence Pack (links)
+- CI run(s): Linked after PR creation
+
+# Gate Checklist (must be complete before merge)
+- [x] **Gate 0:** Scope lock + AC defined + Change Ledger complete
+- [x] **Gate 1:** Exclusive allowlist respected
+- [ ] **Gate 2:** CI green
+- [ ] **Gate 3:** Staging verification complete
+- [ ] **Gate 4:** Canary healthy (if used)
+- [x] **Gate 5:** Production verification plan ready
+
+## Follow-on
+- PR-B: AuditExecution persist is_na / evidence_asset_ids; FE jump-to-missing
