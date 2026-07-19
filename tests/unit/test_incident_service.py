@@ -16,6 +16,12 @@ class TestValidateIncidentTransition:
     def test_valid_reported_to_under_investigation(self):
         validate_incident_transition("reported", "under_investigation")
 
+    def test_same_status_is_noop(self):
+        """Edit forms re-send current status; must not 409 as INVALID_STATE_TRANSITION."""
+        validate_incident_transition("reported", "reported")
+        validate_incident_transition("under_investigation", "under_investigation")
+        validate_incident_transition("closed", "closed")
+
     def test_valid_reported_to_closed(self):
         validate_incident_transition("reported", "closed")
 

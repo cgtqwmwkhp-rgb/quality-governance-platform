@@ -9,6 +9,8 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.exceptions import BadRequestError
+from src.domain.models.enums import EnterpriseRiskStatus
 from src.domain.models.incident import Incident, IncidentSeverity
 from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.user import User
@@ -175,6 +177,28 @@ async def resolve_fk_safe_owner_id(
     return None
 
 
+async def find_existing_enterprise_risk_for_incident(
+    db: AsyncSession,
+    *,
+    incident: Incident,
+) -> EnterpriseRisk | None:
+    """Return an existing enterprise risk for this incident (CSV link or context), if any."""
+    for risk_id in parse_linked_risk_ids(incident.linked_risk_ids):
+        result = await db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))
+        risk = result.scalar_one_or_none()
+        if risk is not None:
+            return risk
+
+    source = incident_risk_source(incident.id, incident.reference_number)
+    result = await db.execute(
+        select(EnterpriseRisk)
+        .where(EnterpriseRisk.context == source)
+        .order_by(EnterpriseRisk.id.asc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def create_enterprise_risk_from_incident(
     db: AsyncSession,
     *,
@@ -186,8 +210,13 @@ async def create_enterprise_risk_from_incident(
     impact: int,
     category: str,
     treatment_strategy: str,
+    tenant_id: int | None = None,
 ) -> EnterpriseRisk:
     """Create an EnterpriseRisk (risks_v2) linked to an incident — canonical UI path."""
+    resolved_tenant_id = tenant_id if tenant_id is not None else incident.tenant_id
+    if resolved_tenant_id is None:
+        raise BadRequestError("Incident has no tenant; cannot raise an enterprise risk.")
+
     score = max(1, min(25, likelihood * impact))
     residual_likelihood = max(1, likelihood - 1)
     residual_score = max(1, residual_likelihood * impact)
@@ -200,7 +229,7 @@ async def create_enterprise_risk_from_incident(
     linked_cases = [incident.reference_number] if incident.reference_number else []
 
     risk = EnterpriseRisk(
-        tenant_id=incident.tenant_id,
+        tenant_id=resolved_tenant_id,
         reference=await ReferenceNumberService.generate(db, "risk", EnterpriseRisk),
         title=title[:255],
         description=description,
@@ -225,7 +254,7 @@ async def create_enterprise_risk_from_incident(
             f"Raised from incident {incident.reference_number}. " "Review in Risk Register and set treatment plan."
         ),
         risk_owner_id=owner_id,
-        status="open",
+        status=EnterpriseRiskStatus.IDENTIFIED.value,
         review_frequency_days=30,
         next_review_date=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=30),
         is_escalated=True,
@@ -238,12 +267,11 @@ async def create_enterprise_risk_from_incident(
     )
     db.add(risk)
     await db.flush()
-    if incident.tenant_id is not None:
-        await upsert_case_risk_link(
-            db,
-            tenant_id=incident.tenant_id,
-            case_type="incident",
-            case_id=incident.id,
-            risk_id=risk.id,
-        )
+    await upsert_case_risk_link(
+        db,
+        tenant_id=resolved_tenant_id,
+        case_type="incident",
+        case_id=incident.id,
+        risk_id=risk.id,
+    )
     return risk
