@@ -43,7 +43,11 @@ from src.domain.services.document_version_service import (
     document_version_service,
     parse_filename_version_hint,
 )
-from src.domain.services.index_job_service import IndexJobService, dispatch_index_job
+from src.domain.services.index_job_service import (
+    IndexJobService,
+    dispatch_index_job,
+    vector_index_configured,
+)
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.infrastructure.storage import StorageError, storage_service
@@ -187,15 +191,43 @@ class IndexJobResponse(BaseModel):
     job_type: str
     status: str
     document_ids: list[int]
+    documents_total: int
+    documents_processed: int
+    documents_succeeded: int
+    documents_failed: int
     chunk_count: int
     chunks_processed: int
     chunks_succeeded: int
     chunks_failed: int
+    vector_index_configured: bool
+    vector_index_warning: Optional[str] = None
+    error_log: Optional[list[dict[str, Any]]] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+
+class BulkReprocessRequest(BaseModel):
+    """Admin request to bulk-reprocess library documents into Pinecone."""
+
+    document_ids: Optional[list[int]] = None
+    confirm_full_tenant: bool = False
+    resume_from_job_id: Optional[int] = None
+    limit: int = 500
+
+
+class BulkReprocessResponse(BaseModel):
+    """Response after queueing a tenant bulk reindex job."""
+
+    index_job_id: int
+    job_type: str
+    documents_total: int
+    vector_index_configured: bool
+    vector_index_warning: Optional[str] = None
+    dispatched: bool
+    message: str
 
 
 class SearchResult(BaseModel):
@@ -433,6 +465,49 @@ async def _enqueue_document_index_job(
     return job, dispatched
 
 
+async def _enqueue_bulk_index_job(
+    db: DbSession,
+    *,
+    job: IndexJob,
+    tenant_id: int,
+    current_user: User,
+) -> tuple[IndexJob, bool]:
+    """Dispatch a multi-document index job via Celery or synchronous fallback."""
+    index_service = IndexJobService(db)
+    dispatched = dispatch_index_job(job.id, tenant_id, current_user.id)
+    if not dispatched:
+        await index_service.process_job(
+            job.id,
+            tenant_id=tenant_id,
+            current_user=current_user,
+        )
+    return job, dispatched
+
+
+def _index_job_response(job: IndexJob) -> IndexJobResponse:
+    configured, warning = vector_index_configured()
+    document_ids = list(job.document_ids or [])
+    return IndexJobResponse(
+        id=job.id,
+        job_type=job.job_type,
+        status=job.status.value if hasattr(job.status, "value") else str(job.status),
+        document_ids=document_ids,
+        documents_total=len(document_ids),
+        documents_processed=int(getattr(job, "documents_processed", 0) or 0),
+        documents_succeeded=int(getattr(job, "documents_succeeded", 0) or 0),
+        documents_failed=int(getattr(job, "documents_failed", 0) or 0),
+        chunk_count=job.chunk_count,
+        chunks_processed=job.chunks_processed,
+        chunks_succeeded=job.chunks_succeeded,
+        chunks_failed=job.chunks_failed,
+        vector_index_configured=configured,
+        vector_index_warning=warning,
+        error_log=list(job.error_log or []) or None,
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+    )
+
+
 # =============================================================================
 # UPLOAD & CREATE
 # =============================================================================
@@ -636,17 +711,64 @@ async def get_index_job(
     job = await index_service.get_job(job_id, tenant_id=getattr(current_user, "tenant_id", None))
     if job is None:
         raise NotFoundError("Index job not found")
-    return IndexJobResponse(
-        id=job.id,
+    return _index_job_response(job)
+
+
+@router.post(
+    "/admin/bulk-reprocess",
+    response_model=BulkReprocessResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def bulk_reprocess_documents(
+    payload: BulkReprocessRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("admin:manage"))],
+) -> BulkReprocessResponse:
+    """Admin-only bulk reindex of tenant library documents into Pinecone."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    index_service = IndexJobService(db)
+
+    try:
+        job = await index_service.create_bulk_reprocess_job(
+            tenant_id=tenant_id,
+            created_by_id=current_user.id,
+            document_ids=payload.document_ids,
+            confirm_full_tenant=payload.confirm_full_tenant,
+            resume_from_job_id=payload.resume_from_job_id,
+            limit=payload.limit,
+        )
+    except ValueError as exc:
+        raise BadRequestError(str(exc)) from exc
+
+    job, dispatched = await _enqueue_bulk_index_job(
+        db,
+        job=job,
+        tenant_id=tenant_id,
+        current_user=current_user,
+    )
+    await db.commit()
+    await db.refresh(job)
+
+    configured, warning = vector_index_configured()
+    documents_total = len(job.document_ids or [])
+    if not configured:
+        message = (
+            "Bulk reprocess queued; chunks and AI metadata will be rebuilt but semantic "
+            "Pinecone upsert requires VOYAGE_API_KEY and PINECONE_API_KEY"
+        )
+    elif dispatched:
+        message = f"Bulk reprocess queued for {documents_total} document(s)"
+    else:
+        message = f"Bulk reprocess completed synchronously for {documents_total} document(s)"
+
+    return BulkReprocessResponse(
+        index_job_id=job.id,
         job_type=job.job_type,
-        status=job.status.value if hasattr(job.status, "value") else str(job.status),
-        document_ids=list(job.document_ids or []),
-        chunk_count=job.chunk_count,
-        chunks_processed=job.chunks_processed,
-        chunks_succeeded=job.chunks_succeeded,
-        chunks_failed=job.chunks_failed,
-        started_at=job.started_at,
-        completed_at=job.completed_at,
+        documents_total=documents_total,
+        vector_index_configured=configured,
+        vector_index_warning=warning,
+        dispatched=dispatched,
+        message=message,
     )
 
 
