@@ -6,7 +6,7 @@ Covers audience expansion, MCQ quiz grading, and campaign launch behaviour
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -1037,10 +1037,155 @@ class TestSpawnReackCampaign:
 
         assert result["spawned"] is True
         assert result["source_campaign_id"] == 11
+        assert result["launched"] is False
         assert db.add.called
         added_campaign = db.add.call_args[0][0]
         assert added_campaign.status == CampaignStatus.DRAFT
         assert added_campaign.title == "Re-acknowledgment: Annual read"
+
+    @pytest.mark.asyncio
+    async def test_flag_off_leaves_draft_only(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.domain.services.document_campaign_service.settings.campaign_reack_auto_launch_enabled",
+            False,
+        )
+        source = SimpleNamespace(
+            id=11,
+            title="Annual read",
+            due_within_days=14,
+            require_quiz=True,
+            require_sign=True,
+            reminder_offsets_hours=[24, 168],
+            audience_all_users=True,
+            audience_department=None,
+            audience_role=None,
+            audience_group_ids=None,
+            audience_user_ids=None,
+            quiz_draft_id=3,
+            quiz_questions=[{"type": "mcq", "question": "Q1"}],
+            quiz_pass_mark=80,
+        )
+
+        execute_results = [
+            SimpleNamespace(scalars=lambda: SimpleNamespace(first=lambda: source)),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
+        ]
+        db = SimpleNamespace(
+            execute=AsyncMock(side_effect=execute_results),
+            add=MagicMock(),
+            commit=AsyncMock(),
+            refresh=AsyncMock(),
+        )
+        service = DocumentCampaignService(db)
+        service._document_title = AsyncMock(return_value="Safety Policy")
+        service.launch_campaign = AsyncMock()
+
+        result = await service.spawn_reack_campaign(document_id=5, tenant_id=1, actor_id=2)
+
+        assert result["spawned"] is True
+        assert result["launched"] is False
+        assert result["launch_error"] is None
+        service.launch_campaign.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_auto_launch_when_flag_enabled_closes_source(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.domain.services.document_campaign_service.settings.campaign_reack_auto_launch_enabled",
+            True,
+        )
+        source = SimpleNamespace(
+            id=11,
+            title="Annual read",
+            due_within_days=14,
+            require_quiz=True,
+            require_sign=True,
+            reminder_offsets_hours=[24, 168],
+            audience_all_users=True,
+            audience_department=None,
+            audience_role=None,
+            audience_group_ids=None,
+            audience_user_ids=None,
+            quiz_draft_id=3,
+            quiz_questions=[{"type": "mcq", "question": "Q1"}],
+            quiz_pass_mark=80,
+        )
+
+        execute_results = [
+            SimpleNamespace(scalars=lambda: SimpleNamespace(first=lambda: source)),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
+        ]
+        db = SimpleNamespace(
+            execute=AsyncMock(side_effect=execute_results),
+            add=MagicMock(),
+            commit=AsyncMock(),
+            refresh=AsyncMock(),
+        )
+        service = DocumentCampaignService(db)
+        service._document_title = AsyncMock(return_value="Safety Policy")
+        service.launch_campaign = AsyncMock(return_value={"campaign_id": 99, "status": "active"})
+        service._close_superseded_campaign = AsyncMock()
+
+        with patch("src.domain.services.document_campaign_service.FeatureFlagService") as mock_ffs:
+            mock_ffs.return_value.is_enabled = AsyncMock(return_value=True)
+            result = await service.spawn_reack_campaign(document_id=5, tenant_id=1, actor_id=2)
+
+        assert result["spawned"] is True
+        assert result["launched"] is True
+        assert result["launch_error"] is None
+        service.launch_campaign.assert_awaited_once()
+        launch_kwargs = service.launch_campaign.await_args.kwargs
+        assert launch_kwargs["tenant_id"] == 1
+        assert launch_kwargs["launched_by_id"] == 2
+        service._close_superseded_campaign.assert_awaited_once_with(tenant_id=1, campaign_id=11)
+
+    @pytest.mark.asyncio
+    async def test_manual_auto_launch_opt_in_without_settings(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.domain.services.document_campaign_service.settings.campaign_reack_auto_launch_enabled",
+            False,
+        )
+        source = SimpleNamespace(
+            id=11,
+            title="Annual read",
+            due_within_days=14,
+            require_quiz=False,
+            require_sign=True,
+            reminder_offsets_hours=[24],
+            audience_all_users=True,
+            audience_department=None,
+            audience_role=None,
+            audience_group_ids=None,
+            audience_user_ids=[10],
+            quiz_draft_id=None,
+            quiz_questions=None,
+            quiz_pass_mark=None,
+        )
+
+        execute_results = [
+            SimpleNamespace(scalars=lambda: SimpleNamespace(first=lambda: source)),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
+        ]
+        db = SimpleNamespace(
+            execute=AsyncMock(side_effect=execute_results),
+            add=MagicMock(),
+            commit=AsyncMock(),
+            refresh=AsyncMock(),
+        )
+        service = DocumentCampaignService(db)
+        service._document_title = AsyncMock(return_value="Safety Policy")
+        service.launch_campaign = AsyncMock(return_value={"campaign_id": 99, "status": "active"})
+        service._close_superseded_campaign = AsyncMock()
+
+        result = await service.spawn_reack_campaign(
+            document_id=5,
+            tenant_id=1,
+            actor_id=2,
+            auto_launch=True,
+        )
+
+        assert result["launched"] is True
+        service.launch_campaign.assert_awaited_once()
+        service._close_superseded_campaign.assert_awaited_once_with(tenant_id=1, campaign_id=11)
 
 
 # =============================================================================

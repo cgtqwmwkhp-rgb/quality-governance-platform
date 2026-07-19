@@ -539,3 +539,5 @@ class SpawnReackCampaignResponse(BaseModel):
     campaign_id: Optional[int] = None
     source_campaign_id: Optional[int] = None
     reason: Optional[str] = None
+    launched: Optional[bool] = None
+    launch_error: Optional[str] = None

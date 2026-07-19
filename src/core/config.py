@@ -295,6 +295,11 @@ class Settings(BaseSettings):
     campaign_complete_competence_gate_enabled: bool = False
     campaign_complete_competence_gate_feature_flag: str = "campaign_complete_competence_gate"
 
+    # DEF-AUTO: auto-launch re-ack campaigns after spawn (e.g. on document publish).
+    # Default OFF — requires settings + feature flag; manual route can opt in via ?auto_launch=true.
+    campaign_reack_auto_launch_enabled: bool = False
+    campaign_reack_auto_launch_feature_flag: str = "campaign_reack_auto_launch"
+
     # External audit OCR / import
     external_audit_import_enabled: bool = True
     external_audit_import_feature_flag: str = "external_audit_import"
