@@ -40,9 +40,8 @@ class FeatureFlagService:
             return False
         bucket = (
             int(
-                hashlib.md5(
+                hashlib.sha256(
                     f"{key}:{user_id or tenant_id or 'default'}".encode(),
-                    usedforsecurity=False,
                 ).hexdigest(),
                 16,
             )

@@ -25,6 +25,7 @@ from src.api.schemas.document_campaign import (
     CampaignRosterItem,
     CampaignRosterResponse,
     CampaignRosterSummary,
+    CampaignUpdateRequest,
     CompleteAssignmentRequest,
     CompleteAssignmentResponse,
     ComplianceOverviewResponse,
@@ -92,6 +93,7 @@ def _campaign_to_response(campaign: DocumentCampaign, summary: dict | None = Non
         due_within_days=campaign.due_within_days,
         require_quiz=campaign.require_quiz,
         require_sign=campaign.require_sign,
+        competence_asset_type_id=campaign.competence_asset_type_id,
         reminder_offsets_hours=campaign.reminder_offsets_hours or [],
         reminder_hours=list(campaign.reminder_offsets_hours or []),
         assigned_count=summary.get("total_assigned"),
@@ -505,6 +507,26 @@ async def create_campaign(
         require_sign=internal_data.require_sign,
         reminder_offsets_hours=internal_data.reminder_offsets_hours,
         audience=internal_data.audience.model_dump(),
+        competence_asset_type_id=internal_data.competence_asset_type_id,
+    )
+    return _campaign_to_response(campaign)
+
+
+@router.patch("/campaigns/{campaign_id}", response_model=CampaignResponse)
+async def update_campaign(
+    campaign_id: int,
+    body: CampaignUpdateRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """Update a draft campaign (optional O-12 competence gate asset type)."""
+    service = DocumentCampaignService(db)
+    payload = body.model_dump(exclude_unset=True)
+    campaign = await service.update_campaign(
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        campaign_id=campaign_id,
+        competence_asset_type_id=payload.get("competence_asset_type_id"),
+        competence_asset_type_id_set="competence_asset_type_id" in payload,
     )
     return _campaign_to_response(campaign)
 
@@ -806,5 +828,24 @@ async def export_campaign_evidence_csv(
     return StreamingResponse(
         iter([csv_content]),
         media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/campaigns/{campaign_id}/evidence-pack.pdf")
+async def export_campaign_evidence_pdf(
+    campaign_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """PDF export of campaign assignment evidence (quiz/sign-off metadata)."""
+    service = DocumentCampaignService(db)
+    pdf_content, filename = await service.build_evidence_pack_pdf(
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        campaign_id=campaign_id,
+    )
+    return StreamingResponse(
+        iter([pdf_content]),
+        media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

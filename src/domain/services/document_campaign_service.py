@@ -10,8 +10,9 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from fpdf import FPDF
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,6 +50,7 @@ from src.domain.services.document_campaign_notifications import (
     user_display_name,
 )
 from src.domain.services.feature_flag_service import FeatureFlagService
+from src.domain.services.governance_service import GovernanceService
 
 logger = logging.getLogger(__name__)
 
@@ -274,6 +276,7 @@ class DocumentCampaignService:
         require_sign: bool = True,
         reminder_offsets_hours: Optional[List[int]] = None,
         audience: Optional[Dict[str, Any]] = None,
+        competence_asset_type_id: Optional[int] = None,
     ) -> DocumentCampaign:
         audience = audience or {}
 
@@ -325,9 +328,27 @@ class DocumentCampaignService:
             audience_user_ids=list(audience["user_ids"]) if audience.get("user_ids") else None,
             quiz_questions=quiz_questions,
             quiz_pass_mark=quiz_pass_mark,
+            competence_asset_type_id=competence_asset_type_id,
             created_by_id=created_by_id,
         )
         self.db.add(campaign)
+        await self.db.commit()
+        await self.db.refresh(campaign)
+        return campaign
+
+    async def update_campaign(
+        self,
+        *,
+        tenant_id: int,
+        campaign_id: int,
+        competence_asset_type_id: Optional[int] = None,
+        competence_asset_type_id_set: bool = False,
+    ) -> DocumentCampaign:
+        campaign = await self.get_campaign(tenant_id=tenant_id, campaign_id=campaign_id)
+        if campaign.status != CampaignStatus.DRAFT:
+            raise BadRequestError("Only draft campaigns can be updated")
+        if competence_asset_type_id_set:
+            campaign.competence_asset_type_id = competence_asset_type_id
         await self.db.commit()
         await self.db.refresh(campaign)
         return campaign
@@ -1091,6 +1112,63 @@ class DocumentCampaignService:
         )
         return (result.scalar_one() or 0) > 0
 
+    async def _enforce_complete_competence_gate_if_enabled(
+        self,
+        *,
+        user_id: int,
+        tenant_id: int,
+        campaign: DocumentCampaign,
+    ) -> None:
+        """O-12: block assignment completion when workforce competence gate is not cleared."""
+        if not settings.campaign_complete_competence_gate_enabled:
+            return
+
+        flag_service = FeatureFlagService(self.db)
+        if not await flag_service.is_enabled(
+            settings.campaign_complete_competence_gate_feature_flag,
+            tenant_id=str(tenant_id),
+            user_id=str(user_id),
+        ):
+            return
+
+        asset_type_id = campaign.competence_asset_type_id
+        if asset_type_id is None:
+            logger.info(
+                "O-12 competence gate skipped: campaign %s has no competence_asset_type_id",
+                campaign.id,
+            )
+            return
+
+        from src.domain.models.engineer import Engineer
+
+        engineer_id = await self.db.scalar(
+            select(Engineer.id).where(
+                Engineer.user_id == user_id,
+                or_(Engineer.tenant_id == tenant_id, Engineer.tenant_id.is_(None)),
+            )
+        )
+        if engineer_id is None:
+            logger.info(
+                "O-12 competence gate skipped: no Engineer linked to user_id=%s tenant_id=%s",
+                user_id,
+                tenant_id,
+            )
+            return
+
+        gate = await GovernanceService.check_competency_gate(
+            self.db,
+            engineer_id=engineer_id,
+            asset_type_id=asset_type_id,
+            tenant_id=tenant_id,
+        )
+        if gate.get("cleared"):
+            return
+
+        reason = gate.get("reason") or "Competency requirements not met for this campaign"
+        raise BadRequestError(
+            f"Cannot complete assignment: {reason}. " "Complete the required competency assessment before signing off."
+        )
+
     async def complete_assignment(
         self,
         *,
@@ -1105,9 +1183,11 @@ class DocumentCampaignService:
         assignment = await self._get_own_assignment(user_id=user_id, assignment_id=assignment_id)
         campaign = await self.get_campaign(tenant_id=assignment.tenant_id, campaign_id=assignment.campaign_id)
 
-        # O-12 scaffold: when campaign_complete_competence_gate_enabled + feature flag are on,
-        # call GovernanceService.check_competency_gate for the linked engineer before completion.
-        # See settings.campaign_complete_competence_gate_* and MyCompliancePassport / workforce spine.
+        await self._enforce_complete_competence_gate_if_enabled(
+            user_id=user_id,
+            tenant_id=assignment.tenant_id,
+            campaign=campaign,
+        )
 
         if campaign.require_quiz and not assignment.quiz_passed:
             raise BadRequestError("Quiz must be passed before completing this assignment")
@@ -2195,10 +2275,25 @@ class DocumentCampaignService:
             },
         }
 
-    # ==================== Evidence CSV export (O-09) ====================
+    # ==================== Evidence export (O-09 / DEF-PDF) ====================
 
-    async def build_evidence_pack_csv(self, *, tenant_id: int, campaign_id: int) -> Tuple[str, str]:
-        """Build CSV evidence pack for a campaign (assignments + quiz/sign-off metadata)."""
+    _EVIDENCE_PACK_COLUMNS: Sequence[str] = (
+        "user_email",
+        "status",
+        "assigned_at",
+        "due_at",
+        "first_opened_at",
+        "completed_at",
+        "quiz_score",
+        "quiz_passed",
+        "signature_present",
+        "signature_disposition",
+        "ip_address",
+    )
+
+    async def _fetch_evidence_pack_rows(
+        self, *, tenant_id: int, campaign_id: int
+    ) -> Tuple[DocumentCampaign, List[Tuple[CampaignAssignment, Optional[str]]]]:
         campaign = await self.get_campaign(tenant_id=tenant_id, campaign_id=campaign_id)
 
         result = await self.db.execute(
@@ -2210,45 +2305,79 @@ class DocumentCampaignService:
             )
             .order_by(User.email)
         )
+        rows: List[Tuple[CampaignAssignment, Optional[str]]] = [
+            (assignment, email) for assignment, email in result.all()
+        ]
+        return campaign, rows
+
+    @staticmethod
+    def _evidence_pack_row_values(assignment: CampaignAssignment, email: Optional[str]) -> List[Any]:
+        status_value = assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status)
+        return [
+            email or "",
+            status_value,
+            assignment.assigned_at.isoformat() if assignment.assigned_at else "",
+            assignment.due_at.isoformat() if assignment.due_at else "",
+            assignment.first_opened_at.isoformat() if assignment.first_opened_at else "",
+            assignment.completed_at.isoformat() if assignment.completed_at else "",
+            assignment.quiz_score if assignment.quiz_score is not None else "",
+            assignment.quiz_passed if assignment.quiz_passed is not None else "",
+            bool(assignment.signature_data),
+            assignment.signature_disposition or "",
+            assignment.ip_address or "",
+        ]
+
+    async def build_evidence_pack_csv(self, *, tenant_id: int, campaign_id: int) -> Tuple[str, str]:
+        """Build CSV evidence pack for a campaign (assignments + quiz/sign-off metadata)."""
+        campaign, rows = await self._fetch_evidence_pack_rows(tenant_id=tenant_id, campaign_id=campaign_id)
 
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(
-            [
-                "user_email",
-                "status",
-                "assigned_at",
-                "due_at",
-                "first_opened_at",
-                "completed_at",
-                "quiz_score",
-                "quiz_passed",
-                "signature_present",
-                "signature_disposition",
-                "ip_address",
-            ]
-        )
+        writer.writerow(list(self._EVIDENCE_PACK_COLUMNS))
 
-        for assignment, email in result.all():
-            status_value = assignment.status.value if hasattr(assignment.status, "value") else str(assignment.status)
-            writer.writerow(
-                [
-                    email or "",
-                    status_value,
-                    assignment.assigned_at.isoformat() if assignment.assigned_at else "",
-                    assignment.due_at.isoformat() if assignment.due_at else "",
-                    assignment.first_opened_at.isoformat() if assignment.first_opened_at else "",
-                    assignment.completed_at.isoformat() if assignment.completed_at else "",
-                    assignment.quiz_score if assignment.quiz_score is not None else "",
-                    assignment.quiz_passed if assignment.quiz_passed is not None else "",
-                    bool(assignment.signature_data),
-                    assignment.signature_disposition or "",
-                    assignment.ip_address or "",
-                ]
-            )
+        for assignment, email in rows:
+            writer.writerow(self._evidence_pack_row_values(assignment, email))
 
         filename = f"campaign-{campaign.id}-evidence-pack.csv"
         return output.getvalue(), filename
+
+    async def build_evidence_pack_pdf(self, *, tenant_id: int, campaign_id: int) -> Tuple[bytes, str]:
+        """Build PDF evidence pack for a campaign (same rows as CSV + campaign header)."""
+        campaign, rows = await self._fetch_evidence_pack_rows(tenant_id=tenant_id, campaign_id=campaign_id)
+        doc_title = await self._document_title(tenant_id=tenant_id, document_id=campaign.document_id)
+        status_value = campaign.status.value if hasattr(campaign.status, "value") else str(campaign.status)
+        generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+        pdf = FPDF(orientation="L", unit="mm", format="A4")
+        pdf.set_auto_page_break(auto=True, margin=12)
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.cell(0, 8, "Campaign Evidence Pack", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(0, 6, f"Campaign ID: {campaign.id}", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, f"Document: {doc_title} (#{campaign.document_id})", new_x="LMARGIN", new_y="NEXT")
+        if campaign.title:
+            pdf.cell(0, 6, f"Campaign title: {campaign.title}", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, f"Status: {status_value}", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, f"Generated: {generated_at}", new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(4)
+
+        col_widths = [38, 18, 28, 28, 28, 28, 14, 14, 18, 24, 22]
+        row_height = 6
+        pdf.set_font("Helvetica", "B", 7)
+        for idx, column in enumerate(self._EVIDENCE_PACK_COLUMNS):
+            pdf.cell(col_widths[idx], row_height, column, border=1)
+        pdf.ln()
+
+        pdf.set_font("Helvetica", "", 6)
+        for assignment, email in rows:
+            values = [str(value) for value in self._evidence_pack_row_values(assignment, email)]
+            for idx, value in enumerate(values):
+                pdf.cell(col_widths[idx], row_height, value[:48], border=1)
+            pdf.ln()
+
+        filename = f"campaign-{campaign.id}-evidence-pack.pdf"
+        return pdf.output(), filename
 
     # ==================== Re-ack on new version (O-10) ====================
 
@@ -2323,6 +2452,7 @@ class DocumentCampaignService:
             audience_user_ids=list(source.audience_user_ids) if source.audience_user_ids else None,
             quiz_questions=source.quiz_questions,
             quiz_pass_mark=source.quiz_pass_mark,
+            competence_asset_type_id=getattr(source, "competence_asset_type_id", None),
             created_by_id=actor_id,
         )
         self.db.add(campaign)

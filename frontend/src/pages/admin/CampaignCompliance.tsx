@@ -33,6 +33,7 @@ export default function CampaignCompliance() {
   const [complianceRows, setComplianceRows] = useState<CampaignComplianceRow[]>([])
   const [complianceLoading, setComplianceLoading] = useState(true)
   const [exportingId, setExportingId] = useState<number | null>(null)
+  const [exportingFormat, setExportingFormat] = useState<'json' | 'csv' | 'pdf' | null>(null)
   const [expandedCampaignId, setExpandedCampaignId] = useState<number | null>(null)
   const [groupRowsByCampaign, setGroupRowsByCampaign] = useState<Record<number, GroupComplianceRow[]>>({})
   const [groupLoadingId, setGroupLoadingId] = useState<number | null>(null)
@@ -122,15 +123,23 @@ export default function CampaignCompliance() {
     }
   }
 
-  const handleExportEvidence = async (campaignId: number) => {
+  const handleExportEvidence = async (campaignId: number, format: 'json' | 'csv' | 'pdf') => {
     setExportingId(campaignId)
+    setExportingFormat(format)
     try {
-      await documentCampaignApi.downloadEvidencePack(campaignId)
+      if (format === 'csv') {
+        await documentCampaignApi.downloadEvidencePackCsv(campaignId)
+      } else if (format === 'pdf') {
+        await documentCampaignApi.downloadEvidencePackPdf(campaignId)
+      } else {
+        await documentCampaignApi.downloadEvidencePack(campaignId)
+      }
       toast.success(t('admin.campaign_compliance.evidence_exported'))
     } catch (err) {
       toast.error(getApiErrorMessage(err, t('admin.campaign_compliance.evidence_export_error')))
     } finally {
       setExportingId(null)
+      setExportingFormat(null)
     }
   }
 
@@ -269,15 +278,41 @@ export default function CampaignCompliance() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => void handleExportEvidence(row.campaign_id)}
+                                onClick={() => void handleExportEvidence(row.campaign_id, 'json')}
                                 disabled={exportingId === row.campaign_id}
                               >
-                                {exportingId === row.campaign_id ? (
+                                {exportingId === row.campaign_id && exportingFormat === 'json' ? (
                                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                                 ) : (
                                   <Download className="w-4 h-4 mr-2" />
                                 )}
                                 {t('admin.campaign_compliance.export_evidence')}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void handleExportEvidence(row.campaign_id, 'csv')}
+                                disabled={exportingId === row.campaign_id}
+                              >
+                                {exportingId === row.campaign_id && exportingFormat === 'csv' ? (
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Download className="w-4 h-4 mr-2" />
+                                )}
+                                {t('admin.campaign_compliance.export_csv', 'Export CSV')}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void handleExportEvidence(row.campaign_id, 'pdf')}
+                                disabled={exportingId === row.campaign_id}
+                              >
+                                {exportingId === row.campaign_id && exportingFormat === 'pdf' ? (
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Download className="w-4 h-4 mr-2" />
+                                )}
+                                {t('admin.campaign_compliance.export_pdf', 'Export PDF')}
                               </Button>
                             </div>
                           </td>
