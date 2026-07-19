@@ -796,6 +796,7 @@ class TestEdgeCasesE2E:
                 "title": special_title,
                 "description": "Testing Unicode handling.",
                 "severity": "low",
+                "reporter_name": "Unicode Test Reporter",
             },
         )
         assert response.status_code in [200, 201]

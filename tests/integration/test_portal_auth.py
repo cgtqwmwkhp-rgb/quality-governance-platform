@@ -274,6 +274,7 @@ class TestReadYourWritesGuarantee:
                 "severity": "medium",
                 "is_anonymous": False,
                 "reporter_email": user.email,
+                "reporter_name": f"{user.first_name} {user.last_name}",
             },
         )
 

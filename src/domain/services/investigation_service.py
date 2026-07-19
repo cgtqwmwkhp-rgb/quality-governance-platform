@@ -619,8 +619,24 @@ class InvestigationService:
         redaction_log: List[Dict[str, Any]] = []
         sections: Dict[str, Any] = {}
         source_data: Dict[str, Any] = investigation.data if isinstance(investigation.data, dict) else {}
+        raw_sections = source_data.get("sections", {})
+        # Support dict map ({section_id: fields}) and list/from-record shapes.
+        if isinstance(raw_sections, dict):
+            section_items = list(raw_sections.items())
+        elif isinstance(raw_sections, list):
+            section_items = []
+            for idx, entry in enumerate(raw_sections):
+                if not isinstance(entry, dict):
+                    continue
+                section_key = str(entry.get("id") or entry.get("section_id") or f"section_{idx}")
+                fields = entry.get("fields") if isinstance(entry.get("fields"), dict) else entry
+                section_items.append((section_key, fields))
+        else:
+            section_items = []
 
-        for section_id, section_data in source_data.get("sections", {}).items():
+        section_keys_present = {str(key) for key, _ in section_items}
+
+        for section_id, section_data in section_items:
             section_key = str(section_id)
             if section_key in approved_omits:
                 redaction_log.append(
@@ -635,6 +651,8 @@ class InvestigationService:
             sections[section_key] = {}
             if isinstance(section_data, dict):
                 for field_id, field_value in section_data.items():
+                    if field_id in {"id", "section_id", "title", "name", "fields"}:
+                        continue
                     sections[section_key][field_id] = cls._redact_customer_pack_field(
                         audience,
                         section_key,
@@ -644,7 +662,7 @@ class InvestigationService:
                     )
 
         for section_key in approved_omits:
-            if section_key not in source_data.get("sections", {}):
+            if section_key not in section_keys_present:
                 redaction_log.append(
                     {
                         "field_path": section_key,
@@ -1407,7 +1425,8 @@ class InvestigationService:
             investigation.status = InvestigationStatus.COMPLETED  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
             investigation.approved_at = datetime.now(timezone.utc)  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
             investigation.approved_by_id = user_id  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
-            investigation.completed_at = datetime.now(timezone.utc)  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
+            # completed_at is TIMESTAMP WITHOUT TIME ZONE — aware datetimes 500 via asyncpg
+            investigation.completed_at = datetime.utcnow()  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
             investigation.rejection_reason = None  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
             event_type = "APPROVED"
         else:
@@ -1421,15 +1440,20 @@ class InvestigationService:
             event_type = "REJECTED"
 
         investigation.updated_by_id = user_id
-        investigation.version += 1
+        investigation.version = (investigation.version or 0) + 1
+
+        old_status_value = old_status.value if hasattr(old_status, "value") else str(old_status)
+        new_status_value = (
+            investigation.status.value if hasattr(investigation.status, "value") else str(investigation.status)
+        )
 
         await cls.create_revision_event(
             db=db,
             investigation=investigation,
             event_type=event_type,
             actor_id=user_id,
-            old_value={"status": old_status.value},
-            new_value={"status": investigation.status.value},
+            old_value={"status": old_status_value},
+            new_value={"status": new_status_value},
             metadata={"rejection_reason": rejection_reason} if not approved else None,
         )
 

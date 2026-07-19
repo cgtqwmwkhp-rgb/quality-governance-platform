@@ -187,6 +187,7 @@ class TestMultiStepEntityWorkflows:
             "description": "Testing QR code availability after submission",
             "severity": "low",
             "is_anonymous": False,
+            "reporter_name": "UAT Test User",
         }
 
         submit_response = await client.post("/api/v1/portal/reports/", json=incident)
@@ -465,6 +466,7 @@ class TestErrorHandlingEdgeCases:
             "title": "SUAT-012: Minimal field test",
             "description": "Only required fields provided",
             "severity": "low",
+            "reporter_name": "UAT Test User",
         }
 
         response = await client.post("/api/v1/portal/reports/", json=minimal_report)
@@ -496,6 +498,7 @@ class TestErrorHandlingEdgeCases:
             "title": "SUAT-014: No content-type test",
             "description": "Testing missing content-type header",
             "severity": "low",
+            "reporter_name": "UAT Test User",
         }
 
         # Send without explicit content-type (httpx will still send it)
