@@ -482,6 +482,8 @@ export default function UVDBAudits() {
   const [reconciliationStatus, setReconciliationStatus] = useState<
     'idle' | 'loading' | 'ready' | 'unavailable' | 'partial'
   >('idle')
+  const [isExportingProtocol, setIsExportingProtocol] = useState(false)
+  const [protocolExportError, setProtocolExportError] = useState<string | null>(null)
   const [reconciliationNotice, setReconciliationNotice] = useState<string | null>(null)
 
   const transformSection = (apiSection: {
@@ -791,6 +793,19 @@ export default function UVDBAudits() {
       setCreateAuditError(apiError.detail || 'Failed to create UVDB audit.')
     } finally {
       setIsCreatingAudit(false)
+    }
+  }
+
+  const handleDownloadProtocolPack = async (format: 'json' | 'xlsx') => {
+    setProtocolExportError(null)
+    setIsExportingProtocol(true)
+    try {
+      await uvdbApi.downloadProtocolPack(format)
+    } catch (err) {
+      const apiError = createApiError(err)
+      setProtocolExportError(apiError.detail || t('uvdb.shell.export_error'))
+    } finally {
+      setIsExportingProtocol(false)
     }
   }
 
@@ -1928,18 +1943,42 @@ export default function UVDBAudits() {
                     <p className="text-sm text-muted-foreground flex-1">
                       {t('uvdb.shell.export_not_wired')}
                     </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled
-                      title={t('uvdb.shell.export_disabled_title')}
-                      aria-disabled="true"
-                      data-testid="uvdb-export-protocol"
-                    >
-                      <Download className="w-4 h-4" />
-                      {t('uvdb.export_protocol')}
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={isExportingProtocol}
+                        data-testid="uvdb-export-protocol-json"
+                        onClick={() => handleDownloadProtocolPack('json')}
+                      >
+                        {isExportingProtocol ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Download className="w-4 h-4" />
+                        )}
+                        {t('uvdb.export_protocol_json')}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={isExportingProtocol}
+                        data-testid="uvdb-export-protocol-xlsx"
+                        onClick={() => handleDownloadProtocolPack('xlsx')}
+                      >
+                        {isExportingProtocol ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Download className="w-4 h-4" />
+                        )}
+                        {t('uvdb.export_protocol_xlsx')}
+                      </Button>
+                    </div>
                   </div>
+                  {protocolExportError ? (
+                    <p className="text-sm text-destructive" data-testid="uvdb-export-protocol-error">
+                      {protocolExportError}
+                    </p>
+                  ) : null}
                 </CardContent>
               </Card>
             </div>
