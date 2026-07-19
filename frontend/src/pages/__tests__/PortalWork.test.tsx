@@ -154,4 +154,60 @@ describe('PortalWork CUJ-P10', () => {
     expect(screen.getByText('Fire Safety SOP')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Continue reading/i })).toBeInTheDocument()
   })
+
+  it('suppresses duplicate policy-ack cards when an active campaign covers the same document', async () => {
+    mockListMyPending.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 50,
+            requirement_id: 1,
+            policy_id: 99,
+            user_id: 1,
+            status: 'pending',
+            assigned_at: '2026-07-01T10:00:00Z',
+            due_date: '2026-09-01',
+            quiz_attempts: 0,
+            reminders_sent: 0,
+          },
+          {
+            id: 51,
+            requirement_id: 2,
+            policy_id: 77,
+            user_id: 1,
+            status: 'pending',
+            assigned_at: '2026-07-01T10:00:00Z',
+            due_date: '2026-10-01',
+            quiz_attempts: 0,
+            reminders_sent: 0,
+          },
+        ],
+        total: 2,
+      },
+    })
+    mockListMyAssignments.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 3,
+            document_id: 501,
+            linked_policy_id: 99,
+            document_title: 'Fire Safety SOP',
+            campaign_title: 'Annual refresh',
+            status: 'pending',
+            due_date: '2026-09-01',
+          },
+        ],
+        total: 1,
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByTestId('portal-work-campaigns')).toBeInTheDocument()
+    expect(screen.getByText('Fire Safety SOP')).toBeInTheDocument()
+    expect(screen.queryByText('Policy #99')).not.toBeInTheDocument()
+    expect(screen.getByText('Policy #77')).toBeInTheDocument()
+    expect(screen.getByTestId('portal-work-reading-count')).toHaveTextContent('2')
+  })
 })

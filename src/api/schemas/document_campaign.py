@@ -173,6 +173,7 @@ class AssignmentResponse(BaseModel):
     id: int
     campaign_id: int
     document_id: int
+    linked_policy_id: Optional[int] = None
     document_title: str
     campaign_title: Optional[str] = None
     status: str

@@ -290,6 +290,11 @@ class Settings(BaseSettings):
     # soft = warn and continue; hard = block start when gate not cleared.
     competency_gate_mode: str = "soft"
 
+    # O-12 (Campaign CUJ Wave 3): gate campaign assignment completion on workforce competence.
+    # Default OFF — hook only; enforcement lands in a follow-up PR behind feature flag.
+    campaign_complete_competence_gate_enabled: bool = False
+    campaign_complete_competence_gate_feature_flag: str = "campaign_complete_competence_gate"
+
     # External audit OCR / import
     external_audit_import_enabled: bool = True
     external_audit_import_feature_flag: str = "external_audit_import"
