@@ -205,6 +205,9 @@ export default function Standards() {
       s.code.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
+  const isSearchFilteredEmpty = standards.length > 0 && filteredStandards.length === 0
+  const isCatalogEmpty = standards.length === 0
+
   const clauseMatchesHighlight = (clauseNumber: string) => {
     if (!highlightClause) return false
     const a = clauseNumber.toLowerCase()
@@ -294,7 +297,35 @@ export default function Standards() {
             {filteredStandards.length === 0 ? (
               <EmptyState
                 icon={<BookOpen className="w-8 h-8 text-muted-foreground" />}
-                title={t('standards.empty')}
+                title={
+                  isSearchFilteredEmpty ? t('standards.empty_search') : t('standards.empty')
+                }
+                description={
+                  isCatalogEmpty
+                    ? t('standards.empty_catalog_description')
+                    : isSearchFilteredEmpty
+                      ? t('standards.empty_search_description', { term: searchTerm })
+                      : undefined
+                }
+                action={
+                  isCatalogEmpty ? (
+                    <Button variant="outline" asChild data-testid="standards-empty-compliance-link">
+                      <Link to="/compliance">
+                        <Shield className="w-4 h-4 mr-2" />
+                        {t('standards.empty_open_compliance')}
+                      </Link>
+                    </Button>
+                  ) : isSearchFilteredEmpty ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setSearchTerm('')}
+                      data-testid="standards-empty-clear-search"
+                    >
+                      {t('common.clear_filters')}
+                    </Button>
+                  ) : undefined
+                }
               />
             ) : (
               filteredStandards.map((standard) => {
