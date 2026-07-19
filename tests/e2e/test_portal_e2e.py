@@ -21,6 +21,7 @@ class TestPortalAuthentication:
                 "title": f"Portal Access Test - {uuid4().hex[:8]}",
                 "description": "Verify portal is accessible.",
                 "severity": "low",
+                "reporter_name": "Portal Access Tester",
             },
         )
         assert response.status_code in [200, 201]
@@ -44,6 +45,7 @@ class TestIncidentReporting:
                 "title": f"Test Incident - Minimal - {uuid4().hex[:8]}",
                 "description": "This is a test incident with minimal fields.",
                 "severity": "low",
+                "reporter_name": "Minimal Field Reporter",
             },
         )
         assert response.status_code in [200, 201]
