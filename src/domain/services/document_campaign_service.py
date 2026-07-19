@@ -2277,7 +2277,7 @@ class DocumentCampaignService:
             audience_user_ids=list(source.audience_user_ids) if source.audience_user_ids else None,
             quiz_questions=source.quiz_questions,
             quiz_pass_mark=source.quiz_pass_mark,
-            competence_asset_type_id=source.competence_asset_type_id,
+            competence_asset_type_id=getattr(source, "competence_asset_type_id", None),
             created_by_id=actor_id,
         )
         self.db.add(campaign)
