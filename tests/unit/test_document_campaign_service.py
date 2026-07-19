@@ -728,6 +728,150 @@ class TestAssignmentQuizAndCompletion:
 
 
 # =============================================================================
+# O-12 competence gate on completion
+# =============================================================================
+
+
+def _complete_assignment_fixture(*, campaign_extra=None):
+    assignment = SimpleNamespace(
+        id=1,
+        user_id=7,
+        tenant_id=1,
+        campaign_id=1,
+        quiz_passed=None,
+        status=AssignmentStatus.PENDING,
+        completed_at=None,
+        acceptance_statement=None,
+        signature_data=None,
+        signature_disposition=None,
+        ip_address=None,
+        user_agent=None,
+    )
+    campaign_kwargs = {
+        "id": 1,
+        "tenant_id": 1,
+        "require_quiz": False,
+        "document_id": 99,
+        "competence_asset_type_id": None,
+    }
+    if campaign_extra:
+        campaign_kwargs.update(campaign_extra)
+    campaign = SimpleNamespace(**campaign_kwargs)
+    db = SimpleNamespace(
+        execute=AsyncMock(return_value=_scalar_one_result(assignment)),
+        commit=AsyncMock(),
+        refresh=AsyncMock(),
+        scalar=AsyncMock(return_value=None),
+    )
+    service = DocumentCampaignService(db)
+    service.get_campaign = AsyncMock(return_value=campaign)
+    service._has_open_assignee_question = AsyncMock(return_value=False)
+    return service, assignment, campaign, db
+
+
+class TestCompleteAssignmentCompetenceGate:
+    @pytest.mark.asyncio
+    async def test_flag_off_unchanged(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.domain.services.document_campaign_service.settings",
+            SimpleNamespace(
+                campaign_complete_competence_gate_enabled=False,
+                campaign_complete_competence_gate_feature_flag="campaign_complete_competence_gate",
+            ),
+        )
+        service, assignment, _campaign, _db = _complete_assignment_fixture(
+            campaign_extra={"competence_asset_type_id": 42}
+        )
+
+        result = await service.complete_assignment(
+            user_id=7,
+            assignment_id=1,
+            acceptance_statement="I have read and understood this document.",
+            signature_data="data:image/png;base64,abc",
+        )
+
+        assert result.status == AssignmentStatus.COMPLETED
+        assert assignment.status == AssignmentStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_flag_on_no_asset_type_allows_completion(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.domain.services.document_campaign_service.settings",
+            SimpleNamespace(
+                campaign_complete_competence_gate_enabled=True,
+                campaign_complete_competence_gate_feature_flag="campaign_complete_competence_gate",
+            ),
+        )
+
+        async def fake_is_enabled(*_args, **_kwargs):
+            return True
+
+        gate_called = {"value": False}
+
+        async def fake_gate(*_args, **_kwargs):
+            gate_called["value"] = True
+            return {"cleared": True}
+
+        monkeypatch.setattr(
+            "src.domain.services.document_campaign_service.FeatureFlagService.is_enabled",
+            fake_is_enabled,
+        )
+        monkeypatch.setattr(
+            "src.domain.services.document_campaign_service.GovernanceService.check_competency_gate",
+            fake_gate,
+        )
+        service, assignment, _campaign, _db = _complete_assignment_fixture()
+
+        result = await service.complete_assignment(
+            user_id=7,
+            assignment_id=1,
+            acceptance_statement="I have read and understood this document.",
+            signature_data="data:image/png;base64,abc",
+        )
+
+        assert gate_called["value"] is False
+        assert result.status == AssignmentStatus.COMPLETED
+        assert assignment.status == AssignmentStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_flag_on_gate_not_cleared_blocks(self, monkeypatch):
+        monkeypatch.setattr(
+            "src.domain.services.document_campaign_service.settings",
+            SimpleNamespace(
+                campaign_complete_competence_gate_enabled=True,
+                campaign_complete_competence_gate_feature_flag="campaign_complete_competence_gate",
+            ),
+        )
+        service, _assignment, campaign, db = _complete_assignment_fixture(
+            campaign_extra={"competence_asset_type_id": 20}
+        )
+        db.scalar = AsyncMock(return_value=10)
+
+        async def fake_is_enabled(*_args, **_kwargs):
+            return True
+
+        async def fake_gate(*_args, **_kwargs):
+            return {"cleared": False, "reason": "No competency records found for this asset type"}
+
+        monkeypatch.setattr(
+            "src.domain.services.document_campaign_service.FeatureFlagService.is_enabled",
+            fake_is_enabled,
+        )
+        monkeypatch.setattr(
+            "src.domain.services.document_campaign_service.GovernanceService.check_competency_gate",
+            fake_gate,
+        )
+
+        with pytest.raises(BadRequestError, match="Cannot complete assignment"):
+            await service.complete_assignment(
+                user_id=7,
+                assignment_id=1,
+                acceptance_statement="I have read and understood this document.",
+                signature_data="data:image/png;base64,abc",
+            )
+
+
+# =============================================================================
 # Snooze
 # =============================================================================
 
@@ -1018,6 +1162,7 @@ class TestSpawnReackCampaign:
             quiz_draft_id=3,
             quiz_questions=[{"type": "mcq", "question": "Q1"}],
             quiz_pass_mark=80,
+            competence_asset_type_id=None,
         )
 
         execute_results = [
@@ -1064,6 +1209,7 @@ class TestSpawnReackCampaign:
             quiz_draft_id=3,
             quiz_questions=[{"type": "mcq", "question": "Q1"}],
             quiz_pass_mark=80,
+            competence_asset_type_id=None,
         )
 
         execute_results = [
@@ -1108,6 +1254,7 @@ class TestSpawnReackCampaign:
             quiz_draft_id=3,
             quiz_questions=[{"type": "mcq", "question": "Q1"}],
             quiz_pass_mark=80,
+            competence_asset_type_id=None,
         )
 
         execute_results = [
