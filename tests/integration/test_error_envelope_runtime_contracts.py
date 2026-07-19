@@ -103,16 +103,6 @@ class TestConflictErrorEnvelopeRuntimeContract:
             "reference_number": f"POL-409-{uuid.uuid4().hex[:8]}",
         }
         response = await client.post("/api/v1/policies", json=policy_data, headers=auth_headers)
-        if response.status_code == 403:
-            pytest.skip("Explicit reference-number permission contract not enabled in this environment")
-        assert response.status_code == 201
-
-        response = await client.post("/api/v1/policies", json=policy_data, headers=auth_headers)
-        assert response.status_code == 409
-
-        data = response.json()
-        code, message, request_id = _extract_error(data)
-        assert code, "Error code should be present"
-        assert message, "Error message should be present"
-        assert request_id, "Request ID should be present"
-        assert len(request_id) > 0
+        # W5 freeze supersedes create/conflict paths on legacy Policy writes
+        assert response.status_code == 410
+        assert "frozen" in response.text.lower()

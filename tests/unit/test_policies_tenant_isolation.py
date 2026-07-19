@@ -111,14 +111,9 @@ async def test_list_policies_uses_exact_tenant_scope():
 
 @pytest.mark.asyncio
 async def test_update_policy_denies_cross_tenant_target(monkeypatch):
-    statements = []
-
-    async def execute(statement):
-        statements.append(statement)
-        return _Result(None)
-
+    """W5 freeze: writes return 410 before any tenant-scoped lookup can leak existence."""
     db = SimpleNamespace(
-        execute=AsyncMock(side_effect=execute),
+        execute=AsyncMock(),
         commit=AsyncMock(),
         refresh=AsyncMock(),
     )
@@ -142,22 +137,16 @@ async def test_update_policy_denies_cross_tenant_target(monkeypatch):
             request_id="req-isolation",
         )
 
-    assert exc.value.status_code == 404
-    sql = _sql(statements[0])
-    assert "tenant_id = 55" in sql
-    assert "9001" in sql
+    assert exc.value.status_code == 410
+    assert "frozen" in str(exc.value.detail).lower()
+    db.execute.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_delete_policy_denies_cross_tenant_target(monkeypatch):
-    statements = []
-
-    async def execute(statement):
-        statements.append(statement)
-        return _Result(None)
-
+    """W5 freeze: deletes return 410 before any tenant-scoped lookup can leak existence."""
     db = SimpleNamespace(
-        execute=AsyncMock(side_effect=execute),
+        execute=AsyncMock(),
         delete=AsyncMock(),
         commit=AsyncMock(),
     )
@@ -180,7 +169,7 @@ async def test_delete_policy_denies_cross_tenant_target(monkeypatch):
             request_id="req-isolation-del",
         )
 
-    assert exc.value.status_code == 404
-    sql = _sql(statements[0])
-    assert "tenant_id = 66" in sql
-    assert "9002" in sql
+    assert exc.value.status_code == 410
+    assert "frozen" in str(exc.value.detail).lower()
+    db.execute.assert_not_called()
+    db.delete.assert_not_called()
