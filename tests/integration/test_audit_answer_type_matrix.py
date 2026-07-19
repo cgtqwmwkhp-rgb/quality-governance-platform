@@ -6,14 +6,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.audit import (
-    AuditQuestion,
-    AuditRun,
-    AuditSection,
-    AuditStatus,
-    AuditTemplate,
-    TemplateVersion,
-)
+from src.domain.models.audit import AuditQuestion, AuditRun, AuditSection, AuditStatus, AuditTemplate, TemplateVersion
 from src.infrastructure.database import engine
 from tests.conftest import generate_test_reference
 
@@ -66,18 +59,21 @@ async def test_publish_writes_template_version_snapshot(
     auth_headers: dict[str, str],
 ) -> None:
     template, question = await _seed_photo_question(test_session)
+    template_id = template.id
+    expected_version = template.version
+    question_id = question.id
 
     publish = await client.post(
-        f"/api/v1/audits/templates/{template.id}/publish",
+        f"/api/v1/audits/templates/{template_id}/publish",
         headers=auth_headers,
     )
     assert publish.status_code == 200, publish.text
 
     test_session.expire_all()
-    versions = await test_session.execute(select(TemplateVersion).where(TemplateVersion.template_id == template.id))
+    versions = await test_session.execute(select(TemplateVersion).where(TemplateVersion.template_id == template_id))
     version = versions.scalar_one()
-    assert version.version_number == template.version
-    assert any(q["id"] == question.id for q in version.snapshot_json["questions"])
+    assert version.version_number == expected_version
+    assert any(q["id"] == question_id for q in version.snapshot_json["questions"])
 
 
 async def test_photo_answer_requires_evidence_asset_ids_for_complete(

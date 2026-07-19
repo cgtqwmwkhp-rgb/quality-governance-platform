@@ -8,7 +8,7 @@ import pytest
 
 from src.domain.exceptions import ValidationError
 from src.domain.models.audit import AuditQuestion, AuditSection, AuditTemplate
-from src.domain.services.audit_service import AuditService, _UNSUPPORTED_PUBLISH_QUESTION_TYPES
+from src.domain.services.audit_service import _UNSUPPORTED_PUBLISH_QUESTION_TYPES, AuditService
 
 
 def test_missing_required_question_ids_flags_unanswered_and_evidence_gaps():
