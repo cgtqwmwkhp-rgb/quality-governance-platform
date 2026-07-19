@@ -13,6 +13,7 @@ from src.domain.models.notification import NotificationPriority, NotificationTyp
 ENTITY_TYPE_CAMPAIGN = "document_campaign"
 ENTITY_TYPE_CAMPAIGN_REMINDER = "document_campaign_reminder"
 ENTITY_TYPE_CAMPAIGN_OVERDUE = "document_campaign_overdue"
+ENTITY_TYPE_CAMPAIGN_QUESTION_RESOLVED = "document_campaign_question_resolved"
 
 _MANAGER_FIELD_NAMES = ("manager_id", "supervisor_id", "reports_to")
 
@@ -200,6 +201,31 @@ def build_overdue_notification_kwargs(
             "assignee_user_id": assignee_user_id,
             "recipient_role": recipient_role,
         },
+    }
+
+
+def build_question_resolved_notification_kwargs(
+    *,
+    tenant_id: int,
+    user_id: int,
+    campaign_id: int,
+    assignment_id: int,
+    document_id: int,
+    doc_title: str,
+) -> Dict[str, Any]:
+    """Nudge an assignee whose signature was deferred pending an HSEQ answer."""
+    return {
+        "tenant_id": tenant_id,
+        "user_id": user_id,
+        "type": NotificationType.ACTION_DUE_SOON,
+        "priority": NotificationPriority.MEDIUM,
+        "title": "Your question has been answered",
+        "message": (
+            f"HSEQ answered your question on '{doc_title}'. " "You can now go back and complete your signature."
+        ),
+        "entity_type": ENTITY_TYPE_CAMPAIGN_QUESTION_RESOLVED,
+        "entity_id": str(campaign_id),
+        "action_url": portal_assignment_action_url(assignment_id),
     }
 
 

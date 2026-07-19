@@ -189,6 +189,7 @@ class AssignmentResponse(BaseModel):
     quiz_score: Optional[int] = None
     quiz_passed: Optional[bool] = None
     quiz_attempts: int = 0
+    signature_disposition: Optional[str] = None
 
 
 class MyAssignmentsResponse(BaseModel):
@@ -249,6 +250,7 @@ class QuizSubmitResponse(BaseModel):
     pass_mark: int
     quiz_attempts: int = 0
     attempts_remaining: int = 0
+    review_needed: bool = False
 
 
 # =============================================================================
@@ -266,6 +268,26 @@ class CompleteAssignmentResponse(BaseModel):
     id: int
     status: str
     completed_at: Optional[datetime] = None
+
+
+class SignAssignmentRequest(BaseModel):
+    """Request to complete a previously-deferred signature (reopen-to-sign)."""
+
+    signature_data: str = Field(..., min_length=1)
+
+
+class SignAssignmentResponse(BaseModel):
+    id: int
+    status: str
+    signature_disposition: Optional[str] = None
+    completed_at: Optional[datetime] = None
+
+
+class RequestSignatureResponse(BaseModel):
+    """Response to HSEQ nudging an assignee to complete a deferred signature."""
+
+    notified: bool
+    assignment_id: Optional[int] = None
 
 
 # =============================================================================
@@ -319,6 +341,8 @@ class CampaignRosterItem(BaseModel):
     quiz_score: Optional[int] = None
     quiz_passed: Optional[bool] = None
     quiz_attempts: int = 0
+    quiz_review_needed: bool = False
+    signature_disposition: Optional[str] = None
     reminders_sent: int = 0
     last_reminder_at: Optional[str] = None
 
@@ -357,6 +381,8 @@ class QuestionInboxItem(BaseModel):
     created_at: datetime
     created_by_id: int
     latest_message_preview: Optional[str] = None
+    assignment_id: Optional[int] = None
+    signature_disposition: Optional[str] = None
 
 
 class QuestionInboxResponse(BaseModel):

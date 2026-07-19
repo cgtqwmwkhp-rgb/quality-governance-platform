@@ -53,7 +53,10 @@ from src.api.schemas.document_campaign import (
     QuizSubmitResponse,
     ReminderDefaultsResponse,
     ReminderDefaultsUpdateRequest,
+    RequestSignatureResponse,
     ScoreHistogramBucket,
+    SignAssignmentRequest,
+    SignAssignmentResponse,
     SnoozeAssignmentRequest,
     SnoozeAssignmentResponse,
     SpawnReackCampaignResponse,
@@ -292,6 +295,8 @@ async def list_campaign_roster(
     q: Optional[str] = Query(None),
     opened: Optional[bool] = Query(None),
     quiz_passed: Optional[bool] = Query(None),
+    review_needed: Optional[bool] = Query(None),
+    disposition: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
@@ -304,6 +309,8 @@ async def list_campaign_roster(
         q=q,
         opened=opened,
         quiz_passed=quiz_passed,
+        review_needed=review_needed,
+        disposition=disposition,
         limit=limit,
         offset=offset,
     )
@@ -457,6 +464,22 @@ async def resolve_question(
     )
 
 
+@router.post("/questions/{thread_id}/request-signature", response_model=RequestSignatureResponse)
+async def request_assignment_signature(
+    thread_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """HSEQ nudges the assignee to reopen their deferred assignment and sign now."""
+    service = DocumentCampaignService(db)
+    result = await service.request_assignment_signature(
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        thread_id=thread_id,
+        requested_by_id=current_user.id,
+    )
+    return RequestSignatureResponse(**result)
+
+
 # =============================================================================
 # Campaigns
 # =============================================================================
@@ -600,6 +623,7 @@ async def get_my_assignments(
                 quiz_score=assignment.quiz_score,
                 quiz_passed=assignment.quiz_passed,
                 quiz_attempts=assignment.quiz_attempts,
+                signature_disposition=assignment.signature_disposition,
             )
         )
 
@@ -665,6 +689,7 @@ async def submit_assignment_quiz(
         pass_mark=result.pass_mark,
         quiz_attempts=result.quiz_attempts,
         attempts_remaining=result.attempts_remaining,
+        review_needed=result.review_needed,
     )
 
 
@@ -692,6 +717,35 @@ async def complete_assignment(
     )
     status_value = assignment.status.value if hasattr(assignment.status, "value") else assignment.status
     return CompleteAssignmentResponse(id=assignment.id, status=status_value, completed_at=assignment.completed_at)
+
+
+@router.post("/assignments/{assignment_id}/signature", response_model=SignAssignmentResponse)
+async def sign_assignment(
+    assignment_id: int,
+    sign_data: SignAssignmentRequest,
+    request: Request,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Reopen-to-sign: complete a previously-deferred signature once a question is answered."""
+    service = DocumentCampaignService(db)
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    assignment = await service.sign_deferred_assignment(
+        user_id=current_user.id,
+        assignment_id=assignment_id,
+        signature_data=sign_data.signature_data,
+        ip_address=ip_address,
+        user_agent=user_agent,
+    )
+    status_value = assignment.status.value if hasattr(assignment.status, "value") else assignment.status
+    return SignAssignmentResponse(
+        id=assignment.id,
+        status=status_value,
+        signature_disposition=assignment.signature_disposition,
+        completed_at=assignment.completed_at,
+    )
 
 
 @router.post("/assignments/{assignment_id}/snooze", response_model=SnoozeAssignmentResponse)
