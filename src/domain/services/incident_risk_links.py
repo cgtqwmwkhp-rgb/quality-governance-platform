@@ -191,10 +191,7 @@ async def find_existing_enterprise_risk_for_incident(
 
     source = incident_risk_source(incident.id, incident.reference_number)
     result = await db.execute(
-        select(EnterpriseRisk)
-        .where(EnterpriseRisk.context == source)
-        .order_by(EnterpriseRisk.id.asc())
-        .limit(1)
+        select(EnterpriseRisk).where(EnterpriseRisk.context == source).order_by(EnterpriseRisk.id.asc()).limit(1)
     )
     return result.scalar_one_or_none()
 

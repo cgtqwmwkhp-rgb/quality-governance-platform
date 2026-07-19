@@ -368,9 +368,7 @@ async def raise_risk_from_incident(
                 incident_id=incident.id,
                 linked_risk_ids=incident.linked_risk_ids or str(recovered.id),
                 incident_href=incident_detail_href(incident.id),
-                risk_register_href=risk_register_href(
-                    recovered.id, incident_ref=incident.reference_number
-                ),
+                risk_register_href=risk_register_href(recovered.id, incident_ref=incident.reference_number),
             )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
