@@ -43440,13 +43440,19 @@
             "type": "integer"
           },
           "user_id": {
-            "title": "User Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
           }
         },
         "required": [
           "engineer_id",
-          "user_id",
           "competencies"
         ],
         "title": "WDPEngineerMatrixRow",

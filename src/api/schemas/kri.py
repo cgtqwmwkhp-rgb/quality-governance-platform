@@ -1,6 +1,6 @@
 """KRI (Key Risk Indicator) API Schemas."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -86,8 +86,15 @@ class KRIResponse(BaseModel):
     current_status: Optional[str] = None
     last_updated: Optional[datetime] = None
     trend_direction: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    @field_validator("created_at", "updated_at", mode="before")
+    @classmethod
+    def _coerce_timestamps(cls, value: Any) -> Any:
+        if value is None:
+            return datetime.now(timezone.utc)
+        return value
 
     @field_validator(
         "category", "unit", "data_source", "current_status", "trend_direction", "measurement_frequency", mode="before"
