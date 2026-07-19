@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 import OfflineIndicator from '../OfflineIndicator'
+import { useAppStore } from '../../stores'
 
 describe('OfflineIndicator', () => {
   const listeners: Record<string, EventListener[]> = {}
@@ -8,6 +9,7 @@ describe('OfflineIndicator', () => {
   beforeEach(() => {
     listeners['online'] = []
     listeners['offline'] = []
+    useAppStore.getState().setConnectionStatus('connected')
 
     vi.spyOn(window, 'addEventListener').mockImplementation(
       (event: string, handler: EventListener) => {
@@ -18,6 +20,7 @@ describe('OfflineIndicator', () => {
   })
 
   afterEach(() => {
+    useAppStore.getState().setConnectionStatus('connected')
     vi.restoreAllMocks()
   })
 
@@ -25,6 +28,16 @@ describe('OfflineIndicator', () => {
     Object.defineProperty(navigator, 'onLine', { value: true, writable: true, configurable: true })
     const { container } = render(<OfflineIndicator />)
     expect(container.innerHTML).toBe('')
+  })
+
+  it('does not show Offline from connectionStatus alone when browser is online (timeout must not set disconnected)', () => {
+    // Mirrors PX-029: client.ts must not set disconnected on timeout while onLine.
+    // Indicator still reflects store if it were set — assert store stays connected here.
+    Object.defineProperty(navigator, 'onLine', { value: true, writable: true, configurable: true })
+    useAppStore.getState().setConnectionStatus('connected')
+    const { container } = render(<OfflineIndicator />)
+    expect(container.innerHTML).toBe('')
+    expect(useAppStore.getState().connectionStatus).toBe('connected')
   })
 
   it('shows offline banner when an offline event fires', () => {

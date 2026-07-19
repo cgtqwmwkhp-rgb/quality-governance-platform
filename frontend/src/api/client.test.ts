@@ -10,7 +10,15 @@ import api, {
   createApiError,
   getApiErrorMessage,
   applyActionWriteIdempotency,
+  applyCreatePostIdempotency,
   needsActionWriteIdempotency,
+  needsCreatePostIdempotency,
+  needsWriteIdempotency,
+  resolveRequestTimeout,
+  isTimeoutOrAbortError,
+  shouldMarkConnectionDisconnected,
+  classifyWriteTimeoutDisposition,
+  isMaybeCommittedTimeout,
   checkPackCapability,
   authApi,
   auditTrailApi,
@@ -59,12 +67,22 @@ function axiosErr(partial: {
 }
 
 describe('client pure helpers', () => {
-  it('adds idempotency only to Actions and CAPA writes', () => {
+  it('adds idempotency to Actions/CAPA writes and create POSTs', () => {
     expect(needsActionWriteIdempotency('/api/v1/actions/', 'post')).toBe(true)
     expect(needsActionWriteIdempotency('/api/v1/capa/8', 'PATCH')).toBe(true)
     expect(needsActionWriteIdempotency('/api/v1/audits/findings/8/capa', 'post')).toBe(true)
     expect(needsActionWriteIdempotency('/api/v1/actions/', 'get')).toBe(false)
     expect(needsActionWriteIdempotency('/api/v1/incidents/', 'post')).toBe(false)
+
+    expect(needsCreatePostIdempotency('/api/v1/incidents/', 'post')).toBe(true)
+    expect(needsCreatePostIdempotency('/api/v1/complaints/', 'post')).toBe(true)
+    expect(needsCreatePostIdempotency('/api/v1/incidents/', 'get')).toBe(false)
+    expect(needsCreatePostIdempotency('/api/v1/auth/login', 'post')).toBe(false)
+    expect(needsCreatePostIdempotency('/api/v1/external-audit-imports/jobs/9/process', 'post')).toBe(
+      false,
+    )
+    expect(needsWriteIdempotency('/api/v1/incidents/', 'post')).toBe(true)
+    expect(needsWriteIdempotency('/api/v1/capa/8', 'patch')).toBe(true)
 
     const actionWrite = {
       url: '/api/v1/actions/',
@@ -74,6 +92,14 @@ describe('client pure helpers', () => {
     applyActionWriteIdempotency(actionWrite as never)
     expect(actionWrite.headers['Idempotency-Key']).toMatch(/^(?:[0-9a-f]{8}-[0-9a-f-]{27}|qgp-)/i)
 
+    const createPost = {
+      url: '/api/v1/incidents/',
+      method: 'post',
+      headers: {} as Record<string, string>,
+    }
+    applyCreatePostIdempotency(createPost as never)
+    expect(createPost.headers['Idempotency-Key']).toMatch(/^(?:[0-9a-f]{8}-[0-9a-f-]{27}|qgp-)/i)
+
     const retry = {
       url: '/api/v1/capa/8',
       method: 'patch',
@@ -81,6 +107,58 @@ describe('client pure helpers', () => {
     }
     applyActionWriteIdempotency(retry as never)
     expect(retry.headers['Idempotency-Key']).toBe('original-write-key')
+  })
+
+  it('resolveRequestTimeout uses adaptive writes 45s / reads 30s', () => {
+    expect(resolveRequestTimeout('get')).toBe(30000)
+    expect(resolveRequestTimeout('post')).toBe(45000)
+    expect(resolveRequestTimeout('put')).toBe(45000)
+    expect(resolveRequestTimeout('patch')).toBe(45000)
+    expect(resolveRequestTimeout('delete')).toBe(45000)
+    expect(resolveRequestTimeout('post', 120000)).toBe(120000)
+    expect(resolveRequestTimeout('get', 300000)).toBe(300000)
+  })
+
+  it('timeout/abort does not mark Offline when navigator.onLine is true', () => {
+    const original = navigator.onLine
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
+    expect(isTimeoutOrAbortError({ code: 'ECONNABORTED' })).toBe(true)
+    expect(isTimeoutOrAbortError({ code: 'ERR_CANCELED' })).toBe(true)
+    expect(isTimeoutOrAbortError({ message: 'timeout of 30000ms exceeded' })).toBe(true)
+    expect(
+      shouldMarkConnectionDisconnected({ code: 'ECONNABORTED', message: 'timeout' }),
+    ).toBe(false)
+    expect(shouldMarkConnectionDisconnected({ message: 'Network Error' })).toBe(true)
+
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+    expect(
+      shouldMarkConnectionDisconnected({ code: 'ECONNABORTED', message: 'timeout' }),
+    ).toBe(true)
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: original })
+  })
+
+  it('classifies POST timeout as maybe-committed (no blind retry)', () => {
+    const timeout = { code: 'ECONNABORTED', message: 'timeout of 45000ms exceeded' }
+    expect(classifyWriteTimeoutDisposition(timeout, 'post')).toBe('maybe_committed')
+    expect(classifyWriteTimeoutDisposition(timeout, 'put')).toBe('maybe_committed')
+    expect(classifyWriteTimeoutDisposition(timeout, 'get')).toBe('safe_retry_read')
+    expect(classifyWriteTimeoutDisposition({ message: 'Network Error' }, 'post')).toBe(
+      'not_timeout',
+    )
+    expect(
+      isMaybeCommittedTimeout({
+        code: 'ECONNABORTED',
+        message: 'timeout',
+        config: { method: 'post' },
+      }),
+    ).toBe(true)
+    expect(
+      isMaybeCommittedTimeout({
+        code: 'ECONNABORTED',
+        message: 'timeout',
+        config: { method: 'get' },
+      }),
+    ).toBe(false)
   })
 
   it('getDurationBucket covers all buckets', () => {

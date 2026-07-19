@@ -26,6 +26,8 @@ export default function OfflineIndicator() {
     }
   }, [])
 
+  // connectionStatus comes from the API client. Timeouts/aborts must not set
+  // 'disconnected' while navigator.onLine is true (PX-029 / client.ts).
   const isDisconnected = !browserOnline || connectionStatus === 'disconnected'
   const isReconnecting = browserOnline && connectionStatus === 'reconnecting'
   const isBackOnline = browserOnline && connectionStatus === 'connected' && showBanner
