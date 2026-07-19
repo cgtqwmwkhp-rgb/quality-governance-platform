@@ -153,9 +153,7 @@ async def fetch_open_work_for_investigation(
         )
 
     if probe_failures == 3:
-        raise RuntimeError(
-            f"All open-work probes failed for investigation_id={investigation_id}"
-        )
+        raise RuntimeError(f"All open-work probes failed for investigation_id={investigation_id}")
 
     return items
 
