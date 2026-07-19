@@ -30,6 +30,7 @@ import {
   mapApiToTemplate,
   mapAISectionsToLocal,
   buildQuestionPayload,
+  getUnpublishableQuestionIssues,
 } from './audit-builder/templateHelpers'
 import { QUESTION_TYPES } from './audit-builder/QuestionEditor'
 import SectionEditor from './audit-builder/SectionEditor'
@@ -248,6 +249,8 @@ export default function AuditTemplateBuilder() {
         }
       })
     })
+
+    publishErrors.push(...getUnpublishableQuestionIssues(template.sections))
 
     return {
       questionErrors,

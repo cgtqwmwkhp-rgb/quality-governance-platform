@@ -1,8 +1,27 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildQuestionPayload, mapApiToTemplate } from './templateHelpers'
+import {
+  EXECUTABLE_QUESTION_TYPES,
+  UNSUPPORTED_PUBLISH_QUESTION_TYPES,
+  getUnpublishableQuestionIssues,
+  isPublishableQuestionType,
+} from './templateHelpers'
 
 describe('templateHelpers', () => {
+  it('exposes publishable type guardrails aligned with PR-A backend', () => {
+    expect(EXECUTABLE_QUESTION_TYPES).toContain('photo')
+    expect(UNSUPPORTED_PUBLISH_QUESTION_TYPES).toContain('file')
+    expect(isPublishableQuestionType('radio')).toBe(true)
+    expect(isPublishableQuestionType('file')).toBe(false)
+    expect(isPublishableQuestionType('unknown_type')).toBe(false)
+  })
+
+  it('flags unpublishable API question types', () => {
+    expect(isPublishableQuestionType('file')).toBe(false)
+    expect(getUnpublishableQuestionIssues([])).toEqual([])
+  })
+
   it('maps backend questions into builder state without losing evidence or auto-action flags', () => {
     const sectionIdMap: Record<string, number> = {}
     const questionIdMap: Record<string, number> = {}
