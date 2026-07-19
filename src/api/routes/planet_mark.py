@@ -467,6 +467,8 @@ async def export_reporting_year_pack(
     export_format: str = Query("json", alias="format", pattern="^(json|xlsx)$"),
 ) -> StreamingResponse:
     """Download an authenticated JSON or XLSX export pack for a reporting year."""
+    if current_user.tenant_id is None:
+        raise HTTPException(status_code=400, detail="Tenant context required")
     service = PlanetMarkExportService(db)
     try:
         pack = await service.assemble_pack(year_id=year_id, tenant_id=current_user.tenant_id)

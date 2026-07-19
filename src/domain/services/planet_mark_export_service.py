@@ -36,9 +36,10 @@ def build_hotspot_initiatives(
     for category in categories:
         if not category.get("is_measured") or not _has_positive(category.get("total_co2e")):
             continue
-        percentage = category.get("percentage")
+        raw_percentage = category.get("percentage")
+        percentage = float(raw_percentage) if isinstance(raw_percentage, (int, float)) else None
         if _has_positive(percentage):
-            footprint_percent = float(percentage)
+            footprint_percent = percentage
         elif total:
             footprint_percent = (float(category["total_co2e"]) / total) * 100
         else:
