@@ -348,14 +348,18 @@ async def dashboard_summary(
     horizons_data = await horizons(db, tenant_id=tenant_id, months=3, now=current)
 
     statutory_count = await db.scalar(
-        select(func.count()).select_from(Document).where(
+        select(func.count())
+        .select_from(Document)
+        .where(
             Document.tenant_id == tenant_id,
             Document.category_id.is_not(None),
             Document.is_statutory.is_(True),
         )
     )
     open_packs = await db.scalar(
-        select(func.count()).select_from(LibraryReviewPack).where(
+        select(func.count())
+        .select_from(LibraryReviewPack)
+        .where(
             LibraryReviewPack.tenant_id == tenant_id,
             LibraryReviewPack.status == ReviewPackStatus.OPEN,
         )
@@ -414,9 +418,9 @@ async def dependency_map(
         "current_tip": {
             "version_number": document.version,
             "status": document.status.value if hasattr(document.status, "value") else str(document.status),
-            "published_at": current_version.published_at.isoformat()
-            if current_version and current_version.published_at
-            else None,
+            "published_at": (
+                current_version.published_at.isoformat() if current_version and current_version.published_at else None
+            ),
         },
         "superseded_history": [serialize(version) for version in versions if version.status == "superseded"],
     }
