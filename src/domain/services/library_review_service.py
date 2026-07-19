@@ -111,7 +111,9 @@ async def open_pack(
     if existing is not None:
         raise ConflictError(f"Document {document_id} already has an open review pack ({existing.id})")
 
-    review_date = _as_utc(document.review_date)  # type: ignore[arg-type]
+    if document.review_date is None:
+        raise BadRequestError(f"Document {document_id} has no review_date")
+    review_date = _as_utc(document.review_date)
     pack = LibraryReviewPack(
         tenant_id=tenant_id,
         document_id=document_id,
@@ -301,7 +303,9 @@ async def horizons(
     upcoming_rows: list[dict[str, Any]] = []
 
     for doc in documents:
-        review_date = _as_utc(doc.review_date)  # type: ignore[arg-type]
+        if doc.review_date is None:
+            continue
+        review_date = _as_utc(doc.review_date)
         row = {
             "document_id": doc.id,
             "title": doc.title,
