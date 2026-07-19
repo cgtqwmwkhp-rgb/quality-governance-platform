@@ -1096,6 +1096,7 @@ async def spawn_reack_campaign(
     document_id: int,
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("document:update"))],
+    auto_launch: bool = Query(False, description="Launch the spawned re-ack campaign immediately"),
 ):
     """Manually spawn a draft re-acknowledgment campaign after a document version change."""
     await _get_document_or_404(db, document_id, current_user)
@@ -1104,6 +1105,7 @@ async def spawn_reack_campaign(
         document_id=document_id,
         tenant_id=require_tenant_id(current_user.tenant_id),
         actor_id=current_user.id,
+        auto_launch=auto_launch,
     )
     return SpawnReackCampaignResponse(**result)
 

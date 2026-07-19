@@ -47,6 +47,7 @@ from src.domain.services.document_campaign_notifications import (
     reminder_due_now,
     user_display_name,
 )
+from src.domain.services.feature_flag_service import FeatureFlagService
 
 logger = logging.getLogger(__name__)
 
@@ -2126,12 +2127,30 @@ class DocumentCampaignService:
 
     # ==================== Re-ack on new version (O-10) ====================
 
+    async def _reack_auto_launch_enabled(self, *, tenant_id: int, actor_id: int) -> bool:
+        if not settings.campaign_reack_auto_launch_enabled:
+            return False
+        flag_service = FeatureFlagService(self.db)
+        return await flag_service.is_enabled(
+            settings.campaign_reack_auto_launch_feature_flag,
+            tenant_id=str(tenant_id),
+            user_id=str(actor_id),
+        )
+
+    async def _close_superseded_campaign(self, *, tenant_id: int, campaign_id: int) -> None:
+        campaign = await self.get_campaign(tenant_id=tenant_id, campaign_id=campaign_id)
+        now = datetime.now(timezone.utc)
+        campaign.status = CampaignStatus.CLOSED
+        campaign.closed_at = now
+        await self.db.commit()
+
     async def spawn_reack_campaign(
         self,
         *,
         document_id: int,
         tenant_id: int,
         actor_id: int,
+        auto_launch: bool = False,
     ) -> Dict[str, Any]:
         """Create a draft re-acknowledgment campaign when active campaigns exist on a document."""
         result = await self.db.execute(
@@ -2185,8 +2204,36 @@ class DocumentCampaignService:
         await self.db.commit()
         await self.db.refresh(campaign)
 
-        return {
+        spawn_result: Dict[str, Any] = {
             "spawned": True,
             "campaign_id": campaign.id,
             "source_campaign_id": source.id,
+            "launched": False,
+            "launch_error": None,
         }
+
+        should_launch = auto_launch or await self._reack_auto_launch_enabled(
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+        )
+        if not should_launch:
+            return spawn_result
+
+        try:
+            await self.launch_campaign(
+                tenant_id=tenant_id,
+                campaign_id=campaign.id,
+                launched_by_id=actor_id,
+            )
+            await self._close_superseded_campaign(tenant_id=tenant_id, campaign_id=source.id)
+            spawn_result["launched"] = True
+        except Exception as exc:  # noqa: BLE001 — publish hook must not fail; draft remains
+            logger.warning(
+                "Re-ack auto-launch failed for campaign %s (source %s)",
+                campaign.id,
+                source.id,
+                exc_info=True,
+            )
+            spawn_result["launch_error"] = str(exc)
+
+        return spawn_result
