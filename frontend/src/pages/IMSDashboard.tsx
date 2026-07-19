@@ -16,7 +16,6 @@ import {
   TrendingUp,
   Calendar,
   Users,
-  BarChart3,
   Link2,
   ChevronRight,
   RefreshCw,
