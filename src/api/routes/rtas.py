@@ -4,7 +4,7 @@ import logging
 from math import ceil
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
@@ -26,6 +26,11 @@ from src.api.utils.errors import api_error
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.models.rta import RoadTrafficCollision, RTAAction, RunningSheetEntry
 from src.domain.models.user import User
+from src.domain.services.api_idempotency_service import (
+    SCOPE_RTA_CREATE,
+    begin_idempotent_create,
+    complete_idempotent_create,
+)
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
 
@@ -80,8 +85,22 @@ async def create_rta(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("rta:create"))],
     request_id: str = Depends(get_request_id),
+    idempotency_key: Annotated[Optional[str], Header(alias="Idempotency-Key")] = None,
 ):
-    """Create a new Road Traffic Collision (RTA)."""
+    """Create a new Road Traffic Collision (RTA).
+
+    Optional ``Idempotency-Key`` header (PX-001): retries return the same record.
+    """
+    claim = await begin_idempotent_create(
+        db,
+        tenant_id=current_user.tenant_id,
+        scope=SCOPE_RTA_CREATE,
+        idempotency_key=idempotency_key,
+        payload=rta_in,
+    )
+    if claim is not None and claim.is_replay and claim.entity_id is not None:
+        return await _get_rta_or_404(db, claim.entity_id, current_user)
+
     ref_number = await ReferenceNumberService.generate(db, "rta", RoadTrafficCollision)
 
     rta = RoadTrafficCollision(
@@ -103,6 +122,13 @@ async def create_rta(
         description=f"RTA {rta.reference_number} created",
         user_id=current_user.id,
         request_id=request_id,
+    )
+
+    await complete_idempotent_create(
+        db,
+        record_id=claim.record_id if claim else None,
+        entity_type="rta",
+        entity_id=rta.id,
     )
 
     await db.commit()

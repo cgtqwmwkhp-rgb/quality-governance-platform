@@ -197,6 +197,7 @@ class TestMiddlewareCacheMiss:
     async def test_caches_new_response(self, mock_get_redis):
         redis_mock = AsyncMock()
         redis_mock.get.return_value = None
+        redis_mock.set.return_value = True  # SET NX claim succeeded
         mock_get_redis.return_value = redis_mock
 
         response_body = b'{"created": true}'
@@ -215,8 +216,42 @@ class TestMiddlewareCacheMiss:
         request = _make_request(headers={"Idempotency-Key": "key-3"})
 
         result = await mw.dispatch(request, call_next)
+        redis_mock.set.assert_awaited_once()
         redis_mock.setex.assert_awaited_once()
         assert result.status_code == 201
+
+    @pytest.mark.asyncio
+    @patch("src.api.middleware.idempotency._get_redis")
+    async def test_set_nx_claim_prevents_concurrent_create(self, mock_get_redis):
+        """Second request with same key waits on in-flight claim instead of calling next."""
+        payload = b'{"title": "x"}'
+        payload_hash = _compute_payload_hash(payload)
+        in_flight = json.dumps({"status": "processing", "payload_hash": payload_hash}).encode()
+        completed = json.dumps(
+            {
+                "body": '{"id": 7}',
+                "status_code": 201,
+                "headers": {"content-type": "application/json"},
+                "payload_hash": payload_hash,
+            }
+        ).encode()
+
+        redis_mock = AsyncMock()
+        # First get: in-flight; set NX fails; subsequent gets return completed
+        redis_mock.get.side_effect = [in_flight, completed]
+        redis_mock.set.return_value = False
+        mock_get_redis.return_value = redis_mock
+
+        mw = IdempotencyMiddleware(app=MagicMock())
+        call_next = AsyncMock()
+        request = _make_request(headers={"Idempotency-Key": "race-key"}, body=payload)
+
+        with patch("src.api.middleware.idempotency._IN_FLIGHT_POLL_INTERVAL_S", 0):
+            response = await mw.dispatch(request, call_next)
+
+        call_next.assert_not_awaited()
+        assert response.status_code == 201
+        assert b'"id": 7' in response.body or b'"id":7' in response.body.replace(b" ", b"")
 
 
 class TestMiddlewareRedisError:

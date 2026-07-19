@@ -122,6 +122,7 @@ from src.domain.models.external_audit_import import (
     ExternalAuditImportStatus,
 )
 from src.domain.models.external_audit_record import ExternalAuditRecord
+from src.domain.models.api_idempotency import ApiIdempotencyKey
 from src.domain.models.failed_task import FailedTask
 
 # Evidence Assets (Shared Attachments Module)
@@ -268,6 +269,7 @@ __all__ = [
     "TenantInvitation",
     "TokenBlacklist",
     "FailedTask",
+    "ApiIdempotencyKey",
     # Standard models
     "Standard",
     "Clause",
