@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 const mockGet = vi.fn()
 const mockPost = vi.fn()
+const mockListCompliance = vi.fn()
 const mockTrackError = vi.fn()
 const mockToastError = vi.fn()
 const mockToastWarning = vi.fn()
@@ -44,6 +45,9 @@ vi.mock('../../api/client', () => ({
     get: (...args: unknown[]) => mockGet(...args),
     post: (...args: unknown[]) => mockPost(...args),
     defaults: { baseURL: 'https://api.example.test' },
+  },
+  documentCampaignApi: {
+    listCompliance: (...args: unknown[]) => mockListCompliance(...args),
   },
   getApiErrorMessage: (error: unknown) => (error instanceof Error ? error.message : 'Request failed'),
 }))
@@ -93,6 +97,27 @@ describe('Documents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHappyPath()
+    mockListCompliance.mockResolvedValue({
+      data: {
+        items: [
+          {
+            campaign_id: 9,
+            document_id: 11,
+            document_title: 'Safety Policy',
+            status: 'active',
+            assigned: 10,
+            completed: 7,
+            pending: 2,
+            overdue: 1,
+            completion_rate: 70,
+            reminder_offsets_hours: [24],
+            launched_at: '2026-07-01T00:00:00Z',
+            due_within_days: 14,
+          },
+        ],
+        total: 1,
+      },
+    })
   })
 
   it('loads documents and navigates to the governed document detail page', async () => {

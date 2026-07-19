@@ -1142,3 +1142,269 @@ class TestListCampaignRoster:
 
         with pytest.raises(BadRequestError, match="Invalid assignment status"):
             await service.list_campaign_roster(tenant_id=1, campaign_id=1, status="nope")
+
+
+# =============================================================================
+# Campaign effectiveness analytics (Wave 2)
+# =============================================================================
+
+
+def _scalar_one_value(item):
+    result = MagicMock()
+    result.scalar_one.return_value = item
+    return result
+
+
+class TestGetComplianceOverview:
+    @pytest.mark.asyncio
+    async def test_empty_tenant_returns_zeros(self):
+        rows_result = MagicMock()
+        rows_result.all.return_value = []
+
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[
+                    _scalar_one_value(0),
+                    rows_result,
+                ]
+            )
+        )
+        service = DocumentCampaignService(db)
+
+        payload = await service.get_compliance_overview(tenant_id=1)
+
+        assert payload["active_campaigns"] == 0
+        assert payload["total_assignments"] == 0
+        assert payload["overall_completion_rate"] == 0.0
+        assert payload["open_rate"] == 0.0
+        assert len(payload["series"]) == 14
+        assert all(point["completed"] == 0 for point in payload["series"])
+
+    @pytest.mark.asyncio
+    async def test_aggregates_counts_and_series(self):
+        now = datetime.now(timezone.utc)
+        yesterday = now - timedelta(days=1)
+        assignment_completed = SimpleNamespace(
+            status=AssignmentStatus.COMPLETED,
+            first_opened_at=yesterday,
+            completed_at=yesterday,
+            due_at=now + timedelta(days=7),
+            quiz_attempts=1,
+            quiz_passed=True,
+            signature_disposition="signed",
+        )
+        assignment_overdue = SimpleNamespace(
+            status=AssignmentStatus.OVERDUE,
+            first_opened_at=None,
+            completed_at=None,
+            due_at=yesterday,
+            quiz_attempts=3,
+            quiz_passed=False,
+            signature_disposition="signed_pending_hseq_answer",
+        )
+        campaign_quiz = SimpleNamespace(require_quiz=True)
+
+        rows_result = MagicMock()
+        rows_result.all.return_value = [
+            (assignment_completed, campaign_quiz),
+            (assignment_overdue, campaign_quiz),
+        ]
+
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[
+                    _scalar_one_value(2),
+                    rows_result,
+                ]
+            )
+        )
+        service = DocumentCampaignService(db)
+
+        payload = await service.get_compliance_overview(tenant_id=1)
+
+        assert payload["active_campaigns"] == 2
+        assert payload["total_assignments"] == 2
+        assert payload["completed_assignments"] == 1
+        assert payload["overall_completion_rate"] == 50.0
+        assert payload["overdue_count"] == 1
+        assert payload["quiz_fail_count"] == 1
+        assert payload["unanswered_hseq_count"] == 1
+        assert payload["open_rate"] == 50.0
+
+        yesterday_key = yesterday.date().isoformat()
+        yesterday_point = next(p for p in payload["series"] if p["date"] == yesterday_key)
+        assert yesterday_point["completed"] == 1
+        assert yesterday_point["opened"] == 1
+        assert yesterday_point["overdue"] == 1
+
+
+class TestGetCampaignAnalytics:
+    @pytest.mark.asyncio
+    async def test_builds_funnel_histogram_and_timing(self):
+        now = datetime.now(timezone.utc)
+        campaign = SimpleNamespace(id=9, document_id=3, require_quiz=True)
+        assignments = [
+            SimpleNamespace(
+                status=AssignmentStatus.COMPLETED,
+                first_opened_at=now - timedelta(hours=4),
+                assigned_at=now - timedelta(hours=6),
+                completed_at=now - timedelta(hours=2),
+                quiz_attempts=1,
+                quiz_passed=True,
+                quiz_score=85,
+                reminders_sent=1,
+            ),
+            SimpleNamespace(
+                status=AssignmentStatus.COMPLETED,
+                first_opened_at=now - timedelta(hours=8),
+                assigned_at=now - timedelta(hours=10),
+                completed_at=now - timedelta(hours=1),
+                quiz_attempts=2,
+                quiz_passed=True,
+                quiz_score=55,
+                reminders_sent=2,
+            ),
+            SimpleNamespace(
+                status=AssignmentStatus.PENDING,
+                first_opened_at=None,
+                assigned_at=now,
+                completed_at=None,
+                quiz_attempts=0,
+                quiz_passed=None,
+                quiz_score=None,
+                reminders_sent=0,
+            ),
+        ]
+
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[
+                    _scalars_result(assignments),
+                    _scalar_one_value(2),
+                    _scalar_one_value(2),
+                    _scalar_one_value(0),
+                ]
+            )
+        )
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+        service._compliance_summary = AsyncMock(
+            return_value={
+                "total_assigned": 3,
+                "completed": 2,
+                "pending": 1,
+                "overdue": 0,
+                "expired": 0,
+                "completion_rate": 66.7,
+            }
+        )
+
+        payload = await service.get_campaign_analytics(tenant_id=1, campaign_id=9)
+
+        assert payload["campaign_id"] == 9
+        assert payload["funnel"]["assigned"] == 3
+        assert payload["funnel"]["opened"] == 2
+        assert payload["funnel"]["quiz_attempted"] == 2
+        assert payload["funnel"]["quiz_passed"] == 2
+        assert payload["funnel"]["completed"] == 2
+        assert payload["reminder_sent_total"] == 3
+        assert payload["time_to_complete_hours"]["p50"] is not None
+        assert payload["time_to_complete_hours"]["p90"] is not None
+        assert sum(row["count"] for row in payload["score_histogram"]) == 2
+        assert payload["summary"]["open_rate"] == pytest.approx(66.7, rel=0.01)
+
+    @pytest.mark.asyncio
+    async def test_time_to_complete_null_when_fewer_than_two(self):
+        now = datetime.now(timezone.utc)
+        campaign = SimpleNamespace(id=1, document_id=2, require_quiz=False)
+        assignments = [
+            SimpleNamespace(
+                status=AssignmentStatus.COMPLETED,
+                first_opened_at=now - timedelta(hours=2),
+                assigned_at=now - timedelta(hours=3),
+                completed_at=now,
+                quiz_attempts=0,
+                quiz_passed=None,
+                quiz_score=None,
+                reminders_sent=0,
+            ),
+        ]
+
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[
+                    _scalars_result(assignments),
+                    _scalar_one_value(1),
+                    _scalar_one_value(0),
+                    _scalar_one_value(0),
+                ]
+            )
+        )
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+        service._compliance_summary = AsyncMock(
+            return_value={
+                "total_assigned": 1,
+                "completed": 1,
+                "pending": 0,
+                "overdue": 0,
+                "expired": 0,
+                "completion_rate": 100.0,
+            }
+        )
+
+        payload = await service.get_campaign_analytics(tenant_id=1, campaign_id=1)
+
+        assert payload["time_to_complete_hours"]["p50"] is None
+        assert payload["time_to_complete_hours"]["p90"] is None
+
+
+class TestListCompliancePeople:
+    @pytest.mark.asyncio
+    async def test_returns_overdue_rows(self):
+        now = datetime.now(timezone.utc)
+        assignment = SimpleNamespace(
+            id=11,
+            campaign_id=9,
+            status=AssignmentStatus.OVERDUE,
+            quiz_score=None,
+            quiz_passed=None,
+            quiz_attempts=0,
+            first_opened_at=None,
+            completed_at=None,
+            due_at=now,
+            reminders_sent=1,
+        )
+        campaign = SimpleNamespace(id=9)
+        document = SimpleNamespace(id=3, title="Safety Policy")
+        user = SimpleNamespace(id=5, email="alex@example.com", full_name="Alex Engineer")
+
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 1
+        rows_result = MagicMock()
+        rows_result.all.return_value = [(assignment, campaign, document, user)]
+
+        db = SimpleNamespace(execute=AsyncMock(side_effect=[count_result, rows_result]))
+        service = DocumentCampaignService(db)
+
+        payload = await service.list_compliance_people(
+            tenant_id=1,
+            status="overdue",
+            q="alex",
+            limit=50,
+            offset=0,
+        )
+
+        assert payload["total"] == 1
+        assert payload["items"][0]["assignment_id"] == 11
+        assert payload["items"][0]["document_title"] == "Safety Policy"
+        assert payload["items"][0]["status"] == "overdue"
+        assert payload["items"][0]["reminders_sent"] == 1
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_status(self):
+        db = SimpleNamespace(execute=AsyncMock())
+        service = DocumentCampaignService(db)
+
+        with pytest.raises(BadRequestError, match="status must be overdue or quiz_fail"):
+            await service.list_compliance_people(tenant_id=1, status="pending")

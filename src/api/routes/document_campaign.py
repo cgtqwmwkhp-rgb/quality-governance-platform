@@ -16,6 +16,9 @@ from src.api.schemas.document_campaign import (
     AssignmentOpenedResponse,
     AssignmentQuizResponse,
     AssignmentResponse,
+    AttemptsDistributionItem,
+    CampaignAnalyticsFunnel,
+    CampaignAnalyticsResponse,
     CampaignCreateRequestFE,
     CampaignListResponse,
     CampaignResponse,
@@ -24,6 +27,10 @@ from src.api.schemas.document_campaign import (
     CampaignRosterSummary,
     CompleteAssignmentRequest,
     CompleteAssignmentResponse,
+    ComplianceOverviewResponse,
+    ComplianceOverviewSeriesPoint,
+    CompliancePeopleItem,
+    CompliancePeopleResponse,
     ComplianceSummaryItem,
     ComplianceSummaryResponse,
     GroupComplianceItem,
@@ -46,9 +53,11 @@ from src.api.schemas.document_campaign import (
     QuizSubmitResponse,
     ReminderDefaultsResponse,
     ReminderDefaultsUpdateRequest,
+    ScoreHistogramBucket,
     SnoozeAssignmentRequest,
     SnoozeAssignmentResponse,
     SpawnReackCampaignResponse,
+    TimeToCompleteHours,
 )
 from src.api.utils.tenant import require_tenant_id
 from src.domain.models.document_campaign import DocumentCampaign, EngineerGroup
@@ -210,6 +219,53 @@ async def list_compliance_summary(
     return ComplianceSummaryResponse(items=items, total=len(items))
 
 
+@router.get("/compliance/overview", response_model=ComplianceOverviewResponse)
+async def get_compliance_overview(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """Tenant-wide campaign effectiveness overview for HSEQ command centre."""
+    service = DocumentCampaignService(db)
+    payload = await service.get_compliance_overview(tenant_id=require_tenant_id(current_user.tenant_id))
+    return ComplianceOverviewResponse(
+        active_campaigns=payload["active_campaigns"],
+        total_assignments=payload["total_assignments"],
+        completed_assignments=payload["completed_assignments"],
+        overall_completion_rate=payload["overall_completion_rate"],
+        overdue_count=payload["overdue_count"],
+        quiz_fail_count=payload["quiz_fail_count"],
+        unanswered_hseq_count=payload["unanswered_hseq_count"],
+        open_rate=payload["open_rate"],
+        series=[ComplianceOverviewSeriesPoint(**point) for point in payload["series"]],
+    )
+
+
+@router.get("/compliance/people", response_model=CompliancePeopleResponse)
+async def list_compliance_people(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+    status: str = Query(...),
+    q: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """Cross-campaign chase list for overdue assignees or quiz failures."""
+    service = DocumentCampaignService(db)
+    payload = await service.list_compliance_people(
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        status=status,
+        q=q,
+        limit=limit,
+        offset=offset,
+    )
+    return CompliancePeopleResponse(
+        items=[CompliancePeopleItem(**row) for row in payload["items"]],
+        total=payload["total"],
+        limit=payload["limit"],
+        offset=payload["offset"],
+    )
+
+
 @router.get("/compliance/{campaign_id}/by-group", response_model=GroupComplianceResponse)
 async def compliance_by_group(
     campaign_id: int,
@@ -259,6 +315,31 @@ async def list_campaign_roster(
         total=payload["total"],
         limit=payload["limit"],
         offset=payload["offset"],
+        summary=CampaignRosterSummary(**payload["summary"]),
+    )
+
+
+@router.get("/campaigns/{campaign_id}/analytics", response_model=CampaignAnalyticsResponse)
+async def get_campaign_analytics(
+    campaign_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
+):
+    """Per-campaign funnel, score histogram, and completion timing analytics."""
+    service = DocumentCampaignService(db)
+    payload = await service.get_campaign_analytics(
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        campaign_id=campaign_id,
+    )
+    return CampaignAnalyticsResponse(
+        campaign_id=payload["campaign_id"],
+        document_id=payload["document_id"],
+        require_quiz=payload["require_quiz"],
+        funnel=CampaignAnalyticsFunnel(**payload["funnel"]),
+        score_histogram=[ScoreHistogramBucket(**row) for row in payload["score_histogram"]],
+        attempts_distribution=[AttemptsDistributionItem(**row) for row in payload["attempts_distribution"]],
+        time_to_complete_hours=TimeToCompleteHours(**payload["time_to_complete_hours"]),
+        reminder_sent_total=payload["reminder_sent_total"],
         summary=CampaignRosterSummary(**payload["summary"]),
     )
 
