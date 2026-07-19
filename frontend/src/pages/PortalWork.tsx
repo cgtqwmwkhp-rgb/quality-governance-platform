@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import {
@@ -27,6 +27,11 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { toast } from '../contexts/ToastContext'
+import {
+  partitionReadingQueue,
+  portalCampaignReadingHref,
+  unifiedReadingQueueCount,
+} from './campaignReadingHelpers'
 
 type LoadState<T> = {
   items: T[]
@@ -158,6 +163,15 @@ export default function PortalWork() {
     void loadPassport()
   }, [announce, loadActions, loadReading, loadCampaigns, loadPassport])
 
+  const readingQueue = useMemo(
+    () => partitionReadingQueue(reading.items, campaigns.items),
+    [reading.items, campaigns.items],
+  )
+  const pendingReadingCount = unifiedReadingQueueCount(
+    readingQueue.activeCampaigns,
+    readingQueue.visiblePolicyAcks,
+  )
+
   const handleOpenReading = async (item: PolicyAcknowledgment) => {
     try {
       await policyAcknowledgmentsApi.recordOpen(item.id)
@@ -170,7 +184,6 @@ export default function PortalWork() {
 
   const overdueCount = actions.items.filter((a) => isOverdue(a.due_date, a.display_status || a.status))
     .length
-  const pendingReadingCount = reading.items.length + campaigns.items.length
 
   return (
     <div data-testid="portal-work" className="min-h-screen bg-surface">
@@ -319,7 +332,9 @@ export default function PortalWork() {
                 </Button>
               </div>
             </div>
-          ) : reading.items.length === 0 && !campaigns.loading && campaigns.items.length === 0 ? (
+          ) : readingQueue.visiblePolicyAcks.length === 0 &&
+            readingQueue.activeCampaigns.length === 0 &&
+            !campaigns.loading ? (
             <EmptyState
               className="py-10"
               icon={<BookOpen className="w-8 h-8 text-muted-foreground" />}
@@ -344,17 +359,17 @@ export default function PortalWork() {
                     </Button>
                   </div>
                 </div>
-              ) : campaigns.items.length > 0 ? (
+              ) : readingQueue.activeCampaigns.length > 0 ? (
                 <div data-testid="portal-work-campaigns" className="space-y-3">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-muted-foreground">Campaign assignments</span>
-                    {campaigns.items.length > 0 && (
+                    {readingQueue.activeCampaigns.length > 0 && (
                       <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
-                        {campaigns.items.length}
+                        {readingQueue.activeCampaigns.length}
                       </span>
                     )}
                   </div>
-                  {campaigns.items.slice(0, 3).map((item) => (
+                  {readingQueue.activeCampaigns.slice(0, 3).map((item) => (
                     <Card key={item.id} className="p-4">
                       <div className="space-y-3">
                         <div>
@@ -375,28 +390,26 @@ export default function PortalWork() {
                         <Button
                           size="lg"
                           className="w-full min-h-12"
-                          onClick={() =>
-                            navigate(`/portal/reading?assignment=${item.id}`)
-                          }
+                          onClick={() => navigate(portalCampaignReadingHref(item.id))}
                         >
                           Continue reading
                         </Button>
                       </div>
                     </Card>
                   ))}
-                  {campaigns.items.length > 3 && (
+                  {readingQueue.activeCampaigns.length > 3 && (
                     <Button
                       variant="outline"
                       size="lg"
                       className="w-full min-h-12"
                       onClick={() => navigate('/portal/reading')}
                     >
-                      View all {campaigns.items.length} campaigns
+                      View all {readingQueue.activeCampaigns.length} campaigns
                     </Button>
                   )}
                 </div>
               ) : null}
-              {reading.items.map((item) => (
+              {readingQueue.visiblePolicyAcks.map((item) => (
                 <Card key={item.id} className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
