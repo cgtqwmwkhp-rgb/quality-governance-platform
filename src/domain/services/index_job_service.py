@@ -13,6 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 from src.domain.models.document import Document, DocumentChunk, DocumentStatus, IndexJob, IndexJobStatus
+from src.domain.models.user import User
+from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
+from src.domain.services.document_intelligence_service import DocumentIntelligenceService
+from src.infrastructure.storage import storage_service
+
+logger = logging.getLogger(__name__)
 
 GOVERNANCE_LIFECYCLE_STATUSES = frozenset(
     {
@@ -40,13 +46,6 @@ def _apply_post_index_status(document: Document, target_status: DocumentStatus) 
             return
     document.status = target_status
 
-
-from src.domain.models.user import User
-from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
-from src.domain.services.document_intelligence_service import DocumentIntelligenceService
-from src.infrastructure.storage import storage_service
-
-logger = logging.getLogger(__name__)
 
 DEFAULT_BULK_REPROCESS_STATUSES = (
     DocumentStatus.INDEXED,
