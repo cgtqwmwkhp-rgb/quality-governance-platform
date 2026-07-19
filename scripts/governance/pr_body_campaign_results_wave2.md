@@ -17,6 +17,8 @@
 - `frontend/src/pages/__tests__/CampaignCommandKpis.test.tsx` (NEW)
 - `frontend/src/pages/__tests__/CampaignAnalyticsPanel.test.tsx` (NEW)
 - `frontend/src/pages/__tests__/CampaignPeopleChase.test.tsx` (NEW)
+- `frontend/src/pages/__tests__/Documents.test.tsx`
+- `frontend/.size-limit.json` (162→163 kB for Command UI)
 - `frontend/src/i18n/locales/en.json`
 - `frontend/src/i18n/locales/cy.json`
 - `scripts/governance/pr_body_campaign_results_wave2.md`
