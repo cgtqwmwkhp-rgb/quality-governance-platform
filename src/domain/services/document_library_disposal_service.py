@@ -61,13 +61,16 @@ def disposal_eligibility_reason(document: Document, as_of: datetime) -> str | No
 
 def _candidate_from_row(document: Document, retention_rule: str | None) -> DisposalCandidate:
     status = getattr(document.status, "value", document.status)
+    retention_until = document.retention_until
+    if retention_until is None:
+        raise ValueError("disposal candidate requires retention_until")
     return DisposalCandidate(
         document_id=document.id,
         reference_number=getattr(document, "reference_number", None),
         pel_doc_ref=getattr(document, "pel_doc_ref", None),
         title=document.title,
         status=str(status),
-        retention_until=document.retention_until,
+        retention_until=retention_until,
         category_retention_rule=retention_rule,
     )
 

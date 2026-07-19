@@ -38,24 +38,31 @@
 - [ ] CI: PR checks
 - [ ] Staging: verify preview against a controlled retention-due retired document; keep execute flag off.
 
-## 6) Critical User Journeys
+## 6) Critical Journeys
 - [x] CUJ-01: HSEQ admin previews retention queue → sees only due, inactive documents with rule provenance.
 - [x] CUJ-02: HSEQ admin attempts execute with default config → receives safe 403; no rows or blobs mutate.
 - [x] CUJ-03: Release operator enables flag, explicitly selects an eligible ID → only that valid tenant candidate is hard-disposed.
 - [x] CUJ-04: Quality user selects legacy Policy “new” path → receives Library / Document Control / HSEQ Campaigns guidance; no new Policy row is created.
 
-## 7) Observability & Operations
+## 7) Rollback Plan
+- **Owner:** Platform / HSEQ release operator
+- **Rollback steps:**
+  1. Set `LIBRARY_DISPOSAL_EXECUTE=false` immediately (blocks all execute paths).
+  2. Revert this PR / redeploy prior SHA to remove disposal routes and restore Policy write APIs if needed.
+  3. For any hard-disposed documents, restore from DB/blob backup per storage recovery procedure (disposal is irreversible without recovery).
+
+## 8) Observability & Operations
 - **Metrics:** Queue preview count, blocked execution count, and enabled execution count are emitted under `library.disposal_queue.*`.
 - **Logs:** Existing FastAPI error handling captures forbidden execution attempts; storage failures surface through the existing storage service.
 - **Alerts:** Alert on any non-zero `.executed` metric until retention disposal has an approved operational runbook.
 - **Runbook:** Start with `GET .../admin/disposal`; review references, lifecycle status, and rule text; obtain explicit approval before setting the execution flag; execute explicit IDs only; retain request/audit evidence.
 
-## 8) Release Plan
+## 9) Release Plan
 - **Staging:** Confirm preview is tenant-isolated and no storage calls occur. Keep flag false.
 - **Canary:** If execution is authorised, enable the flag briefly for one approved, recoverable test candidate and collect audit evidence.
 - **Production:** Default flag remains false. Verify dashboard/metric ingestion for preview and blocked paths.
 
-## 9) Evidence Pack
+## 10) Evidence Pack
 - Unit command: `pytest tests/unit/test_gov_lib_w5_disposal_policy_freeze.py`
 - Format command: `black --check src tests && isort --check-only src tests`
 - Type-ignore ceiling: verify repository count remains at or below 216.
