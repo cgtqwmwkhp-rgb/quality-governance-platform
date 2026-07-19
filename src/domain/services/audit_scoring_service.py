@@ -256,6 +256,9 @@ class AuditScoringService:
     @classmethod
     def evidence_requirements_met(cls, question: Any, response: Any) -> bool:
         """Return True when photo/signature/min-attachment evidence rules are satisfied."""
+        if getattr(response, "is_na", False):
+            return True
+        
         requirements = getattr(question, "evidence_requirements_json", None) or {}
         if not isinstance(requirements, dict) or not requirements.get("required"):
             return True
