@@ -9,13 +9,16 @@ test.describe("Staging UI Verification", () => {
   });
 
   test("static assets load without errors", async ({ page }) => {
+    test.setTimeout(60_000);
     const consoleLogs: string[] = [];
     page.on("console", (msg) => {
       if (msg.type() === "error") consoleLogs.push(msg.text());
     });
 
-    await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.goto("/", { waitUntil: "domcontentloaded", timeout: 45_000 });
+    // networkidle is flaky on SWA (analytics/keepalive); prefer load + short settle
+    await page.waitForLoadState("load", { timeout: 45_000 });
+    await page.waitForTimeout(1500);
 
     const criticalErrors = consoleLogs.filter(
       (log) =>

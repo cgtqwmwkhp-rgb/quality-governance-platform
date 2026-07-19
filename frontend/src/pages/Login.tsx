@@ -392,8 +392,9 @@ export default function Login({ onLogin }: LoginProps) {
       <div className="w-full max-w-md relative">
         {/* Logo */}
         <div className="text-center mb-8">
-          <BrandMarkTile size={64} className="mb-4 rounded-2xl" />
-          <h1 className="text-2xl font-bold text-foreground mb-2">{t('login.title')}</h1>
+          <BrandMarkTile size={72} className="mb-4 rounded-2xl mx-auto" />
+          <h1 className="text-2xl font-bold text-foreground mb-1">{t('brand.product_name')}</h1>
+          <p className="text-sm text-muted-foreground mb-2">{t('brand.company_line')}</p>
           <p className="text-muted-foreground">{t('login.subtitle')}</p>
         </div>
 

@@ -1681,6 +1681,8 @@
   "login.password": "Password",
   "login.signing_in": "Signing in…",
   "login.submit": "Sign In",
+  "brand.company_line": "Planexpand Limited",
+  "brand.product_name": "Quality Governance Platform",
   "login.subtitle": "Sign in to manage your governance",
   "login.success": "Signed in successfully",
   "login.title": "Quality Governance Platform",
