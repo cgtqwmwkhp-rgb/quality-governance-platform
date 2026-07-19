@@ -8,7 +8,8 @@ Documentation of data integrity mechanisms in the Quality Governance Platform.
 
 | Mechanism | Location | Scope |
 |-----------|----------|-------|
-| Redis-based idempotency keys | `src/api/middleware/idempotency.py` | POST/PUT/PATCH requests |
+| Redis-based idempotency keys | `src/api/middleware/idempotency.py` | POST/PUT/PATCH requests (SET NX claim + response cache) |
+| Durable create key→id | `api_idempotency_keys` + `api_idempotency_service` | Incident / Near Miss / RTA creates (PX-001) |
 | Database unique constraints | Model definitions | Reference number uniqueness |
 | External audit import dedup | `ExternalAuditImportJob` model | `uq_external_audit_import_job_idempotency` |
 

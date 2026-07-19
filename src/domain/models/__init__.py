@@ -17,6 +17,7 @@ from src.domain.models.analytics import (
     ROIInvestment,
     SavedReport,
 )
+from src.domain.models.api_idempotency import ApiIdempotencyKey
 from src.domain.models.assessment import (
     AssessmentOutcome,
     AssessmentResponse,
@@ -268,6 +269,7 @@ __all__ = [
     "TenantInvitation",
     "TokenBlacklist",
     "FailedTask",
+    "ApiIdempotencyKey",
     # Standard models
     "Standard",
     "Clause",

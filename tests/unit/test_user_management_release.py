@@ -18,6 +18,9 @@ class _FakeResult:
     def scalar_one_or_none(self):
         return self._value
 
+    def scalar_one(self):
+        return self._value
+
     def scalars(self):
         return types.SimpleNamespace(all=lambda: self._value)
 
@@ -31,17 +34,25 @@ async def test_create_user_supports_sso_without_password(monkeypatch):
     role.created_at = now
     role.updated_at = now
 
-    async def _refresh(entity):
-        entity.id = 101
-        entity.created_at = now
-        entity.updated_at = now
-
     db = types.SimpleNamespace(
-        execute=AsyncMock(side_effect=[_FakeResult(None), _FakeResult([role])]),
+        execute=AsyncMock(),
         add=Mock(),
         commit=AsyncMock(),
-        refresh=AsyncMock(side_effect=_refresh),
+        refresh=AsyncMock(),
     )
+
+    async def _execute(_query):
+        if db.execute.await_count == 1:
+            return _FakeResult(None)
+        if db.execute.await_count == 2:
+            return _FakeResult([role])
+        created = db.add.call_args.args[0]
+        created.id = 101
+        created.created_at = now
+        created.updated_at = now
+        return _FakeResult(created)
+
+    db.execute = AsyncMock(side_effect=_execute)
     current_user = types.SimpleNamespace(id=1, email="admin@example.com", is_superuser=True)
     monkeypatch.setattr("src.api.routes.users._ensure_user_management_enabled", AsyncMock())
 
@@ -61,6 +72,7 @@ async def test_create_user_supports_sso_without_password(monkeypatch):
     assert created_user.email == "sso.user@example.com"
     assert created_user.hashed_password == ""
     assert created_user.roles[0].name == "manager"
+    assert db.execute.await_count == 3
 
 
 @pytest.mark.asyncio

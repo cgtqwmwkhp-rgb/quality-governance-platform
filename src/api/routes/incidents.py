@@ -3,7 +3,7 @@
 import logging
 from typing import Annotated, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
@@ -21,6 +21,11 @@ from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictError, NotFoundError
 from src.domain.models.incident import Incident, IncidentRunningSheetEntry
 from src.domain.models.user import User
+from src.domain.services.api_idempotency_service import (
+    SCOPE_INCIDENT_CREATE,
+    begin_idempotent_create,
+    complete_idempotent_create,
+)
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.case_risk_links import sync_case_risk_links_from_csv
 from src.domain.services.incident_risk_links import (
@@ -139,15 +144,32 @@ async def create_incident(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("incident:create"))],
     request_id: str = Depends(get_request_id),
+    idempotency_key: Annotated[Optional[str], Header(alias="Idempotency-Key")] = None,
 ) -> Incident:
     """
     Report a new incident.
 
     Requires authentication. Delegates to IncidentService for audit trail,
     cache invalidation, and telemetry.
+
+    Optional ``Idempotency-Key`` header (PX-001): retries return the same record.
     """
     svc = IncidentService(db)
     try:
+        claim = await begin_idempotent_create(
+            db,
+            tenant_id=current_user.tenant_id,
+            scope=SCOPE_INCIDENT_CREATE,
+            idempotency_key=idempotency_key,
+            payload=incident_data,
+        )
+        if claim is not None and claim.is_replay and claim.entity_id is not None:
+            return await svc.get_incident(
+                claim.entity_id,
+                current_user.tenant_id,
+                skip_tenant_check=current_user.is_superuser,
+            )
+
         has_set_ref = current_user.has_permission("incident:set_reference_number")
         incident = await svc.create_incident(
             incident_data=incident_data,
@@ -156,6 +178,12 @@ async def create_incident(
             has_set_ref_permission=has_set_ref,
             request_id=request_id,
         )
+        await complete_idempotent_create(
+            db,
+            record_id=claim.record_id if claim else None,
+            entity_type="incident",
+            entity_id=incident.id,
+        )
         track_metric("incidents.created")
         await _trigger_operational_standards_assess(db, incident, current_user)
         return incident
@@ -163,6 +191,8 @@ async def create_incident(
         raise AuthorizationError(str(e))
     except ValueError as e:
         raise ConflictError(str(e))
+    except LookupError as e:
+        raise NotFoundError(str(e))
 
 
 @router.get("/{incident_id}", response_model=IncidentResponseWithLinks)
