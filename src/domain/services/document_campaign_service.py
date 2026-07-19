@@ -1103,6 +1103,10 @@ class DocumentCampaignService:
         assignment = await self._get_own_assignment(user_id=user_id, assignment_id=assignment_id)
         campaign = await self.get_campaign(tenant_id=assignment.tenant_id, campaign_id=assignment.campaign_id)
 
+        # O-12 scaffold: when campaign_complete_competence_gate_enabled + feature flag are on,
+        # call GovernanceService.check_competency_gate for the linked engineer before completion.
+        # See settings.campaign_complete_competence_gate_* and MyCompliancePassport / workforce spine.
+
         if campaign.require_quiz and not assignment.quiz_passed:
             raise BadRequestError("Quiz must be passed before completing this assignment")
 
