@@ -45,7 +45,7 @@ async def test_create_workflow_rule_uses_user_attributes(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_create_kri_uses_user_email_attribute(monkeypatch):
-    monkeypatch.setattr("src.api.routes.kri.KRIResponse.from_orm", lambda obj: obj)
+    monkeypatch.setattr("src.api.routes.kri._kri_response", lambda obj: obj)
 
     db = types.SimpleNamespace(
         execute=AsyncMock(return_value=_FakeResult(None)),

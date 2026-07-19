@@ -40,15 +40,34 @@ def test_map_pams_technician_row_uses_display_name_and_role():
     assert mapped.display_name == "Alex Technician"
     assert mapped.job_title == "Field Engineer"
     assert mapped.site == "SW1A 1AA"
-    assert mapped.employee_number == "AT42"
+    # short_name must not become employee_number (often a first name in PAMS).
+    assert mapped.employee_number == "42"
     assert mapped.is_active is True
     assert mapped.email == "alex@example.com"
     assert "alex@example.com" in (mapped.notes or "")
     assert mapped.external_id == pams_technician_external_id(42)
 
 
-def test_map_pams_technician_row_falls_back_to_first_last_name():
-    mapped = map_pams_technician_row({"id": 7, "firstname": "Sam", "surname": "Taylor", "active_technician": 0})
+def test_map_pams_technician_row_prefers_explicit_employee_number():
+    mapped = map_pams_technician_row(
+        {
+            "id": 99,
+            "short_name": "Keith",
+            "employee_number": "EMP-4412",
+            "firstname": "Keith",
+            "surname": "Turner",
+            "active_technician": 1,
+        }
+    )
+    assert mapped is not None
+    assert mapped.employee_number == "EMP-4412"
+    assert mapped.display_name != mapped.employee_number
+
+
+def test_map_pams_technician_row_ignores_short_name_as_employee_number():
+    mapped = map_pams_technician_row(
+        {"id": 7, "firstname": "Sam", "surname": "Taylor", "short_name": "Sam", "active_technician": 0}
+    )
     assert mapped is not None
     assert mapped.display_name == "Sam Taylor"
     assert mapped.is_active is False

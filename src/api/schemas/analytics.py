@@ -314,7 +314,8 @@ class WDPEngineerMatrixRow(BaseModel):
     """Single engineer row in competency matrix."""
 
     engineer_id: int
-    user_id: int
+    # PAMS-synced engineers often have no linked login yet (nullable FK).
+    user_id: Optional[int] = None
     employee_number: Optional[str] = None
     competencies: dict[int, str]  # asset_type_id -> state
 
