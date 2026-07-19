@@ -39,6 +39,8 @@ def _apply_post_index_status(document: Document, target_status: DocumentStatus) 
             document.status = DocumentStatus.DRAFT
             return
     document.status = target_status
+
+
 from src.domain.models.user import User
 from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
 from src.domain.services.document_intelligence_service import DocumentIntelligenceService

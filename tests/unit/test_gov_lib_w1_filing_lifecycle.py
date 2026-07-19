@@ -20,11 +20,7 @@ from src.domain.services.document_library_filing_service import (
     normalize_title,
     titles_are_similar,
 )
-from src.domain.services.document_library_lifecycle_service import (
-    approve_document,
-    reject_review,
-    submit_for_review,
-)
+from src.domain.services.document_library_lifecycle_service import approve_document, reject_review, submit_for_review
 
 
 def _category(*, taxonomy_id: str = "04.04", default_access: str = "managers") -> DocumentCategory:
@@ -138,7 +134,9 @@ async def test_approve_rejects_self_approval():
 
     db = SimpleNamespace(
         scalar=scalar,
-        execute=AsyncMock(return_value=MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))))),
+        execute=AsyncMock(
+            return_value=MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))))
+        ),
         get=AsyncMock(return_value=None),
         flush=AsyncMock(),
     )
