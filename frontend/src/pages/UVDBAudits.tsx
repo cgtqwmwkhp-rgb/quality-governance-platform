@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { cn } from '../helpers/utils'
 import {
   Shield,
   Leaf,
@@ -22,7 +23,6 @@ import {
   Calendar,
   Award,
   ClipboardList,
-  Link2,
   XCircle,
   ExternalLink,
   Eye,
@@ -48,6 +48,13 @@ import {
   getUvdbRiskRegisterPath,
 } from '../components/assuranceHubHelpers'
 import { SetupRequiredPanel } from '../components/ui/SetupRequiredPanel'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import {
+  UVDB_SECTIONS,
+  parseUvdbSection,
+  type UvdbSectionId,
+} from './uvdbHelpers'
 
 interface UVDBSection {
   number: string
@@ -409,13 +416,37 @@ function AuditDetailPanel({
 
 export default function UVDBAudits() {
   const { t } = useTranslation()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const auditRefFromQuery = searchParams.get('auditRef') || ''
   const runIdFromQuery = Number(searchParams.get('runId') || '') || null
   const jobIdFromQuery = Number(searchParams.get('jobId') || '') || null
   const recoveryImportReviewPath = getImportReviewPath(runIdFromQuery, jobIdFromQuery)
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'protocol' | 'audits' | 'mapping'>(
-    auditRefFromQuery ? 'audits' : 'dashboard',
+  const section = parseUvdbSection(searchParams.get('section'), {
+    auditRefHint: Boolean(auditRefFromQuery) && !searchParams.get('section'),
+  })
+
+  const setQuery = useCallback(
+    (patch: Record<string, string | null>) => {
+      const next = new URLSearchParams(searchParams)
+      Object.entries(patch).forEach(([key, value]) => {
+        if (value == null || value === '' || (key === 'section' && value === 'scores')) {
+          if (key === 'section' && value === 'scores') next.delete(key)
+          else if (value == null || value === '') next.delete(key)
+          else next.set(key, value)
+        } else {
+          next.set(key, value)
+        }
+      })
+      setSearchParams(next, { replace: true })
+    },
+    [searchParams, setSearchParams],
+  )
+
+  const navigateToSection = useCallback(
+    (nextSection: UvdbSectionId) => {
+      setQuery({ section: nextSection === 'scores' ? null : nextSection })
+    },
+    [setQuery],
   )
   const [sections, setSections] = useState<UVDBSection[]>([])
   const [audits, setAudits] = useState<UVDBAudit[]>([])
@@ -753,7 +784,7 @@ export default function UVDBAudits() {
       })
       setCreateAuditSuccess(`Audit ${response.data.audit_reference} created successfully.`)
       setShowCreateAuditForm(false)
-      setActiveTab('audits')
+      navigateToSection('audits')
       await loadData()
     } catch (err) {
       const apiError = createApiError(err)
@@ -867,34 +898,13 @@ export default function UVDBAudits() {
               getImportReviewPath(audits[0]?.audit_run_id, audits[0]?.import_job_id)
             }
           />
-          <div className="flex flex-col gap-2 md:items-end">
-            <div className="flex gap-3">
-              <button
-                disabled
-                title="Protocol export is not available yet"
-                aria-disabled="true"
-                data-testid="uvdb-export-protocol"
-                className="flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-secondary px-4 py-2 opacity-60"
-              >
-                <Download className="w-4 h-4" />
-                {t('uvdb.export_protocol')}
-              </button>
-              <button
-                onClick={handleOpenCreateAuditForm}
-                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                {t('uvdb.new_audit')}
-              </button>
-            </div>
-            <p
-              className="max-w-md text-xs text-muted-foreground"
-              data-testid="uvdb-export-protocol-honesty"
-            >
-              Protocol export is not available yet — this control stays disabled until the export
-              pack is wired. It is not a broken download.
-            </p>
-          </div>
+          <button
+            onClick={handleOpenCreateAuditForm}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            {t('uvdb.new_audit')}
+          </button>
         </div>
       </div>
 
@@ -1098,7 +1108,7 @@ export default function UVDBAudits() {
             onChange={(e) => setAuditSearch(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                setActiveTab('audits')
+                navigateToSection('audits')
                 void loadData()
               }
             }}
@@ -1110,7 +1120,7 @@ export default function UVDBAudits() {
           value={auditStatusFilter}
           onChange={(e) => {
             setAuditStatusFilter(e.target.value)
-            setActiveTab('audits')
+            navigateToSection('audits')
           }}
           className="px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:ring-2 focus:ring-ring"
           aria-label="Filter by status"
@@ -1125,7 +1135,7 @@ export default function UVDBAudits() {
           type="button"
           className="flex items-center justify-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg transition-colors"
           onClick={() => {
-            setActiveTab('audits')
+            navigateToSection('audits')
             void loadData()
           }}
           data-testid="uvdb-global-filter-apply"
@@ -1135,30 +1145,52 @@ export default function UVDBAudits() {
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-border pb-2 overflow-x-auto">
-        {[
-          { id: 'dashboard', labelKey: 'uvdb.tab.scores', icon: BarChart3 },
-          { id: 'protocol', labelKey: 'uvdb.tab.protocol', icon: ClipboardList },
-          { id: 'audits', labelKey: 'uvdb.tab.audit_history', icon: Calendar },
-          { id: 'mapping', labelKey: 'uvdb.tab.iso_mapping', icon: Link2 },
-        ].map((tab) => {
-          const Icon = tab.icon
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-surface hover:text-foreground'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {t(tab.labelKey)}
-            </button>
-          )
-        })}
+      <div
+        className="flex flex-col sm:flex-row sm:items-center gap-2 mb-6"
+        data-testid="uvdb-section-filters"
+      >
+        <select
+          value={section}
+          onChange={(e) => navigateToSection(e.target.value as UvdbSectionId)}
+          aria-label={t('uvdb.shell.tabs_aria')}
+          data-testid="uvdb-section-filter"
+          className="rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground"
+        >
+          {UVDB_SECTIONS.map(({ id, labelKey }) => (
+            <option key={id} value={id}>
+              {t(labelKey)}
+            </option>
+          ))}
+        </select>
+        <Button type="button" variant="outline" size="sm" data-testid="uvdb-section-filter-apply">
+          Filter
+        </Button>
+      </div>
+
+      <div
+        className="flex bg-surface rounded-xl p-1 border border-border overflow-x-auto mb-6"
+        role="tablist"
+        aria-label={t('uvdb.shell.tabs_aria')}
+      >
+        {UVDB_SECTIONS.map(({ id, labelKey, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={section === id}
+            data-testid={`uvdb-section-tab-${id}`}
+            onClick={() => navigateToSection(id)}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap',
+              section === id
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Icon className="w-4 h-4" />
+            {t(labelKey)}
+          </button>
+        ))}
       </div>
 
       {/* Loading State */}
@@ -1196,8 +1228,8 @@ export default function UVDBAudits() {
       {loadState === 'success' && (
         <>
           {/* Dashboard Tab */}
-          {activeTab === 'dashboard' && (
-            <div className="space-y-6">
+          {section === 'scores' && (
+            <div className="space-y-6" data-testid="uvdb-section-scores">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-wide text-primary">
                   Qualification performance
@@ -1351,7 +1383,7 @@ export default function UVDBAudits() {
                   ))}
                   {expandedAuditId &&
                     audits.some((a) => a.id === expandedAuditId) &&
-                    activeTab === 'dashboard' && (
+                    section === 'scores' && (
                       <AuditDetailPanel
                         detail={auditDetail}
                         isLoading={isLoadingDetail}
@@ -1374,8 +1406,8 @@ export default function UVDBAudits() {
           )}
 
           {/* Protocol Sections Tab */}
-          {activeTab === 'protocol' && (
-            <div className="space-y-6">
+          {section === 'protocol' && (
+            <div className="space-y-6" data-testid="uvdb-section-protocol">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-wide text-primary">
                   Achilles protocol
@@ -1544,8 +1576,8 @@ export default function UVDBAudits() {
           )}
 
           {/* Audit History Tab */}
-          {activeTab === 'audits' && (
-            <div className="space-y-6">
+          {section === 'audits' && (
+            <div className="space-y-6" data-testid="uvdb-section-audits">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-wide text-primary">
                   Qualification evidence
@@ -1783,8 +1815,8 @@ export default function UVDBAudits() {
           )}
 
           {/* ISO Cross-Mapping Tab */}
-          {activeTab === 'mapping' && (
-            <div className="space-y-6">
+          {section === 'mapping' && (
+            <div className="space-y-6" data-testid="uvdb-section-mapping">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-wide text-primary">
                   Integrated assurance
@@ -1875,6 +1907,41 @@ export default function UVDBAudits() {
                   </table>
                 </div>
               </div>
+            </div>
+          )}
+
+          {section === 'export' && (
+            <div data-testid="uvdb-section-export">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('uvdb.shell.section.export')}</CardTitle>
+                  <p className="text-sm text-muted-foreground">{t('uvdb.shell.export_hint')}</p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p
+                    className="text-sm text-muted-foreground"
+                    data-testid="uvdb-export-protocol-honesty"
+                  >
+                    {t('uvdb.shell.export_honesty')}
+                  </p>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <p className="text-sm text-muted-foreground flex-1">
+                      {t('uvdb.shell.export_not_wired')}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled
+                      title={t('uvdb.shell.export_disabled_title')}
+                      aria-disabled="true"
+                      data-testid="uvdb-export-protocol"
+                    >
+                      <Download className="w-4 h-4" />
+                      {t('uvdb.export_protocol')}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
         </>
