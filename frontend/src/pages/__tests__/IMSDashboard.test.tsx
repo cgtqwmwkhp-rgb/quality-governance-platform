@@ -17,7 +17,17 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string) => {
+      const labels: Record<string, string> = {
+        'ims.shell.section.overview': 'Overview',
+        'ims.shell.section.mapping': 'Cross-Standard Mapping',
+        'ims.shell.section.audit': 'Unified Audit Plan',
+        'ims.shell.section.review': 'Management Review',
+        'ims.shell.section.isms': 'ISO 27001 ISMS',
+        'ims.shell.tabs_aria': 'IMS sections',
+      }
+      return labels[key] ?? key
+    },
     i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
@@ -259,5 +269,65 @@ describe('IMSDashboard IA W2 compliance hub', () => {
     expect(screen.getByTestId('ims-map-w1-scheme-iso')).toBeInTheDocument()
     expect(screen.getByTestId('ims-map-w1-scheme-planet-mark')).toBeInTheDocument()
     expect(screen.getByTestId('ims-map-w1-scheme-uvdb')).toBeInTheDocument()
+  })
+
+  it('renders Audits-style section pills with default overview section', async () => {
+    const { default: IMSDashboard } = await import('../IMSDashboard')
+
+    render(
+      <MemoryRouter initialEntries={['/ims']}>
+        <Routes>
+          <Route path="/ims" element={<IMSDashboard />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ims-section-overview')).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('tab', { name: /Overview/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByTestId('ims-section-filter')).toBeInTheDocument()
+  })
+
+  it('routes ?section=mapping to cross-standard mapping panel', async () => {
+    const { default: IMSDashboard } = await import('../IMSDashboard')
+
+    render(
+      <MemoryRouter initialEntries={['/ims?section=mapping']}>
+        <Routes>
+          <Route path="/ims" element={<IMSDashboard />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('ims-section-mapping')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Cross-Standard Mapping/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(screen.getByTestId('ims-map-w1-panel')).toBeInTheDocument()
+  })
+
+  it('routes compliance hub ISMS chip to ?section=isms', async () => {
+    const { default: IMSDashboard } = await import('../IMSDashboard')
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter initialEntries={['/ims']}>
+        <Routes>
+          <Route path="/ims" element={<IMSDashboard />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('compliance-hub-isms')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByTestId('compliance-hub-isms'))
+
+    expect(await screen.findByTestId('ims-section-isms')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /ISO 27001 ISMS/i })).toHaveAttribute('aria-selected', 'true')
   })
 })
