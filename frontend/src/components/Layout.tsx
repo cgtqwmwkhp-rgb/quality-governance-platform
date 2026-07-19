@@ -382,19 +382,17 @@ export default function Layout({ onLogout }: LayoutProps) {
         )}
       >
         <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="p-6 border-b border-border">
+          {/* Brand — Option C: mark-dominant */}
+          <div className="p-5 border-b border-border">
             <div className="flex items-center gap-3">
-              <BrandMarkTile size={44} />
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-lg font-bold text-foreground">QGP</h1>
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold gradient-brand text-primary-foreground rounded-full flex items-center gap-0.5">
-                    <Sparkles className="w-2.5 h-2.5" />
-                    PRO
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">{t('login.title')}</p>
+              <BrandMarkTile size={56} />
+              <div className="min-w-0">
+                <h1 className="text-sm font-bold text-foreground leading-snug">
+                  {t('brand.product_name', 'Quality Governance Platform')}
+                </h1>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
+                  {t('brand.company_line', 'Planexpand Limited')}
+                </p>
               </div>
             </div>
           </div>

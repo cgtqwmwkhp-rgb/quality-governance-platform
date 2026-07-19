@@ -77,6 +77,11 @@ on:
         required: false
         type: boolean
         default: false
+      force_production_bake:
+        description: 'EMERGENCY: rebuild+deploy purple-water with PRODUCTION API + Entra VITE_* secrets (skips staging UI gate)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   # purple-water is the single user-facing SWA hostname (also used as staging
@@ -817,3 +822,90 @@ jobs:
 
   # NOTE: close_pull_request_job removed - no longer creating PR preview environments
   # Frontend PRs are validated by CI workflow (Build Check job) and only deployed on merge to main
+
+  # ============================================================================
+  # EMERGENCY PRODUCTION BAKE (workflow_dispatch only)
+  # Restores tip==LIVE when a staging bake was left on purple-water after a
+  # failed staging_ui_verification gate. Always includes Entra VITE_* secrets.
+  # ============================================================================
+  emergency_production_bake:
+    if: github.event_name == 'workflow_dispatch' && inputs.force_production_bake == true
+    runs-on: ubuntu-latest
+    name: Emergency Production SWA Bake
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+          lfs: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Clean Install Dependencies
+        working-directory: frontend
+        run: |
+          rm -rf node_modules
+          npm ci
+
+      - name: Update Service Worker Cache Version
+        working-directory: frontend
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          sed -i "s/CACHE_VERSION = 'qgp-v[^']*'/CACHE_VERSION = 'qgp-v2.0.0-${SHA}-${TIMESTAMP}'/" public/sw.js
+
+      - name: Set production build version metadata
+        run: |
+          echo "VITE_BUILD_SHA=${{ github.sha }}" >> $GITHUB_ENV
+          echo "VITE_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+
+      - name: Build Frontend (PRODUCTION API + Entra)
+        working-directory: frontend
+        env:
+          VITE_API_URL: ${{ env.PRODUCTION_API_URL }}
+          VITE_ENVIRONMENT: production
+          VITE_AZURE_CLIENT_ID: ${{ secrets.VITE_AZURE_CLIENT_ID }}
+          VITE_AZURE_AUTHORITY: ${{ secrets.VITE_AZURE_AUTHORITY }}
+          VITE_AZURE_REDIRECT_URI: ${{ secrets.VITE_AZURE_REDIRECT_URI }}
+          VITE_BUILD_SHA: ${{ env.VITE_BUILD_SHA }}
+          VITE_BUILD_TIME: ${{ env.VITE_BUILD_TIME }}
+        run: |
+          test -n "$VITE_AZURE_CLIENT_ID" || { echo "FAIL: VITE_AZURE_CLIENT_ID secret empty"; exit 1; }
+          test -n "$VITE_AZURE_AUTHORITY" || { echo "FAIL: VITE_AZURE_AUTHORITY secret empty"; exit 1; }
+          npm run build
+
+      - name: Verify tip==LIVE production API bake
+        working-directory: frontend
+        env:
+          PRODUCTION_API_URL: ${{ env.PRODUCTION_API_URL }}
+          STAGING_API_URL: ${{ env.STAGING_API_URL }}
+        run: |
+          python3 <<'PY'
+          import os, pathlib, re, sys
+          prod = os.environ["PRODUCTION_API_URL"]
+          staging = os.environ["STAGING_API_URL"]
+          dist = pathlib.Path("dist")
+          staging_map = re.compile(r'staging\s*:\s*[\'"]' + re.escape(staging) + r'[\'"]')
+          found_prod = baked_staging = False
+          for path in dist.rglob("*.js"):
+              text = path.read_text(encoding="utf-8", errors="ignore")
+              if prod in text:
+                  found_prod = True
+              if staging in staging_map.sub("", text):
+                  baked_staging = True
+                  print(f"FAIL: staging API outside map in {path}")
+          if baked_staging or not found_prod:
+              sys.exit(1)
+          print(f"OK: emergency production bake inlines {prod}")
+          PY
+
+      - name: Deploy production bake to purple-water SWA
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PURPLE_WATER_03205FA03 }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "frontend/dist"
+          skip_app_build: true

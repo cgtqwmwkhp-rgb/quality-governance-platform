@@ -71,7 +71,10 @@ describe('Layout', () => {
       </BrowserRouter>,
     )
 
-    expect(screen.getByText('QGP')).toBeInTheDocument()
+    expect(screen.getByText('brand.product_name')).toBeInTheDocument()
+    expect(screen.getByText('brand.company_line')).toBeInTheDocument()
+    expect(screen.queryByText('QGP')).not.toBeInTheDocument()
+    expect(screen.queryByText('PRO')).not.toBeInTheDocument()
     expect(navLink('/dashboard')).toHaveTextContent('nav.home')
 
     for (const hub of [
