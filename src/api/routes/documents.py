@@ -43,11 +43,7 @@ from src.domain.services.document_version_service import (
     document_version_service,
     parse_filename_version_hint,
 )
-from src.domain.services.index_job_service import (
-    IndexJobService,
-    dispatch_index_job,
-    vector_index_configured,
-)
+from src.domain.services.index_job_service import IndexJobService, dispatch_index_job, vector_index_configured
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.infrastructure.storage import StorageError, storage_service
