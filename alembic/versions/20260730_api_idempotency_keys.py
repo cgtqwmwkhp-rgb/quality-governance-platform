@@ -1,7 +1,7 @@
 """Create api_idempotency_keys for durable Idempotency-Key creates (PX-001).
 
 Revision ID: 20260730_api_idem
-Revises: 20260729_campaign_comp_gate
+Revises: 20260719_gov_lib_w3_review
 Create Date: 2026-07-30
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260730_api_idem"
-down_revision: Union[str, Sequence[str], None] = "20260729_campaign_comp_gate"
+down_revision: Union[str, Sequence[str], None] = "20260719_gov_lib_w3_review"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
