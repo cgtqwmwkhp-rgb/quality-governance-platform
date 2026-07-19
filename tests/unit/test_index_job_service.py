@@ -194,7 +194,9 @@ async def test_process_job_updates_document_progress_counters(monkeypatch: pytes
                 )
             ),
             generate_chunks=AsyncMock(
-                return_value=[SimpleNamespace(content="chunk", index=0, token_count=1, heading=None, char_start=0, char_end=5)]
+                return_value=[
+                    SimpleNamespace(content="chunk", index=0, token_count=1, heading=None, char_start=0, char_end=5)
+                ]
             ),
         ),
     )

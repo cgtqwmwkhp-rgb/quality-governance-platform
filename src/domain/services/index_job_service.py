@@ -174,8 +174,7 @@ class IndexJobService:
             )
         else:
             raise ValueError(
-                "Bulk reprocess requires explicit document_ids, confirm_full_tenant=true, "
-                "or resume_from_job_id"
+                "Bulk reprocess requires explicit document_ids, confirm_full_tenant=true, " "or resume_from_job_id"
             )
 
         if not resolved_ids:
