@@ -24881,8 +24881,9 @@
             "title": "Checksum Sha256"
           },
           "content": {
+            "additionalProperties": true,
             "title": "Content",
-            "type": "string"
+            "type": "object"
           },
           "generated_at": {
             "format": "date-time",
@@ -24928,8 +24929,7 @@
           "audience",
           "investigation_id",
           "investigation_reference",
-          "generated_at",
-          "content"
+          "generated_at"
         ],
         "title": "InvestigationPackGeneratedResponse",
         "type": "object"
@@ -25283,6 +25283,18 @@
               }
             ],
             "title": "Description"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HSG245 level: minimal|low|medium|high",
+            "title": "Level"
           },
           "reviewer_user_id": {
             "anyOf": [
@@ -26099,6 +26111,7 @@
         "description": "Response schema for KRI.\n\nDecoupled from KRIBase to avoid inheriting input validators\n(max_length, Field descriptions) that cause 500 errors on response serialization.",
         "properties": {
           "amber_threshold": {
+            "default": 0.0,
             "title": "Amber Threshold",
             "type": "number"
           },
@@ -26119,6 +26132,7 @@
             "title": "Calculation Method"
           },
           "category": {
+            "default": "operational",
             "title": "Category",
             "type": "string"
           },
@@ -26154,6 +26168,7 @@
             "title": "Current Value"
           },
           "data_source": {
+            "default": "manual",
             "title": "Data Source",
             "type": "string"
           },
@@ -26180,6 +26195,7 @@
             "title": "Description"
           },
           "green_threshold": {
+            "default": 0.0,
             "title": "Green Threshold",
             "type": "number"
           },
@@ -26244,6 +26260,7 @@
             "title": "Owner Id"
           },
           "red_threshold": {
+            "default": 0.0,
             "title": "Red Threshold",
             "type": "number"
           },
@@ -26259,6 +26276,7 @@
             "title": "Trend Direction"
           },
           "unit": {
+            "default": "count",
             "title": "Unit",
             "type": "string"
           },
@@ -26272,12 +26290,6 @@
           "id",
           "code",
           "name",
-          "category",
-          "unit",
-          "data_source",
-          "green_threshold",
-          "amber_threshold",
-          "red_threshold",
           "created_at",
           "updated_at"
         ],
@@ -31363,6 +31375,19 @@
               }
             ],
             "title": "Attachment Ids"
+          },
+          "complainant_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Alias for reporter_name on complaint submissions",
+            "title": "Complainant Name"
           },
           "department": {
             "anyOf": [
@@ -43440,13 +43465,19 @@
             "type": "integer"
           },
           "user_id": {
-            "title": "User Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
           }
         },
         "required": [
           "engineer_id",
-          "user_id",
           "competencies"
         ],
         "title": "WDPEngineerMatrixRow",
@@ -52533,7 +52564,7 @@
         ]
       },
       "post": {
-        "description": "Create an assessment run. Reference number is auto-generated as ASM-YYYY-NNNN.",
+        "description": "Create an assessment run. Reference number is auto-generated as ASM-YYYY-NNNN.\n\nTransactional: the row is committed only after a successful response payload is\nbuilt. Failures roll back so clients never see a 500 with a phantom draft.",
         "operationId": "create_assessment_run_api_v1_assessments__post",
         "requestBody": {
           "content": {
@@ -52637,6 +52668,45 @@
       }
     },
     "/api/v1/assessments/{run_id}": {
+      "delete": {
+        "description": "Soft-delete an assessment run by marking it cancelled.\n\nUses cancelled status (no schema migration) so phantom drafts from failed\ncreates can be cleaned up via DELETE without 405.",
+        "operationId": "delete_assessment_run_api_v1_assessments__run_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Assessment Run",
+        "tags": [
+          "Assessments"
+        ]
+      },
       "get": {
         "description": "Get an assessment run by ID.",
         "operationId": "get_assessment_run_api_v1_assessments__run_id__get",
@@ -70565,8 +70635,26 @@
         ]
       },
       "post": {
-        "description": "Report a new incident.\n\nRequires authentication. Delegates to IncidentService for audit trail,\ncache invalidation, and telemetry.",
+        "description": "Report a new incident.\n\nRequires authentication. Delegates to IncidentService for audit trail,\ncache invalidation, and telemetry.\n\nOptional ``Idempotency-Key`` header (PX-001): retries return the same record.",
         "operationId": "create_incident_api_v1_incidents__post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -77596,8 +77684,26 @@
         ]
       },
       "post": {
-        "description": "Report a new near miss.\n\nNear misses are events that could have resulted in injury, damage, or loss\nbut didn't. Tracking these helps prevent future incidents.",
+        "description": "Report a new near miss.\n\nNear misses are events that could have resulted in injury, damage, or loss\nbut didn't. Tracking these helps prevent future incidents.\n\nOptional ``Idempotency-Key`` header (PX-001): retries return the same record.",
         "operationId": "create_near_miss_api_v1_near_misses__post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -86490,8 +86596,26 @@
         ]
       },
       "post": {
-        "description": "Create a new Road Traffic Collision (RTA).",
+        "description": "Create a new Road Traffic Collision (RTA).\n\nOptional ``Idempotency-Key`` header (PX-001): retries return the same record.",
         "operationId": "create_rta_api_v1_rtas__post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
