@@ -75,6 +75,28 @@
 
 - Single PR to `main`; no migration; no feature flag
 
+## 9) Rollback Plan (Mandatory)
+
+- **Rollback trigger:** Export endpoint errors or broken downloads
+- **Rollback steps:** Revert squash merge; redeploy previous SHA
+- **Owner:** Platform team
+
+## 10) Evidence Pack (links)
+
+- CI run(s): Linked after PR creation
+- Staging deploy evidence: Linked after deploy
+
+---
+
+# Gate Checklist (must be complete before merge)
+
+- [x] **Gate 0:** Scope lock + AC defined + Change Ledger complete
+- [x] **Gate 1:** API/Data/UX contracts approved (as applicable)
+- [ ] **Gate 2:** CI green (lint/type/build/tests)
+- [ ] **Gate 3:** Staging verification complete (evidence linked)
+- [ ] **Gate 4:** Canary healthy (if used) (evidence linked)
+- [x] **Gate 5:** Production verification plan + monitoring ready
+
 ## Test plan
 
 - [x] `pytest tests/unit/test_planet_mark_export_service.py tests/unit/test_planetmark_uvdb_route_harness.py`
