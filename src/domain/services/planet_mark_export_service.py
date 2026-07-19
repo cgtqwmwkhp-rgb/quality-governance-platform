@@ -7,7 +7,7 @@ import json
 import math
 import re
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TypeGuard
 
 from openpyxl import Workbook
 from sqlalchemy import select
@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.models.planet_mark import CarbonReportingYear, ImprovementAction, Scope3CategoryData
 
 
-def _has_positive(value: float | None) -> bool:
+def _has_positive(value: float | None) -> TypeGuard[float]:
     return value is not None and math.isfinite(value) and value > 0
 
 
