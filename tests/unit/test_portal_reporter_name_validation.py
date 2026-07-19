@@ -11,9 +11,9 @@ from src.api.routes.employee_portal import (
     require_portal_display_name,
     resolve_portal_display_name,
 )
+from src.domain.exceptions import ValidationError
 from src.domain.models.complaint import ComplaintPriority
 from src.domain.services.portal_service import _resolve_portal_display_name
-from src.domain.exceptions import ValidationError
 
 
 def test_resolve_anonymous_maps_to_anonymous():
