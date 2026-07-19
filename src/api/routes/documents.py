@@ -21,6 +21,7 @@ from sqlalchemy import func, or_, select
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.document_campaign import SpawnReackCampaignResponse
 from src.api.utils.tenant import require_tenant_id
+from src.core.config import settings
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.document import (
     Document,
@@ -45,6 +46,7 @@ from src.domain.services.document_library_campaign_offer_service import (
     build_campaign_offer_for_document,
     offer_campaign_from_document,
 )
+from src.domain.services.document_library_disposal_service import execute_disposal, list_disposal_candidates
 from src.domain.services.document_library_filing_service import (
     assert_library_read_access,
     filing_defaults_for_category,
@@ -256,6 +258,38 @@ class BulkReprocessResponse(BaseModel):
     vector_index_configured: bool
     vector_index_warning: Optional[str] = None
     dispatched: bool
+    message: str
+
+
+class DisposalCandidateResponse(BaseModel):
+    """Retention-due document returned from the dry-run disposal queue."""
+
+    document_id: int
+    reference_number: Optional[str] = None
+    pel_doc_ref: Optional[str] = None
+    title: str
+    status: str
+    retention_until: datetime
+    category_retention_rule: Optional[str] = None
+
+
+class DisposalQueueResponse(BaseModel):
+    """Preview-only retention disposal candidates."""
+
+    dry_run: bool = True
+    execute_enabled: bool
+    as_of: datetime
+    items: list[DisposalCandidateResponse]
+
+
+class DisposalExecuteRequest(BaseModel):
+    """Explicit candidate IDs required to execute a flagged hard disposal."""
+
+    document_ids: list[int]
+
+
+class DisposalExecuteResponse(BaseModel):
+    disposed_document_ids: list[int]
     message: str
 
 
@@ -960,6 +994,56 @@ async def bulk_reprocess_documents(
         vector_index_warning=warning,
         dispatched=dispatched,
         message=message,
+    )
+
+
+@router.get("/admin/disposal", response_model=DisposalQueueResponse)
+async def preview_disposal_queue(
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("admin:manage"))],
+    limit: int = Query(100, ge=1, le=500),
+) -> DisposalQueueResponse:
+    """Preview retention-due inactive library documents; never mutates data."""
+    as_of = datetime.now(timezone.utc)
+    candidates = await list_disposal_candidates(
+        db,
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        as_of=as_of,
+        limit=limit,
+    )
+    track_metric("library.disposal_queue.previewed")
+    return DisposalQueueResponse(
+        execute_enabled=settings.library_disposal_execute,
+        as_of=as_of,
+        items=[DisposalCandidateResponse(**candidate.__dict__) for candidate in candidates],
+    )
+
+
+@router.post("/admin/disposal/execute", response_model=DisposalExecuteResponse)
+async def execute_disposal_queue(
+    payload: DisposalExecuteRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("admin:manage"))],
+) -> DisposalExecuteResponse:
+    """Hard-dispose explicitly selected candidates only when the kill switch is enabled."""
+    if not settings.library_disposal_execute:
+        track_metric("library.disposal_queue.execution_blocked")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Library disposal execution is disabled. Set LIBRARY_DISPOSAL_EXECUTE=true to enable it.",
+        )
+    if not payload.document_ids:
+        raise BadRequestError("At least one disposal candidate ID is required")
+
+    disposed_ids = await execute_disposal(
+        db,
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        document_ids=payload.document_ids,
+    )
+    track_metric("library.disposal_queue.executed", float(len(disposed_ids)))
+    return DisposalExecuteResponse(
+        disposed_document_ids=disposed_ids,
+        message=f"Hard-disposed {len(disposed_ids)} retention-due document(s)",
     )
 
 
