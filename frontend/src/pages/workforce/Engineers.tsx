@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Search,
@@ -11,6 +11,8 @@ import {
   LayoutGrid,
   List,
   Rows3,
+  ArrowDown,
+  ArrowUp,
 } from 'lucide-react'
 import { CardSkeleton } from '../../components/ui/SkeletonLoader'
 import { useNavigate } from 'react-router-dom'
@@ -41,6 +43,41 @@ import { isWorkforceManager } from '../../utils/workforceAccess'
 type ActiveFilter = '' | 'true' | 'false'
 type LinkFilter = '' | 'linked' | 'unlinked'
 type ViewMode = 'cards' | 'list' | 'compact'
+type SortKey = 'name' | 'role' | 'site' | 'status' | 'login'
+type SortDirection = 'asc' | 'desc'
+
+const SORTABLE_COLUMNS: { key: SortKey; label: string }[] = [
+  { key: 'name', label: 'Name' },
+  { key: 'role', label: 'Role' },
+  { key: 'site', label: 'Site' },
+  { key: 'status', label: 'Status' },
+  { key: 'login', label: 'Login' },
+]
+
+function engineerSortValue(eng: EngineerProfile, key: SortKey): string | number {
+  switch (key) {
+    case 'name':
+      return engineerLabel(eng).toLowerCase()
+    case 'role':
+      return (eng.job_title || '').toLowerCase()
+    case 'site':
+      return (eng.site || '').toLowerCase()
+    case 'status':
+      return eng.is_active ? 1 : 0
+    case 'login':
+      return eng.user_id == null ? -1 : eng.user_id
+  }
+}
+
+function compareEngineers(a: EngineerProfile, b: EngineerProfile, key: SortKey, dir: SortDirection): number {
+  const aVal = engineerSortValue(a, key)
+  const bVal = engineerSortValue(b, key)
+  if (aVal === '' && bVal !== '') return 1
+  if (bVal === '' && aVal !== '') return -1
+  if (aVal < bVal) return dir === 'asc' ? -1 : 1
+  if (aVal > bVal) return dir === 'asc' ? 1 : -1
+  return a.id - b.id
+}
 
 type EmployeeFormState = {
   display_name: string
@@ -95,6 +132,8 @@ export default function Engineers() {
   const [linkFilter, setLinkFilter] = useState<LinkFilter>('')
   const [linkCoverage, setLinkCoverage] = useState<{ linked: number; active: number; percent: number } | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('cards')
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortDir, setSortDir] = useState<SortDirection>('asc')
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
 
@@ -143,6 +182,20 @@ export default function Engineers() {
   useEffect(() => {
     void loadEngineers()
   }, [loadEngineers])
+
+  const sortedEngineers = useMemo(
+    () => [...engineers].sort((a, b) => compareEngineers(a, b, sortKey, sortDir)),
+    [engineers, sortKey, sortDir],
+  )
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setSortKey(key)
+    setSortDir('asc')
+  }
 
   const handleSyncFromPams = async () => {
     setSyncing(true)
@@ -382,7 +435,7 @@ export default function Engineers() {
                   )}
                   aria-pressed={viewMode === id}
                   onClick={() => setViewMode(id)}
-                  data-testid={`employees-view-${id}`}
+                  data-testid={`employees-view-mode-${id}`}
                 >
                   <Icon className="w-3.5 h-3.5" />
                   {label}
@@ -414,7 +467,7 @@ export default function Engineers() {
         </Card>
       ) : viewMode === 'cards' ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="employees-view-cards-grid">
-          {engineers.map((eng) => (
+          {sortedEngineers.map((eng) => (
             <Card
               key={eng.id}
               hoverable
@@ -485,16 +538,43 @@ export default function Engineers() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">Name</th>
-                  <th className="px-4 py-3 font-medium">Role</th>
-                  <th className="px-4 py-3 font-medium">Site</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Login</th>
+                  {SORTABLE_COLUMNS.map(({ key, label }) => {
+                    const active = sortKey === key
+                    return (
+                      <th
+                        key={key}
+                        className="px-4 py-3 font-medium"
+                        scope="col"
+                        aria-sort={
+                          active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'
+                        }
+                      >
+                        <button
+                          type="button"
+                          className={cn(
+                            'inline-flex items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            active ? 'text-foreground' : 'text-muted-foreground',
+                          )}
+                          onClick={() => handleSort(key)}
+                          data-testid={`employees-sort-${key}`}
+                        >
+                          {label}
+                          {active ? (
+                            sortDir === 'asc' ? (
+                              <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
+                            ) : (
+                              <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
+                            )
+                          ) : null}
+                        </button>
+                      </th>
+                    )
+                  })}
                   <th className="px-4 py-3 font-medium w-10" />
                 </tr>
               </thead>
               <tbody>
-                {engineers.map((eng) => (
+                {sortedEngineers.map((eng) => (
                   <tr
                     key={eng.id}
                     className="border-b border-border last:border-0 hover:bg-muted/40 cursor-pointer"
@@ -533,7 +613,7 @@ export default function Engineers() {
           className="rounded-lg border border-border divide-y divide-border bg-card"
           data-testid="employees-view-compact"
         >
-          {engineers.map((eng) => (
+          {sortedEngineers.map((eng) => (
             <button
               key={eng.id}
               type="button"
