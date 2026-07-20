@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import {
   ArrowLeft,
   BookOpen,
   Briefcase,
+  ChevronDown,
   ClipboardList,
   ExternalLink,
   GraduationCap,
@@ -95,6 +96,56 @@ function openAtlas(url?: string | null) {
   window.open(url || ATLAS_HUB_URL, '_blank', 'noopener,noreferrer')
 }
 
+const LONG_ACTIONS_COLLAPSE_AT = 4
+
+function WorkSection({
+  testId,
+  headingId,
+  title,
+  icon,
+  badge,
+  open,
+  onToggle,
+  children,
+}: {
+  testId: string
+  headingId: string
+  title: string
+  icon: ReactNode
+  badge?: ReactNode
+  open: boolean
+  onToggle: () => void
+  children: ReactNode
+}) {
+  return (
+    <section data-testid={testId} aria-labelledby={headingId}>
+      <button
+        type="button"
+        className="w-full flex items-center gap-2 mb-3 text-left rounded-xl px-1 py-1 -mx-1 hover:bg-muted/40 transition-colors"
+        onClick={onToggle}
+        aria-expanded={open}
+        data-testid={`${testId}-toggle`}
+      >
+        <ChevronDown
+          className={`w-4 h-4 shrink-0 text-muted-foreground transition-transform ${
+            open ? '' : '-rotate-90'
+          }`}
+          aria-hidden="true"
+        />
+        {icon}
+        <h2 id={headingId} className="font-semibold text-foreground">
+          {title}
+        </h2>
+        {badge}
+        <span className="ml-auto text-xs text-muted-foreground shrink-0">
+          {open ? 'Collapse' : 'Expand'}
+        </span>
+      </button>
+      {open ? children : null}
+    </section>
+  )
+}
+
 export default function PortalWork() {
   const navigate = useNavigate()
   const { announce } = useLiveAnnouncer()
@@ -117,6 +168,11 @@ export default function PortalWork() {
   const [passport, setPassport] = useState<PassportState>({ status: 'loading' })
   const [training, setTraining] = useState<TrainingState>({ status: 'loading' })
   const [showCompliant, setShowCompliant] = useState(false)
+  const [openActions, setOpenActions] = useState(true)
+  const [openTraining, setOpenTraining] = useState(true)
+  const [openReading, setOpenReading] = useState(true)
+  const [openPassport, setOpenPassport] = useState(false)
+  const actionsCollapseApplied = useRef(false)
 
   const loadActions = useCallback(async () => {
     setActions((prev) => ({ ...prev, loading: true, error: null }))
@@ -250,6 +306,15 @@ export default function PortalWork() {
   const overdueCount = actions.items.filter((a) => isOverdue(a.due_date, a.display_status || a.status))
     .length
 
+  // Long action lists bury Training / Reading — collapse once after first load.
+  useEffect(() => {
+    if (actions.loading || actionsCollapseApplied.current) return
+    actionsCollapseApplied.current = true
+    if (actions.items.length >= LONG_ACTIONS_COLLAPSE_AT) {
+      setOpenActions(false)
+    }
+  }, [actions.loading, actions.items.length])
+
   return (
     <div data-testid="portal-work" className="min-h-screen bg-surface">
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
@@ -288,14 +353,29 @@ export default function PortalWork() {
         </div>
 
         {/* Assigned actions */}
-        <section data-testid="portal-work-actions" aria-labelledby="portal-work-actions-heading">
-          <div className="flex items-center gap-2 mb-3">
-            <ClipboardList className="w-5 h-5 text-primary" />
-            <h2 id="portal-work-actions-heading" className="font-semibold text-foreground">
-              Assigned actions
-            </h2>
-          </div>
-
+        <WorkSection
+          testId="portal-work-actions"
+          headingId="portal-work-actions-heading"
+          title="Assigned actions"
+          icon={<ClipboardList className="w-5 h-5 text-primary" />}
+          open={openActions}
+          onToggle={() => setOpenActions((v) => !v)}
+          badge={
+            !actions.loading && !actions.error && actions.items.length > 0 ? (
+              <span
+                data-testid="portal-work-actions-count"
+                className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold"
+                aria-label={`${actions.items.length} assigned actions`}
+              >
+                {actions.items.length}
+              </span>
+            ) : overdueCount > 0 ? (
+              <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-destructive/10 text-destructive text-xs font-semibold">
+                {overdueCount}
+              </span>
+            ) : null
+          }
+        >
           {actions.loading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="w-7 h-7 text-primary animate-spin" />
@@ -361,19 +441,18 @@ export default function PortalWork() {
               })}
             </div>
           )}
-        </section>
+        </WorkSection>
 
         {/* Training compliance (Atlas + QGP frequency) */}
-        <section
-          data-testid="portal-work-training"
-          aria-labelledby="portal-work-training-heading"
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <GraduationCap className="w-5 h-5 text-primary" />
-            <h2 id="portal-work-training-heading" className="font-semibold text-foreground">
-              Training compliance
-            </h2>
-            {trainingNeedsAttention.length > 0 ? (
+        <WorkSection
+          testId="portal-work-training"
+          headingId="portal-work-training-heading"
+          title="Training compliance"
+          icon={<GraduationCap className="w-5 h-5 text-primary" />}
+          open={openTraining}
+          onToggle={() => setOpenTraining((v) => !v)}
+          badge={
+            trainingNeedsAttention.length > 0 ? (
               <span
                 data-testid="portal-work-training-gap-count"
                 className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-destructive/10 text-destructive text-xs font-semibold"
@@ -381,8 +460,9 @@ export default function PortalWork() {
               >
                 {trainingNeedsAttention.length}
               </span>
-            ) : null}
-          </div>
+            ) : null
+          }
+        >
           <p className="text-sm text-muted-foreground mb-3">
             Due dates use Atlas Passed dates plus Plantexpand frequency rules. Complete training in
             Atlas — QGP is not an LMS.
@@ -528,16 +608,18 @@ export default function PortalWork() {
               ) : null}
             </div>
           )}
-        </section>
+        </WorkSection>
 
         {/* Pending reading */}
-        <section data-testid="portal-work-reading" aria-labelledby="portal-work-reading-heading">
-          <div className="flex items-center gap-2 mb-3">
-            <BookOpen className="w-5 h-5 text-primary" />
-            <h2 id="portal-work-reading-heading" className="font-semibold text-foreground">
-              Pending reading
-            </h2>
-            {pendingReadingCount > 0 && (
+        <WorkSection
+          testId="portal-work-reading"
+          headingId="portal-work-reading-heading"
+          title="Pending reading"
+          icon={<BookOpen className="w-5 h-5 text-primary" />}
+          open={openReading}
+          onToggle={() => setOpenReading((v) => !v)}
+          badge={
+            pendingReadingCount > 0 ? (
               <span
                 data-testid="portal-work-reading-count"
                 className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold"
@@ -545,9 +627,9 @@ export default function PortalWork() {
               >
                 {pendingReadingCount}
               </span>
-            )}
-          </div>
-
+            ) : null
+          }
+        >
           {reading.loading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="w-7 h-7 text-primary animate-spin" />
@@ -670,20 +752,17 @@ export default function PortalWork() {
               ))}
             </div>
           )}
-        </section>
+        </WorkSection>
 
         {/* Passport / profile link */}
-        <section
-          data-testid="portal-work-passport-link"
-          aria-labelledby="portal-work-passport-heading"
+        <WorkSection
+          testId="portal-work-passport-link"
+          headingId="portal-work-passport-heading"
+          title="Workforce profile"
+          icon={<IdCard className="w-5 h-5 text-primary" />}
+          open={openPassport}
+          onToggle={() => setOpenPassport((v) => !v)}
         >
-          <div className="flex items-center gap-2 mb-3">
-            <IdCard className="w-5 h-5 text-primary" />
-            <h2 id="portal-work-passport-heading" className="font-semibold text-foreground">
-              Workforce profile
-            </h2>
-          </div>
-
           {passport.status === 'loading' ? (
             <div className="flex justify-center py-10">
               <Loader2 className="w-7 h-7 text-primary animate-spin" />
@@ -737,7 +816,7 @@ export default function PortalWork() {
               </div>
             </Card>
           )}
-        </section>
+        </WorkSection>
       </main>
     </div>
   )

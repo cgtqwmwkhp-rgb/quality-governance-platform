@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import PortalWork from '../PortalWork'
 
@@ -104,11 +105,49 @@ describe('PortalWork CUJ-P10', () => {
     expect(screen.getByTestId('portal-work-actions-filter-label')).toHaveTextContent(
       'assigned_to=me',
     )
-    expect(await screen.findByTestId('portal-work-passport-unlinked')).toBeInTheDocument()
-    expect(screen.getByText(/Contact your supervisor/i)).toBeInTheDocument()
     expect(screen.getByTestId('portal-work-reading')).toBeInTheDocument()
     expect(screen.getByText(/No pending reads/i)).toBeInTheDocument()
     expect(await screen.findByTestId('portal-work-training-unlinked')).toBeInTheDocument()
+
+    const user = userEvent.setup()
+    await user.click(screen.getByTestId('portal-work-passport-link-toggle'))
+    expect(await screen.findByTestId('portal-work-passport-unlinked')).toBeInTheDocument()
+    expect(screen.getByText(/Contact your supervisor/i)).toBeInTheDocument()
+  })
+
+  it('auto-collapses long assigned-actions lists and lets the user expand again', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: Array.from({ length: 5 }, (_, i) => ({
+          id: i + 1,
+          title: `Action ${i + 1}`,
+          description: 'Do the thing',
+          action_type: 'corrective',
+          priority: 'high',
+          status: 'open',
+          display_status: 'open',
+          action_key: `capa:${i + 1}`,
+          source_type: 'audit_finding',
+          source_id: 9,
+          due_date: '2026-08-01',
+          created_at: '2026-07-01T10:00:00Z',
+          reference_number: `ACT-000${i + 1}`,
+        })),
+        total: 5,
+      },
+    })
+
+    const user = userEvent.setup()
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('portal-work-actions-count')).toHaveTextContent('5')
+    })
+    expect(screen.queryByText('Action 1')).not.toBeInTheDocument()
+
+    await user.click(screen.getByTestId('portal-work-actions-toggle'))
+    expect(await screen.findByText('Action 1')).toBeInTheDocument()
+    expect(screen.getByText('Action 5')).toBeInTheDocument()
   })
 
   it('shows personal training gaps with Atlas CTA and compliant modules', async () => {
@@ -185,9 +224,11 @@ describe('PortalWork CUJ-P10', () => {
       },
     })
 
+    const user = userEvent.setup()
     renderPage()
 
     expect(await screen.findByText(/No actions assigned to you/i)).toBeInTheDocument()
+    await user.click(screen.getByTestId('portal-work-passport-link-toggle'))
     expect(await screen.findByTestId('portal-work-passport-linked')).toBeInTheDocument()
     expect(screen.getByText('Field Engineer')).toBeInTheDocument()
   })
