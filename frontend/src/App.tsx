@@ -398,14 +398,7 @@ function App() {
                     </RequireRole>
                   }
                 />
-                <Route
-                  path="workforce/training"
-                  element={
-                    <RequireRole allowed={['admin', 'supervisor']}>
-                      <WorkforceTraining />
-                    </RequireRole>
-                  }
-                />
+                <Route path="workforce/training" element={<WorkforceTraining />} />
                 <Route
                   path="workforce/training/new"
                   element={
