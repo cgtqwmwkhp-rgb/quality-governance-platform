@@ -79,6 +79,7 @@ const IMSDashboard = lazy(() => import('./pages/IMSDashboard'))
 const AIIntelligence = lazy(() => import('./pages/AIIntelligence'))
 const UVDBAudits = lazy(() => import('./pages/UVDBAudits'))
 const PlanetMark = lazy(() => import('./pages/PlanetMark'))
+const AssuranceCertShelf = lazy(() => import('./pages/AssuranceCertShelf'))
 const CustomerAudits = lazy(() => import('./pages/CustomerAudits'))
 const DigitalSignatures = lazy(() => import('./pages/DigitalSignatures'))
 const VehicleChecklists = lazy(() => import('./pages/VehicleChecklists'))
@@ -333,6 +334,7 @@ function App() {
                 <Route path="compliance" element={<ComplianceEvidence />} />
                 <Route path="uvdb" element={<UVDBAudits />} />
                 <Route path="planet-mark" element={<PlanetMark />} />
+                <Route path="assurance/certificates" element={<AssuranceCertShelf />} />
                 <Route path="customer-audits" element={<CustomerAudits />} />
                 <Route path="signatures" element={<DigitalSignatures />} />
               </Route>

@@ -415,6 +415,15 @@ admin_routes:
     expected_degraded_state: null
     description: "Planet Mark carbon management"
 
+  - pageId: assurance-cert-shelf
+    route: /assurance/certificates
+    auth: jwt_admin
+    criticality: P2
+    component: AssuranceCertShelf
+    expected_empty_state: "Assurance certificate shelf empty state"
+    expected_degraded_state: null
+    description: "Unified assurance certificate shelf with expiry readiness"
+
   - pageId: signatures
     route: /signatures
     auth: jwt_admin
