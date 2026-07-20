@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronRight, Download, ExternalLink, Mail, Upload } from 'lucide-react'
+import { ChevronDown, ChevronRight, Download, ExternalLink, Mail, Upload } from 'lucide-react'
 import {
   getApiErrorMessage,
   trainingMatrixApi,
   workforceApi,
   type EngineerProfile,
   type TrainingMatrixComplianceRow,
+  type TrainingMatrixImport,
   type TrainingMatrixMatrixCell,
   type TrainingMatrixNameMapItem,
   type TrainingMatrixRequirement,
@@ -45,6 +46,64 @@ const HORIZON_VARIANT: Record<Horizon, BadgeVariant> = {
 }
 
 const BRIEFING_ROTATE_MS = 8000
+
+function formatImportStamp(imp: TrainingMatrixImport): string {
+  const when = imp.created_at
+    ? new Date(imp.created_at).toLocaleString(undefined, {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : 'unknown time'
+  const who = imp.uploaded_by_name?.trim() || imp.uploaded_by_email?.trim() || 'unknown user'
+  return `${when} · ${who} · ${imp.filename}`
+}
+
+function AdminSection({
+  title,
+  subtitle,
+  open,
+  onToggle,
+  testId,
+  children,
+  headerRight,
+}: {
+  title: string
+  subtitle?: string
+  open: boolean
+  onToggle: () => void
+  testId: string
+  children: ReactNode
+  headerRight?: ReactNode
+}) {
+  return (
+    <Card data-testid={testId}>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <button
+          type="button"
+          className="flex flex-1 items-start gap-2 text-left"
+          onClick={onToggle}
+          aria-expanded={open}
+          data-testid={`${testId}-toggle`}
+        >
+          <ChevronDown
+            className={`mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+              open ? '' : '-rotate-90'
+            }`}
+          />
+          <div>
+            <p className="font-medium">{title}</p>
+            {subtitle ? <p className="text-sm text-muted-foreground">{subtitle}</p> : null}
+          </div>
+        </button>
+        {headerRight}
+      </CardHeader>
+      {open ? <CardContent className="space-y-3">{children}</CardContent> : null}
+    </Card>
+  )
+}
 
 function AtlasCta({ url = ATLAS_HUB_URL }: { url?: string }) {
   const { t } = useTranslation()
@@ -152,6 +211,7 @@ export function TrainingMatrixGapBoard() {
   const [briefingIndex, setBriefingIndex] = useState(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [notifying, setNotifying] = useState(false)
+  const [latestImport, setLatestImport] = useState<TrainingMatrixImport | null>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -164,6 +224,10 @@ export function TrainingMatrixGapBoard() {
         setError(getApiErrorMessage(err))
       })
       .finally(() => setLoading(false))
+    trainingMatrixApi
+      .getLatestImport()
+      .then(setLatestImport)
+      .catch(() => setLatestImport(null))
   }, [])
 
   const roleStats = useMemo(() => computeRoleStats(rows), [rows])
@@ -243,6 +307,15 @@ export function TrainingMatrixGapBoard() {
                 'Due dates use Atlas Passed + your frequency rules. Complete training in Atlas.',
               )}
             </p>
+            {latestImport ? (
+              <p className="text-xs text-muted-foreground mt-1" data-testid="training-matrix-last-upload">
+                Atlas data on file: {formatImportStamp(latestImport)}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-1" data-testid="training-matrix-last-upload">
+                No Atlas matrix uploaded yet — use Admin → Upload CSV.
+              </p>
+            )}
           </div>
           <AtlasCta />
         </CardHeader>
@@ -285,7 +358,7 @@ export function TrainingMatrixGapBoard() {
                     <p className="text-xs text-muted-foreground">{stat.role}</p>
                     <p className="text-lg font-semibold">{stat.pct}%</p>
                     <p className="text-xs text-muted-foreground">
-                      {stat.ok}/{stat.total} fully compliant
+                      {stat.ok}/{stat.total} people with every required module OK
                     </p>
                   </div>
                 ) : null,
@@ -633,6 +706,10 @@ export function TrainingMatrixAdminPanel() {
   const [courses, setCourses] = useState<{ course_key: string; display_name: string }[]>([])
   const [grid, setGrid] = useState<MatrixGrid>({})
   const [savingMatrix, setSavingMatrix] = useState(false)
+  const [latestImport, setLatestImport] = useState<TrainingMatrixImport | null>(null)
+  const [openUpload, setOpenUpload] = useState(true)
+  const [openNameMap, setOpenNameMap] = useState(false)
+  const [openMatrix, setOpenMatrix] = useState(true)
 
   const reload = () => {
     setNameMapsLoaded(false)
@@ -649,6 +726,10 @@ export function TrainingMatrixAdminPanel() {
       .finally(() => setNameMapsLoaded(true))
     trainingMatrixApi.listRequirements().then((r) => setRequirements(r.items)).catch(() => setRequirements([]))
     trainingMatrixApi.listCourses().then(setCourses).catch(() => setCourses([]))
+    trainingMatrixApi
+      .getLatestImport()
+      .then(setLatestImport)
+      .catch(() => setLatestImport(null))
     workforceApi
       .listEngineers({ page: '1', page_size: '500' })
       .then((res) => {
@@ -684,13 +765,29 @@ export function TrainingMatrixAdminPanel() {
   }, [JSON.stringify(savedGrid)])
 
   const onUpload = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      setError(
+        'Upload the Atlas Training Matrix Report as CSV (.csv). Excel (.xlsx) is not accepted — export/save as CSV from Atlas first.',
+      )
+      return
+    }
+    if (latestImport) {
+      const ok = window.confirm(
+        `Overwrite the Atlas matrix currently on file?\n\n` +
+          `Current: ${formatImportStamp(latestImport)}\n\n` +
+          `This replaces last week's completion cells with the new CSV. Name maps and frequency rules are kept.`,
+      )
+      if (!ok) return
+    }
     setUploading(true)
     setError(null)
     setMessage(null)
     try {
       const imp = await trainingMatrixApi.uploadImport(file)
+      setLatestImport(imp)
       setMessage(
-        `Imported ${imp.person_count} people, ${imp.course_count} courses (${imp.expiry_without_passed_count} expiry without passed)`,
+        `Imported ${imp.person_count} people, ${imp.course_count} courses. ` +
+          `This file is now the live Atlas snapshot until the next upload.`,
       )
       reload()
     } catch (err) {
@@ -751,49 +848,65 @@ export function TrainingMatrixAdminPanel() {
 
   return (
     <div className="space-y-4" data-testid="training-matrix-admin">
-      <Card>
-        <CardHeader>
-          <p className="font-medium">
-            {t('workforce.training_matrix.upload_title', 'Weekly Atlas matrix upload')}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Admin only. CSV template from Atlas. QGP is not an LMS — completions stay in Atlas.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".csv,text/csv"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              if (f) void onUpload(f)
-              e.target.value = ''
-            }}
-          />
-          <Button
-            type="button"
-            disabled={uploading}
-            onClick={() => fileRef.current?.click()}
-            data-testid="training-matrix-upload"
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            {uploading ? 'Uploading…' : 'Upload CSV'}
-          </Button>
-          {message ? <p className="text-sm text-foreground">{message}</p> : null}
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
-        </CardContent>
-      </Card>
+      <AdminSection
+        testId="training-matrix-admin-upload"
+        title={t('workforce.training_matrix.upload_title', 'Weekly Atlas matrix upload')}
+        subtitle="Admin only. Atlas CSV only (.csv). Each upload replaces the previous week's completion data and stays on file until the next upload."
+        open={openUpload}
+        onToggle={() => setOpenUpload((v) => !v)}
+      >
+        <div
+          className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm"
+          data-testid="training-matrix-admin-last-upload"
+        >
+          {latestImport ? (
+            <>
+              <p className="font-medium">Last upload</p>
+              <p className="text-muted-foreground">{formatImportStamp(latestImport)}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {latestImport.person_count} people · {latestImport.course_count} courses · retained until next overwrite
+              </p>
+            </>
+          ) : (
+            <p className="text-muted-foreground">No Atlas matrix on file yet.</p>
+          )}
+        </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".csv,text/csv"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) void onUpload(f)
+            e.target.value = ''
+          }}
+        />
+        <Button
+          type="button"
+          disabled={uploading}
+          onClick={() => fileRef.current?.click()}
+          data-testid="training-matrix-upload"
+        >
+          <Upload className="w-4 h-4 mr-2" />
+          {uploading ? 'Uploading…' : latestImport ? 'Upload CSV (overwrite)' : 'Upload CSV'}
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Export the Training Matrix Report from Atlas as CSV. XLSX/PDF will be rejected. You will be asked
+          to confirm before overwriting an existing snapshot.
+        </p>
+        {message ? <p className="text-sm text-foreground">{message}</p> : null}
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      </AdminSection>
 
-      <Card>
-        <CardHeader>
-          <p className="font-medium">Name mapping (Atlas → Employee)</p>
-          <p className="text-sm text-muted-foreground">
-            Unmatched: {unmatched.length}. Auto-match uses display name; resolve the rest here.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-2 max-h-64 overflow-y-auto">
+      <AdminSection
+        testId="training-matrix-admin-namemap"
+        title="Name mapping (Atlas → Employee)"
+        subtitle={`Unmatched: ${unmatched.length}. Auto-match uses display name; resolve the rest here.`}
+        open={openNameMap}
+        onToggle={() => setOpenNameMap((v) => !v)}
+      >
+        <div className="space-y-2 max-h-64 overflow-y-auto">
           {unmatched.slice(0, 40).map((row) => (
             <div key={row.atlas_name} className="flex flex-wrap items-center gap-2 text-sm">
               <span className="min-w-[10rem] font-medium">{row.atlas_name}</span>
@@ -824,76 +937,75 @@ export function TrainingMatrixAdminPanel() {
               No Atlas people yet. Upload a matrix CSV first.
             </p>
           ) : null}
-        </CardContent>
-      </Card>
+        </div>
+      </AdminSection>
 
-      <Card>
-        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <p className="font-medium">Frequency matrix (role x course)</p>
-            <p className="text-sm text-muted-foreground">
-              Select a cycle for each cell — course rows come from your Atlas courses and existing
-              rules. Clear a cell (—) to deactivate that rule. Compliance always reads these rows.
-            </p>
-          </div>
-          <Button
-            type="button"
-            disabled={savingMatrix || courseRows.length === 0}
-            onClick={onSaveMatrix}
-            data-testid="training-matrix-save-matrix"
-          >
-            {savingMatrix ? 'Saving…' : 'Save matrix'}
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto max-h-[32rem]">
-            <table className="w-full text-sm" data-testid="training-matrix-matrix-grid">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground sticky top-0 bg-card">
-                  <th className="py-2 px-3">Course</th>
+      <AdminSection
+        testId="training-matrix-admin-matrix"
+        title="Frequency matrix (role x course)"
+        subtitle="Select a cycle for each cell — course rows come from your Atlas courses and existing rules. Clear a cell (—) to deactivate that rule."
+        open={openMatrix}
+        onToggle={() => setOpenMatrix((v) => !v)}
+        headerRight={
+          openMatrix ? (
+            <Button
+              type="button"
+              disabled={savingMatrix || courseRows.length === 0}
+              onClick={onSaveMatrix}
+              data-testid="training-matrix-save-matrix"
+            >
+              {savingMatrix ? 'Saving…' : 'Save matrix'}
+            </Button>
+          ) : null
+        }
+      >
+        <div className="overflow-auto max-h-[min(70vh,48rem)] border border-border rounded-md">
+          <table className="w-full text-sm" data-testid="training-matrix-matrix-grid">
+            <thead>
+              <tr className="border-b border-border text-left text-muted-foreground sticky top-0 bg-card z-10">
+                <th className="py-2 px-3">Course</th>
+                {BOARD_ROLES.map((role) => (
+                  <th key={role} className="py-2 px-3">
+                    {role}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {courseRows.map((row) => (
+                <tr key={row.course_key} className="border-b border-border/50">
+                  <td className="py-1.5 px-3 font-medium">{row.course_display_name}</td>
                   {BOARD_ROLES.map((role) => (
-                    <th key={role} className="py-2 px-3">
-                      {role}
-                    </th>
+                    <td key={role} className="py-1.5 px-3">
+                      <select
+                        className="h-8 rounded-md border border-border bg-card px-2 text-sm"
+                        aria-label={`${row.course_display_name} — ${role}`}
+                        value={grid[row.course_key]?.[role] ?? ''}
+                        onChange={(e) => {
+                          const raw = e.target.value
+                          setCell(row.course_key, role, raw === '' ? null : Number(raw))
+                        }}
+                      >
+                        <option value="">—</option>
+                        <option value={1}>1y</option>
+                        <option value={2}>2y</option>
+                        <option value={3}>3y</option>
+                      </select>
+                    </td>
                   ))}
                 </tr>
-              </thead>
-              <tbody>
-                {courseRows.map((row) => (
-                  <tr key={row.course_key} className="border-b border-border/50">
-                    <td className="py-1.5 px-3 font-medium">{row.course_display_name}</td>
-                    {BOARD_ROLES.map((role) => (
-                      <td key={role} className="py-1.5 px-3">
-                        <select
-                          className="h-8 rounded-md border border-border bg-card px-2 text-sm"
-                          aria-label={`${row.course_display_name} — ${role}`}
-                          value={grid[row.course_key]?.[role] ?? ''}
-                          onChange={(e) => {
-                            const raw = e.target.value
-                            setCell(row.course_key, role, raw === '' ? null : Number(raw))
-                          }}
-                        >
-                          <option value="">—</option>
-                          <option value={1}>1y</option>
-                          <option value={2}>2y</option>
-                          <option value={3}>3y</option>
-                        </select>
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-                {courseRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={BOARD_ROLES.length + 1} className="py-6 text-center text-muted-foreground">
-                      No Atlas courses yet. Upload a matrix CSV to populate rows.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+              ))}
+              {courseRows.length === 0 ? (
+                <tr>
+                  <td colSpan={BOARD_ROLES.length + 1} className="py-6 text-center text-muted-foreground">
+                    No Atlas courses yet. Upload a matrix CSV to populate rows.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </AdminSection>
     </div>
   )
 }
