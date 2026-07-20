@@ -55,6 +55,96 @@ vi.mock('../../components/ui/SetupRequiredPanel', () => ({
 }))
 
 describe('UVDBAudits', () => {
+  const mockContentCoverage = {
+    protocol_version: '11.8-target',
+    status: 'partial' as const,
+    total_sections: 15,
+    loaded_sections: ['1', '2', '12', '13', '14', '15'],
+    pending_sections: ['3', '4', '5', '6', '7', '8', '9', '10', '11'],
+    loaded_question_count: 25,
+    pending_question_count: 0,
+    pending_reason:
+      'Sections 3-11 await UVDB-QS-003 v11.8 protocol PDF ingest; section titles marked provisional where not PDF-pinned.',
+  }
+
+  const mockSections = [
+    {
+      number: '1',
+      title: 'System Assurance and Compliance',
+      max_score: 21,
+      question_count: 5,
+      iso_mapping: {},
+      content_status: 'loaded' as const,
+      title_provisional: false,
+    },
+    {
+      number: '2',
+      title: 'Quality Control and Assurance',
+      max_score: 21,
+      question_count: 5,
+      iso_mapping: {},
+      content_status: 'loaded' as const,
+      title_provisional: false,
+    },
+    {
+      number: '3',
+      title: 'Health and Safety Policy and Leadership',
+      max_score: 0,
+      question_count: 0,
+      iso_mapping: { '45001': 'pending' },
+      content_status: 'pending_protocol_pdf' as const,
+      title_provisional: true,
+    },
+    ...Array.from({ length: 8 }, (_, index) => {
+      const number = String(index + 4)
+      return {
+        number,
+        title: `Section ${number} shell`,
+        max_score: 0,
+        question_count: 0,
+        iso_mapping: {},
+        content_status: 'pending_protocol_pdf' as const,
+        title_provisional: true,
+      }
+    }),
+    {
+      number: '12',
+      title: 'Selection and Management of Sub-contractors',
+      max_score: 12,
+      question_count: 2,
+      iso_mapping: {},
+      content_status: 'loaded' as const,
+      title_provisional: false,
+    },
+    {
+      number: '13',
+      title: 'Sourcing of Goods and Products',
+      max_score: 12,
+      question_count: 4,
+      iso_mapping: {},
+      content_status: 'loaded' as const,
+      title_provisional: false,
+    },
+    {
+      number: '14',
+      title: 'Use of Work Equipment, Vehicles and Machines',
+      max_score: 6,
+      question_count: 1,
+      iso_mapping: {},
+      content_status: 'loaded' as const,
+      title_provisional: false,
+    },
+    {
+      number: '15',
+      title: 'Key Performance Indicators',
+      max_score: 0,
+      question_count: 14,
+      iso_mapping: {},
+      content_status: 'loaded' as const,
+      title_provisional: false,
+    },
+  ]
+
   const renderPage = (ui: ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>)
 
   beforeEach(() => {
@@ -62,29 +152,21 @@ describe('UVDBAudits', () => {
     mockGetDashboard.mockResolvedValue({
       data: {
         summary: { total_audits: 3, active_audits: 1, completed_audits: 2, average_score: 91.2 },
-        protocol: { name: 'UVDB Verify B2', version: 'V11.2', sections: 2 },
+        protocol: {
+          name: 'UVDB Verify B2',
+          version: '11.8-target',
+          sections: 15,
+          content_coverage: mockContentCoverage,
+        },
         certification_alignment: {},
+        content_coverage: mockContentCoverage,
       },
     })
     mockListSections.mockResolvedValue({
       data: {
-        total_sections: 2,
-        sections: [
-          {
-            number: '1',
-            title: 'Management Systems',
-            max_score: 10,
-            question_count: 4,
-            iso_mapping: {},
-          },
-          {
-            number: '2',
-            title: 'Information Security',
-            max_score: 8,
-            question_count: 3,
-            iso_mapping: {},
-          },
-        ],
+        total_sections: 15,
+        content_coverage: mockContentCoverage,
+        sections: mockSections,
       },
     })
     mockListAudits.mockResolvedValue({
@@ -236,8 +318,14 @@ describe('UVDBAudits', () => {
     mockGetDashboard.mockRejectedValueOnce(new Error('temporary outage')).mockResolvedValue({
       data: {
         summary: { total_audits: 3, active_audits: 1, completed_audits: 2, average_score: 91.2 },
-        protocol: { name: 'UVDB Verify B2', version: 'V11.2', sections: 2 },
+        protocol: {
+          name: 'UVDB Verify B2',
+          version: '11.8-target',
+          sections: 15,
+          content_coverage: mockContentCoverage,
+        },
         certification_alignment: {},
+        content_coverage: mockContentCoverage,
       },
     })
 
@@ -292,6 +380,21 @@ describe('UVDBAudits', () => {
     expect(screen.getByRole('tab', { name: /uvdb.shell.section.mapping/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /uvdb.shell.section.export/i })).toBeInTheDocument()
     expect(screen.getByTestId('uvdb-section-scores')).toBeInTheDocument()
+    expect(screen.getByTestId('uvdb-protocol-partial-honesty')).toBeInTheDocument()
+    expect(screen.getByText('uvdb.protocol_version_target')).toBeInTheDocument()
+  })
+
+  it('shows pending section honesty on the protocol tab', async () => {
+    const UVDBAudits = (await import('../UVDBAudits')).default
+    render(
+      <MemoryRouter initialEntries={['/uvdb?section=protocol']}>
+        <UVDBAudits />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('uvdb-section-3-pending')).toBeInTheDocument()
+    expect(screen.getAllByText('uvdb.title_provisional').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('uvdb.questions_pending_pdf').length).toBeGreaterThan(0)
   })
 
   it('enables protocol export downloads on the export section', async () => {
@@ -534,7 +637,18 @@ describe('UVDBAudits', () => {
     mockGetDashboard.mockResolvedValueOnce({
       data: {
         summary: { total_audits: 0, active_audits: 0, completed_audits: 0, average_score: 0 },
-        protocol: { name: 'UVDB Verify B2', version: 'V11.2', sections: 0 },
+        protocol: {
+          name: 'UVDB Verify B2',
+          version: '11.8-target',
+          sections: 0,
+          content_coverage: {
+            ...mockContentCoverage,
+            status: 'partial',
+            loaded_sections: [],
+            pending_sections: [],
+            total_sections: 0,
+          },
+        },
         certification_alignment: {},
       },
     })
