@@ -202,4 +202,63 @@ describe('Engineers', () => {
     })
     expect(createEngineer).not.toHaveBeenCalled()
   })
+
+  it('sorts the list view when column headers are clicked', async () => {
+    listEngineers.mockResolvedValue({
+      data: {
+        items: [
+          {
+            ...employee,
+            id: 1,
+            display_name: 'Charlie',
+            job_title: 'Welder',
+            site: 'South',
+            user_id: null,
+          },
+          {
+            ...employee,
+            id: 2,
+            display_name: 'Alice',
+            job_title: 'Technician',
+            site: 'North',
+            user_id: 10,
+          },
+          {
+            ...employee,
+            id: 3,
+            display_name: 'Bob',
+            job_title: 'Supervisor',
+            site: 'East',
+            user_id: null,
+          },
+        ],
+      },
+    })
+    renderPage()
+
+    await screen.findByText('Alice')
+    fireEvent.click(screen.getByTestId('employees-view-mode-list'))
+
+    const list = await screen.findByTestId('employees-view-list')
+    const nameCells = () =>
+      Array.from(list.querySelectorAll('tbody tr')).map(
+        (row) => row.querySelector('td')?.textContent?.trim() ?? '',
+      )
+
+    expect(nameCells()).toEqual(['Alice', 'Bob', 'Charlie'])
+
+    fireEvent.click(screen.getByTestId('employees-sort-name'))
+    expect(nameCells()).toEqual(['Charlie', 'Bob', 'Alice'])
+    expect(screen.getByTestId('employees-sort-name').closest('th')).toHaveAttribute(
+      'aria-sort',
+      'descending',
+    )
+
+    fireEvent.click(screen.getByTestId('employees-sort-site'))
+    expect(nameCells()).toEqual(['Bob', 'Alice', 'Charlie'])
+    expect(screen.getByTestId('employees-sort-site').closest('th')).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    )
+  })
 })
