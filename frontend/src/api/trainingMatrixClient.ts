@@ -13,6 +13,9 @@ export type TrainingMatrixImport = {
   nonempty_cell_count: number
   expiry_without_passed_count: number
   created_at?: string
+  uploaded_by_user_id?: number | null
+  uploaded_by_name?: string | null
+  uploaded_by_email?: string | null
 }
 
 export type TrainingMatrixImportQa = {

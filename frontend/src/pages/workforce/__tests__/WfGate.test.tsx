@@ -51,6 +51,7 @@ vi.mock('../../../api/client', () => ({
     listRequirements: vi.fn().mockResolvedValue({ items: [], total: 0 }),
     listCourses: vi.fn().mockResolvedValue([]),
     uploadImport: vi.fn(),
+    getLatestImport: vi.fn().mockRejectedValue(new Error('No training matrix import found')),
     upsertNameMap: vi.fn(),
     upsertRequirementsMatrix: vi.fn(),
     notify: vi.fn(),

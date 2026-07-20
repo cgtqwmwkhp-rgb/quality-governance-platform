@@ -94,6 +94,24 @@ async def _latest_import(db: DbSession, tenant_id: int) -> Optional[TrainingMatr
     ).scalar_one_or_none()
 
 
+async def _import_response(db: DbSession, imp: TrainingMatrixImport) -> TrainingMatrixImportResponse:
+    """Serialize an import row and resolve uploader display fields when present."""
+    payload = TrainingMatrixImportResponse.model_validate(imp)
+    uploader_id = getattr(imp, "uploaded_by_user_id", None)
+    if not uploader_id:
+        return payload
+    uploader = (await db.execute(select(User).where(User.id == uploader_id))).scalar_one_or_none()
+    if not uploader:
+        return payload.model_copy(update={"uploaded_by_user_id": uploader_id})
+    return payload.model_copy(
+        update={
+            "uploaded_by_user_id": uploader.id,
+            "uploaded_by_name": uploader.full_name,
+            "uploaded_by_email": uploader.email,
+        }
+    )
+
+
 @router.post("/imports", response_model=TrainingMatrixImportResponse, status_code=status.HTTP_201_CREATED)
 async def upload_training_matrix(
     db: DbSession,
@@ -104,7 +122,10 @@ async def upload_training_matrix(
     tenant_id = _tenant(user)
     filename = file.filename or "training-matrix.csv"
     if not filename.lower().endswith(".csv"):
-        raise ValidationError("Upload the Atlas Training Matrix Report as CSV (.csv)")
+        raise ValidationError(
+            "Upload the Atlas Training Matrix Report as CSV (.csv). "
+            "Excel (.xlsx) is not accepted — export/save as CSV from Atlas first."
+        )
     raw = await file.read()
     if not raw:
         raise ValidationError("Uploaded file is empty")
@@ -122,7 +143,7 @@ async def upload_training_matrix(
     )
     await db.commit()
     await db.refresh(imp)
-    return TrainingMatrixImportResponse.model_validate(imp)
+    return await _import_response(db, imp)
 
 
 @router.get("/imports/latest", response_model=TrainingMatrixImportResponse)
@@ -132,7 +153,7 @@ async def get_latest_import(db: DbSession, user: CurrentUser):
     imp = await _latest_import(db, tenant_id)
     if not imp:
         raise NotFoundError("No training matrix import found")
-    return TrainingMatrixImportResponse.model_validate(imp)
+    return await _import_response(db, imp)
 
 
 @router.get("/imports/latest/qa", response_model=TrainingMatrixImportQaResponse)

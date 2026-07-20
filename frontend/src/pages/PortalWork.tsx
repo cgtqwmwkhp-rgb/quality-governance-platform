@@ -7,6 +7,7 @@ import {
   Briefcase,
   ClipboardList,
   ExternalLink,
+  GraduationCap,
   IdCard,
   Loader2,
 } from 'lucide-react'
@@ -16,13 +17,16 @@ import {
   engineersApi,
   getApiErrorMessage,
   policyAcknowledgmentsApi,
+  trainingMatrixApi,
   type Action,
   type DocumentCampaignAssignment,
   type PolicyAcknowledgment,
+  type TrainingMatrixComplianceRow,
 } from '../api/client'
+import { ATLAS_HUB_URL } from '../api/trainingMatrixClient'
 import type { EngineerSelfProfile } from '../api/engineersClient'
 import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
-import { Badge } from '../components/ui/Badge'
+import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -32,6 +36,10 @@ import {
   portalCampaignReadingHref,
   unifiedReadingQueueCount,
 } from './campaignReadingHelpers'
+import {
+  myTrainingSummary,
+  statusLabel,
+} from './workforce/trainingMatrix/trainingMatrixBoardHelpers'
 
 type LoadState<T> = {
   items: T[]
@@ -70,6 +78,23 @@ function isOverdue(due?: string | null, status?: string): boolean {
   return d.getTime() < Date.now()
 }
 
+type TrainingState =
+  | { status: 'loading' }
+  | { status: 'ready'; rows: TrainingMatrixComplianceRow[]; atlasUrl: string }
+  | { status: 'unlinked' }
+  | { status: 'error'; message: string }
+
+function trainingBadgeVariant(status: string): BadgeVariant {
+  if (status === 'compliant') return 'success'
+  if (status === 'overdue' || status === 'failed' || status === 'missing') return 'destructive'
+  if (status === 'due_soon') return 'warning'
+  return 'submitted'
+}
+
+function openAtlas(url?: string | null) {
+  window.open(url || ATLAS_HUB_URL, '_blank', 'noopener,noreferrer')
+}
+
 export default function PortalWork() {
   const navigate = useNavigate()
   const { announce } = useLiveAnnouncer()
@@ -90,6 +115,8 @@ export default function PortalWork() {
     error: null,
   })
   const [passport, setPassport] = useState<PassportState>({ status: 'loading' })
+  const [training, setTraining] = useState<TrainingState>({ status: 'loading' })
+  const [showCompliant, setShowCompliant] = useState(false)
 
   const loadActions = useCallback(async () => {
     setActions((prev) => ({ ...prev, loading: true, error: null }))
@@ -155,13 +182,32 @@ export default function PortalWork() {
     }
   }, [])
 
+  const loadTraining = useCallback(async () => {
+    setTraining({ status: 'loading' })
+    try {
+      const res = await trainingMatrixApi.myTraining()
+      setTraining({
+        status: 'ready',
+        rows: res.items || [],
+        atlasUrl: res.atlas_hub_url || ATLAS_HUB_URL,
+      })
+    } catch (err) {
+      if (isNotFound(err)) {
+        setTraining({ status: 'unlinked' })
+        return
+      }
+      setTraining({ status: 'error', message: reportFailure(err) })
+    }
+  }, [])
+
   useEffect(() => {
     announce('My Work inbox loaded')
     void loadActions()
     void loadReading()
     void loadCampaigns()
     void loadPassport()
-  }, [announce, loadActions, loadReading, loadCampaigns, loadPassport])
+    void loadTraining()
+  }, [announce, loadActions, loadReading, loadCampaigns, loadPassport, loadTraining])
 
   const readingQueue = useMemo(
     () => partitionReadingQueue(reading.items, campaigns.items),
@@ -170,6 +216,25 @@ export default function PortalWork() {
   const pendingReadingCount = unifiedReadingQueueCount(
     readingQueue.activeCampaigns,
     readingQueue.visiblePolicyAcks,
+  )
+
+  const trainingSummary = useMemo(
+    () => (training.status === 'ready' ? myTrainingSummary(training.rows) : null),
+    [training],
+  )
+  const trainingNeedsAttention = useMemo(
+    () =>
+      training.status === 'ready'
+        ? training.rows
+            .filter((row) => row.status !== 'compliant')
+            .sort((a, b) => (a.qgp_due_on || '9999').localeCompare(b.qgp_due_on || '9999'))
+        : [],
+    [training],
+  )
+  const trainingCompliant = useMemo(
+    () =>
+      training.status === 'ready' ? training.rows.filter((row) => row.status === 'compliant') : [],
+    [training],
   )
 
   const handleOpenReading = async (item: PolicyAcknowledgment) => {
@@ -208,8 +273,8 @@ export default function PortalWork() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Your inbox</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Assigned actions, pending reading, and profile link state — from the server, not a local
-            guess.
+            Assigned actions, pending reading, training compliance, and profile link — from the
+            server, not a local guess.
           </p>
           {!actions.loading && !actions.error && (
             <p
@@ -294,6 +359,173 @@ export default function PortalWork() {
                   </Card>
                 )
               })}
+            </div>
+          )}
+        </section>
+
+        {/* Training compliance (Atlas + QGP frequency) */}
+        <section
+          data-testid="portal-work-training"
+          aria-labelledby="portal-work-training-heading"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <GraduationCap className="w-5 h-5 text-primary" />
+            <h2 id="portal-work-training-heading" className="font-semibold text-foreground">
+              Training compliance
+            </h2>
+            {trainingNeedsAttention.length > 0 ? (
+              <span
+                data-testid="portal-work-training-gap-count"
+                className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-destructive/10 text-destructive text-xs font-semibold"
+                aria-label={`${trainingNeedsAttention.length} modules need attention`}
+              >
+                {trainingNeedsAttention.length}
+              </span>
+            ) : null}
+          </div>
+          <p className="text-sm text-muted-foreground mb-3">
+            Due dates use Atlas Passed dates plus Plantexpand frequency rules. Complete training in
+            Atlas — QGP is not an LMS.
+          </p>
+
+          {training.status === 'loading' ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="w-7 h-7 text-primary animate-spin" />
+            </div>
+          ) : training.status === 'error' ? (
+            <div
+              data-testid="portal-work-training-error"
+              className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            >
+              {training.message}
+              <div className="mt-2">
+                <Button variant="outline" size="sm" onClick={() => void loadTraining()}>
+                  Retry
+                </Button>
+              </div>
+            </div>
+          ) : training.status === 'unlinked' ? (
+            <div data-testid="portal-work-training-unlinked">
+              <EmptyState
+                className="py-10"
+                icon={<GraduationCap className="w-8 h-8 text-muted-foreground" />}
+                title="Training not linked yet"
+                description="Your login must be linked to a workforce profile and mapped to your Atlas name before personal compliance appears. Ask your supervisor if this is missing."
+              />
+            </div>
+          ) : training.rows.length === 0 ? (
+            <EmptyState
+              className="py-10"
+              icon={<GraduationCap className="w-8 h-8 text-muted-foreground" />}
+              title="No required modules on file"
+              description="Once the weekly Atlas matrix is uploaded and your name is mapped, your modules will show here."
+            />
+          ) : (
+            <div className="space-y-3">
+              <Card className="p-4" data-testid="portal-work-training-summary">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-foreground">
+                      {trainingSummary?.okCount}/{trainingSummary?.total} modules OK
+                    </p>
+                    {trainingSummary?.nextDue ? (
+                      <p className="text-sm text-muted-foreground mt-0.5">
+                        Next due: {trainingSummary.nextDue.course_display_name} on{' '}
+                        {formatDue(trainingSummary.nextDue.qgp_due_on) ??
+                          trainingSummary.nextDue.qgp_due_on}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground mt-0.5">
+                        Nothing outstanding right now.
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    data-testid="portal-work-training-atlas"
+                    onClick={() => openAtlas(training.atlasUrl)}
+                  >
+                    <ExternalLink className="w-4 h-4 mr-1" />
+                    Open Atlas
+                  </Button>
+                </div>
+              </Card>
+
+              {trainingNeedsAttention.length > 0 ? (
+                <div className="space-y-2" data-testid="portal-work-training-gaps">
+                  <p className="text-sm font-medium text-muted-foreground">Needs attention</p>
+                  {trainingNeedsAttention.map((row) => (
+                    <Card key={`${row.course_key}-${row.atlas_name}`} className="p-4">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={trainingBadgeVariant(row.status)}>
+                            {statusLabel(row)}
+                          </Badge>
+                          {row.expires_on ? (
+                            <span className="text-xs text-muted-foreground">
+                              Atlas expiry {formatDue(row.expires_on) ?? row.expires_on}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="font-medium text-foreground">{row.course_display_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          QGP due{' '}
+                          {formatDue(row.qgp_due_on) ?? row.qgp_due_on ?? 'not set'}
+                          {row.passed_on
+                            ? ` · last passed ${formatDue(row.passed_on) ?? row.passed_on}`
+                            : ' · no Passed date in Atlas'}
+                        </p>
+                        <Button
+                          size="lg"
+                          className="w-full min-h-12"
+                          onClick={() => openAtlas(row.atlas_hub_url || training.atlasUrl)}
+                        >
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          Complete in Atlas
+                        </Button>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : null}
+
+              {trainingCompliant.length > 0 ? (
+                <div data-testid="portal-work-training-ok">
+                  <button
+                    type="button"
+                    className="text-sm font-medium text-muted-foreground underline-offset-2 hover:underline"
+                    onClick={() => setShowCompliant((v) => !v)}
+                    aria-expanded={showCompliant}
+                  >
+                    {showCompliant ? 'Hide' : 'Show'} {trainingCompliant.length} compliant module
+                    {trainingCompliant.length === 1 ? '' : 's'}
+                  </button>
+                  {showCompliant ? (
+                    <div className="mt-2 space-y-2">
+                      {trainingCompliant.map((row) => (
+                        <Card key={`${row.course_key}-ok`} className="p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2 mb-1">
+                                <Badge variant="success">{statusLabel(row)}</Badge>
+                              </div>
+                              <p className="font-medium text-foreground text-sm">
+                                {row.course_display_name}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                QGP due {formatDue(row.qgp_due_on) ?? row.qgp_due_on ?? '—'}
+                                {row.expires_on
+                                  ? ` · Atlas expiry ${formatDue(row.expires_on) ?? row.expires_on}`
+                                  : ''}
+                              </p>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           )}
         </section>
@@ -488,8 +720,8 @@ export default function PortalWork() {
                   .join(' · ') || `Engineer #${passport.engineer.id ?? '—'}`}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
-                Competency matrix and training tickets live in the full workforce passport (separate
-                CUJ) — this inbox only confirms your identity link.
+                Your Atlas training compliance is listed in Training compliance above. Competency
+                matrix detail remains in the full workforce passport.
               </p>
               <div className="mt-3">
                 <Button variant="outline" size="sm" asChild>

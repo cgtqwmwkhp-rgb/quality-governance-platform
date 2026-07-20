@@ -20,6 +20,9 @@ class TrainingMatrixImportResponse(BaseModel):
     nonempty_cell_count: int
     expiry_without_passed_count: int
     created_at: Optional[datetime] = None
+    uploaded_by_user_id: Optional[int] = None
+    uploaded_by_name: Optional[str] = None
+    uploaded_by_email: Optional[str] = None
 
 
 class TrainingMatrixImportQaResponse(BaseModel):

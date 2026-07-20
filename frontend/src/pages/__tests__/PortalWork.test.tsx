@@ -7,6 +7,7 @@ const mockList = vi.fn()
 const mockListMyPending = vi.fn()
 const mockListMyAssignments = vi.fn()
 const mockGetByUserMe = vi.fn()
+const mockMyTraining = vi.fn()
 const mockRecordOpen = vi.fn()
 const mockToastError = vi.fn()
 const mockAnnounce = vi.fn()
@@ -25,8 +26,15 @@ vi.mock('../../api/client', () => ({
   engineersApi: {
     getByUserMe: (...args: unknown[]) => mockGetByUserMe(...args),
   },
+  trainingMatrixApi: {
+    myTraining: (...args: unknown[]) => mockMyTraining(...args),
+  },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Request failed',
+}))
+
+vi.mock('../../api/trainingMatrixClient', () => ({
+  ATLAS_HUB_URL: 'https://www.atlas-hub.co.uk/o/test/',
 }))
 
 vi.mock('../../contexts/ToastContext', () => ({
@@ -76,6 +84,10 @@ describe('PortalWork CUJ-P10', () => {
     mockListMyPending.mockResolvedValue({ data: { items: [], total: 0 } })
     mockListMyAssignments.mockResolvedValue({ data: { items: [], total: 0 } })
     mockGetByUserMe.mockResolvedValue({ data: { linked: false } })
+    mockMyTraining.mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 404 },
+    })
   })
 
   it('requests assigned_to=me and renders action + unlinked passport', async () => {
@@ -96,6 +108,67 @@ describe('PortalWork CUJ-P10', () => {
     expect(screen.getByText(/Contact your supervisor/i)).toBeInTheDocument()
     expect(screen.getByTestId('portal-work-reading')).toBeInTheDocument()
     expect(screen.getByText(/No pending reads/i)).toBeInTheDocument()
+    expect(await screen.findByTestId('portal-work-training-unlinked')).toBeInTheDocument()
+  })
+
+  it('shows personal training gaps with Atlas CTA and compliant modules', async () => {
+    mockGetByUserMe.mockResolvedValue({
+      data: {
+        linked: true,
+        id: 10,
+        external_id: 'eng-1',
+        user_id: 42,
+        job_title: 'Field Engineer',
+        employee_number: 'E-42',
+        is_active: true,
+      },
+    })
+    mockMyTraining.mockResolvedValue({
+      items: [
+        {
+          atlas_name: 'David Harris',
+          course_key: 'info-sec',
+          course_display_name: 'Information Security',
+          frequency_years: 1,
+          status: 'overdue',
+          qgp_due_on: '2026-01-01',
+          expires_on: '2026-06-01',
+          passed_on: '2025-01-01',
+          atlas_hub_url: 'https://www.atlas-hub.co.uk/o/test/',
+          expiry_without_passed: false,
+        },
+        {
+          atlas_name: 'David Harris',
+          course_key: 'ladders',
+          course_display_name: 'Ladders And Stepladders',
+          frequency_years: 3,
+          status: 'compliant',
+          qgp_due_on: '2028-01-01',
+          expires_on: '2028-01-01',
+          passed_on: '2025-01-01',
+          atlas_hub_url: 'https://www.atlas-hub.co.uk/o/test/',
+          expiry_without_passed: false,
+        },
+      ],
+      total: 2,
+      atlas_hub_url: 'https://www.atlas-hub.co.uk/o/test/',
+    })
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null)
+
+    renderPage()
+
+    expect(await screen.findByTestId('portal-work-training-summary')).toHaveTextContent('1/2 modules OK')
+    expect(screen.getByTestId('portal-work-training-gaps')).toHaveTextContent('Information Security')
+    expect(screen.getByRole('button', { name: /Complete in Atlas/i })).toBeInTheDocument()
+    screen.getByRole('button', { name: /Complete in Atlas/i }).click()
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://www.atlas-hub.co.uk/o/test/',
+      '_blank',
+      'noopener,noreferrer',
+    )
+    expect(screen.getByText(/Show 1 compliant module/i)).toBeInTheDocument()
+    openSpy.mockRestore()
   })
 
   it('shows honest empty actions when server returns none', async () => {
