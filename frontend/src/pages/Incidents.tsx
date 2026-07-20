@@ -11,6 +11,8 @@ import {
   UserSearchResult,
 } from '../api/client'
 import { trackError } from '../utils/errorTracker'
+import { resolvePlatformReporterIdentity } from '../utils/platformSessionReporter'
+import { displayIncidentText } from './incidentTextDisplay'
 import { queueForSync } from '../lib/syncService'
 import { toast } from '../contexts/ToastContext'
 import { Button } from '../components/ui/Button'
@@ -126,6 +128,31 @@ export default function Incidents() {
     incident_date: new Date().toISOString().slice(0, 16),
     reported_date: new Date().toISOString().slice(0, 16),
   })
+  const [sessionReporterLabel, setSessionReporterLabel] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!showModal) {
+      setSessionReporterLabel(null)
+      return
+    }
+    let cancelled = false
+    void resolvePlatformReporterIdentity().then((identity) => {
+      if (cancelled) return
+      const label =
+        identity.reporter_name && identity.reporter_email
+          ? `${identity.reporter_name} (${identity.reporter_email})`
+          : identity.reporter_name || identity.reporter_email || null
+      setSessionReporterLabel(label)
+      setFormData((prev) => ({
+        ...prev,
+        reporter_name: identity.reporter_name || prev.reporter_name,
+        reporter_email: identity.reporter_email || prev.reporter_email,
+      }))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [showModal])
 
   useEffect(() => {
     let cancelled = false
@@ -270,8 +297,11 @@ export default function Incidents() {
     setCreateError(null)
 
     if (!navigator.onLine) {
+      const reporter = await resolvePlatformReporterIdentity()
       const payload = {
         ...formData,
+        reporter_name: formData.reporter_name || reporter.reporter_name,
+        reporter_email: formData.reporter_email || reporter.reporter_email,
         incident_date: new Date(formData.incident_date).toISOString(),
         reported_date: new Date(formData.reported_date).toISOString(),
       }
@@ -283,8 +313,11 @@ export default function Incidents() {
     }
 
     try {
+      const reporter = await resolvePlatformReporterIdentity()
       const response = await incidentsApi.create({
         ...formData,
+        reporter_name: formData.reporter_name || reporter.reporter_name,
+        reporter_email: formData.reporter_email || reporter.reporter_email,
         incident_date: new Date(formData.incident_date).toISOString(),
         reported_date: new Date(formData.reported_date).toISOString(),
       })
@@ -588,7 +621,7 @@ export default function Incidents() {
                       </td>
                       <td className="px-6 py-4">
                         <p className="text-sm font-medium text-foreground truncate max-w-xs">
-                          {incident.title}
+                          {displayIncidentText(incident.title)}
                         </p>
                       </td>
                       <td className="px-6 py-4">
@@ -806,6 +839,24 @@ export default function Incidents() {
                 </Select>
               </div>
             </div>
+
+            {sessionReporterLabel ? (
+              <div
+                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-muted-foreground"
+                data-testid="incident-create-reporter"
+              >
+                <span className="font-medium text-foreground">
+                  {t('incidents.form.reporter', 'Reporter')}
+                </span>
+                : {sessionReporterLabel}
+                <span className="block text-xs mt-1">
+                  {t(
+                    'incidents.form.reporter_session_hint',
+                    'Captured from your signed-in session when the incident is saved.',
+                  )}
+                </span>
+              </div>
+            ) : null}
 
             <div>
               <label

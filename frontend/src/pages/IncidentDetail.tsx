@@ -6,6 +6,7 @@ import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
 import { resolveIncidentDetailTab } from './incidentStandardsTab'
+import { displayIncidentText } from './incidentTextDisplay'
 import {
   ArrowLeft,
   AlertTriangle,
@@ -178,8 +179,8 @@ export default function IncidentDetail() {
       const response = await incidentsApi.get(incidentId)
       setIncident(response.data)
       setEditForm({
-        title: response.data.title,
-        description: response.data.description,
+        title: displayIncidentText(response.data.title),
+        description: displayIncidentText(response.data.description),
         incident_type: response.data.incident_type,
         severity: response.data.severity,
         status: response.data.status,
@@ -270,8 +271,8 @@ export default function IncidentDetail() {
       const response = await incidentsApi.update(incident.id, payload)
       setIncident(response.data)
       setEditForm({
-        title: response.data.title,
-        description: response.data.description,
+        title: displayIncidentText(response.data.title),
+        description: displayIncidentText(response.data.description),
         incident_type: response.data.incident_type,
         severity: response.data.severity,
         status: response.data.status,
@@ -292,8 +293,8 @@ export default function IncidentDetail() {
   const handleCancelEdit = () => {
     if (incident) {
       setEditForm({
-        title: incident.title,
-        description: incident.description,
+        title: displayIncidentText(incident.title),
+        description: displayIncidentText(incident.description),
         incident_type: incident.incident_type,
         severity: incident.severity,
         status: incident.status,
@@ -607,7 +608,7 @@ export default function IncidentDetail() {
                 {incident.status.replace('_', ' ')}
               </Badge>
             </div>
-            <h1 className="text-2xl font-bold text-foreground">{incident.title}</h1>
+            <h1 className="text-2xl font-bold text-foreground">{displayIncidentText(incident.title)}</h1>
             <p className="text-muted-foreground mt-1">
               {t('incidents.detail.reported_on', {
                 date: new Date(incident.reported_date).toLocaleDateString(),
@@ -897,7 +898,7 @@ export default function IncidentDetail() {
                       {t('common.description')}
                     </span>
                     <p className="mt-1 text-foreground whitespace-pre-wrap">
-                      {incident.description || t('incidents.detail.no_description')}
+                      {displayIncidentText(incident.description) || t('incidents.detail.no_description')}
                     </p>
                   </div>
                   {incident.asset_id != null && (

@@ -584,7 +584,7 @@ export default function FormBuilder() {
               </div>
 
               {template.steps.map((step, stepIndex) => (
-                <Card key={step.id} className="overflow-hidden">
+                <Card key={step.id}>
                   {/* Step Header */}
                   <div
                     className={cn(
@@ -715,21 +715,27 @@ export default function FormBuilder() {
                       {/* Add Field Button */}
                       <div className="relative">
                         <Button
+                          type="button"
                           variant="outline"
                           size="sm"
                           className="w-full border-dashed"
+                          data-testid={`formbuilder-add-field-${step.id}`}
                           onClick={() => {
                             setSelectedStepId(step.id)
-                            setShowFieldPalette(!showFieldPalette)
+                            setShowFieldPalette(
+                              showFieldPalette && selectedStepId === step.id ? false : true,
+                            )
                           }}
                         >
                           <Plus className="w-4 h-4 mr-2" />
                           Add Field
                         </Button>
 
-                        {/* Field Palette */}
                         {showFieldPalette && selectedStepId === step.id && (
-                          <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-lg z-10 p-4 max-h-64 overflow-y-auto">
+                          <div
+                            className="mt-2 bg-card border border-border rounded-xl shadow-lg p-4 max-h-64 overflow-y-auto"
+                            data-testid="formbuilder-field-palette"
+                          >
                             <p className="text-xs text-muted-foreground mb-2 font-medium">
                               Select Field Type
                             </p>
@@ -737,6 +743,7 @@ export default function FormBuilder() {
                               {FIELD_TYPES.map((ft) => (
                                 <button
                                   key={ft.value}
+                                  type="button"
                                   onClick={() => addField(step.id, ft.value)}
                                   className="flex items-center gap-2 p-2 text-sm text-left hover:bg-surface rounded-lg transition-colors"
                                 >
