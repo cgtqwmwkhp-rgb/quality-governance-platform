@@ -109,11 +109,7 @@ async def seed_plantexpand_2024_requirements(
         .all()
     )
     existing = (
-        (
-            await db.execute(
-                select(TrainingMatrixRequirement).where(TrainingMatrixRequirement.tenant_id == tenant_id)
-            )
-        )
+        (await db.execute(select(TrainingMatrixRequirement).where(TrainingMatrixRequirement.tenant_id == tenant_id)))
         .scalars()
         .all()
     )
@@ -121,9 +117,7 @@ async def seed_plantexpand_2024_requirements(
     def _req_key(dept: Optional[str], role: Optional[str], course_key: str) -> tuple:
         return ((dept or "").strip().lower(), (role or "").strip().lower(), course_key)
 
-    existing_by_key = {
-        _req_key(r.match_department, r.match_role_key, r.course_key): r for r in existing
-    }
+    existing_by_key = {_req_key(r.match_department, r.match_role_key, r.course_key): r for r in existing}
 
     created = 0
     skipped = 0
