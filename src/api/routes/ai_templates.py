@@ -31,6 +31,7 @@ ALLOWED_DOCUMENT_CONTENT_TYPES = {
     "image/webp",
 }
 MAX_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024  # 20MB
+AI_TEMPLATE_UNAVAILABLE_DETAIL = "AI template generation is currently unavailable. Please try again later."
 
 
 # ============ Request/Response schemas ============
@@ -181,9 +182,11 @@ async def generate_template(
     try:
         return await service.prompt_to_template(request.prompt)
     except Exception as exc:
+        # Upstream SDK/provider errors can contain operational details. Keep the
+        # user-facing response actionable without exposing those internals.
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"AI template generation unavailable: {exc}",
+            detail=AI_TEMPLATE_UNAVAILABLE_DETAIL,
         ) from exc
 
 

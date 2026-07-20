@@ -247,27 +247,33 @@ async def get_daily_record(
     db: DbSession,
 ) -> dict[str, Any]:
     """Get a single daily checklist record."""
-    cached = (
-        await db.execute(select(PAMSVanChecklistCache).where(PAMSVanChecklistCache.pams_id == record_id))
-    ).scalar_one_or_none()
+    try:
+        cached = (
+            await db.execute(select(PAMSVanChecklistCache).where(PAMSVanChecklistCache.pams_id == record_id))
+        ).scalar_one_or_none()
 
-    if cached and cached.raw_data:
-        data = dict(cached.raw_data)
-        data["_pams_id"] = cached.pams_id
-        return data
+        if cached and cached.raw_data:
+            data = dict(cached.raw_data)
+            data["_pams_id"] = cached.pams_id
+            return data
 
-    _require_pams()
-    pams_tbl = get_pams_table("vanchecklist")
-    if pams_tbl is None:
-        raise NotFoundError("PAMS vanchecklist table not found")
+        _require_pams()
+        pams_tbl = get_pams_table("vanchecklist")
+        if pams_tbl is None:
+            raise NotFoundError("PAMS vanchecklist table not found")
 
-    pk_col = list(pams_tbl.primary_key.columns)[0]
-    async for pams_session in get_pams_db():
-        result = await pams_session.execute(select(pams_tbl).where(pk_col == record_id))
-        row = result.mappings().first()
-        if not row:
-            raise NotFoundError("Record not found")
-        return {k: _serialise_value(v) for k, v in dict(row).items()}
+        pk_col = list(pams_tbl.primary_key.columns)[0]
+        async for pams_session in get_pams_db():
+            result = await pams_session.execute(select(pams_tbl).where(pk_col == record_id))
+            row = result.mappings().first()
+            if not row:
+                raise NotFoundError("Record not found")
+            return {k: _serialise_value(v) for k, v in dict(row).items()}
+    except DomainError:
+        raise
+    except Exception:
+        logger.exception("Daily checklist detail failed for record %s", record_id)
+        _service_unavailable(reason="detail_failed")
 
     _service_unavailable(reason="session_unavailable")
 
@@ -279,27 +285,35 @@ async def get_monthly_record(
     db: DbSession,
 ) -> dict[str, Any]:
     """Get a single monthly checklist record."""
-    cached = (
-        await db.execute(select(PAMSVanChecklistMonthlyCache).where(PAMSVanChecklistMonthlyCache.pams_id == record_id))
-    ).scalar_one_or_none()
+    try:
+        cached = (
+            await db.execute(
+                select(PAMSVanChecklistMonthlyCache).where(PAMSVanChecklistMonthlyCache.pams_id == record_id)
+            )
+        ).scalar_one_or_none()
 
-    if cached and cached.raw_data:
-        data = dict(cached.raw_data)
-        data["_pams_id"] = cached.pams_id
-        return data
+        if cached and cached.raw_data:
+            data = dict(cached.raw_data)
+            data["_pams_id"] = cached.pams_id
+            return data
 
-    _require_pams()
-    pams_tbl = get_pams_table("vanchecklistmonthly")
-    if pams_tbl is None:
-        raise NotFoundError("PAMS vanchecklistmonthly table not found")
+        _require_pams()
+        pams_tbl = get_pams_table("vanchecklistmonthly")
+        if pams_tbl is None:
+            raise NotFoundError("PAMS vanchecklistmonthly table not found")
 
-    pk_col = list(pams_tbl.primary_key.columns)[0]
-    async for pams_session in get_pams_db():
-        result = await pams_session.execute(select(pams_tbl).where(pk_col == record_id))
-        row = result.mappings().first()
-        if not row:
-            raise NotFoundError("Record not found")
-        return {k: _serialise_value(v) for k, v in dict(row).items()}
+        pk_col = list(pams_tbl.primary_key.columns)[0]
+        async for pams_session in get_pams_db():
+            result = await pams_session.execute(select(pams_tbl).where(pk_col == record_id))
+            row = result.mappings().first()
+            if not row:
+                raise NotFoundError("Record not found")
+            return {k: _serialise_value(v) for k, v in dict(row).items()}
+    except DomainError:
+        raise
+    except Exception:
+        logger.exception("Monthly checklist detail failed for record %s", record_id)
+        _service_unavailable(reason="detail_failed")
 
     _service_unavailable(reason="session_unavailable")
 
