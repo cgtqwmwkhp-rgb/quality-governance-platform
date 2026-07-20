@@ -50,7 +50,7 @@ import { Button } from './ui/Button'
 import { cn } from '../helpers/utils'
 import { hasRole, isSuperuser } from '../utils/auth'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
-import { CUSTOMER_AUDITS_AUDITS_PATH, navItemIsActive } from './assuranceHubHelpers'
+import { CUSTOMER_AUDITS_PROGRAMME_PATH, navItemIsActive } from './assuranceHubHelpers'
 
 /** Deferred until the shell opens Copilot — keeps authenticated first paint lean (S14). */
 const AICopilot = lazy(() => import('./copilot/AICopilot'))
@@ -142,7 +142,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/audit-templates', icon: Sparkles, label: t('nav.audit_builder') },
         { path: '/uvdb', icon: Award, label: t('nav.uvdb_achilles') },
         { path: '/planet-mark', icon: Leaf, label: t('nav.planet_mark') },
-        { path: CUSTOMER_AUDITS_AUDITS_PATH, icon: Users, label: t('nav.customer_audits') },
+        { path: CUSTOMER_AUDITS_PROGRAMME_PATH, icon: Users, label: t('nav.customer_audits') },
       ],
     },
     {

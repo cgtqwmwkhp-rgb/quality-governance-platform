@@ -29,9 +29,9 @@ describe('importReviewHelpers (Audit Import Review phase 2)', () => {
     ).toBe('Achilles / UVDB')
   })
 
-  it('deriveSpecialistHome falls back to customer audits assurance filter', () => {
+  it('deriveSpecialistHome falls back to customer audits programme home', () => {
     expect(deriveSpecialistHome(null)).toEqual({
-      path: '/audits?source=customer',
+      path: '/customer-audits',
       label: 'Open Customer Audits',
     })
   })
