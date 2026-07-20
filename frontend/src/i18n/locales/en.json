@@ -547,7 +547,7 @@
   "audits.unavailable.description": "The audit list could not be loaded. This is not an empty workspace — retry when the service recovers.",
   "audits.unavailable.title": "Audits unavailable",
   "back": "Back",
-  "brand.company_line": "Planexpand Limited",
+  "brand.company_line": "Plantexpand Limited",
   "brand.product_name": "Quality Governance Platform",
   "calendar.add_event": "Add Event",
   "calendar.agenda": "Agenda",

@@ -2,7 +2,7 @@
 
 ## 1) Summary
 - **Feature / Change name:** Sidebar/login brand Option C + tip==LIVE SWA recovery
-- **User goal:** Replace QGP/PRO chip with mark-dominant Planexpand branding; keep purple-water on prod API with Microsoft Entra configured.
+- **User goal:** Replace QGP/PRO chip with mark-dominant Plantexpand branding; keep purple-water on prod API with Microsoft Entra configured.
 - **Depends on:** Prod tip with gov-lib schema + category-tree hotfix (`5097ae2e5888` lineage).
 - **In scope:** BrandMark PNG tile, Layout Option C copy, Login brand lines, staging-verification flaky `networkidle` timeout fix, emergency production SWA bake workflow job (Entra VITE secrets required).
 - **Out of scope:** Renaming residual QGP copy elsewhere; staging DB schema repair.
@@ -17,7 +17,7 @@
 - Emergency bake is opt-in via `workflow_dispatch` input `force_production_bake=true`.
 
 ## 4) Acceptance Criteria
-- [x] AC-01: Sidebar shows Quality Governance Platform + Planexpand Limited; no QGP/PRO chip.
+- [x] AC-01: Sidebar shows Quality Governance Platform + Plantexpand Limited; no QGP/PRO chip.
 - [x] AC-02: Brand mark uses uploaded transparent PNG on Layout and Login.
 - [x] AC-03: Staging verification static-assets test no longer depends on `networkidle` (60s budget).
 - [x] AC-04: Emergency production bake job builds with `VITE_AZURE_*` secrets + prod API URL.
@@ -29,7 +29,7 @@
 - [ ] CI: PR checks green after this revision.
 
 ## 6) Critical Journeys
-- [x] CUJ-01: User opens login → sees Planexpand mark + product/company lines → Microsoft SSO configured (no “not configured” banner when Entra baked).
+- [x] CUJ-01: User opens login → sees Plantexpand mark + product/company lines → Microsoft SSO configured (no “not configured” banner when Entra baked).
 - [x] CUJ-02: Authenticated user sees Option C brand in sidebar; Library navigates to `/documents`.
 
 ## 7) Rollback Plan
