@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 from src.core.pagination import PaginationInput, paginate
-from src.domain.exceptions import BadRequestError, NotFoundError
+from src.domain.exceptions import BadRequestError, NotFoundError, ValidationError
 from src.domain.models.document import Document
 from src.domain.models.document_campaign import (
     DEFAULT_REMINDER_OFFSETS_HOURS,
@@ -28,6 +28,7 @@ from src.domain.models.document_campaign import (
     EngineerGroup,
     EngineerGroupMember,
 )
+from src.domain.models.engineer import Engineer
 from src.domain.models.form_config import SystemSetting
 from src.domain.models.governed_knowledge import (
     DiscussionThreadStatus,
@@ -519,6 +520,25 @@ class DocumentCampaignService:
         user_ids = await self.expand_audience(tenant_id=tenant_id, audience=audience)
         if not user_ids:
             raise BadRequestError("No valid active users in campaign audience — check user IDs / groups")
+        if getattr(campaign, "competence_asset_type_id", None) is not None:
+            linked_result = await self.db.execute(
+                select(Engineer.user_id).where(
+                    Engineer.tenant_id == tenant_id,
+                    Engineer.is_active.is_(True),
+                    Engineer.user_id.in_(user_ids),
+                )
+            )
+            linked_user_ids = {user_id for user_id in linked_result.scalars().all() if user_id is not None}
+            unlinked_user_ids = sorted(set(user_ids) - linked_user_ids)
+            if unlinked_user_ids:
+                raise ValidationError(
+                    "Competence-gated campaign cannot launch while audience users lack an active Engineer link",
+                    details={
+                        "unlinked_user_ids": unlinked_user_ids,
+                        "linked_count": len(linked_user_ids),
+                        "audience_count": len(user_ids),
+                    },
+                )
 
         existing_result = await self.db.execute(
             select(CampaignAssignment.user_id).where(CampaignAssignment.campaign_id == campaign_id)

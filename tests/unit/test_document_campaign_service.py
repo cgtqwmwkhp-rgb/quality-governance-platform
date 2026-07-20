@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.domain.exceptions import BadRequestError, NotFoundError
+from src.domain.exceptions import BadRequestError, NotFoundError, ValidationError
 from src.domain.models.document_campaign import AssignmentStatus, CampaignAssignment, CampaignStatus
 from src.domain.models.governed_knowledge import DiscussionThreadStatus, QuizDraftStatus
 from src.domain.services.document_campaign_notifications import portal_assignment_action_url
@@ -323,6 +323,32 @@ class TestCreateCampaign:
 
 
 class TestLaunchCampaign:
+    @pytest.mark.asyncio
+    async def test_competence_gated_launch_rejects_audience_users_without_engineer_links(self):
+        campaign = SimpleNamespace(
+            id=1,
+            status=CampaignStatus.DRAFT,
+            audience_all_users=False,
+            audience_department=None,
+            audience_role=None,
+            audience_group_ids=None,
+            audience_user_ids=[10, 20],
+            competence_asset_type_id=3,
+        )
+        db = SimpleNamespace(execute=AsyncMock(return_value=_scalars_result([10])))
+        service = DocumentCampaignService(db)
+        service.get_campaign = AsyncMock(return_value=campaign)
+        service.expand_audience = AsyncMock(return_value=[10, 20])
+
+        with pytest.raises(ValidationError, match="lack an active Engineer link") as exc:
+            await service.launch_campaign(tenant_id=1, campaign_id=1, launched_by_id=5)
+
+        assert exc.value.details == {
+            "unlinked_user_ids": [20],
+            "linked_count": 1,
+            "audience_count": 2,
+        }
+
     @pytest.mark.asyncio
     async def test_launch_creates_assignments_skips_duplicates_and_notifies(self):
         campaign = SimpleNamespace(

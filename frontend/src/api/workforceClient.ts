@@ -403,6 +403,9 @@ export function createWorkforceApi(api: AxiosInstance) {
       page: number
       page_size: number
       pages: number
+      active_engineers: number
+      linked_active_engineers: number
+      linked_coverage_percent: number
     }>('/api/v1/engineers/', { params }),
   getEngineer: (id: number) => api.get<EngineerProfile>(`/api/v1/engineers/${id}`),
   createEngineer: (data: EngineerCreatePayload) =>

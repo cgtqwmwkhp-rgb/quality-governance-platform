@@ -15,7 +15,7 @@ writes stay with HSEQ/supervisor operators, not general staff personas.
 
 import logging
 from datetime import datetime, timezone
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, or_, select
@@ -145,6 +145,7 @@ async def list_engineers(
     page_size: int = Query(20, ge=1, le=500),
     search: Optional[str] = None,
     is_active: Optional[bool] = None,
+    link_status: Optional[Literal["linked", "unlinked"]] = None,
 ):
     """List engineers with filtering and pagination."""
     tenant_id = _require_engineer_tenant_id(user)
@@ -154,6 +155,10 @@ async def list_engineers(
         query = query.where(Engineer.user_id == user.id)
     if is_active is not None:
         query = query.where(Engineer.is_active == is_active)
+    if link_status == "linked":
+        query = query.where(Engineer.user_id.is_not(None))
+    elif link_status == "unlinked":
+        query = query.where(Engineer.user_id.is_(None))
     if search:
         pattern = f"%{search}%"
         query = query.where(
@@ -173,6 +178,16 @@ async def list_engineers(
     items = items_result.scalars().all()
     pages = (total + page_size - 1) // page_size if total > 0 else 0
 
+    coverage_query = select(
+        func.count(Engineer.id),
+        func.count(Engineer.user_id),
+    ).where(Engineer.tenant_id == tenant_id, Engineer.is_active.is_(True))
+    if not _is_workforce_manager(user):
+        coverage_query = coverage_query.where(Engineer.user_id == user.id)
+    active_engineers, linked_active_engineers = (await db.execute(coverage_query)).one()
+    active_engineers = int(active_engineers or 0)
+    linked_active_engineers = int(linked_active_engineers or 0)
+
     responses: list[EngineerResponse] = []
     for engineer in items:
         responses.append(await _engineer_response(db, engineer))
@@ -182,6 +197,11 @@ async def list_engineers(
         page=page,
         page_size=page_size,
         pages=pages,
+        active_engineers=active_engineers,
+        linked_active_engineers=linked_active_engineers,
+        linked_coverage_percent=round(linked_active_engineers / active_engineers * 100, 1)
+        if active_engineers
+        else 0.0,
     )
 
 
