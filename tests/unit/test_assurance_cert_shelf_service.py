@@ -4,8 +4,8 @@ import pytest
 
 from src.domain.services.assurance_cert_shelf_service import (
     DEFAULT_DUE_SOON_DAYS,
-    _build_item,
     AssuranceCertShelfService,
+    _build_item,
     compute_readiness_status,
 )
 

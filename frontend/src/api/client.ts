@@ -28,6 +28,7 @@ import { createPlanetMarkApi } from './planetMarkClient'
 import { createUvdbApi } from './uvdbClient'
 import { createUsersApi } from './usersClient'
 import { createWorkflowsApi } from './workflowsClient'
+import type { AssuranceCertShelfResponse } from '../pages/assuranceCertShelfHelpers'
 import { createAuditTrailApi } from './auditTrailClient'
 import { createSignaturesApi } from './signaturesClient'
 import { createLookupsApi } from './lookupsClient'
@@ -1581,18 +1582,7 @@ export const complianceAutomationApi = {
     if (params?.scheme) sp.set('scheme', params.scheme)
     if (params?.readiness_status) sp.set('readiness_status', params.readiness_status)
     if (params?.due_soon_days) sp.set('due_soon_days', String(params.due_soon_days))
-    return api.get<{
-      items: unknown[]
-      total: number
-      summary: {
-        valid: number
-        due_soon: number
-        expired: number
-        unknown: number
-        by_scheme: Record<string, number>
-      }
-      due_soon_days: number
-    }>(`/api/v1/compliance-automation/certificates/shelf?${sp}`)
+    return api.get<AssuranceCertShelfResponse>(`/api/v1/compliance-automation/certificates/shelf?${sp}`)
   },
   getExpiringCertificates: () =>
     api.get<{
