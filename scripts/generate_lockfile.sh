@@ -34,14 +34,17 @@ if [[ "${LOCKFILE_UPGRADE:-}" == "1" ]]; then
   echo "[INFO] LOCKFILE_UPGRADE=1 — compiling with --upgrade (refreshes versions within constraints)"
 fi
 
-"$PYTHON_BIN" -m piptools compile \
+COMPILE_CMD=("$PYTHON_BIN" -m piptools compile \
     "requirements.txt" \
     -o "$REPO_ROOT/requirements.lock" \
     --no-header \
     --strip-extras \
     --allow-unsafe \
     --generate-hashes \
-    --quiet \
-    "${UPGRADE_ARGS[@]}"
+    --quiet)
+if [[ ${#UPGRADE_ARGS[@]} -gt 0 ]]; then
+  COMPILE_CMD+=("${UPGRADE_ARGS[@]}")
+fi
+"${COMPILE_CMD[@]}"
 
 echo "[OK] requirements.lock generated successfully (with hashes)"
