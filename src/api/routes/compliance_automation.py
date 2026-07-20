@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.domain.exceptions import NotFoundError
 from src.domain.models.user import User
+from src.domain.services.assurance_cert_shelf_service import AssuranceCertShelfService
 from src.domain.services.compliance_automation_service import ComplianceAutomationService
 
 router = APIRouter()
@@ -144,6 +145,26 @@ async def list_certificates(
         expiring_within_days=expiring_within_days,
     )
     return {"certificates": certificates, "total": len(certificates)}
+
+
+@router.get("/certificates/shelf")
+async def get_assurance_cert_shelf(
+    db: DbSession,
+    current_user: CurrentUser,
+    scheme: Optional[str] = None,
+    readiness_status: Optional[str] = None,
+    due_soon_days: int = 30,
+):
+    """Unified assurance certificate shelf with expiry-driven readiness."""
+    service = AssuranceCertShelfService(db)
+    tenant_id = current_user.tenant_id
+    assert tenant_id is not None
+    return await service.get_shelf(
+        tenant_id=tenant_id,
+        scheme=scheme,
+        readiness_status=readiness_status,
+        due_soon_days=due_soon_days,
+    )
 
 
 @router.get("/certificates/expiring-summary")
