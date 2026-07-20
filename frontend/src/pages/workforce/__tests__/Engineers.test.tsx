@@ -7,6 +7,7 @@ const {
   listEngineers,
   createEngineer,
   syncFromPams,
+  linkEngineerUser,
   t,
 } = vi.hoisted(() => {
   const t = (key: string, opts?: Record<string, unknown>) => {
@@ -19,6 +20,7 @@ const {
     listEngineers: vi.fn(),
     createEngineer: vi.fn(),
     syncFromPams: vi.fn(),
+    linkEngineerUser: vi.fn(),
     t,
   }
 })
@@ -42,6 +44,7 @@ vi.mock('../../../api/client', () => ({
     listEngineers: (...args: unknown[]) => listEngineers(...args),
     createEngineer: (...args: unknown[]) => createEngineer(...args),
     syncFromPams: (...args: unknown[]) => syncFromPams(...args),
+    linkEngineerUser: (...args: unknown[]) => linkEngineerUser(...args),
   },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'load failed',
@@ -99,6 +102,26 @@ describe('Engineers', () => {
     expect(screen.getByTestId('engineer-user-unlinked-2')).toHaveTextContent(
       'workforce.engineers.user_link.roster_unlinked',
     )
+  })
+
+  it('guides managers through linking multiple selected unlinked employees', async () => {
+    listEngineers.mockResolvedValue({
+      data: {
+        items: [
+          { ...employee, id: 1, user_id: null, display_name: 'PAMS One' },
+          { ...employee, id: 2, user_id: null, display_name: 'PAMS Two' },
+        ],
+      },
+    })
+    renderPage()
+
+    fireEvent.click(await screen.findByLabelText('Select PAMS One for user linking'))
+    fireEvent.click(screen.getByLabelText('Select PAMS Two for user linking'))
+    fireEvent.click(screen.getByRole('button', { name: 'Link selected (2)' }))
+
+    expect(screen.getByTestId('employee-bulk-link-dialog')).toBeInTheDocument()
+    expect(screen.getAllByText('PAMS One')).toHaveLength(2)
+    expect(screen.getAllByText('PAMS Two')).toHaveLength(2)
   })
 
   it('shows honest empty state with PAMS sync CTA when roster is empty', async () => {

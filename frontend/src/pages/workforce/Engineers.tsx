@@ -101,6 +101,12 @@ export default function Engineers() {
   const [createFormError, setCreateFormError] = useState<string | null>(null)
   const [createLinkEmail, setCreateLinkEmail] = useState('')
   const [createLinkUser, setCreateLinkUser] = useState<UserSearchResult | undefined>()
+  const [selectedEngineerIds, setSelectedEngineerIds] = useState<number[]>([])
+  const [bulkLinkOpen, setBulkLinkOpen] = useState(false)
+  const [bulkLinkUsers, setBulkLinkUsers] = useState<Record<number, UserSearchResult | undefined>>({})
+  const [bulkLinkEmails, setBulkLinkEmails] = useState<Record<number, string>>({})
+  const [bulkLinkSaving, setBulkLinkSaving] = useState(false)
+  const [bulkLinkError, setBulkLinkError] = useState<string | null>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300)
@@ -197,6 +203,54 @@ export default function Engineers() {
   }
 
   const canManageRoster = isWorkforceManager()
+  const selectedUnlinkedEngineers = engineers.filter(
+    (engineer) => selectedEngineerIds.includes(engineer.id) && engineer.user_id == null,
+  )
+
+  const toggleEngineerSelection = (engineerId: number) => {
+    setSelectedEngineerIds((selected) =>
+      selected.includes(engineerId)
+        ? selected.filter((id) => id !== engineerId)
+        : [...selected, engineerId],
+    )
+  }
+
+  const openBulkLinkDialog = () => {
+    setBulkLinkError(null)
+    setBulkLinkUsers({})
+    setBulkLinkEmails({})
+    setBulkLinkOpen(true)
+  }
+
+  const closeBulkLinkDialog = () => {
+    if (bulkLinkSaving) return
+    setBulkLinkOpen(false)
+    setBulkLinkError(null)
+  }
+
+  const handleBulkLink = async () => {
+    if (selectedUnlinkedEngineers.some((engineer) => !bulkLinkUsers[engineer.id])) {
+      setBulkLinkError('Choose a QGP user for every selected employee.')
+      return
+    }
+    setBulkLinkSaving(true)
+    setBulkLinkError(null)
+    try {
+      // Keep the existing server-side dual gate authoritative. Each link is
+      // deliberately sent through the dedicated endpoint, never PATCH user_id.
+      for (const engineer of selectedUnlinkedEngineers) {
+        await workforceApi.linkEngineerUser(engineer.id, bulkLinkUsers[engineer.id]!.id)
+      }
+      setSelectedEngineerIds([])
+      setBulkLinkOpen(false)
+      setSyncMessage(`Linked ${selectedUnlinkedEngineers.length} employee login(s).`)
+      await loadEngineers()
+    } catch (err) {
+      setBulkLinkError(getApiErrorMessage(err))
+    } finally {
+      setBulkLinkSaving(false)
+    }
+  }
 
   const rosterEmpty =
     !loading && engineers.length === 0 && !debouncedSearch && activeFilter === 'true'
@@ -211,6 +265,11 @@ export default function Engineers() {
         <div className="flex flex-wrap gap-2 shrink-0">
           {canManageRoster ? (
             <>
+              {selectedUnlinkedEngineers.length > 0 && (
+                <Button type="button" variant="outline" onClick={openBulkLinkDialog} disabled={loading}>
+                  Link selected ({selectedUnlinkedEngineers.length})
+                </Button>
+              )}
               <Button type="button" onClick={openCreateDialog} disabled={loading}>
                 <Plus className="w-4 h-4 mr-2" />
                 {t('workforce.engineers.add')}
@@ -341,6 +400,15 @@ export default function Engineers() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
+                      {canManageRoster && eng.user_id == null && (
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${engineerLabel(eng)} for user linking`}
+                          checked={selectedEngineerIds.includes(eng.id)}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={() => toggleEngineerSelection(eng.id)}
+                        />
+                      )}
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                         <Users className="w-5 h-5 text-primary" />
                       </div>
@@ -562,6 +630,49 @@ export default function Engineers() {
             </Button>
             <Button type="button" onClick={() => void handleCreateEmployee()} disabled={createSaving}>
               {createSaving ? t('workforce.common.creating') : t('workforce.engineers.add')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={bulkLinkOpen}
+        onOpenChange={(open) => {
+          if (!open) closeBulkLinkDialog()
+          else setBulkLinkOpen(true)
+        }}
+      >
+        <DialogContent className="sm:max-w-lg" data-testid="employee-bulk-link-dialog">
+          <DialogHeader>
+            <DialogTitle>Link selected employees to QGP users</DialogTitle>
+            <DialogDescription>
+              Each employee needs a distinct active QGP user. Existing employee data is unchanged.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {bulkLinkError && (
+              <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{bulkLinkError}</div>
+            )}
+            {selectedUnlinkedEngineers.map((engineer) => (
+              <div key={engineer.id} className="space-y-2">
+                <Label>{engineerLabel(engineer)}</Label>
+                <UserEmailSearch
+                  value={bulkLinkEmails[engineer.id] ?? ''}
+                  onChange={(email, selectedUser) => {
+                    setBulkLinkEmails((current) => ({ ...current, [engineer.id]: email }))
+                    setBulkLinkUsers((current) => ({ ...current, [engineer.id]: selectedUser }))
+                  }}
+                  placeholder="Search active QGP user…"
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="secondary" onClick={closeBulkLinkDialog} disabled={bulkLinkSaving}>
+              {t('common.cancel')}
+            </Button>
+            <Button type="button" onClick={() => void handleBulkLink()} disabled={bulkLinkSaving}>
+              {bulkLinkSaving ? 'Linking…' : `Link ${selectedUnlinkedEngineers.length} employee(s)`}
             </Button>
           </DialogFooter>
         </DialogContent>
