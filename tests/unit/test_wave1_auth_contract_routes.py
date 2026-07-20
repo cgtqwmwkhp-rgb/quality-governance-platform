@@ -82,8 +82,9 @@ async def test_get_my_pending_acknowledgments_uses_user_id(monkeypatch):
         def __init__(self, _db):
             pass
 
-        async def get_user_pending_acknowledgments(self, user_id):
+        async def get_user_pending_acknowledgments(self, user_id, tenant_id=None):
             captured["user_id"] = user_id
+            captured["tenant_id"] = tenant_id
             return []
 
     monkeypatch.setattr(
@@ -93,10 +94,11 @@ async def test_get_my_pending_acknowledgments_uses_user_id(monkeypatch):
 
     response = await get_my_pending_acknowledgments(
         types.SimpleNamespace(),
-        types.SimpleNamespace(id=31, email="reader@example.com"),
+        types.SimpleNamespace(id=31, email="reader@example.com", tenant_id=9),
     )
 
     assert captured["user_id"] == 31
+    assert captured["tenant_id"] == 9
     assert response.total == 0
     assert response.items == []
 
