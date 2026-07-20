@@ -3,11 +3,7 @@
 from types import SimpleNamespace
 
 from src.domain.services.training_matrix_requirement_seed import match_module_to_course
-from src.domain.training_matrix.plantexpand_matrix_2024 import (
-    PLANTEXPAND_MATRIX_2024,
-    TEMPLATE_ID,
-    expand_seed_rows,
-)
+from src.domain.training_matrix.plantexpand_matrix_2024 import PLANTEXPAND_MATRIX_2024, TEMPLATE_ID, expand_seed_rows
 
 
 def test_expand_seed_rows_covers_all_role_marks():
