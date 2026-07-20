@@ -1,3 +1,5 @@
+import type { AssuranceCertReadinessStatus } from '../api/assuranceCertShelfTypes'
+
 export type {
   AssuranceCertReadinessStatus,
   AssuranceCertShelfItem,
