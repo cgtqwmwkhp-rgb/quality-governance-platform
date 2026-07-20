@@ -241,10 +241,57 @@ describe('Incidents', () => {
     })
 
     const rows = screen.getAllByTestId('incident-row-link')
-    const clickableCell = rows[0].querySelector('td.cursor-pointer') ?? rows[0].querySelector('td')
-    fireEvent.click(clickableCell!)
+    fireEvent.click(rows[0])
 
     expect(mockNavigate).toHaveBeenCalledWith('/incidents/1')
+  })
+
+  it('opens incident detail when row receives Enter (PX-008)', async () => {
+    render(<Incidents />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('INC-001')).toBeInTheDocument()
+    })
+
+    const row = screen.getAllByTestId('incident-row-link')[0]
+    fireEvent.keyDown(row, { key: 'Enter' })
+
+    expect(mockNavigate).toHaveBeenCalledWith('/incidents/1')
+  })
+
+  it('shows pagination when total exceeds page size (PX-004)', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: sampleIncidents,
+        total: 120,
+        page: 1,
+        page_size: 50,
+        pages: 3,
+      },
+    })
+
+    render(<Incidents />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('incidents-pagination')).toBeInTheDocument()
+    })
+    expect(screen.getByText('common.previous')).toBeInTheDocument()
+    expect(screen.getByText('common.next')).toBeInTheDocument()
+    expect(screen.getByText('a11y.page_of')).toBeInTheDocument()
+  })
+
+  it('shows search scope honesty when filtering current page (PX-004)', async () => {
+    render(<Incidents />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('INC-001')).toBeInTheDocument()
+    })
+
+    fireEvent.change(screen.getByPlaceholderText('incidents.search_placeholder'), {
+      target: { value: 'warehouse' },
+    })
+
+    expect(screen.getByTestId('incidents-search-scope-honesty')).toBeInTheDocument()
   })
 
   it('hydrates q/status/severity filters from shareable URL', async () => {

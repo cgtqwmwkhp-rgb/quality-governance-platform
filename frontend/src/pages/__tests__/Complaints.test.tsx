@@ -423,4 +423,30 @@ describe('Complaints', () => {
 
     expect(mockNavigate).toHaveBeenCalledWith('/complaints/1')
   })
+
+  it('confirms before closing dirty create modal on Escape (PX-017)', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    render(<Complaints />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('CMP-001')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('complaints.new'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('complaints-create-form')).toBeInTheDocument()
+    })
+
+    fireEvent.change(screen.getByPlaceholderText('complaints.form.title_placeholder'), {
+      target: { value: 'Draft title' },
+    })
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(screen.getByTestId('complaints-create-form')).toBeInTheDocument()
+
+    confirmSpy.mockRestore()
+  })
 })
