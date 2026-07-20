@@ -3,7 +3,7 @@
     "path": "dist/assets/index-*.js",
     "limit": "167 kB",
     "gzip": true,
-    "name": "index: 166\u2192167 kB \u2014 customer audits + training matrix shells"
+    "name": "index: 166\u2192167 kB \u2014 customer audits + cert shelf + training shells"
   },
   {
     "path": "dist/assets/vendor-*.js",
