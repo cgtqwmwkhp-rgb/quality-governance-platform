@@ -217,11 +217,6 @@ export default function Layout({ onLogout }: LayoutProps) {
                 label: t('nav.notifications', { defaultValue: 'Notifications' }),
               },
               {
-                path: '/admin/campaign-compliance',
-                icon: Megaphone,
-                label: t('nav.campaign_compliance', { defaultValue: 'Campaign Compliance' }),
-              },
-              {
                 path: '/admin/hsec-inbox',
                 icon: MessageSquare,
                 label: t('nav.hsec_inbox', { defaultValue: 'HSEQ Inbox' }),
@@ -250,7 +245,9 @@ export default function Layout({ onLogout }: LayoutProps) {
   const location = useLocation()
   const pathIsActive = (path: string) =>
     navItemIsActive(path, location.pathname, location.search)
-  const libraryNavActive = pathIsActive('/documents') || pathIsActive('/policies')
+  const documentCampaignsNavActive = pathIsActive('/documents/campaigns')
+  const libraryNavActive =
+    (pathIsActive('/documents') && !documentCampaignsNavActive) || pathIsActive('/policies')
   const activeHubId = hubs.find((hub) => hub.items.some((item) => pathIsActive(item.path)))?.id
   const [expandedHubs, setExpandedHubs] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
@@ -513,31 +510,61 @@ export default function Layout({ onLogout }: LayoutProps) {
                       )}
                     </div>
                     {hub.id === 'risk-improvement' && (
-                      <Link
-                        to="/documents"
-                        onClick={() => setSidebarOpen(false)}
-                        aria-current={libraryNavActive ? 'page' : undefined}
-                        className={cn(
-                          'flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
-                          'transition-all duration-200 group',
-                          libraryNavActive
-                            ? 'bg-primary/10 text-primary border border-primary/20'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-surface',
-                        )}
-                      >
-                        <FolderOpen
+                      <>
+                        <Link
+                          to="/documents"
+                          onClick={() => setSidebarOpen(false)}
+                          aria-current={libraryNavActive ? 'page' : undefined}
                           className={cn(
-                            'w-5 h-5 shrink-0 transition-colors',
+                            'flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
+                            'transition-all duration-200 group',
                             libraryNavActive
-                              ? 'text-primary'
-                              : 'text-muted-foreground group-hover:text-foreground',
+                              ? 'bg-primary/10 text-primary border border-primary/20'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-surface',
                           )}
-                        />
-                        <span className="min-w-0 flex-1 leading-snug">{t('nav.library')}</span>
-                        {libraryNavActive && (
-                          <div className="ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary" />
-                        )}
-                      </Link>
+                        >
+                          <FolderOpen
+                            className={cn(
+                              'w-5 h-5 shrink-0 transition-colors',
+                              libraryNavActive
+                                ? 'text-primary'
+                                : 'text-muted-foreground group-hover:text-foreground',
+                            )}
+                          />
+                          <span className="min-w-0 flex-1 leading-snug">{t('nav.library')}</span>
+                          {libraryNavActive && (
+                            <div className="ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary" />
+                          )}
+                        </Link>
+                        <Link
+                          to="/documents/campaigns"
+                          onClick={() => setSidebarOpen(false)}
+                          aria-current={documentCampaignsNavActive ? 'page' : undefined}
+                          data-testid="nav-document-campaigns"
+                          className={cn(
+                            'flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
+                            'transition-all duration-200 group',
+                            documentCampaignsNavActive
+                              ? 'bg-primary/10 text-primary border border-primary/20'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-surface',
+                          )}
+                        >
+                          <Megaphone
+                            className={cn(
+                              'w-5 h-5 shrink-0 transition-colors',
+                              documentCampaignsNavActive
+                                ? 'text-primary'
+                                : 'text-muted-foreground group-hover:text-foreground',
+                            )}
+                          />
+                          <span className="min-w-0 flex-1 leading-snug">
+                            {t('nav.document_campaigns', { defaultValue: 'Document campaigns' })}
+                          </span>
+                          {documentCampaignsNavActive && (
+                            <div className="ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary" />
+                          )}
+                        </Link>
+                      </>
                     )}
                   </Fragment>
                 )

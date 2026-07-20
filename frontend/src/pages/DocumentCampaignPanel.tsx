@@ -438,7 +438,7 @@ export function DocumentCampaignPanel({ documentId, hasApprovedQuiz }: DocumentC
             {t('documents.detail.campaign_existing_title')}
           </h4>
           <Link
-            to="/admin/campaign-compliance"
+            to="/documents/campaigns"
             className="text-sm text-primary hover:underline"
           >
             {t('documents.detail.campaign_compliance_link')}

@@ -155,7 +155,7 @@ export function DocumentCampaignResults({
               ))}
             </select>
             <Button variant="outline" size="sm" asChild>
-              <Link to="/admin/campaign-compliance">
+              <Link to="/documents/campaigns">
                 <ExternalLink className="mr-2 h-4 w-4" />
                 {t('campaigns.results.open_central', 'Central compliance')}
               </Link>

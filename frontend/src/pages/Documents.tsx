@@ -23,6 +23,7 @@ import {
   ExternalLink,
   Brain,
   Zap,
+  Megaphone,
 } from 'lucide-react'
 import api, { documentCampaignApi, getApiErrorMessage, type CampaignComplianceRow } from '../api/client'
 import { toast } from '../contexts/ToastContext'
@@ -592,10 +593,18 @@ export default function Documents() {
       <LibraryShell
         activeView="documents"
         actions={
-          <Button onClick={() => setShowUploadModal(true)}>
-            <Upload size={20} />
-            {t('documents.upload')}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" asChild>
+              <Link to="/documents/campaigns" data-testid="documents-campaigns-cta">
+                <Megaphone size={18} className="mr-2" />
+                {t('nav.document_campaigns', { defaultValue: 'Document campaigns' })}
+              </Link>
+            </Button>
+            <Button onClick={() => setShowUploadModal(true)}>
+              <Upload size={20} />
+              {t('documents.upload')}
+            </Button>
+          </div>
         }
       >
       <div className="flex flex-wrap items-center gap-2">

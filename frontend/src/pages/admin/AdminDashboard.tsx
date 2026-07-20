@@ -91,7 +91,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     title: 'Campaign Compliance',
     description: 'Document campaign completion and reminders',
     icon: <Megaphone className="w-6 h-6" />,
-    href: '/admin/campaign-compliance',
+    href: '/documents/campaigns',
     color: 'bg-amber-100 text-amber-700',
   },
   {

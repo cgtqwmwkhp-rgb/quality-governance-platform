@@ -106,7 +106,7 @@ export default function Policies() {
           <Link className="text-primary hover:underline" to="/document-control">
             Document Control
           </Link>
-          <Link className="text-primary hover:underline" to="/admin/campaign-compliance">
+          <Link className="text-primary hover:underline" to="/documents/campaigns">
             HSEQ Campaigns
           </Link>
         </div>
