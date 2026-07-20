@@ -1,6 +1,9 @@
 """Feature Flags API routes."""
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy.exc import ProgrammingError
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
@@ -16,8 +19,10 @@ from src.api.utils.errors import api_error
 from src.domain.services.feature_flag_service import FeatureFlagService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
+@router.get("", response_model=FeatureFlagListResponse, include_in_schema=False)
 @router.get("/", response_model=FeatureFlagListResponse)
 async def list_feature_flags(
     db: DbSession,
@@ -27,7 +32,12 @@ async def list_feature_flags(
 ) -> FeatureFlagListResponse:
     """List all feature flags."""
     service = FeatureFlagService(db)
-    flags = await service.list_flags()
+    try:
+        flags = await service.list_flags()
+    except ProgrammingError:
+        logger.exception("GET /feature-flags failed — feature_flags table unavailable")
+        await db.rollback()
+        return FeatureFlagListResponse(items=[], total=0)
     paginated = flags[skip : skip + limit]
     return FeatureFlagListResponse(
         items=[FeatureFlagResponse.model_validate(f) for f in paginated],

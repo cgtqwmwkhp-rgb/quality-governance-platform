@@ -42,6 +42,12 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
+def _evidence_asset_response(asset: EvidenceAsset) -> EvidenceAssetResponse:
+    """Serialize ORM → response (source_id is str in DB; may be action_key)."""
+    return EvidenceAssetResponse.model_validate(asset)
+
+
 # Allowed content types for upload (security: content-type allowlist)
 ALLOWED_CONTENT_TYPES = {
     # Images
@@ -458,8 +464,18 @@ async def list_evidence_assets(
 
     total_pages = math.ceil(total / page_size) if total and total > 0 else 1
 
+    items: list[EvidenceAssetResponse] = []
+    for asset in assets:
+        try:
+            items.append(_evidence_asset_response(asset))
+        except Exception:
+            logger.warning(
+                "Skipping evidence asset id=%s — response validation failed",
+                getattr(asset, "id", None),
+            )
+
     return EvidenceAssetListResponse(
-        items=[EvidenceAssetResponse.model_validate(asset) for asset in assets],
+        items=items,
         total=total or 0,
         page=page,
         page_size=page_size,
@@ -487,7 +503,7 @@ async def get_evidence_asset(
             f"Evidence asset with ID {asset_id} not found", code="ASSET_NOT_FOUND", details={"asset_id": asset_id}
         )
 
-    return asset
+    return _evidence_asset_response(asset)
 
 
 @router.patch("/{asset_id}", response_model=EvidenceAssetResponse)

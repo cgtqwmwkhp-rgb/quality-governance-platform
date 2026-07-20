@@ -37,6 +37,7 @@ class SearchResponse(BaseModel):
     facets: dict[str, object] = {}
 
 
+@router.get("", response_model=SearchResponse, include_in_schema=False)
 @router.get("/", response_model=SearchResponse)
 async def global_search(
     current_user: CurrentUser,

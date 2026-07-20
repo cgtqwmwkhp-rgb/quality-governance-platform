@@ -203,22 +203,23 @@ class PolicyAcknowledgmentService:
     async def get_user_pending_acknowledgments(
         self,
         user_id: int,
+        tenant_id: int | None = None,
     ) -> List[PolicyAcknowledgment]:
         """Get all pending acknowledgments for a user."""
+        filters = [
+            PolicyAcknowledgment.user_id == user_id,
+            PolicyAcknowledgment.status.in_(
+                [
+                    AcknowledgmentStatus.PENDING,
+                    AcknowledgmentStatus.OVERDUE,
+                ]
+            ),
+        ]
+        if tenant_id is not None:
+            filters.append(PolicyAcknowledgment.tenant_id == tenant_id)
+
         result = await self.db.execute(
-            select(PolicyAcknowledgment)
-            .where(
-                and_(
-                    PolicyAcknowledgment.user_id == user_id,
-                    PolicyAcknowledgment.status.in_(
-                        [
-                            AcknowledgmentStatus.PENDING,
-                            AcknowledgmentStatus.OVERDUE,
-                        ]
-                    ),
-                )
-            )
-            .order_by(PolicyAcknowledgment.due_date)
+            select(PolicyAcknowledgment).where(and_(*filters)).order_by(PolicyAcknowledgment.due_date)
         )
         return list(result.scalars().all())
 
@@ -316,29 +317,38 @@ class PolicyAcknowledgmentService:
             ack.last_reminder_at = datetime.now(timezone.utc)
             await self.db.commit()
 
-    async def get_compliance_dashboard(self) -> Dict[str, Any]:
+    async def get_compliance_dashboard(self, tenant_id: int | None = None) -> Dict[str, Any]:
         """Get overall policy acknowledgment compliance dashboard."""
-        # Overall stats
-        total_result = await self.db.execute(select(func.count(PolicyAcknowledgment.id)))
+        tenant_filter: list = []
+        if tenant_id is not None:
+            tenant_filter.append(PolicyAcknowledgment.tenant_id == tenant_id)
+
+        total_q = select(func.count(PolicyAcknowledgment.id))
+        if tenant_filter:
+            total_q = total_q.where(*tenant_filter)
+        total_result = await self.db.execute(total_q)
         total = total_result.scalar() or 0
 
         completed_result = await self.db.execute(
             select(func.count(PolicyAcknowledgment.id)).where(
-                PolicyAcknowledgment.status == AcknowledgmentStatus.COMPLETED
+                PolicyAcknowledgment.status == AcknowledgmentStatus.COMPLETED,
+                *tenant_filter,
             )
         )
         completed = completed_result.scalar() or 0
 
         overdue_result = await self.db.execute(
             select(func.count(PolicyAcknowledgment.id)).where(
-                PolicyAcknowledgment.status == AcknowledgmentStatus.OVERDUE
+                PolicyAcknowledgment.status == AcknowledgmentStatus.OVERDUE,
+                *tenant_filter,
             )
         )
         overdue = overdue_result.scalar() or 0
 
         pending_result = await self.db.execute(
             select(func.count(PolicyAcknowledgment.id)).where(
-                PolicyAcknowledgment.status == AcknowledgmentStatus.PENDING
+                PolicyAcknowledgment.status == AcknowledgmentStatus.PENDING,
+                *tenant_filter,
             )
         )
         pending = pending_result.scalar() or 0
