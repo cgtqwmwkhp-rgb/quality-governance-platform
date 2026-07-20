@@ -9,6 +9,9 @@ export const ASSURANCE_SOURCE_ACHILLES = 'achilles'
 /** Alias query param for the same Achilles / UVDB assurance slice. */
 export const ASSURANCE_SOURCE_UVDB = 'uvdb'
 
+/** Programme home for Customer Audits (thin shell; filtered board on Audits). */
+export const CUSTOMER_AUDITS_PROGRAMME_PATH = '/customer-audits'
+
 /** Canonical Audits URL for the Customer Audits assurance view (IA-W3). */
 export const CUSTOMER_AUDITS_AUDITS_PATH = `/audits?source=${ASSURANCE_SOURCE_CUSTOMER}`
 
@@ -70,6 +73,23 @@ export function filterAuditsByAssuranceSource(
   return audits
 }
 
+/** Scoped CAPA Actions path for customer / external audit downstream hand-off. */
+export function getCustomerCapaActionsPath(sourceId?: number | null): string {
+  if (sourceId != null && Number.isFinite(sourceId) && sourceId > 0) {
+    return `/actions?sourceType=audit_finding&sourceId=${sourceId}`
+  }
+  return '/actions?sourceType=audit_finding'
+}
+
+/** Scoped Risk Register path for customer / external audit downstream hand-off. */
+export function getCustomerRiskRegisterPath(auditRef?: string | null): string {
+  const ref = (auditRef || '').trim()
+  if (ref) {
+    return `/risk-register?auditOnly=1&auditRef=${encodeURIComponent(ref)}`
+  }
+  return '/risk-register?triage=import'
+}
+
 /** Scoped CAPA Actions path for UVDB / Achilles downstream hand-off. */
 export function getUvdbCapaActionsPath(sourceId?: number | null): string {
   if (sourceId != null && Number.isFinite(sourceId) && sourceId > 0) {
@@ -92,7 +112,11 @@ export function navItemIsActive(itemPath: string, pathname: string, search = '')
   const [targetPath, targetQuery = ''] = itemPath.split('?')
 
   if (pathname !== targetPath && !pathname.startsWith(`${targetPath}/`)) {
-    if (itemPath === CUSTOMER_AUDITS_AUDITS_PATH && pathname === '/customer-audits') {
+    if (
+      (itemPath === CUSTOMER_AUDITS_PROGRAMME_PATH ||
+        itemPath === CUSTOMER_AUDITS_AUDITS_PATH) &&
+      pathname === '/customer-audits'
+    ) {
       return true
     }
     if (

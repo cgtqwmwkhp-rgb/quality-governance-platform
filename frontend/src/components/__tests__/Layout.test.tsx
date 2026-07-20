@@ -133,7 +133,7 @@ describe('Layout', () => {
       ],
       [
         'nav.assurance',
-        ['/audits', '/audit-templates', '/uvdb', '/planet-mark', '/audits?source=customer'],
+        ['/audits', '/audit-templates', '/uvdb', '/planet-mark', '/customer-audits'],
       ],
       [
         'nav.compliance_sustainability',

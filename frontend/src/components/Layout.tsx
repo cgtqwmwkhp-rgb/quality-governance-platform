@@ -50,7 +50,7 @@ import { Button } from './ui/Button'
 import { cn } from '../helpers/utils'
 import { hasRole, isSuperuser } from '../utils/auth'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
-import { CUSTOMER_AUDITS_AUDITS_PATH, navItemIsActive } from './assuranceHubHelpers'
+import { CUSTOMER_AUDITS_PROGRAMME_PATH, navItemIsActive } from './assuranceHubHelpers'
 
 /** Deferred until the shell opens Copilot — keeps authenticated first paint lean (S14). */
 const AICopilot = lazy(() => import('./copilot/AICopilot'))
@@ -147,7 +147,7 @@ export default function Layout({ onLogout }: LayoutProps) {
           icon: Shield,
           label: t('nav.assurance_cert_shelf', { defaultValue: 'Certificate shelf' }),
         },
-        { path: CUSTOMER_AUDITS_AUDITS_PATH, icon: Users, label: t('nav.customer_audits') },
+        { path: CUSTOMER_AUDITS_PROGRAMME_PATH, icon: Users, label: t('nav.customer_audits') },
       ],
     },
     {
