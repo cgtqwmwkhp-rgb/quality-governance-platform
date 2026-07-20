@@ -40,6 +40,28 @@ type CategoryState = {
   error: boolean
 }
 
+/** Stable machine key from a human name (max 50 chars to match API). */
+export function generateLookupCode(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 50)
+  return slug || 'option'
+}
+
+function uniqueLookupCode(base: string, existing: LookupOption[]): string {
+  const taken = new Set(existing.map((o) => o.code.toLowerCase()))
+  if (!taken.has(base.toLowerCase())) return base
+  for (let i = 2; i < 100; i++) {
+    const suffix = `_${i}`
+    const candidate = `${base.slice(0, Math.max(1, 50 - suffix.length))}${suffix}`
+    if (!taken.has(candidate.toLowerCase())) return candidate
+  }
+  return `${base.slice(0, 43)}_${Date.now().toString(36)}`.slice(0, 50)
+}
+
 export default function LookupTables() {
   const { t } = useTranslation()
   const [counts, setCounts] = useState<Record<string, CategoryState>>(() =>
@@ -54,8 +76,10 @@ export default function LookupTables() {
   const [options, setOptions] = useState<LookupOption[]>([])
   const [editorLoading, setEditorLoading] = useState(false)
   const [editorError, setEditorError] = useState<string | null>(null)
-  const [newCode, setNewCode] = useState('')
   const [newLabel, setNewLabel] = useState('')
+  const [newCode, setNewCode] = useState('')
+  const [codeManual, setCodeManual] = useState(false)
+  const [showAdvancedCode, setShowAdvancedCode] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const visibleCategories =
@@ -86,13 +110,19 @@ export default function LookupTables() {
     void refreshCounts()
   }, [refreshCounts])
 
+  const resetCreateForm = () => {
+    setNewLabel('')
+    setNewCode('')
+    setCodeManual(false)
+    setShowAdvancedCode(false)
+  }
+
   const openEditor = async (cat: (typeof LOOKUP_CATEGORIES)[number]) => {
     setEditorCategory(cat)
     setEditorLoading(true)
     setEditorError(null)
     setOptions([])
-    setNewCode('')
-    setNewLabel('')
+    resetCreateForm()
     try {
       const data = await lookupsApi.list(cat.key, false)
       setOptions(data.items ?? [])
@@ -112,19 +142,29 @@ export default function LookupTables() {
     }
   }
 
+  const handleNameChange = (name: string) => {
+    setNewLabel(name)
+    if (!codeManual) {
+      setNewCode(generateLookupCode(name))
+    }
+  }
+
+  const resolvedCode = codeManual
+    ? newCode.trim()
+    : uniqueLookupCode(generateLookupCode(newLabel), options)
+
   const handleCreate = async () => {
-    if (!editorCategory || !newCode.trim() || !newLabel.trim()) return
+    if (!editorCategory || !newLabel.trim() || !resolvedCode) return
     setSaving(true)
     try {
       const created = await lookupsApi.create(editorCategory.key, {
-        code: newCode.trim(),
+        code: resolvedCode,
         label: newLabel.trim(),
         is_active: true,
         display_order: options.length,
       })
       setOptions((prev) => [...prev, created])
-      setNewCode('')
-      setNewLabel('')
+      resetCreateForm()
       setCounts((prev) => ({
         ...prev,
         [editorCategory.key]: {
@@ -318,19 +358,41 @@ export default function LookupTables() {
                 </ul>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="space-y-2">
                 <Input
-                  placeholder={t('admin.lookups.code_placeholder', 'Code')}
-                  value={newCode}
-                  onChange={(e) => setNewCode(e.target.value)}
-                  data-testid="lookup-new-code"
-                />
-                <Input
-                  placeholder={t('admin.lookups.label_placeholder', 'Label')}
+                  placeholder={t('admin.lookups.name_placeholder', 'Name')}
                   value={newLabel}
-                  onChange={(e) => setNewLabel(e.target.value)}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  aria-label={t('admin.lookups.name_placeholder', 'Name')}
                   data-testid="lookup-new-label"
                 />
+                <p className="text-xs text-muted-foreground" data-testid="lookup-code-preview">
+                  {t('admin.lookups.code_auto_hint', 'System code')}:{' '}
+                  <span className="font-mono">{resolvedCode || '—'}</span>
+                </p>
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => setShowAdvancedCode((prev) => !prev)}
+                  data-testid="lookup-advanced-code-toggle"
+                  aria-expanded={showAdvancedCode}
+                >
+                  {showAdvancedCode
+                    ? t('admin.lookups.hide_advanced_code', 'Hide advanced code')
+                    : t('admin.lookups.show_advanced_code', 'Advanced: edit code')}
+                </button>
+                {showAdvancedCode ? (
+                  <Input
+                    placeholder={t('admin.lookups.code_placeholder', 'Code')}
+                    value={codeManual ? newCode : resolvedCode}
+                    onChange={(e) => {
+                      setCodeManual(true)
+                      setNewCode(e.target.value)
+                    }}
+                    aria-label={t('admin.lookups.code_placeholder', 'Code')}
+                    data-testid="lookup-new-code"
+                  />
+                ) : null}
               </div>
             </div>
           )}
@@ -341,7 +403,7 @@ export default function LookupTables() {
             </Button>
             <Button
               type="button"
-              disabled={saving || !newCode.trim() || !newLabel.trim() || !!editorError}
+              disabled={saving || !newLabel.trim() || !resolvedCode || !!editorError}
               onClick={() => void handleCreate()}
               data-testid="lookup-add-option"
             >

@@ -117,4 +117,69 @@ describe('LookupTables configure CTA', () => {
       'process_scheduler',
     )
   })
+
+  it('adds an option from name only and auto-generates the system code', async () => {
+    const user = userEvent.setup()
+    mockCreate.mockResolvedValue({
+      id: 9,
+      category: 'locations',
+      code: 'oxford_depot',
+      label: 'Oxford Depot',
+      is_active: true,
+      display_order: 0,
+    })
+    render(<LookupTables />)
+
+    await user.click(await screen.findByTestId('lookup-configure-locations'))
+    expect(await screen.findByTestId('lookup-editor-dialog')).toBeInTheDocument()
+
+    await user.type(screen.getByTestId('lookup-new-label'), 'Oxford Depot')
+    expect(screen.getByTestId('lookup-code-preview')).toHaveTextContent('oxford_depot')
+    expect(screen.queryByTestId('lookup-new-code')).not.toBeInTheDocument()
+
+    await user.click(screen.getByTestId('lookup-add-option'))
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledWith(
+        'locations',
+        expect.objectContaining({ code: 'oxford_depot', label: 'Oxford Depot' }),
+      )
+    })
+  })
+
+  it('allows overriding the auto-generated code via advanced reveal', async () => {
+    const user = userEvent.setup()
+    mockCreate.mockResolvedValue({
+      id: 10,
+      category: 'locations',
+      code: 'ox5',
+      label: 'Oxford Depot',
+      is_active: true,
+      display_order: 0,
+    })
+    render(<LookupTables />)
+
+    await user.click(await screen.findByTestId('lookup-configure-locations'))
+    await screen.findByTestId('lookup-editor-dialog')
+    await user.type(screen.getByTestId('lookup-new-label'), 'Oxford Depot')
+    await user.click(screen.getByTestId('lookup-advanced-code-toggle'))
+    const codeInput = await screen.findByTestId('lookup-new-code')
+    await user.clear(codeInput)
+    await user.type(codeInput, 'ox5')
+    await user.click(screen.getByTestId('lookup-add-option'))
+
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledWith(
+        'locations',
+        expect.objectContaining({ code: 'ox5', label: 'Oxford Depot' }),
+      )
+    })
+  })
+})
+
+describe('generateLookupCode', () => {
+  it('slugifies human names into stable codes', async () => {
+    const { generateLookupCode } = await import('../LookupTables')
+    expect(generateLookupCode('Oxford Depot')).toBe('oxford_depot')
+    expect(generateLookupCode('  High-risk / Near Miss  ')).toBe('high_risk_near_miss')
+  })
 })
