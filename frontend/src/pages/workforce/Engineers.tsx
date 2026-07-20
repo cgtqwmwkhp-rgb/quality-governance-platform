@@ -39,6 +39,7 @@ import { cn } from '../../helpers/utils'
 import { isWorkforceManager } from '../../utils/workforceAccess'
 
 type ActiveFilter = '' | 'true' | 'false'
+type LinkFilter = '' | 'linked' | 'unlinked'
 type ViewMode = 'cards' | 'list' | 'compact'
 
 type EmployeeFormState = {
@@ -91,6 +92,8 @@ export default function Engineers() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   // Best-in-class default: active engineers only (roster for assignment / reporting).
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('true')
+  const [linkFilter, setLinkFilter] = useState<LinkFilter>('')
+  const [linkCoverage, setLinkCoverage] = useState<{ linked: number; active: number; percent: number } | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('cards')
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
@@ -114,15 +117,22 @@ export default function Engineers() {
       const params: Record<string, string> = { page: '1', page_size: '50' }
       if (debouncedSearch) params.search = debouncedSearch
       if (activeFilter) params.is_active = activeFilter
+      if (linkFilter) params.link_status = linkFilter
       const res = await workforceApi.listEngineers(params)
       setEngineers(res.data.items || [])
+      setLinkCoverage({
+        linked: res.data.linked_active_engineers ?? 0,
+        active: res.data.active_engineers ?? 0,
+        percent: res.data.linked_coverage_percent ?? 0,
+      })
     } catch (err) {
       setEngineers([])
+      setLinkCoverage(null)
       setError(getApiErrorMessage(err))
     } finally {
       setLoading(false)
     }
-  }, [debouncedSearch, activeFilter])
+  }, [debouncedSearch, activeFilter, linkFilter])
 
   useEffect(() => {
     void loadEngineers()
@@ -275,6 +285,21 @@ export default function Engineers() {
               <option value="true">{t('common.active')}</option>
               <option value="false">{t('common.inactive')}</option>
             </select>
+            <select
+              value={linkFilter}
+              onChange={(e) => setLinkFilter(e.target.value as LinkFilter)}
+              className="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
+              aria-label="Engineer link status"
+            >
+              <option value="">All links</option>
+              <option value="linked">Linked</option>
+              <option value="unlinked">Unlinked</option>
+            </select>
+            {linkCoverage && (
+              <span className="text-sm text-muted-foreground" data-testid="engineer-link-coverage">
+                {linkCoverage.linked}/{linkCoverage.active} linked ({linkCoverage.percent}%)
+              </span>
+            )}
             <div
               className="inline-flex rounded-md border border-border p-0.5"
               role="group"

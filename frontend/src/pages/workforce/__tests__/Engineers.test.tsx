@@ -126,6 +126,27 @@ describe('Engineers', () => {
     })
   })
 
+  it('filters roster by linked user status and shows active-link coverage', async () => {
+    listEngineers.mockResolvedValue({
+      data: {
+        items: [],
+        active_engineers: 8,
+        linked_active_engineers: 6,
+        linked_coverage_percent: 75,
+      },
+    })
+    renderPage()
+
+    expect(await screen.findByTestId('engineer-link-coverage')).toHaveTextContent('6/8 linked (75%)')
+    fireEvent.change(screen.getByLabelText('Engineer link status'), { target: { value: 'unlinked' } })
+
+    await waitFor(() => {
+      expect(listEngineers).toHaveBeenCalledWith(
+        expect.objectContaining({ link_status: 'unlinked', page: '1', page_size: '50' }),
+      )
+    })
+  })
+
   it('creates an employee from the dialog and navigates to profile', async () => {
     renderPage()
 
