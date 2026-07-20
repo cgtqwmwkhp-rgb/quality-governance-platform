@@ -246,16 +246,24 @@ class AssuranceCertShelfService:
 
     @staticmethod
     def _build_summary(items: list[dict[str, Any]]) -> dict[str, Any]:
-        summary = {
-            "valid": 0,
-            "due_soon": 0,
-            "expired": 0,
-            "unknown": 0,
-            "by_scheme": {},
-        }
+        valid = due_soon = expired = unknown = 0
+        by_scheme: dict[str, int] = {}
         for item in items:
             status = item["readiness_status"]
-            summary[status] = summary.get(status, 0) + 1
-            scheme = item["scheme"]
-            summary["by_scheme"][scheme] = summary["by_scheme"].get(scheme, 0) + 1
-        return summary
+            if status == "valid":
+                valid += 1
+            elif status == "due_soon":
+                due_soon += 1
+            elif status == "expired":
+                expired += 1
+            else:
+                unknown += 1
+            scheme = str(item["scheme"])
+            by_scheme[scheme] = by_scheme.get(scheme, 0) + 1
+        return {
+            "valid": valid,
+            "due_soon": due_soon,
+            "expired": expired,
+            "unknown": unknown,
+            "by_scheme": by_scheme,
+        }

@@ -102,7 +102,7 @@ export default function AssuranceCertShelf() {
           <p className="text-sm text-muted-foreground mt-1 max-w-3xl">
             {t(
               'assurance.cert_shelf.subtitle',
-              'QGP orchestrates readiness across owned Library masters and external assurance systems of record (Achilles UVDB, Planet Mark). Hyperlink external certificates; Library holds owned masters.',
+              'Readiness across Library masters and external assurance systems of record (UVDB, Planet Mark).',
             )}
           </p>
         </div>
@@ -159,7 +159,7 @@ export default function AssuranceCertShelf() {
             )}
           >
             {status === 'all'
-              ? t('common.all_statuses', 'All statuses')
+              ? t('campaigns.roster.filter_all_statuses', 'All statuses')
               : ASSURANCE_CERT_READINESS_LABELS[status]}
           </button>
         ))}
