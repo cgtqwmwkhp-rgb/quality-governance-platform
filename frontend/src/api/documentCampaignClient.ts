@@ -9,6 +9,7 @@ export type CampaignAudienceType =
   | 'role'
   | 'group'
   | 'specific_users'
+  | 'specific_engineers'
 
 export interface CampaignGroup {
   id: number
@@ -31,6 +32,7 @@ export interface DocumentCampaign {
   audience_role?: string | null
   audience_group_id?: number | null
   audience_user_ids?: number[]
+  audience_engineer_ids?: number[]
   assigned_count?: number
   total_assigned?: number
   completed?: number
@@ -105,6 +107,7 @@ export interface CreateCampaignPayload {
   audience_role?: string | null
   audience_group_id?: number | null
   audience_user_ids?: number[]
+  audience_engineer_ids?: number[]
 }
 
 export interface LaunchCampaignResponse {

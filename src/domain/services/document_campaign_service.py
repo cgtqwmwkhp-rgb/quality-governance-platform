@@ -280,6 +280,7 @@ class DocumentCampaignService:
         competence_asset_type_id: Optional[int] = None,
     ) -> DocumentCampaign:
         audience = audience or {}
+        audience = await self._resolve_engineer_audience(tenant_id=tenant_id, audience=audience)
 
         quiz_questions: Optional[List[Dict[str, Any]]] = None
         quiz_pass_mark: Optional[int] = None
@@ -336,6 +337,36 @@ class DocumentCampaignService:
         await self.db.commit()
         await self.db.refresh(campaign)
         return campaign
+
+    async def _resolve_engineer_audience(self, *, tenant_id: int, audience: Dict[str, Any]) -> Dict[str, Any]:
+        """Translate roster engineer IDs to active linked user IDs before persistence."""
+        engineer_ids = list(dict.fromkeys(int(value) for value in (audience.get("engineer_ids") or [])))
+        if not engineer_ids:
+            return audience
+
+        result = await self.db.execute(
+            select(Engineer.id, Engineer.user_id)
+            .join(User, Engineer.user_id == User.id)
+            .where(
+                Engineer.id.in_(engineer_ids),
+                Engineer.tenant_id == tenant_id,
+                User.tenant_id == tenant_id,
+                User.is_active == True,  # noqa: E712
+            )
+        )
+        links = {int(engineer_id): user_id for engineer_id, user_id in result.all()}
+        unlinked_engineer_ids = [engineer_id for engineer_id in engineer_ids if links.get(engineer_id) is None]
+        if unlinked_engineer_ids:
+            raise ValidationError(
+                "All selected engineers must be linked to an active QGP user",
+                details={"unlinked_engineer_ids": unlinked_engineer_ids},
+            )
+
+        resolved = dict(audience)
+        resolved["user_ids"] = list(
+            dict.fromkeys([*(audience.get("user_ids") or []), *(links[id] for id in engineer_ids)])
+        )
+        return resolved
 
     async def update_campaign(
         self,
