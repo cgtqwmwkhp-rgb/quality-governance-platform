@@ -27,6 +27,8 @@ export default function InductionCreate() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [templateLoadFailed, setTemplateLoadFailed] = useState(false)
+  const [rosterLoadFailed, setRosterLoadFailed] = useState(false)
 
   const [templateId, setTemplateId] = useState<string>('')
   const [engineerId, setEngineerId] = useState<string>('')
@@ -35,30 +37,47 @@ export default function InductionCreate() {
   const [location, setLocation] = useState('')
   const [scheduledDate, setScheduledDate] = useState('')
   const [notes, setNotes] = useState('')
-  const rosterEmpty = !loading && engineers.length === 0
+  const rosterEmpty = !loading && !rosterLoadFailed && engineers.length === 0
+  const requiredDataUnavailable = templateLoadFailed || rosterLoadFailed
 
   useEffect(() => {
     const load = async () => {
-      try {
-        const [tRes, eRes, aRes] = await Promise.all([
+      const [templatesResult, engineersResult, assetTypesResult] = await Promise.allSettled([
           auditsApi.listTemplates(1, 100, { is_published: true }),
           workforceApi.listEngineers({ ...ACTIVE_EMPLOYEES_LIST_PARAMS }),
           workforceApi.listAssetTypes(),
-        ])
-        setTemplates(tRes.data.items || [])
-        setEngineers(sortEmployeesForPicker(eRes.data.items || []))
-        setAssetTypes(aRes.data.items || [])
-      } catch {
-        setError('Failed to load form data')
-      } finally {
-        setLoading(false)
+      ])
+
+      if (templatesResult.status === 'fulfilled') {
+        setTemplates(templatesResult.value.data.items || [])
+      } else {
+        setTemplateLoadFailed(true)
       }
+      if (engineersResult.status === 'fulfilled') {
+        setEngineers(sortEmployeesForPicker(engineersResult.value.data.items || []))
+      } else {
+        setRosterLoadFailed(true)
+      }
+      if (assetTypesResult.status === 'fulfilled') {
+        setAssetTypes(assetTypesResult.value.data.items || [])
+      }
+
+      if (templatesResult.status === 'rejected' || engineersResult.status === 'rejected') {
+        setError('Could not load templates or employees. Reload before starting training.')
+      } else if (assetTypesResult.status === 'rejected') {
+        setError('Asset types could not be loaded. You can still start training without one.')
+      }
+      setLoading(false)
     }
     load()
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (requiredDataUnavailable) {
+      setError('Could not load templates or employees. Reload before starting training.')
+      return
+    }
     if (!templateId || !engineerId) {
       setError('Template and engineer are required')
       return
@@ -130,7 +149,8 @@ export default function InductionCreate() {
                 value={templateId}
                 onChange={(e) => setTemplateId(e.target.value)}
                 required
-                className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                disabled={templateLoadFailed}
+                className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
               >
                 <option value="">{t('workforce.common.select_template')}</option>
                 {templates.map((t) => (
@@ -153,8 +173,14 @@ export default function InductionCreate() {
                 value={engineerId}
                 onChange={(e) => setEngineerId(e.target.value)}
                 required
-                disabled={rosterEmpty}
-                aria-describedby={rosterEmpty ? 'inductioncreate-employees-empty' : undefined}
+                disabled={rosterEmpty || rosterLoadFailed}
+                aria-describedby={
+                  rosterEmpty
+                    ? 'inductioncreate-employees-empty'
+                    : rosterLoadFailed
+                      ? 'inductioncreate-employees-unavailable'
+                      : undefined
+                }
                 className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
               >
                 <option value="">{t('workforce.common.select_engineer')}</option>
@@ -177,6 +203,15 @@ export default function InductionCreate() {
                   >
                     {t('workforce.induction.employees_empty_link')}
                   </Link>
+                </p>
+              )}
+              {rosterLoadFailed && (
+                <p
+                  id="inductioncreate-employees-unavailable"
+                  className="mt-2 text-sm text-destructive"
+                  data-testid="induction-create-employees-unavailable"
+                >
+                  Employee records could not be loaded. Reload before starting training.
                 </p>
               )}
             </div>
@@ -275,7 +310,11 @@ export default function InductionCreate() {
               </div>
             )}
 
-            <Button type="submit" disabled={submitting} className="w-full min-h-[48px] text-base">
+            <Button
+              type="submit"
+              disabled={submitting || requiredDataUnavailable}
+              className="w-full min-h-[48px] text-base"
+            >
               {submitting ? t('workforce.common.creating') : t('workforce.induction.create_start')}
             </Button>
           </form>
