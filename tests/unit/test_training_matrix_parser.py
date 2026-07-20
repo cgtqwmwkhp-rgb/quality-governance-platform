@@ -76,3 +76,12 @@ def test_requirement_match_department():
         engineer_department="Mobile Engineers",
         engineer_job_title="Technician",
     )
+
+
+def test_parse_dedupes_duplicate_trainee_rows():
+    csv_dup = SAMPLE_CSV + "Aaron Smith,Mobile Engineers,Passed,02/12/2023,21/11/2026,,,,,\n"
+    parsed = parse_training_matrix_csv(csv_dup)
+    assert len(parsed.people) == 2
+    aaron = next(p for p in parsed.people if p.atlas_name == "Aaron Smith")
+    asbestos = next(c for c in aaron.cells if c.course_key == "asbestos_awareness")
+    assert asbestos.passed_on == date(2023, 12, 2)

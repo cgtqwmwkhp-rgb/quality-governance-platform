@@ -2,15 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ExternalLink, Upload } from 'lucide-react'
 import {
-  ATLAS_HUB_URL,
   getApiErrorMessage,
   trainingMatrixApi,
   workforceApi,
+  type EngineerProfile,
   type TrainingMatrixComplianceRow,
   type TrainingMatrixImportQa,
   type TrainingMatrixNameMapItem,
   type TrainingMatrixRequirement,
 } from '../../../api/client'
+import { ATLAS_HUB_URL } from '../../../api/trainingMatrixClient'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card'
@@ -238,6 +239,7 @@ export function TrainingMatrixAdminPanel() {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [nameMaps, setNameMaps] = useState<TrainingMatrixNameMapItem[]>([])
+  const [nameMapsLoaded, setNameMapsLoaded] = useState(false)
   const [requirements, setRequirements] = useState<TrainingMatrixRequirement[]>([])
   const [engineers, setEngineers] = useState<{ id: number; label: string }[]>([])
   const [courses, setCourses] = useState<{ course_key: string; display_name: string }[]>([])
@@ -250,14 +252,25 @@ export function TrainingMatrixAdminPanel() {
   })
 
   const reload = () => {
-    trainingMatrixApi.listNameMaps().then(setNameMaps).catch(() => setNameMaps([]))
+    setNameMapsLoaded(false)
+    trainingMatrixApi
+      .listNameMaps()
+      .then((rows) => {
+        setNameMaps(rows)
+        setError(null)
+      })
+      .catch((err) => {
+        setNameMaps([])
+        setError(getApiErrorMessage(err, 'Could not load name maps (admin only).'))
+      })
+      .finally(() => setNameMapsLoaded(true))
     trainingMatrixApi.listRequirements().then((r) => setRequirements(r.items)).catch(() => setRequirements([]))
     trainingMatrixApi.listCourses().then(setCourses).catch(() => setCourses([]))
     workforceApi
       .listEngineers({ page: '1', page_size: '500' })
       .then((res) => {
         setEngineers(
-          (res.data?.items || []).map((e: { id: number; display_name?: string }) => ({
+          (res.data?.items || []).map((e: EngineerProfile) => ({
             id: e.id,
             label: e.display_name?.trim() || `#${e.id}`,
           })),
@@ -356,8 +369,13 @@ export function TrainingMatrixAdminPanel() {
               </select>
             </div>
           ))}
-          {unmatched.length === 0 ? (
+          {nameMapsLoaded && unmatched.length === 0 && nameMaps.length > 0 ? (
             <p className="text-sm text-muted-foreground">All Atlas names are mapped.</p>
+          ) : null}
+          {nameMapsLoaded && nameMaps.length === 0 && !error ? (
+            <p className="text-sm text-muted-foreground">
+              No Atlas people yet. Upload a matrix CSV first.
+            </p>
           ) : null}
         </CardContent>
       </Card>

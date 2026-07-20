@@ -76,7 +76,7 @@ def parse_training_matrix_csv(content: bytes | str) -> ParsedMatrix:
     if not courses:
         raise ValueError("No course columns found in training matrix CSV")
 
-    people: list[ParsedPerson] = []
+    people_by_name: dict[str, ParsedPerson] = {}
     cell_count = 0
     nonempty = 0
     expiry_without_passed = 0
@@ -89,7 +89,15 @@ def parse_training_matrix_csv(content: bytes | str) -> ParsedMatrix:
         if name.lower().startswith("page "):
             continue
         department = (row[1] if len(row) > 1 else "").strip() or None
-        person = ParsedPerson(atlas_name=name, department=department)
+        person_key = name.lower()
+        person = people_by_name.get(person_key)
+        if person is None:
+            person = ParsedPerson(atlas_name=name, department=department)
+            people_by_name[person_key] = person
+        elif department:
+            person.department = department
+
+        cells_by_course = {c.course_key: c for c in person.cells}
         for ci, course_name in enumerate(courses):
             base = 2 + ci * 3
             cell_count += 1
@@ -105,17 +113,17 @@ def parse_training_matrix_csv(content: bytes | str) -> ParsedMatrix:
             expires_on = parse_atlas_date(expiry_s)
             if expires_on and not passed_on:
                 expiry_without_passed += 1
-            person.cells.append(
-                ParsedCell(
-                    course_name=course_name,
-                    course_key=normalize_course_key(course_name),
-                    atlas_status=status,
-                    passed_on=passed_on,
-                    expires_on=expires_on,
-                )
+            course_key = normalize_course_key(course_name)
+            cells_by_course[course_key] = ParsedCell(
+                course_name=course_name,
+                course_key=course_key,
+                atlas_status=status,
+                passed_on=passed_on,
+                expires_on=expires_on,
             )
-        people.append(person)
+        person.cells = list(cells_by_course.values())
 
+    people = list(people_by_name.values())
     if not people:
         raise ValueError("No people rows found in training matrix CSV")
 

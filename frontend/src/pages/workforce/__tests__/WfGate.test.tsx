@@ -44,6 +44,18 @@ vi.mock('../../../api/client', () => ({
     listTemplates,
     getTemplate,
   },
+  trainingMatrixApi: {
+    listCompliance: vi.fn().mockResolvedValue({ items: [], total: 0, atlas_hub_url: 'https://atlas' }),
+    getLatestImportQa: vi.fn().mockRejectedValue(new Error('none')),
+    myTraining: vi.fn().mockResolvedValue({ items: [], total: 0, atlas_hub_url: 'https://atlas' }),
+    listNameMaps: vi.fn().mockResolvedValue([]),
+    listRequirements: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+    listCourses: vi.fn().mockResolvedValue([]),
+    uploadImport: vi.fn(),
+    upsertNameMap: vi.fn(),
+    createRequirement: vi.fn(),
+  },
+  ATLAS_HUB_URL: 'https://www.atlas-hub.co.uk/o/98b88f4e-2c3f-44c1-a812-36ea66222c7d/',
   getApiErrorMessage: (err: unknown, fallback = 'Request failed') => {
     if (err && typeof err === 'object' && 'response' in err) {
       const data = (err as { response?: { data?: { error?: { message?: string } } } }).response
@@ -219,7 +231,7 @@ describe('WF-GATE Training filters', () => {
     const user = userEvent.setup()
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/workforce/training?tab=inductions']}>
         <Training />
       </MemoryRouter>,
     )
@@ -253,7 +265,7 @@ describe('WF-GATE Training filters', () => {
 
     const Training = (await import('../Training')).default
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/workforce/training?tab=inductions']}>
         <Training />
       </MemoryRouter>,
     )

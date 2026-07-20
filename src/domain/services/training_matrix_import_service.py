@@ -30,7 +30,20 @@ async def persist_training_matrix_import(
     eng_rows = (
         await db.execute(select(Engineer.id, Engineer.display_name).where(Engineer.tenant_id == tenant_id))
     ).all()
-    eng_by_name = {normalize_person_name(name).lower(): eng_id for eng_id, name in eng_rows if name and name.strip()}
+    # Auto-map only when the normalized display name is unique in the tenant.
+    eng_by_name: dict[str, int] = {}
+    ambiguous_names: set[str] = set()
+    for eng_id, name in eng_rows:
+        if not name or not name.strip():
+            continue
+        key = normalize_person_name(name).lower()
+        if key in ambiguous_names:
+            continue
+        if key in eng_by_name:
+            eng_by_name.pop(key, None)
+            ambiguous_names.add(key)
+            continue
+        eng_by_name[key] = eng_id
 
     maps = (
         (await db.execute(select(TrainingMatrixNameMap).where(TrainingMatrixNameMap.tenant_id == tenant_id)))

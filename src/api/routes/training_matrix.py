@@ -390,7 +390,14 @@ async def _build_compliance_rows(
         .all()
     )
     people = (
-        (await db.execute(select(TrainingMatrixPerson).where(TrainingMatrixPerson.tenant_id == tenant_id)))
+        (
+            await db.execute(
+                select(TrainingMatrixPerson).where(
+                    TrainingMatrixPerson.tenant_id == tenant_id,
+                    TrainingMatrixPerson.last_seen_import_id == imp.id,
+                )
+            )
+        )
         .scalars()
         .all()
     )
