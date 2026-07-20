@@ -1,8 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { hasRole, isSuperuser } from './auth'
-import { isWorkforceManager } from './workforceAccess'
+import { hasRole, isSuperuser } from '../auth'
+import { isWorkforceManager } from '../workforceAccess'
 
-vi.mock('./auth', () => ({
+vi.mock('../auth', () => ({
   hasRole: vi.fn(),
   isSuperuser: vi.fn(),
 }))
