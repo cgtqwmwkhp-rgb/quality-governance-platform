@@ -158,6 +158,28 @@ class TestCertificateTracking:
         assert "expiring_90_days" in summary
         assert "by_type" in summary
 
+    def test_get_assurance_cert_shelf(self, auth_client: Any) -> None:
+        """Test unified assurance certificate shelf aggregation."""
+        response = auth_client.get("/api/v1/compliance-automation/certificates/shelf")
+        assert response.status_code == 200
+
+        payload = response.json()
+        assert "items" in payload
+        assert "total" in payload
+        assert "summary" in payload
+        assert "due_soon_days" in payload
+        assert "valid" in payload["summary"]
+        assert "due_soon" in payload["summary"]
+        assert "expired" in payload["summary"]
+        assert "by_scheme" in payload["summary"]
+
+    def test_filter_assurance_cert_shelf_by_scheme(self, auth_client: Any) -> None:
+        """Test shelf scheme filter."""
+        response = auth_client.get("/api/v1/compliance-automation/certificates/shelf?scheme=planet_mark")
+        assert response.status_code == 200
+        for item in response.json().get("items", []):
+            assert item["scheme"] == "planet_mark"
+
 
 @pytest.mark.phase34
 class TestScheduledAudits:
