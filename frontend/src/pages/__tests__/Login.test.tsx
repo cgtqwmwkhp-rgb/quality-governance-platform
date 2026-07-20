@@ -11,7 +11,7 @@ vi.mock('react-i18next', () => ({
     t: (key: string) => {
       const translations: Record<string, string> = {
         'brand.product_name': 'Quality Governance Platform',
-        'brand.company_line': 'Planexpand Limited',
+        'brand.company_line': 'Plantexpand Limited',
         'login.title': 'Sign In',
         'login.subtitle': 'Welcome back',
         'login.email': 'Email',
@@ -86,7 +86,7 @@ describe('Login', () => {
     expect(screen.getByTestId('password-input')).toBeInTheDocument()
     expect(screen.getByTestId('login-submit-btn')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Quality Governance Platform' })).toBeInTheDocument()
-    expect(screen.getByText('Planexpand Limited')).toBeInTheDocument()
+    expect(screen.getByText('Plantexpand Limited')).toBeInTheDocument()
   })
 
   it('allows typing into email and password fields', async () => {
