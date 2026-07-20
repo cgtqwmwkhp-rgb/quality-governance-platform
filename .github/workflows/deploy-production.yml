@@ -24,7 +24,7 @@ on:
         description: 'Reason for production deployment'
         required: true
       force_deploy:
-        description: 'Override deploy freeze window (Fri 16:00 UTC — Mon 09:00 UTC)'
+        description: 'Legacy no-op (weekend deploy freeze removed — always allowed)'
         required: false
         default: false
         type: boolean
@@ -66,45 +66,15 @@ jobs:
     steps:
       - name: Deploy freeze check
         id: freeze
-        env:
-          FORCE_DEPLOY: ${{ github.event_name == 'workflow_dispatch' && inputs.force_deploy }}
         run: |
           set -euo pipefail
           {
-            echo "## Deploy freeze window (UTC)"
+            echo "## Deploy freeze"
             echo ""
-            echo "Production deploys are **frozen** from **Friday 16:00** through **Monday 09:00** (UTC), except when \`force_deploy\` is enabled on manual runs."
+            echo "Weekend deploy freeze **removed** — production deploys are always allowed when other gates pass."
             echo ""
+            echo "✅ **Allowed** — no calendar freeze."
           } >> "$GITHUB_STEP_SUMMARY"
-
-          if [[ "${FORCE_DEPLOY}" == "true" ]]; then
-            echo "Deploy freeze overridden: force_deploy=true"
-            echo "✅ **Deploy freeze overridden** (\`force_deploy=true\`)." >> "$GITHUB_STEP_SUMMARY"
-            echo "allowed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # GNU date: %u weekday 1=Monday … 7=Sunday; %H hour 00–23 UTC
-          DOW=$(date -u +%u)
-          HOUR=$(date -u +%H)
-          MINUTE=$(date -u +%M)
-          echo "Current UTC: weekday=$DOW (1=Mon … 7=Sun) time=${HOUR}:${MINUTE}"
-
-          FROZEN=0
-          if [[ "$DOW" == "5" && "$HOUR" -ge 16 ]]; then FROZEN=1; fi
-          if [[ "$DOW" == "6" || "$DOW" == "7" ]]; then FROZEN=1; fi
-          if [[ "$DOW" == "1" && "$HOUR" -lt 9 ]]; then FROZEN=1; fi
-
-          if [[ "$FROZEN" -eq 1 ]]; then
-            echo "❌ BLOCKED: deploy freeze active (Fri 16:00 UTC — Mon 09:00 UTC)."
-            echo "Re-run with workflow_dispatch input \`force_deploy: true\` to override."
-            echo "❌ **BLOCKED** — inside deploy freeze window." >> "$GITHUB_STEP_SUMMARY"
-            echo "allowed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "✅ Not in deploy freeze window; proceeding."
-          echo "✅ **Allowed** — outside deploy freeze window." >> "$GITHUB_STEP_SUMMARY"
           echo "allowed=true" >> "$GITHUB_OUTPUT"
 
       - name: Mark deploy freeze block
