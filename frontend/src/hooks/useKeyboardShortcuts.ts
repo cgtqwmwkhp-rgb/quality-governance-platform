@@ -19,6 +19,24 @@ export function getRegisteredShortcuts(): Shortcut[] {
   return Array.from(globalRegistry.values())
 }
 
+const EDITABLE_ROLES = new Set(['combobox', 'listbox', 'searchbox'])
+
+function isEditableTarget(el: EventTarget | null): boolean {
+  let node = el instanceof HTMLElement ? el : null
+  while (node) {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(node.tagName)) return true
+    if (node.isContentEditable) return true
+    const role = node.getAttribute('role')
+    if (role && EDITABLE_ROLES.has(role)) return true
+    node = node.parentElement
+  }
+  return false
+}
+
+function hasPrimaryModifier(modifiers: Shortcut['modifiers']): boolean {
+  return (modifiers || []).some((m) => m === 'ctrl' || m === 'meta' || m === 'alt')
+}
+
 export function useKeyboardShortcuts(shortcuts: Shortcut[]) {
   const shortcutsRef = useRef(shortcuts)
   shortcutsRef.current = shortcuts
@@ -29,9 +47,7 @@ export function useKeyboardShortcuts(shortcuts: Shortcut[]) {
     }
 
     const handler = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement
-      const isInput =
-        ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable
+      const isEditable = isEditableTarget(e.target)
 
       for (const s of shortcutsRef.current) {
         const mods = s.modifiers || []
@@ -40,7 +56,7 @@ export function useKeyboardShortcuts(shortcuts: Shortcut[]) {
         const needsShift = mods.includes('shift')
         const needsAlt = mods.includes('alt')
 
-        if (isInput && mods.length === 0) continue
+        if (isEditable && !hasPrimaryModifier(mods)) continue
 
         if (
           e.key.toLowerCase() === s.key.toLowerCase() &&
