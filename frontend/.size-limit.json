@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "166 kB",
+    "limit": "167 kB",
     "gzip": true,
-    "name": "index: 165→166 kB — training matrix + customer audits programme shells"
+    "name": "index: 166\u2192167 kB \u2014 customer audits + training matrix shells"
   },
   {
     "path": "dist/assets/vendor-*.js",
