@@ -33,6 +33,10 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
 
+vi.mock('../../../utils/workforceAccess', () => ({
+  isWorkforceManager: vi.fn(() => true),
+}))
+
 vi.mock('../../../api/client', () => ({
   workforceApi: {
     listEngineers: (...args: unknown[]) => listEngineers(...args),

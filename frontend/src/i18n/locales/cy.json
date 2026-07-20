@@ -3375,6 +3375,7 @@
   "workforce.engineers.view_mode": "View mode",
   "workforce.engineers.qgp_override_badge": "QGP profile",
   "workforce.engineers.qgp_only_hint": "Edits apply on this platform only — PAMS technician records are never updated.",
+  "workforce.engineers.manager_gate_honesty": "Mae ychwanegu cyflogeion a chysoni PAMS yn gofyn am rôl gweinyddwr neu oruchwyliwr yn ogystal â engineer:create. Cysylltwch â HSEQ os oes angen mynediad ysgrifennu ar y rhestr.",
   "workforce.engineers.user_link.link": "Link user",
   "workforce.engineers.user_link.search_placeholder": "Optional — search QGP user to link…",
   "workforce.engineers.user_link.select_user": "Select a QGP user from search",
