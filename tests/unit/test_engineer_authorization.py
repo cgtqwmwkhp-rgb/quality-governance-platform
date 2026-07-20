@@ -22,6 +22,9 @@ class _FakeResult:
     def all(self):
         return self._value
 
+    def one(self):
+        return self._value
+
 
 @pytest.mark.asyncio
 async def test_get_engineer_allows_self_read():
@@ -96,7 +99,7 @@ async def test_list_engineers_scopes_non_manager_to_self():
     )
     db = types.SimpleNamespace(
         scalar=AsyncMock(return_value=1),
-        execute=AsyncMock(side_effect=[_FakeResult([engineer]), _FakeResult(None)]),
+        execute=AsyncMock(side_effect=[_FakeResult([engineer]), _FakeResult((1, 1))]),
     )
     user = types.SimpleNamespace(id=42, tenant_id=1, is_superuser=False, roles=[])
 
@@ -105,6 +108,9 @@ async def test_list_engineers_scopes_non_manager_to_self():
     assert result.total == 1
     assert len(result.items) == 1
     assert result.items[0].user_id == 42
+    assert result.active_engineers == 1
+    assert result.linked_active_engineers == 1
+    assert result.linked_coverage_percent == 100.0
 
 
 @pytest.mark.asyncio

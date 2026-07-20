@@ -199,9 +199,7 @@ async def list_engineers(
         pages=pages,
         active_engineers=active_engineers,
         linked_active_engineers=linked_active_engineers,
-        linked_coverage_percent=round(linked_active_engineers / active_engineers * 100, 1)
-        if active_engineers
-        else 0.0,
+        linked_coverage_percent=round(linked_active_engineers / active_engineers * 100, 1) if active_engineers else 0.0,
     )
 
 
