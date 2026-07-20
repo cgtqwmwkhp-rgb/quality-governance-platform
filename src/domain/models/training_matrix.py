@@ -60,6 +60,7 @@ class TrainingMatrixPerson(Base, TimestampMixin):
     last_seen_import_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("training_matrix_imports.id", ondelete="SET NULL"), nullable=True
     )
+    last_training_notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class TrainingMatrixCell(Base, TimestampMixin):

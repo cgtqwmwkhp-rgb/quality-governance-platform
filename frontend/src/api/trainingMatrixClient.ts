@@ -44,6 +44,7 @@ export type TrainingMatrixComplianceRow = {
   qgp_due_on?: string | null
   expiry_without_passed: boolean
   atlas_hub_url: string
+  last_training_notified_at?: string | null
 }
 
 export type TrainingMatrixRequirement = {
@@ -68,6 +69,24 @@ export type TrainingMatrixNameMapItem = {
 export type TrainingMatrixCourseOption = {
   course_key: string
   display_name: string
+}
+
+export type TrainingMatrixMatrixCell = {
+  match_department: string
+  course_key: string
+  course_display_name: string
+  frequency_years: number | null
+}
+
+export type TrainingMatrixMatrixUpsertResponse = {
+  upserted: number
+  deactivated: number
+}
+
+export type TrainingMatrixNotifyResponse = {
+  sent: number
+  skipped: number
+  failed: number
 }
 
 export function createTrainingMatrixApi(api: AxiosInstance) {
@@ -155,6 +174,19 @@ export function createTrainingMatrixApi(api: AxiosInstance) {
     listCourses: () =>
       api
         .get<TrainingMatrixCourseOption[]>('/api/v1/training-matrix/courses')
+        .then((r) => r.data),
+    upsertRequirementsMatrix: (cells: TrainingMatrixMatrixCell[]) =>
+      api
+        .post<TrainingMatrixMatrixUpsertResponse>('/api/v1/training-matrix/requirements/matrix', {
+          cells,
+        })
+        .then((r) => r.data),
+    notify: (atlas_names: string[], message?: string) =>
+      api
+        .post<TrainingMatrixNotifyResponse>('/api/v1/training-matrix/notify', {
+          atlas_names,
+          message,
+        })
         .then((r) => r.data),
   }
 }

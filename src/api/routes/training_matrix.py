@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, File, Query, UploadFile, status
@@ -15,8 +15,12 @@ from src.api.schemas.training_matrix import (
     TrainingMatrixCourseOption,
     TrainingMatrixImportQaResponse,
     TrainingMatrixImportResponse,
+    TrainingMatrixMatrixUpsertRequest,
+    TrainingMatrixMatrixUpsertResponse,
     TrainingMatrixNameMapItem,
     TrainingMatrixNameMapUpsert,
+    TrainingMatrixNotifyRequest,
+    TrainingMatrixNotifyResponse,
     TrainingMatrixRequirementCreate,
     TrainingMatrixRequirementListResponse,
     TrainingMatrixRequirementResponse,
@@ -35,6 +39,8 @@ from src.domain.models.training_matrix import (
     TrainingMatrixPerson,
     TrainingMatrixRequirement,
 )
+from src.domain.models.user import User
+from src.domain.services.email_service import email_service
 from src.domain.services.training_matrix_compliance import (
     ATLAS_HUB_URL,
     ComplianceInput,
@@ -352,6 +358,74 @@ async def seed_requirements(
     )
 
 
+@router.post("/requirements/matrix", response_model=TrainingMatrixMatrixUpsertResponse)
+async def upsert_requirements_matrix(
+    db: DbSession,
+    user: CurrentUser,
+    body: TrainingMatrixMatrixUpsertRequest,
+):
+    """Bulk upsert the interactive Admin frequency matrix (dept x course cells).
+
+    A null/0 frequency deactivates the requirement for that department+course
+    instead of deleting it, so history/notes are preserved.
+    """
+    _require_admin(user)
+    tenant_id = _tenant(user)
+
+    existing = (
+        (
+            await db.execute(
+                select(TrainingMatrixRequirement).where(
+                    TrainingMatrixRequirement.tenant_id == tenant_id,
+                    TrainingMatrixRequirement.match_role_key.is_(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    by_key: dict[tuple[str, str], TrainingMatrixRequirement] = {
+        ((row.match_department or "").strip().lower(), row.course_key): row for row in existing
+    }
+
+    upserted = 0
+    deactivated = 0
+    for cell in body.cells:
+        dept = (cell.match_department or "").strip()
+        if not dept or not cell.course_key:
+            continue
+        key = (dept.lower(), cell.course_key)
+        current = by_key.get(key)
+
+        if not cell.frequency_years:
+            if current and current.is_active:
+                current.is_active = False
+                deactivated += 1
+            continue
+
+        if current:
+            current.frequency_years = cell.frequency_years
+            current.course_display_name = cell.course_display_name or current.course_display_name
+            current.is_active = True
+        else:
+            current = TrainingMatrixRequirement(
+                tenant_id=tenant_id,
+                match_department=dept,
+                match_role_key=None,
+                course_key=cell.course_key,
+                course_display_name=cell.course_display_name or cell.course_key,
+                frequency_years=cell.frequency_years,
+                is_active=True,
+                notes="board:manual",
+            )
+            db.add(current)
+            by_key[key] = current
+        upserted += 1
+
+    await db.commit()
+    return TrainingMatrixMatrixUpsertResponse(upserted=upserted, deactivated=deactivated)
+
+
 @router.patch("/requirements/{requirement_id}", response_model=TrainingMatrixRequirementResponse)
 async def update_requirement(
     requirement_id: int,
@@ -510,6 +584,7 @@ async def _build_compliance_rows(
                     qgp_due_on=result.qgp_due_on,
                     expiry_without_passed=result.expiry_without_passed,
                     atlas_hub_url=ATLAS_HUB_URL,
+                    last_training_notified_at=person.last_training_notified_at,
                 )
             )
     return rows, imp.id
@@ -555,3 +630,77 @@ async def my_training(db: DbSession, user: CurrentUser):
         atlas_hub_url=ATLAS_HUB_URL,
         import_id=import_id,
     )
+
+
+@router.post("/notify", response_model=TrainingMatrixNotifyResponse)
+async def notify_people(
+    db: DbSession,
+    user: CurrentUser,
+    body: TrainingMatrixNotifyRequest,
+):
+    """Email selected Atlas people their non-OK modules + the Atlas hub link."""
+    _require_manager(user)
+    tenant_id = _tenant(user)
+
+    names = {normalize_person_name(n) for n in body.atlas_names if n and n.strip()}
+    if not names:
+        raise ValidationError("Provide at least one atlas_name to notify")
+
+    people = (
+        (
+            await db.execute(
+                select(TrainingMatrixPerson).where(
+                    TrainingMatrixPerson.tenant_id == tenant_id,
+                    TrainingMatrixPerson.atlas_name.in_(names),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    sent = 0
+    skipped = 0
+    failed = 0
+    for person in people:
+        if not person.engineer_id:
+            skipped += 1
+            continue
+        eng = (
+            await db.execute(select(Engineer).where(Engineer.id == person.engineer_id, Engineer.tenant_id == tenant_id))
+        ).scalar_one_or_none()
+        recipient: Optional[User] = None
+        if eng and eng.user_id:
+            recipient = (await db.execute(select(User).where(User.id == eng.user_id))).scalar_one_or_none()
+        if not recipient or not recipient.email:
+            skipped += 1
+            continue
+
+        rows, _ = await _build_compliance_rows(db, tenant_id=tenant_id, engineer_id=person.engineer_id)
+        gaps = [row for row in rows if row.status != "compliant"]
+        if not gaps:
+            skipped += 1
+            continue
+
+        ok = await email_service.send_training_gap_notification(
+            to=recipient.email,
+            display_name=eng.display_name if eng and eng.display_name else person.atlas_name,
+            gaps=[
+                {
+                    "course_display_name": g.course_display_name,
+                    "status": g.status,
+                    "qgp_due_on": g.qgp_due_on.isoformat() if g.qgp_due_on else None,
+                }
+                for g in gaps
+            ],
+            atlas_hub_url=ATLAS_HUB_URL,
+            message=body.message,
+        )
+        if ok:
+            person.last_training_notified_at = datetime.now(timezone.utc)
+            sent += 1
+        else:
+            failed += 1
+
+    await db.commit()
+    return TrainingMatrixNotifyResponse(sent=sent, skipped=skipped, failed=failed)
