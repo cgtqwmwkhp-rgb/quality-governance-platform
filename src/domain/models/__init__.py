@@ -109,6 +109,14 @@ from src.domain.models.engineer import (
     TicketVerifyState,
     TrainingTicket,
 )
+from src.domain.models.training_matrix import (
+    TrainingMatrixCell,
+    TrainingMatrixCourse,
+    TrainingMatrixImport,
+    TrainingMatrixNameMap,
+    TrainingMatrixPerson,
+    TrainingMatrixRequirement,
+)
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
     EvidenceAssetType,
@@ -462,6 +470,12 @@ __all__ = [
     "CompetencyRequirement",
     "CompetencyLifecycleState",
     "TrainingTicket",
+    "TrainingMatrixImport",
+    "TrainingMatrixCourse",
+    "TrainingMatrixPerson",
+    "TrainingMatrixCell",
+    "TrainingMatrixNameMap",
+    "TrainingMatrixRequirement",
     "TicketVerifyState",
     "CompetenceGapAction",
     "CompetenceGapSignalType",

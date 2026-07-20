@@ -75,6 +75,7 @@ from src.api.routes import (
     telemetry,
     tenants,
     testing,
+    training_matrix,
     training_tickets,
     users,
     uvdb,
@@ -236,6 +237,11 @@ router.include_router(
     training_tickets.router,
     prefix="/training-tickets",
     tags=["Training Tickets"],
+)
+router.include_router(
+    training_matrix.router,
+    prefix="/training-matrix",
+    tags=["Training Matrix"],
 )
 router.include_router(
     competency_requirements.router,

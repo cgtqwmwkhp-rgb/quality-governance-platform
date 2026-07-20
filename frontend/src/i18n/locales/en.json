@@ -3562,5 +3562,18 @@
   "workforce.training.stage1": "Stage 1",
   "workforce.training.stage2": "Stage 2",
   "workforce.training.subtitle": "Training programs and records",
-  "workforce.training.title": "Training"
+  "workforce.training.title": "Training",
+  "workforce.training_matrix.empty_compliance": "No compliance rows yet. Upload an Atlas matrix and configure role/department requirements.",
+  "workforce.training_matrix.gap_subtitle": "Due dates use Atlas Passed + your frequency rules. Complete training in Atlas.",
+  "workforce.training_matrix.gap_title": "Manager gap board",
+  "workforce.training_matrix.my_subtitle": "Your required modules and compliance. Incomplete items open Atlas to complete.",
+  "workforce.training_matrix.my_title": "My training",
+  "workforce.training_matrix.open_atlas": "Complete in Atlas",
+  "workforce.training_matrix.shell_subtitle": "Atlas completions + Plantexpand frequency rules. Not an LMS — complete modules in Atlas.",
+  "workforce.training_matrix.tab_admin": "Admin",
+  "workforce.training_matrix.tab_gaps": "Compliance gaps",
+  "workforce.training_matrix.tab_inductions": "Inductions",
+  "workforce.training_matrix.tab_mine": "My training",
+  "workforce.training_matrix.tabs": "Training sections",
+  "workforce.training_matrix.upload_title": "Weekly Atlas matrix upload"
 }
