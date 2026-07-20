@@ -55,6 +55,14 @@ class TrainingMatrixNameMapUpsert(BaseModel):
     engineer_id: int
 
 
+class TrainingMatrixNameMapAutoMatchResponse(BaseModel):
+    people_considered: int
+    already_mapped: int
+    from_saved_maps: int
+    from_auto_match: int
+    still_unmatched: int
+
+
 class TrainingMatrixRequirementCreate(BaseModel):
     match_department: Optional[str] = None
     match_role_key: Optional[str] = None

@@ -18,19 +18,11 @@ from src.domain.models.training_matrix import (
 from src.domain.services.training_matrix_parser import ParsedMatrix, normalize_course_key, normalize_person_name
 
 
-async def persist_training_matrix_import(
-    db: AsyncSession,
-    *,
-    tenant_id: int,
-    filename: str,
-    uploaded_by_user_id: Optional[int],
-    parsed: ParsedMatrix,
-) -> TrainingMatrixImport:
-    # Resolve engineer lookup — Engineer model uses tenant_id
+async def _unique_engineer_name_index(db: AsyncSession, tenant_id: int) -> dict[str, int]:
+    """Map normalized unique Engineer.display_name → engineer id (skip ambiguous names)."""
     eng_rows = (
         await db.execute(select(Engineer.id, Engineer.display_name).where(Engineer.tenant_id == tenant_id))
     ).all()
-    # Auto-map only when the normalized display name is unique in the tenant.
     eng_by_name: dict[str, int] = {}
     ambiguous_names: set[str] = set()
     for eng_id, name in eng_rows:
@@ -44,6 +36,131 @@ async def persist_training_matrix_import(
             ambiguous_names.add(key)
             continue
         eng_by_name[key] = eng_id
+    return eng_by_name
+
+
+async def _ensure_name_map(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    atlas_name: str,
+    engineer_id: int,
+    mapped_by_user_id: Optional[int],
+) -> None:
+    """Upsert a durable Atlas→employee name map (survives weekly CSV overwrite)."""
+    existing = (
+        await db.execute(
+            select(TrainingMatrixNameMap).where(
+                TrainingMatrixNameMap.tenant_id == tenant_id,
+                TrainingMatrixNameMap.atlas_name == atlas_name,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing:
+        existing.engineer_id = engineer_id
+        if mapped_by_user_id is not None:
+            existing.mapped_by_user_id = mapped_by_user_id
+        return
+    db.add(
+        TrainingMatrixNameMap(
+            tenant_id=tenant_id,
+            atlas_name=atlas_name,
+            engineer_id=engineer_id,
+            mapped_by_user_id=mapped_by_user_id,
+        )
+    )
+
+
+async def auto_match_training_matrix_names(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    mapped_by_user_id: Optional[int] = None,
+    latest_import_only: bool = True,
+) -> dict[str, int]:
+    """Re-apply saved name maps + unique display-name auto-match.
+
+    Never clears an existing person.engineer_id. Persists successful matches into
+    training_matrix_name_maps so the next Atlas upload keeps them.
+    """
+    eng_by_name = await _unique_engineer_name_index(db, tenant_id)
+    maps = (
+        (await db.execute(select(TrainingMatrixNameMap).where(TrainingMatrixNameMap.tenant_id == tenant_id)))
+        .scalars()
+        .all()
+    )
+    map_by_name = {normalize_person_name(m.atlas_name).lower(): m.engineer_id for m in maps}
+
+    people_q = select(TrainingMatrixPerson).where(TrainingMatrixPerson.tenant_id == tenant_id)
+    if latest_import_only:
+        latest = (
+            await db.execute(
+                select(TrainingMatrixImport)
+                .where(TrainingMatrixImport.tenant_id == tenant_id)
+                .order_by(TrainingMatrixImport.id.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if latest:
+            people_q = people_q.where(TrainingMatrixPerson.last_seen_import_id == latest.id)
+
+    people = (await db.execute(people_q.order_by(TrainingMatrixPerson.atlas_name))).scalars().all()
+
+    from_saved = 0
+    from_auto = 0
+    already_mapped = 0
+    still_unmatched = 0
+
+    for person in people:
+        key = normalize_person_name(person.atlas_name).lower()
+        if person.engineer_id:
+            already_mapped += 1
+            await _ensure_name_map(
+                db,
+                tenant_id=tenant_id,
+                atlas_name=person.atlas_name,
+                engineer_id=person.engineer_id,
+                mapped_by_user_id=mapped_by_user_id,
+            )
+            continue
+
+        resolved = map_by_name.get(key) or eng_by_name.get(key)
+        if not resolved:
+            still_unmatched += 1
+            continue
+
+        person.engineer_id = resolved
+        if key in map_by_name:
+            from_saved += 1
+        else:
+            from_auto += 1
+        await _ensure_name_map(
+            db,
+            tenant_id=tenant_id,
+            atlas_name=person.atlas_name,
+            engineer_id=resolved,
+            mapped_by_user_id=mapped_by_user_id,
+        )
+
+    await db.flush()
+    return {
+        "already_mapped": already_mapped,
+        "from_saved_maps": from_saved,
+        "from_auto_match": from_auto,
+        "still_unmatched": still_unmatched,
+        "people_considered": len(people),
+    }
+
+
+async def persist_training_matrix_import(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+    filename: str,
+    uploaded_by_user_id: Optional[int],
+    parsed: ParsedMatrix,
+) -> TrainingMatrixImport:
+    eng_by_name = await _unique_engineer_name_index(db, tenant_id)
 
     maps = (
         (await db.execute(select(TrainingMatrixNameMap).where(TrainingMatrixNameMap.tenant_id == tenant_id)))
@@ -93,7 +210,7 @@ async def persist_training_matrix_import(
             await db.flush()
             course_id_by_key[key] = row.id
 
-    # Clear prior cells for tenant (latest-import model)
+    # Clear prior cells for tenant (latest-import model) — name maps + requirements are kept.
     old_imports = (
         (
             await db.execute(
@@ -117,7 +234,7 @@ async def persist_training_matrix_import(
     for person in parsed.people:
         atlas_name = normalize_person_name(person.atlas_name)
         key = atlas_name.lower()
-        engineer_id = map_by_name.get(key) or eng_by_name.get(key)
+        resolved = map_by_name.get(key) or eng_by_name.get(key)
 
         existing_person = (
             await db.execute(
@@ -129,10 +246,14 @@ async def persist_training_matrix_import(
         ).scalar_one_or_none()
         if existing_person:
             existing_person.department = person.department
-            existing_person.engineer_id = engineer_id
             existing_person.last_seen_import_id = imp.id
+            # Never wipe a prior link when this week's auto-match misses.
+            if resolved is not None:
+                existing_person.engineer_id = resolved
+            engineer_id = existing_person.engineer_id
             person_id = existing_person.id
         else:
+            engineer_id = resolved
             prow = TrainingMatrixPerson(
                 tenant_id=tenant_id,
                 atlas_name=atlas_name,
@@ -143,6 +264,16 @@ async def persist_training_matrix_import(
             db.add(prow)
             await db.flush()
             person_id = prow.id
+
+        if engineer_id is not None:
+            await _ensure_name_map(
+                db,
+                tenant_id=tenant_id,
+                atlas_name=atlas_name,
+                engineer_id=engineer_id,
+                mapped_by_user_id=uploaded_by_user_id,
+            )
+            map_by_name[key] = engineer_id
 
         for cell in person.cells:
             db.add(

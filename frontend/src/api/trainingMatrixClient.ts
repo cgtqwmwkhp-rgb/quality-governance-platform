@@ -131,6 +131,16 @@ export function createTrainingMatrixApi(api: AxiosInstance) {
           engineer_id,
         })
         .then((r) => r.data),
+    autoMatchNameMaps: () =>
+      api
+        .post<{
+          people_considered: number
+          already_mapped: number
+          from_saved_maps: number
+          from_auto_match: number
+          still_unmatched: number
+        }>('/api/v1/training-matrix/name-maps/auto-match')
+        .then((r) => r.data),
     listRequirements: () =>
       api
         .get<{ items: TrainingMatrixRequirement[]; total: number }>(
