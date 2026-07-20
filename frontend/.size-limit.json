@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "165 kB",
+    "limit": "166 kB",
     "gzip": true,
-    "name": "index: 164\u2192165 kB \u2014 PX-002 incident save toast i18n (+~57 B over 164)"
+    "name": "index: 165→166 kB — training matrix client export (+~588 B over 165)"
   },
   {
     "path": "dist/assets/vendor-*.js",
