@@ -97,9 +97,16 @@ async def test_list_engineers_scopes_non_manager_to_self():
         created_at="2026-01-01T00:00:00Z",
         updated_at="2026-01-01T00:00:00Z",
     )
+    linked_user = types.SimpleNamespace(id=42, email="eng@example.com", full_name="Eng User")
     db = types.SimpleNamespace(
         scalar=AsyncMock(return_value=1),
-        execute=AsyncMock(side_effect=[_FakeResult([engineer]), _FakeResult((1, 1))]),
+        execute=AsyncMock(
+            side_effect=[
+                _FakeResult([engineer]),
+                _FakeResult((1, 1)),
+                _FakeResult(linked_user),
+            ]
+        ),
     )
     user = types.SimpleNamespace(id=42, tenant_id=1, is_superuser=False, roles=[])
 
