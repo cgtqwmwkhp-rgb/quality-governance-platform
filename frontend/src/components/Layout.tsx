@@ -388,7 +388,7 @@ export default function Layout({ onLogout }: LayoutProps) {
                   {t('brand.product_name', 'Quality Governance Platform')}
                 </h1>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
-                  {t('brand.company_line', 'Planexpand Limited')}
+                  {t('brand.company_line', 'Plantexpand Limited')}
                 </p>
               </div>
             </div>
