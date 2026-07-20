@@ -19,7 +19,6 @@ from src.core.config import settings
 from src.core.pagination import PaginationInput, paginate
 from src.domain.exceptions import BadRequestError, NotFoundError, ValidationError
 from src.domain.models.document import Document
-from src.domain.models.engineer import Engineer
 from src.domain.models.document_campaign import (
     DEFAULT_REMINDER_OFFSETS_HOURS,
     AssignmentStatus,
@@ -29,6 +28,7 @@ from src.domain.models.document_campaign import (
     EngineerGroup,
     EngineerGroupMember,
 )
+from src.domain.models.engineer import Engineer
 from src.domain.models.form_config import SystemSetting
 from src.domain.models.governed_knowledge import (
     DiscussionThreadStatus,
@@ -355,9 +355,7 @@ class DocumentCampaignService:
             )
         )
         links = {int(engineer_id): user_id for engineer_id, user_id in result.all()}
-        unlinked_engineer_ids = [
-            engineer_id for engineer_id in engineer_ids if links.get(engineer_id) is None
-        ]
+        unlinked_engineer_ids = [engineer_id for engineer_id in engineer_ids if links.get(engineer_id) is None]
         if unlinked_engineer_ids:
             raise ValidationError(
                 "All selected engineers must be linked to an active QGP user",
