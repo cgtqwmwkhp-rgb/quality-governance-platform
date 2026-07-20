@@ -6,12 +6,27 @@ import type { AxiosInstance } from 'axios'
 
 // ============ UVDB Achilles Types ============
 
+export type UVDBContentStatus = 'loaded' | 'pending_protocol_pdf'
+
+export interface UVDBContentCoverage {
+  protocol_version: string
+  status: 'partial' | 'complete'
+  total_sections: number
+  loaded_sections: string[]
+  pending_sections: string[]
+  loaded_question_count: number
+  pending_question_count: number
+  pending_reason?: string
+}
+
 export interface UVDBSectionRecord {
   number: string
   title: string
   max_score: number
   question_count: number
   iso_mapping: Record<string, string>
+  content_status?: UVDBContentStatus
+  title_provisional?: boolean
 }
 
 export interface UVDBQuestion {
@@ -55,13 +70,16 @@ export interface UVDBDashboardResponse {
     name: string
     version: string
     sections: number
+    content_coverage?: UVDBContentCoverage
   }
   certification_alignment: Record<string, string>
+  content_coverage?: UVDBContentCoverage
 }
 
 export interface UVDBSectionsResponse {
   total_sections: number
   sections: UVDBSectionRecord[]
+  content_coverage?: UVDBContentCoverage
 }
 
 export interface UVDBAuditsResponse {
