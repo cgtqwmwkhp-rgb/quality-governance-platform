@@ -4,10 +4,12 @@ Provides endpoints for managing policy acknowledgment requirements
 tracking user acknowledgments, and compliance reporting.
 """
 
+import logging
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy import and_, select
+from sqlalchemy.exc import ProgrammingError
 
 from src.api.deps import CurrentUser, DbSession, require_permission
 from src.api.schemas.policy_acknowledgment import (
@@ -26,6 +28,7 @@ from src.api.schemas.policy_acknowledgment import (
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.policy_acknowledgment import (
     AcknowledgmentStatus,
+    DocumentReadLog,
     PolicyAcknowledgment,
     PolicyAcknowledgmentRequirement,
 )
@@ -33,6 +36,20 @@ from src.domain.models.user import User
 from src.domain.services.policy_acknowledgment import DocumentReadLogService, PolicyAcknowledgmentService
 
 router = APIRouter(prefix="/policy-acknowledgments", tags=["Policy Acknowledgments"])
+logger = logging.getLogger(__name__)
+
+
+def _policy_ack_response(ack: PolicyAcknowledgment) -> PolicyAcknowledgmentResponse:
+    """Serialize ORM → response without deprecated from_orm (Pydantic v2)."""
+    return PolicyAcknowledgmentResponse.model_validate(ack)
+
+
+def _requirement_response(requirement: PolicyAcknowledgmentRequirement) -> AcknowledgmentRequirementResponse:
+    return AcknowledgmentRequirementResponse.model_validate(requirement)
+
+
+def _read_log_response(log: DocumentReadLog) -> DocumentReadLogResponse:
+    return DocumentReadLogResponse.model_validate(log)
 
 
 # =============================================================================
@@ -64,7 +81,7 @@ async def create_acknowledgment_requirement(
         quiz_questions=requirement_data.quiz_questions,
         quiz_passing_score=requirement_data.quiz_passing_score,
     )
-    return AcknowledgmentRequirementResponse.from_orm(requirement)
+    return _requirement_response(requirement)
 
 
 @router.get("/requirements/{requirement_id}", response_model=AcknowledgmentRequirementResponse)
@@ -85,7 +102,7 @@ async def get_acknowledgment_requirement(
     if not requirement:
         raise NotFoundError("Requirement not found")
 
-    return AcknowledgmentRequirementResponse.from_orm(requirement)
+    return _requirement_response(requirement)
 
 
 @router.post(
@@ -111,7 +128,7 @@ async def assign_acknowledgments(
         raise BadRequestError(str(e))
 
     return PolicyAcknowledgmentListResponse(
-        items=[PolicyAcknowledgmentResponse.from_orm(a) for a in acknowledgments],
+        items=[_policy_ack_response(a) for a in acknowledgments],
         total=len(acknowledgments),
     )
 
@@ -128,10 +145,18 @@ async def get_my_pending_acknowledgments(
 ):
     """Get current user's pending acknowledgments."""
     service = PolicyAcknowledgmentService(db)
-    pending = await service.get_user_pending_acknowledgments(current_user.id)
+    try:
+        pending = await service.get_user_pending_acknowledgments(
+            current_user.id,
+            tenant_id=current_user.tenant_id,
+        )
+    except ProgrammingError:
+        logger.exception("GET /policy-acknowledgments/my-pending — table unavailable")
+        await db.rollback()
+        return PolicyAcknowledgmentListResponse(items=[], total=0)
 
     return PolicyAcknowledgmentListResponse(
-        items=[PolicyAcknowledgmentResponse.from_orm(a) for a in pending],
+        items=[_policy_ack_response(a) for a in pending],
         total=len(pending),
     )
 
@@ -154,7 +179,7 @@ async def get_acknowledgment(
     if not ack:
         raise NotFoundError("Acknowledgment not found")
 
-    return PolicyAcknowledgmentResponse.from_orm(ack)
+    return _policy_ack_response(ack)
 
 
 @router.post("/{acknowledgment_id}/open")
@@ -217,7 +242,7 @@ async def record_acknowledgment(
     except ValueError as e:
         raise BadRequestError(str(e))
 
-    return PolicyAcknowledgmentResponse.from_orm(ack)
+    return _policy_ack_response(ack)
 
 
 # =============================================================================
@@ -249,7 +274,19 @@ async def get_compliance_dashboard(
 ):
     """Get overall policy acknowledgment compliance dashboard."""
     service = PolicyAcknowledgmentService(db)
-    dashboard = await service.get_compliance_dashboard()
+    try:
+        dashboard = await service.get_compliance_dashboard(tenant_id=current_user.tenant_id)
+    except ProgrammingError:
+        logger.exception("GET /policy-acknowledgments/dashboard — table unavailable")
+        await db.rollback()
+        dashboard = {
+            "total_assignments": 0,
+            "completed": 0,
+            "pending": 0,
+            "overdue": 0,
+            "completion_rate": 0.0,
+            "overdue_rate": 0.0,
+        }
     return ComplianceDashboardResponse(**dashboard)
 
 
@@ -311,7 +348,7 @@ async def log_document_read(
         device_type=log_data.device_type,
     )
 
-    return DocumentReadLogResponse.from_orm(log)
+    return _read_log_response(log)
 
 
 @router.get(
@@ -330,7 +367,7 @@ async def get_document_read_history(
     logs = await service.get_document_read_history(document_type, document_id, limit)
 
     return DocumentReadLogListResponse(
-        items=[DocumentReadLogResponse.from_orm(l) for l in logs],
+        items=[_read_log_response(l) for l in logs],
         total=len(logs),
     )
 
@@ -348,6 +385,6 @@ async def get_user_read_history(
     logs = await service.get_user_read_history(user_id, document_type, limit)
 
     return DocumentReadLogListResponse(
-        items=[DocumentReadLogResponse.from_orm(l) for l in logs],
+        items=[_read_log_response(l) for l in logs],
         total=len(logs),
     )

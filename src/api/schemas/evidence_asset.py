@@ -186,7 +186,7 @@ class EvidenceAssetResponse(BaseModel):
     checksum_sha256: Optional[str] = None
     asset_type: str
     source_module: str
-    source_id: int
+    source_id: str = Field(..., description="Source record id (numeric string or action_key)")
     linked_investigation_id: Optional[int] = None
     title: Optional[str] = None
     description: Optional[str] = None

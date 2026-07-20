@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.domain.exceptions import BadRequestError, NotFoundError
@@ -169,7 +170,11 @@ async def list_signature_requests(
     """List signature requests."""
     from src.domain.models.digital_signature import SignatureRequest
 
-    stmt = select(SignatureRequest).where(SignatureRequest.tenant_id == current_user.tenant_id)
+    stmt = (
+        select(SignatureRequest)
+        .options(selectinload(SignatureRequest.signers))
+        .where(SignatureRequest.tenant_id == current_user.tenant_id)
+    )
 
     if status:
         stmt = stmt.where(SignatureRequest.status == status)

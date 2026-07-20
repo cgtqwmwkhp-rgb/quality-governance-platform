@@ -15,6 +15,7 @@ from typing import Any, Optional
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.domain.models.digital_signature import (
     Signature,
@@ -124,7 +125,11 @@ class SignatureService:
 
     async def get_request(self, request_id: int) -> Optional[SignatureRequest]:
         """Get a signature request by ID."""
-        result = await self.db.execute(select(SignatureRequest).where(SignatureRequest.id == request_id))
+        result = await self.db.execute(
+            select(SignatureRequest)
+            .options(selectinload(SignatureRequest.signers))
+            .where(SignatureRequest.id == request_id)
+        )
         return result.scalar_one_or_none()
 
     async def get_request_by_reference(self, reference: str) -> Optional[SignatureRequest]:
@@ -503,9 +508,13 @@ class SignatureService:
         email: Optional[str] = None,
     ) -> list[SignatureRequest]:
         """Get pending signature requests for a user."""
-        stmt = select(SignatureRequest).where(
-            SignatureRequest.tenant_id == tenant_id,
-            SignatureRequest.status.in_(["pending", "in_progress"]),
+        stmt = (
+            select(SignatureRequest)
+            .options(selectinload(SignatureRequest.signers))
+            .where(
+                SignatureRequest.tenant_id == tenant_id,
+                SignatureRequest.status.in_(["pending", "in_progress"]),
+            )
         )
 
         if user_id or email:
