@@ -45,6 +45,12 @@ vi.mock('../../utils/errorTracker', () => ({
   trackError: vi.fn(),
 }))
 
+const mockResolveReporter = vi.fn()
+
+vi.mock('../../utils/platformSessionReporter', () => ({
+  resolvePlatformReporterIdentity: (...args: unknown[]) => mockResolveReporter(...args),
+}))
+
 function Wrapper({ children }: { children: ReactNode }) {
   return <BrowserRouter>{children}</BrowserRouter>
 }
@@ -90,6 +96,10 @@ describe('Incidents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockList.mockResolvedValue(paginatedResponse)
+    mockResolveReporter.mockResolvedValue({
+      reporter_name: 'Alex Engineer',
+      reporter_email: 'alex@example.com',
+    })
     mockCreate.mockResolvedValue({
       data: {
         id: 3,
@@ -186,6 +196,45 @@ describe('Incidents', () => {
     const callArgs = mockCreate.mock.calls[0][0]
     expect(callArgs.title).toBe('New incident')
     expect(callArgs.description).toBe('Detailed description')
+    expect(callArgs.reporter_name).toBe('Alex Engineer')
+    expect(callArgs.reporter_email).toBe('alex@example.com')
+  })
+
+  it('shows session reporter hint when create modal opens (PX-015)', async () => {
+    render(<Incidents />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('INC-001')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('incidents.new'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('incident-create-reporter')).toHaveTextContent('Alex Engineer')
+    })
+  })
+
+  it('decodes HTML entities in list titles (PX-009)', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [
+          {
+            ...sampleIncidents[0],
+            title: 'Tools &amp; equipment',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 50,
+        total_pages: 1,
+      },
+    })
+
+    render(<Incidents />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('Tools & equipment')).toBeInTheDocument()
+    })
   })
 
   it('shows error when creation fails', async () => {

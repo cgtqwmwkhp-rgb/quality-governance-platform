@@ -449,4 +449,26 @@ describe('Complaints', () => {
 
     confirmSpy.mockRestore()
   })
+
+  it('shows honest customer-unavailable state when contracts list is empty (PX-005)', async () => {
+    mockContractsList.mockResolvedValueOnce({ items: [], total: 0 })
+
+    render(<Complaints />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('CMP-001')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('complaints.new'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('complaints-customer-unavailable')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('complaints-customer-admin-link')).toHaveAttribute(
+      'href',
+      '/admin/contracts',
+    )
+    expect(screen.getByText('complaints.create')).toBeDisabled()
+  })
 })

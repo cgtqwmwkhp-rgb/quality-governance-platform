@@ -1,5 +1,5 @@
 import { useEffect, useState, useDeferredValue, useMemo } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
 import { Plus, MessageSquare, Search, Loader2, MailWarning, Paperclip } from 'lucide-react'
@@ -164,6 +164,7 @@ export default function Complaints() {
   >({})
   const [formData, setFormData] = useState<ComplaintCreate>(freshComplaintForm)
   const [contracts, setContracts] = useState<Contract[]>([])
+  const [contractsLoaded, setContractsLoaded] = useState(false)
   const [topicOptions, setTopicOptions] = useState<{ value: string; label: string }[]>([])
   const [subjectEmail, setSubjectEmail] = useState('')
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
@@ -185,8 +186,12 @@ export default function Complaints() {
 
   // Load customer contracts + topic labels when create dialog opens.
   useEffect(() => {
-    if (!showModal) return
+    if (!showModal) {
+      setContractsLoaded(false)
+      return
+    }
     let cancelled = false
+    setContractsLoaded(false)
     ;(async () => {
       try {
         const [contractRes, lookupRes] = await Promise.all([
@@ -195,6 +200,7 @@ export default function Complaints() {
         ])
         if (cancelled) return
         setContracts(contractRes.items || [])
+        setContractsLoaded(true)
         const lookupByCode = new Map(
           (lookupRes.items || []).map((item) => [item.code.toLowerCase(), item.label]),
         )
@@ -206,6 +212,7 @@ export default function Complaints() {
         )
       } catch (err) {
         if (!cancelled) {
+          setContractsLoaded(true)
           trackError(err, { component: 'Complaints', action: 'loadCreateLookups' })
           setTopicOptions(
             COMPLAINT_TYPE_VALUES.map((code) => ({
@@ -230,6 +237,8 @@ export default function Complaints() {
       })),
     [contracts],
   )
+
+  const customersUnavailable = contractsLoaded && contractOptions.length === 0
 
   // Hydrate list filters from shareable URL (back/forward + deep links).
   useEffect(() => {
@@ -362,6 +371,15 @@ export default function Complaints() {
     }
     if (!formData.contract_id) {
       setFormError(t('complaints.form.customer_required', 'Select which customer this complaint is from.'))
+      return
+    }
+    if (customersUnavailable) {
+      setFormError(
+        t(
+          'complaints.form.customer_unavailable',
+          'No customer contracts are available — add contracts in Admin before creating a complaint.',
+        ),
+      )
       return
     }
     setFormError(null)
@@ -852,6 +870,32 @@ export default function Complaints() {
                 }
                 placeholder={t('complaints.form.customer_search', 'Search customer / contract…')}
               />
+              {customersUnavailable ? (
+                <div
+                  className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-foreground"
+                  data-testid="complaints-customer-unavailable"
+                >
+                  <p className="font-medium">
+                    {t(
+                      'complaints.form.customer_empty_title',
+                      'No customer contracts are loaded',
+                    )}
+                  </p>
+                  <p className="text-muted-foreground mt-1">
+                    {t(
+                      'complaints.form.customer_empty_body',
+                      'Complaint intake needs at least one contract/customer. This is a setup gap — not an empty search result.',
+                    )}
+                  </p>
+                  <Link
+                    to="/admin/contracts"
+                    className="inline-flex mt-2 text-sm font-medium text-primary hover:underline"
+                    data-testid="complaints-customer-admin-link"
+                  >
+                    {t('complaints.form.customer_admin_cta', 'Open Admin → Contracts')}
+                  </Link>
+                </div>
+              ) : null}
             </div>
 
             <div className="space-y-3">
@@ -1168,7 +1212,7 @@ export default function Complaints() {
               <Button type="button" variant="outline" onClick={() => requestCloseCreateModal()}>
                 {t('cancel')}
               </Button>
-              <Button type="submit" disabled={creating}>
+              <Button type="submit" disabled={creating || customersUnavailable}>
                 {creating ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />

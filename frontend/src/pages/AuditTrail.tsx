@@ -178,6 +178,9 @@ export default function AuditTrail() {
     return matchesSearch && matchesAction && matchesModule
   })
 
+  const hasActiveFilters =
+    searchQuery.trim().length > 0 || selectedAction !== 'all' || selectedModule !== 'all'
+
   const handleRefresh = () => {
     void loadEntries()
   }
@@ -206,7 +209,14 @@ export default function AuditTrail() {
             <RefreshCw className="w-5 h-5" />
           </button>
 
-          <button className="px-4 py-2 bg-secondary border border-border text-foreground font-medium rounded-xl hover:bg-surface transition-all flex items-center gap-2">
+          <button
+            type="button"
+            disabled
+            title="Export is not available yet — audit trail export API is not wired on this screen."
+            aria-disabled="true"
+            data-testid="audit-trail-export-disabled"
+            className="px-4 py-2 bg-secondary border border-border text-muted-foreground font-medium rounded-xl flex items-center gap-2 opacity-60 cursor-not-allowed"
+          >
             <Download className="w-5 h-5" />
             Export Log
           </button>
@@ -273,11 +283,13 @@ export default function AuditTrail() {
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
           </div>
 
-          {/* Date Range */}
+          {/* Date Range — client-only filter; not yet wired to API */}
           <div className="relative">
             <select
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
+              aria-label="Date range (display only — not yet wired to server)"
+              title="Date range filter is not yet wired to the audit trail API."
               className="appearance-none pl-4 pr-10 py-2.5 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[150px]"
             >
               <option value="today">Today</option>
@@ -415,22 +427,34 @@ export default function AuditTrail() {
 
       {/* Empty State */}
       {!loadError && filteredEntries.length === 0 && !isLoading && (
-        <div className="text-center py-12">
+        <div className="text-center py-12" data-testid="audit-trail-empty">
           <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
             <History className="w-10 h-10 text-slate-600" />
           </div>
-          <h3 className="text-xl font-semibold text-white mb-2">No audit entries found</h3>
-          <p className="text-slate-400">Try adjusting your filters</p>
+          {hasActiveFilters ? (
+            <>
+              <h3 className="text-xl font-semibold text-white mb-2">No audit entries match your filters</h3>
+              <p className="text-slate-400">Try adjusting search, action, or module filters.</p>
+            </>
+          ) : (
+            <>
+              <h3 className="text-xl font-semibold text-white mb-2">No activity logged yet</h3>
+              <p className="text-slate-400 max-w-lg mx-auto">
+                The audit trail API returned no events. This environment is not recording login, create,
+                update, or delete activity yet — not a filtered empty register.
+              </p>
+            </>
+          )}
         </div>
       )}
 
-      {/* Load More */}
       {filteredEntries.length > 0 && (
-        <div className="text-center">
-          <button className="px-6 py-2 bg-slate-800/50 border border-slate-700 text-slate-300 font-medium rounded-xl hover:bg-slate-700/50 transition-all">
-            Load More
-          </button>
-        </div>
+        <p
+          className="text-center text-xs text-muted-foreground"
+          data-testid="audit-trail-load-more-honesty"
+        >
+          Showing the first page only — additional pages are not wired on this screen yet.
+        </p>
       )}
     </div>
   )
