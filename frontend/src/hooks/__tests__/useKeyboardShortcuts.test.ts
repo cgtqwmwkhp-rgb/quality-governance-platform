@@ -92,6 +92,54 @@ describe('useKeyboardShortcuts', () => {
     unmount()
   })
 
+  it('blocks shift-only shortcuts inside text fields (e.g. Shift+?)', () => {
+    const help = vi.fn()
+    const { unmount } = renderHook(() =>
+      useKeyboardShortcuts([
+        { key: '?', modifiers: ['shift'], description: 'Show keyboard shortcuts', action: help },
+      ]),
+    )
+
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    act(() => {
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '?', shiftKey: true, bubbles: true }),
+      )
+    })
+    expect(help).not.toHaveBeenCalled()
+
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '?', shiftKey: true, bubbles: true }),
+      )
+    })
+    expect(help).toHaveBeenCalledTimes(1)
+    unmount()
+  })
+
+  it('blocks bare-key shortcuts inside ARIA searchbox controls', () => {
+    const find = vi.fn()
+    const { unmount } = renderHook(() =>
+      useKeyboardShortcuts([{ key: 'f', description: 'Find', action: find }]),
+    )
+
+    const searchbox = document.createElement('div')
+    searchbox.setAttribute('role', 'searchbox')
+    searchbox.tabIndex = 0
+    document.body.appendChild(searchbox)
+    act(() => {
+      searchbox.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', bubbles: true }))
+    })
+    expect(find).not.toHaveBeenCalled()
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', bubbles: true }))
+    })
+    expect(find).toHaveBeenCalledTimes(1)
+    unmount()
+  })
+
   it('matches shift+alt modifier combinations and calls preventDefault', () => {
     const help = vi.fn()
     const { unmount } = renderHook(() =>

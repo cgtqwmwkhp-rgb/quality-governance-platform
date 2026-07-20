@@ -28,6 +28,24 @@ describe('KeyboardShortcutHelp', () => {
     expect(screen.getByText('Keyboard Shortcuts')).toBeInTheDocument()
   })
 
+  it('does not open the shortcuts dialog when Shift+? is typed in an input', async () => {
+    render(
+      <>
+        <input aria-label="Notes" />
+        <KeyboardShortcutHelp />
+      </>,
+    )
+
+    const input = screen.getByRole('textbox', { name: 'Notes' })
+    act(() => {
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '?', shiftKey: true, bubbles: true }),
+      )
+    })
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
   it('lists the help shortcut when the dialog is open', async () => {
     render(<KeyboardShortcutHelp />)
 
