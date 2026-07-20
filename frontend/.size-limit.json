@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "166 kB",
+    "limit": "167 kB",
     "gzip": true,
-    "name": "index: 165→166 kB — training matrix client export (+~588 B over 165)"
+    "name": "index: 166\u2192167 kB \u2014 assurance cert shelf + prior shells"
   },
   {
     "path": "dist/assets/vendor-*.js",

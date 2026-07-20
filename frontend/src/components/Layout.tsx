@@ -142,6 +142,11 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/audit-templates', icon: Sparkles, label: t('nav.audit_builder') },
         { path: '/uvdb', icon: Award, label: t('nav.uvdb_achilles') },
         { path: '/planet-mark', icon: Leaf, label: t('nav.planet_mark') },
+        {
+          path: '/assurance/certificates',
+          icon: Shield,
+          label: t('nav.assurance_cert_shelf', { defaultValue: 'Certificate shelf' }),
+        },
         { path: CUSTOMER_AUDITS_AUDITS_PATH, icon: Users, label: t('nav.customer_audits') },
       ],
     },
