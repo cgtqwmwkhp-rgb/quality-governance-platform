@@ -16,7 +16,13 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, fallback?: string) => fallback ?? key,
+    t: (key: string, fallback?: string | { defaultValue?: string }) => {
+      if (typeof fallback === 'string') return fallback
+      if (fallback && typeof fallback === 'object' && fallback.defaultValue) {
+        return fallback.defaultValue
+      }
+      return key
+    },
     i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },

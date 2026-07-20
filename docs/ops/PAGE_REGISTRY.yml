@@ -262,6 +262,15 @@ admin_routes:
     expected_degraded_state: null
     description: "Document management"
 
+  - pageId: document-campaigns
+    route: /documents/campaigns
+    auth: jwt_admin
+    criticality: P1
+    component: CampaignCompliance
+    expected_empty_state: "Empty campaign compliance table"
+    expected_degraded_state: null
+    description: "Document campaign portfolio KPIs, reminder defaults, and chase"
+
   - pageId: analytics
     route: /analytics
     auth: jwt_admin

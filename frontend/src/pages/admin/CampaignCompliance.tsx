@@ -22,6 +22,7 @@ import { CampaignRosterPanel } from '../CampaignRosterPanel'
 import { CampaignCommandKpis } from '../CampaignCommandKpis'
 import { CampaignAnalyticsPanel } from '../CampaignAnalyticsPanel'
 import { CampaignPeopleChase } from '../CampaignPeopleChase'
+import { LibraryShell } from '../LibraryShell'
 
 export default function CampaignCompliance() {
   const { t } = useTranslation()
@@ -144,12 +145,8 @@ export default function CampaignCompliance() {
   }
 
   return (
+    <LibraryShell activeView="campaigns">
     <div className="space-y-6" data-testid="campaign-compliance-page">
-      <div>
-        <h1 className="text-2xl font-bold">{t('admin.campaign_compliance.title')}</h1>
-        <p className="text-muted-foreground mt-1">{t('admin.campaign_compliance.subtitle')}</p>
-      </div>
-
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -411,5 +408,6 @@ export default function CampaignCompliance() {
         </CardContent>
       </Card>
     </div>
+    </LibraryShell>
   )
 }

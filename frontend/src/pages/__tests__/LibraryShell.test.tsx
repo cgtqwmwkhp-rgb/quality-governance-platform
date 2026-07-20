@@ -53,6 +53,18 @@ describe('LibraryShell', () => {
     expect(documentsTab).not.toHaveAttribute('aria-current')
   })
 
+  it('marks the Document campaigns tab active on /documents/campaigns', () => {
+    render(
+      <MemoryRouter initialEntries={['/documents/campaigns']}>
+        <LibraryShell activeView="campaigns">content</LibraryShell>
+      </MemoryRouter>,
+    )
+
+    const campaignsTab = screen.getByTestId('library-shell-tab-campaigns')
+    expect(campaignsTab).toHaveAttribute('aria-current', 'page')
+    expect(campaignsTab).toHaveAttribute('href', '/documents/campaigns')
+  })
+
   it('renders header actions when provided', () => {
     render(
       <MemoryRouter>

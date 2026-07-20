@@ -348,6 +348,14 @@ function App() {
                 <Route path="notifications" element={<Notifications />} />
                 <Route path="exports" element={<ExportCenter />} />
                 <Route path="documents" element={<Documents />} />
+                <Route
+                  path="documents/campaigns"
+                  element={
+                    <RequireRole allowed={['admin', 'manager']}>
+                      <CampaignCompliance />
+                    </RequireRole>
+                  }
+                />
                 <Route path="documents/:id" element={<DocumentDetail />} />
                 <Route path="document-control" element={<DocumentControl />} />
                 <Route path="my-reading" element={<MyReading />} />
@@ -544,11 +552,7 @@ function App() {
                 />
                 <Route
                   path="admin/campaign-compliance"
-                  element={
-                    <RequireRole allowed={['admin', 'manager']}>
-                      <CampaignCompliance />
-                    </RequireRole>
-                  }
+                  element={<Navigate to="/documents/campaigns" replace />}
                 />
                 <Route
                   path="admin/hsec-inbox"
