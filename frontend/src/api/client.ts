@@ -1012,6 +1012,9 @@ export {
   type TrainingMatrixImportQa,
   type TrainingMatrixRequirement,
   type TrainingMatrixNameMapItem,
+  type TrainingMatrixMatrixCell,
+  type TrainingMatrixMatrixUpsertResponse,
+  type TrainingMatrixNotifyResponse,
 } from './trainingMatrixClient'
 
 // ============ Investigation Types (extracted: investigationsClient.ts) ============

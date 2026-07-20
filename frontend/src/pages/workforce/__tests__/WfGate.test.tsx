@@ -46,14 +46,14 @@ vi.mock('../../../api/client', () => ({
   },
   trainingMatrixApi: {
     listCompliance: vi.fn().mockResolvedValue({ items: [], total: 0, atlas_hub_url: 'https://atlas' }),
-    getLatestImportQa: vi.fn().mockRejectedValue(new Error('none')),
     myTraining: vi.fn().mockResolvedValue({ items: [], total: 0, atlas_hub_url: 'https://atlas' }),
     listNameMaps: vi.fn().mockResolvedValue([]),
     listRequirements: vi.fn().mockResolvedValue({ items: [], total: 0 }),
     listCourses: vi.fn().mockResolvedValue([]),
     uploadImport: vi.fn(),
     upsertNameMap: vi.fn(),
-    createRequirement: vi.fn(),
+    upsertRequirementsMatrix: vi.fn(),
+    notify: vi.fn(),
   },
   ATLAS_HUB_URL: 'https://www.atlas-hub.co.uk/o/98b88f4e-2c3f-44c1-a812-36ea66222c7d/',
   getApiErrorMessage: (err: unknown, fallback = 'Request failed') => {

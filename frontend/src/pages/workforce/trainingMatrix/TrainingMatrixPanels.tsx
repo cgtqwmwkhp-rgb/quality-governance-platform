@@ -1,31 +1,50 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ExternalLink, Upload } from 'lucide-react'
+import { ChevronRight, Download, ExternalLink, Mail, Upload } from 'lucide-react'
 import {
   getApiErrorMessage,
   trainingMatrixApi,
   workforceApi,
   type EngineerProfile,
   type TrainingMatrixComplianceRow,
-  type TrainingMatrixImportQa,
+  type TrainingMatrixMatrixCell,
   type TrainingMatrixNameMapItem,
   type TrainingMatrixRequirement,
 } from '../../../api/client'
 import { ATLAS_HUB_URL } from '../../../api/trainingMatrixClient'
-import { Badge } from '../../../components/ui/Badge'
+import { Badge, type BadgeVariant } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card'
-import { Input } from '../../../components/ui/Input'
 import { TableSkeleton } from '../../../components/ui/SkeletonLoader'
+import { toast } from '../../../contexts/ToastContext'
+import {
+  BOARD_ROLES,
+  type BoardRole,
+  buildStatusBriefings,
+  computeRoleStats,
+  filterRowsByHorizon,
+  groupRowsByCourse,
+  groupRowsByDepartment,
+  groupRowsByPerson,
+  type Horizon,
+  HORIZON_FILTERS,
+  horizonForRow,
+  moduleViewForRole,
+  myTrainingSummary,
+  rowsToCsv,
+  statusLabel,
+  topCoursesInHorizon,
+} from './trainingMatrixBoardHelpers'
 
-const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'destructive' | 'secondary' | 'info'> = {
-  compliant: 'success',
-  due_soon: 'warning',
+const HORIZON_VARIANT: Record<Horizon, BadgeVariant> = {
   overdue: 'destructive',
-  pending: 'warning',
-  missing: 'secondary',
-  failed: 'destructive',
+  d30: 'warning',
+  d60: 'warning',
+  d180: 'info',
+  ok: 'success',
 }
+
+const BRIEFING_ROTATE_MS = 8000
 
 function AtlasCta({ url = ATLAS_HUB_URL }: { url?: string }) {
   const { t } = useTranslation()
@@ -41,6 +60,21 @@ function AtlasCta({ url = ATLAS_HUB_URL }: { url?: string }) {
       <ExternalLink className="w-3.5 h-3.5" />
     </a>
   )
+}
+
+function HorizonBadge({ row }: { row: TrainingMatrixComplianceRow }) {
+  const horizon = horizonForRow(row.status, row.qgp_due_on)
+  return <Badge variant={HORIZON_VARIANT[horizon]}>{statusLabel(row)}</Badge>
+}
+
+function downloadCsv(filename: string, csv: string) {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 function ComplianceTable({ rows, loading }: { rows: TrainingMatrixComplianceRow[]; loading: boolean }) {
@@ -82,12 +116,7 @@ function ComplianceTable({ rows, loading }: { rows: TrainingMatrixComplianceRow[
                 <div className="text-xs text-muted-foreground">{row.frequency_years}y cycle</div>
               </td>
               <td className="py-2 px-3">
-                <Badge variant={STATUS_VARIANT[row.status] || 'secondary'}>
-                  {row.status.replace(/_/g, ' ')}
-                </Badge>
-                {row.expiry_without_passed ? (
-                  <div className="text-xs text-amber-700 mt-1">expiry w/o passed</div>
-                ) : null}
+                <HorizonBadge row={row} />
               </td>
               <td className="py-2 px-3 text-muted-foreground">{row.passed_on || '—'}</td>
               <td className="py-2 px-3 text-muted-foreground">{row.qgp_due_on || '—'}</td>
@@ -103,45 +132,111 @@ function ComplianceTable({ rows, loading }: { rows: TrainingMatrixComplianceRow[
   )
 }
 
+type ViewId = 'group' | 'course' | 'individual' | 'module'
+
+const VIEWS: { id: ViewId; label: string }[] = [
+  { id: 'group', label: 'By group' },
+  { id: 'course', label: 'By course' },
+  { id: 'individual', label: 'By individual' },
+  { id: 'module', label: 'By module' },
+]
+
 export function TrainingMatrixGapBoard() {
   const { t } = useTranslation()
   const [rows, setRows] = useState<TrainingMatrixComplianceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [status, setStatus] = useState('')
-  const [qa, setQa] = useState<TrainingMatrixImportQa | null>(null)
+  const [horizon, setHorizon] = useState<Horizon | 'all'>('overdue')
+  const [view, setView] = useState<ViewId>('group')
+  const [moduleRole, setModuleRole] = useState<BoardRole>('Engineer')
+  const [briefingIndex, setBriefingIndex] = useState(0)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [notifying, setNotifying] = useState(false)
 
   useEffect(() => {
     setLoading(true)
     setError(null)
-    Promise.all([
-      trainingMatrixApi.listCompliance(status ? { status } : undefined),
-      trainingMatrixApi.getLatestImportQa().catch(() => null),
-    ])
-      .then(([compliance, qaRes]) => {
-        setRows(compliance.items || [])
-        setQa(qaRes)
-      })
+    trainingMatrixApi
+      .listCompliance()
+      .then((res) => setRows(res.items || []))
       .catch((err) => {
         setRows([])
         setError(getApiErrorMessage(err))
       })
       .finally(() => setLoading(false))
-  }, [status])
+  }, [])
 
-  const gapRows = useMemo(
-    () => rows.filter((r) => r.status !== 'compliant'),
-    [rows],
-  )
+  const roleStats = useMemo(() => computeRoleStats(rows), [rows])
+  const briefings = useMemo(() => buildStatusBriefings(rows, roleStats), [rows, roleStats])
+
+  useEffect(() => {
+    if (briefings.length <= 1) return
+    const id = window.setInterval(() => {
+      setBriefingIndex((i) => (i + 1) % briefings.length)
+    }, BRIEFING_ROTATE_MS)
+    return () => window.clearInterval(id)
+  }, [briefings.length])
+
+  useEffect(() => {
+    setBriefingIndex(0)
+  }, [briefings.length])
+
+  const filteredRows = useMemo(() => filterRowsByHorizon(rows, horizon), [rows, horizon])
+
+  const topCourses = useMemo(() => {
+    if (horizon === 'all') {
+      const counts = new Map<string, number>()
+      for (const row of filteredRows) counts.set(row.course_display_name, (counts.get(row.course_display_name) || 0) + 1)
+      return [...counts.entries()]
+        .map(([course_display_name, count]) => ({ course_display_name, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5)
+    }
+    return topCoursesInHorizon(rows, horizon, 5)
+  }, [rows, filteredRows, horizon])
+
+  const groupRows = useMemo(() => groupRowsByDepartment(filteredRows), [filteredRows])
+  const courseRows = useMemo(() => groupRowsByCourse(filteredRows), [filteredRows])
+  const personRows = useMemo(() => groupRowsByPerson(filteredRows), [filteredRows])
+  const moduleRows = useMemo(() => moduleViewForRole(rows, moduleRole), [rows, moduleRole])
+
+  const toggleSelected = (atlasName: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(atlasName)) next.delete(atlasName)
+      else next.add(atlasName)
+      return next
+    })
+  }
+
+  const runNotify = (atlasNames: string[]) => {
+    if (atlasNames.length === 0) return
+    setNotifying(true)
+    setError(null)
+    void trainingMatrixApi
+      .notify(atlasNames)
+      .then((res) => {
+        toast.success(`Emailed ${res.sent} · skipped ${res.skipped} · failed ${res.failed}`)
+        setSelected(new Set())
+      })
+      .catch((err) => setError(getApiErrorMessage(err, 'Could not send training emails.')))
+      .finally(() => setNotifying(false))
+  }
+
+  const onExportCsv = () => {
+    const csv = rowsToCsv(filteredRows)
+    downloadCsv(`training-matrix-${horizon}-${new Date().toISOString().slice(0, 10)}.csv`, csv)
+    toast.success(`Exported ${filteredRows.length} row${filteredRows.length === 1 ? '' : 's'}`)
+  }
+
+  const overall = roleStats.find((s) => s.role === 'Overall')
 
   return (
     <div className="space-y-4" data-testid="training-matrix-gap-board">
       <Card>
         <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <p className="font-medium">
-              {t('workforce.training_matrix.gap_title', 'Manager gap board')}
-            </p>
+            <p className="font-medium">{t('workforce.training_matrix.gap_title', 'Training matrix board')}</p>
             <p className="text-sm text-muted-foreground">
               {t(
                 'workforce.training_matrix.gap_subtitle',
@@ -149,45 +244,301 @@ export function TrainingMatrixGapBoard() {
               )}
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <select
-              className="h-9 rounded-md border border-border bg-card px-3 text-sm"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              aria-label="Filter status"
-            >
-              <option value="">All non-compliant focus</option>
-              <option value="overdue">Overdue</option>
-              <option value="due_soon">Due soon</option>
-              <option value="pending">Pending</option>
-              <option value="missing">Missing</option>
-              <option value="failed">Failed</option>
-              <option value="compliant">Compliant</option>
-            </select>
-            <AtlasCta />
-          </div>
+          <AtlasCta />
         </CardHeader>
-        <CardContent>
-          {qa ? (
+        <CardContent className="space-y-4">
+          {error ? (
+            <div className="mb-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
+          ) : null}
+
+          {briefings.length > 0 ? (
             <div
-              className="mb-4 p-3 rounded-lg bg-muted/50 text-sm space-y-1"
-              data-testid="training-matrix-qa"
+              className="flex items-start justify-between gap-3 p-3 rounded-lg bg-muted/50"
+              data-testid="training-matrix-briefing"
             >
-              <p>
-                Expiry without Passed: <strong>{qa.expiry_without_passed_count}</strong> (
-                {qa.expiry_without_passed_before_pct}% before today /{' '}
-                {qa.expiry_without_passed_after_pct}% after)
-              </p>
-              <p className="text-muted-foreground">
-                All expiry dates: {qa.all_expiry_before_pct}% before today /{' '}
-                {qa.all_expiry_after_pct}% after today
-              </p>
+              <div>
+                <p className="text-sm font-medium">{briefings[briefingIndex % briefings.length].title}</p>
+                <p className="text-sm text-muted-foreground">
+                  {briefings[briefingIndex % briefings.length].detail}
+                </p>
+              </div>
+              {briefings.length > 1 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  data-testid="training-matrix-briefing-next"
+                  onClick={() => setBriefingIndex((i) => (i + 1) % briefings.length)}
+                >
+                  Next
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Button>
+              ) : null}
             </div>
           ) : null}
-          {error ? (
-            <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
+
+          <div className="space-y-2" data-testid="training-matrix-role-bar">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              {[overall, ...roleStats.filter((s) => s.role !== 'Overall')].map((stat) =>
+                stat ? (
+                  <div key={stat.role} className="p-2.5 rounded-lg border border-border">
+                    <p className="text-xs text-muted-foreground">{stat.role}</p>
+                    <p className="text-lg font-semibold">{stat.pct}%</p>
+                    <p className="text-xs text-muted-foreground">
+                      {stat.ok}/{stat.total} fully compliant
+                    </p>
+                  </div>
+                ) : null,
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Horizon filter">
+            {HORIZON_FILTERS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                role="tab"
+                aria-selected={horizon === f.id}
+                data-testid={`training-matrix-horizon-${f.id}`}
+                className={`px-3 py-1.5 text-sm rounded-full border ${
+                  horizon === f.id
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'border-border text-muted-foreground hover:text-foreground'
+                }`}
+                onClick={() => setHorizon(f.id)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {topCourses.length > 0 ? (
+            <div className="text-sm">
+              <p className="text-muted-foreground mb-1">Top courses in this horizon</p>
+              <div className="flex flex-wrap gap-2">
+                {topCourses.map((c) => (
+                  <Badge key={c.course_display_name} variant="secondary">
+                    {c.course_display_name} · {c.count}
+                  </Badge>
+                ))}
+              </div>
+            </div>
           ) : null}
-          <ComplianceTable rows={status ? rows : gapRows} loading={loading} />
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border">
+            <div className="flex flex-wrap gap-1" role="tablist" aria-label="Board view">
+              {VIEWS.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === v.id}
+                  data-testid={`training-matrix-view-${v.id}`}
+                  className={`px-3 py-1.5 text-sm rounded-sm ${
+                    view === v.id
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  onClick={() => setView(v.id)}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={selected.size === 0 || notifying}
+                onClick={() => runNotify([...selected])}
+                data-testid="training-matrix-email-selected"
+              >
+                <Mail className="w-3.5 h-3.5 mr-1.5" />
+                Email selected ({selected.size})
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={filteredRows.length === 0 || notifying}
+                onClick={() => runNotify([...new Set(filteredRows.map((r) => r.atlas_name))])}
+                data-testid="training-matrix-email-filter"
+              >
+                <Mail className="w-3.5 h-3.5 mr-1.5" />
+                Email everyone in filter
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={onExportCsv} data-testid="training-matrix-export-csv">
+                <Download className="w-3.5 h-3.5 mr-1.5" />
+                Export CSV
+              </Button>
+            </div>
+          </div>
+
+          {loading ? (
+            <TableSkeleton rows={6} columns={4} />
+          ) : view === 'group' ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="py-2 px-3">Group</th>
+                    <th className="py-2 px-3">Overdue</th>
+                    <th className="py-2 px-3">Total lines</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groupRows.map((g) => (
+                    <tr key={g.department} className="border-b border-border/50">
+                      <td className="py-2 px-3 font-medium">{g.department}</td>
+                      <td className="py-2 px-3">
+                        <Badge variant={g.overdue > 0 ? 'destructive' : 'success'}>{g.overdue}</Badge>
+                      </td>
+                      <td className="py-2 px-3 text-muted-foreground">{g.total}</td>
+                    </tr>
+                  ))}
+                  {groupRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="py-6 text-center text-muted-foreground">
+                        No rows in this filter.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          ) : view === 'course' ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="py-2 px-3">Course</th>
+                    <th className="py-2 px-3">Overdue</th>
+                    <th className="py-2 px-3">30d</th>
+                    <th className="py-2 px-3">60d</th>
+                    <th className="py-2 px-3">180d</th>
+                    <th className="py-2 px-3">OK</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {courseRows.map((c) => (
+                    <tr key={c.course_key} className="border-b border-border/50">
+                      <td className="py-2 px-3 font-medium">{c.course_display_name}</td>
+                      <td className="py-2 px-3">{c.overdue}</td>
+                      <td className="py-2 px-3">{c.d30}</td>
+                      <td className="py-2 px-3">{c.d60}</td>
+                      <td className="py-2 px-3">{c.d180}</td>
+                      <td className="py-2 px-3">{c.ok}</td>
+                    </tr>
+                  ))}
+                  {courseRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center text-muted-foreground">
+                        No rows in this filter.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          ) : view === 'individual' ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="py-2 px-3" />
+                    <th className="py-2 px-3">Person</th>
+                    <th className="py-2 px-3">Department</th>
+                    <th className="py-2 px-3">Overdue</th>
+                    <th className="py-2 px-3">Lines in filter</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {personRows.map((p) => (
+                    <tr key={p.atlas_name} className="border-b border-border/50">
+                      <td className="py-2 px-3">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${p.atlas_name}`}
+                          checked={selected.has(p.atlas_name)}
+                          onChange={() => toggleSelected(p.atlas_name)}
+                        />
+                      </td>
+                      <td className="py-2 px-3 font-medium">{p.engineer_display_name || p.atlas_name}</td>
+                      <td className="py-2 px-3 text-muted-foreground">{p.department || '—'}</td>
+                      <td className="py-2 px-3">
+                        <Badge variant={p.overdue > 0 ? 'destructive' : 'success'}>{p.overdue}</Badge>
+                      </td>
+                      <td className="py-2 px-3 text-muted-foreground">{p.total}</td>
+                    </tr>
+                  ))}
+                  {personRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                        No rows in this filter.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2" role="tablist" aria-label="Module role">
+                {BOARD_ROLES.map((role) => (
+                  <button
+                    key={role}
+                    type="button"
+                    role="tab"
+                    aria-selected={moduleRole === role}
+                    data-testid={`training-matrix-module-role-${role}`}
+                    className={`px-3 py-1.5 text-sm rounded-full border ${
+                      moduleRole === role
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'border-border text-muted-foreground hover:text-foreground'
+                    }`}
+                    onClick={() => setModuleRole(role)}
+                  >
+                    {role}
+                  </button>
+                ))}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-muted-foreground">
+                      <th className="py-2 px-3">Module</th>
+                      <th className="py-2 px-3">% compliant</th>
+                      <th className="py-2 px-3">People</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {moduleRows.map((m) => (
+                      <tr key={m.course_key} className="border-b border-border/50">
+                        <td className="py-2 px-3 font-medium">{m.course_display_name}</td>
+                        <td className="py-2 px-3">
+                          <Badge variant={m.pct >= 90 ? 'success' : m.pct >= 60 ? 'warning' : 'destructive'}>
+                            {m.pct}%
+                          </Badge>
+                        </td>
+                        <td className="py-2 px-3 text-muted-foreground">
+                          {m.compliant}/{m.total}
+                        </td>
+                      </tr>
+                    ))}
+                    {moduleRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="py-6 text-center text-muted-foreground">
+                          No required modules mapped to {moduleRole} yet.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -208,6 +559,8 @@ export function TrainingMatrixMyTraining() {
       .finally(() => setLoading(false))
   }, [])
 
+  const summary = useMemo(() => myTrainingSummary(rows), [rows])
+
   return (
     <Card data-testid="training-matrix-my-training">
       <CardHeader className="flex flex-row items-center justify-between gap-3">
@@ -222,7 +575,24 @@ export function TrainingMatrixMyTraining() {
         </div>
         <AtlasCta />
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {!loading && rows.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-4 p-3 rounded-lg bg-muted/50 text-sm" data-testid="training-matrix-my-progress">
+            <p>
+              <strong>
+                {summary.okCount}/{summary.total}
+              </strong>{' '}
+              modules OK
+            </p>
+            {summary.nextDue ? (
+              <p className="text-muted-foreground">
+                Next due: <strong>{summary.nextDue.course_display_name}</strong> on {summary.nextDue.qgp_due_on}
+              </p>
+            ) : (
+              <p className="text-muted-foreground">Nothing outstanding right now.</p>
+            )}
+          </div>
+        ) : null}
         {error ? (
           <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
         ) : null}
@@ -230,6 +600,24 @@ export function TrainingMatrixMyTraining() {
       </CardContent>
     </Card>
   )
+}
+
+type MatrixGrid = Record<string, Partial<Record<BoardRole, number | null>>>
+
+function buildGridFromRequirements(
+  courseRows: { course_key: string; course_display_name: string }[],
+  requirements: TrainingMatrixRequirement[],
+): MatrixGrid {
+  const grid: MatrixGrid = {}
+  for (const row of courseRows) grid[row.course_key] = {}
+  for (const req of requirements) {
+    if (req.match_role_key) continue
+    const role = BOARD_ROLES.find((r) => (req.match_department || '').trim().toLowerCase() === r.toLowerCase())
+    if (!role) continue
+    if (!grid[req.course_key]) grid[req.course_key] = {}
+    grid[req.course_key][role] = req.is_active ? req.frequency_years : null
+  }
+  return grid
 }
 
 export function TrainingMatrixAdminPanel() {
@@ -243,14 +631,8 @@ export function TrainingMatrixAdminPanel() {
   const [requirements, setRequirements] = useState<TrainingMatrixRequirement[]>([])
   const [engineers, setEngineers] = useState<{ id: number; label: string }[]>([])
   const [courses, setCourses] = useState<{ course_key: string; display_name: string }[]>([])
-  const [reqForm, setReqForm] = useState({
-    match_department: 'Engineer',
-    match_role_key: '',
-    course_key: '',
-    course_display_name: '',
-    frequency_years: 1,
-  })
-  const [seeding, setSeeding] = useState(false)
+  const [grid, setGrid] = useState<MatrixGrid>({})
+  const [savingMatrix, setSavingMatrix] = useState(false)
 
   const reload = () => {
     setNameMapsLoaded(false)
@@ -284,6 +666,23 @@ export function TrainingMatrixAdminPanel() {
     reload()
   }, [])
 
+  const courseRows = useMemo(() => {
+    const byKey = new Map<string, string>()
+    for (const c of courses) byKey.set(c.course_key, c.display_name)
+    for (const r of requirements) if (!byKey.has(r.course_key)) byKey.set(r.course_key, r.course_display_name)
+    return [...byKey.entries()]
+      .map(([course_key, course_display_name]) => ({ course_key, course_display_name }))
+      .sort((a, b) => a.course_display_name.localeCompare(b.course_display_name))
+  }, [courses, requirements])
+
+  const savedGrid = useMemo(() => buildGridFromRequirements(courseRows, requirements), [courseRows, requirements])
+
+  useEffect(() => {
+    setGrid(savedGrid)
+    // Reset any unsaved edits whenever the server truth changes (after load/save).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(savedGrid)])
+
   const onUpload = async (file: File) => {
     setUploading(true)
     setError(null)
@@ -299,6 +698,53 @@ export function TrainingMatrixAdminPanel() {
     } finally {
       setUploading(false)
     }
+  }
+
+  const setCell = (courseKey: string, role: BoardRole, value: number | null) => {
+    setGrid((prev) => ({
+      ...prev,
+      [courseKey]: { ...prev[courseKey], [role]: value },
+    }))
+  }
+
+  const onSaveMatrix = () => {
+    const cells: TrainingMatrixMatrixCell[] = []
+    let changed = 0
+    for (const row of courseRows) {
+      for (const role of BOARD_ROLES) {
+        const value = grid[row.course_key]?.[role] ?? null
+        const original = savedGrid[row.course_key]?.[role] ?? null
+        if (value !== original) changed += 1
+        cells.push({
+          match_department: role,
+          course_key: row.course_key,
+          course_display_name: row.course_display_name,
+          frequency_years: value,
+        })
+      }
+    }
+    if (changed === 0) {
+      setMessage('No changes to save.')
+      return
+    }
+    if (
+      !window.confirm(
+        `Save ${changed} cell change${changed === 1 ? '' : 's'} to the frequency matrix? This can move people into or out of overdue for the affected department(s) and course(s).`,
+      )
+    ) {
+      return
+    }
+    setSavingMatrix(true)
+    setError(null)
+    setMessage(null)
+    void trainingMatrixApi
+      .upsertRequirementsMatrix(cells)
+      .then((res) => {
+        setMessage(`Matrix saved: ${res.upserted} active cell${res.upserted === 1 ? '' : 's'}, ${res.deactivated} deactivated.`)
+        reload()
+      })
+      .catch((err) => setError(getApiErrorMessage(err, 'Could not save the frequency matrix.')))
+      .finally(() => setSavingMatrix(false))
   }
 
   const unmatched = nameMaps.filter((m) => !m.mapped)
@@ -382,179 +828,70 @@ export function TrainingMatrixAdminPanel() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <p className="font-medium">Requirements (role/dept → course + frequency)</p>
-          <p className="text-sm text-muted-foreground">
-            Stored in the database — load the April 2024 matrix as a starting set, then edit or
-            delete any rule. Compliance never hardcodes these.
-          </p>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="font-medium">Frequency matrix (role x course)</p>
+            <p className="text-sm text-muted-foreground">
+              Select a cycle for each cell — course rows come from your Atlas courses and existing
+              rules. Clear a cell (—) to deactivate that rule. Compliance always reads these rows.
+            </p>
+          </div>
+          <Button
+            type="button"
+            disabled={savingMatrix || courseRows.length === 0}
+            onClick={onSaveMatrix}
+            data-testid="training-matrix-save-matrix"
+          >
+            {savingMatrix ? 'Saving…' : 'Save matrix'}
+          </Button>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={seeding}
-              data-testid="training-matrix-seed-2024"
-              onClick={() => {
-                setSeeding(true)
-                setError(null)
-                setMessage(null)
-                void trainingMatrixApi
-                  .seedRequirements({ template: 'plantexpand_2024_v1', mode: 'fill_missing' })
-                  .then((res) => {
-                    const unmatched =
-                      res.unmatched_modules.length > 0
-                        ? ` Unmatched Atlas courses (rules still created): ${res.unmatched_modules.slice(0, 8).join(', ')}${res.unmatched_modules.length > 8 ? '…' : ''}.`
-                        : ''
-                    setMessage(
-                      `Loaded ${res.template_label}: created ${res.created}, skipped existing ${res.skipped_existing}.${unmatched}`,
-                    )
-                    reload()
-                  })
-                  .catch((err) => setError(getApiErrorMessage(err, 'Could not load 2024 matrix.')))
-                  .finally(() => setSeeding(false))
-              }}
-            >
-              {seeding ? 'Loading…' : 'Load April 2024 matrix'}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={seeding || requirements.length === 0}
-              onClick={() => {
-                if (
-                  !window.confirm(
-                    'Refresh frequencies from the April 2024 template for previously seeded rules? Manual rules are left alone.',
-                  )
-                ) {
-                  return
-                }
-                setSeeding(true)
-                setError(null)
-                void trainingMatrixApi
-                  .seedRequirements({ template: 'plantexpand_2024_v1', mode: 'refresh_template' })
-                  .then((res) => {
-                    setMessage(
-                      `Refreshed template rows; created ${res.created}, left ${res.skipped_existing} non-template rules unchanged.`,
-                    )
-                    reload()
-                  })
-                  .catch((err) => setError(getApiErrorMessage(err)))
-                  .finally(() => setSeeding(false))
-              }}
-            >
-              Refresh seeded frequencies
-            </Button>
+        <CardContent>
+          <div className="overflow-x-auto max-h-[32rem]">
+            <table className="w-full text-sm" data-testid="training-matrix-matrix-grid">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground sticky top-0 bg-card">
+                  <th className="py-2 px-3">Course</th>
+                  {BOARD_ROLES.map((role) => (
+                    <th key={role} className="py-2 px-3">
+                      {role}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {courseRows.map((row) => (
+                  <tr key={row.course_key} className="border-b border-border/50">
+                    <td className="py-1.5 px-3 font-medium">{row.course_display_name}</td>
+                    {BOARD_ROLES.map((role) => (
+                      <td key={role} className="py-1.5 px-3">
+                        <select
+                          className="h-8 rounded-md border border-border bg-card px-2 text-sm"
+                          aria-label={`${row.course_display_name} — ${role}`}
+                          value={grid[row.course_key]?.[role] ?? ''}
+                          onChange={(e) => {
+                            const raw = e.target.value
+                            setCell(row.course_key, role, raw === '' ? null : Number(raw))
+                          }}
+                        >
+                          <option value="">—</option>
+                          <option value={1}>1y</option>
+                          <option value={2}>2y</option>
+                          <option value={3}>3y</option>
+                        </select>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                {courseRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={BOARD_ROLES.length + 1} className="py-6 text-center text-muted-foreground">
+                      No Atlas courses yet. Upload a matrix CSV to populate rows.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
-            <Input
-              placeholder="Department (e.g. Engineer)"
-              value={reqForm.match_department}
-              onChange={(e) => setReqForm((p) => ({ ...p, match_department: e.target.value }))}
-            />
-            <Input
-              placeholder="Role key (optional)"
-              value={reqForm.match_role_key}
-              onChange={(e) => setReqForm((p) => ({ ...p, match_role_key: e.target.value }))}
-            />
-            <select
-              className="h-9 rounded-md border border-border bg-card px-3 text-sm"
-              value={reqForm.course_key}
-              onChange={(e) => {
-                const course = courses.find((c) => c.course_key === e.target.value)
-                setReqForm((p) => ({
-                  ...p,
-                  course_key: e.target.value,
-                  course_display_name: course?.display_name || p.course_display_name,
-                }))
-              }}
-            >
-              <option value="">Course…</option>
-              {courses.map((c) => (
-                <option key={c.course_key} value={c.course_key}>
-                  {c.display_name}
-                </option>
-              ))}
-            </select>
-            <select
-              className="h-9 rounded-md border border-border bg-card px-3 text-sm"
-              value={reqForm.frequency_years}
-              onChange={(e) =>
-                setReqForm((p) => ({ ...p, frequency_years: Number(e.target.value) }))
-              }
-            >
-              <option value={1}>1 year</option>
-              <option value={2}>2 years</option>
-              <option value={3}>3 years</option>
-            </select>
-            <Button
-              type="button"
-              disabled={!reqForm.course_key || (!reqForm.match_department && !reqForm.match_role_key)}
-              onClick={() => {
-                void trainingMatrixApi
-                  .createRequirement({
-                    match_department: reqForm.match_department || null,
-                    match_role_key: reqForm.match_role_key || null,
-                    course_key: reqForm.course_key,
-                    course_display_name: reqForm.course_display_name,
-                    frequency_years: reqForm.frequency_years,
-                    is_active: true,
-                  })
-                  .then(reload)
-              }}
-            >
-              Add rule
-            </Button>
-          </div>
-          <ul className="text-sm space-y-1 max-h-72 overflow-y-auto" data-testid="training-matrix-requirements-list">
-            {requirements.map((r) => (
-              <li
-                key={r.id}
-                className="flex flex-wrap items-center gap-2 border-b border-border/50 py-1.5"
-              >
-                <span className="min-w-[12rem] flex-1 font-medium">{r.course_display_name}</span>
-                <span className="text-muted-foreground">
-                  {r.match_department || r.match_role_key || '—'}
-                </span>
-                <select
-                  className="h-8 rounded-md border border-border bg-card px-2 text-sm"
-                  value={r.frequency_years}
-                  aria-label={`Frequency for ${r.course_display_name}`}
-                  onChange={(e) => {
-                    const years = Number(e.target.value)
-                    void trainingMatrixApi
-                      .updateRequirement(r.id, { frequency_years: years })
-                      .then(reload)
-                      .catch((err) => setError(getApiErrorMessage(err)))
-                  }}
-                >
-                  <option value={1}>1y</option>
-                  <option value={2}>2y</option>
-                  <option value={3}>3y</option>
-                </select>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    if (!window.confirm(`Delete rule for ${r.course_display_name}?`)) return
-                    void trainingMatrixApi
-                      .deleteRequirement(r.id)
-                      .then(reload)
-                      .catch((err) => setError(getApiErrorMessage(err)))
-                  }}
-                >
-                  Delete
-                </Button>
-              </li>
-            ))}
-            {requirements.length === 0 ? (
-              <li className="text-muted-foreground py-2">
-                No rules yet. Use “Load April 2024 matrix” or add a rule manually.
-              </li>
-            ) : null}
-          </ul>
         </CardContent>
       </Card>
     </div>

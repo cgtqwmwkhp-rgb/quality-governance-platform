@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "167 kB",
+    "limit": "170 kB",
     "gzip": true,
-    "name": "index: 166\u2192167 kB \u2014 customer audits + cert shelf + training shells"
+    "name": "index: 167\u2192170 kB \u2014 training matrix manager UX board"
   },
   {
     "path": "dist/assets/vendor-*.js",

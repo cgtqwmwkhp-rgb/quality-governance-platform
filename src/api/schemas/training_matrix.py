@@ -123,6 +123,7 @@ class TrainingMatrixComplianceRow(BaseModel):
     qgp_due_on: Optional[date] = None
     expiry_without_passed: bool = False
     atlas_hub_url: str
+    last_training_notified_at: Optional[datetime] = None
 
 
 class TrainingMatrixComplianceListResponse(BaseModel):
@@ -135,3 +136,32 @@ class TrainingMatrixComplianceListResponse(BaseModel):
 class TrainingMatrixCourseOption(BaseModel):
     course_key: str
     display_name: str
+
+
+class TrainingMatrixMatrixCell(BaseModel):
+    """One dept/role x course cell in the interactive Admin frequency matrix."""
+
+    match_department: str
+    course_key: str
+    course_display_name: str
+    frequency_years: Optional[int] = Field(default=None, ge=0, le=5)
+
+
+class TrainingMatrixMatrixUpsertRequest(BaseModel):
+    cells: List[TrainingMatrixMatrixCell]
+
+
+class TrainingMatrixMatrixUpsertResponse(BaseModel):
+    upserted: int
+    deactivated: int
+
+
+class TrainingMatrixNotifyRequest(BaseModel):
+    atlas_names: List[str] = Field(min_length=1)
+    message: Optional[str] = None
+
+
+class TrainingMatrixNotifyResponse(BaseModel):
+    sent: int
+    skipped: int
+    failed: int

@@ -489,6 +489,68 @@ class EmailService:
 
         return await self._send_email_as_bool(to=to, subject="📊 Weekly IMS Summary", html_content=html)
 
+    async def send_training_gap_notification(
+        self,
+        to: str,
+        display_name: str,
+        gaps: List[Dict[str, Any]],
+        atlas_hub_url: str,
+        message: Optional[str] = None,
+    ) -> bool:
+        """Send a training compliance gap notification listing non-OK modules.
+
+        Args:
+            to: Recipient email address
+            display_name: Person's display/Atlas name for personalization
+            gaps: List of dicts with course_display_name, status, qgp_due_on (str or None)
+            atlas_hub_url: Atlas hub link to complete training
+            message: Optional manager note to include above the module list
+
+        Returns:
+            True if email sent successfully, False otherwise
+        """
+        esc = html_mod.escape
+        rows = "".join(f"""
+            <tr>
+                <td>{esc(str(g.get('course_display_name') or ''))}</td>
+                <td><span class="status-badge status-open">{esc(str(g.get('status') or '').replace('_', ' ').upper())}</span></td>
+                <td>{esc(str(g.get('qgp_due_on') or '—'))}</td>
+            </tr>
+            """ for g in gaps)
+        note = f"<p>{esc(message)}</p>" if message else ""
+        content = f"""
+        <h2>🎓 Training Compliance — Action Needed</h2>
+        <p>Hi {esc(display_name)},</p>
+        {note}
+        <div class="alert-box medium">
+            <h3>{len(gaps)} module{'s' if len(gaps) != 1 else ''} need attention</h3>
+            <p>Complete these in Atlas to stay compliant.</p>
+        </div>
+        <table class="details-table">
+            <tr>
+                <th>Module</th>
+                <th>Status</th>
+                <th>QGP due</th>
+            </tr>
+            {rows}
+        </table>
+        <a href="{esc(atlas_hub_url)}" class="button">Complete in Atlas →</a>
+        """
+
+        html = self._safe_format(
+            self._get_base_template(),
+            subject="Training Compliance — Action Needed",
+            content=content,
+            alert_color="#f59e0b",
+            year=datetime.now().year,
+        )
+
+        return await self._send_email_as_bool(
+            to=[to],
+            subject="🎓 Training Compliance — Action Needed",
+            html_content=html,
+        )
+
     async def send_password_reset_email(
         self,
         to: str,
