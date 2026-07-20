@@ -32,6 +32,7 @@
 
 ## 6) Critical Journeys Verified (CUJ)
 - [x] CUJ-01: Lockfile generate script runs under `set -u` with and without upgrade
+- [x] CUJ-02: Regenerated lockfile removes package-version drift reported by Lockfile Freshness Check
 
 ## 7) Observability & Ops
 - **Logs / Metrics / Alerts:** None
