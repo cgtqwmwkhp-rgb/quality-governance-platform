@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -73,16 +73,30 @@ async def test_disposal_execute_is_blocked_by_default(monkeypatch):
 async def test_disposal_execute_delegates_only_when_flag_enabled(monkeypatch):
     monkeypatch.setattr(documents.settings, "library_disposal_execute", True)
     execute = AsyncMock(return_value=[11])
+    audit = AsyncMock()
     monkeypatch.setattr(documents, "execute_disposal", execute)
+    monkeypatch.setattr(documents, "record_audit_event", audit)
+    user = SimpleNamespace(id=42, tenant_id=7)
 
     result = await documents.execute_disposal_queue(
         documents.DisposalExecuteRequest(document_ids=[11]),
         MagicMock(),
-        SimpleNamespace(tenant_id=7),
+        user,
     )
 
     assert result.disposed_document_ids == [11]
     execute.assert_awaited_once()
+    audit.assert_awaited_once_with(
+        db=ANY,
+        event_type="document_library.disposed",
+        entity_type="document",
+        entity_id="11",
+        action="delete",
+        description="Hard-disposed 1 retention-due library document(s)",
+        payload={"actor_id": 42, "document_ids": [11], "count": 1},
+        user_id=42,
+        tenant_id=7,
+    )
 
 
 @pytest.mark.asyncio

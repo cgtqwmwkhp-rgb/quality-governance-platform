@@ -47,6 +47,7 @@ from src.domain.services.document_library_campaign_offer_service import (
     offer_campaign_from_document,
 )
 from src.domain.services.document_library_disposal_service import execute_disposal, list_disposal_candidates
+from src.domain.services.audit_service import record_audit_event
 from src.domain.services.document_library_filing_service import (
     assert_library_read_access,
     filing_defaults_for_category,
@@ -1040,6 +1041,22 @@ async def execute_disposal_queue(
         tenant_id=require_tenant_id(current_user.tenant_id),
         document_ids=payload.document_ids,
     )
+    if disposed_ids:
+        await record_audit_event(
+            db=db,
+            event_type="document_library.disposed",
+            entity_type="document",
+            entity_id=",".join(map(str, disposed_ids)),
+            action="delete",
+            description=f"Hard-disposed {len(disposed_ids)} retention-due library document(s)",
+            payload={
+                "actor_id": current_user.id,
+                "document_ids": disposed_ids,
+                "count": len(disposed_ids),
+            },
+            user_id=current_user.id,
+            tenant_id=require_tenant_id(current_user.tenant_id),
+        )
     track_metric("library.disposal_queue.executed", float(len(disposed_ids)))
     return DisposalExecuteResponse(
         disposed_document_ids=disposed_ids,
