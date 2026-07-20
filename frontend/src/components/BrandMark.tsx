@@ -1,5 +1,5 @@
 /**
- * Planexpand interlocking-octagon mark for QGP.
+ * Plantexpand interlocking-octagon mark for QGP.
  * BrandMarkTile uses the uploaded PNG asset (SSOT). SVG BrandMark remains for
  * vector / onBrand variants where a flat image is unsuitable.
  */
@@ -109,7 +109,7 @@ export function BrandMarkTile({
   className,
   size = 44,
   iconSize,
-  title = 'Quality Governance Platform for Planexpand Limited',
+  title = 'Quality Governance Platform for Plantexpand Limited',
 }: {
   className?: string
   size?: number
