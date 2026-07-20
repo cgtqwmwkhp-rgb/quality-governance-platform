@@ -51029,7 +51029,7 @@
     },
     "/api/v1/ai/health": {
       "get": {
-        "description": "Check AI service availability",
+        "description": "Authenticated AI ops probe \u2014 configuration honesty only (ACT-046).\n\nInternal route: requires a valid platform session. Never exposes secret values\nor unauthenticated capability theatre. Use ``/healthz`` / ``/readyz`` for probes.",
         "operationId": "ai_health_check_api_v1_ai_health_get",
         "responses": {
           "200": {
@@ -51045,6 +51045,11 @@
             "description": "Successful Response"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Ai Health Check",
         "tags": [
           "AI Intelligence"
@@ -67305,7 +67310,7 @@
         ]
       },
       "post": {
-        "description": "Create a new engineer.",
+        "description": "Create a new engineer (``engineer:create`` + workforce manager facet).",
         "operationId": "create_engineer_api_v1_engineers__post",
         "requestBody": {
           "content": {
@@ -67379,7 +67384,7 @@
     },
     "/api/v1/engineers/sync-from-pams": {
       "post": {
-        "description": "Sync active PAMS technicians_store rows into engineer profiles (manager only).",
+        "description": "Sync PAMS technicians into engineer profiles (``engineer:create`` + manager facet).",
         "operationId": "sync_engineers_from_pams_api_v1_engineers_sync_from_pams_post",
         "parameters": [
           {

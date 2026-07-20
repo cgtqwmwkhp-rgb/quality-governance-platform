@@ -36,6 +36,7 @@ import {
 import { UserEmailSearch } from '../../components/UserEmailSearch'
 import type { UserSearchResult } from '../../api/client'
 import { cn } from '../../helpers/utils'
+import { isWorkforceManager } from '../../utils/workforceAccess'
 
 type ActiveFilter = '' | 'true' | 'false'
 type ViewMode = 'cards' | 'list' | 'compact'
@@ -195,6 +196,8 @@ export default function Engineers() {
     }
   }
 
+  const canManageRoster = isWorkforceManager()
+
   const rosterEmpty =
     !loading && engineers.length === 0 && !debouncedSearch && activeFilter === 'true'
 
@@ -206,21 +209,39 @@ export default function Engineers() {
           <p className="text-muted-foreground mt-1">{t('workforce.engineers.subtitle')}</p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
-          <Button type="button" onClick={openCreateDialog} disabled={loading}>
-            <Plus className="w-4 h-4 mr-2" />
-            {t('workforce.engineers.add')}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void handleSyncFromPams()}
-            disabled={syncing || loading}
-          >
-            <RefreshCw className={cn('w-4 h-4 mr-2', syncing && 'animate-spin')} />
-            {syncing ? t('workforce.engineers.syncing') : t('workforce.engineers.sync_from_pams')}
-          </Button>
+          {canManageRoster ? (
+            <>
+              <Button type="button" onClick={openCreateDialog} disabled={loading}>
+                <Plus className="w-4 h-4 mr-2" />
+                {t('workforce.engineers.add')}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleSyncFromPams()}
+                disabled={syncing || loading}
+              >
+                <RefreshCw className={cn('w-4 h-4 mr-2', syncing && 'animate-spin')} />
+                {syncing ? t('workforce.engineers.syncing') : t('workforce.engineers.sync_from_pams')}
+              </Button>
+            </>
+          ) : (
+            <Button type="button" disabled title={t('workforce.engineers.manager_gate_honesty')}>
+              <Plus className="w-4 h-4 mr-2" />
+              {t('workforce.engineers.add')}
+            </Button>
+          )}
         </div>
       </div>
+
+      {!canManageRoster && (
+        <div
+          className="rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-foreground"
+          data-testid="engineers-manager-gate-honesty"
+        >
+          {t('workforce.engineers.manager_gate_honesty')}
+        </div>
+      )}
 
       <Card>
         <CardContent className="pt-6">
@@ -294,7 +315,7 @@ export default function Engineers() {
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground space-y-4">
             <p>{rosterEmpty ? t('workforce.engineers.empty') : t('common.no_results')}</p>
-            {rosterEmpty && (
+            {rosterEmpty && canManageRoster && (
               <Button
                 type="button"
                 variant="outline"

@@ -3460,6 +3460,7 @@
   "workforce.engineers.filter_status": "Active status",
   "workforce.engineers.form_required": "Display name or user ID is required",
   "workforce.engineers.job_title": "Job title",
+  "workforce.engineers.manager_gate_honesty": "Adding employees and PAMS sync require admin or supervisor role in addition to engineer:create. Contact HSEQ if you need roster write access.",
   "workforce.engineers.not_found": "Engineer not found",
   "workforce.engineers.qgp_only_hint": "Edits apply on this platform only — PAMS technician records are never updated.",
   "workforce.engineers.qgp_override_badge": "QGP profile",

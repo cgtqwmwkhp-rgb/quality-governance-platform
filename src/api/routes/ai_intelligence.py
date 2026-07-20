@@ -313,18 +313,31 @@ async def get_recurring_findings(
 
 
 @router.get("/health", response_model=dict)
-async def ai_health_check() -> dict[str, Any]:
-    """Check AI service availability"""
+async def ai_health_check(current_user: CurrentUser) -> dict[str, Any]:
+    """Authenticated AI ops probe — configuration honesty only (ACT-046).
+
+    Internal route: requires a valid platform session. Never exposes secret values
+    or unauthenticated capability theatre. Use ``/healthz`` / ``/readyz`` for probes.
+    """
     import os
 
+    from src.infrastructure.upstream.ai_status import get_upstream_ai_readiness
+
+    _ = current_user  # auth gate — payload is tenant-agnostic configuration meta
+    anthropic_configured = bool((os.getenv("ANTHROPIC_API_KEY") or "").strip())
+    ocr_ai = get_upstream_ai_readiness()
     return {
-        "status": "operational",
-        "services": {
-            "text_analysis": True,
-            "anomaly_detection": True,
-            "recommendation_engine": True,
-            "root_cause_analysis": True,
-            "audit_assistant": True,
-            "claude_ai": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "status": ocr_ai["status"],
+        "endpoint": "/api/v1/ai/health",
+        "auth_required": True,
+        "ocr_ai": ocr_ai,
+        "anthropic": {
+            "status": "configured" if anthropic_configured else "not_configured",
+            "api_key_present": anthropic_configured,
+            "role": "claude_analysis",
         },
+        "note": (
+            "Internal authenticated probe; reports configuration flags only. "
+            "Live AI calls occur on analysis/import paths, not on this endpoint."
+        ),
     }

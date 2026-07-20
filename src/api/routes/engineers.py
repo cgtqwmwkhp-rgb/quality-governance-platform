@@ -1,6 +1,16 @@
 """Engineer API Routes.
 
 REST endpoints for engineer profiles and competency tracking.
+
+Workforce write dual gate (ACT-053)
+------------------------------------
+``POST /`` and ``POST /sync-from-pams`` require **both**:
+
+1. RBAC permission ``engineer:create`` on the caller's role facet, **and**
+2. Workforce manager facet: ``admin`` or ``supervisor`` role name, or ``is_superuser``.
+
+Granting ``engineer:create`` without a manager facet returns 403 by design — roster
+writes stay with HSEQ/supervisor operators, not general staff personas.
 """
 
 import logging
@@ -181,7 +191,7 @@ async def create_engineer(
     db: DbSession,
     user: Annotated[User, Depends(require_permission("engineer:create"))],
 ):
-    """Create a new engineer."""
+    """Create a new engineer (``engineer:create`` + workforce manager facet)."""
     tenant_id = _require_engineer_tenant_id(user)
     if not _is_workforce_manager(user):
         raise AuthorizationError("You do not have permission to create engineer records")
@@ -241,7 +251,7 @@ async def sync_engineers_from_pams(
     user: Annotated[User, Depends(require_permission("engineer:create"))],
     tenant_id: Optional[int] = Query(None, description="Override tenant; defaults to DEFAULT_TENANT_ID"),
 ):
-    """Sync active PAMS technicians_store rows into engineer profiles (manager only)."""
+    """Sync PAMS technicians into engineer profiles (``engineer:create`` + manager facet)."""
     if not _is_workforce_manager(user):
         raise AuthorizationError("You do not have permission to sync engineers from PAMS")
 
