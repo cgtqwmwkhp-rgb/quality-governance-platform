@@ -20,6 +20,8 @@ from src.api.schemas.training_matrix import (
     TrainingMatrixRequirementCreate,
     TrainingMatrixRequirementListResponse,
     TrainingMatrixRequirementResponse,
+    TrainingMatrixRequirementSeedRequest,
+    TrainingMatrixRequirementSeedResponse,
     TrainingMatrixRequirementUpdate,
 )
 from src.api.utils.tenant import require_tenant_id
@@ -41,6 +43,7 @@ from src.domain.services.training_matrix_compliance import (
 )
 from src.domain.services.training_matrix_import_service import persist_training_matrix_import
 from src.domain.services.training_matrix_parser import normalize_person_name, parse_training_matrix_csv
+from src.domain.services.training_matrix_requirement_seed import seed_plantexpand_2024_requirements
 
 router = APIRouter()
 
@@ -318,6 +321,35 @@ async def create_requirement(db: DbSession, user: CurrentUser, body: TrainingMat
     await db.commit()
     await db.refresh(row)
     return TrainingMatrixRequirementResponse.model_validate(row)
+
+
+@router.post(
+    "/requirements/seed",
+    response_model=TrainingMatrixRequirementSeedResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def seed_requirements(
+    db: DbSession,
+    user: CurrentUser,
+    body: TrainingMatrixRequirementSeedRequest,
+):
+    """Seed requirement rows from a SoR template into the DB (still fully editable)."""
+    _require_admin(user)
+    tenant_id = _tenant(user)
+    if body.template != "plantexpand_2024_v1":
+        raise ValidationError("Unknown template. Supported: plantexpand_2024_v1")
+    try:
+        result = await seed_plantexpand_2024_requirements(db, tenant_id=tenant_id, mode=body.mode)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
+    return TrainingMatrixRequirementSeedResponse(
+        template_id=result.template_id,
+        template_label=result.template_label,
+        created=result.created,
+        skipped_existing=result.skipped_existing,
+        unmatched_modules=result.unmatched_modules,
+        created_without_atlas_match=result.created_without_atlas_match,
+    )
 
 
 @router.patch("/requirements/{requirement_id}", response_model=TrainingMatrixRequirementResponse)

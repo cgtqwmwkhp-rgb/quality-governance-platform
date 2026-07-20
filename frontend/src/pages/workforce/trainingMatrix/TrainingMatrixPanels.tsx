@@ -244,12 +244,13 @@ export function TrainingMatrixAdminPanel() {
   const [engineers, setEngineers] = useState<{ id: number; label: string }[]>([])
   const [courses, setCourses] = useState<{ course_key: string; display_name: string }[]>([])
   const [reqForm, setReqForm] = useState({
-    match_department: 'Mobile Engineers',
+    match_department: 'Engineer',
     match_role_key: '',
     course_key: '',
     course_display_name: '',
     frequency_years: 1,
   })
+  const [seeding, setSeeding] = useState(false)
 
   const reload = () => {
     setNameMapsLoaded(false)
@@ -383,11 +384,72 @@ export function TrainingMatrixAdminPanel() {
       <Card>
         <CardHeader>
           <p className="font-medium">Requirements (role/dept → course + frequency)</p>
+          <p className="text-sm text-muted-foreground">
+            Stored in the database — load the April 2024 matrix as a starting set, then edit or
+            delete any rule. Compliance never hardcodes these.
+          </p>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={seeding}
+              data-testid="training-matrix-seed-2024"
+              onClick={() => {
+                setSeeding(true)
+                setError(null)
+                setMessage(null)
+                void trainingMatrixApi
+                  .seedRequirements({ template: 'plantexpand_2024_v1', mode: 'fill_missing' })
+                  .then((res) => {
+                    const unmatched =
+                      res.unmatched_modules.length > 0
+                        ? ` Unmatched Atlas courses (rules still created): ${res.unmatched_modules.slice(0, 8).join(', ')}${res.unmatched_modules.length > 8 ? '…' : ''}.`
+                        : ''
+                    setMessage(
+                      `Loaded ${res.template_label}: created ${res.created}, skipped existing ${res.skipped_existing}.${unmatched}`,
+                    )
+                    reload()
+                  })
+                  .catch((err) => setError(getApiErrorMessage(err, 'Could not load 2024 matrix.')))
+                  .finally(() => setSeeding(false))
+              }}
+            >
+              {seeding ? 'Loading…' : 'Load April 2024 matrix'}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={seeding || requirements.length === 0}
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    'Refresh frequencies from the April 2024 template for previously seeded rules? Manual rules are left alone.',
+                  )
+                ) {
+                  return
+                }
+                setSeeding(true)
+                setError(null)
+                void trainingMatrixApi
+                  .seedRequirements({ template: 'plantexpand_2024_v1', mode: 'refresh_template' })
+                  .then((res) => {
+                    setMessage(
+                      `Refreshed template rows; created ${res.created}, left ${res.skipped_existing} non-template rules unchanged.`,
+                    )
+                    reload()
+                  })
+                  .catch((err) => setError(getApiErrorMessage(err)))
+                  .finally(() => setSeeding(false))
+              }}
+            >
+              Refresh seeded frequencies
+            </Button>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
             <Input
-              placeholder="Department"
+              placeholder="Department (e.g. Engineer)"
               value={reqForm.match_department}
               onChange={(e) => setReqForm((p) => ({ ...p, match_department: e.target.value }))}
             />
@@ -445,13 +507,53 @@ export function TrainingMatrixAdminPanel() {
               Add rule
             </Button>
           </div>
-          <ul className="text-sm space-y-1 max-h-48 overflow-y-auto">
+          <ul className="text-sm space-y-1 max-h-72 overflow-y-auto" data-testid="training-matrix-requirements-list">
             {requirements.map((r) => (
-              <li key={r.id} className="border-b border-border/50 py-1">
-                <span className="font-medium">{r.course_display_name}</span> —{' '}
-                {r.match_department || r.match_role_key} — {r.frequency_years}y
+              <li
+                key={r.id}
+                className="flex flex-wrap items-center gap-2 border-b border-border/50 py-1.5"
+              >
+                <span className="min-w-[12rem] flex-1 font-medium">{r.course_display_name}</span>
+                <span className="text-muted-foreground">
+                  {r.match_department || r.match_role_key || '—'}
+                </span>
+                <select
+                  className="h-8 rounded-md border border-border bg-card px-2 text-sm"
+                  value={r.frequency_years}
+                  aria-label={`Frequency for ${r.course_display_name}`}
+                  onChange={(e) => {
+                    const years = Number(e.target.value)
+                    void trainingMatrixApi
+                      .updateRequirement(r.id, { frequency_years: years })
+                      .then(reload)
+                      .catch((err) => setError(getApiErrorMessage(err)))
+                  }}
+                >
+                  <option value={1}>1y</option>
+                  <option value={2}>2y</option>
+                  <option value={3}>3y</option>
+                </select>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    if (!window.confirm(`Delete rule for ${r.course_display_name}?`)) return
+                    void trainingMatrixApi
+                      .deleteRequirement(r.id)
+                      .then(reload)
+                      .catch((err) => setError(getApiErrorMessage(err)))
+                  }}
+                >
+                  Delete
+                </Button>
               </li>
             ))}
+            {requirements.length === 0 ? (
+              <li className="text-muted-foreground py-2">
+                No rules yet. Use “Load April 2024 matrix” or add a rule manually.
+              </li>
+            ) : null}
           </ul>
         </CardContent>
       </Card>
