@@ -269,30 +269,30 @@ export interface PartnerWebhookSubscriptionInput {
 }
 
 export const partnerWebhooksApi = {
-  listEvents: () => apiRequest<{ events: string[] }>('/partner-webhooks/events'),
+  listEvents: () => apiRequest<{ events: string[] }>('/api/v1/partner-webhooks/events'),
 
   listSubscriptions: (skip = 0, limit = 50) =>
     apiRequest<{ items: PartnerWebhookSubscription[]; total: number }>(
-      `/partner-webhooks/subscriptions?skip=${skip}&limit=${limit}`,
+      `/api/v1/partner-webhooks/subscriptions?skip=${skip}&limit=${limit}`,
     ),
 
   createSubscription: (
     data: Required<Pick<PartnerWebhookSubscriptionInput, 'url' | 'secret' | 'events'>> &
       Pick<PartnerWebhookSubscriptionInput, 'name' | 'is_active'>,
   ) =>
-    apiRequest<PartnerWebhookSubscription>('/partner-webhooks/subscriptions', {
+    apiRequest<PartnerWebhookSubscription>('/api/v1/partner-webhooks/subscriptions', {
       method: 'POST',
       body: data,
     }),
 
   updateSubscription: (id: number, data: PartnerWebhookSubscriptionInput) =>
-    apiRequest<PartnerWebhookSubscription>(`/partner-webhooks/subscriptions/${id}`, {
+    apiRequest<PartnerWebhookSubscription>(`/api/v1/partner-webhooks/subscriptions/${id}`, {
       method: 'PATCH',
       body: data,
     }),
 
   deleteSubscription: (id: number) =>
-    apiRequest<void>(`/partner-webhooks/subscriptions/${id}`, { method: 'DELETE' }),
+    apiRequest<void>(`/api/v1/partner-webhooks/subscriptions/${id}`, { method: 'DELETE' }),
 }
 
 // Portal Submissions
