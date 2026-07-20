@@ -3,15 +3,16 @@
 ## 1) Summary
 - **Feature / Change name:** Training Matrix weekly Atlas upload ops — last-upload audit, overwrite confirm, collapsible Admin, Friday in-app reminder
 - **User goal (1–2 lines):** Make the weekly Atlas CSV upload robust and auditable: retain the latest snapshot until the next upload overwrites it, confirm before overwrite, show who/when last uploaded, collapse Admin sections so the frequency matrix is usable, and remind admins every Friday via the standard notification bell.
-- **In scope:** Import response uploader fields; Admin last-upload panel + overwrite confirm + CSV-only messaging; collapsible Admin sections + taller frequency grid; Compliance gaps last-upload stamp + clearer % copy; Celery Friday in-app reminder to admins (deduped per ISO week)
-- **Out of scope:** Accepting XLSX; changing due-date / compliance math; fixing sparse Atlas Passed data that drives 0% fully-compliant; Planet Mark
+- **In scope:** Import response uploader fields; Admin last-upload panel + overwrite confirm + CSV-only messaging; collapsible Admin sections + taller frequency grid; Compliance gaps last-upload stamp + clearer % copy; Celery Friday in-app reminder to admins (deduped per ISO week); Employee Portal My Work personal training compliance (OK / needs attention / due dates / Open Atlas)
+- **Out of scope:** Accepting XLSX; changing due-date / compliance math; fixing sparse Atlas Passed data that drives 0% fully-compliant; Planet Mark; deep-linking to a specific Atlas course page (hub login URL only)
 - **Feature flag / kill switch:** Reminder admin role via `TRAINING_MATRIX_UPLOAD_ADMIN_ROLE` (default `admin`); disable by removing the beat entry / not running the worker
 
 ## 2) Impact Map (what changed)
 - **Frontend:**
   - `trainingMatrix/TrainingMatrixPanels.tsx` — collapsible Admin sections; last-upload stamp; overwrite confirm; taller frequency matrix; gap board last-upload line + clearer compliance % label
   - `api/trainingMatrixClient.ts` — `uploaded_by_*` fields on `TrainingMatrixImport`
-  - Workforce shell tests mock `getLatestImport`
+  - `pages/PortalWork.tsx` + `pages/Portal.tsx` — employee portal My Work training compliance section + home badge for training gaps
+  - Workforce shell tests mock `getLatestImport`; PortalWork tests cover Atlas CTA
 - **Backend:**
   - `src/api/schemas/training_matrix.py` — `uploaded_by_user_id` / `uploaded_by_name` / `uploaded_by_email` on import response
   - `src/api/routes/training_matrix.py` — `_import_response` join to User; clearer non-CSV validation message

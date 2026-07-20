@@ -14,7 +14,7 @@ import {
 import { BrandMarkTile } from '../components/BrandMark'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
-import { documentCampaignApi } from '../api/client'
+import { documentCampaignApi, trainingMatrixApi } from '../api/client'
 import { Card } from '../components/ui/Card'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
 import { cn } from '../helpers/utils'
@@ -24,6 +24,7 @@ export default function Portal() {
   const { user, logout } = usePortalAuth()
   const { announce } = useLiveAnnouncer()
   const [pendingCampaignCount, setPendingCampaignCount] = useState(0)
+  const [trainingGapCount, setTrainingGapCount] = useState(0)
 
   useEffect(() => {
     announce('Employee portal loaded')
@@ -39,7 +40,17 @@ export default function Portal() {
       .catch(() => {
         setPendingCampaignCount(0)
       })
+    void trainingMatrixApi
+      .myTraining()
+      .then((res) => {
+        setTrainingGapCount((res.items || []).filter((row) => row.status !== 'compliant').length)
+      })
+      .catch(() => {
+        setTrainingGapCount(0)
+      })
   }, [])
+
+  const myWorkBadgeCount = pendingCampaignCount + trainingGapCount
 
   const handleLogout = () => {
     logout()
@@ -126,9 +137,9 @@ export default function Portal() {
             data-testid="portal-work-btn"
             type="button"
             aria-label={
-              pendingCampaignCount > 0
-                ? `My Work — ${pendingCampaignCount} pending campaign assignments`
-                : 'My Work — assigned actions and reading'
+              myWorkBadgeCount > 0
+                ? `My Work — ${myWorkBadgeCount} items needing attention`
+                : 'My Work — assigned actions, reading, and training'
             }
             onClick={() => navigate('/portal/work')}
             className={cn(
@@ -138,14 +149,14 @@ export default function Portal() {
           >
             <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center relative">
               <Briefcase className="w-7 h-7 text-primary" />
-              {pendingCampaignCount > 0 && (
+              {myWorkBadgeCount > 0 && (
                 <span
                   data-testid="portal-work-pending-badge"
                   className="absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-xs font-semibold motion-safe:animate-pulse"
                   aria-hidden="true"
                 >
                   <Bell className="w-3 h-3" />
-                  <span className="sr-only">{pendingCampaignCount}</span>
+                  <span className="sr-only">{myWorkBadgeCount}</span>
                 </span>
               )}
             </div>
@@ -154,17 +165,17 @@ export default function Portal() {
                 <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
                   My Work
                 </h3>
-                {pendingCampaignCount > 0 && (
+                {myWorkBadgeCount > 0 && (
                   <span
                     data-testid="portal-work-pending-count"
                     className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-destructive/10 text-destructive text-xs font-semibold"
                   >
-                    {pendingCampaignCount}
+                    {myWorkBadgeCount}
                   </span>
                 )}
               </div>
               <p className="text-sm text-muted-foreground">
-                Assigned actions, pending reading, profile link
+                Assigned actions, pending reading, training compliance
               </p>
             </div>
             <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:translate-x-1 transition-transform" />
