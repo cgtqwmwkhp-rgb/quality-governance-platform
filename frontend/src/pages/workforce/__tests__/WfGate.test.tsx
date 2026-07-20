@@ -33,6 +33,7 @@ vi.mock('../../../api/client', () => ({
     listInductions,
     listEngineers,
     listAssetTypes,
+    createAssessment: vi.fn(),
     getAssessment,
     startAssessment,
     getInduction,
@@ -51,6 +52,10 @@ vi.mock('../../../api/client', () => ({
     }
     return fallback
   },
+}))
+
+vi.mock('../../builderMapAssistApi', () => ({
+  fetchTemplateStandardsCoverage: vi.fn(),
 }))
 
 describe('WF-GATE Assessments filters', () => {
@@ -126,6 +131,52 @@ describe('WF-GATE Assessments filters', () => {
       expect(screen.getByTestId('assessments-employees-empty')).toBeInTheDocument(),
     )
     expect(screen.getByLabelText('workforce.common.engineer')).toBeDisabled()
+  })
+
+  it('does not present a failed employee lookup as an empty roster', async () => {
+    listEngineers.mockRejectedValue(new Error('engineers unavailable'))
+
+    const Assessments = (await import('../Assessments')).default
+    render(
+      <MemoryRouter>
+        <Assessments />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('assessments-employees-unavailable')).toHaveTextContent(
+      /could not be loaded/i,
+    )
+    expect(screen.queryByTestId('assessments-employees-empty')).not.toBeInTheDocument()
+    expect(screen.getByTestId('assessments-lookup-warning')).toHaveTextContent(
+      /labels could not be loaded/i,
+    )
+  })
+})
+
+describe('WF-GATE AssessmentCreate required lookups', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    listAssetTypes.mockResolvedValue({ data: { items: [] } })
+    listEngineers.mockResolvedValue({ data: { items: [{ id: 42, employee_number: 'E-42' }] } })
+    listTemplates.mockResolvedValue({ data: { items: [{ id: 1, name: 'Template A' }] } })
+  })
+
+  it('fails closed and identifies unavailable required form data', async () => {
+    listTemplates.mockRejectedValue(new Error('templates unavailable'))
+    listEngineers.mockRejectedValue(new Error('engineers unavailable'))
+
+    const AssessmentCreate = (await import('../AssessmentCreate')).default
+    render(
+      <MemoryRouter>
+        <AssessmentCreate />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('assessment-create-templates-unavailable')).toBeInTheDocument()
+    expect(screen.getByTestId('assessment-create-employees-unavailable')).toBeInTheDocument()
+    expect(screen.getByLabelText(/workforce\.common\.template/i)).toBeDisabled()
+    expect(screen.getByLabelText(/workforce\.common\.engineer/i)).toBeDisabled()
+    expect(screen.getByRole('button', { name: /workforce\.assessments\.create_start/i })).toBeDisabled()
   })
 })
 
