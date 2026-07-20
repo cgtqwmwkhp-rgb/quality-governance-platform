@@ -37,6 +37,7 @@ from src.domain.models.document import (
 )
 from src.domain.models.location import Location
 from src.domain.models.user import User
+from src.domain.services.audit_service import record_audit_event
 from src.domain.services.document_ai_service import VectorSearchService
 from src.domain.services.document_campaign_service import DocumentCampaignService
 from src.domain.services.document_category_service import allocate_pel_doc_ref
@@ -47,7 +48,6 @@ from src.domain.services.document_library_campaign_offer_service import (
     offer_campaign_from_document,
 )
 from src.domain.services.document_library_disposal_service import execute_disposal, list_disposal_candidates
-from src.domain.services.audit_service import record_audit_event
 from src.domain.services.document_library_filing_service import (
     assert_library_read_access,
     filing_defaults_for_category,
