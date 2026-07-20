@@ -7,7 +7,8 @@ import types
 
 import pytest
 
-from src.api.routes.uvdb import UVDB_B2_SECTIONS, export_protocol_pack
+from src.api.routes.uvdb import export_protocol_pack
+from src.domain.uvdb.protocol_b2_v118 import UVDB_B2_SECTIONS
 
 
 @pytest.mark.asyncio
@@ -18,12 +19,16 @@ async def test_export_protocol_pack_json_attachment() -> None:
 
     assert response.media_type == "application/json"
     assert "attachment" in response.headers["content-disposition"]
-    assert response.headers["x-uvdb-protocol-pack-version"] == "uvdb-protocol-1.0"
+    assert response.headers["x-uvdb-protocol-pack-version"] == "uvdb-protocol-1.1"
 
     pack = json.loads(response.body.decode("utf-8"))
-    assert pack["pack_version"] == "uvdb-protocol-1.0"
+    assert pack["pack_version"] == "uvdb-protocol-1.1"
     assert pack["exported_by"] == "auditor@example.com"
+    assert pack["total_sections"] == 15
     assert pack["total_sections"] == len(UVDB_B2_SECTIONS)
+    assert pack["version"] == "11.8-target"
+    assert pack["content_coverage"]["status"] == "partial"
+    assert pack["content_coverage"]["loaded_sections"] == ["1", "2", "12", "13", "14", "15"]
     assert pack["follow_on_exports"]["branded_pdf"] == "not_available"
 
 

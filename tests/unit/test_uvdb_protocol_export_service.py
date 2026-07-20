@@ -22,6 +22,8 @@ SAMPLE_SECTIONS = [
         "title": "System Assurance and Compliance",
         "max_score": 21,
         "iso_mapping": {"9001": "4-5"},
+        "content_status": "loaded",
+        "title_provisional": False,
         "questions": [
             {
                 "number": "1.1",
@@ -39,9 +41,10 @@ def test_build_protocol_structure_payload_matches_protocol_contract() -> None:
     payload = build_protocol_structure_payload(SAMPLE_SECTIONS)
 
     assert payload["protocol_name"] == "UVDB Verify B2 Audit Protocol"
-    assert payload["version"] == "V11.2"
+    assert payload["version"] == "11.8-target"
     assert payload["reference"] == "UVDB-QS-003"
     assert payload["total_sections"] == 1
+    assert payload["content_coverage"]["status"] == "partial"
     assert payload["sections"] == SAMPLE_SECTIONS
     assert "3" in payload["scoring"]
     assert payload["iso_cross_mapping"]["1.1"].startswith("ISO 9001")
@@ -93,6 +96,8 @@ def test_build_protocol_export_xlsx_contains_sections_and_questions() -> None:
         "title",
         "max_score",
         "question_count",
+        "content_status",
+        "title_provisional",
         "iso_mapping",
     )
     assert sections_rows[1][0] == "1"
