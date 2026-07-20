@@ -3,7 +3,9 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from src.api.schemas.validators import reject_future_statutory_datetime, sanitize_field
 
 
 class NearMissBase(BaseModel):
@@ -44,11 +46,21 @@ class NearMissCreate(NearMissBase):
 
     attachments: Optional[str] = None  # JSON array of file URLs
 
+    @field_validator("description", "location", "contract", "reporter_name", mode="before")
+    @classmethod
+    def _sanitize(cls, v: str) -> str:
+        return sanitize_field(v)
+
+    @field_validator("event_date")
+    @classmethod
+    def event_date_not_future(cls, v: datetime) -> datetime:
+        return reject_future_statutory_datetime(v)
+
 
 class NearMissUpdate(BaseModel):
     """Schema for updating a Near Miss."""
 
-    description: Optional[str] = None
+    description: Optional[str] = Field(None, min_length=10)
     potential_consequences: Optional[str] = None
     preventive_action_suggested: Optional[str] = None
 
@@ -61,10 +73,29 @@ class NearMissUpdate(BaseModel):
     corrective_actions_taken: Optional[str] = None
 
     risk_category: Optional[str] = None
-    potential_severity: Optional[str] = None
+    potential_severity: Optional[str] = Field(None, pattern="^(low|medium|high|critical)$")
     asset_id: Optional[int] = Field(None, description="Linked Asset registry id (null clears link)")
     asset_number: Optional[str] = None
     asset_type: Optional[str] = None
+    event_date: Optional[datetime] = None
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def _sanitize_description(cls, v: Optional[str]) -> Optional[str]:
+        return sanitize_field(v)
+
+    @field_validator("event_date")
+    @classmethod
+    def event_date_not_future(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is None:
+            return v
+        return reject_future_statutory_datetime(v)
+
+    @model_validator(mode="after")
+    def at_least_one_field(self) -> "NearMissUpdate":
+        if not self.model_fields_set:
+            raise ValueError("At least one field must be provided for update")
+        return self
 
 
 class NearMissResponse(BaseModel):

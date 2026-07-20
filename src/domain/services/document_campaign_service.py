@@ -16,6 +16,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
+from src.core.pagination import PaginationInput, paginate
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.document import Document
 from src.domain.models.document_campaign import (
@@ -391,6 +392,30 @@ class DocumentCampaignService:
             .order_by(DocumentCampaign.created_at.desc())
         )
         return list(result.scalars().all())
+
+    async def list_campaigns(
+        self,
+        *,
+        tenant_id: int,
+        document_id: Optional[int] = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Tuple[List[DocumentCampaign], int]:
+        """List campaigns for a tenant, optionally scoped to one document."""
+        query = (
+            select(DocumentCampaign)
+            .where(DocumentCampaign.tenant_id == tenant_id)
+            .order_by(DocumentCampaign.created_at.desc(), DocumentCampaign.id.desc())
+        )
+        if document_id is not None:
+            query = query.where(DocumentCampaign.document_id == document_id)
+
+        result = await paginate(
+            self.db,
+            query,
+            PaginationInput(page=page, page_size=page_size),
+        )
+        return list(result.items), int(result.total)
 
     async def _compliance_summary(self, campaign_id: int) -> Dict[str, Any]:
         result = await self.db.execute(
@@ -2381,7 +2406,8 @@ class DocumentCampaignService:
             pdf.ln()
 
         filename = f"campaign-{campaign.id}-evidence-pack.pdf"
-        return pdf.output(), filename
+        # fpdf2 returns bytearray; Starlette StreamingResponse requires bytes (ACT-044).
+        return bytes(pdf.output()), filename
 
     # ==================== Re-ack on new version (O-10) ====================
 

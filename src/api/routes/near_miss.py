@@ -92,6 +92,12 @@ async def _get_near_miss_or_404(db, near_miss_id: int, current_user: CurrentUser
     return near_miss
 
 
+@router.post(
+    "",
+    response_model=NearMissResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
 @router.post("/", response_model=NearMissResponse, status_code=status.HTTP_201_CREATED)
 async def create_near_miss(
     data: NearMissCreate,
@@ -158,6 +164,7 @@ async def create_near_miss(
     return near_miss
 
 
+@router.get("", response_model=NearMissListResponse, include_in_schema=False)
 @router.get("/", response_model=NearMissListResponse)
 async def list_near_misses(
     db: DbSession,

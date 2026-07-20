@@ -589,17 +589,22 @@ async def list_campaigns_for_document(
 
 @router.get("/campaigns", response_model=CampaignListResponse)
 async def list_campaigns(
-    document_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    document_id: Optional[int] = Query(None, description="Optional document scope filter"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
 ):
-    """Alias: list campaigns for a document (wrapped)."""
+    """List campaigns for the tenant; optional document_id filter (ACT-045)."""
     service = DocumentCampaignService(db)
-    campaigns = await service.list_campaigns_for_document(
-        tenant_id=require_tenant_id(current_user.tenant_id), document_id=document_id
+    campaigns, total = await service.list_campaigns(
+        tenant_id=require_tenant_id(current_user.tenant_id),
+        document_id=document_id,
+        page=page,
+        page_size=page_size,
     )
     items = [_campaign_to_response(c) for c in campaigns]
-    return CampaignListResponse(items=items, total=len(items))
+    return CampaignListResponse(items=items, total=total)
 
 
 # =============================================================================
