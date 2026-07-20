@@ -89,6 +89,25 @@ class TrainingMatrixRequirementListResponse(BaseModel):
     total: int
 
 
+class TrainingMatrixRequirementSeedRequest(BaseModel):
+    """Populate DB requirement rows from a named SoR template (editable after)."""
+
+    template: str = Field(default="plantexpand_2024_v1")
+    mode: str = Field(
+        default="fill_missing",
+        description="fill_missing | refresh_template",
+    )
+
+
+class TrainingMatrixRequirementSeedResponse(BaseModel):
+    template_id: str
+    template_label: str
+    created: int
+    skipped_existing: int
+    unmatched_modules: List[str]
+    created_without_atlas_match: int
+
+
 class TrainingMatrixComplianceRow(BaseModel):
     atlas_name: str
     department: Optional[str] = None

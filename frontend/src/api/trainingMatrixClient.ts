@@ -119,6 +119,39 @@ export function createTrainingMatrixApi(api: AxiosInstance) {
       api
         .post<TrainingMatrixRequirement>('/api/v1/training-matrix/requirements', body)
         .then((r) => r.data),
+    updateRequirement: (
+      id: number,
+      body: Partial<
+        Pick<
+          TrainingMatrixRequirement,
+          | 'match_department'
+          | 'match_role_key'
+          | 'course_display_name'
+          | 'frequency_years'
+          | 'is_active'
+          | 'notes'
+        >
+      >,
+    ) =>
+      api
+        .patch<TrainingMatrixRequirement>(`/api/v1/training-matrix/requirements/${id}`, body)
+        .then((r) => r.data),
+    deleteRequirement: (id: number) =>
+      api.delete(`/api/v1/training-matrix/requirements/${id}`).then(() => undefined),
+    seedRequirements: (body?: { template?: string; mode?: 'fill_missing' | 'refresh_template' }) =>
+      api
+        .post<{
+          template_id: string
+          template_label: string
+          created: number
+          skipped_existing: number
+          unmatched_modules: string[]
+          created_without_atlas_match: number
+        }>('/api/v1/training-matrix/requirements/seed', {
+          template: body?.template ?? 'plantexpand_2024_v1',
+          mode: body?.mode ?? 'fill_missing',
+        })
+        .then((r) => r.data),
     listCourses: () =>
       api
         .get<TrainingMatrixCourseOption[]>('/api/v1/training-matrix/courses')
