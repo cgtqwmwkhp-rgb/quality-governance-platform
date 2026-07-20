@@ -79,7 +79,18 @@
 - [x] CUJ-02: Operator expands section 3 → sees pending PDF message (no fake questions)
 - [x] CUJ-03: Operator downloads protocol JSON/XLSX → pack includes 15 sections + `content_coverage`
 
-## 7) Still needs v11.8 PDF (Wave 2)
+## 7) Observability & Ops
+
+- **Logs / Metrics / Alerts:** No change — static SSOT module; existing UVDB route logging unchanged
+- **Runbook updates:** N/A (Wave 2 PDF ingest will extend ops notes)
+
+## 8) Release Plan (Local → Staging → Canary → Prod)
+
+- **Staging verification:** Open `/uvdb`; confirm 15-section layout, partial-load banner, pending section 3 card
+- **Canary plan:** N/A — additive metadata; no feature flag
+- **Prod post-deploy checks:** Protocol JSON/XLSX export includes `content_coverage`; version shows `11.8-target`
+
+## 9) Still needs v11.8 PDF (Wave 2)
 
 - Official section titles pin for sections 3–11 (currently `title_provisional=true`)
 - Full question / sub-question / evidence / scoring text for sections 3–11
@@ -87,16 +98,24 @@
 - ISO cross-mapping rows for pending-section questions
 - `content_coverage.status` transition from `partial` → `complete`
 
-## 8) Rollback Plan
+## 10) Rollback Plan (Mandatory)
 
-- **Trigger:** Incorrect section ordering; export pack regression; FE misstates coverage
-- **Steps:** Revert this PR deploy
+- **Rollback trigger:** Incorrect section ordering; export pack regression; FE misstates coverage
+- **Rollback steps:** Revert this PR deploy
 - **Owner:** David Harris / Platform ops
+
+## 11) Evidence Pack (links)
+
+- CI run(s): Linked on PR checks
+- Unit/integration/Vitest paths listed in Testing Evidence above
 
 ---
 
-# Gate Checklist
+# Gate Checklist (must be complete before merge)
 
 - [x] **Gate 0:** Scope lock + AC defined + Change Ledger complete
-- [ ] **Gate 2:** CI green
+- [x] **Gate 1:** API/Data contracts — additive `content_coverage` on existing UVDB routes
+- [ ] **Gate 2:** CI green (lint/type/build/tests)
 - [ ] **Gate 3:** Staging verification
+- [ ] **Gate 4:** Canary (N/A — skip when not used)
+- [x] **Gate 5:** Production verification plan ready
