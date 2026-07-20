@@ -85,7 +85,9 @@ class TestUvdbApiContracts:
         assert response.status_code == 200
         payload = response.json()
         assert "sections" in payload
-        assert "total_sections" in payload
+        assert payload["total_sections"] == 15
+        assert payload["content_coverage"]["status"] == "partial"
+        assert payload["content_coverage"]["loaded_sections"] == ["1", "2", "12", "13", "14", "15"]
 
     async def test_uvdb_audits_and_iso_mapping_contracts(self, client, auth_headers):
         audits_response = await client.get("/api/v1/uvdb/audits?skip=0&limit=5", headers=auth_headers)
