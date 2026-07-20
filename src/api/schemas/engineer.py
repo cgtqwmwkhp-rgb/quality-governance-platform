@@ -146,6 +146,9 @@ class EngineerListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+    active_engineers: int = 0
+    linked_active_engineers: int = 0
+    linked_coverage_percent: float = 0.0
 
 
 # ============== Competency Record Schema ==============
