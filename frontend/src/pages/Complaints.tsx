@@ -80,6 +80,31 @@ const EMPTY_FORM: ComplaintCreate = {
   alleged_event_at: null,
 }
 
+function freshComplaintForm(): ComplaintCreate {
+  return { ...EMPTY_FORM, received_date: new Date().toISOString().slice(0, 16) }
+}
+
+function isComplaintCreateDirty(
+  form: ComplaintCreate,
+  extras: { subjectEmail: string; pendingFiles: File[] },
+): boolean {
+  if (extras.pendingFiles.length > 0) return true
+  if (extras.subjectEmail.trim()) return true
+  if (form.title.trim() || form.description.trim()) return true
+  if (
+    form.complainant_name.trim() ||
+    form.complainant_email?.trim() ||
+    form.complainant_phone?.trim()
+  ) {
+    return true
+  }
+  if (form.complainant_company?.trim() || form.subject_name?.trim()) return true
+  if (form.contract_id != null) return true
+  if (form.complaint_type !== 'other' || form.priority !== 'medium') return true
+  if (form.alleged_event_at) return true
+  return false
+}
+
 type OwnerFilter = 'all' | 'unassigned'
 
 const ALL_FILTER = 'all'
@@ -137,10 +162,7 @@ export default function Complaints() {
   const [assigneeById, setAssigneeById] = useState<
     Record<number, { email: string; user?: UserSearchResult }>
   >({})
-  const [formData, setFormData] = useState<ComplaintCreate>({
-    ...EMPTY_FORM,
-    received_date: new Date().toISOString().slice(0, 16),
-  })
+  const [formData, setFormData] = useState<ComplaintCreate>(freshComplaintForm)
   const [contracts, setContracts] = useState<Contract[]>([])
   const [topicOptions, setTopicOptions] = useState<{ value: string; label: string }[]>([])
   const [subjectEmail, setSubjectEmail] = useState('')
@@ -308,6 +330,30 @@ export default function Complaints() {
     }
   }
 
+  const resetCreateForm = () => {
+    setPendingFiles([])
+    setSubjectEmail('')
+    setFormError(null)
+    setFormData(freshComplaintForm())
+  }
+
+  const requestCloseCreateModal = (): boolean => {
+    if (
+      isComplaintCreateDirty(formData, { subjectEmail, pendingFiles }) &&
+      !window.confirm(
+        t(
+          'complaints.dialog.discard_confirm',
+          'Discard unsaved complaint details?',
+        ),
+      )
+    ) {
+      return false
+    }
+    resetCreateForm()
+    setShowModal(false)
+    return true
+  }
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.title.trim() || !formData.description.trim() || !formData.complainant_name.trim()) {
@@ -335,6 +381,7 @@ export default function Complaints() {
     if (!navigator.onLine) {
       await queueForSync('/api/v1/complaints', 'POST', payload)
       toast.success(t('complaints.saved_offline', 'Saved for sync when back online'))
+      resetCreateForm()
       setShowModal(false)
       setCreating(false)
       return
@@ -370,7 +417,7 @@ export default function Complaints() {
         }
         setComplaints((prev) => [created, ...prev])
         setShowModal(false)
-        setFormData({ ...EMPTY_FORM, received_date: new Date().toISOString().slice(0, 16) })
+        setFormData(freshComplaintForm())
         setSubjectEmail('')
         setPendingFiles([])
         toast.success(`Complaint ${created.reference_number} recorded`)
@@ -770,12 +817,11 @@ export default function Complaints() {
       <Dialog
         open={showModal}
         onOpenChange={(open) => {
-          setShowModal(open)
-          if (!open) {
-            setPendingFiles([])
-            setSubjectEmail('')
-            setFormError(null)
+          if (open) {
+            setShowModal(true)
+            return
           }
+          requestCloseCreateModal()
         }}
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
@@ -1119,7 +1165,7 @@ export default function Complaints() {
 
             <DialogFooter className="gap-3 pt-4">
               {formError && <p className="text-sm text-destructive">{formError}</p>}
-              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
+              <Button type="button" variant="outline" onClick={() => requestCloseCreateModal()}>
                 {t('cancel')}
               </Button>
               <Button type="submit" disabled={creating}>

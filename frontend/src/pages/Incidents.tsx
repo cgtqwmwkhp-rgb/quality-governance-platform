@@ -108,6 +108,8 @@ export default function Incidents() {
     parseListFilter(searchParams.get('severity')),
   )
   const [page, setPage] = useState(() => parseListPage(searchParams.get('page')))
+  const [listTotal, setListTotal] = useState(0)
+  const [listPages, setListPages] = useState(1)
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>(
     searchParams.get('owner') === 'unassigned' ? 'unassigned' : 'all',
   )
@@ -185,6 +187,22 @@ export default function Incidents() {
         if (!cancelled) {
           const rows = normalizeIncidentItems(response.data)
           setIncidents(rows)
+          const meta = response.data
+          if (meta && typeof meta === 'object') {
+            const total = typeof (meta as { total?: unknown }).total === 'number' ? meta.total : rows.length
+            const pagesRaw =
+              (meta as { pages?: unknown; total_pages?: unknown }).pages ??
+              (meta as { total_pages?: unknown }).total_pages
+            const pages =
+              typeof pagesRaw === 'number' && pagesRaw >= 1
+                ? pagesRaw
+                : Math.max(1, Math.ceil(total / PAGE_SIZE))
+            setListTotal(total)
+            setListPages(pages)
+          } else {
+            setListTotal(rows.length)
+            setListPages(1)
+          }
           if (
             response.data &&
             typeof response.data === 'object' &&
@@ -340,16 +358,21 @@ export default function Incidents() {
   }
 
   const deferredSearch = useDeferredValue(searchTerm)
+  const searchNeedle = deferredSearch.trim()
   const filteredIncidents = incidents.filter((i) => {
     if (statusFilter !== ALL_FILTER && i.status !== statusFilter) return false
     if (severityFilter !== ALL_FILTER && i.severity !== severityFilter) return false
-    const needle = deferredSearch.trim().toLowerCase()
+    const needle = searchNeedle.toLowerCase()
     if (!needle) return true
     return (
       (i.title || '').toLowerCase().includes(needle) ||
       (i.reference_number || '').toLowerCase().includes(needle)
     )
   })
+
+  const showingFrom = listTotal === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const showingTo =
+    listTotal === 0 ? 0 : Math.min(page * PAGE_SIZE, listTotal)
 
   if (loading) {
     return (
@@ -444,11 +467,35 @@ export default function Incidents() {
             type="text"
             placeholder={t('incidents.search_placeholder')}
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value)
+              setPage(1)
+            }}
             className="pl-10"
           />
         </div>
       </div>
+      {searchNeedle ? (
+        <p
+          className="text-sm text-muted-foreground"
+          role="status"
+          data-testid="incidents-search-scope-honesty"
+        >
+          {t(
+            'incidents.search.page_scope',
+            'Search filters this page only ({{from}}–{{to}} of {{total}}). Use pagination to scan other pages.',
+            { from: showingFrom, to: showingTo, total: listTotal },
+          )}
+        </p>
+      ) : listTotal > PAGE_SIZE ? (
+        <p className="text-sm text-muted-foreground" data-testid="incidents-list-range">
+          {t('incidents.list.range', 'Showing {{from}}–{{to}} of {{total}} incidents', {
+            from: showingFrom,
+            to: showingTo,
+            total: listTotal,
+          })}
+        </p>
+      ) : null}
 
       {/* Incidents Table */}
       <Card>
@@ -488,15 +535,28 @@ export default function Incidents() {
                     <td colSpan={ownerFilter === 'unassigned' ? 7 : 6}>
                       <EmptyState
                         icon={<AlertTriangle className="w-6 h-6 text-muted-foreground" />}
-                        title={t('incidents.empty.title', 'No incidents found')}
-                        description={t(
-                          'incidents.empty.subtitle',
-                          'Create your first incident report to get started.',
-                        )}
+                        title={
+                          searchNeedle
+                            ? t('incidents.empty.no_match', 'No matching incidents on this page')
+                            : t('incidents.empty.title', 'No incidents found')
+                        }
+                        description={
+                          searchNeedle
+                            ? t(
+                                'incidents.empty.no_match_hint',
+                                'Try another term or move to another page — search does not scan the full register yet.',
+                              )
+                            : t(
+                                'incidents.empty.subtitle',
+                                'Create your first incident report to get started.',
+                              )
+                        }
                         action={
-                          <Button variant="outline" size="sm" onClick={() => setShowModal(true)}>
-                            <Plus size={16} /> {t('incidents.new', 'Report Incident')}
-                          </Button>
+                          !searchNeedle ? (
+                            <Button variant="outline" size="sm" onClick={() => setShowModal(true)}>
+                              <Plus size={16} /> {t('incidents.new', 'Report Incident')}
+                            </Button>
+                          ) : undefined
                         }
                       />
                     </td>
@@ -506,21 +566,27 @@ export default function Incidents() {
                     <tr
                       key={incident.id}
                       data-testid="incident-row-link"
-                      className="hover:bg-surface transition-colors"
+                      className="hover:bg-surface transition-colors cursor-pointer"
                       style={{ animationDelay: `${index * 30}ms` }}
+                      onClick={() => navigate(`/incidents/${incident.id}`)}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={t('incidents.row.open', 'View incident: {{title}}', {
+                        title: incident.title || incident.reference_number,
+                      })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          navigate(`/incidents/${incident.id}`)
+                        }
+                      }}
                     >
-                      <td
-                        className="px-6 py-4 cursor-pointer"
-                        onClick={() => navigate(`/incidents/${incident.id}`)}
-                      >
+                      <td className="px-6 py-4">
                         <span className="font-mono text-sm text-primary">
                           {incident.reference_number}
                         </span>
                       </td>
-                      <td
-                        className="px-6 py-4 cursor-pointer"
-                        onClick={() => navigate(`/incidents/${incident.id}`)}
-                      >
+                      <td className="px-6 py-4">
                         <p className="text-sm font-medium text-foreground truncate max-w-xs">
                           {incident.title}
                         </p>
@@ -592,6 +658,46 @@ export default function Incidents() {
               </tbody>
             </table>
           </div>
+          {listPages > 1 ? (
+            <div
+              className="flex items-center justify-between gap-2 border-t border-border px-4 py-3"
+              data-testid="incidents-pagination"
+            >
+              <p className="text-sm text-muted-foreground">
+                {t('incidents.list.range', 'Showing {{from}}–{{to}} of {{total}} incidents', {
+                  from: showingFrom,
+                  to: showingTo,
+                  total: listTotal,
+                })}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  {t('common.previous', 'Previous')}
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  {t('a11y.page_of', 'Page {{current}} of {{total}}', {
+                    current: page,
+                    total: listPages,
+                  })}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= listPages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  {t('common.next', 'Next')}
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
