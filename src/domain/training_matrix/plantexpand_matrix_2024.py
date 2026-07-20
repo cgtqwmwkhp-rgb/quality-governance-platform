@@ -21,6 +21,14 @@ class MatrixModule(TypedDict):
     frequency_years: int
 
 
+class SeedRow(TypedDict):
+    match_department: str
+    match_role_key: None
+    module: str
+    frequency_years: int
+    template_id: str
+
+
 # Source: Plantexpand Training Matrix (2024).pdf — X marks required roles.
 PLANTEXPAND_MATRIX_2024: Final[tuple[MatrixModule, ...]] = (
     {"module": "Appraisals", "roles": ("Management",), "frequency_years": 3},
@@ -155,9 +163,9 @@ MODULE_ALIASES: Final[dict[str, tuple[str, ...]]] = {
 }
 
 
-def expand_seed_rows() -> list[dict[str, object]]:
+def expand_seed_rows() -> list[SeedRow]:
     """Expand matrix modules × roles into requirement seed rows."""
-    rows: list[dict[str, object]] = []
+    rows: list[SeedRow] = []
     for item in PLANTEXPAND_MATRIX_2024:
         for role in item["roles"]:
             rows.append(
