@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.domain.exceptions import BadRequestError, NotFoundError
+from src.domain.exceptions import BadRequestError, NotFoundError, ValidationError
 from src.domain.models.document_campaign import AssignmentStatus, CampaignAssignment, CampaignStatus
 from src.domain.models.governed_knowledge import DiscussionThreadStatus, QuizDraftStatus
 from src.domain.services.document_campaign_notifications import portal_assignment_action_url
@@ -33,6 +33,13 @@ def _scalar_one_result(item):
     """Build a fake SQLAlchemy result whose .scalar_one_or_none() returns `item`."""
     result = MagicMock()
     result.scalar_one_or_none.return_value = item
+    return result
+
+
+def _rows_result(rows):
+    """Build a fake SQLAlchemy result whose .all() returns row tuples."""
+    result = MagicMock()
+    result.all.return_value = rows
     return result
 
 
@@ -239,6 +246,31 @@ class TestExpandAudience:
 
 
 class TestCreateCampaign:
+    @pytest.mark.asyncio
+    async def test_resolves_linked_engineers_to_user_ids(self):
+        db = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([(10, 101), (20, 202)])))
+        service = DocumentCampaignService(db)
+
+        audience = await service._resolve_engineer_audience(
+            tenant_id=1,
+            audience={"engineer_ids": [20, 10, 20], "user_ids": [9]},
+        )
+
+        assert audience["user_ids"] == [9, 202, 101]
+
+    @pytest.mark.asyncio
+    async def test_rejects_unlinked_or_out_of_scope_engineer_ids_with_details(self):
+        db = SimpleNamespace(execute=AsyncMock(return_value=_rows_result([(10, 101)])))
+        service = DocumentCampaignService(db)
+
+        with pytest.raises(ValidationError) as exc_info:
+            await service._resolve_engineer_audience(
+                tenant_id=1,
+                audience={"engineer_ids": [10, 20, 30]},
+            )
+
+        assert exc_info.value.details["unlinked_engineer_ids"] == [20, 30]
+
     @pytest.mark.asyncio
     async def test_copies_quiz_from_approved_draft_and_sets_require_quiz(self):
         draft = SimpleNamespace(

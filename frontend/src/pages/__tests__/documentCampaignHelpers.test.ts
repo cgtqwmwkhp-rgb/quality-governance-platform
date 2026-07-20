@@ -23,6 +23,7 @@ describe('documentCampaignHelpers', () => {
         role: '',
         groupId: '',
         specificUserIds: '5,6',
+        engineerIds: [],
       },
     })
     expect(payload.document_id).toBe(10)
@@ -34,5 +35,24 @@ describe('documentCampaignHelpers', () => {
     expect(canLaunchCampaign(true, false)).toBe(false)
     expect(canLaunchCampaign(true, true)).toBe(true)
     expect(canLaunchCampaign(false, false)).toBe(true)
+  })
+
+  it('builds a de-duplicated workforce engineer audience payload', () => {
+    const payload = buildCampaignPayload(10, {
+      dueWithinDays: 14,
+      requireQuiz: false,
+      requireSign: true,
+      reminderHours: [24],
+      audience: {
+        audienceType: 'specific_engineers',
+        department: '',
+        role: '',
+        groupId: '',
+        specificUserIds: '',
+        engineerIds: [8, 3, 8],
+      },
+    })
+
+    expect(payload.audience_engineer_ids).toEqual([3, 8])
   })
 })

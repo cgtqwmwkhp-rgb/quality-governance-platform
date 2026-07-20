@@ -5,8 +5,10 @@ import { Download, Loader2, Megaphone, Rocket, Save } from 'lucide-react'
 import {
   documentCampaignApi,
   getApiErrorMessage,
+  workforceApi,
   type CampaignGroup,
   type DocumentCampaign,
+  type EngineerProfile,
 } from '../api/client'
 import { toast } from '../contexts/ToastContext'
 import { Button } from '../components/ui/Button'
@@ -53,10 +55,13 @@ export function DocumentCampaignPanel({ documentId, hasApprovedQuiz }: DocumentC
     role: '',
     groupId: '',
     specificUserIds: '',
+    engineerIds: [],
   })
 
   const [groups, setGroups] = useState<CampaignGroup[]>([])
   const [groupsLoading, setGroupsLoading] = useState(false)
+  const [engineers, setEngineers] = useState<EngineerProfile[]>([])
+  const [engineersLoading, setEngineersLoading] = useState(false)
   const [campaigns, setCampaigns] = useState<DocumentCampaign[]>([])
   const [campaignsLoading, setCampaignsLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -111,11 +116,25 @@ export function DocumentCampaignPanel({ documentId, hasApprovedQuiz }: DocumentC
     }
   }, [documentId, t])
 
+  const loadEngineers = useCallback(async () => {
+    setEngineersLoading(true)
+    try {
+      const response = await workforceApi.listEngineers({ page: 1, page_size: 500, is_active: true })
+      setEngineers(response.data.items ?? [])
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Unable to load the workforce roster.'))
+      setEngineers([])
+    } finally {
+      setEngineersLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     void loadGroups()
     void loadCampaigns()
     void loadReminderDefaults()
-  }, [loadGroups, loadCampaigns, loadReminderDefaults])
+    void loadEngineers()
+  }, [loadGroups, loadCampaigns, loadReminderDefaults, loadEngineers])
 
   const ensureRemindersSelected = () => {
     if (reminderHours.length === 0) {
@@ -199,6 +218,7 @@ export function DocumentCampaignPanel({ documentId, hasApprovedQuiz }: DocumentC
       { value: 'role', label: t('documents.detail.campaign_audience_role') },
       { value: 'group', label: t('documents.detail.campaign_audience_group') },
       { value: 'specific_users', label: t('documents.detail.campaign_audience_users') },
+      { value: 'specific_engineers', label: 'Selected workforce employees' },
     ]
 
   return (
@@ -343,6 +363,53 @@ export function DocumentCampaignPanel({ documentId, hasApprovedQuiz }: DocumentC
               setAudience((prev) => ({ ...prev, specificUserIds: e.target.value }))
             }
           />
+        ) : null}
+
+        {audience.audienceType === 'specific_engineers' ? (
+          <div className="max-h-56 space-y-2 overflow-y-auto rounded-md border border-border p-3">
+            <p className="text-xs text-muted-foreground">
+              Only linked employees can receive a campaign. Unlinked roster entries are shown but unavailable.
+            </p>
+            {engineersLoading ? (
+              <p className="text-sm text-muted-foreground">Loading workforce roster…</p>
+            ) : engineers.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No active workforce employees found.</p>
+            ) : (
+              engineers.map((engineer) => {
+                const linked = engineer.user_id != null
+                const selected = audience.engineerIds.includes(engineer.id)
+                const label =
+                  engineer.display_name || engineer.employee_number || engineer.job_title || `Employee #${engineer.id}`
+                return (
+                  <label
+                    key={engineer.id}
+                    className="flex items-center justify-between gap-3 text-sm"
+                    title={linked ? undefined : 'Link this employee to a QGP user before targeting them.'}
+                  >
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        disabled={!linked}
+                        onChange={() =>
+                          setAudience((previous) => ({
+                            ...previous,
+                            engineerIds: selected
+                              ? previous.engineerIds.filter((id) => id !== engineer.id)
+                              : [...previous.engineerIds, engineer.id],
+                          }))
+                        }
+                      />
+                      {label}
+                    </span>
+                    <Badge variant={linked ? 'outline' : 'secondary'}>
+                      {linked ? `Linked to user #${engineer.user_id}` : 'Not linked'}
+                    </Badge>
+                  </label>
+                )
+              })
+            )}
+          </div>
         ) : null}
       </div>
 

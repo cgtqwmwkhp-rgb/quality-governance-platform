@@ -55,6 +55,7 @@ class AudienceSpec(BaseModel):
     role: Optional[str] = None
     group_ids: List[int] = Field(default_factory=list)
     user_ids: List[int] = Field(default_factory=list)
+    engineer_ids: List[int] = Field(default_factory=list)
 
 
 class CampaignCreateRequestFE(BaseModel):
@@ -68,11 +69,12 @@ class CampaignCreateRequestFE(BaseModel):
     require_sign: bool = True
     reminder_hours: Optional[List[int]] = None
     reminder_offsets_hours: Optional[List[int]] = None
-    audience_type: Optional[str] = None  # all_users|department|role|group|specific_users
+    audience_type: Optional[str] = None  # all_users|department|role|group|specific_users|specific_engineers
     audience_department: Optional[str] = None
     audience_role: Optional[str] = None
     audience_group_id: Optional[int] = None
     audience_user_ids: Optional[List[int]] = None
+    audience_engineer_ids: Optional[List[int]] = None
     audience: Optional[AudienceSpec] = None
     competence_asset_type_id: Optional[int] = None
 
@@ -88,6 +90,7 @@ class CampaignCreateRequestFE(BaseModel):
                 role=self.audience_role if t == "role" else None,
                 group_ids=[self.audience_group_id] if t == "group" and self.audience_group_id else [],
                 user_ids=list(self.audience_user_ids or []) if t == "specific_users" else [],
+                engineer_ids=list(self.audience_engineer_ids or []) if t == "specific_engineers" else [],
             )
             if t == "all_users":
                 aud.all_users = True
