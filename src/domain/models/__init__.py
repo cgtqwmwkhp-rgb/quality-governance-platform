@@ -239,6 +239,14 @@ from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.standard import Clause, Control, Standard
 from src.domain.models.tenant import Tenant, TenantInvitation, TenantUser
 from src.domain.models.token_blacklist import TokenBlacklist
+from src.domain.models.training_matrix import (
+    TrainingMatrixCell,
+    TrainingMatrixCourse,
+    TrainingMatrixImport,
+    TrainingMatrixNameMap,
+    TrainingMatrixPerson,
+    TrainingMatrixRequirement,
+)
 from src.domain.models.user import Role, User, UserRole
 
 # UVDB Achilles Verify B2 Audit Protocol
@@ -462,6 +470,12 @@ __all__ = [
     "CompetencyRequirement",
     "CompetencyLifecycleState",
     "TrainingTicket",
+    "TrainingMatrixImport",
+    "TrainingMatrixCourse",
+    "TrainingMatrixPerson",
+    "TrainingMatrixCell",
+    "TrainingMatrixNameMap",
+    "TrainingMatrixRequirement",
     "TicketVerifyState",
     "CompetenceGapAction",
     "CompetenceGapSignalType",
