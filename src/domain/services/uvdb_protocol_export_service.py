@@ -10,20 +10,29 @@ from typing import Any, Literal
 from openpyxl import Workbook
 
 from src.domain.exceptions import BadRequestError
+from src.domain.uvdb.protocol_b2_v118 import (
+    PROTOCOL_DESCRIPTION,
+    PROTOCOL_NAME,
+    PROTOCOL_REFERENCE,
+    PROTOCOL_VERSION,
+    build_content_coverage,
+)
 
-PACK_VERSION = "uvdb-protocol-1.0"
+PACK_VERSION = "uvdb-protocol-1.1"
 SUPPORTED_FORMATS = frozenset({"json", "xlsx"})
 
 
 def build_protocol_structure_payload(sections: list[dict[str, Any]]) -> dict[str, Any]:
     """Shared protocol structure used by GET /protocol and export pack builders."""
+    coverage = build_content_coverage()
     return {
-        "protocol_name": "UVDB Verify B2 Audit Protocol",
-        "version": "V11.2",
-        "reference": "UVDB-QS-003",
-        "description": "Comprehensive supply chain qualification audit for UK utilities sector",
+        "protocol_name": PROTOCOL_NAME,
+        "version": PROTOCOL_VERSION,
+        "reference": PROTOCOL_REFERENCE,
+        "description": PROTOCOL_DESCRIPTION,
         "sections": sections,
         "total_sections": len(sections),
+        "content_coverage": coverage,
         "scoring": {
             "0": "Non-Compliant - No evidence or systems in place",
             "1": "Partially Compliant - Some evidence but gaps identified",
@@ -107,7 +116,9 @@ def build_xlsx_bytes(pack: dict[str, Any]) -> bytes:
         overview.append([export_name, status])
 
     sections_sheet = workbook.create_sheet("Sections")
-    sections_sheet.append(["section_number", "title", "max_score", "question_count", "iso_mapping"])
+    sections_sheet.append(
+        ["section_number", "title", "max_score", "question_count", "content_status", "title_provisional", "iso_mapping"]
+    )
     for section in pack.get("sections") or []:
         sections_sheet.append(
             [
@@ -115,6 +126,8 @@ def build_xlsx_bytes(pack: dict[str, Any]) -> bytes:
                 section.get("title"),
                 section.get("max_score"),
                 len(section.get("questions") or []),
+                section.get("content_status"),
+                section.get("title_provisional", False),
                 _serialize_iso_mapping(section.get("iso_mapping")),
             ]
         )

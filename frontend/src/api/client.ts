@@ -34,6 +34,7 @@ import { createLookupsApi } from './lookupsClient'
 import { createKnowledgeBankApi } from './knowledgeBankClient'
 import { createDocumentControlApi } from './documentControlClient'
 import { createDocumentCampaignApi } from './documentCampaignClient'
+import { createTrainingMatrixApi } from './trainingMatrixClient'
 import {
   beginGlobalLoading,
   endGlobalLoading,
@@ -1000,6 +1001,17 @@ export const auditsApi = createAuditsApi(api)
 // ============ Workforce API (extracted: workforceClient.ts) ============
 export const workforceApi = createWorkforceApi(api)
 export const engineersApi = createEngineersApi(api)
+
+// ============ Training Matrix API (Atlas compliance layer) ============
+export const trainingMatrixApi = createTrainingMatrixApi(api)
+export {
+  ATLAS_HUB_URL,
+  type TrainingMatrixComplianceRow,
+  type TrainingMatrixImport,
+  type TrainingMatrixImportQa,
+  type TrainingMatrixRequirement,
+  type TrainingMatrixNameMapItem,
+} from './trainingMatrixClient'
 
 // ============ Investigation Types (extracted: investigationsClient.ts) ============
 export type {

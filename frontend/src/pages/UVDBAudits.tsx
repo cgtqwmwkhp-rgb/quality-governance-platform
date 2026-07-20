@@ -62,6 +62,8 @@ interface UVDBSection {
   max_score: number
   question_count: number
   iso_mapping: Record<string, string>
+  content_status: 'loaded' | 'pending_protocol_pdf'
+  title_provisional: boolean
 }
 
 interface UVDBAudit {
@@ -119,6 +121,17 @@ interface SectionScoreData {
   audit_reference: string
 }
 
+interface UVDBContentCoverage {
+  protocol_version: string
+  status: 'partial' | 'complete'
+  total_sections: number
+  loaded_sections: string[]
+  pending_sections: string[]
+  loaded_question_count: number
+  pending_question_count: number
+  pending_reason?: string
+}
+
 interface UVDBDashboardState {
   total_audits: number
   active_audits: number
@@ -126,6 +139,7 @@ interface UVDBDashboardState {
   average_score: number
   protocol_name: string
   protocol_version: string
+  content_coverage: UVDBContentCoverage | null
 }
 
 interface UVDBIsoMappingRow {
@@ -492,12 +506,16 @@ export default function UVDBAudits() {
     max_score: number
     question_count: number
     iso_mapping: Record<string, string>
+    content_status?: 'loaded' | 'pending_protocol_pdf'
+    title_provisional?: boolean
   }): UVDBSection => ({
     number: apiSection.number,
     title: apiSection.title,
     max_score: apiSection.max_score,
     question_count: apiSection.question_count,
     iso_mapping: apiSection.iso_mapping || {},
+    content_status: apiSection.content_status ?? 'loaded',
+    title_provisional: apiSection.title_provisional ?? false,
   })
 
   const transformAudit = (apiAudit: {
@@ -579,6 +597,11 @@ export default function UVDBAudits() {
           average_score: dashboardResponse.data.summary.average_score,
           protocol_name: dashboardResponse.data.protocol.name,
           protocol_version: dashboardResponse.data.protocol.version,
+          content_coverage:
+            dashboardResponse.data.content_coverage ??
+            dashboardResponse.data.protocol.content_coverage ??
+            sectionsResponse.data.content_coverage ??
+            null,
         })
 
         const transformedSections = sectionsResponse.data.sections.map(transformSection)
@@ -813,7 +836,15 @@ export default function UVDBAudits() {
     loadData()
   }, [loadData])
 
-  const totalMaxScore = sections.reduce((sum, s) => sum + s.max_score, 0)
+  const totalMaxScore = sections.reduce(
+    (sum, section) =>
+      section.content_status === 'pending_protocol_pdf' ? sum : sum + section.max_score,
+    0,
+  )
+
+  const loadedSectionCount =
+    dashboard?.content_coverage?.loaded_sections.length ??
+    sections.filter((section) => section.content_status !== 'pending_protocol_pdf').length
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -1085,14 +1116,25 @@ export default function UVDBAudits() {
             </h2>
             <p className="text-primary-foreground/80">
               {dashboard
-                ? `${t('uvdb.protocol_version')} ${dashboard.protocol_version}`
-                : t('uvdb.protocol_version')}
+                ? t('uvdb.protocol_version_target', { version: dashboard.protocol_version })
+                : t('uvdb.protocol_version_target', { version: '—' })}
             </p>
+            {dashboard?.content_coverage?.status === 'partial' ? (
+              <div
+                className="mt-3 max-w-3xl rounded-lg bg-primary-foreground/10 px-4 py-2 text-sm text-primary-foreground/90"
+                data-testid="uvdb-protocol-partial-honesty"
+              >
+                {t('uvdb.protocol_partial_honesty', {
+                  loaded: dashboard.content_coverage.loaded_sections.length,
+                  total: dashboard.content_coverage.total_sections,
+                })}
+              </div>
+            ) : null}
           </div>
           <div className="mt-4 md:mt-0 flex items-center gap-6">
             <div className="text-center">
-              <div className="text-3xl font-bold text-primary-foreground">{sections.length}</div>
-              <div className="text-primary-foreground/80 text-sm">{t('uvdb.sections')}</div>
+              <div className="text-3xl font-bold text-primary-foreground">{loadedSectionCount}</div>
+              <div className="text-primary-foreground/80 text-sm">{t('uvdb.sections_loaded')}</div>
             </div>
             <div className="text-center">
               <div className="text-3xl font-bold text-primary-foreground">{totalMaxScore}</div>
@@ -1291,6 +1333,7 @@ export default function UVDBAudits() {
                     icon: Shield,
                     color: 'bg-blue-500',
                     sections: '1.1, 2.1-2.5, 12-13',
+                    showPendingPdfNote: false,
                   },
                   {
                     standard: 'ISO 14001:2015',
@@ -1298,6 +1341,7 @@ export default function UVDBAudits() {
                     icon: Leaf,
                     color: 'bg-emerald-500',
                     sections: '1.3, 8-11, 15',
+                    showPendingPdfNote: true,
                   },
                   {
                     standard: 'ISO 45001:2018',
@@ -1305,6 +1349,7 @@ export default function UVDBAudits() {
                     icon: HardHat,
                     color: 'bg-orange-500',
                     sections: '1.2, 3-7, 14, 15',
+                    showPendingPdfNote: true,
                   },
                   {
                     standard: 'ISO 27001:2022',
@@ -1312,6 +1357,7 @@ export default function UVDBAudits() {
                     icon: Lock,
                     color: 'bg-purple-500',
                     sections: '2.3',
+                    showPendingPdfNote: false,
                   },
                 ].map((iso) => {
                   const Icon = iso.icon
@@ -1329,6 +1375,11 @@ export default function UVDBAudits() {
                       <div className="text-sm text-foreground-secondary">
                         <span className="text-muted-foreground">UVDB Sections:</span> {iso.sections}
                       </div>
+                      {iso.showPendingPdfNote ? (
+                        <div className="mt-2 text-xs text-warning">
+                          {t('uvdb.section_pending_pdf')} (sections 3-11)
+                        </div>
+                      ) : null}
                     </div>
                   )
                 })}
@@ -1430,6 +1481,7 @@ export default function UVDBAudits() {
                 <h2 className="mt-1 text-2xl font-bold text-foreground">Verify B2 sections</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Explore protocol questions, scoring weight and standards alignment by section.
+                  Sections 3–11 are structural shells pending v11.8 PDF ingest.
                 </p>
               </div>
               {sections.length === 0 ? (
@@ -1500,15 +1552,30 @@ export default function UVDBAudits() {
                             </div>
                           )}
 
-                          <div className="text-lg font-bold text-card-foreground mb-1">
-                            Section {section.number}
+                          <div className="text-lg font-bold text-card-foreground mb-1 flex flex-wrap items-center gap-2">
+                            <span>Section {section.number}</span>
+                            {section.title_provisional ? (
+                              <span className="rounded px-2 py-0.5 text-xs font-medium bg-warning/20 text-warning">
+                                {t('uvdb.title_provisional')}
+                              </span>
+                            ) : null}
                           </div>
                           <div className="text-sm text-foreground-secondary mb-4">
                             {section.title}
                           </div>
+                          {section.content_status === 'pending_protocol_pdf' ? (
+                            <p
+                              className="mb-4 text-sm text-muted-foreground"
+                              data-testid={`uvdb-section-${section.number}-pending`}
+                            >
+                              {t('uvdb.section_pending_pdf')}
+                            </p>
+                          ) : null}
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">
-                              {section.question_count} Questions
+                              {section.content_status === 'pending_protocol_pdf'
+                                ? t('uvdb.questions_pending_pdf')
+                                : `${section.question_count} Questions`}
                             </span>
                             <div className="flex gap-1 items-center">
                               {Object.keys(section.iso_mapping).map((iso) => (
@@ -1538,7 +1605,14 @@ export default function UVDBAudits() {
 
                         {isExpanded && (
                           <div className="bg-surface rounded-b-xl border border-t-0 border-border p-4 -mt-1 animate-fade-in">
-                            {isLoadingQuestions ? (
+                            {section.content_status === 'pending_protocol_pdf' ? (
+                              <p
+                                className="text-sm text-muted-foreground text-center py-2"
+                                data-testid={`uvdb-section-${section.number}-pending`}
+                              >
+                                {t('uvdb.section_pending_pdf')}
+                              </p>
+                            ) : isLoadingQuestions ? (
                               <div className="flex items-center justify-center gap-2 py-4">
                                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                                 <span className="text-sm text-muted-foreground">
