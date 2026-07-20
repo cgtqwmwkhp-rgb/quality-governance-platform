@@ -409,8 +409,8 @@ async def _build_compliance_rows(
     eng_ids = {p.engineer_id for p in people if p.engineer_id}
     engineers: dict[int, Engineer] = {}
     if eng_ids:
-        for eng in (await db.execute(select(Engineer).where(Engineer.id.in_(eng_ids)))).scalars().all():
-            engineers[eng.id] = eng
+        for engineer_row in (await db.execute(select(Engineer).where(Engineer.id.in_(eng_ids)))).scalars().all():
+            engineers[engineer_row.id] = engineer_row
 
     cells = (
         await db.execute(
@@ -428,9 +428,9 @@ async def _build_compliance_rows(
 
     rows: list[TrainingMatrixComplianceRow] = []
     for person in people:
-        eng = engineers.get(person.engineer_id) if person.engineer_id else None
-        eng_dept = (eng.department if eng and eng.department else None) or person.department
-        eng_title = eng.job_title if eng else None
+        mapped_eng: Optional[Engineer] = engineers.get(person.engineer_id) if person.engineer_id else None
+        eng_dept = (mapped_eng.department if mapped_eng and mapped_eng.department else None) or person.department
+        eng_title = mapped_eng.job_title if mapped_eng else None
         matched_reqs = [
             req
             for req in requirements
@@ -467,7 +467,7 @@ async def _build_compliance_rows(
                     atlas_name=person.atlas_name,
                     department=person.department,
                     engineer_id=person.engineer_id,
-                    engineer_display_name=(eng.display_name if eng else None),
+                    engineer_display_name=(mapped_eng.display_name if mapped_eng else None),
                     course_key=result.course_key,
                     course_display_name=result.course_display_name,
                     frequency_years=result.frequency_years,
