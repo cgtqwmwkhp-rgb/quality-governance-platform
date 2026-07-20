@@ -35,11 +35,7 @@ from src.domain.models.uvdb_achilles import (
     UVDBSection,
 )
 from src.domain.services.uvdb_protocol_export_service import build_protocol_export, build_protocol_structure_payload
-from src.domain.uvdb.protocol_b2_v118 import (
-    PROTOCOL_VERSION,
-    UVDB_B2_SECTIONS,
-    build_content_coverage,
-)
+from src.domain.uvdb.protocol_b2_v118 import PROTOCOL_VERSION, UVDB_B2_SECTIONS, build_content_coverage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
