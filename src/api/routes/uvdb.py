@@ -45,9 +45,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-
 # UVDB B2 protocol structure lives in src/domain/uvdb/protocol_b2_v118.py (SSOT).
-
 
 
 # ============ Pydantic Schemas ============
