@@ -17,6 +17,7 @@ from src.api.schemas.training_matrix import (
     TrainingMatrixImportResponse,
     TrainingMatrixMatrixUpsertRequest,
     TrainingMatrixMatrixUpsertResponse,
+    TrainingMatrixNameMapAutoMatchResponse,
     TrainingMatrixNameMapItem,
     TrainingMatrixNameMapUpsert,
     TrainingMatrixNotifyRequest,
@@ -47,7 +48,10 @@ from src.domain.services.training_matrix_compliance import (
     evaluate_compliance,
     requirement_matches_engineer,
 )
-from src.domain.services.training_matrix_import_service import persist_training_matrix_import
+from src.domain.services.training_matrix_import_service import (
+    auto_match_training_matrix_names,
+    persist_training_matrix_import,
+)
 from src.domain.services.training_matrix_parser import normalize_person_name, parse_training_matrix_csv
 from src.domain.services.training_matrix_requirement_seed import seed_plantexpand_2024_requirements
 
@@ -222,17 +226,11 @@ async def list_courses(db: DbSession, user: CurrentUser):
 async def list_name_maps(db: DbSession, user: CurrentUser):
     _require_admin(user)
     tenant_id = _tenant(user)
-    people = (
-        (
-            await db.execute(
-                select(TrainingMatrixPerson)
-                .where(TrainingMatrixPerson.tenant_id == tenant_id)
-                .order_by(TrainingMatrixPerson.atlas_name)
-            )
-        )
-        .scalars()
-        .all()
-    )
+    latest = await _latest_import(db, tenant_id)
+    people_q = select(TrainingMatrixPerson).where(TrainingMatrixPerson.tenant_id == tenant_id)
+    if latest:
+        people_q = people_q.where(TrainingMatrixPerson.last_seen_import_id == latest.id)
+    people = (await db.execute(people_q.order_by(TrainingMatrixPerson.atlas_name))).scalars().all()
     eng_ids = {p.engineer_id for p in people if p.engineer_id}
     eng_names: dict[int, str] = {}
     if eng_ids:
@@ -248,6 +246,21 @@ async def list_name_maps(db: DbSession, user: CurrentUser):
         )
         for p in people
     ]
+
+
+@router.post("/name-maps/auto-match", response_model=TrainingMatrixNameMapAutoMatchResponse)
+async def auto_match_name_maps(db: DbSession, user: CurrentUser):
+    """Re-apply saved Atlas→employee maps and unique display-name auto-match."""
+    _require_admin(user)
+    tenant_id = _tenant(user)
+    result = await auto_match_training_matrix_names(
+        db,
+        tenant_id=tenant_id,
+        mapped_by_user_id=getattr(user, "id", None),
+        latest_import_only=True,
+    )
+    await db.commit()
+    return TrainingMatrixNameMapAutoMatchResponse(**result)
 
 
 @router.put("/name-maps", response_model=TrainingMatrixNameMapItem)

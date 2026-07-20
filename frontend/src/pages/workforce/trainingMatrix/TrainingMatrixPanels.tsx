@@ -706,9 +706,11 @@ export function TrainingMatrixAdminPanel() {
   const [courses, setCourses] = useState<{ course_key: string; display_name: string }[]>([])
   const [grid, setGrid] = useState<MatrixGrid>({})
   const [savingMatrix, setSavingMatrix] = useState(false)
+  const [seedingMatrix, setSeedingMatrix] = useState(false)
+  const [autoMatching, setAutoMatching] = useState(false)
   const [latestImport, setLatestImport] = useState<TrainingMatrixImport | null>(null)
   const [openUpload, setOpenUpload] = useState(true)
-  const [openNameMap, setOpenNameMap] = useState(false)
+  const [openNameMap, setOpenNameMap] = useState(true)
   const [openMatrix, setOpenMatrix] = useState(true)
 
   const reload = () => {
@@ -785,10 +787,17 @@ export function TrainingMatrixAdminPanel() {
     try {
       const imp = await trainingMatrixApi.uploadImport(file)
       setLatestImport(imp)
-      setMessage(
+      let status =
         `Imported ${imp.person_count} people, ${imp.course_count} courses. ` +
-          `This file is now the live Atlas snapshot until the next upload.`,
-      )
+        `This file is now the live Atlas snapshot until the next upload. Name maps and frequency rules were kept.`
+      // Re-apply durable maps + unique display-name matches after every weekly overwrite.
+      try {
+        const match = await trainingMatrixApi.autoMatchNameMaps()
+        status += ` Auto-match: ${match.from_saved_maps + match.from_auto_match} linked, ${match.still_unmatched} still need a manual map.`
+      } catch {
+        // Upload already succeeded; manual Auto-match button remains available.
+      }
+      setMessage(status)
       reload()
     } catch (err) {
       setError(getApiErrorMessage(err))
@@ -806,12 +815,11 @@ export function TrainingMatrixAdminPanel() {
 
   const onSaveMatrix = () => {
     const cells: TrainingMatrixMatrixCell[] = []
-    let changed = 0
     for (const row of courseRows) {
       for (const role of BOARD_ROLES) {
         const value = grid[row.course_key]?.[role] ?? null
         const original = savedGrid[row.course_key]?.[role] ?? null
-        if (value !== original) changed += 1
+        if (value === original) continue
         cells.push({
           match_department: role,
           course_key: row.course_key,
@@ -820,13 +828,13 @@ export function TrainingMatrixAdminPanel() {
         })
       }
     }
-    if (changed === 0) {
+    if (cells.length === 0) {
       setMessage('No changes to save.')
       return
     }
     if (
       !window.confirm(
-        `Save ${changed} cell change${changed === 1 ? '' : 's'} to the frequency matrix? This can move people into or out of overdue for the affected department(s) and course(s).`,
+        `Save ${cells.length} cell change${cells.length === 1 ? '' : 's'} to the frequency matrix? This can move people into or out of overdue for the affected department(s) and course(s).`,
       )
     ) {
       return
@@ -844,7 +852,49 @@ export function TrainingMatrixAdminPanel() {
       .finally(() => setSavingMatrix(false))
   }
 
+  const onAutoMatchNames = () => {
+    setAutoMatching(true)
+    setError(null)
+    setMessage(null)
+    void trainingMatrixApi
+      .autoMatchNameMaps()
+      .then((res) => {
+        setMessage(
+          `Name maps restored: ${res.from_saved_maps} from saved maps, ${res.from_auto_match} auto-matched by display name, ${res.already_mapped} already linked, ${res.still_unmatched} still unmatched.`,
+        )
+        setOpenNameMap(true)
+        reload()
+      })
+      .catch((err) => setError(getApiErrorMessage(err, 'Could not auto-match Atlas names.')))
+      .finally(() => setAutoMatching(false))
+  }
+
+  const onRestoreFrequencies = () => {
+    if (
+      !window.confirm(
+        'Restore the April 2024 Plantexpand frequency matrix into the editable grid? Existing seeded cells are refreshed; manual cells are left alone. You can still edit after.',
+      )
+    ) {
+      return
+    }
+    setSeedingMatrix(true)
+    setError(null)
+    setMessage(null)
+    void trainingMatrixApi
+      .seedRequirements({ template: 'plantexpand_2024_v1', mode: 'refresh_template' })
+      .then((res) => {
+        setMessage(
+          `Frequencies restored from ${res.template_label}: ${res.created} created, ${res.skipped_existing} kept, ${res.unmatched_modules.length} modules without an Atlas course match.`,
+        )
+        setOpenMatrix(true)
+        reload()
+      })
+      .catch((err) => setError(getApiErrorMessage(err, 'Could not restore the frequency matrix.')))
+      .finally(() => setSeedingMatrix(false))
+  }
+
   const unmatched = nameMaps.filter((m) => !m.mapped)
+  const mappedCount = nameMaps.length - unmatched.length
 
   return (
     <div className="space-y-4" data-testid="training-matrix-admin">
@@ -902,10 +952,22 @@ export function TrainingMatrixAdminPanel() {
       <AdminSection
         testId="training-matrix-admin-namemap"
         title="Name mapping (Atlas → Employee)"
-        subtitle={`Unmatched: ${unmatched.length}. Auto-match uses display name; resolve the rest here.`}
+        subtitle={`Mapped ${mappedCount}/${nameMaps.length}. Unmatched: ${unmatched.length}. Saved maps survive weekly uploads; use Auto-match to restore.`}
         open={openNameMap}
         onToggle={() => setOpenNameMap((v) => !v)}
       >
+        <div className="flex flex-wrap gap-2 mb-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={autoMatching || !nameMapsLoaded}
+            onClick={onAutoMatchNames}
+            data-testid="training-matrix-auto-match"
+          >
+            {autoMatching ? 'Matching…' : 'Restore / auto-match names'}
+          </Button>
+        </div>
         <div className="space-y-2 max-h-64 overflow-y-auto">
           {unmatched.slice(0, 40).map((row) => (
             <div key={row.atlas_name} className="flex flex-wrap items-center gap-2 text-sm">
@@ -948,17 +1010,32 @@ export function TrainingMatrixAdminPanel() {
         onToggle={() => setOpenMatrix((v) => !v)}
         headerRight={
           openMatrix ? (
-            <Button
-              type="button"
-              disabled={savingMatrix || courseRows.length === 0}
-              onClick={onSaveMatrix}
-              data-testid="training-matrix-save-matrix"
-            >
-              {savingMatrix ? 'Saving…' : 'Save matrix'}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={seedingMatrix}
+                onClick={onRestoreFrequencies}
+                data-testid="training-matrix-restore-frequencies"
+              >
+                {seedingMatrix ? 'Restoring…' : 'Restore April 2024 frequencies'}
+              </Button>
+              <Button
+                type="button"
+                disabled={savingMatrix || courseRows.length === 0}
+                onClick={onSaveMatrix}
+                data-testid="training-matrix-save-matrix"
+              >
+                {savingMatrix ? 'Saving…' : 'Save matrix'}
+              </Button>
+            </div>
           ) : null
         }
       >
+        <p className="text-xs text-muted-foreground mb-2">
+          If the grid looks empty after an upload, click <strong>Restore April 2024 frequencies</strong> —
+          weekly CSV overwrite keeps rules in the database, but a bad Save could clear cells.
+        </p>
         <div className="overflow-auto max-h-[min(70vh,48rem)] border border-border rounded-md">
           <table className="w-full text-sm" data-testid="training-matrix-matrix-grid">
             <thead>
