@@ -40,6 +40,7 @@ export default function Training() {
   const [engineerMap, setEngineerMap] = useState<Record<number, string>>({})
   const [templateMap, setTemplateMap] = useState<Record<number, string>>({})
   const [assetTypes, setAssetTypes] = useState<AssetType[]>([])
+  const [lookupWarning, setLookupWarning] = useState<string | null>(null)
 
   useEffect(() => {
     workforceApi
@@ -52,7 +53,11 @@ export default function Training() {
         }
         setEngineerMap(map)
       })
-      .catch(() => {})
+      .catch(() => {
+        setLookupWarning(
+          'Some engineer, template, or asset labels could not be loaded. Training records remain available by ID.',
+        )
+      })
     auditsApi
       .listTemplates(1, 500, { is_published: true })
       .then((res) => {
@@ -62,11 +67,19 @@ export default function Training() {
         }
         setTemplateMap(map)
       })
-      .catch(() => {})
+      .catch(() => {
+        setLookupWarning(
+          'Some engineer, template, or asset labels could not be loaded. Training records remain available by ID.',
+        )
+      })
     workforceApi
       .listAssetTypes()
       .then((res) => setAssetTypes(res.data?.items || []))
-      .catch(() => {})
+      .catch(() => {
+        setLookupWarning(
+          'Some engineer, template, or asset labels could not be loaded. Training records remain available by ID.',
+        )
+      })
   }, [])
 
   useEffect(() => {
@@ -195,6 +208,14 @@ export default function Training() {
           {error && (
             <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
               {error}
+            </div>
+          )}
+          {lookupWarning && (
+            <div
+              className="mb-4 p-3 rounded-lg bg-amber-500/10 text-amber-900 text-sm"
+              data-testid="training-lookup-warning"
+            >
+              {lookupWarning}
             </div>
           )}
           {loading ? (

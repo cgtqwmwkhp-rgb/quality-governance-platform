@@ -196,6 +196,22 @@ describe('WF-GATE Training filters', () => {
 
     expect(screen.getByRole('button', { name: /workforce\.common\.filters/i })).toBeDisabled()
   })
+
+  it('warns when lookup labels fail instead of silently showing raw IDs', async () => {
+    listEngineers.mockRejectedValue(new Error('engineers unavailable'))
+
+    const Training = (await import('../Training')).default
+    render(
+      <MemoryRouter>
+        <Training />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('training-lookup-warning')).toHaveTextContent(
+      /labels could not be loaded/i,
+    )
+    expect(screen.getAllByText('#7')).not.toHaveLength(0)
+  })
 })
 
 describe('WF-GATE AssessmentExecution start-gate honesty', () => {
