@@ -48,6 +48,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY --chown=appuser:appgroup src/ ./src/
 COPY --chown=appuser:appgroup alembic/ ./alembic/
 COPY --chown=appuser:appgroup alembic.ini .
+COPY --chown=appuser:appgroup specs/governance-library/taxonomy.json ./specs/governance-library/taxonomy.json
 COPY --chown=appuser:appgroup certs/ ./certs/
 COPY --chown=appuser:appgroup scripts/celery/ ./scripts/celery/
 
