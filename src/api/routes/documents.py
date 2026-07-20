@@ -37,6 +37,7 @@ from src.domain.models.document import (
 )
 from src.domain.models.location import Location
 from src.domain.models.user import User
+from src.domain.services.audit_service import record_audit_event
 from src.domain.services.document_ai_service import VectorSearchService
 from src.domain.services.document_campaign_service import DocumentCampaignService
 from src.domain.services.document_category_service import allocate_pel_doc_ref
@@ -1040,6 +1041,22 @@ async def execute_disposal_queue(
         tenant_id=require_tenant_id(current_user.tenant_id),
         document_ids=payload.document_ids,
     )
+    if disposed_ids:
+        await record_audit_event(
+            db=db,
+            event_type="document_library.disposed",
+            entity_type="document",
+            entity_id=",".join(map(str, disposed_ids)),
+            action="delete",
+            description=f"Hard-disposed {len(disposed_ids)} retention-due library document(s)",
+            payload={
+                "actor_id": current_user.id,
+                "document_ids": disposed_ids,
+                "count": len(disposed_ids),
+            },
+            user_id=current_user.id,
+            tenant_id=require_tenant_id(current_user.tenant_id),
+        )
     track_metric("library.disposal_queue.executed", float(len(disposed_ids)))
     return DisposalExecuteResponse(
         disposed_document_ids=disposed_ids,
