@@ -250,10 +250,18 @@ export function TrainingMatrixGapBoard() {
     () => summary?.module_ok ?? computeModuleRoleStats(rows),
     [summary, rows],
   )
-  const peopleStats = useMemo(
-    () => summary?.people_fully_ok ?? computePeopleFullyOkStats(rows),
-    [summary, rows],
-  )
+  const peopleStats = useMemo(() => {
+    if (summary?.people_fully_ok?.length) {
+      return summary.people_fully_ok.map((s) => ({
+        role: s.role,
+        ok: s.ok,
+        total: s.total,
+        pct: s.pct,
+        metric: 'people_fully_ok' as const,
+      }))
+    }
+    return computePeopleFullyOkStats(rows)
+  }, [summary, rows])
   const briefings = useMemo(() => buildStatusBriefings(rows, peopleStats), [rows, peopleStats])
 
   useEffect(() => {

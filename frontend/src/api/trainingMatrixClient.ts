@@ -57,7 +57,7 @@ export type TrainingMatrixRoleMetric = {
   ok: number
   total: number
   pct: number
-  metric: string
+  metric: 'module_ok' | 'people_fully_ok' | string
 }
 
 export type TrainingMatrixSummary = {
