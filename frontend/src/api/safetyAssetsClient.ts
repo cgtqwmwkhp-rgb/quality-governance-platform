@@ -240,6 +240,30 @@ export const safetyAssetsApi = {
    * Parallel count queries for the KPI hub.
    * Each metric is independently settled — failures yield null, never fake zeros.
    */
+  /**
+   * Page through the register for board rollups (page_size capped at API max 500).
+   */
+  listAllAssetsForBoard: async (
+    baseFilters?: Omit<SafetyAssetListParams, 'page' | 'page_size'>,
+    options?: { pageSize?: number; maxPages?: number },
+  ): Promise<SafetyAsset[]> => {
+    const pageSize = options?.pageSize ?? 500
+    const maxPages = options?.maxPages ?? 20
+    const items: SafetyAsset[] = []
+    for (let page = 1; page <= maxPages; page += 1) {
+      const res = await safetyAssetsApi.listAssets({
+        ...baseFilters,
+        page,
+        page_size: pageSize,
+      })
+      const batch = res.data.items ?? []
+      items.push(...batch)
+      const pages = res.data.pages ?? 1
+      if (page >= pages || batch.length === 0) break
+    }
+    return items
+  },
+
   getKpis: async (
     baseFilters?: Omit<SafetyAssetListParams, 'page' | 'page_size' | 'expiry_band' | 'status'>,
   ): Promise<SafetyAssetKpis> => {
