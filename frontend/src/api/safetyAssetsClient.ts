@@ -248,8 +248,9 @@ export const safetyAssetsApi = {
     options?: { pageSize?: number; maxPages?: number },
   ): Promise<SafetyAsset[]> => {
     const pageSize = options?.pageSize ?? 500
-    const maxPages = options?.maxPages ?? 20
+    const maxPages = options?.maxPages ?? 40
     const items: SafetyAsset[] = []
+    let pages = 1
     for (let page = 1; page <= maxPages; page += 1) {
       const res = await safetyAssetsApi.listAssets({
         ...baseFilters,
@@ -258,8 +259,13 @@ export const safetyAssetsApi = {
       })
       const batch = res.data.items ?? []
       items.push(...batch)
-      const pages = res.data.pages ?? 1
+      pages = res.data.pages ?? 1
       if (page >= pages || batch.length === 0) break
+    }
+    if (pages > maxPages) {
+      throw new Error(
+        `Asset register has ${pages} pages; board fetch capped at ${maxPages}. Narrow filters or raise the cap.`,
+      )
     }
     return items
   },

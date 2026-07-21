@@ -8,7 +8,6 @@ import {
   Loader2,
   Package,
   RefreshCw,
-  ShieldAlert,
   Trash2,
 } from 'lucide-react'
 import {
@@ -48,6 +47,7 @@ import {
   filterEntityRollups,
   isOkAsset,
   ownerLabel,
+  siteLabel,
   sortAssetRows,
   sortEntityRollups,
   type AssetBoardView,
@@ -145,19 +145,28 @@ export default function SafetyAssetRegister() {
     setLoading(true)
     setLoadError(null)
     try {
-      const [assets, typesRes, locsRes, engineersRes] = await Promise.all([
+      const [assetsRes, typesRes, locsRes, engineersRes] = await Promise.allSettled([
         safetyAssetsApi.listAllAssetsForBoard(),
         safetyAssetsApi.listAssetTypes({ page: 1, page_size: 200, is_active: true }),
         safetyAssetsApi.listLocations({ page: 1, page_size: 200, is_active: true }),
-        workforceApi.listEngineers({ page: 1, page_size: 500, is_active: true }).catch(() => null),
+        workforceApi.listEngineers({ page: 1, page_size: 500, is_active: true }),
       ])
-      setBoardAssets(assets)
-      setAssetTypes(typesRes.data.items ?? [])
-      setLocations(locsRes.data.items ?? [])
+      if (assetsRes.status === 'rejected') {
+        throw assetsRes.reason
+      }
+      setBoardAssets(assetsRes.value)
+      if (typesRes.status === 'fulfilled') {
+        setAssetTypes(typesRes.value.data.items ?? [])
+      }
+      if (locsRes.status === 'fulfilled') {
+        setLocations(locsRes.value.data.items ?? [])
+      }
       const names = new Map<number, string>()
-      for (const eng of engineersRes?.data?.items ?? []) {
-        if (eng.user_id != null && eng.display_name) {
-          names.set(eng.user_id, eng.display_name)
+      if (engineersRes.status === 'fulfilled') {
+        for (const eng of engineersRes.value.data?.items ?? []) {
+          if (eng.user_id != null && eng.display_name) {
+            names.set(eng.user_id, eng.display_name)
+          }
         }
       }
       setOwnerNames(names)
@@ -197,7 +206,7 @@ export default function SafetyAssetRegister() {
         type,
         owner,
         asset.vehicle_reg,
-        asset.site,
+        siteLabel(asset, locationNameById),
         asset.status,
       ]
         .filter(Boolean)
@@ -205,12 +214,33 @@ export default function SafetyAssetRegister() {
         .toLowerCase()
       return haystack.includes(q)
     })
-  }, [bandFiltered, search, typeNameById, ownerNames])
+  }, [bandFiltered, search, typeNameById, ownerNames, locationNameById])
 
   const assetRows = useMemo(() => {
-    const filtered = filterAssetRows(searchFiltered, assetFilters, typeNameById, ownerNames)
-    return sortAssetRows(filtered, assetSortKey, assetSortDir, typeNameById, ownerNames)
-  }, [searchFiltered, assetFilters, assetSortKey, assetSortDir, typeNameById, ownerNames])
+    const filtered = filterAssetRows(
+      searchFiltered,
+      assetFilters,
+      typeNameById,
+      ownerNames,
+      locationNameById,
+    )
+    return sortAssetRows(
+      filtered,
+      assetSortKey,
+      assetSortDir,
+      typeNameById,
+      ownerNames,
+      locationNameById,
+    )
+  }, [
+    searchFiltered,
+    assetFilters,
+    assetSortKey,
+    assetSortDir,
+    typeNameById,
+    ownerNames,
+    locationNameById,
+  ])
 
   const engineerRollups = useMemo(
     () => buildEngineerRollups(searchFiltered, ownerNames),
@@ -285,14 +315,6 @@ export default function SafetyAssetRegister() {
     } finally {
       setCesBusy(false)
     }
-  }
-
-  const assignmentText = (asset: SafetyAsset) => {
-    if (asset.vehicle_reg) return asset.vehicle_reg
-    if (asset.location_id != null) {
-      return locationNameById.get(asset.location_id) || asset.site || `Location #${asset.location_id}`
-    }
-    return asset.site || '—'
   }
 
   return (
@@ -468,6 +490,22 @@ export default function SafetyAssetRegister() {
                   {cesReport.valid_rows} valid, {cesReport.error_rows} error rows, {cesReport.creates}{' '}
                   creates, {cesReport.updates} updates, {cesReport.warnings.length} warnings.
                 </p>
+                {cesReport.errors.length ? (
+                  <p className="mt-1 text-destructive">
+                    {cesReport.errors
+                      .slice(0, 5)
+                      .map((issue) => `Row ${issue.row}: ${issue.code}`)
+                      .join(' · ')}
+                  </p>
+                ) : null}
+                {cesReport.warnings.length ? (
+                  <p className="mt-1 text-muted-foreground">
+                    {cesReport.warnings
+                      .slice(0, 5)
+                      .map((issue) => `Row ${issue.row}: ${issue.code}`)
+                      .join(' · ')}
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </CardContent>
@@ -560,7 +598,7 @@ export default function SafetyAssetRegister() {
                       >
                         <td className="p-3 font-medium">
                           <Link
-                            to={`/safety/assets/${asset.id}`}
+                            to={`/safety-assets/${asset.id}`}
                             className="text-primary hover:underline"
                           >
                             {asset.serial_number || asset.asset_number}
@@ -570,7 +608,7 @@ export default function SafetyAssetRegister() {
                         <td className="p-3">{typeNameById.get(asset.asset_type_id) || '—'}</td>
                         <td className="p-3">{ownerLabel(asset, ownerNames)}</td>
                         <td className="p-3">{asset.vehicle_reg || '—'}</td>
-                        <td className="p-3">{assignmentText(asset)}</td>
+                        <td className="p-3">{siteLabel(asset, locationNameById) || '—'}</td>
                         <td className="p-3">{formatDate(asset.expiry_date)}</td>
                         <td className="p-3">
                           <Badge variant={statusVariant(asset.status)}>{asset.status}</Badge>
@@ -678,7 +716,7 @@ export default function SafetyAssetRegister() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <Link
-                    to={`/safety/assets/${asset.id}`}
+                    to={`/safety-assets/${asset.id}`}
                     className="font-medium text-primary hover:underline"
                   >
                     {asset.serial_number || asset.asset_number}

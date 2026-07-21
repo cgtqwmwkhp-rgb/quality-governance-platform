@@ -333,16 +333,24 @@ export function ownerLabel(
   return ownerNames.get(asset.owner_user_id) || `User #${asset.owner_user_id}`
 }
 
+export function siteLabel(asset: SafetyAsset, locationNames: Map<number, string>): string {
+  if (asset.location_id != null) {
+    return locationNames.get(asset.location_id) || asset.site || `Location #${asset.location_id}`
+  }
+  return asset.site || ''
+}
+
 export function filterAssetRows(
   assets: SafetyAsset[],
   filters: AssetRowColumnFilters,
   typeNames: Map<number, string>,
   ownerNames: Map<number, string>,
+  locationNames: Map<number, string> = new Map(),
 ): SafetyAsset[] {
   return assets.filter((asset) => {
     const type = typeNames.get(asset.asset_type_id) || ''
     const owner = ownerLabel(asset, ownerNames)
-    const site = asset.site || ''
+    const site = siteLabel(asset, locationNames)
     const expiry = asset.expiry_date || ''
     return (
       matchesTextFilter(asset.serial_number || asset.asset_number, filters.serial) &&
@@ -363,6 +371,7 @@ export function sortAssetRows(
   sortDir: SortDirection,
   typeNames: Map<number, string>,
   ownerNames: Map<number, string>,
+  locationNames: Map<number, string> = new Map(),
 ): SafetyAsset[] {
   const dir = sortDir === 'asc' ? 1 : -1
   return [...assets].sort((a, b) => {
@@ -396,7 +405,9 @@ export function sortAssetRows(
         })
         break
       case 'site':
-        cmp = (a.site || '').localeCompare(b.site || '', undefined, { sensitivity: 'base' })
+        cmp = siteLabel(a, locationNames).localeCompare(siteLabel(b, locationNames), undefined, {
+          sensitivity: 'base',
+        })
         break
       case 'expiry':
         cmp = (a.expiry_date || '').localeCompare(b.expiry_date || '')
