@@ -270,6 +270,16 @@ async def get_templates_for_asset_type(
 # ============== Asset endpoints ==============
 
 
+@router.get("/my-tools")
+async def my_tools(db: DbSession, user: CurrentUser):
+    """Portal self-scope: tools assigned to me ∪ kit on my van."""
+    from src.api.schemas.portal_compliance import PortalMyToolsResponse
+    from src.domain.services.portal_compliance_service import PortalComplianceService
+
+    payload = await PortalComplianceService(db).my_tools(user_id=user.id, tenant_id=_tid(user))
+    return PortalMyToolsResponse.model_validate(payload)
+
+
 @router.get("/", response_model=AssetListResponse)
 async def list_assets(
     db: DbSession,

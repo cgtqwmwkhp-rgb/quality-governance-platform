@@ -57,6 +57,8 @@ const PortalTrack = lazy(() => import('./pages/PortalTrack'))
 const PortalHelp = lazy(() => import('./pages/PortalHelp'))
 const PortalWork = lazy(() => import('./pages/PortalWork'))
 const PortalReading = lazy(() => import('./pages/PortalReading'))
+const PortalMyTools = lazy(() => import('./pages/PortalMyTools'))
+const PortalMyVan = lazy(() => import('./pages/PortalMyVan'))
 const PortalIncidentForm = lazy(() => import('./pages/PortalIncidentForm'))
 const PortalRTAForm = lazy(() => import('./pages/PortalRTAForm'))
 const PortalNearMissForm = lazy(() => import('./pages/PortalNearMissForm'))
@@ -262,6 +264,8 @@ function App() {
               <Route path="track/:referenceNumber" element={<PortalTrack />} />
               <Route path="work" element={<PortalWork />} />
               <Route path="reading" element={<PortalReading />} />
+              <Route path="tools" element={<PortalMyTools />} />
+              <Route path="van" element={<PortalMyVan />} />
               <Route path="help" element={<PortalHelp />} />
             </Route>
 

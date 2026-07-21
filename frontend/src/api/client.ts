@@ -36,6 +36,7 @@ import { createKnowledgeBankApi } from './knowledgeBankClient'
 import { createDocumentControlApi } from './documentControlClient'
 import { createDocumentCampaignApi } from './documentCampaignClient'
 import { createTrainingMatrixApi } from './trainingMatrixClient'
+import { createPortalComplianceApi } from './portalComplianceClient'
 import {
   beginGlobalLoading,
   endGlobalLoading,
@@ -1018,6 +1019,17 @@ export {
   type TrainingMatrixFrequencyChangeRequestList,
   type TrainingMatrixNotifyResponse,
 } from './trainingMatrixClient'
+
+// ============ Portal tool + van compliance (person-scoped) ============
+export const portalComplianceApi = createPortalComplianceApi(api)
+export type {
+  PortalClearState,
+  PortalMyCompliance,
+  PortalMyTools,
+  PortalMyVan,
+  PortalToolBand,
+  PortalToolItem,
+} from './portalComplianceClient'
 
 // ============ Investigation Types (extracted: investigationsClient.ts) ============
 export type {

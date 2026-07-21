@@ -91,6 +91,18 @@ async def list_vehicles(
     )
 
 
+@router.get("/me/status")
+async def my_vehicle_status(db: DbSession, user: CurrentUser):
+    """Portal self-scope: my van checks + open defects (never fleet-wide)."""
+    from src.api.schemas.portal_compliance import PortalMyVanResponse
+    from src.api.utils.tenant import require_tenant_id
+    from src.domain.services.portal_compliance_service import PortalComplianceService
+
+    tenant_id = require_tenant_id(getattr(user, "tenant_id", None))
+    payload = await PortalComplianceService(db).my_van_status(user_id=user.id, tenant_id=tenant_id)
+    return PortalMyVanResponse.model_validate(payload)
+
+
 @router.get("/analytics/fleet-health", response_model=FleetHealthResponse)
 async def fleet_health(db: DbSession, user: CurrentUser):
     """Fleet health summary — counts by fleet status and compliance status."""
