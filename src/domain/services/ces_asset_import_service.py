@@ -987,20 +987,20 @@ class CesAssetImportService:
                 if item.create_type_name:
                     key = normalise_lookup_key(item.create_type_name)
                     if key not in type_cache:
-                        created = await self._ensure_provisional_type(
+                        created_type = await self._ensure_provisional_type(
                             item.create_type_name, user_id=user_id, tenant_id=tenant_id
                         )
-                        type_cache[key] = created.id
-                        provisional_type_ids.append(created.id)
+                        type_cache[key] = created_type.id
+                        provisional_type_ids.append(created_type.id)
                     item.asset_type_id = type_cache[key]
                 if item.create_location_name:
                     key = normalise_lookup_key(item.create_location_name)
                     if key not in location_cache:
-                        created = await self._ensure_provisional_location(
+                        created_location = await self._ensure_provisional_location(
                             item.create_location_name, user_id=user_id, tenant_id=tenant_id
                         )
-                        location_cache[key] = created.id
-                        provisional_location_ids.append(created.id)
+                        location_cache[key] = created_location.id
+                        provisional_location_ids.append(created_location.id)
                     item.location_id = location_cache[key]
 
                 if item.action == "update":

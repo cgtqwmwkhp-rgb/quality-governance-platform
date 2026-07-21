@@ -105,7 +105,7 @@ class SafetyLookupApprovalService:
 
     async def _get_pending(self, kind: Kind, entity_id: int, *, tenant_id: int) -> AssetType | Location:
         if kind == "asset_type":
-            row = (
+            asset_type = (
                 await self.db.execute(
                     select(AssetType).where(
                         AssetType.id == entity_id,
@@ -114,19 +114,21 @@ class SafetyLookupApprovalService:
                     )
                 )
             ).scalar_one_or_none()
-        else:
-            row = (
-                await self.db.execute(
-                    select(Location).where(
-                        Location.id == entity_id,
-                        Location.tenant_id == tenant_id,
-                        Location.approval_status == "pending",
-                    )
+            if asset_type is None:
+                raise NotFoundError(f"Pending {kind} {entity_id} not found")
+            return asset_type
+        location = (
+            await self.db.execute(
+                select(Location).where(
+                    Location.id == entity_id,
+                    Location.tenant_id == tenant_id,
+                    Location.approval_status == "pending",
                 )
-            ).scalar_one_or_none()
-        if row is None:
+            )
+        ).scalar_one_or_none()
+        if location is None:
             raise NotFoundError(f"Pending {kind} {entity_id} not found")
-        return row
+        return location
 
     async def approve(self, kind: Kind, entity_id: int, *, tenant_id: int, actor_user_id: int) -> dict[str, Any]:
         row = await self._get_pending(kind, entity_id, tenant_id=tenant_id)
@@ -149,7 +151,7 @@ class SafetyLookupApprovalService:
             raise ValidationError("Cannot merge a lookup into itself")
         row = await self._get_pending(kind, entity_id, tenant_id=tenant_id)
         if kind == "asset_type":
-            target = (
+            target_type = (
                 await self.db.execute(
                     select(AssetType).where(
                         AssetType.id == target_id,
@@ -159,7 +161,7 @@ class SafetyLookupApprovalService:
                     )
                 )
             ).scalar_one_or_none()
-            if target is None:
+            if target_type is None:
                 raise NotFoundError(f"Target asset type {target_id} not found or not an approved active type")
             await self.db.execute(
                 update(Asset)
@@ -170,7 +172,7 @@ class SafetyLookupApprovalService:
                 .values(asset_type_id=target_id, updated_by_id=actor_user_id)
             )
         else:
-            target = (
+            target_location = (
                 await self.db.execute(
                     select(Location).where(
                         Location.id == target_id,
@@ -180,7 +182,7 @@ class SafetyLookupApprovalService:
                     )
                 )
             ).scalar_one_or_none()
-            if target is None:
+            if target_location is None:
                 raise NotFoundError(f"Target location {target_id} not found or not an approved active location")
             await self.db.execute(
                 update(Asset)
@@ -225,7 +227,7 @@ class SafetyLookupApprovalService:
         tenant_id: int,
     ) -> dict[str, Any]:
         if kind == "asset_type":
-            rows = list(
+            type_rows = list(
                 (
                     await self.db.execute(
                         select(AssetType).where(
@@ -237,8 +239,9 @@ class SafetyLookupApprovalService:
                 .scalars()
                 .all()
             )
+            candidates = [(row.id, row.name) for row in type_rows]
         else:
-            rows = list(
+            location_rows = list(
                 (
                     await self.db.execute(
                         select(Location).where(
@@ -250,7 +253,7 @@ class SafetyLookupApprovalService:
                 .scalars()
                 .all()
             )
-        candidates = [(row.id, row.name) for row in rows]
+            candidates = [(row.id, row.name) for row in location_rows]
         intent, exact, similar = classify_lookup_name(name, candidates)
         return {
             "kind": kind,

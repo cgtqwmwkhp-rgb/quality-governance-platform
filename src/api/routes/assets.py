@@ -337,8 +337,11 @@ def _parse_safety_lookup_kind(kind: str):
     from src.domain.exceptions import ValidationError
     from src.domain.services.safety_lookup_approval_service import Kind
 
-    if kind == "asset_type" or kind == "location":
-        parsed: Kind = kind
+    if kind == "asset_type":
+        parsed: Kind = "asset_type"
+        return parsed
+    if kind == "location":
+        parsed = "location"
         return parsed
     raise ValidationError("kind must be asset_type or location")
 
