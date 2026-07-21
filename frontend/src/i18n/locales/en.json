@@ -3612,5 +3612,6 @@
   "workforce.training_matrix.tab_inductions": "Inductions",
   "workforce.training_matrix.tab_mine": "My training",
   "workforce.training_matrix.tabs": "Training sections",
-  "workforce.training_matrix.upload_title": "Weekly Atlas matrix upload"
+  "workforce.training_matrix.upload_title": "Weekly Atlas matrix upload",
+  "safetyAssets.search": "Search serial, owner, vehicle…"
 }
