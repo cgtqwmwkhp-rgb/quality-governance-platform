@@ -69,6 +69,17 @@ describe('Training shell', () => {
 
   it('keeps latest import provenance when compliance loading fails', async () => {
     vi.mocked(trainingMatrixApi.listCompliance).mockRejectedValueOnce(new Error('Compliance unavailable'))
+    vi.mocked(trainingMatrixApi.getSummary).mockResolvedValueOnce({
+      module_ok: [{ role: 'Overall', ok: 8, total: 10, pct: 80, metric: 'module_ok' }],
+      people_fully_ok: [
+        { role: 'Overall', ok: 4, total: 5, pct: 80, metric: 'people_fully_ok' },
+      ],
+      horizons: {},
+      top_overdue_courses: [],
+      required_row_count: 10,
+      person_count: 5,
+      atlas_hub_url: 'https://atlas',
+    })
     vi.mocked(trainingMatrixApi.getLatestImport).mockResolvedValueOnce({
       id: 7,
       filename: 'matrix.csv',
@@ -88,5 +99,8 @@ describe('Training shell', () => {
     )
 
     expect(await screen.findByTestId('training-matrix-last-upload')).toHaveTextContent('matrix.csv')
+    expect(await screen.findByText('Compliance unavailable')).toBeInTheDocument()
+    expect(screen.getByTestId('training-matrix-hero-Overall')).toHaveTextContent('0%')
+    expect(screen.getByTestId('training-matrix-hero-Overall')).not.toHaveTextContent('80%')
   })
 })

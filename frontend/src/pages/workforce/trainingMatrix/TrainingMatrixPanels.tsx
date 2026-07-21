@@ -222,20 +222,23 @@ export function TrainingMatrixGapBoard() {
   useEffect(() => {
     setLoading(true)
     setError(null)
-    Promise.all([
-      trainingMatrixApi.listCompliance().catch(() => ({ items: [] })),
-      trainingMatrixApi.getSummary().catch(() => null),
-      trainingMatrixApi.getLatestImport().catch(() => null),
+    Promise.allSettled([
+      trainingMatrixApi.listCompliance(),
+      trainingMatrixApi.getSummary(),
+      trainingMatrixApi.getLatestImport(),
     ])
-      .then(([compliance, summaryRes, latest]) => {
-        setRows(compliance.items || [])
-        setSummary(summaryRes)
-        setLatestImport(latest)
-      })
-      .catch((err) => {
-        setRows([])
-        setSummary(null)
-        setError(getApiErrorMessage(err))
+      .then(([complianceResult, summaryResult, latestImportResult]) => {
+        if (complianceResult.status === 'fulfilled') {
+          setRows(complianceResult.value.items || [])
+          setSummary(summaryResult.status === 'fulfilled' ? summaryResult.value : null)
+        } else {
+          setRows([])
+          setSummary(null)
+          setError(getApiErrorMessage(complianceResult.reason))
+        }
+        setLatestImport(
+          latestImportResult.status === 'fulfilled' ? latestImportResult.value : null,
+        )
       })
       .finally(() => setLoading(false))
   }, [])
