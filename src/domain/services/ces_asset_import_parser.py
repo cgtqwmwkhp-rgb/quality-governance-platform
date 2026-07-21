@@ -62,9 +62,7 @@ def split_location(value: Any) -> dict[str, str | None]:
     remainder = " ; ".join(parts[1:]).strip() if len(parts) > 1 else ""
     vehicle_reg = normalise_vehicle_reg(remainder or raw)
 
-    labelled_engineer = re.search(
-        r"(?:engineer|technician)\s*[:\-]\s*([^;,(]+)", remainder, re.IGNORECASE
-    )
+    labelled_engineer = re.search(r"(?:engineer|technician)\s*[:\-]\s*([^;,(]+)", remainder, re.IGNORECASE)
     engineer_name = labelled_engineer.group(1).strip() if labelled_engineer else None
     assignment_text = remainder or company or ""
     if labelled_engineer:
@@ -89,8 +87,7 @@ def split_location(value: Any) -> dict[str, str | None]:
         site_prefixes = ("workshop", "spare", "uk power networks")
         if (
             has_implicit_engineer_prefix
-            and
-            re.fullmatch(r"[A-Za-zÀ-ÿ' -]{3,100}", candidate)
+            and re.fullmatch(r"[A-Za-zÀ-ÿ' -]{3,100}", candidate)
             and len(candidate.split()) >= 2
             and not candidate.lower().startswith(site_prefixes)
         ):

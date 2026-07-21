@@ -51,8 +51,8 @@ class ValidatedCesRow:
     qr_code_data: str | None = None
     metadata_json: dict[str, Any] = dataclasses.field(default_factory=dict)
 
-    def payload(self) -> dict[str, Any]:
-        return {
+    def payload(self, *, for_update: bool = False) -> dict[str, Any]:
+        data = {
             "asset_type_id": self.asset_type_id,
             "asset_number": self.asset_number,
             "name": self.name,
@@ -68,6 +68,10 @@ class ValidatedCesRow:
             "status": self.status,
             "metadata_json": self.metadata_json or None,
         }
+        if for_update:
+            # Serial is the upsert key; preserve existing asset_number on re-import.
+            data.pop("asset_number", None)
+        return data
 
 
 @dataclasses.dataclass
@@ -174,18 +178,26 @@ class CesAssetImportService:
         self, tenant_id: int, serials: set[str]
     ) -> tuple[dict[str, AssetType], dict[str, Location], dict[str, int | None], dict[str, list[Asset]]]:
         types = (
-            await self.db.execute(
-                select(AssetType).where(
-                    or_(AssetType.tenant_id == tenant_id, AssetType.tenant_id.is_(None)),
-                    AssetType.is_active.is_(True),
+            (
+                await self.db.execute(
+                    select(AssetType).where(
+                        or_(AssetType.tenant_id == tenant_id, AssetType.tenant_id.is_(None)),
+                        AssetType.is_active.is_(True),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         locations = (
-            await self.db.execute(
-                select(Location).where(Location.tenant_id == tenant_id, Location.is_active.is_(True))
+            (
+                await self.db.execute(
+                    select(Location).where(Location.tenant_id == tenant_id, Location.is_active.is_(True))
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         engineers = (
             await self.db.execute(
                 select(Engineer.id, Engineer.display_name, Engineer.user_id).where(Engineer.tenant_id == tenant_id)
@@ -218,13 +230,17 @@ class CesAssetImportService:
         existing_by_serial: dict[str, list[Asset]] = {}
         if serials:
             assets = (
-                await self.db.execute(
-                    select(Asset).where(
-                        or_(Asset.tenant_id == tenant_id, Asset.tenant_id.is_(None)),
-                        Asset.serial_number.in_(serials),
+                (
+                    await self.db.execute(
+                        select(Asset).where(
+                            or_(Asset.tenant_id == tenant_id, Asset.tenant_id.is_(None)),
+                            Asset.serial_number.in_(serials),
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             for asset in assets:
                 existing_by_serial.setdefault((asset.serial_number or "").strip(), []).append(asset)
         return (
@@ -274,11 +290,17 @@ class CesAssetImportService:
             same_file = serial_rows.get(serial, [])
             if len(same_file) > 1:
                 discriminator = (equipment_type.lower(), (qr or "").strip())
-                if sum(
-                    (str(candidate.get("equipment_type") or "").strip().lower(), (candidate.get("qr_code_data") or "").strip())
-                    == discriminator
-                    for candidate in same_file
-                ) > 1:
+                if (
+                    sum(
+                        (
+                            str(candidate.get("equipment_type") or "").strip().lower(),
+                            (candidate.get("qr_code_data") or "").strip(),
+                        )
+                        == discriminator
+                        for candidate in same_file
+                    )
+                    > 1
+                ):
                     row_errors.append(
                         RowIssue(
                             row_number,
@@ -429,8 +451,17 @@ class CesAssetImportService:
         for item in validated:
             if item.action == "update":
                 assert item.existing_id is not None
+                existing = await self.assets.get_asset(item.existing_id, tenant_id=tenant_id)
+                update_payload = item.payload(for_update=True)
+                # Merge CES metadata keys; do not wipe unrelated asset metadata.
+                prior_meta = dict(existing.metadata_json or {})
+                ces_meta = dict(item.metadata_json or {})
+                update_payload["metadata_json"] = {**prior_meta, **ces_meta} or None
                 asset = await self.assets.update_asset(
-                    item.existing_id, item.payload(), tenant_id=tenant_id, actor_user_id=user_id
+                    item.existing_id,
+                    update_payload,
+                    tenant_id=tenant_id,
+                    actor_user_id=user_id,
                 )
                 updated_ids.append(asset.id)
             else:

@@ -103,7 +103,11 @@ describe('safetyAssetsApi', () => {
     })
     await safetyAssetsApi.cesImportDryRun(file)
 
-    expect(mockPost).toHaveBeenCalledWith('/api/v1/asset-imports/ces/dry-run', expect.any(FormData))
+    expect(mockPost).toHaveBeenCalledWith(
+      '/api/v1/asset-imports/ces/dry-run',
+      expect.any(FormData),
+      expect.objectContaining({ timeout: 300000 }),
+    )
     const form = mockPost.mock.calls[0][1] as FormData
     expect(form.get('file')).toBe(file)
   })

@@ -202,13 +202,19 @@ export const safetyAssetsApi = {
   cesImportDryRun: (file: File) => {
     const form = new FormData()
     form.append('file', file)
-    return api.post<CesAssetImportReport>('/api/v1/asset-imports/ces/dry-run', form)
+    // Full CES workbooks are large; allow long parse/validate wall-clock.
+    return api.post<CesAssetImportReport>('/api/v1/asset-imports/ces/dry-run', form, {
+      timeout: 300000,
+    })
   },
 
   cesImportCommit: (file: File) => {
     const form = new FormData()
     form.append('file', file)
-    return api.post<CesAssetImportCommitResult>('/api/v1/asset-imports/ces/commit', form)
+    // Commit upserts ~1.8k rows; keep above default 45s write timeout.
+    return api.post<CesAssetImportCommitResult>('/api/v1/asset-imports/ces/commit', form, {
+      timeout: 300000,
+    })
   },
 
   listAssetTypes: (params?: {

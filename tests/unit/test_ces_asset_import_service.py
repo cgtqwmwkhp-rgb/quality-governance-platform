@@ -101,8 +101,38 @@ def test_parse_workbook_uses_equipment_list_sheet():
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Equipment List"
-    sheet.append(["Location", "Equipment Type", "Make", "Model", "Capacity", "Serial", "Asset ID", "QR", "", "Last", "Next", "Status"])
-    sheet.append(["Plantexpand; Main Depot", "Gas Detector", "MSA", "Altair", "4 gas", "CES-1", None, "PLA-1", None, "01/07/2026", "01/07/2027", "Pass"])
+    sheet.append(
+        [
+            "Location",
+            "Equipment Type",
+            "Make",
+            "Model",
+            "Capacity",
+            "Serial",
+            "Asset ID",
+            "QR",
+            "",
+            "Last",
+            "Next",
+            "Status",
+        ]
+    )
+    sheet.append(
+        [
+            "Plantexpand; Main Depot",
+            "Gas Detector",
+            "MSA",
+            "Altair",
+            "4 gas",
+            "CES-1",
+            None,
+            "PLA-1",
+            None,
+            "01/07/2026",
+            "01/07/2027",
+            "Pass",
+        ]
+    )
     output = io.BytesIO()
     workbook.save(output)
 
