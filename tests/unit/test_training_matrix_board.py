@@ -6,6 +6,7 @@ from src.domain.services.training_matrix_board import (
     BOARD_ROLES,
     build_status_briefings,
     horizon_for_row,
+    normalize_board_role,
     resolve_board_role,
 )
 
@@ -27,6 +28,21 @@ def test_resolve_board_role_no_match():
     assert resolve_board_role("Sales") is None
     assert resolve_board_role(None) is None
     assert resolve_board_role("") is None
+
+
+def test_normalize_board_role():
+    assert normalize_board_role("office") == "Office"
+    assert normalize_board_role("Engineer") == "Engineer"
+    assert normalize_board_role("Sales") is None
+    assert normalize_board_role(None) is None
+
+
+def test_resolve_board_role_prefers_override():
+    assert resolve_board_role("IT", "Office") == "Office"
+    assert resolve_board_role("Mobile Engineers", "Management") == "Management"
+    assert resolve_board_role("IT", None) is None
+    assert resolve_board_role("IT", "") is None
+    assert resolve_board_role("IT", "Sales") is None
 
 
 def test_horizon_overdue_status_without_due_date():

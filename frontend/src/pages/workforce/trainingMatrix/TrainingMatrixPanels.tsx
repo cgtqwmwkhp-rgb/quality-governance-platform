@@ -951,8 +951,8 @@ export function TrainingMatrixAdminPanel() {
 
       <AdminSection
         testId="training-matrix-admin-namemap"
-        title="Name mapping (Atlas → Employee)"
-        subtitle={`Mapped ${mappedCount}/${nameMaps.length}. Unmatched: ${unmatched.length}. Saved maps survive weekly uploads; use Auto-match to restore.`}
+        title="People mapping (employee + Training group)"
+        subtitle={`Employees mapped ${mappedCount}/${nameMaps.length} (unmatched ${unmatched.length}). Training group overrides Atlas dept for frequency rules and board buckets; both survive weekly uploads.`}
         open={openNameMap}
         onToggle={() => setOpenNameMap((v) => !v)}
       >
@@ -968,32 +968,66 @@ export function TrainingMatrixAdminPanel() {
             {autoMatching ? 'Matching…' : 'Restore / auto-match names'}
           </Button>
         </div>
-        <div className="space-y-2 max-h-64 overflow-y-auto">
-          {unmatched.slice(0, 40).map((row) => (
-            <div key={row.atlas_name} className="flex flex-wrap items-center gap-2 text-sm">
+        <div className="space-y-2 max-h-80 overflow-y-auto">
+          {nameMaps.map((row) => (
+            <div
+              key={row.person_id ?? row.atlas_name}
+              className="flex flex-wrap items-center gap-2 text-sm"
+              data-testid="training-matrix-person-row"
+            >
               <span className="min-w-[10rem] font-medium">{row.atlas_name}</span>
-              <span className="text-muted-foreground">{row.department || '—'}</span>
+              <span className="text-muted-foreground min-w-[8rem]" title="Atlas department (unchanged)">
+                {row.department || '—'}
+              </span>
+              <label className="sr-only" htmlFor={`tm-role-${row.person_id}`}>
+                Training group
+              </label>
               <select
+                id={`tm-role-${row.person_id}`}
                 className="h-8 rounded-md border border-border bg-card px-2 text-sm"
-                defaultValue=""
+                value={row.board_role_override || ''}
+                disabled={!row.person_id}
+                data-testid="training-matrix-board-role"
                 onChange={(e) => {
-                  const id = Number(e.target.value)
-                  if (!id) return
-                  void trainingMatrixApi.upsertNameMap(row.atlas_name, id).then(reload)
+                  if (!row.person_id) return
+                  const next = e.target.value || null
+                  void trainingMatrixApi
+                    .patchPersonBoardRole(row.person_id, next)
+                    .then(reload)
+                    .catch((err) =>
+                      setError(getApiErrorMessage(err, 'Could not update Training group.')),
+                    )
                 }}
               >
-                <option value="">Select employee…</option>
-                {engineers.map((eng) => (
-                  <option key={eng.id} value={eng.id}>
-                    {eng.label}
+                <option value="">Auto (Atlas)</option>
+                {BOARD_ROLES.map((role) => (
+                  <option key={role} value={role}>
+                    {role}
                   </option>
                 ))}
               </select>
+              {row.mapped ? (
+                <span className="text-muted-foreground">{row.engineer_display_name || 'Mapped'}</span>
+              ) : (
+                <select
+                  className="h-8 rounded-md border border-border bg-card px-2 text-sm"
+                  defaultValue=""
+                  onChange={(e) => {
+                    const id = Number(e.target.value)
+                    if (!id) return
+                    void trainingMatrixApi.upsertNameMap(row.atlas_name, id).then(reload)
+                  }}
+                >
+                  <option value="">Select employee…</option>
+                  {engineers.map((eng) => (
+                    <option key={eng.id} value={eng.id}>
+                      {eng.label}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           ))}
-          {nameMapsLoaded && unmatched.length === 0 && nameMaps.length > 0 ? (
-            <p className="text-sm text-muted-foreground">All Atlas names are mapped.</p>
-          ) : null}
           {nameMapsLoaded && nameMaps.length === 0 && !error ? (
             <p className="text-sm text-muted-foreground">
               No Atlas people yet. Upload a matrix CSV first.

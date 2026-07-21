@@ -30,8 +30,16 @@ function parseDueDate(qgpDueOn?: string | null): Date | null {
   return startOfDay(parsed)
 }
 
-/** First BOARD_ROLE whose lowercased name is a substring of department (e.g. Engineer in "Mobile Engineers"). */
-export function resolveBoardRole(department?: string | null): BoardRole | null {
+/** Prefer Admin override; else first BOARD_ROLE substring-matched in department (e.g. Engineer in "Mobile Engineers"). */
+export function resolveBoardRole(
+  department?: string | null,
+  override?: string | null,
+): BoardRole | null {
+  if (override) {
+    const cleaned = override.trim().toLowerCase()
+    const exact = BOARD_ROLES.find((role) => role.toLowerCase() === cleaned)
+    if (exact) return exact
+  }
   if (!department) return null
   const deptLower = department.trim().toLowerCase()
   for (const role of BOARD_ROLES) {
@@ -102,7 +110,7 @@ export function computeRoleStats(rows: TrainingMatrixComplianceRow[]): RoleStat[
     const isOk = personRows.every((r) => r.status === 'compliant')
     overallTotal += 1
     if (isOk) overallOk += 1
-    const role = resolveBoardRole(personRows[0].department)
+    const role = resolveBoardRole(personRows[0].department, personRows[0].board_role_override)
     if (role) {
       roleCounts[role].total += 1
       if (isOk) roleCounts[role].ok += 1
@@ -343,7 +351,7 @@ export function moduleViewForRole(
   rows: TrainingMatrixComplianceRow[],
   role: BoardRole,
 ): { course_key: string; course_display_name: string; compliant: number; total: number; pct: number }[] {
-  const scoped = rows.filter((r) => resolveBoardRole(r.department) === role)
+  const scoped = rows.filter((r) => resolveBoardRole(r.department, r.board_role_override) === role)
   const byCourse = new Map<string, { course_display_name: string; compliant: number; total: number }>()
   for (const row of scoped) {
     let agg = byCourse.get(row.course_key)

@@ -22,6 +22,7 @@ from src.api.schemas.training_matrix import (
     TrainingMatrixNameMapUpsert,
     TrainingMatrixNotifyRequest,
     TrainingMatrixNotifyResponse,
+    TrainingMatrixPersonRoleUpdate,
     TrainingMatrixRequirementCreate,
     TrainingMatrixRequirementListResponse,
     TrainingMatrixRequirementResponse,
@@ -42,6 +43,7 @@ from src.domain.models.training_matrix import (
 )
 from src.domain.models.user import User
 from src.domain.services.email_service import email_service
+from src.domain.services.training_matrix_board import BOARD_ROLES, normalize_board_role
 from src.domain.services.training_matrix_compliance import (
     ATLAS_HUB_URL,
     ComplianceInput,
@@ -238,8 +240,10 @@ async def list_name_maps(db: DbSession, user: CurrentUser):
             eng_names[eng.id] = eng.display_name or f"#{eng.id}"
     return [
         TrainingMatrixNameMapItem(
+            person_id=p.id,
             atlas_name=p.atlas_name,
             department=p.department,
+            board_role_override=p.board_role_override,
             engineer_id=p.engineer_id,
             engineer_display_name=eng_names.get(p.engineer_id) if p.engineer_id else None,
             mapped=p.engineer_id is not None,
@@ -308,11 +312,65 @@ async def upsert_name_map(db: DbSession, user: CurrentUser, body: TrainingMatrix
 
     await db.commit()
     return TrainingMatrixNameMapItem(
+        person_id=person.id if person else None,
         atlas_name=atlas_name,
         department=person.department if person else None,
+        board_role_override=person.board_role_override if person else None,
         engineer_id=eng.id,
         engineer_display_name=eng.display_name or f"#{eng.id}",
         mapped=True,
+    )
+
+
+@router.patch("/people/{person_id}", response_model=TrainingMatrixNameMapItem)
+async def patch_person_board_role(
+    person_id: int,
+    db: DbSession,
+    user: CurrentUser,
+    body: TrainingMatrixPersonRoleUpdate,
+):
+    """Set or clear the Admin Training group override for an Atlas person."""
+    _require_admin(user)
+    tenant_id = _tenant(user)
+    person = (
+        await db.execute(
+            select(TrainingMatrixPerson).where(
+                TrainingMatrixPerson.id == person_id,
+                TrainingMatrixPerson.tenant_id == tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not person:
+        raise NotFoundError("Atlas person not found")
+
+    if body.board_role_override is None or str(body.board_role_override).strip() == "":
+        person.board_role_override = None
+    else:
+        normalized = normalize_board_role(body.board_role_override)
+        if not normalized:
+            allowed = ", ".join(BOARD_ROLES)
+            raise ValidationError(f"board_role_override must be one of: {allowed}")
+        person.board_role_override = normalized
+
+    await db.commit()
+    await db.refresh(person)
+
+    eng_name: Optional[str] = None
+    if person.engineer_id:
+        eng = (
+            await db.execute(select(Engineer).where(Engineer.id == person.engineer_id))
+        ).scalar_one_or_none()
+        if eng:
+            eng_name = eng.display_name or f"#{eng.id}"
+
+    return TrainingMatrixNameMapItem(
+        person_id=person.id,
+        atlas_name=person.atlas_name,
+        department=person.department,
+        board_role_override=person.board_role_override,
+        engineer_id=person.engineer_id,
+        engineer_display_name=eng_name,
+        mapped=person.engineer_id is not None,
     )
 
 
@@ -569,7 +627,13 @@ async def _build_compliance_rows(
     rows: list[TrainingMatrixComplianceRow] = []
     for person in people:
         mapped_eng: Optional[Engineer] = engineers.get(person.engineer_id) if person.engineer_id else None
-        eng_dept = (mapped_eng.department if mapped_eng and mapped_eng.department else None) or person.department
+        # Admin Training group wins for requirement matching; else Atlas/employee dept.
+        override = normalize_board_role(person.board_role_override)
+        eng_dept = (
+            override
+            or (mapped_eng.department if mapped_eng and mapped_eng.department else None)
+            or person.department
+        )
         eng_title = mapped_eng.job_title if mapped_eng else None
         matched_reqs = [
             req
@@ -606,6 +670,7 @@ async def _build_compliance_rows(
                 TrainingMatrixComplianceRow(
                     atlas_name=person.atlas_name,
                     department=person.department,
+                    board_role_override=person.board_role_override,
                     engineer_id=person.engineer_id,
                     engineer_display_name=(mapped_eng.display_name if mapped_eng else None),
                     course_key=result.course_key,

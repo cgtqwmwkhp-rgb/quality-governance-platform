@@ -60,6 +60,13 @@ describe('resolveBoardRole', () => {
     expect(resolveBoardRole('Senior Management')).toBe('Management')
   })
 
+  it('prefers an Admin Training group override over Atlas department', () => {
+    expect(resolveBoardRole('IT', 'Office')).toBe('Office')
+    expect(resolveBoardRole('Mobile Engineers', 'Management')).toBe('Management')
+    expect(resolveBoardRole('IT', null)).toBeNull()
+    expect(resolveBoardRole('IT', 'Sales')).toBeNull()
+  })
+
   it('returns null when nothing matches', () => {
     expect(resolveBoardRole('Sales')).toBeNull()
     expect(resolveBoardRole(null)).toBeNull()
@@ -120,6 +127,21 @@ describe('computeRoleStats', () => {
     expect(engineer.total).toBe(2)
     expect(engineer.ok).toBe(1)
     expect(workshop.pct).toBe(100)
+  })
+
+  it('buckets people by override when set', () => {
+    const rows = [
+      row({
+        atlas_name: 'Dana',
+        department: 'IT',
+        board_role_override: 'Office',
+        status: 'compliant',
+      }),
+    ]
+    const stats = computeRoleStats(rows)
+    const office = stats.find((s) => s.role === 'Office')
+    expect(office?.total).toBe(1)
+    expect(office?.ok).toBe(1)
   })
 })
 
@@ -232,6 +254,22 @@ describe('moduleViewForRole', () => {
     expect(view[0].total).toBe(2)
     expect(view[0].compliant).toBe(1)
     expect(view[0].pct).toBe(50)
+  })
+
+  it('uses board_role_override when Atlas department does not match a board role', () => {
+    const rows = [
+      row({
+        atlas_name: 'Dana',
+        department: 'IT',
+        board_role_override: 'Office',
+        course_key: 'gdpr',
+        status: 'compliant',
+      }),
+    ]
+    const view = moduleViewForRole(rows, 'Office')
+    expect(view).toHaveLength(1)
+    expect(view[0].total).toBe(1)
+    expect(moduleViewForRole(rows, 'Engineer')).toHaveLength(0)
   })
 })
 

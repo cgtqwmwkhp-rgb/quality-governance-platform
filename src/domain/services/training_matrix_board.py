@@ -18,12 +18,29 @@ _OVERDUE_STATUSES = ("overdue", "missing", "pending", "failed")
 Horizon = str  # one of: "overdue" | "d30" | "d60" | "d180" | "ok"
 
 
-def resolve_board_role(department: Optional[str]) -> Optional[str]:
-    """Map an Atlas/engineer department string to one of BOARD_ROLES.
+def normalize_board_role(value: Optional[str]) -> Optional[str]:
+    """Return canonical BOARD_ROLES value if ``value`` matches one (case-insensitive)."""
+    if not value:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    for role in BOARD_ROLES:
+        if role.lower() == cleaned.lower():
+            return role
+    return None
 
-    Returns the first role whose lowercased name is a substring of ``department``
+
+def resolve_board_role(department: Optional[str], override: Optional[str] = None) -> Optional[str]:
+    """Map to one of BOARD_ROLES.
+
+    Prefers an explicit Admin ``override`` when set. Otherwise returns the first
+    role whose lowercased name is a substring of ``department``
     (e.g. "Engineer" matches "Mobile Engineers"). Returns None if no role matches.
     """
+    normalized_override = normalize_board_role(override)
+    if normalized_override:
+        return normalized_override
     if not department:
         return None
     dept_l = department.strip().lower()

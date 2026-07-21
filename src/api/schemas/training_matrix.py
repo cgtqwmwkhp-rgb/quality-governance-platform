@@ -43,8 +43,10 @@ class TrainingMatrixNameMapItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: Optional[int] = None
+    person_id: Optional[int] = None
     atlas_name: str
     department: Optional[str] = None
+    board_role_override: Optional[str] = None
     engineer_id: Optional[int] = None
     engineer_display_name: Optional[str] = None
     mapped: bool = False
@@ -53,6 +55,12 @@ class TrainingMatrixNameMapItem(BaseModel):
 class TrainingMatrixNameMapUpsert(BaseModel):
     atlas_name: str
     engineer_id: int
+
+
+class TrainingMatrixPersonRoleUpdate(BaseModel):
+    """Admin-assigned Training group; null clears override (Auto from Atlas)."""
+
+    board_role_override: Optional[str] = None
 
 
 class TrainingMatrixNameMapAutoMatchResponse(BaseModel):
@@ -122,6 +130,7 @@ class TrainingMatrixRequirementSeedResponse(BaseModel):
 class TrainingMatrixComplianceRow(BaseModel):
     atlas_name: str
     department: Optional[str] = None
+    board_role_override: Optional[str] = None
     engineer_id: Optional[int] = None
     engineer_display_name: Optional[str] = None
     course_key: str
