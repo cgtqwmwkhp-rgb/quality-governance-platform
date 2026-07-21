@@ -327,6 +327,14 @@ class Settings(BaseSettings):
     # OpenAI (tertiary AI provider)
     openai_api_key: str = ""
 
+    # Governance Library Wave W3 — horizon scan provider (stub|anthropic|openai|perplexity)
+    library_horizon_provider: str = "stub"
+    perplexity_api_key: str = ""
+
+    # Governance Library Wave W5 — retention disposal remains preview-only
+    # unless an operator explicitly enables this destructive execution path.
+    library_disposal_execute: bool = False
+
     # Voyage + Pinecone (library semantic index / smart search)
     voyage_api_key: str = ""
     pinecone_api_key: str = ""

@@ -28,12 +28,15 @@ import { createPlanetMarkApi } from './planetMarkClient'
 import { createUvdbApi } from './uvdbClient'
 import { createUsersApi } from './usersClient'
 import { createWorkflowsApi } from './workflowsClient'
+import type { AssuranceCertShelfResponse } from './assuranceCertShelfTypes'
 import { createAuditTrailApi } from './auditTrailClient'
 import { createSignaturesApi } from './signaturesClient'
 import { createLookupsApi } from './lookupsClient'
 import { createKnowledgeBankApi } from './knowledgeBankClient'
 import { createDocumentControlApi } from './documentControlClient'
 import { createDocumentCampaignApi } from './documentCampaignClient'
+import { createTrainingMatrixApi } from './trainingMatrixClient'
+import { createPortalComplianceApi } from './portalComplianceClient'
 import {
   beginGlobalLoading,
   endGlobalLoading,
@@ -70,9 +73,15 @@ function maybeShowErrorToast(message: string, config?: InternalAxiosRequestConfi
 // Use centralized API base URL from config (environment-aware)
 const HTTPS_API_BASE = API_BASE_URL
 
-// Request timeout in milliseconds (15 seconds for normal requests)
-// Prevents infinite spinner if backend hangs
-const REQUEST_TIMEOUT_MS = 15000
+// Adaptive request timeouts (PX-029 / ACT-052 Wave A1).
+// 15s caused false timeouts on cold starts, large list reads, and write paths that
+// wait on DB + side effects — which then falsely drove OfflineIndicator via
+// connectionStatus. Reads get 30s; mutating verbs get 45s. Callers may still
+// override (uploads / long-running process jobs).
+const READ_TIMEOUT_MS = 30000
+const WRITE_TIMEOUT_MS = 45000
+/** @deprecated Prefer READ_TIMEOUT_MS / WRITE_TIMEOUT_MS — kept for refresh + callers. */
+const REQUEST_TIMEOUT_MS = READ_TIMEOUT_MS
 
 // Extended timeout for file uploads (2 minutes)
 // File uploads to Azure Blob Storage can take longer, especially for large files
@@ -81,6 +90,26 @@ const UPLOAD_TIMEOUT_MS = 120000
 // Extended timeout for import processing (5 minutes)
 // PDF extraction + OCR + dual AI analysis (Mistral + Gemini) runs synchronously
 const PROCESSING_TIMEOUT_MS = 300000
+
+const WRITE_METHODS = new Set(['post', 'put', 'patch', 'delete'])
+
+/**
+ * Resolve per-request timeout. Preserves explicit caller overrides (e.g. uploads).
+ */
+export function resolveRequestTimeout(
+  method?: string,
+  currentTimeout?: number,
+): number {
+  if (
+    currentTimeout !== undefined &&
+    currentTimeout !== READ_TIMEOUT_MS &&
+    currentTimeout !== WRITE_TIMEOUT_MS
+  ) {
+    return currentTimeout
+  }
+  const m = (method ?? 'get').toLowerCase()
+  return WRITE_METHODS.has(m) ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS
+}
 
 // ============ Bounded Error Codes (LOGIN_UX_CONTRACT.md) ============
 // These are the ONLY allowed error codes for login
@@ -248,7 +277,7 @@ export function createApiError(error: unknown): ApiError {
 
 const api = axios.create({
   baseURL: HTTPS_API_BASE,
-  timeout: REQUEST_TIMEOUT_MS,
+  timeout: READ_TIMEOUT_MS,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -257,7 +286,11 @@ const api = axios.create({
 const ACTIONS_OR_CAPA_PATH = /(?:^|\/)(?:actions|capa)(?:\/|$)/
 const IDEMPOTENT_WRITE_METHODS = new Set(['post', 'put', 'patch'])
 
-function newIdempotencyKey(): string {
+/** Non-create POST verbs (RPC / auth / analysis) — do not auto-attach Idempotency-Key. */
+const NON_CREATE_POST_PATH =
+  /\/(?:auth\/(?:login|logout|refresh|token-exchange)|[^/?]*\/(?:publish|queue|process|promote|bulk-review|analyze(?:-[^/?]+)?|search|forecast|review|check|prepare|submit|acknowledge|open|sync|link-investigation|approve|reject|bulk-approve|auto-tag|run|generate-[^/?]+))(?:\/|$|\?)/i
+
+export function newIdempotencyKey(): string {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
     return globalThis.crypto.randomUUID()
   }
@@ -271,6 +304,30 @@ export function needsActionWriteIdempotency(url?: string, method?: string): bool
 }
 
 /**
+ * True for create-style POSTs (resource collection creates).
+ * Backend IdempotencyMiddleware only activates when the header is present.
+ */
+export function needsCreatePostIdempotency(url?: string, method?: string): boolean {
+  if (!url || !method || method.toLowerCase() !== 'post') return false
+  const path = url.split('?')[0]
+  if (isAuthEndpoint(path)) return false
+  if (NON_CREATE_POST_PATH.test(path)) return false
+  return path.includes('/api/')
+}
+
+export function needsWriteIdempotency(url?: string, method?: string): boolean {
+  return needsActionWriteIdempotency(url, method) || needsCreatePostIdempotency(url, method)
+}
+
+function ensureIdempotencyKey(config: InternalAxiosRequestConfig): InternalAxiosRequestConfig {
+  const headers = config.headers as Record<string, string | undefined>
+  if (!headers['Idempotency-Key'] && !headers['idempotency-key']) {
+    headers['Idempotency-Key'] = newIdempotencyKey()
+  }
+  return config
+}
+
+/**
  * Add a per-request key while preserving a caller-supplied key.
  *
  * Axios preserves this header when a 401 triggers its single retry, so the
@@ -280,12 +337,18 @@ export function applyActionWriteIdempotency(
   config: InternalAxiosRequestConfig,
 ): InternalAxiosRequestConfig {
   if (!needsActionWriteIdempotency(config.url, config.method)) return config
+  return ensureIdempotencyKey(config)
+}
 
-  const headers = config.headers as Record<string, string | undefined>
-  if (!headers['Idempotency-Key'] && !headers['idempotency-key']) {
-    headers['Idempotency-Key'] = newIdempotencyKey()
-  }
-  return config
+/**
+ * Attach Idempotency-Key to create POSTs (and action/CAPA writes).
+ * Prefer this over blind retry after a timeout — see maybeCommitted below.
+ */
+export function applyCreatePostIdempotency(
+  config: InternalAxiosRequestConfig,
+): InternalAxiosRequestConfig {
+  if (!needsWriteIdempotency(config.url, config.method)) return config
+  return ensureIdempotencyKey(config)
 }
 
 /** In-flight count for requests that opted into globalLoading. */
@@ -406,7 +469,9 @@ api.interceptors.request.use(async (config) => {
     trackGlobalLoading,
     (loading) => useAppStore.getState().setLoading(loading),
   )
-  applyActionWriteIdempotency(config)
+  config.timeout = resolveRequestTimeout(config.method, config.timeout)
+  // Create POSTs + Actions/CAPA writes — stable key survives auth-refresh retry.
+  applyCreatePostIdempotency(config)
   // Force HTTPS on baseURL
   if (config.baseURL && !isLocalDevHost(config.baseURL) && !config.baseURL.startsWith('https://')) {
     config.baseURL = config.baseURL.replace(/^http:/, 'https:')
@@ -498,6 +563,63 @@ api.interceptors.request.use(async (config) => {
 interface ClassifiedAxiosError extends AxiosError {
   classifiedMessage?: string
   isTimeout?: boolean
+  /** POST/PUT/PATCH timed out — server may have committed; do not blind-retry. */
+  maybeCommitted?: boolean
+}
+
+/** Timeout / AbortController cancel (axios ECONNABORTED / CanceledError). */
+export function isTimeoutOrAbortError(error: {
+  code?: string
+  message?: string
+  name?: string
+}): boolean {
+  if (error.code === 'ECONNABORTED' || error.code === 'ERR_CANCELED') return true
+  if (error.name === 'CanceledError' || error.name === 'AbortError') return true
+  return typeof error.message === 'string' && error.message.toLowerCase().includes('timeout')
+}
+
+/**
+ * Whether a transport failure should drive OfflineIndicator via connectionStatus.
+ * PX-029: timeout/abort while navigator.onLine must NOT mark the app Offline.
+ */
+export function shouldMarkConnectionDisconnected(error: {
+  code?: string
+  message?: string
+  name?: string
+  response?: unknown
+}): boolean {
+  if (error.response) return false
+  const browserOnline =
+    typeof navigator === 'undefined' ? true : navigator.onLine !== false
+  if (isTimeoutOrAbortError(error) && browserOnline) {
+    return false
+  }
+  return true
+}
+
+/**
+ * Classify write-timeout disposition for UX. POST (and other mutations) that
+ * time out are maybe-committed — reconcile/list before retrying; Idempotency-Key
+ * makes a deliberate retry safe, but blind retry is discouraged.
+ */
+export function classifyWriteTimeoutDisposition(
+  error: { code?: string; message?: string; name?: string },
+  method?: string,
+): 'maybe_committed' | 'safe_retry_read' | 'not_timeout' {
+  if (!isTimeoutOrAbortError(error)) return 'not_timeout'
+  const m = (method ?? 'get').toLowerCase()
+  if (WRITE_METHODS.has(m) && m !== 'delete') {
+    // DELETE is usually idempotent; POST/PUT/PATCH creates/updates may have landed.
+    return 'maybe_committed'
+  }
+  if (m === 'delete') return 'maybe_committed'
+  return 'safe_retry_read'
+}
+
+export function isMaybeCommittedTimeout(
+  error: { code?: string; message?: string; name?: string; config?: { method?: string } },
+): boolean {
+  return classifyWriteTimeoutDisposition(error, error.config?.method) === 'maybe_committed'
 }
 
 api.interceptors.response.use(
@@ -516,7 +638,7 @@ api.interceptors.response.use(
       shouldTrackGlobalLoading(error.config),
       (loading) => useAppStore.getState().setLoading(loading),
     )
-    if (!error.response) {
+    if (!error.response && shouldMarkConnectionDisconnected(error)) {
       useAppStore.getState().setConnectionStatus('disconnected')
     }
     // Classify the error for better user messaging
@@ -604,9 +726,15 @@ api.interceptors.response.use(
       ;(error as ClassifiedAxiosError).classifiedMessage = serverMsg
         ? `Server error: ${serverMsg}`
         : 'Server error. Please try again later.'
-    } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-      ;(error as ClassifiedAxiosError).classifiedMessage = 'Request timed out. Please try again.'
+    } else if (isTimeoutOrAbortError(error)) {
+      const method = error.config?.method
+      const maybeCommitted =
+        classifyWriteTimeoutDisposition(error, method) === 'maybe_committed'
       ;(error as ClassifiedAxiosError).isTimeout = true
+      ;(error as ClassifiedAxiosError).maybeCommitted = maybeCommitted
+      ;(error as ClassifiedAxiosError).classifiedMessage = maybeCommitted
+        ? 'Request timed out. Your changes may already have been saved — refresh or check the list before trying again.'
+        : 'Request timed out. Please try again.'
     } else if (!error.response) {
       ;(error as ClassifiedAxiosError).classifiedMessage =
         'Network error. Please check your connection and try again.'
@@ -875,6 +1003,33 @@ export const auditsApi = createAuditsApi(api)
 // ============ Workforce API (extracted: workforceClient.ts) ============
 export const workforceApi = createWorkforceApi(api)
 export const engineersApi = createEngineersApi(api)
+
+// ============ Training Matrix API (Atlas compliance layer) ============
+export const trainingMatrixApi = createTrainingMatrixApi(api)
+export {
+  ATLAS_HUB_URL,
+  type TrainingMatrixComplianceRow,
+  type TrainingMatrixImport,
+  type TrainingMatrixImportQa,
+  type TrainingMatrixRequirement,
+  type TrainingMatrixNameMapItem,
+  type TrainingMatrixMatrixCell,
+  type TrainingMatrixMatrixUpsertResponse,
+  type TrainingMatrixFrequencyChangeRequest,
+  type TrainingMatrixFrequencyChangeRequestList,
+  type TrainingMatrixNotifyResponse,
+} from './trainingMatrixClient'
+
+// ============ Portal tool + van compliance (person-scoped) ============
+export const portalComplianceApi = createPortalComplianceApi(api)
+export type {
+  PortalClearState,
+  PortalMyCompliance,
+  PortalMyTools,
+  PortalMyVan,
+  PortalToolBand,
+  PortalToolItem,
+} from './portalComplianceClient'
 
 // ============ Investigation Types (extracted: investigationsClient.ts) ============
 export type {
@@ -1447,6 +1602,17 @@ export const complianceAutomationApi = {
       `/api/v1/compliance-automation/certificates?${sp}`,
     )
   },
+  getAssuranceCertShelf: (params?: {
+    scheme?: string
+    readiness_status?: string
+    due_soon_days?: number
+  }) => {
+    const sp = new URLSearchParams()
+    if (params?.scheme) sp.set('scheme', params.scheme)
+    if (params?.readiness_status) sp.set('readiness_status', params.readiness_status)
+    if (params?.due_soon_days) sp.set('due_soon_days', String(params.due_soon_days))
+    return api.get<AssuranceCertShelfResponse>(`/api/v1/compliance-automation/certificates/shelf?${sp}`)
+  },
   getExpiringCertificates: () =>
     api.get<{
       expired: number
@@ -1608,6 +1774,37 @@ export interface IMSDashboardResponse {
 
 export const imsDashboardApi = {
   getDashboard: () => api.get<IMSDashboardResponse>('/api/v1/ims/dashboard'),
+}
+
+export interface LibraryDashboardSummary {
+  as_of: string
+  statutory_documents: number
+  overdue_reviews: number
+  open_review_packs: number
+}
+
+export interface LibraryDependencyMap {
+  pel_doc_ref: string
+  document_id: number
+  title: string
+  current_tip: {
+    version_number: string
+    status: string
+    published_at?: string | null
+  }
+  superseded_history: {
+    id: number
+    version_number: string
+    status: string
+    published_at?: string | null
+    change_notes?: string | null
+  }[]
+}
+
+export const libraryReviewApi = {
+  getDashboardSummary: () => api.get<LibraryDashboardSummary>('/api/v1/library-review/dashboard-summary'),
+  getDependencyMap: (pelDocRef: string) =>
+    api.get<LibraryDependencyMap>(`/api/v1/library-review/dependencies/${encodeURIComponent(pelDocRef)}`),
 }
 
 // ============ ISO 27001 ISMS API ============

@@ -1,48 +1,22 @@
 import { useEffect, useState, useDeferredValue } from 'react'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
-import { Plus, FileText, Search, Loader2 } from 'lucide-react'
+import { FileText, Search } from 'lucide-react'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { EmptyState } from '../components/ui/EmptyState'
-import { policiesApi, Policy, PolicyCreate, getApiErrorMessage } from '../api/client'
-import { Button } from '../components/ui/Button'
+import { policiesApi, Policy, getApiErrorMessage } from '../api/client'
 import { Input } from '../components/ui/Input'
-import { Textarea } from '../components/ui/Textarea'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '../components/ui/Dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/Select'
+import { Link } from 'react-router-dom'
 import { LibraryShell } from './LibraryShell'
 
 export default function Policies() {
   const { t } = useTranslation()
   const [policies, setPolicies] = useState<Policy[]>([])
   const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [creating, setCreating] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [createError, setCreateError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
-  const [formData, setFormData] = useState<PolicyCreate>({
-    title: '',
-    description: '',
-    document_type: 'policy',
-    category: '',
-    department: '',
-    review_frequency_months: 12,
-  })
 
   useEffect(() => {
     let cancelled = false
@@ -64,32 +38,6 @@ export default function Policies() {
       cancelled = true
     }
   }, [])
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setCreating(true)
-    setCreateError(null)
-    try {
-      const response = await policiesApi.create(formData)
-      if (response.data) {
-        setPolicies((prev) => [response.data, ...prev])
-      }
-      setShowModal(false)
-      setFormData({
-        title: '',
-        description: '',
-        document_type: 'policy',
-        category: '',
-        department: '',
-        review_frequency_months: 12,
-      })
-    } catch (err) {
-      trackError(err, { component: 'Policies', action: 'create' })
-      setCreateError(getApiErrorMessage(err))
-    } finally {
-      setCreating(false)
-    }
-  }
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -151,15 +99,26 @@ export default function Policies() {
     <LibraryShell
       activeView="policies"
       actions={
-        <Button onClick={() => setShowModal(true)}>
-          <Plus size={20} />
-          {t('policies.new')}
-        </Button>
+        <div className="flex flex-wrap gap-2 text-sm">
+          <Link className="text-primary hover:underline" to="/documents">
+            Governance Library
+          </Link>
+          <Link className="text-primary hover:underline" to="/document-control">
+            Document Control
+          </Link>
+          <Link className="text-primary hover:underline" to="/documents/campaigns">
+            HSEQ Campaigns
+          </Link>
+        </div>
       }
     >
       {loadError && (
         <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{loadError}</div>
       )}
+      <div className="rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-foreground">
+        New Policy CRUD is frozen. Use Governance Library for controlled files, Document Control for governance,
+        and HSEQ Campaigns for acknowledgements.
+      </div>
 
       {/* Search */}
       <div className="flex gap-4">
@@ -183,12 +142,6 @@ export default function Policies() {
               icon={<FileText className="w-8 h-8 text-muted-foreground" />}
               title={t('policies.empty.title')}
               description={t('policies.empty.subtitle')}
-              action={
-                <Button onClick={() => setShowModal(true)}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  {t('policies.create')}
-                </Button>
-              }
             />
           </div>
         ) : (
@@ -229,160 +182,6 @@ export default function Policies() {
         )}
       </div>
 
-      {/* Create Modal */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('policies.dialog.title')}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-5">
-            {createError && (
-              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">
-                {createError}
-              </div>
-            )}
-            <div>
-              <label
-                htmlFor="policies-field-0"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('policies.form.title')}
-              </label>
-              <Input
-                id="policies-field-0"
-                type="text"
-                required
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder={t('policies.form.title_placeholder')}
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="policies-field-1"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('policies.form.description')}
-              </label>
-              <Textarea
-                id="policies-field-1"
-                rows={3}
-                value={formData.description || ''}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder={t('policies.form.description_placeholder')}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label
-                  htmlFor="policies-field-2"
-                  className="block text-sm font-medium text-foreground mb-2"
-                >
-                  {t('policies.form.type')}
-                </label>
-                <Select
-                  value={formData.document_type}
-                  onValueChange={(value) => setFormData({ ...formData, document_type: value })}
-                >
-                  <SelectTrigger id="policies-field-2">
-                    <SelectValue placeholder={t('policies.form.select_type')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="policy">{t('policies.type.policy')}</SelectItem>
-                    <SelectItem value="procedure">{t('policies.type.procedure')}</SelectItem>
-                    <SelectItem value="work_instruction">
-                      {t('policies.type.work_instruction')}
-                    </SelectItem>
-                    <SelectItem value="sop">{t('policies.type.sop')}</SelectItem>
-                    <SelectItem value="form">{t('policies.type.form')}</SelectItem>
-                    <SelectItem value="template">{t('policies.type.template')}</SelectItem>
-                    <SelectItem value="guideline">{t('policies.type.guideline')}</SelectItem>
-                    <SelectItem value="manual">{t('policies.type.manual')}</SelectItem>
-                    <SelectItem value="record">{t('policies.type.record')}</SelectItem>
-                    <SelectItem value="other">{t('policies.type.other')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="policies-field-3"
-                  className="block text-sm font-medium text-foreground mb-2"
-                >
-                  {t('policies.form.review_frequency')}
-                </label>
-                <Select
-                  value={String(formData.review_frequency_months)}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, review_frequency_months: parseInt(value) })
-                  }
-                >
-                  <SelectTrigger id="policies-field-3">
-                    <SelectValue placeholder={t('policies.form.select_frequency')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="6">{t('policies.frequency.6_months')}</SelectItem>
-                    <SelectItem value="12">{t('policies.frequency.12_months')}</SelectItem>
-                    <SelectItem value="24">{t('policies.frequency.24_months')}</SelectItem>
-                    <SelectItem value="36">{t('policies.frequency.36_months')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label
-                  htmlFor="policies-field-4"
-                  className="block text-sm font-medium text-foreground mb-2"
-                >
-                  {t('policies.form.category')}
-                </label>
-                <Input
-                  id="policies-field-4"
-                  type="text"
-                  value={formData.category || ''}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  placeholder={t('policies.form.category_placeholder')}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="policies-field-5"
-                  className="block text-sm font-medium text-foreground mb-2"
-                >
-                  {t('policies.form.department')}
-                </label>
-                <Input
-                  id="policies-field-5"
-                  type="text"
-                  value={formData.department || ''}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                  placeholder={t('policies.form.department_placeholder')}
-                />
-              </div>
-            </div>
-
-            <DialogFooter className="gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
-                {t('cancel')}
-              </Button>
-              <Button type="submit" disabled={creating}>
-                {creating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {t('policies.creating')}
-                  </>
-                ) : (
-                  t('policies.create')
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </LibraryShell>
   )
 }

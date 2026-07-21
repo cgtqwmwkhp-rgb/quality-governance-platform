@@ -1,10 +1,11 @@
 """User management API routes."""
 
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
@@ -22,6 +23,8 @@ from src.api.utils.errors import api_error
 from src.core.security import get_password_hash
 from src.domain.models.user import Role, User
 from src.domain.services.feature_flag_service import FeatureFlagService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 USER_MANAGEMENT_FLAG_KEY = "admin_user_management"
@@ -190,10 +193,27 @@ async def create_user(
         from src.domain.services.engineer_user_link_service import ensure_engineer_for_user_async
 
         await db.flush()
-        await ensure_engineer_for_user_async(db, user, tenant_id=user.tenant_id)
+        try:
+            await ensure_engineer_for_user_async(db, user, tenant_id=user.tenant_id)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=api_error(ErrorCode.VALIDATION_ERROR, str(exc)),
+            ) from exc
+        except IntegrityError as exc:
+            logger.warning("ensure_engineer_for_user failed on create user=%s", normalized_email, exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=api_error(
+                    ErrorCode.VALIDATION_ERROR,
+                    "Unable to provision workforce person record for this user",
+                ),
+            ) from exc
 
     await db.commit()
-    await db.refresh(user)
+    # Re-load with roles: async lazy-load of relationships after refresh → MissingGreenlet 500 (ACT-051).
+    result = await db.execute(select(User).options(selectinload(User.roles)).where(User.id == user.id))
+    user = result.scalar_one()
 
     return UserResponse.model_validate(user)
 

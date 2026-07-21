@@ -34,13 +34,14 @@ async def test_complete_assessment_rejects_empty_responses():
         execute=AsyncMock(side_effect=[_FakeResult(run), _FakeResult(template)]),
         commit=AsyncMock(),
         refresh=AsyncMock(),
+        rollback=AsyncMock(),
     )
     user = types.SimpleNamespace(id=42, tenant_id=1, is_superuser=False, roles=[])
 
     with pytest.raises(HTTPException) as exc:
         await complete_assessment("asm-run-001", db, user)
 
-    assert exc.value.status_code == 400
+    assert exc.value.status_code == 422
     assert exc.value.detail["code"] == "VALIDATION_ERROR"
     assert exc.value.detail["details"]["scorable_items"] == 0
     db.commit.assert_not_awaited()
@@ -65,13 +66,14 @@ async def test_complete_assessment_rejects_all_na_responses():
         execute=AsyncMock(side_effect=[_FakeResult(run), _FakeResult(template)]),
         commit=AsyncMock(),
         refresh=AsyncMock(),
+        rollback=AsyncMock(),
     )
     user = types.SimpleNamespace(id=42, tenant_id=1, is_superuser=False, roles=[])
 
     with pytest.raises(HTTPException) as exc:
         await complete_assessment("asm-run-002", db, user)
 
-    assert exc.value.status_code == 400
+    assert exc.value.status_code == 422
     assert exc.value.detail["details"]["response_count"] == 1
     assert exc.value.detail["details"]["scorable_items"] == 0
     db.commit.assert_not_awaited()
@@ -145,7 +147,7 @@ async def test_complete_assessment_rejects_missing_template_answers():
     with pytest.raises(HTTPException) as exc:
         await complete_assessment("asm-run-004", db, user)
 
-    assert exc.value.status_code == 400
+    assert exc.value.status_code == 422
     assert exc.value.detail["code"] == "VALIDATION_ERROR"
     assert exc.value.detail["details"]["missing_question_ids"] == [102]
     db.commit.assert_not_awaited()

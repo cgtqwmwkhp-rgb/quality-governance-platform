@@ -3,7 +3,7 @@
 import logging
 from typing import Annotated, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
@@ -21,12 +21,18 @@ from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictError, NotFoundError
 from src.domain.models.incident import Incident, IncidentRunningSheetEntry
 from src.domain.models.user import User
+from src.domain.services.api_idempotency_service import (
+    SCOPE_INCIDENT_CREATE,
+    begin_idempotent_create,
+    complete_idempotent_create,
+)
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.case_risk_links import sync_case_risk_links_from_csv
 from src.domain.services.incident_risk_links import (
     append_linked_risk_id,
     create_enterprise_risk_from_incident,
     default_impact_for_incident,
+    find_existing_enterprise_risk_for_incident,
     incident_detail_href,
     resolve_enterprise_category,
     risk_register_href,
@@ -138,15 +144,32 @@ async def create_incident(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("incident:create"))],
     request_id: str = Depends(get_request_id),
+    idempotency_key: Annotated[Optional[str], Header(alias="Idempotency-Key")] = None,
 ) -> Incident:
     """
     Report a new incident.
 
     Requires authentication. Delegates to IncidentService for audit trail,
     cache invalidation, and telemetry.
+
+    Optional ``Idempotency-Key`` header (PX-001): retries return the same record.
     """
     svc = IncidentService(db)
     try:
+        claim = await begin_idempotent_create(
+            db,
+            tenant_id=current_user.tenant_id,
+            scope=SCOPE_INCIDENT_CREATE,
+            idempotency_key=idempotency_key,
+            payload=incident_data,
+        )
+        if claim is not None and claim.is_replay and claim.entity_id is not None:
+            return await svc.get_incident(
+                claim.entity_id,
+                current_user.tenant_id,
+                skip_tenant_check=current_user.is_superuser,
+            )
+
         has_set_ref = current_user.has_permission("incident:set_reference_number")
         incident = await svc.create_incident(
             incident_data=incident_data,
@@ -155,6 +178,12 @@ async def create_incident(
             has_set_ref_permission=has_set_ref,
             request_id=request_id,
         )
+        await complete_idempotent_create(
+            db,
+            record_id=claim.record_id if claim else None,
+            entity_type="incident",
+            entity_id=incident.id,
+        )
         track_metric("incidents.created")
         await _trigger_operational_standards_assess(db, incident, current_user)
         return incident
@@ -162,6 +191,8 @@ async def create_incident(
         raise AuthorizationError(str(e))
     except ValueError as e:
         raise ConflictError(str(e))
+    except LookupError as e:
+        raise NotFoundError(str(e))
 
 
 @router.get("/{incident_id}", response_model=IncidentResponseWithLinks)
@@ -267,6 +298,34 @@ async def raise_risk_from_incident(
             ),
         )
 
+    tenant_id = incident.tenant_id or current_user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("Incident has no tenant; cannot raise an enterprise risk.")
+
+    existing = await find_existing_enterprise_risk_for_incident(db, incident=incident)
+    if existing is not None:
+        incident.linked_risk_ids = append_linked_risk_id(incident.linked_risk_ids, existing.id)
+        await sync_case_risk_links_from_csv(
+            db,
+            tenant_id=tenant_id,
+            case_type="incident",
+            case_id=incident.id,
+            linked_risk_ids_raw=incident.linked_risk_ids,
+        )
+        await db.commit()
+        return RaiseRiskFromIncidentResponse(
+            risk=RaisedEnterpriseRiskSummary(
+                id=existing.id,
+                reference_number=existing.reference,
+                title=existing.title,
+                risk_source=existing.context,
+            ),
+            incident_id=incident.id,
+            linked_risk_ids=incident.linked_risk_ids or str(existing.id),
+            incident_href=incident_detail_href(incident.id),
+            risk_register_href=risk_register_href(existing.id, incident_ref=incident.reference_number),
+        )
+
     impact = default_impact_for_incident(incident, body.impact)
     category = resolve_enterprise_category(body.category, incident)
     title = body.title or f"Risk from incident {incident.reference_number}"
@@ -287,16 +346,16 @@ async def raise_risk_from_incident(
             impact=impact,
             category=category,
             treatment_strategy=body.treatment_strategy,
+            tenant_id=tenant_id,
         )
         incident.linked_risk_ids = append_linked_risk_id(incident.linked_risk_ids, risk.id)
-        if incident.tenant_id is not None:
-            await sync_case_risk_links_from_csv(
-                db,
-                tenant_id=incident.tenant_id,
-                case_type="incident",
-                case_id=incident.id,
-                linked_risk_ids_raw=incident.linked_risk_ids,
-            )
+        await sync_case_risk_links_from_csv(
+            db,
+            tenant_id=tenant_id,
+            case_type="incident",
+            case_id=incident.id,
+            linked_risk_ids_raw=incident.linked_risk_ids,
+        )
 
         await record_audit_event(
             db=db,
@@ -308,7 +367,7 @@ async def raise_risk_from_incident(
             payload={"risk_id": risk.id, "risk_reference": risk.reference},
             user_id=current_user.id,
             request_id=request_id,
-            tenant_id=incident.tenant_id,
+            tenant_id=tenant_id,
         )
 
         await db.commit()
@@ -316,13 +375,42 @@ async def raise_risk_from_incident(
     except IntegrityError as exc:
         await db.rollback()
         logger.exception("raise-risk IntegrityError for incident_id=%s", incident_id)
+        # Concurrent double-submit may have created the row — return it when present.
+        try:
+            incident = await svc.get_incident(
+                incident_id,
+                current_user.tenant_id,
+                skip_tenant_check=current_user.is_superuser,
+            )
+            recovered = await find_existing_enterprise_risk_for_incident(db, incident=incident)
+        except Exception:
+            recovered = None
+        if recovered is not None:
+            incident.linked_risk_ids = append_linked_risk_id(incident.linked_risk_ids, recovered.id)
+            await db.commit()
+            return RaiseRiskFromIncidentResponse(
+                risk=RaisedEnterpriseRiskSummary(
+                    id=recovered.id,
+                    reference_number=recovered.reference,
+                    title=recovered.title,
+                    risk_source=recovered.context,
+                ),
+                incident_id=incident.id,
+                linked_risk_ids=incident.linked_risk_ids or str(recovered.id),
+                incident_href=incident_detail_href(incident.id),
+                risk_register_href=risk_register_href(recovered.id, incident_ref=incident.reference_number),
+            )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=api_error(
                 ErrorCode.DATABASE_ERROR,
-                "Could not raise risk due to a data conflict. Check assignee and try again.",
+                "Could not raise risk due to a data conflict. Refresh and try again, "
+                "or open any already-linked risk from this incident.",
             ),
         ) from exc
+    except BadRequestError:
+        await db.rollback()
+        raise
     except Exception as exc:
         await db.rollback()
         logger.exception("raise-risk failed for incident_id=%s", incident_id)

@@ -303,10 +303,26 @@ class LookupOptionBase(BaseModel):
     parent_id: Optional[int] = None
 
 
-class LookupOptionCreate(LookupOptionBase):
-    """Schema for creating a lookup option."""
+class LookupOptionCreate(BaseModel):
+    """Schema for creating a lookup option.
 
-    pass
+    ``category`` may be omitted (or empty) in the body because the URL path is
+    authoritative (``POST /lookup/{category}``). Admin UI historically omitted
+    it; requiring it caused 422 ``body -> category: field required`` on every Add.
+    Kept as ``str`` (not Optional) for OpenAPI contract stability.
+    """
+
+    category: str = Field(
+        default="",
+        max_length=50,
+        description="Optional; URL path category is used when omitted or empty.",
+    )
+    code: str = Field(..., min_length=1, max_length=50)
+    label: str = Field(..., min_length=1, max_length=200)
+    description: Optional[str] = None
+    is_active: bool = True
+    display_order: int = 0
+    parent_id: Optional[int] = None
 
 
 class LookupOptionUpdate(BaseModel):

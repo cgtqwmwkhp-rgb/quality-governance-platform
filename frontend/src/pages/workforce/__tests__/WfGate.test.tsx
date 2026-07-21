@@ -33,6 +33,7 @@ vi.mock('../../../api/client', () => ({
     listInductions,
     listEngineers,
     listAssetTypes,
+    createAssessment: vi.fn(),
     getAssessment,
     startAssessment,
     getInduction,
@@ -43,6 +44,36 @@ vi.mock('../../../api/client', () => ({
     listTemplates,
     getTemplate,
   },
+  trainingMatrixApi: {
+    listCompliance: vi.fn().mockResolvedValue({ items: [], total: 0, atlas_hub_url: 'https://atlas' }),
+    myTraining: vi.fn().mockResolvedValue({ items: [], total: 0, atlas_hub_url: 'https://atlas' }),
+    listNameMaps: vi.fn().mockResolvedValue([]),
+    listRequirements: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+    listCourses: vi.fn().mockResolvedValue([]),
+    uploadImport: vi.fn(),
+    getLatestImport: vi.fn().mockRejectedValue(new Error('No training matrix import found')),
+    upsertNameMap: vi.fn(),
+    autoMatchNameMaps: vi.fn().mockResolvedValue({
+      people_considered: 0,
+      already_mapped: 0,
+      from_saved_maps: 0,
+      from_auto_match: 0,
+      still_unmatched: 0,
+    }),
+    seedRequirements: vi.fn(),
+    upsertRequirementsMatrix: vi.fn(),
+    proposeRequirementsMatrix: vi.fn(),
+    listMatrixProposals: vi.fn().mockResolvedValue({
+      items: [],
+      total: 0,
+      viewer_can_approve: false,
+      approver_email: 'david.harris@plantexpand.com',
+    }),
+    approveMatrixProposal: vi.fn(),
+    rejectMatrixProposal: vi.fn(),
+    notify: vi.fn(),
+  },
+  ATLAS_HUB_URL: 'https://www.atlas-hub.co.uk/o/98b88f4e-2c3f-44c1-a812-36ea66222c7d/',
   getApiErrorMessage: (err: unknown, fallback = 'Request failed') => {
     if (err && typeof err === 'object' && 'response' in err) {
       const data = (err as { response?: { data?: { error?: { message?: string } } } }).response
@@ -51,6 +82,10 @@ vi.mock('../../../api/client', () => ({
     }
     return fallback
   },
+}))
+
+vi.mock('../../builderMapAssistApi', () => ({
+  fetchTemplateStandardsCoverage: vi.fn(),
 }))
 
 describe('WF-GATE Assessments filters', () => {
@@ -127,6 +162,52 @@ describe('WF-GATE Assessments filters', () => {
     )
     expect(screen.getByLabelText('workforce.common.engineer')).toBeDisabled()
   })
+
+  it('does not present a failed employee lookup as an empty roster', async () => {
+    listEngineers.mockRejectedValue(new Error('engineers unavailable'))
+
+    const Assessments = (await import('../Assessments')).default
+    render(
+      <MemoryRouter>
+        <Assessments />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('assessments-employees-unavailable')).toHaveTextContent(
+      /could not be loaded/i,
+    )
+    expect(screen.queryByTestId('assessments-employees-empty')).not.toBeInTheDocument()
+    expect(screen.getByTestId('assessments-lookup-warning')).toHaveTextContent(
+      /labels could not be loaded/i,
+    )
+  })
+})
+
+describe('WF-GATE AssessmentCreate required lookups', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    listAssetTypes.mockResolvedValue({ data: { items: [] } })
+    listEngineers.mockResolvedValue({ data: { items: [{ id: 42, employee_number: 'E-42' }] } })
+    listTemplates.mockResolvedValue({ data: { items: [{ id: 1, name: 'Template A' }] } })
+  })
+
+  it('fails closed and identifies unavailable required form data', async () => {
+    listTemplates.mockRejectedValue(new Error('templates unavailable'))
+    listEngineers.mockRejectedValue(new Error('engineers unavailable'))
+
+    const AssessmentCreate = (await import('../AssessmentCreate')).default
+    render(
+      <MemoryRouter>
+        <AssessmentCreate />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('assessment-create-templates-unavailable')).toBeInTheDocument()
+    expect(screen.getByTestId('assessment-create-employees-unavailable')).toBeInTheDocument()
+    expect(screen.getByLabelText(/workforce\.common\.template/i)).toBeDisabled()
+    expect(screen.getByLabelText(/workforce\.common\.engineer/i)).toBeDisabled()
+    expect(screen.getByRole('button', { name: /workforce\.assessments\.create_start/i })).toBeDisabled()
+  })
 })
 
 describe('WF-GATE Training filters', () => {
@@ -168,7 +249,7 @@ describe('WF-GATE Training filters', () => {
     const user = userEvent.setup()
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/workforce/training?tab=inductions']}>
         <Training />
       </MemoryRouter>,
     )
@@ -195,6 +276,22 @@ describe('WF-GATE Training filters', () => {
     }
 
     expect(screen.getByRole('button', { name: /workforce\.common\.filters/i })).toBeDisabled()
+  })
+
+  it('warns when lookup labels fail instead of silently showing raw IDs', async () => {
+    listEngineers.mockRejectedValue(new Error('engineers unavailable'))
+
+    const Training = (await import('../Training')).default
+    render(
+      <MemoryRouter initialEntries={['/workforce/training?tab=inductions']}>
+        <Training />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('training-lookup-warning')).toHaveTextContent(
+      /labels could not be loaded/i,
+    )
+    expect(screen.getAllByText('#7')).not.toHaveLength(0)
   })
 })
 

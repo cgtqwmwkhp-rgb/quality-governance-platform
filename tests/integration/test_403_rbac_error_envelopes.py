@@ -12,8 +12,7 @@ class Test403RBACErrorEnvelopes:
 
     @pytest.mark.asyncio
     async def test_policies_403_explicit_reference_number(self, client: AsyncClient, test_session, auth_headers):
-        """Verify that Policies returns canonical 403 for unauthorized reference_number."""
-        # test_user does NOT have the permission (no roles assigned)
+        """W5: Policy create is frozen (410) before reference_number RBAC can run."""
         response = await client.post(
             "/api/v1/policies",
             json={
@@ -26,24 +25,8 @@ class Test403RBACErrorEnvelopes:
             headers=auth_headers,
         )
 
-        assert response.status_code == 403
-
-        data = response.json()
-        # Verify canonical error envelope keys
-        assert "code" in data.get("error", {})
-        assert "message" in data.get("error", {})
-        assert "details" in data.get("error", {})
-        assert "request_id" in data.get("error", {})
-
-        assert isinstance(data["error"]["code"], str)
-        assert data["error"]["code"] == "PERMISSION_DENIED"
-
-        assert data["error"]["request_id"] is not None
-        assert isinstance(data["error"]["request_id"], str)
-        assert len(data["error"]["request_id"]) > 0
-
-        msg = data["error"]["message"].lower()
-        assert "permission" in msg or "reference_number" in msg or "denied" in msg
+        assert response.status_code == 410
+        assert "frozen" in response.text.lower()
 
     @pytest.mark.asyncio
     async def test_incidents_403_explicit_reference_number(self, client: AsyncClient, test_session, auth_headers):

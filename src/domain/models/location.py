@@ -27,6 +27,9 @@ class Location(Base, TimestampMixin, AuditTrailMixin):
         Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # approved | pending | rejected — provisional CES rows use pending + is_active=False
+    approval_status: Mapped[str] = mapped_column(String(40), nullable=False, default="approved", index=True)
+    source: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
 
     parent: Mapped[Optional["Location"]] = relationship(
         "Location",

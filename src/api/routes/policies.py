@@ -17,6 +17,16 @@ from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter()
 
+POLICY_CRUD_FROZEN_MESSAGE = (
+    "Policy CRUD is frozen. Create and govern new documents in the Governance Library, "
+    "Document Control, and HSEQ Campaigns."
+)
+
+
+def _policy_crud_frozen() -> None:
+    """Return the migration guidance instead of creating parallel policy records."""
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail=POLICY_CRUD_FROZEN_MESSAGE)
+
 
 @router.post(
     "",
@@ -35,6 +45,10 @@ async def create_policy(
 
     Requires authentication.
     """
+    _policy_crud_frozen()
+
+    # Unreachable while the legacy policy write surface is frozen. Retained to
+    # keep the migration reversible without maintaining a second document stack.
     # Generate or use provided reference number
     if policy_data.reference_number:
         # Guard: Only authorized users can set explicit reference numbers
@@ -177,6 +191,9 @@ async def update_policy(
 
     Requires authentication.
     """
+    _policy_crud_frozen()
+
+    # Unreachable while the legacy policy write surface is frozen.
     # Get existing policy with tenant isolation
     query = select(Policy).where(Policy.id == policy_id)
     if not getattr(current_user, "is_superuser", False):
@@ -231,6 +248,9 @@ async def delete_policy(
 
     Requires authentication.
     """
+    _policy_crud_frozen()
+
+    # Unreachable while the legacy policy write surface is frozen.
     # Get existing policy with tenant isolation
     query = select(Policy).where(Policy.id == policy_id)
     if not getattr(current_user, "is_superuser", False):

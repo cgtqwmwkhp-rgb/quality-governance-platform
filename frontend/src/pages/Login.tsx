@@ -68,7 +68,7 @@ type LoginState =
 // Timing constants (from contract)
 const SPINNER_DELAY_MS = 250 // Don't show spinner for fast requests
 const SLOW_WARNING_MS = 3000 // Show "Still working..." after 3s
-// Note: REQUEST_TIMEOUT_MS (15000) is handled by the API client's AbortController
+// Note: adaptive API client timeouts (reads 30s / writes 45s) handle hung backends
 
 interface LoginProps {
   onLogin: (token: string, refreshToken?: string) => void
@@ -209,26 +209,33 @@ export default function Login({ onLogin }: LoginProps) {
 
   // Pre-warm the backend on mount so cold-start latency is absorbed before
   // the user actually submits credentials or returns from SSO redirect.
-  // Retries silently to handle Azure App Service cold-start (503 until ready).
+  // Uses /api/v1/health (versioned) rather than /healthz. While the App Service
+  // is returning platform 503 HTML (no CORS headers), the browser still logs a
+  // CORS console warning — that is expected during outage/cold-start and is
+  // swallowed here so login UX is unaffected.
   useEffect(() => {
     let cancelled = false
     const warmUp = async () => {
       for (let attempt = 0; attempt < 3; attempt++) {
         if (cancelled) return
+        const controller = new AbortController()
+        const timer = window.setTimeout(() => controller.abort(), 8_000)
         try {
-          // CORS mode (default): no-cors + CORP same-origin on the API causes
-          // Chrome ERR_BLOCKED_BY_RESPONSE.NotSameOrigin on cross-origin warmup.
-          await fetch(`${API_BASE}/healthz`, {
+          const res = await fetch(`${API_BASE}/api/v1/health`, {
             method: 'GET',
             credentials: 'omit',
+            signal: controller.signal,
           })
-          return
+          if (res.ok) return
         } catch {
-          if (attempt < 2) await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt))
+          // Network / CORS-during-503 / abort — retry quietly
+        } finally {
+          window.clearTimeout(timer)
         }
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt))
       }
     }
-    warmUp()
+    void warmUp()
     return () => { cancelled = true }
   }, [])
 
@@ -385,8 +392,9 @@ export default function Login({ onLogin }: LoginProps) {
       <div className="w-full max-w-md relative">
         {/* Logo */}
         <div className="text-center mb-8">
-          <BrandMarkTile size={64} className="mb-4 rounded-2xl" />
-          <h1 className="text-2xl font-bold text-foreground mb-2">{t('login.title')}</h1>
+          <BrandMarkTile size={72} className="mb-4 rounded-2xl mx-auto" />
+          <h1 className="text-2xl font-bold text-foreground mb-1">{t('brand.product_name')}</h1>
+          <p className="text-sm text-muted-foreground mb-2">{t('brand.company_line')}</p>
           <p className="text-muted-foreground">{t('login.subtitle')}</p>
         </div>
 

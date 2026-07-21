@@ -45,6 +45,7 @@ async def test_create_assessment_response_updates_existing_response():
         add=Mock(),
         commit=AsyncMock(),
         refresh=AsyncMock(),
+        rollback=AsyncMock(),
     )
     user = types.SimpleNamespace(id=42, tenant_id=1, is_superuser=False, roles=[])
     payload = AssessmentResponseCreate(

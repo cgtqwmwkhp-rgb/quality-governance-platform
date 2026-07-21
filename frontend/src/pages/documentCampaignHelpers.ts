@@ -57,6 +57,7 @@ export interface CampaignAudienceFormState {
   role: string
   groupId: string
   specificUserIds: string
+  engineerIds: number[]
 }
 
 export function parseSpecificUserIds(raw: string): number[] {
@@ -97,6 +98,8 @@ export function buildCampaignPayload(
     payload.audience_group_id = Number.isInteger(groupId) && groupId > 0 ? groupId : null
   } else if (form.audience.audienceType === 'specific_users') {
     payload.audience_user_ids = parseSpecificUserIds(form.audience.specificUserIds)
+  } else if (form.audience.audienceType === 'specific_engineers') {
+    payload.audience_engineer_ids = [...new Set(form.audience.engineerIds)].sort((a, b) => a - b)
   }
 
   return payload

@@ -1,5 +1,5 @@
-import { useEffect, useState, useDeferredValue, useMemo } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useEffect, useState, useDeferredValue } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
 import { Plus, MessageSquare, Search, Loader2, MailWarning, Paperclip } from 'lucide-react'
@@ -41,6 +41,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import {
+  CUSTOMERS_LOOKUP_CATEGORY,
+  toCustomerSelectOptions,
+} from './admin/customersCatalog'
+import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
 
 const COMPLAINT_TYPE_VALUES = [
   'product',
@@ -78,6 +83,32 @@ const EMPTY_FORM: ComplaintCreate = {
   subject_user_id: null,
   subject_name: '',
   alleged_event_at: null,
+}
+
+function freshComplaintForm(): ComplaintCreate {
+  return { ...EMPTY_FORM, received_date: new Date().toISOString().slice(0, 16) }
+}
+
+function isComplaintCreateDirty(
+  form: ComplaintCreate,
+  extras: { subjectEmail: string; pendingFiles: File[]; selectedCustomerCode: string },
+): boolean {
+  if (extras.pendingFiles.length > 0) return true
+  if (extras.subjectEmail.trim()) return true
+  if (extras.selectedCustomerCode.trim()) return true
+  if (form.title.trim() || form.description.trim()) return true
+  if (
+    form.complainant_name.trim() ||
+    form.complainant_email?.trim() ||
+    form.complainant_phone?.trim()
+  ) {
+    return true
+  }
+  if (form.complainant_company?.trim() || form.subject_name?.trim()) return true
+  if (form.contract_id != null) return true
+  if (form.complaint_type !== 'other' || form.priority !== 'medium') return true
+  if (form.alleged_event_at) return true
+  return false
 }
 
 type OwnerFilter = 'all' | 'unassigned'
@@ -137,11 +168,11 @@ export default function Complaints() {
   const [assigneeById, setAssigneeById] = useState<
     Record<number, { email: string; user?: UserSearchResult }>
   >({})
-  const [formData, setFormData] = useState<ComplaintCreate>({
-    ...EMPTY_FORM,
-    received_date: new Date().toISOString().slice(0, 16),
-  })
+  const [formData, setFormData] = useState<ComplaintCreate>(freshComplaintForm)
   const [contracts, setContracts] = useState<Contract[]>([])
+  const [customerOptions, setCustomerOptions] = useState<{ value: string; label: string }[]>([])
+  const [selectedCustomerCode, setSelectedCustomerCode] = useState('')
+  const [customersLoaded, setCustomersLoaded] = useState(false)
   const [topicOptions, setTopicOptions] = useState<{ value: string; label: string }[]>([])
   const [subjectEmail, setSubjectEmail] = useState('')
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
@@ -161,29 +192,43 @@ export default function Complaints() {
     }
   }, [])
 
-  // Load customer contracts + topic labels when create dialog opens.
+  // Load Customers lookup (SSOT) + contracts (optional FK) + topic labels when create opens.
   useEffect(() => {
-    if (!showModal) return
+    if (!showModal) {
+      setCustomersLoaded(false)
+      return
+    }
     let cancelled = false
+    setCustomersLoaded(false)
     ;(async () => {
       try {
-        const [contractRes, lookupRes] = await Promise.all([
-          contractsApi.list(true),
+        const [customerRes, contractRes, lookupRes] = await Promise.all([
+          lookupsApi.list(CUSTOMERS_LOOKUP_CATEGORY, true).catch(() => ({ items: [], total: 0 })),
+          contractsApi.list(true).catch(() => ({ items: [] as Contract[] })),
           lookupsApi.list('complaint_types', true).catch(() => ({ items: [], total: 0 })),
         ])
         if (cancelled) return
+        const fromLookup = toCustomerSelectOptions(customerRes.items || [])
+        const fromContracts = (contractRes.items || []).map((c) => ({
+          value: `contract:${c.id}`,
+          label: c.client_name ? `${c.client_name} (${c.code})` : `${c.name} (${c.code})`,
+        }))
+        // Prefer Admin → Lookups → Customers; fall back to Contracts only if lookup empty.
+        setCustomerOptions(fromLookup.length > 0 ? fromLookup : fromContracts)
         setContracts(contractRes.items || [])
-        const lookupByCode = new Map(
-          (lookupRes.items || []).map((item) => [item.code.toLowerCase(), item.label]),
-        )
+        setCustomersLoaded(true)
         setTopicOptions(
-          COMPLAINT_TYPE_VALUES.map((code) => ({
-            value: code,
-            label: lookupByCode.get(code) || t(`complaints.type.${code}`, code),
-          })),
+          mergeLookupSelectOptions(
+            COMPLAINT_TYPE_VALUES.map((code) => ({
+              value: code,
+              label: t(`complaints.type.${code}`, code),
+            })),
+            lookupRes.items,
+          ),
         )
       } catch (err) {
         if (!cancelled) {
+          setCustomersLoaded(true)
           trackError(err, { component: 'Complaints', action: 'loadCreateLookups' })
           setTopicOptions(
             COMPLAINT_TYPE_VALUES.map((code) => ({
@@ -199,15 +244,42 @@ export default function Complaints() {
     }
   }, [showModal, t])
 
-  const contractOptions = useMemo(
-    () =>
-      contracts.map((c) => ({
-        value: String(c.id),
-        label: c.client_name ? `${c.client_name} (${c.code})` : `${c.name} (${c.code})`,
-        sublabel: c.name !== c.client_name ? c.name : c.code,
-      })),
-    [contracts],
-  )
+  const customersUnavailable = customersLoaded && customerOptions.length === 0
+
+  const applyCustomerSelection = (value: string) => {
+    setSelectedCustomerCode(value)
+    if (!value) {
+      setFormData((prev) => ({
+        ...prev,
+        contract_id: null,
+        complainant_company: '',
+      }))
+      return
+    }
+    if (value.startsWith('contract:')) {
+      const id = Number(value.slice('contract:'.length))
+      const contract = contracts.find((c) => c.id === id)
+      setFormData((prev) => ({
+        ...prev,
+        contract_id: Number.isFinite(id) ? id : null,
+        complainant_company: contract?.client_name || contract?.name || '',
+      }))
+      return
+    }
+    const option = customerOptions.find((o) => o.value === value)
+    const label = option?.label || value
+    const matched = contracts.find(
+      (c) =>
+        c.code?.toLowerCase() === value.toLowerCase() ||
+        c.client_name?.toLowerCase() === label.toLowerCase() ||
+        c.name?.toLowerCase() === label.toLowerCase(),
+    )
+    setFormData((prev) => ({
+      ...prev,
+      contract_id: matched?.id ?? null,
+      complainant_company: label,
+    }))
+  }
 
   // Hydrate list filters from shareable URL (back/forward + deep links).
   useEffect(() => {
@@ -308,18 +380,58 @@ export default function Complaints() {
     }
   }
 
+  const resetCreateForm = () => {
+    setPendingFiles([])
+    setSubjectEmail('')
+    setFormError(null)
+    setSelectedCustomerCode('')
+    setFormData(freshComplaintForm())
+  }
+
+  const requestCloseCreateModal = (): boolean => {
+    if (
+      isComplaintCreateDirty(formData, { subjectEmail, pendingFiles, selectedCustomerCode }) &&
+      !window.confirm(
+        t(
+          'complaints.dialog.discard_confirm',
+          'Discard unsaved complaint details?',
+        ),
+      )
+    ) {
+      return false
+    }
+    resetCreateForm()
+    setShowModal(false)
+    return true
+  }
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.title.trim() || !formData.description.trim() || !formData.complainant_name.trim()) {
       setFormError(t('complaints.form.required_error'))
       return
     }
-    if (!formData.contract_id) {
+    if (!selectedCustomerCode) {
       setFormError(t('complaints.form.customer_required', 'Select which customer this complaint is from.'))
+      return
+    }
+    if (customersUnavailable) {
+      setFormError(
+        t(
+          'complaints.form.customer_unavailable',
+          'No customers are available — add customers in Admin → Lookups before creating a complaint.',
+        ),
+      )
       return
     }
     setFormError(null)
     setCreating(true)
+
+    const selectedCustomerLabel =
+      customerOptions.find((o) => o.value === selectedCustomerCode)?.label?.trim() ||
+      selectedCustomerCode
+    const complainantCompany =
+      formData.complainant_company?.trim() || selectedCustomerLabel || undefined
 
     const payload: ComplaintCreate = {
       ...formData,
@@ -328,13 +440,14 @@ export default function Complaints() {
         ? new Date(formData.alleged_event_at).toISOString()
         : null,
       subject_name: formData.subject_name?.trim() || null,
-      complainant_company: formData.complainant_company?.trim() || undefined,
+      complainant_company: complainantCompany,
       source_type: formData.source_type || 'manual',
     }
 
     if (!navigator.onLine) {
       await queueForSync('/api/v1/complaints', 'POST', payload)
       toast.success(t('complaints.saved_offline', 'Saved for sync when back online'))
+      resetCreateForm()
       setShowModal(false)
       setCreating(false)
       return
@@ -370,9 +483,7 @@ export default function Complaints() {
         }
         setComplaints((prev) => [created, ...prev])
         setShowModal(false)
-        setFormData({ ...EMPTY_FORM, received_date: new Date().toISOString().slice(0, 16) })
-        setSubjectEmail('')
-        setPendingFiles([])
+        resetCreateForm()
         toast.success(`Complaint ${created.reference_number} recorded`)
         navigate(`/complaints/${created.id}`)
       }
@@ -770,12 +881,11 @@ export default function Complaints() {
       <Dialog
         open={showModal}
         onOpenChange={(open) => {
-          setShowModal(open)
-          if (!open) {
-            setPendingFiles([])
-            setSubjectEmail('')
-            setFormError(null)
+          if (open) {
+            setShowModal(true)
+            return
           }
+          requestCloseCreateModal()
         }}
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
@@ -796,16 +906,37 @@ export default function Complaints() {
               <FuzzySearchDropdown
                 label={`${t('complaints.form.customer', 'Which customer')} *`}
                 required
-                options={contractOptions}
-                value={formData.contract_id ? String(formData.contract_id) : ''}
-                onChange={(value) =>
-                  setFormData({
-                    ...formData,
-                    contract_id: value ? Number(value) : null,
-                  })
-                }
-                placeholder={t('complaints.form.customer_search', 'Search customer / contract…')}
+                options={customerOptions}
+                value={selectedCustomerCode}
+                onChange={applyCustomerSelection}
+                placeholder={t('complaints.form.customer_search', 'Search customer…')}
               />
+              {customersUnavailable ? (
+                <div
+                  className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-foreground"
+                  data-testid="complaints-customer-unavailable"
+                >
+                  <p className="font-medium">
+                    {t(
+                      'complaints.form.customer_empty_title',
+                      'No customers are configured',
+                    )}
+                  </p>
+                  <p className="text-muted-foreground mt-1">
+                    {t(
+                      'complaints.form.customer_empty_body',
+                      'Complaint intake needs at least one customer in Admin → Lookups → Customers. This is a setup gap — not an empty search result.',
+                    )}
+                  </p>
+                  <Link
+                    to="/admin/lookups"
+                    className="inline-flex mt-2 text-sm font-medium text-primary hover:underline"
+                    data-testid="complaints-customer-admin-link"
+                  >
+                    {t('complaints.form.customer_admin_cta', 'Open Admin → Lookups → Customers')}
+                  </Link>
+                </div>
+              ) : null}
             </div>
 
             <div className="space-y-3">
@@ -1119,10 +1250,10 @@ export default function Complaints() {
 
             <DialogFooter className="gap-3 pt-4">
               {formError && <p className="text-sm text-destructive">{formError}</p>}
-              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
+              <Button type="button" variant="outline" onClick={() => requestCloseCreateModal()}>
                 {t('cancel')}
               </Button>
-              <Button type="submit" disabled={creating}>
+              <Button type="submit" disabled={creating || customersUnavailable}>
                 {creating ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />

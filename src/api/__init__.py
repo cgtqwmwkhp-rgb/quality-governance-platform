@@ -26,6 +26,7 @@ from src.api.routes import (
     cross_standard_mappings,
     dlq_admin,
     document_campaign,
+    document_categories,
     document_control,
     documents,
     drivers,
@@ -50,6 +51,7 @@ from src.api.routes import (
     iso27001,
     kri,
     legal_holds,
+    library_review,
     loler_inspections,
     near_miss,
     notifications,
@@ -59,6 +61,7 @@ from src.api.routes import (
     planet_mark,
     policies,
     policy_acknowledgment,
+    portal_compliance,
     privacy,
     push_notifications,
     rca_tools,
@@ -73,6 +76,7 @@ from src.api.routes import (
     telemetry,
     tenants,
     testing,
+    training_matrix,
     training_tickets,
     users,
     uvdb,
@@ -111,8 +115,12 @@ router.include_router(investigations.router, prefix="/investigations", tags=["In
 router.include_router(complaints.router, prefix="/complaints", tags=["Complaints"])
 router.include_router(policies.router, prefix="/policies", tags=["Policy Library"])
 router.include_router(documents.router, prefix="/documents", tags=["Document Library"])
+# Governance Library taxonomy (Wave W0) — category tree + tag vocabulary
+router.include_router(document_categories.router, prefix="/document-categories", tags=["Governance Library Taxonomy"])
+router.include_router(library_review.router, prefix="/library-review", tags=["Governance Library Review"])
 router.include_router(global_search.router, prefix="/search", tags=["Global Search"])
 router.include_router(employee_portal.router, prefix="/portal", tags=["Employee Portal"])
+router.include_router(portal_compliance.router, prefix="/portal", tags=["Employee Portal"])
 router.include_router(compliance.router, prefix="/compliance", tags=["ISO Compliance & Evidence"])
 router.include_router(
     governed_knowledge.router,
@@ -231,6 +239,11 @@ router.include_router(
     training_tickets.router,
     prefix="/training-tickets",
     tags=["Training Tickets"],
+)
+router.include_router(
+    training_matrix.router,
+    prefix="/training-matrix",
+    tags=["Training Matrix"],
 )
 router.include_router(
     competency_requirements.router,

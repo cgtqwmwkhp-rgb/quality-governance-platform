@@ -51,6 +51,8 @@ export default function Assessments() {
     Array<{ id: number; label: string }>
   >([])
   const [templateMap, setTemplateMap] = useState<Record<number, string>>({})
+  const [lookupWarning, setLookupWarning] = useState<string | null>(null)
+  const [rosterLoadFailed, setRosterLoadFailed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
@@ -63,11 +65,17 @@ export default function Assessments() {
     workforceApi
       .listAssetTypes()
       .then((res) => setAssetTypes(res.data?.items || []))
-      .catch(() => setAssetTypes([]))
+      .catch(() => {
+        setAssetTypes([])
+        setLookupWarning(
+          'Some engineer, template, or asset labels could not be loaded. Assessment records remain available by ID.',
+        )
+      })
     workforceApi
       .listEngineers({ ...ACTIVE_EMPLOYEES_LIST_PARAMS })
       .then((res) => {
         const items = res.data?.items || []
+        setRosterLoadFailed(false)
         setEngineerMap(buildEmployeeLabelMap(items))
         setActiveEmployees(
           [...items]
@@ -76,8 +84,12 @@ export default function Assessments() {
         )
       })
       .catch(() => {
+        setRosterLoadFailed(true)
         setEngineerMap({})
         setActiveEmployees([])
+        setLookupWarning(
+          'Some engineer, template, or asset labels could not be loaded. Assessment records remain available by ID.',
+        )
       })
     auditsApi
       .listTemplates(1, 500, { is_published: true })
@@ -88,7 +100,11 @@ export default function Assessments() {
         }
         setTemplateMap(map)
       })
-      .catch(() => {})
+      .catch(() => {
+        setLookupWarning(
+          'Some engineer, template, or asset labels could not be loaded. Assessment records remain available by ID.',
+        )
+      })
   }, [])
 
   useEffect(() => {
@@ -124,7 +140,8 @@ export default function Assessments() {
     })
   }, [assessments, searchTerm, engineerMap, templateMap])
 
-  const rosterEmpty = activeEmployees.length === 0
+  const rosterEmpty = activeEmployees.length === 0 && !rosterLoadFailed
+  const rosterUnavailable = rosterEmpty || rosterLoadFailed
 
   return (
     <div className="space-y-6">
@@ -140,7 +157,15 @@ export default function Assessments() {
         </Button>
       </div>
 
-      {rosterEmpty && (
+      {rosterLoadFailed ? (
+        <div
+          className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive"
+          data-testid="assessments-employees-unavailable"
+        >
+          The employee roster could not be loaded. Reload the page before filtering or creating an
+          assessment.
+        </div>
+      ) : rosterEmpty ? (
         <div
           className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground"
           data-testid="assessments-employees-empty"
@@ -154,7 +179,7 @@ export default function Assessments() {
             {t('workforce.assessments.employees_empty_link')}
           </button>
         </div>
-      )}
+      ) : null}
 
       <Card>
         <CardHeader className="pb-4">
@@ -190,7 +215,7 @@ export default function Assessments() {
                 onChange={(e) => setEngineerFilter(e.target.value)}
                 className="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
                 aria-label={t('workforce.common.engineer')}
-                disabled={rosterEmpty}
+                disabled={rosterUnavailable}
               >
                 <option value="">{t('workforce.common.all_employees')}</option>
                 {activeEmployees.map((eng) => (
@@ -227,6 +252,14 @@ export default function Assessments() {
           </div>
         </CardHeader>
         <CardContent>
+          {lookupWarning && (
+            <div
+              className="mb-4 rounded-lg bg-amber-500/10 p-3 text-sm text-amber-900"
+              data-testid="assessments-lookup-warning"
+            >
+              {lookupWarning}
+            </div>
+          )}
           {loading ? (
             <TableSkeleton rows={6} columns={4} />
           ) : (

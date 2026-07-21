@@ -168,6 +168,7 @@ async def test_get_document_signed_url_increments_download_count(monkeypatch: py
     current_user = SimpleNamespace(id=3, tenant_id=9, is_superuser=False)
     document = SimpleNamespace(
         id=15,
+        tenant_id=9,
         file_name="policy.pdf",
         file_path="documents/2026/03/policy.pdf",
         download_count=2,

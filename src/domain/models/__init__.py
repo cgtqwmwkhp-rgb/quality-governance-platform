@@ -17,6 +17,7 @@ from src.domain.models.analytics import (
     ROIInvestment,
     SavedReport,
 )
+from src.domain.models.api_idempotency import ApiIdempotencyKey
 from src.domain.models.assessment import (
     AssessmentOutcome,
     AssessmentResponse,
@@ -94,6 +95,9 @@ from src.domain.models.document_control import (
     DocumentTrainingLink,
     ObsoleteDocumentRecord,
 )
+
+# Governance Library taxonomy (Wave W0)
+from src.domain.models.document_library import DocumentCategory, DocumentTag, PelDocRefCounter
 from src.domain.models.driver_profile import AcknowledgementStatus, DriverAcknowledgement, DriverProfile
 from src.domain.models.engineer import (
     CompetencyLifecycleState,
@@ -184,6 +188,15 @@ from src.domain.models.iso27001 import (
     SupplierSecurityAssessment,
 )
 from src.domain.models.legal_hold import LegalHoldStatus, MatterLegalHold
+
+# Governance Library review packs (Wave W3)
+from src.domain.models.library_review import (
+    FindingDisposition,
+    HorizonProvider,
+    LibraryRegulatoryFinding,
+    LibraryReviewPack,
+    ReviewPackStatus,
+)
 from src.domain.models.location import Location, LocationKind
 from src.domain.models.loler import LOLERDefect, LOLERDefectCategory, LOLERExamination, LOLERExaminationType
 from src.domain.models.partner_webhook import (
@@ -226,6 +239,15 @@ from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.standard import Clause, Control, Standard
 from src.domain.models.tenant import Tenant, TenantInvitation, TenantUser
 from src.domain.models.token_blacklist import TokenBlacklist
+from src.domain.models.training_matrix import (
+    TrainingMatrixCell,
+    TrainingMatrixCourse,
+    TrainingMatrixFrequencyChangeRequest,
+    TrainingMatrixImport,
+    TrainingMatrixNameMap,
+    TrainingMatrixPerson,
+    TrainingMatrixRequirement,
+)
 from src.domain.models.user import Role, User, UserRole
 
 # UVDB Achilles Verify B2 Audit Protocol
@@ -256,6 +278,7 @@ __all__ = [
     "TenantInvitation",
     "TokenBlacklist",
     "FailedTask",
+    "ApiIdempotencyKey",
     # Standard models
     "Standard",
     "Clause",
@@ -363,6 +386,16 @@ __all__ = [
     "DocumentTrainingLink",
     "DocumentAccessLog",
     "ObsoleteDocumentRecord",
+    # Governance Library taxonomy (Wave W0)
+    "DocumentCategory",
+    "DocumentTag",
+    "PelDocRefCounter",
+    # Governance Library review packs (Wave W3)
+    "LibraryReviewPack",
+    "LibraryRegulatoryFinding",
+    "ReviewPackStatus",
+    "FindingDisposition",
+    "HorizonProvider",
     # ISO 27001 Information Security (Tier 1)
     "InformationAsset",
     "ISO27001Control",
@@ -438,6 +471,13 @@ __all__ = [
     "CompetencyRequirement",
     "CompetencyLifecycleState",
     "TrainingTicket",
+    "TrainingMatrixImport",
+    "TrainingMatrixCourse",
+    "TrainingMatrixPerson",
+    "TrainingMatrixCell",
+    "TrainingMatrixNameMap",
+    "TrainingMatrixRequirement",
+    "TrainingMatrixFrequencyChangeRequest",
     "TicketVerifyState",
     "CompetenceGapAction",
     "CompetenceGapSignalType",

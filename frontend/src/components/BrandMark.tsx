@@ -1,8 +1,10 @@
 /**
- * Plantexpand interlocking-octagon mark, recolored for QGP.
- * Top-left ring → brand lime; bottom-right ring → deep green; hashes → charcoal.
+ * Plantexpand interlocking-octagon mark for QGP.
+ * BrandMarkTile uses the uploaded PNG asset (SSOT). SVG BrandMark remains for
+ * vector / onBrand variants where a flat image is unsuitable.
  */
 import { cn } from '../helpers/utils'
+import plantexpandMark from '../assets/plantexpand-mark.png'
 
 type BrandMarkProps = {
   className?: string
@@ -14,9 +16,9 @@ type BrandMarkProps = {
 
 const COLORS = {
   color: {
-    ringA: 'hsl(82 85% 45%)', // brand lime (was burgundy)
-    ringB: 'hsl(82 45% 22%)', // deep green (was charcoal)
-    hash: 'hsl(220 20% 12%)',
+    ringA: 'hsl(82 85% 45%)',
+    ringB: 'hsl(220 15% 28%)',
+    hash: 'hsl(220 20% 18%)',
   },
   onBrand: {
     ringA: 'hsl(220 20% 10%)',
@@ -49,7 +51,6 @@ export function BrandMark({
 }: BrandMarkProps) {
   const c = COLORS[variant]
   const stroke = 5.2
-  // Two interlocking octagons along the diagonal
   const a = { cx: 26, cy: 26, r: 16.5 }
   const b = { cx: 38, cy: 38, r: 16.5 }
 
@@ -65,8 +66,6 @@ export function BrandMark({
       aria-label={title}
     >
       <title>{title}</title>
-
-      {/* Ring A (top-left) — drawn first */}
       <polygon
         points={octagonPoints(a.cx, a.cy, a.r)}
         stroke={c.ringA}
@@ -74,8 +73,6 @@ export function BrandMark({
         strokeLinejoin="round"
         fill="none"
       />
-
-      {/* Ring B (bottom-right) — paints over at crossings for link effect */}
       <polygon
         points={octagonPoints(b.cx, b.cy, b.r)}
         stroke={c.ringB}
@@ -83,16 +80,12 @@ export function BrandMark({
         strokeLinejoin="round"
         fill="none"
       />
-
-      {/* Re-paint A segments that should pass over B for true interlock */}
       <path
         d="M32.2 18.8 L34.5 21.1 M18.8 32.2 L21.1 34.5"
         stroke={c.ringA}
         strokeWidth={stroke}
         strokeLinecap="round"
       />
-
-      {/* Hash marks — interior NW of ring A */}
       <g stroke={c.hash} strokeWidth="1.75" strokeLinecap="round">
         <line x1="15.2" y1="22.5" x2="18.6" y2="19.1" />
         <line x1="14.4" y1="26.0" x2="18.2" y2="22.2" />
@@ -100,8 +93,6 @@ export function BrandMark({
         <line x1="15.2" y1="32.8" x2="18.8" y2="29.2" />
         <line x1="17.0" y1="35.5" x2="20.4" y2="32.1" />
       </g>
-
-      {/* Hash marks — interior SE of ring B */}
       <g stroke={c.hash} strokeWidth="1.75" strokeLinecap="round">
         <line x1="43.6" y1="44.9" x2="47.0" y2="41.5" />
         <line x1="45.8" y1="46.8" x2="49.6" y2="43.0" />
@@ -113,26 +104,35 @@ export function BrandMark({
   )
 }
 
-/** Rounded brand tile used in shell / auth headers */
+/** Rounded brand tile used in shell / auth headers — PNG mark (Option C). */
 export function BrandMarkTile({
   className,
   size = 44,
   iconSize,
+  title = 'Quality Governance Platform for Plantexpand Limited',
 }: {
   className?: string
   size?: number
   iconSize?: number
+  title?: string
 }) {
-  const mark = iconSize ?? Math.round(size * 0.72)
+  const mark = iconSize ?? Math.round(size * 0.78)
   return (
     <div
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/25 shadow-glow',
+        'inline-flex shrink-0 items-center justify-center rounded-xl bg-background ring-1 ring-border',
         className,
       )}
       style={{ width: size, height: size }}
     >
-      <BrandMark size={mark} variant="color" />
+      <img
+        src={plantexpandMark}
+        width={mark}
+        height={mark}
+        alt={title}
+        className="object-contain"
+        draggable={false}
+      />
     </div>
   )
 }

@@ -41,7 +41,7 @@ async def test_create_assessment_response_rejects_question_outside_template():
     with pytest.raises(HTTPException) as exc:
         await create_assessment_response("asm-run-010", payload, db, user)
 
-    assert exc.value.status_code == 400
+    assert exc.value.status_code == 422
     assert exc.value.detail["code"] == "VALIDATION_ERROR"
     assert exc.value.detail["details"]["template_id"] == 501
     db.add.assert_not_called()

@@ -89,6 +89,94 @@ async def _get_investigation_or_404(
     return investigation
 
 
+async def _collect_closure_reasons(
+    db: AsyncSession,
+    *,
+    investigation: InvestigationRun,
+    investigation_id: int,
+    tenant_id: int,
+) -> tuple[list[str], list]:
+    """Collect closure readiness reasons (same contract as GET /closure-validation)."""
+    from src.domain.services.investigation_closure_helpers import (
+        CLOSURE_REASON_OPEN_ACTIONS_REMAIN,
+        fetch_open_work_for_investigation,
+    )
+
+    reasons: list[str] = []
+    if not investigation.level:
+        reasons.append(ClosureReasonCode.LEVEL_NOT_SET)
+    if investigation.status != InvestigationStatus.COMPLETED:
+        reasons.append(ClosureReasonCode.STATUS_NOT_COMPLETE)
+
+    open_work: list = []
+    try:
+        open_work = await fetch_open_work_for_investigation(
+            db,
+            investigation_id=investigation_id,
+            tenant_id=tenant_id,
+        )
+        if open_work:
+            reasons.append(CLOSURE_REASON_OPEN_ACTIONS_REMAIN)
+    except Exception:  # noqa: BLE001 — never turn open-work probe into HTTP 500
+        logger.exception(
+            "closure_gate_open_work_failed",
+            extra={"investigation_id": investigation_id, "tenant_id": tenant_id},
+        )
+        if CLOSURE_REASON_OPEN_ACTIONS_REMAIN not in reasons:
+            reasons.append(CLOSURE_REASON_OPEN_ACTIONS_REMAIN)
+
+    try:
+        template_validation = await InvestigationService.validate_closure(
+            db,
+            investigation_id=investigation_id,
+            tenant_id=tenant_id,
+        )
+        for code in getattr(template_validation, "reason_codes", None) or []:
+            code_str = code.value if hasattr(code, "value") else str(code)
+            if code_str not in reasons:
+                reasons.append(code_str)
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "closure_gate_template_failed",
+            extra={"investigation_id": investigation_id, "tenant_id": tenant_id},
+        )
+        if ClosureReasonCode.MISSING_REQUIRED_SECTION not in reasons:
+            reasons.append(ClosureReasonCode.MISSING_REQUIRED_SECTION)
+
+    return reasons, open_work
+
+
+async def _ensure_investigation_ready_to_close(
+    db: AsyncSession,
+    *,
+    investigation: InvestigationRun,
+    investigation_id: int,
+    current_user: Any,
+) -> None:
+    """Raise BadRequestError(400) with closure reasons when the run cannot close."""
+    from src.domain.services.investigation_closure_helpers import open_work_to_payload
+
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    reasons, open_work = await _collect_closure_reasons(
+        db,
+        investigation=investigation,
+        investigation_id=investigation_id,
+        tenant_id=tenant_id,
+    )
+    if not reasons:
+        return
+    raise BadRequestError(
+        "Investigation cannot be closed until closure validation passes",
+        code="CLOSURE_VALIDATION_FAILED",
+        details={
+            "can_close": False,
+            "reasons": reasons,
+            "open_work": open_work_to_payload(open_work),
+            "open_work_count": len(open_work),
+        },
+    )
+
+
 async def validate_assigned_entity(
     entity_type: str,
     entity_id: int,
@@ -740,25 +828,31 @@ async def update_investigation(
 
     update_data = investigation_data.model_dump(exclude_unset=True)
     if update_data.get("status") == "closed":
-        from src.domain.services.investigation_closure_helpers import assert_investigation_can_close
-
-        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
-        await assert_investigation_can_close(
+        # Mirror GET /closure-validation: return 400 with reason codes, never 500.
+        await _ensure_investigation_ready_to_close(
             db,
+            investigation=investigation,
             investigation_id=investigation_id,
-            tenant_id=tenant_id,
+            current_user=current_user,
         )
 
     # Update fields
     for field, value in update_data.items():
         if field == "status" and value is not None:
             setattr(investigation, field, InvestigationStatus(value))
+        elif field == "level" and value is not None:
+            from src.domain.models.investigation import InvestigationLevel
+
+            try:
+                setattr(investigation, field, InvestigationLevel(str(value).lower()))
+            except ValueError as exc:
+                raise BadRequestError(f"Invalid investigation level: {value}") from exc
         else:
             setattr(investigation, field, value)
 
     investigation.updated_by_id = current_user.id
 
-    # Update status timestamps
+    # Update status timestamps (naive UTC — completed_at/closed_at columns are TIMESTAMP WITHOUT TIME ZONE)
     if investigation_data.status:
         if investigation_data.status == "in_progress" and not investigation.started_at:
             setattr(investigation, "started_at", datetime.utcnow())
@@ -1263,7 +1357,8 @@ async def approve_investigation(
         investigation.status = InvestigationStatus.COMPLETED  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
         investigation.approved_at = datetime.now(timezone.utc)  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
         investigation.approved_by_id = current_user.id  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
-        investigation.completed_at = datetime.now(timezone.utc)  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
+        # completed_at is TIMESTAMP WITHOUT TIME ZONE — aware datetimes 500 via asyncpg
+        investigation.completed_at = datetime.utcnow()  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
         investigation.rejection_reason = None  # type: ignore[assignment]  # TYPE-IGNORE: SQLALCHEMY-1
         event_type = "APPROVED"
     else:
@@ -1274,7 +1369,12 @@ async def approve_investigation(
         event_type = "REJECTED"
 
     investigation.updated_by_id = current_user.id
-    investigation.version += 1
+    investigation.version = (investigation.version or 0) + 1
+
+    old_status_value = old_status.value if hasattr(old_status, "value") else str(old_status)
+    new_status_value = (
+        investigation.status.value if hasattr(investigation.status, "value") else str(investigation.status)
+    )
 
     # Create revision event
     await InvestigationService.create_revision_event(
@@ -1282,8 +1382,8 @@ async def approve_investigation(
         investigation=investigation,
         event_type=event_type,
         actor_id=current_user.id,
-        old_value={"status": old_status.value},
-        new_value={"status": investigation.status.value},
+        old_value={"status": old_status_value},
+        new_value={"status": new_status_value},
         metadata={"rejection_reason": rejection_reason} if not approved else None,
     )
 

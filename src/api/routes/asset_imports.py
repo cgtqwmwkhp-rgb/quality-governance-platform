@@ -6,15 +6,21 @@ Commit re-validates then creates assets; row errors yield HTTP 422 with the repo
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.api.schemas.asset import AssetImportCommitResponse, AssetImportValidationReportResponse
+from src.api.schemas.asset import (
+    AssetImportCommitResponse,
+    AssetImportValidationReportResponse,
+    CesAssetImportCommitResponse,
+    CesAssetImportValidationReportResponse,
+)
 from src.domain.exceptions import BadRequestError
 from src.domain.models.user import User
 from src.domain.services.asset_import_service import AssetImportService
+from src.domain.services.ces_asset_import_service import CesAssetImportService, parse_confirmations
 
 router = APIRouter()
 
@@ -31,9 +37,19 @@ async def _read_csv_upload(file: UploadFile) -> bytes:
     content = await file.read()
     if not content:
         raise BadRequestError("CSV file is empty")
-    # Soft size guard (~2 MiB) to keep dry-run responsive
     if len(content) > 2 * 1024 * 1024:
         raise BadRequestError("CSV file exceeds 2 MiB limit")
+    return content
+
+
+async def _read_xlsx_upload(file: UploadFile) -> bytes:
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        raise BadRequestError("File must be an Excel workbook (.xlsx extension)")
+    content = await file.read()
+    if not content:
+        raise BadRequestError("XLSX file is empty")
+    if len(content) > 5 * 1024 * 1024:
+        raise BadRequestError("XLSX file exceeds 5 MiB limit")
     return content
 
 
@@ -72,3 +88,43 @@ async def commit_asset_import(
     service = AssetImportService(db)
     result = await service.commit(content, user_id=user.id, tenant_id=_tid(user))
     return AssetImportCommitResponse.model_validate(result.to_dict())
+
+
+@router.post(
+    "/ces/dry-run",
+    response_model=CesAssetImportValidationReportResponse,
+    summary="Dry-run CES Calibrations XLSX import",
+)
+async def dry_run_ces_asset_import(
+    db: DbSession,
+    user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("asset:create"))],
+    file: UploadFile = File(...),
+) -> CesAssetImportValidationReportResponse:
+    content = await _read_xlsx_upload(file)
+    report = await CesAssetImportService(db).dry_run(content, tenant_id=_tid(user))
+    return CesAssetImportValidationReportResponse.model_validate(report.to_dict())
+
+
+@router.post(
+    "/ces/commit",
+    response_model=CesAssetImportCommitResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Commit CES Calibrations XLSX import",
+)
+async def commit_ces_asset_import(
+    db: DbSession,
+    user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("asset:create"))],
+    file: UploadFile = File(...),
+    confirmations: Optional[str] = Form(default=None),
+) -> CesAssetImportCommitResponse:
+    content = await _read_xlsx_upload(file)
+    parsed = parse_confirmations(confirmations)
+    result = await CesAssetImportService(db).commit(
+        content,
+        user_id=user.id,
+        tenant_id=_tid(user),
+        confirmations=parsed,
+    )
+    return CesAssetImportCommitResponse.model_validate(result.to_dict())

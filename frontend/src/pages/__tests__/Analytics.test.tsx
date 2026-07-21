@@ -9,6 +9,7 @@ const mockRiskSummary = vi.fn()
 const mockListRuns = vi.fn()
 const mockListRtas = vi.fn()
 const mockComplianceScore = vi.fn()
+const mockGetComplianceOverview = vi.fn()
 
 vi.mock('../../api/client', () => ({
   executiveDashboardApi: {
@@ -29,6 +30,9 @@ vi.mock('../../api/client', () => ({
   },
   complianceAutomationApi: {
     getComplianceScore: (...args: unknown[]) => mockComplianceScore(...args),
+  },
+  documentCampaignApi: {
+    getComplianceOverview: (...args: unknown[]) => mockGetComplianceOverview(...args),
   },
   getApiErrorMessage: (err: unknown) => (err instanceof Error ? err.message : 'error'),
 }))
@@ -120,6 +124,19 @@ describe('Analytics', () => {
       },
     })
     mockComplianceScore.mockResolvedValue({ data: { overall_score: 81.5 } })
+    mockGetComplianceOverview.mockResolvedValue({
+      data: {
+        active_campaigns: 2,
+        total_assignments: 12,
+        completed_assignments: 2,
+        overall_completion_rate: 17,
+        overdue_count: 0,
+        quiz_fail_count: 1,
+        unanswered_hseq_count: 0,
+        open_rate: 17,
+        series: [{ date: '2026-07-19', completed: 1, opened: 1, overdue: 0 }],
+      },
+    })
   })
 
   it('loads live KPIs and drills into a section', async () => {
@@ -146,6 +163,29 @@ describe('Analytics', () => {
       'href',
       '/incidents',
     )
+  })
+
+  it('renders Document campaigns section with campaign command KPIs', async () => {
+    const Analytics = (await import('../Analytics')).default
+    render(
+      <MemoryRouter initialEntries={['/analytics?section=document-campaigns']}>
+        <Routes>
+          <Route path="/analytics" element={<Analytics />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('analytics-document-campaigns')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Document campaigns' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(await screen.findByTestId('campaign-command-kpis')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Open Document campaigns/i })).toHaveAttribute(
+      'href',
+      '/documents/campaigns',
+    )
+    expect(mockGetComplianceOverview).toHaveBeenCalled()
   })
 
   describe('module metric honesty', () => {

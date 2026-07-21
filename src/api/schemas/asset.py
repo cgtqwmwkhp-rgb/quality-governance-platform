@@ -20,7 +20,7 @@ class LocationBase(BaseModel):
 class LocationCreate(LocationBase):
     """Schema for creating a Location."""
 
-    pass
+    force: bool = False
 
 
 class LocationUpdate(BaseModel):
@@ -42,6 +42,8 @@ class LocationResponse(BaseModel):
     kind: str
     parent_id: Optional[int] = None
     is_active: bool = True
+    approval_status: str = "approved"
+    source: Optional[str] = None
     tenant_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
@@ -73,7 +75,7 @@ class AssetTypeBase(BaseModel):
 class AssetTypeCreate(AssetTypeBase):
     """Schema for creating an Asset Type."""
 
-    pass
+    force: bool = False
 
 
 class AssetTypeUpdate(BaseModel):
@@ -101,6 +103,8 @@ class AssetTypeResponse(BaseModel):
     description: Optional[str] = None
     icon: Optional[str] = None
     is_active: bool = True
+    approval_status: str = "approved"
+    source: Optional[str] = None
     tenant_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
@@ -327,3 +331,121 @@ class AssetImportCommitResponse(BaseModel):
     created_count: int
     created_asset_ids: List[int]
     report: AssetImportValidationReportResponse
+
+
+# ============== CES XLSX Import Schemas ==============
+
+
+class CesAssetImportRowIssue(BaseModel):
+    row: int
+    code: str
+    message: str
+    field: Optional[str] = None
+    severity: str = "error"
+
+
+class CesAssetImportPreviewRow(BaseModel):
+    row: int
+    action: str
+    asset_number: str
+    name: str
+    serial_number: str
+    owner_user_id: Optional[int] = None
+    location_id: Optional[int] = None
+    vehicle_reg: Optional[str] = None
+    status: str
+    not_made_available: bool = False
+
+
+class CesLookupSimilarMatch(BaseModel):
+    id: int
+    name: str
+    score: float
+
+
+class CesLookupProposal(BaseModel):
+    kind: str
+    name: str
+    intent: str
+    reuse_id: Optional[int] = None
+    reuse_name: Optional[str] = None
+    similar_matches: List[CesLookupSimilarMatch] = Field(default_factory=list)
+    row_count: int = 0
+    needs_confirmation: bool = False
+
+
+class CesLookupConfirmation(BaseModel):
+    kind: str
+    name: str
+    action: str
+    reuse_id: Optional[int] = None
+
+
+class CesAssetImportValidationReportResponse(BaseModel):
+    dry_run: bool
+    total_rows: int
+    valid_rows: int
+    error_rows: int
+    creates: int
+    updates: int
+    ok: bool
+    requires_confirmation: bool = False
+    errors: List[CesAssetImportRowIssue] = Field(default_factory=list)
+    warnings: List[CesAssetImportRowIssue] = Field(default_factory=list)
+    preview: List[CesAssetImportPreviewRow] = Field(default_factory=list)
+    lookup_proposals: List[CesLookupProposal] = Field(default_factory=list)
+
+
+class CesAssetImportCommitResponse(BaseModel):
+    created_count: int
+    updated_count: int
+    created_asset_ids: List[int]
+    updated_asset_ids: List[int]
+    provisional_type_ids: List[int] = Field(default_factory=list)
+    provisional_location_ids: List[int] = Field(default_factory=list)
+    report: CesAssetImportValidationReportResponse
+
+
+class SafetyLookupPendingItem(BaseModel):
+    kind: str
+    id: int
+    name: str
+    source: Optional[str] = None
+    is_active: bool = False
+    approval_status: str
+    similar_matches: List[CesLookupSimilarMatch] = Field(default_factory=list)
+    created_at: Optional[datetime] = None
+
+
+class SafetyLookupPendingListResponse(BaseModel):
+    items: List[SafetyLookupPendingItem]
+    total: int
+
+
+class SafetyLookupActionResponse(BaseModel):
+    kind: str
+    id: int
+    approval_status: str
+    is_active: Optional[bool] = None
+    target_id: Optional[int] = None
+    merged: Optional[bool] = None
+
+
+class SafetyLookupMergeRequest(BaseModel):
+    target_id: int = Field(..., ge=1)
+
+
+class SafetyLookupPreviewRequest(BaseModel):
+    kind: str
+    name: str = Field(..., min_length=1, max_length=200)
+
+
+class SafetyLookupPreviewResponse(BaseModel):
+    kind: str
+    name: str
+    intent: str
+    reuse_id: Optional[int] = None
+    reuse_name: Optional[str] = None
+    similar_matches: List[CesLookupSimilarMatch] = Field(default_factory=list)
+    needs_confirmation: bool = False
+    blocked_exact_duplicate: bool = False

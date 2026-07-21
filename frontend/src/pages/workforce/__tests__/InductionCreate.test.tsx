@@ -82,4 +82,22 @@ describe('InductionCreate employee picker (EMP-07)', () => {
       expect(screen.getByTestId('induction-create-employees-empty')).toBeInTheDocument(),
     )
   })
+
+  it('does not present a failed roster request as an empty roster', async () => {
+    listEngineers.mockRejectedValue(new Error('Engineers unavailable'))
+
+    const InductionCreate = (await import('../InductionCreate')).default
+    render(
+      <MemoryRouter>
+        <InductionCreate />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('induction-create-employees-unavailable')).toHaveTextContent(
+      /could not be loaded/i,
+    )
+    expect(screen.queryByTestId('induction-create-employees-empty')).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/workforce\.common\.engineer/i)).toBeDisabled()
+    expect(screen.getByRole('button', { name: /workforce\.induction\.create_start/i })).toBeDisabled()
+  })
 })

@@ -22,11 +22,19 @@ export function createLookupsApi(api: AxiosInstance) {
         .get<{
           items: LookupOption[]
           total: number
-        }>(`/api/v1/admin/config/lookup/${category}${activeOnly ? '?is_active=true' : ''}`)
+        }>(
+          `/api/v1/admin/config/lookup/${category}${activeOnly ? '?is_active=true' : ''}`,
+        )
         .then((r) => r.data),
 
     create: (category: string, data: Partial<LookupOption>) =>
-      api.post<LookupOption>(`/api/v1/admin/config/lookup/${category}`, data).then((r) => r.data),
+      api
+        .post<LookupOption>(`/api/v1/admin/config/lookup/${category}`, {
+          ...data,
+          // Path is authoritative; always include so older BE schemas still accept Admin create.
+          category,
+        })
+        .then((r) => r.data),
 
     update: (category: string, id: number, data: Partial<LookupOption>) =>
       api

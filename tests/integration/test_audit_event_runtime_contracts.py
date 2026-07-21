@@ -18,11 +18,11 @@ from src.domain.models.policy import Policy
 
 
 class TestPoliciesAuditEventRuntimeContract:
-    """Test that Policies write operations succeed (audit events are logged)."""
+    """Policy writes are frozen (W5); freeze must win before audit side-effects."""
 
     @pytest.mark.asyncio
     async def test_create_policy_succeeds(self, client: AsyncClient, test_session, auth_headers):
-        """Verify that creating a policy succeeds."""
+        """Verify that creating a policy returns the W5 freeze (410)."""
         policy_data = {
             "title": "Test Policy",
             "description": "Test Description",
@@ -30,14 +30,12 @@ class TestPoliciesAuditEventRuntimeContract:
             "status": "draft",
         }
         response = await client.post("/api/v1/policies", json=policy_data, headers=auth_headers)
-        assert response.status_code == 201
-
-        policy_id = response.json()["id"]
-        assert policy_id is not None
+        assert response.status_code == 410
+        assert "frozen" in response.text.lower()
 
     @pytest.mark.asyncio
     async def test_update_policy_succeeds(self, client: AsyncClient, test_session, auth_headers):
-        """Verify that updating a policy succeeds."""
+        """Verify that updating a policy returns the W5 freeze (410)."""
         policy = Policy(
             title="Test Policy",
             description="Test Description",
@@ -54,12 +52,12 @@ class TestPoliciesAuditEventRuntimeContract:
 
         update_data = {"title": "Updated Policy"}
         response = await client.put(f"/api/v1/policies/{policy.id}", json=update_data, headers=auth_headers)
-        assert response.status_code == 200
-        assert response.json()["title"] == "Updated Policy"
+        assert response.status_code == 410
+        assert "frozen" in response.text.lower()
 
     @pytest.mark.asyncio
     async def test_delete_policy_succeeds(self, client: AsyncClient, test_session, auth_headers):
-        """Verify that deleting a policy succeeds."""
+        """Verify that deleting a policy returns the W5 freeze (410)."""
         policy = Policy(
             title="Test Policy",
             description="Test Description",
@@ -76,7 +74,8 @@ class TestPoliciesAuditEventRuntimeContract:
         policy_id = policy.id
 
         response = await client.delete(f"/api/v1/policies/{policy_id}", headers=auth_headers)
-        assert response.status_code == 204
+        assert response.status_code == 410
+        assert "frozen" in response.text.lower()
 
 
 class TestIncidentsAuditEventRuntimeContract:

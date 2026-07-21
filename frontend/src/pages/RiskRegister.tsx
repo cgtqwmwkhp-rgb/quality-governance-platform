@@ -274,6 +274,10 @@ export default function RiskRegister() {
   const [titleDraft, setTitleDraft] = useState('')
   const [descriptionDraft, setDescriptionDraft] = useState('')
   const [categoryDraft, setCategoryDraft] = useState('operational')
+  const [inherentLikelihoodDraft, setInherentLikelihoodDraft] = useState(2)
+  const [inherentImpactDraft, setInherentImpactDraft] = useState(2)
+  const [residualLikelihoodDraft, setResidualLikelihoodDraft] = useState(1)
+  const [residualImpactDraft, setResidualImpactDraft] = useState(2)
   const [detailSaving, setDetailSaving] = useState(false)
   const [heroFilter, setHeroFilter] = useState<HeroFilter>(
     (searchParams.get('hero') as HeroFilter) || 'all',
@@ -756,6 +760,10 @@ export default function RiskRegister() {
     setTitleDraft('')
     setDescriptionDraft('')
     setCategoryDraft('operational')
+    setInherentLikelihoodDraft(2)
+    setInherentImpactDraft(2)
+    setResidualLikelihoodDraft(1)
+    setResidualImpactDraft(2)
   }
 
   const saveCreateRisk = async () => {
@@ -767,6 +775,16 @@ export default function RiskRegister() {
       toast.error('Description must be at least 10 characters')
       return
     }
+    const scoreFields = [
+      inherentLikelihoodDraft,
+      inherentImpactDraft,
+      residualLikelihoodDraft,
+      residualImpactDraft,
+    ]
+    if (scoreFields.some((n) => !Number.isInteger(n) || n < 1 || n > 5)) {
+      toast.error('Likelihood and impact scores must be integers from 1 to 5')
+      return
+    }
     setDetailSaving(true)
     try {
       const created = await riskRegisterApi.create({
@@ -774,10 +792,10 @@ export default function RiskRegister() {
         description: descriptionDraft.trim(),
         category: categoryDraft,
         risk_owner_name: ownerDraft.trim() || undefined,
-        inherent_likelihood: 2,
-        inherent_impact: 2,
-        residual_likelihood: 1,
-        residual_impact: 2,
+        inherent_likelihood: inherentLikelihoodDraft,
+        inherent_impact: inherentImpactDraft,
+        residual_likelihood: residualLikelihoodDraft,
+        residual_impact: residualImpactDraft,
         treatment_strategy: 'treat',
       })
       toast.success('Risk created')
@@ -1953,6 +1971,80 @@ export default function RiskRegister() {
                 ))}
               </select>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="risk-detail-inherent-likelihood">Inherent likelihood</Label>
+                <select
+                  id="risk-detail-inherent-likelihood"
+                  value={inherentLikelihoodDraft}
+                  onChange={(e) => setInherentLikelihoodDraft(Number(e.target.value))}
+                  disabled={detailSaving}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  data-testid="risk-detail-inherent-likelihood"
+                >
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="risk-detail-inherent-impact">Inherent impact</Label>
+                <select
+                  id="risk-detail-inherent-impact"
+                  value={inherentImpactDraft}
+                  onChange={(e) => setInherentImpactDraft(Number(e.target.value))}
+                  disabled={detailSaving}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  data-testid="risk-detail-inherent-impact"
+                >
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="risk-detail-residual-likelihood">Residual likelihood</Label>
+                <select
+                  id="risk-detail-residual-likelihood"
+                  value={residualLikelihoodDraft}
+                  onChange={(e) => setResidualLikelihoodDraft(Number(e.target.value))}
+                  disabled={detailSaving}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  data-testid="risk-detail-residual-likelihood"
+                >
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="risk-detail-residual-impact">Residual impact</Label>
+                <select
+                  id="risk-detail-residual-impact"
+                  value={residualImpactDraft}
+                  onChange={(e) => setResidualImpactDraft(Number(e.target.value))}
+                  disabled={detailSaving}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  data-testid="risk-detail-residual-impact"
+                >
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground" data-testid="risk-detail-score-preview">
+              Inherent {inherentLikelihoodDraft * inherentImpactDraft} · Residual{' '}
+              {residualLikelihoodDraft * residualImpactDraft}
+            </p>
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">

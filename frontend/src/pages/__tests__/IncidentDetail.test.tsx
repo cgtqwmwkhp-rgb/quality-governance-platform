@@ -69,6 +69,7 @@ vi.mock('../../api/client', () => ({
   incidentsApi: {
     get: vi.fn(),
     update: vi.fn(),
+    raiseRisk: vi.fn(),
     listInvestigations: vi.fn(),
     listRunningSheet: vi.fn(),
     addRunningSheetEntry: vi.fn(),
@@ -88,7 +89,7 @@ vi.mock('../../api/client', () => ({
   workforceApi: {
     listEngineers: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
   },
-  getApiErrorMessage: (err: Error) => err.message,
+  getApiErrorMessage: (err: Error, fallback?: string) => err.message || fallback || 'error',
 }))
 
 const incidentRecord = {
@@ -242,5 +243,40 @@ describe('IncidentDetail', () => {
       expect(screen.getByTestId('incident-standards-panel')).toBeInTheDocument()
     })
     expect(screen.getByTestId('standards-assessment-panel-mock')).toHaveTextContent('incident:11')
+  })
+
+  it('surfaces toast when incident edit save fails (PX-002)', async () => {
+    const { toast } = await import('../../contexts/ToastContext')
+    client.incidentsApi.update.mockRejectedValue(new Error('Conflict: cannot transition'))
+
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Loader slip' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'edit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'incidents.detail.save_changes' }))
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Conflict: cannot transition')
+    })
+  })
+
+  it('omits unchanged status on save so reported→reported never patches status', async () => {
+    client.incidentsApi.update.mockResolvedValue({ data: incidentRecord })
+
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Loader slip' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'edit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'incidents.detail.save_changes' }))
+
+    await waitFor(() => {
+      expect(client.incidentsApi.update).toHaveBeenCalled()
+    })
+    const payload = client.incidentsApi.update.mock.calls[0][1]
+    expect(payload.status).toBeUndefined()
   })
 })

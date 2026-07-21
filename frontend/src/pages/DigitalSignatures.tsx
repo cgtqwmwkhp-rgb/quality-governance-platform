@@ -9,6 +9,7 @@
  */
 
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   FileSignature,
   Plus,
@@ -89,6 +90,7 @@ interface SignatureTemplate {
 }
 
 const DigitalSignatures: React.FC = () => {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'requests' | 'pending' | 'templates' | 'audit'>(
     'requests',
   )
@@ -161,10 +163,21 @@ const DigitalSignatures: React.FC = () => {
             Secure electronic signatures with legal compliance
           </p>
         </div>
-        <Button onClick={() => setShowCreateModal(true)}>
+        <Button
+          disabled
+          title={t('signatures.coming_soon')}
+          data-testid="signatures-new-request-disabled"
+        >
           <Plus className="w-5 h-5" />
           New Request
         </Button>
+      </div>
+
+      <div
+        className="rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-foreground"
+        data-testid="signatures-coming-soon-honesty"
+      >
+        {t('signatures.coming_soon')}
       </div>
 
       {/* Stats */}
@@ -609,7 +622,6 @@ const DigitalSignatures: React.FC = () => {
             <Button variant="ghost" onClick={() => setShowCreateModal(false)}>
               Cancel
             </Button>
-            <Button onClick={() => setShowCreateModal(false)}>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

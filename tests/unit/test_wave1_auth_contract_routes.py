@@ -45,7 +45,7 @@ async def test_create_workflow_rule_uses_user_attributes(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_create_kri_uses_user_email_attribute(monkeypatch):
-    monkeypatch.setattr("src.api.routes.kri.KRIResponse.from_orm", lambda obj: obj)
+    monkeypatch.setattr("src.api.routes.kri._kri_response", lambda obj: obj)
 
     db = types.SimpleNamespace(
         execute=AsyncMock(return_value=_FakeResult(None)),
@@ -82,8 +82,9 @@ async def test_get_my_pending_acknowledgments_uses_user_id(monkeypatch):
         def __init__(self, _db):
             pass
 
-        async def get_user_pending_acknowledgments(self, user_id):
+        async def get_user_pending_acknowledgments(self, user_id, tenant_id=None):
             captured["user_id"] = user_id
+            captured["tenant_id"] = tenant_id
             return []
 
     monkeypatch.setattr(
@@ -93,10 +94,11 @@ async def test_get_my_pending_acknowledgments_uses_user_id(monkeypatch):
 
     response = await get_my_pending_acknowledgments(
         types.SimpleNamespace(),
-        types.SimpleNamespace(id=31, email="reader@example.com"),
+        types.SimpleNamespace(id=31, email="reader@example.com", tenant_id=9),
     )
 
     assert captured["user_id"] == 31
+    assert captured["tenant_id"] == 9
     assert response.total == 0
     assert response.items == []
 

@@ -5,8 +5,11 @@ import {
   ASSURANCE_SOURCE_CUSTOMER,
   ASSURANCE_SOURCE_UVDB,
   CUSTOMER_AUDITS_AUDITS_PATH,
+  CUSTOMER_AUDITS_PROGRAMME_PATH,
   UVDB_AUDITS_AUDITS_PATH,
   filterAuditsByAssuranceSource,
+  getCustomerCapaActionsPath,
+  getCustomerRiskRegisterPath,
   getUvdbCapaActionsPath,
   getUvdbRiskRegisterPath,
   isAchillesUvdbAssuranceAudit,
@@ -25,8 +28,9 @@ const baseAudit = {
 }
 
 describe('assuranceHubHelpers', () => {
-  it('exposes the customer assurance filter path', () => {
+  it('exposes the customer assurance filter path and programme home', () => {
     expect(CUSTOMER_AUDITS_AUDITS_PATH).toBe('/audits?source=customer')
+    expect(CUSTOMER_AUDITS_PROGRAMME_PATH).toBe('/customer-audits')
     expect(ASSURANCE_SOURCE_CUSTOMER).toBe('customer')
   })
 
@@ -80,6 +84,10 @@ describe('assuranceHubHelpers', () => {
   })
 
   it('builds scoped CAPA and Risk deep-link paths', () => {
+    expect(getCustomerCapaActionsPath(88)).toBe('/actions?sourceType=audit_finding&sourceId=88')
+    expect(getCustomerRiskRegisterPath('AUD-C-001')).toBe(
+      '/risk-register?auditOnly=1&auditRef=AUD-C-001',
+    )
     expect(getUvdbCapaActionsPath()).toBe('/actions?sourceType=audit_finding')
     expect(getUvdbCapaActionsPath(501)).toBe('/actions?sourceType=audit_finding&sourceId=501')
     expect(getUvdbRiskRegisterPath('UVDB-2026-0001')).toBe(
@@ -94,6 +102,7 @@ describe('assuranceHubHelpers', () => {
     expect(navItemIsActive(CUSTOMER_AUDITS_AUDITS_PATH, '/audits', '?source=customer')).toBe(
       true,
     )
+    expect(navItemIsActive(CUSTOMER_AUDITS_PROGRAMME_PATH, '/customer-audits', '')).toBe(true)
     expect(navItemIsActive(CUSTOMER_AUDITS_AUDITS_PATH, '/customer-audits', '')).toBe(true)
     expect(navItemIsActive('/audits', '/audits/41/execute', '')).toBe(true)
   })

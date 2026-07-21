@@ -33,6 +33,35 @@ async def test_wdp_summary_denies_non_manager_user():
 
 
 @pytest.mark.asyncio
+async def test_engineer_matrix_allows_null_user_id():
+    """PAMS engineers without a linked login must not 500 response validation."""
+    from src.api.schemas.analytics import WDPEngineerMatrixResponse
+
+    engineer = types.SimpleNamespace(id=10, user_id=None, employee_number="42")
+    asset_type = types.SimpleNamespace(id=7, name="Transformer", category="network")
+    db = types.SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                _FakeResult([engineer]),
+                _FakeResult([asset_type]),
+                _FakeResult([]),
+            ]
+        )
+    )
+    user = types.SimpleNamespace(
+        id=7,
+        tenant_id=1,
+        is_superuser=False,
+        roles=[types.SimpleNamespace(name="supervisor")],
+    )
+
+    result = await get_engineer_competency_matrix(db, user)
+    validated = WDPEngineerMatrixResponse.model_validate(result)
+    assert validated.engineers[0].user_id is None
+    assert validated.engineers[0].competencies[7] == "not_assessed"
+
+
+@pytest.mark.asyncio
 async def test_engineer_matrix_uses_latest_record_per_asset_type():
     older = types.SimpleNamespace(
         id=1,
@@ -70,6 +99,38 @@ async def test_engineer_matrix_uses_latest_record_per_asset_type():
 
     assert len(result["engineers"]) == 1
     assert result["engineers"][0]["competencies"][7] == "active"
+
+
+@pytest.mark.asyncio
+async def test_engineer_matrix_naive_expires_at_does_not_500():
+    expired_active = types.SimpleNamespace(
+        id=3,
+        asset_type_id=7,
+        state=CompetencyLifecycleState.ACTIVE,
+        assessed_at=datetime(2026, 1, 1),
+        created_at=datetime(2026, 1, 1),
+        expires_at=datetime(2026, 1, 2),  # naive — previously TypeError vs aware now()
+    )
+    engineer = types.SimpleNamespace(id=10, user_id=None, employee_number="E001")
+    asset_type = types.SimpleNamespace(id=7, name="Transformer", category="network")
+    db = types.SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                _FakeResult([engineer]),
+                _FakeResult([asset_type]),
+                _FakeResult([expired_active]),
+            ]
+        )
+    )
+    user = types.SimpleNamespace(
+        id=7,
+        tenant_id=1,
+        is_superuser=False,
+        roles=[types.SimpleNamespace(name="supervisor")],
+    )
+
+    result = await get_engineer_competency_matrix(db, user)
+    assert result["engineers"][0]["competencies"][7] == "expired"
 
 
 @pytest.mark.asyncio

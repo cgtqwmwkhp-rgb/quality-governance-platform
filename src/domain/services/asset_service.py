@@ -208,11 +208,40 @@ class AssetService:
         *,
         user_id: int,
         tenant_id: int,
+        force: bool = False,
     ) -> Location:
-        if "kind" in data:
-            data["kind"] = LocationKind(data["kind"])
+        from src.domain.exceptions import ConflictError, ValidationError
+        from src.domain.services.lookup_similarity import classify_lookup_name
+
+        payload = {k: v for k, v in data.items() if k != "force"}
+        name = str(payload.get("name") or "").strip()
+        existing_rows = list(
+            (
+                await self.db.execute(
+                    select(Location).where(
+                        Location.tenant_id == tenant_id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        intent, exact, similar = classify_lookup_name(name, [(row.id, row.name) for row in existing_rows])
+        if intent == "reuse" and exact is not None:
+            raise ConflictError(
+                f"Location '{name}' already exists as '{exact[1]}'",
+                details={"reuse_id": exact[0], "reuse_name": exact[1]},
+            )
+        if intent == "similar" and not force:
+            raise ValidationError(
+                f"Location '{name}' is similar to existing entries; pass force=true to create anyway",
+                code="SIMILAR_LOOKUP",
+                details={"similar_matches": [{"id": m.id, "name": m.name, "score": m.score} for m in similar]},
+            )
+        if "kind" in payload:
+            payload["kind"] = LocationKind(payload["kind"])
         location = Location(
-            **data,
+            **payload,
             created_by_id=user_id,
             updated_by_id=user_id,
             tenant_id=tenant_id,
@@ -287,11 +316,40 @@ class AssetService:
         *,
         user_id: int,
         tenant_id: int,
+        force: bool = False,
     ) -> AssetType:
-        if "category" in data:
-            data["category"] = AssetCategory(data["category"])
+        from src.domain.exceptions import ConflictError, ValidationError
+        from src.domain.services.lookup_similarity import classify_lookup_name
+
+        payload = {k: v for k, v in data.items() if k != "force"}
+        name = str(payload.get("name") or "").strip()
+        existing_rows = list(
+            (
+                await self.db.execute(
+                    select(AssetType).where(
+                        or_(AssetType.tenant_id == tenant_id, AssetType.tenant_id.is_(None)),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        intent, exact, similar = classify_lookup_name(name, [(row.id, row.name) for row in existing_rows])
+        if intent == "reuse" and exact is not None:
+            raise ConflictError(
+                f"Asset type '{name}' already exists as '{exact[1]}'",
+                details={"reuse_id": exact[0], "reuse_name": exact[1]},
+            )
+        if intent == "similar" and not force:
+            raise ValidationError(
+                f"Asset type '{name}' is similar to existing entries; pass force=true to create anyway",
+                code="SIMILAR_LOOKUP",
+                details={"similar_matches": [{"id": m.id, "name": m.name, "score": m.score} for m in similar]},
+            )
+        if "category" in payload:
+            payload["category"] = AssetCategory(payload["category"])
         asset_type = AssetType(
-            **data,
+            **payload,
             created_by_id=user_id,
             updated_by_id=user_id,
             tenant_id=tenant_id,
@@ -407,6 +465,7 @@ class AssetService:
         *,
         user_id: int,
         tenant_id: int,
+        commit: bool = True,
     ) -> Asset:
         if "status" in data:
             data["status"] = AssetStatus(data["status"])
@@ -437,8 +496,9 @@ class AssetService:
                 to_owner_user_id=asset.owner_user_id,
                 note="initial assignment",
             )
-        await self.db.commit()
-        await self.db.refresh(asset)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(asset)
         return asset
 
     async def get_asset(
@@ -469,6 +529,7 @@ class AssetService:
         *,
         tenant_id: int,
         actor_user_id: int,
+        commit: bool = True,
     ) -> Asset:
         asset: Asset = await self._get_entity(Asset, asset_id, tenant_id=tenant_id)
         if "status" in update_data:
@@ -502,8 +563,11 @@ class AssetService:
             to_owner_user_id=asset.owner_user_id,
         )
 
-        await self.db.commit()
-        await self.db.refresh(asset)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(asset)
+        else:
+            await self.db.flush()
         return asset
 
     # ==================================================================

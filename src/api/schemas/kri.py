@@ -1,9 +1,9 @@
 """KRI (Key Risk Indicator) API Schemas."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class KRIBase(BaseModel):
@@ -68,16 +68,16 @@ class KRIResponse(BaseModel):
     code: str
     name: str
     description: Optional[str] = None
-    category: str
-    unit: str
+    category: str = "operational"
+    unit: str = "count"
     measurement_frequency: str = "monthly"
-    data_source: str
+    data_source: str = "manual"
     calculation_method: Optional[str] = None
     auto_calculate: bool = True
     lower_is_better: bool = True
-    green_threshold: float
-    amber_threshold: float
-    red_threshold: float
+    green_threshold: float = 0.0
+    amber_threshold: float = 0.0
+    red_threshold: float = 0.0
     linked_risk_ids: Optional[List[int]] = None
     owner_id: Optional[int] = None
     department: Optional[str] = None
@@ -88,6 +88,37 @@ class KRIResponse(BaseModel):
     trend_direction: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("created_at", "updated_at", mode="before")
+    @classmethod
+    def _coerce_timestamps(cls, value: Any) -> Any:
+        if value is None:
+            return datetime.now(timezone.utc)
+        return value
+
+    @field_validator(
+        "category", "unit", "data_source", "current_status", "trend_direction", "measurement_frequency", mode="before"
+    )
+    @classmethod
+    def _enum_to_str(cls, value: Any) -> Any:
+        if value is None:
+            return value
+        return value.value if hasattr(value, "value") else value
+
+    @field_validator("linked_risk_ids", mode="before")
+    @classmethod
+    def _coerce_linked_risk_ids(cls, value: Any) -> Optional[List[int]]:
+        if value is None:
+            return None
+        if not isinstance(value, (list, tuple)):
+            return None
+        out: list[int] = []
+        for item in value:
+            try:
+                out.append(int(item))
+            except (TypeError, ValueError):
+                continue
+        return out
 
 
 class KRIListResponse(BaseModel):

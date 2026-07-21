@@ -77,4 +77,16 @@ describe('FormBuilder API wiring', () => {
     expect(payload.slug).toBe('new-form')
     expect(mockNavigate).toHaveBeenCalledWith('/admin/forms/42', { replace: true })
   }, 15000)
+
+  it('adds a field when Add Field palette is used (PX-036)', async () => {
+    render(<FormBuilder />)
+
+    fireEvent.click(screen.getByTestId('formbuilder-add-field-step-1'))
+
+    expect(screen.getByTestId('formbuilder-field-palette')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Text Input/i }))
+
+    expect(screen.getByDisplayValue('Text Input')).toBeInTheDocument()
+  })
 })

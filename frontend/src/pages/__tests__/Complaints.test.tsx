@@ -197,7 +197,15 @@ describe('Complaints', () => {
       ],
       total: 1,
     })
-    mockLookupsList.mockResolvedValue({ items: [], total: 0 })
+    mockLookupsList.mockImplementation(async (category: string) => {
+      if (category === 'customers') {
+        return {
+          items: [{ id: 1, category: 'customers', code: 'acme', label: 'Acme Corp', is_active: true }],
+          total: 1,
+        }
+      }
+      return { items: [], total: 0 }
+    })
     mockEvidenceUpload.mockResolvedValue({ data: { id: 1 } })
     mockCreate.mockResolvedValue({
       data: {
@@ -219,8 +227,8 @@ describe('Complaints', () => {
   })
 
   async function fillRequiredCreateFields() {
-    fireEvent.change(screen.getByTestId('fuzzy-Search customer / contract…'), {
-      target: { value: '10' },
+    fireEvent.change(screen.getByTestId('fuzzy-Search customer…'), {
+      target: { value: 'acme' },
     })
     fireEvent.change(screen.getByPlaceholderText('complaints.form.title_placeholder'), {
       target: { value: 'New complaint' },
@@ -333,6 +341,7 @@ describe('Complaints', () => {
     expect(callArgs.title).toBe('New complaint')
     expect(callArgs.description).toBe('Detailed description')
     expect(callArgs.contract_id).toBe(10)
+    expect(callArgs.complainant_company).toBe('Acme Corp')
     expect(callArgs.source_type).toBe('manual')
     expect(mockToastSuccess).toHaveBeenCalled()
     expect(mockNavigate).toHaveBeenCalledWith('/complaints/3')
@@ -422,5 +431,83 @@ describe('Complaints', () => {
     fireEvent.click(titleCell)
 
     expect(mockNavigate).toHaveBeenCalledWith('/complaints/1')
+  })
+
+  it('confirms before closing dirty create modal on Escape (PX-017)', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    render(<Complaints />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('CMP-001')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('complaints.new'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('complaints-create-form')).toBeInTheDocument()
+    })
+
+    fireEvent.change(screen.getByPlaceholderText('complaints.form.title_placeholder'), {
+      target: { value: 'Draft title' },
+    })
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(screen.getByTestId('complaints-create-form')).toBeInTheDocument()
+
+    confirmSpy.mockRestore()
+  })
+
+  it('keeps selected customer on create when optional company field is cleared', async () => {
+    render(<Complaints />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('CMP-001')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('complaints.new'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('complaints-create-form')).toBeInTheDocument()
+    })
+    await waitFor(() => {
+      expect(mockLookupsList).toHaveBeenCalled()
+    })
+
+    await fillRequiredCreateFields()
+    fireEvent.change(screen.getByPlaceholderText('Organisation (optional)'), {
+      target: { value: '' },
+    })
+    fireEvent.click(screen.getByText('complaints.create'))
+
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledTimes(1)
+    })
+
+    expect(mockCreate.mock.calls[0][0].complainant_company).toBe('Acme Corp')
+  })
+
+  it('shows honest customer-unavailable state when customers lookup and contracts are empty', async () => {
+    mockContractsList.mockResolvedValueOnce({ items: [], total: 0 })
+    mockLookupsList.mockImplementation(async () => ({ items: [], total: 0 }))
+
+    render(<Complaints />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('CMP-001')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('complaints.new'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('complaints-customer-unavailable')).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('complaints-customer-admin-link')).toHaveAttribute(
+      'href',
+      '/admin/lookups',
+    )
+    expect(screen.getByText('complaints.create')).toBeDisabled()
   })
 })

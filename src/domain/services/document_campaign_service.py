@@ -12,12 +12,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from fpdf import FPDF
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
-from src.domain.exceptions import BadRequestError, NotFoundError
+from src.core.pagination import PaginationInput, paginate
+from src.domain.exceptions import BadRequestError, NotFoundError, ValidationError
 from src.domain.models.document import Document
 from src.domain.models.document_campaign import (
     DEFAULT_REMINDER_OFFSETS_HOURS,
@@ -28,6 +28,7 @@ from src.domain.models.document_campaign import (
     EngineerGroup,
     EngineerGroupMember,
 )
+from src.domain.models.engineer import Engineer
 from src.domain.models.form_config import SystemSetting
 from src.domain.models.governed_knowledge import (
     DiscussionThreadStatus,
@@ -279,6 +280,7 @@ class DocumentCampaignService:
         competence_asset_type_id: Optional[int] = None,
     ) -> DocumentCampaign:
         audience = audience or {}
+        audience = await self._resolve_engineer_audience(tenant_id=tenant_id, audience=audience)
 
         quiz_questions: Optional[List[Dict[str, Any]]] = None
         quiz_pass_mark: Optional[int] = None
@@ -336,6 +338,36 @@ class DocumentCampaignService:
         await self.db.refresh(campaign)
         return campaign
 
+    async def _resolve_engineer_audience(self, *, tenant_id: int, audience: Dict[str, Any]) -> Dict[str, Any]:
+        """Translate roster engineer IDs to active linked user IDs before persistence."""
+        engineer_ids = list(dict.fromkeys(int(value) for value in (audience.get("engineer_ids") or [])))
+        if not engineer_ids:
+            return audience
+
+        result = await self.db.execute(
+            select(Engineer.id, Engineer.user_id)
+            .join(User, Engineer.user_id == User.id)
+            .where(
+                Engineer.id.in_(engineer_ids),
+                Engineer.tenant_id == tenant_id,
+                User.tenant_id == tenant_id,
+                User.is_active == True,  # noqa: E712
+            )
+        )
+        links = {int(engineer_id): user_id for engineer_id, user_id in result.all()}
+        unlinked_engineer_ids = [engineer_id for engineer_id in engineer_ids if links.get(engineer_id) is None]
+        if unlinked_engineer_ids:
+            raise ValidationError(
+                "All selected engineers must be linked to an active QGP user",
+                details={"unlinked_engineer_ids": unlinked_engineer_ids},
+            )
+
+        resolved = dict(audience)
+        resolved["user_ids"] = list(
+            dict.fromkeys([*(audience.get("user_ids") or []), *(links[id] for id in engineer_ids)])
+        )
+        return resolved
+
     async def update_campaign(
         self,
         *,
@@ -392,6 +424,30 @@ class DocumentCampaignService:
             .order_by(DocumentCampaign.created_at.desc())
         )
         return list(result.scalars().all())
+
+    async def list_campaigns(
+        self,
+        *,
+        tenant_id: int,
+        document_id: Optional[int] = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Tuple[List[DocumentCampaign], int]:
+        """List campaigns for a tenant, optionally scoped to one document."""
+        query = (
+            select(DocumentCampaign)
+            .where(DocumentCampaign.tenant_id == tenant_id)
+            .order_by(DocumentCampaign.created_at.desc(), DocumentCampaign.id.desc())
+        )
+        if document_id is not None:
+            query = query.where(DocumentCampaign.document_id == document_id)
+
+        result = await paginate(
+            self.db,
+            query,
+            PaginationInput(page=page, page_size=page_size),
+        )
+        return list(result.items), int(result.total)
 
     async def _compliance_summary(self, campaign_id: int) -> Dict[str, Any]:
         result = await self.db.execute(
@@ -495,6 +551,25 @@ class DocumentCampaignService:
         user_ids = await self.expand_audience(tenant_id=tenant_id, audience=audience)
         if not user_ids:
             raise BadRequestError("No valid active users in campaign audience — check user IDs / groups")
+        if getattr(campaign, "competence_asset_type_id", None) is not None:
+            linked_result = await self.db.execute(
+                select(Engineer.user_id).where(
+                    Engineer.tenant_id == tenant_id,
+                    Engineer.is_active.is_(True),
+                    Engineer.user_id.in_(user_ids),
+                )
+            )
+            linked_user_ids = {user_id for user_id in linked_result.scalars().all() if user_id is not None}
+            unlinked_user_ids = sorted(set(user_ids) - linked_user_ids)
+            if unlinked_user_ids:
+                raise ValidationError(
+                    "Competence-gated campaign cannot launch while audience users lack an active Engineer link",
+                    details={
+                        "unlinked_user_ids": unlinked_user_ids,
+                        "linked_count": len(linked_user_ids),
+                        "audience_count": len(user_ids),
+                    },
+                )
 
         existing_result = await self.db.execute(
             select(CampaignAssignment.user_id).where(CampaignAssignment.campaign_id == campaign_id)
@@ -2343,6 +2418,11 @@ class DocumentCampaignService:
 
     async def build_evidence_pack_pdf(self, *, tenant_id: int, campaign_id: int) -> Tuple[bytes, str]:
         """Build PDF evidence pack for a campaign (same rows as CSV + campaign header)."""
+        try:
+            from fpdf import FPDF
+        except ModuleNotFoundError as exc:  # pragma: no cover - lockfile/runtime guard
+            raise BadRequestError("PDF export unavailable: fpdf2 is not installed in this environment") from exc
+
         campaign, rows = await self._fetch_evidence_pack_rows(tenant_id=tenant_id, campaign_id=campaign_id)
         doc_title = await self._document_title(tenant_id=tenant_id, document_id=campaign.document_id)
         status_value = campaign.status.value if hasattr(campaign.status, "value") else str(campaign.status)
@@ -2377,7 +2457,8 @@ class DocumentCampaignService:
             pdf.ln()
 
         filename = f"campaign-{campaign.id}-evidence-pack.pdf"
-        return pdf.output(), filename
+        # fpdf2 returns bytearray; Starlette StreamingResponse requires bytes (ACT-044).
+        return bytes(pdf.output()), filename
 
     # ==================== Re-ack on new version (O-10) ====================
 

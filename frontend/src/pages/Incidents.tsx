@@ -7,10 +7,14 @@ import {
   Incident,
   IncidentCreate,
   getApiErrorMessage,
+  lookupsApi,
   notificationsApi,
   UserSearchResult,
 } from '../api/client'
+import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
 import { trackError } from '../utils/errorTracker'
+import { resolvePlatformReporterIdentity } from '../utils/platformSessionReporter'
+import { displayIncidentText } from './incidentTextDisplay'
 import { queueForSync } from '../lib/syncService'
 import { toast } from '../contexts/ToastContext'
 import { Button } from '../components/ui/Button'
@@ -108,6 +112,8 @@ export default function Incidents() {
     parseListFilter(searchParams.get('severity')),
   )
   const [page, setPage] = useState(() => parseListPage(searchParams.get('page')))
+  const [listTotal, setListTotal] = useState(0)
+  const [listPages, setListPages] = useState(1)
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>(
     searchParams.get('owner') === 'unassigned' ? 'unassigned' : 'all',
   )
@@ -124,6 +130,64 @@ export default function Incidents() {
     incident_date: new Date().toISOString().slice(0, 16),
     reported_date: new Date().toISOString().slice(0, 16),
   })
+  const [sessionReporterLabel, setSessionReporterLabel] = useState<string | null>(null)
+  const defaultTypeOptions = [
+    { value: 'injury', label: t('incidents.type.injury') },
+    { value: 'near_miss', label: t('incidents.type.near_miss') },
+    { value: 'hazard', label: t('incidents.type.hazard') },
+    { value: 'property_damage', label: t('incidents.type.property_damage') },
+    { value: 'environmental', label: t('incidents.type.environmental') },
+    { value: 'security', label: t('incidents.type.security') },
+    { value: 'quality', label: t('incidents.type.quality') },
+    { value: 'other', label: t('incidents.type.other') },
+  ]
+  const defaultSeverityOptions = [
+    { value: 'critical', label: t('severity.critical') },
+    { value: 'high', label: t('severity.high') },
+    { value: 'medium', label: t('severity.medium') },
+    { value: 'low', label: t('severity.low') },
+    { value: 'negligible', label: t('severity.negligible') },
+  ]
+  const [typeOptions, setTypeOptions] = useState(defaultTypeOptions)
+  const [severityOptions, setSeverityOptions] = useState(defaultSeverityOptions)
+
+  useEffect(() => {
+    if (!showModal) {
+      setSessionReporterLabel(null)
+      return
+    }
+    let cancelled = false
+    // Show translated defaults immediately; overlay Admin lookup labels when loaded.
+    setTypeOptions(defaultTypeOptions)
+    setSeverityOptions(defaultSeverityOptions)
+    void resolvePlatformReporterIdentity().then((identity) => {
+      if (cancelled) return
+      const label =
+        identity.reporter_name && identity.reporter_email
+          ? `${identity.reporter_name} (${identity.reporter_email})`
+          : identity.reporter_name || identity.reporter_email || null
+      setSessionReporterLabel(label)
+      setFormData((prev) => ({
+        ...prev,
+        reporter_name: identity.reporter_name || prev.reporter_name,
+        reporter_email: identity.reporter_email || prev.reporter_email,
+      }))
+    })
+    void (async () => {
+      const [typesRes, severityRes] = await Promise.all([
+        lookupsApi.list('incident_types', true).catch(() => ({ items: [], total: 0 })),
+        lookupsApi.list('severity_levels', true).catch(() => ({ items: [], total: 0 })),
+      ])
+      if (cancelled) return
+      setTypeOptions(mergeLookupSelectOptions(defaultTypeOptions, typesRes.items))
+      setSeverityOptions(mergeLookupSelectOptions(defaultSeverityOptions, severityRes.items))
+    })()
+    return () => {
+      cancelled = true
+    }
+    // Intentional: load lookups when the create dialog opens (not on every t identity change).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showModal is the dialog open gate
+  }, [showModal])
 
   useEffect(() => {
     let cancelled = false
@@ -185,6 +249,22 @@ export default function Incidents() {
         if (!cancelled) {
           const rows = normalizeIncidentItems(response.data)
           setIncidents(rows)
+          const meta = response.data
+          if (meta && typeof meta === 'object') {
+            const total = typeof (meta as { total?: unknown }).total === 'number' ? meta.total : rows.length
+            const pagesRaw =
+              (meta as { pages?: unknown; total_pages?: unknown }).pages ??
+              (meta as { total_pages?: unknown }).total_pages
+            const pages =
+              typeof pagesRaw === 'number' && pagesRaw >= 1
+                ? pagesRaw
+                : Math.max(1, Math.ceil(total / PAGE_SIZE))
+            setListTotal(total)
+            setListPages(pages)
+          } else {
+            setListTotal(rows.length)
+            setListPages(1)
+          }
           if (
             response.data &&
             typeof response.data === 'object' &&
@@ -252,8 +332,11 @@ export default function Incidents() {
     setCreateError(null)
 
     if (!navigator.onLine) {
+      const reporter = await resolvePlatformReporterIdentity()
       const payload = {
         ...formData,
+        reporter_name: formData.reporter_name || reporter.reporter_name,
+        reporter_email: formData.reporter_email || reporter.reporter_email,
         incident_date: new Date(formData.incident_date).toISOString(),
         reported_date: new Date(formData.reported_date).toISOString(),
       }
@@ -265,8 +348,11 @@ export default function Incidents() {
     }
 
     try {
+      const reporter = await resolvePlatformReporterIdentity()
       const response = await incidentsApi.create({
         ...formData,
+        reporter_name: formData.reporter_name || reporter.reporter_name,
+        reporter_email: formData.reporter_email || reporter.reporter_email,
         incident_date: new Date(formData.incident_date).toISOString(),
         reported_date: new Date(formData.reported_date).toISOString(),
       })
@@ -340,16 +426,21 @@ export default function Incidents() {
   }
 
   const deferredSearch = useDeferredValue(searchTerm)
+  const searchNeedle = deferredSearch.trim()
   const filteredIncidents = incidents.filter((i) => {
     if (statusFilter !== ALL_FILTER && i.status !== statusFilter) return false
     if (severityFilter !== ALL_FILTER && i.severity !== severityFilter) return false
-    const needle = deferredSearch.trim().toLowerCase()
+    const needle = searchNeedle.toLowerCase()
     if (!needle) return true
     return (
       (i.title || '').toLowerCase().includes(needle) ||
       (i.reference_number || '').toLowerCase().includes(needle)
     )
   })
+
+  const showingFrom = listTotal === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const showingTo =
+    listTotal === 0 ? 0 : Math.min(page * PAGE_SIZE, listTotal)
 
   if (loading) {
     return (
@@ -444,11 +535,35 @@ export default function Incidents() {
             type="text"
             placeholder={t('incidents.search_placeholder')}
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value)
+              setPage(1)
+            }}
             className="pl-10"
           />
         </div>
       </div>
+      {searchNeedle ? (
+        <p
+          className="text-sm text-muted-foreground"
+          role="status"
+          data-testid="incidents-search-scope-honesty"
+        >
+          {t(
+            'incidents.search.page_scope',
+            'Search filters this page only ({{from}}–{{to}} of {{total}}). Use pagination to scan other pages.',
+            { from: showingFrom, to: showingTo, total: listTotal },
+          )}
+        </p>
+      ) : listTotal > PAGE_SIZE ? (
+        <p className="text-sm text-muted-foreground" data-testid="incidents-list-range">
+          {t('incidents.list.range', 'Showing {{from}}–{{to}} of {{total}} incidents', {
+            from: showingFrom,
+            to: showingTo,
+            total: listTotal,
+          })}
+        </p>
+      ) : null}
 
       {/* Incidents Table */}
       <Card>
@@ -488,15 +603,28 @@ export default function Incidents() {
                     <td colSpan={ownerFilter === 'unassigned' ? 7 : 6}>
                       <EmptyState
                         icon={<AlertTriangle className="w-6 h-6 text-muted-foreground" />}
-                        title={t('incidents.empty.title', 'No incidents found')}
-                        description={t(
-                          'incidents.empty.subtitle',
-                          'Create your first incident report to get started.',
-                        )}
+                        title={
+                          searchNeedle
+                            ? t('incidents.empty.no_match', 'No matching incidents on this page')
+                            : t('incidents.empty.title', 'No incidents found')
+                        }
+                        description={
+                          searchNeedle
+                            ? t(
+                                'incidents.empty.no_match_hint',
+                                'Try another term or move to another page — search does not scan the full register yet.',
+                              )
+                            : t(
+                                'incidents.empty.subtitle',
+                                'Create your first incident report to get started.',
+                              )
+                        }
                         action={
-                          <Button variant="outline" size="sm" onClick={() => setShowModal(true)}>
-                            <Plus size={16} /> {t('incidents.new', 'Report Incident')}
-                          </Button>
+                          !searchNeedle ? (
+                            <Button variant="outline" size="sm" onClick={() => setShowModal(true)}>
+                              <Plus size={16} /> {t('incidents.new', 'Report Incident')}
+                            </Button>
+                          ) : undefined
                         }
                       />
                     </td>
@@ -506,23 +634,29 @@ export default function Incidents() {
                     <tr
                       key={incident.id}
                       data-testid="incident-row-link"
-                      className="hover:bg-surface transition-colors"
+                      className="hover:bg-surface transition-colors cursor-pointer"
                       style={{ animationDelay: `${index * 30}ms` }}
+                      onClick={() => navigate(`/incidents/${incident.id}`)}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={t('incidents.row.open', 'View incident: {{title}}', {
+                        title: incident.title || incident.reference_number,
+                      })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          navigate(`/incidents/${incident.id}`)
+                        }
+                      }}
                     >
-                      <td
-                        className="px-6 py-4 cursor-pointer"
-                        onClick={() => navigate(`/incidents/${incident.id}`)}
-                      >
+                      <td className="px-6 py-4">
                         <span className="font-mono text-sm text-primary">
                           {incident.reference_number}
                         </span>
                       </td>
-                      <td
-                        className="px-6 py-4 cursor-pointer"
-                        onClick={() => navigate(`/incidents/${incident.id}`)}
-                      >
+                      <td className="px-6 py-4">
                         <p className="text-sm font-medium text-foreground truncate max-w-xs">
-                          {incident.title}
+                          {displayIncidentText(incident.title)}
                         </p>
                       </td>
                       <td className="px-6 py-4">
@@ -592,6 +726,46 @@ export default function Incidents() {
               </tbody>
             </table>
           </div>
+          {listPages > 1 ? (
+            <div
+              className="flex items-center justify-between gap-2 border-t border-border px-4 py-3"
+              data-testid="incidents-pagination"
+            >
+              <p className="text-sm text-muted-foreground">
+                {t('incidents.list.range', 'Showing {{from}}–{{to}} of {{total}} incidents', {
+                  from: showingFrom,
+                  to: showingTo,
+                  total: listTotal,
+                })}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  {t('common.previous', 'Previous')}
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  {t('a11y.page_of', 'Page {{current}} of {{total}}', {
+                    current: page,
+                    total: listPages,
+                  })}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= listPages}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  {t('common.next', 'Next')}
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -660,18 +834,11 @@ export default function Incidents() {
                     <SelectValue placeholder={t('incidents.form.select_type')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="injury">{t('incidents.type.injury')}</SelectItem>
-                    <SelectItem value="near_miss">{t('incidents.type.near_miss')}</SelectItem>
-                    <SelectItem value="hazard">{t('incidents.type.hazard')}</SelectItem>
-                    <SelectItem value="property_damage">
-                      {t('incidents.type.property_damage')}
-                    </SelectItem>
-                    <SelectItem value="environmental">
-                      {t('incidents.type.environmental')}
-                    </SelectItem>
-                    <SelectItem value="security">{t('incidents.type.security')}</SelectItem>
-                    <SelectItem value="quality">{t('incidents.type.quality')}</SelectItem>
-                    <SelectItem value="other">{t('incidents.type.other')}</SelectItem>
+                    {typeOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -691,15 +858,33 @@ export default function Incidents() {
                     <SelectValue placeholder={t('incidents.form.select_severity')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="critical">{t('severity.critical')}</SelectItem>
-                    <SelectItem value="high">{t('severity.high')}</SelectItem>
-                    <SelectItem value="medium">{t('severity.medium')}</SelectItem>
-                    <SelectItem value="low">{t('severity.low')}</SelectItem>
-                    <SelectItem value="negligible">{t('severity.negligible')}</SelectItem>
+                    {severityOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
+
+            {sessionReporterLabel ? (
+              <div
+                className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-muted-foreground"
+                data-testid="incident-create-reporter"
+              >
+                <span className="font-medium text-foreground">
+                  {t('incidents.form.reporter', 'Reporter')}
+                </span>
+                : {sessionReporterLabel}
+                <span className="block text-xs mt-1">
+                  {t(
+                    'incidents.form.reporter_session_hint',
+                    'Captured from your signed-in session when the incident is saved.',
+                  )}
+                </span>
+              </div>
+            ) : null}
 
             <div>
               <label

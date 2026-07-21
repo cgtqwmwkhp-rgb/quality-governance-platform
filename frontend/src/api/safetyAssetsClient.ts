@@ -117,6 +117,85 @@ export interface SafetyAssetUpdate {
   department?: string | null
 }
 
+export interface CesAssetImportIssue {
+  row: number
+  code: string
+  message: string
+  field?: string | null
+  severity: 'error' | 'warning'
+}
+
+export interface CesLookupSimilarMatch {
+  id: number
+  name: string
+  score: number
+}
+
+export interface CesLookupProposal {
+  kind: 'asset_type' | 'location' | string
+  name: string
+  intent: 'reuse' | 'similar' | 'new' | string
+  reuse_id?: number | null
+  reuse_name?: string | null
+  similar_matches: CesLookupSimilarMatch[]
+  row_count: number
+  needs_confirmation: boolean
+}
+
+export interface CesLookupConfirmation {
+  kind: 'asset_type' | 'location' | string
+  name: string
+  action: 'reuse' | 'create'
+  reuse_id?: number | null
+}
+
+export interface CesAssetImportReport {
+  dry_run: boolean
+  total_rows: number
+  valid_rows: number
+  error_rows: number
+  creates: number
+  updates: number
+  ok: boolean
+  requires_confirmation?: boolean
+  errors: CesAssetImportIssue[]
+  warnings: CesAssetImportIssue[]
+  lookup_proposals?: CesLookupProposal[]
+  preview: Array<{
+    row: number
+    action: 'create' | 'update'
+    asset_number: string
+    name: string
+    serial_number: string
+    owner_user_id?: number | null
+    location_id?: number | null
+    vehicle_reg?: string | null
+    status: string
+    not_made_available: boolean
+  }>
+}
+
+export interface CesAssetImportCommitResult {
+  created_count: number
+  updated_count: number
+  created_asset_ids: number[]
+  updated_asset_ids: number[]
+  provisional_type_ids?: number[]
+  provisional_location_ids?: number[]
+  report: CesAssetImportReport
+}
+
+export interface SafetyLookupPendingItem {
+  kind: 'asset_type' | 'location' | string
+  id: number
+  name: string
+  source?: string | null
+  is_active: boolean
+  approval_status: string
+  similar_matches: CesLookupSimilarMatch[]
+  created_at?: string | null
+}
+
 /** KPI metrics — null means unavailable (never silent-zero on fetch failure). */
 export type MetricValue = number | null
 
@@ -159,6 +238,27 @@ export const safetyAssetsApi = {
   updateAsset: (id: number, data: SafetyAssetUpdate) =>
     api.patch<SafetyAsset>(`${BASE}/${id}`, data),
 
+  cesImportDryRun: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    // Full CES workbooks are large; allow long parse/validate wall-clock.
+    return api.post<CesAssetImportReport>('/api/v1/asset-imports/ces/dry-run', form, {
+      timeout: 300000,
+    })
+  },
+
+  cesImportCommit: (file: File, confirmations: CesLookupConfirmation[] = []) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (confirmations.length) {
+      form.append('confirmations', JSON.stringify(confirmations))
+    }
+    // Commit upserts ~1.8k rows; keep above default 45s write timeout.
+    return api.post<CesAssetImportCommitResult>('/api/v1/asset-imports/ces/commit', form, {
+      timeout: 300000,
+    })
+  },
+
   listAssetTypes: (params?: {
     page?: number
     page_size?: number
@@ -178,10 +278,74 @@ export const safetyAssetsApi = {
 
   getLocation: (id: number) => api.get<SafetyLocation>(`${BASE}/locations/${id}`),
 
+  listPendingSafetyLookups: () =>
+    api.get<{ items: SafetyLookupPendingItem[]; total: number }>(`${BASE}/safety-lookups/pending`),
+
+  previewSafetyLookup: (kind: 'asset_type' | 'location', name: string) =>
+    api.post<{
+      kind: string
+      name: string
+      intent: string
+      reuse_id?: number | null
+      reuse_name?: string | null
+      similar_matches: CesLookupSimilarMatch[]
+      needs_confirmation: boolean
+      blocked_exact_duplicate: boolean
+    }>(`${BASE}/safety-lookups/preview`, { kind, name }),
+
+  approveSafetyLookup: (kind: string, id: number) =>
+    api.post(`${BASE}/safety-lookups/${kind}/${id}/approve`),
+
+  mergeSafetyLookup: (kind: string, id: number, targetId: number) =>
+    api.post(`${BASE}/safety-lookups/${kind}/${id}/merge`, { target_id: targetId }),
+
+  rejectSafetyLookup: (kind: string, id: number, targetId: number) =>
+    api.post(`${BASE}/safety-lookups/${kind}/${id}/reject`, { target_id: targetId }),
+
+  createAssetType: (data: {
+    category: string
+    name: string
+    description?: string
+    force?: boolean
+  }) => api.post<SafetyAssetType>(`${BASE}/asset-types`, data),
+
+  createLocation: (data: { name: string; kind: string; force?: boolean }) =>
+    api.post<SafetyLocation>(`${BASE}/locations`, data),
+
   /**
    * Parallel count queries for the KPI hub.
    * Each metric is independently settled — failures yield null, never fake zeros.
    */
+  /**
+   * Page through the register for board rollups (page_size capped at API max 500).
+   */
+  listAllAssetsForBoard: async (
+    baseFilters?: Omit<SafetyAssetListParams, 'page' | 'page_size'>,
+    options?: { pageSize?: number; maxPages?: number },
+  ): Promise<SafetyAsset[]> => {
+    const pageSize = options?.pageSize ?? 500
+    const maxPages = options?.maxPages ?? 40
+    const items: SafetyAsset[] = []
+    let pages = 1
+    for (let page = 1; page <= maxPages; page += 1) {
+      const res = await safetyAssetsApi.listAssets({
+        ...baseFilters,
+        page,
+        page_size: pageSize,
+      })
+      const batch = res.data.items ?? []
+      items.push(...batch)
+      pages = res.data.pages ?? 1
+      if (page >= pages) break
+    }
+    if (pages > maxPages) {
+      throw new Error(
+        `Asset register has ${pages} pages; board fetch capped at ${maxPages}. Narrow filters or raise the cap.`,
+      )
+    }
+    return items
+  },
+
   getKpis: async (
     baseFilters?: Omit<SafetyAssetListParams, 'page' | 'page_size' | 'expiry_band' | 'status'>,
   ): Promise<SafetyAssetKpis> => {

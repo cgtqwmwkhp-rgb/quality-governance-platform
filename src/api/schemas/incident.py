@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from src.api.schemas.validators import sanitize_field
+from src.api.schemas.validators import reject_future_statutory_datetime, sanitize_field
 from src.domain.models.incident import IncidentSeverity, IncidentStatus, IncidentType
 
 
@@ -54,6 +54,11 @@ class IncidentCreate(IncidentBase):
             raise ValueError("Title cannot be empty or whitespace")
         return v.strip()
 
+    @field_validator("incident_date")
+    @classmethod
+    def incident_date_not_future(cls, v: datetime) -> datetime:
+        return reject_future_statutory_datetime(v)
+
 
 class IncidentUpdate(BaseModel):
     """Schema for updating an existing incident."""
@@ -80,6 +85,13 @@ class IncidentUpdate(BaseModel):
         if v is not None and (not v or not v.strip()):
             raise ValueError("Title cannot be empty or whitespace")
         return v.strip() if v else None
+
+    @field_validator("incident_date")
+    @classmethod
+    def incident_date_not_future(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is None:
+            return v
+        return reject_future_statutory_datetime(v)
 
 
 class IncidentResponse(BaseModel):

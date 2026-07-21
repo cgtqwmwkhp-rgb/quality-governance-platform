@@ -73,11 +73,23 @@ def _latest_records_by_engineer_asset(records):
     return latest.values()
 
 
+def _as_utc_aware(value: datetime) -> datetime:
+    """Normalise naive/aware datetimes for safe comparison."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def _effective_competency_state(record):
     state = record.state.value if hasattr(record.state, "value") else str(record.state)
     expires_at = getattr(record, "expires_at", None)
-    if expires_at is not None and expires_at <= datetime.now(timezone.utc) and state in {"active", "due"}:
-        return "expired"
+    if expires_at is not None and state in {"active", "due"}:
+        try:
+            if _as_utc_aware(expires_at) <= datetime.now(timezone.utc):
+                return "expired"
+        except (TypeError, ValueError):
+            # Corrupt/unparseable expiry must not 500 the matrix.
+            pass
     return state
 
 

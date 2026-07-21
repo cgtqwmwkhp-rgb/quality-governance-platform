@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.exceptions import ValidationError
 from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.near_miss import NearMiss
@@ -27,6 +28,31 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _resolve_portal_display_name(data: dict, *, is_anonymous: bool) -> str:
+    """Map reporter_name / complainant_name for portal entity NOT NULL columns."""
+    if is_anonymous:
+        return "Anonymous"
+    raw_snapshot = data.get("reporter_submission")
+    snapshot: dict = raw_snapshot if isinstance(raw_snapshot, dict) else {}
+    for key in (
+        "reporter_name",
+        "complainant_name",
+    ):
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    for key in ("reporter_name", "complainant_name", "person_name", "employee_name"):
+        value = snapshot.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    raise ValidationError(
+        "reporter_name is required unless is_anonymous=true "
+        "(complainant_name is also accepted for complaint submissions)",
+        code="REPORTER_NAME_REQUIRED",
+        details={"fields": ["reporter_name", "complainant_name"]},
+    )
 
 
 def _generate_tracking_code() -> str:
@@ -120,6 +146,7 @@ class PortalService:
         tracking_code: str,
     ) -> dict[str, Any]:
         ref_number = await ReferenceNumberService.generate(self.db, "incident", Incident)
+        display_name = _resolve_portal_display_name(data, is_anonymous=is_anonymous)
         incident = Incident(
             reference_number=ref_number,
             title=data["title"],
@@ -132,7 +159,7 @@ class PortalService:
             incident_date=datetime.now(timezone.utc),
             reported_date=datetime.now(timezone.utc),
             tenant_id=self.tenant_id,
-            reporter_name=(data.get("reporter_name") if not is_anonymous else "Anonymous"),
+            reporter_name=display_name,
             reporter_email=data.get("reporter_email") if not is_anonymous else None,
             source_form_id="portal_incident_v1",
             source_type="portal",
@@ -158,6 +185,7 @@ class PortalService:
         tracking_code: str,
     ) -> dict[str, Any]:
         ref_number = await ReferenceNumberService.generate(self.db, "complaint", Complaint)
+        display_name = _resolve_portal_display_name(data, is_anonymous=is_anonymous)
         complaint = Complaint(
             reference_number=ref_number,
             title=data["title"],
@@ -167,7 +195,7 @@ class PortalService:
             status=ComplaintStatus.RECEIVED,
             received_date=datetime.now(timezone.utc),
             tenant_id=self.tenant_id,
-            complainant_name=(data.get("reporter_name") if not is_anonymous else "Anonymous"),
+            complainant_name=display_name,
             complainant_email=data.get("reporter_email") if not is_anonymous else None,
             complainant_phone=data.get("reporter_phone") if not is_anonymous else None,
             source_form_id="portal_complaint_v1",
@@ -196,6 +224,7 @@ class PortalService:
         }
         rta_severity = rta_severity_map.get(data.get("severity", "low").lower(), RTASeverity.DAMAGE_ONLY)
 
+        display_name = _resolve_portal_display_name(data, is_anonymous=is_anonymous)
         rta = RoadTrafficCollision(
             reference_number=ref_number,
             title=data["title"],
@@ -206,9 +235,9 @@ class PortalService:
             collision_date=datetime.now(timezone.utc),
             reported_date=datetime.now(timezone.utc),
             tenant_id=self.tenant_id,
-            reporter_name=(data.get("reporter_name") if not is_anonymous else "Anonymous"),
+            reporter_name=display_name,
             reporter_email=data.get("reporter_email") if not is_anonymous else None,
-            driver_name=data.get("reporter_name") if not is_anonymous else "Anonymous",
+            driver_name=display_name,
             source_form_id="portal_rta_v1",
         )
         self.db.add(rta)
@@ -234,9 +263,10 @@ class PortalService:
         }
         priority = priority_map.get(data.get("severity", "medium").lower(), "MEDIUM")
 
+        display_name = _resolve_portal_display_name(data, is_anonymous=is_anonymous)
         near_miss = NearMiss(
             reference_number=ref_number,
-            reporter_name=(data.get("reporter_name") if not is_anonymous else "Anonymous"),
+            reporter_name=display_name,
             reporter_email=data.get("reporter_email") if not is_anonymous else None,
             contract=data.get("department") or "Not specified",
             location=data.get("location") or "Not specified",

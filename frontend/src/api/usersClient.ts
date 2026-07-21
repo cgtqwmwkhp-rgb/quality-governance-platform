@@ -117,8 +117,23 @@ export function createUsersApi(api: AxiosInstance) {
   delete: (id: number) => api.delete<void>(`/api/v1/users/${id}`),
   listRoles: (config?: AxiosRequestConfig) =>
     api.get<RoleDetail[]>('/api/v1/users/roles/', config),
-  createRole: (data: RoleCreatePayload) => api.post<RoleDetail>('/api/v1/users/roles/', data),
+  createRole: (data: RoleCreatePayload) =>
+    api.post<RoleDetail>('/api/v1/users/roles/', {
+      name: data.name,
+      description: data.description,
+      // Backend Role.permissions is a JSON string, not a list.
+      permissions: JSON.stringify(data.permissions ?? []),
+    } as never),
   updateRole: (id: number, data: RoleUpdatePayload) =>
-    api.patch<RoleDetail>(`/api/v1/users/roles/${id}`, data),
+    api.patch<RoleDetail>(
+      `/api/v1/users/roles/${id}`,
+      {
+        ...(data.name !== undefined ? { name: data.name } : {}),
+        ...(data.description !== undefined ? { description: data.description } : {}),
+        ...(data.permissions !== undefined
+          ? { permissions: JSON.stringify(data.permissions) }
+          : {}),
+      } as never,
+    ),
 }
 }

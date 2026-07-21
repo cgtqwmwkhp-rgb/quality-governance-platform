@@ -71,7 +71,10 @@ describe('Layout', () => {
       </BrowserRouter>,
     )
 
-    expect(screen.getByText('QGP')).toBeInTheDocument()
+    expect(screen.getByText('brand.product_name')).toBeInTheDocument()
+    expect(screen.getByText('brand.company_line')).toBeInTheDocument()
+    expect(screen.queryByText('QGP')).not.toBeInTheDocument()
+    expect(screen.queryByText('PRO')).not.toBeInTheDocument()
     expect(navLink('/dashboard')).toHaveTextContent('nav.home')
 
     for (const hub of [
@@ -130,7 +133,7 @@ describe('Layout', () => {
       ],
       [
         'nav.assurance',
-        ['/audits', '/audit-templates', '/uvdb', '/planet-mark', '/audits?source=customer'],
+        ['/audits', '/audit-templates', '/uvdb', '/planet-mark', '/customer-audits'],
       ],
       [
         'nav.compliance_sustainability',
@@ -157,7 +160,6 @@ describe('Layout', () => {
           '/admin/forms',
           '/admin/settings',
           '/admin/notifications',
-          '/admin/campaign-compliance',
           '/admin/hsec-inbox',
           '/admin/lookups',
           '/admin/contracts',
@@ -176,7 +178,7 @@ describe('Layout', () => {
     }
   })
 
-  it('exposes a single Library sidebar entry landing on /documents', async () => {
+  it('exposes Library and Document campaigns sidebar entries', async () => {
     const Layout = (await import('../Layout')).default
 
     render(
@@ -189,6 +191,7 @@ describe('Layout', () => {
     expect(libraryLink).toBeInTheDocument()
     expect(libraryLink).toHaveTextContent('nav.library')
     expect(libraryLink).toHaveAttribute('href', '/documents')
+    expect(navLink('/documents/campaigns')).toBeInTheDocument()
     expect(navLink('/policies')).not.toBeInTheDocument()
     expect(screen.queryByText('nav.documents')).not.toBeInTheDocument()
     expect(screen.queryByText('nav.policies')).not.toBeInTheDocument()
@@ -211,6 +214,22 @@ describe('Layout', () => {
         'page',
       )
     }
+  })
+
+  it('marks Document campaigns active on /documents/campaigns without Library', async () => {
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <MemoryRouter initialEntries={['/documents/campaigns']}>
+        <Layout onLogout={onLogout} />
+      </MemoryRouter>,
+    )
+
+    expect(navLink('/documents/campaigns')).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'nav.library' })).not.toHaveAttribute(
+      'aria-current',
+      'page',
+    )
   })
 
   it('exposes Insights hub links for analytics, calendar, exports, and AI', async () => {

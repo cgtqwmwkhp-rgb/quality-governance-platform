@@ -32,6 +32,8 @@ export default function AssessmentCreate() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [templateLoadFailed, setTemplateLoadFailed] = useState(false)
+  const [rosterLoadFailed, setRosterLoadFailed] = useState(false)
 
   const [templateId, setTemplateId] = useState<string>('')
   const [engineerId, setEngineerId] = useState<string>('')
@@ -44,20 +46,31 @@ export default function AssessmentCreate() {
 
   useEffect(() => {
     const load = async () => {
-      try {
-        const [tRes, eRes, aRes] = await Promise.all([
+      const [templatesResult, engineersResult, assetTypesResult] = await Promise.allSettled([
           auditsApi.listTemplates(1, 100, { is_published: true }),
           workforceApi.listEngineers({ ...ACTIVE_EMPLOYEES_LIST_PARAMS }),
           workforceApi.listAssetTypes(),
-        ])
-        setTemplates(tRes.data.items || [])
-        setEngineers(sortEmployeesForPicker(eRes.data.items || []))
-        setAssetTypes(aRes.data.items || [])
-      } catch {
-        setError('Failed to load form data')
-      } finally {
-        setLoading(false)
+      ])
+
+      if (templatesResult.status === 'fulfilled') {
+        setTemplates(templatesResult.value.data.items || [])
+      } else {
+        setTemplateLoadFailed(true)
+        setError('Assessment templates could not be loaded. Reload the page before creating an assessment.')
       }
+
+      if (engineersResult.status === 'fulfilled') {
+        setEngineers(sortEmployeesForPicker(engineersResult.value.data.items || []))
+      } else {
+        setRosterLoadFailed(true)
+        setError('The employee roster could not be loaded. Reload the page before creating an assessment.')
+      }
+
+      if (assetTypesResult.status === 'fulfilled') {
+        setAssetTypes(assetTypesResult.value.data.items || [])
+      }
+
+      setLoading(false)
     }
     load()
   }, [])
@@ -106,7 +119,8 @@ export default function AssessmentCreate() {
     }
   }
 
-  const rosterEmpty = !loading && engineers.length === 0
+  const rosterEmpty = !loading && engineers.length === 0 && !rosterLoadFailed
+  const requiredDataUnavailable = templateLoadFailed || rosterLoadFailed
 
   if (loading) {
     return (
@@ -196,7 +210,9 @@ export default function AssessmentCreate() {
                 value={templateId}
                 onChange={(e) => setTemplateId(e.target.value)}
                 required
-                className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                disabled={templateLoadFailed}
+                aria-describedby={templateLoadFailed ? 'assessmentcreate-templates-unavailable' : undefined}
+                className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
               >
                 <option value="">{t('workforce.common.select_template')}</option>
                 {templates.map((t) => (
@@ -205,6 +221,15 @@ export default function AssessmentCreate() {
                   </option>
                 ))}
               </select>
+              {templateLoadFailed && (
+                <p
+                  id="assessmentcreate-templates-unavailable"
+                  className="mt-2 text-sm text-destructive"
+                  data-testid="assessment-create-templates-unavailable"
+                >
+                  Templates could not be loaded. Reload the page before creating an assessment.
+                </p>
+              )}
             </div>
 
             <div>
@@ -219,8 +244,14 @@ export default function AssessmentCreate() {
                 value={engineerId}
                 onChange={(e) => setEngineerId(e.target.value)}
                 required
-                disabled={rosterEmpty}
-                aria-describedby={rosterEmpty ? 'assessmentcreate-employees-empty' : undefined}
+                disabled={rosterEmpty || rosterLoadFailed}
+                aria-describedby={
+                  rosterLoadFailed
+                    ? 'assessmentcreate-employees-unavailable'
+                    : rosterEmpty
+                      ? 'assessmentcreate-employees-empty'
+                      : undefined
+                }
                 className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
               >
                 <option value="">{t('workforce.common.select_engineer')}</option>
@@ -230,7 +261,16 @@ export default function AssessmentCreate() {
                   </option>
                 ))}
               </select>
-              {rosterEmpty && (
+              {rosterLoadFailed ? (
+                <p
+                  id="assessmentcreate-employees-unavailable"
+                  className="mt-2 text-sm text-destructive"
+                  data-testid="assessment-create-employees-unavailable"
+                >
+                  The employee roster could not be loaded. Reload the page before creating an
+                  assessment.
+                </p>
+              ) : rosterEmpty ? (
                 <p
                   id="assessmentcreate-employees-empty"
                   className="mt-2 text-sm text-muted-foreground"
@@ -244,7 +284,7 @@ export default function AssessmentCreate() {
                     {t('workforce.assessments.employees_empty_link')}
                   </Link>
                 </p>
-              )}
+              ) : null}
             </div>
 
             <div>
@@ -343,7 +383,7 @@ export default function AssessmentCreate() {
 
             <Button
               type="submit"
-              disabled={submitting || rosterEmpty}
+              disabled={submitting || rosterEmpty || requiredDataUnavailable}
               className="w-full min-h-[48px] text-base"
             >
               {submitting

@@ -50,7 +50,7 @@ import { Button } from './ui/Button'
 import { cn } from '../helpers/utils'
 import { hasRole, isSuperuser } from '../utils/auth'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
-import { CUSTOMER_AUDITS_AUDITS_PATH, navItemIsActive } from './assuranceHubHelpers'
+import { CUSTOMER_AUDITS_PROGRAMME_PATH, navItemIsActive } from './assuranceHubHelpers'
 
 /** Deferred until the shell opens Copilot — keeps authenticated first paint lean (S14). */
 const AICopilot = lazy(() => import('./copilot/AICopilot'))
@@ -142,7 +142,12 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/audit-templates', icon: Sparkles, label: t('nav.audit_builder') },
         { path: '/uvdb', icon: Award, label: t('nav.uvdb_achilles') },
         { path: '/planet-mark', icon: Leaf, label: t('nav.planet_mark') },
-        { path: CUSTOMER_AUDITS_AUDITS_PATH, icon: Users, label: t('nav.customer_audits') },
+        {
+          path: '/assurance/certificates',
+          icon: Shield,
+          label: t('nav.assurance_cert_shelf', { defaultValue: 'Certificate shelf' }),
+        },
+        { path: CUSTOMER_AUDITS_PROGRAMME_PATH, icon: Users, label: t('nav.customer_audits') },
       ],
     },
     {
@@ -217,11 +222,6 @@ export default function Layout({ onLogout }: LayoutProps) {
                 label: t('nav.notifications', { defaultValue: 'Notifications' }),
               },
               {
-                path: '/admin/campaign-compliance',
-                icon: Megaphone,
-                label: t('nav.campaign_compliance', { defaultValue: 'Campaign Compliance' }),
-              },
-              {
                 path: '/admin/hsec-inbox',
                 icon: MessageSquare,
                 label: t('nav.hsec_inbox', { defaultValue: 'HSEQ Inbox' }),
@@ -250,7 +250,9 @@ export default function Layout({ onLogout }: LayoutProps) {
   const location = useLocation()
   const pathIsActive = (path: string) =>
     navItemIsActive(path, location.pathname, location.search)
-  const libraryNavActive = pathIsActive('/documents') || pathIsActive('/policies')
+  const documentCampaignsNavActive = pathIsActive('/documents/campaigns')
+  const libraryNavActive =
+    (pathIsActive('/documents') && !documentCampaignsNavActive) || pathIsActive('/policies')
   const activeHubId = hubs.find((hub) => hub.items.some((item) => pathIsActive(item.path)))?.id
   const [expandedHubs, setExpandedHubs] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
@@ -382,19 +384,17 @@ export default function Layout({ onLogout }: LayoutProps) {
         )}
       >
         <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="p-6 border-b border-border">
+          {/* Brand — Option C: mark-dominant */}
+          <div className="p-5 border-b border-border">
             <div className="flex items-center gap-3">
-              <BrandMarkTile size={44} />
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-lg font-bold text-foreground">QGP</h1>
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold gradient-brand text-primary-foreground rounded-full flex items-center gap-0.5">
-                    <Sparkles className="w-2.5 h-2.5" />
-                    PRO
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">{t('login.title')}</p>
+              <BrandMarkTile size={56} />
+              <div className="min-w-0">
+                <h1 className="text-sm font-bold text-foreground leading-snug">
+                  {t('brand.product_name', 'Quality Governance Platform')}
+                </h1>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
+                  {t('brand.company_line', 'Plantexpand Limited')}
+                </p>
               </div>
             </div>
           </div>
@@ -515,31 +515,61 @@ export default function Layout({ onLogout }: LayoutProps) {
                       )}
                     </div>
                     {hub.id === 'risk-improvement' && (
-                      <Link
-                        to="/documents"
-                        onClick={() => setSidebarOpen(false)}
-                        aria-current={libraryNavActive ? 'page' : undefined}
-                        className={cn(
-                          'flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
-                          'transition-all duration-200 group',
-                          libraryNavActive
-                            ? 'bg-primary/10 text-primary border border-primary/20'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-surface',
-                        )}
-                      >
-                        <FolderOpen
+                      <>
+                        <Link
+                          to="/documents"
+                          onClick={() => setSidebarOpen(false)}
+                          aria-current={libraryNavActive ? 'page' : undefined}
                           className={cn(
-                            'w-5 h-5 shrink-0 transition-colors',
+                            'flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
+                            'transition-all duration-200 group',
                             libraryNavActive
-                              ? 'text-primary'
-                              : 'text-muted-foreground group-hover:text-foreground',
+                              ? 'bg-primary/10 text-primary border border-primary/20'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-surface',
                           )}
-                        />
-                        <span className="min-w-0 flex-1 leading-snug">{t('nav.library')}</span>
-                        {libraryNavActive && (
-                          <div className="ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary" />
-                        )}
-                      </Link>
+                        >
+                          <FolderOpen
+                            className={cn(
+                              'w-5 h-5 shrink-0 transition-colors',
+                              libraryNavActive
+                                ? 'text-primary'
+                                : 'text-muted-foreground group-hover:text-foreground',
+                            )}
+                          />
+                          <span className="min-w-0 flex-1 leading-snug">{t('nav.library')}</span>
+                          {libraryNavActive && (
+                            <div className="ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary" />
+                          )}
+                        </Link>
+                        <Link
+                          to="/documents/campaigns"
+                          onClick={() => setSidebarOpen(false)}
+                          aria-current={documentCampaignsNavActive ? 'page' : undefined}
+                          data-testid="nav-document-campaigns"
+                          className={cn(
+                            'flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
+                            'transition-all duration-200 group',
+                            documentCampaignsNavActive
+                              ? 'bg-primary/10 text-primary border border-primary/20'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-surface',
+                          )}
+                        >
+                          <Megaphone
+                            className={cn(
+                              'w-5 h-5 shrink-0 transition-colors',
+                              documentCampaignsNavActive
+                                ? 'text-primary'
+                                : 'text-muted-foreground group-hover:text-foreground',
+                            )}
+                          />
+                          <span className="min-w-0 flex-1 leading-snug">
+                            {t('nav.document_campaigns', { defaultValue: 'Document campaigns' })}
+                          </span>
+                          {documentCampaignsNavActive && (
+                            <div className="ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary" />
+                          )}
+                        </Link>
+                      </>
                     )}
                   </Fragment>
                 )

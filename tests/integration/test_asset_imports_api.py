@@ -15,6 +15,7 @@ from src.api.middleware.error_handler import register_exception_handlers
 from src.api.routes import asset_imports
 from src.domain.exceptions import ValidationError
 from src.domain.services.asset_import_service import ImportCommitResult, ImportValidationReport
+from src.domain.services.ces_asset_import_service import CesImportReport
 from src.infrastructure.database import get_db
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "asset_import"
@@ -155,3 +156,40 @@ def test_rejects_non_csv(api_client: TestClient):
         files={"file": ("tools.txt", b"not csv", "text/plain")},
     )
     assert response.status_code == 400
+
+
+def test_ces_dry_run_endpoint_returns_report(api_client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    report = CesImportReport(
+        dry_run=True,
+        total_rows=1,
+        valid_rows=1,
+        error_rows=0,
+        creates=1,
+        updates=0,
+        preview=[
+            {
+                "row": 2,
+                "action": "create",
+                "asset_number": "CES-1",
+                "name": "Gas Detector",
+                "serial_number": "CES-1",
+                "status": "active",
+                "not_made_available": False,
+            }
+        ],
+    )
+    monkeypatch.setattr(asset_imports.CesAssetImportService, "dry_run", AsyncMock(return_value=report))
+
+    response = api_client.post(
+        "/api/v1/asset-imports/ces/dry-run",
+        files={
+            "file": (
+                "ces.xlsx",
+                b"not-read-by-mocked-service",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["creates"] == 1
+    assert response.json()["preview"][0]["action"] == "create"

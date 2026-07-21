@@ -772,10 +772,14 @@ export default function ComplianceAutomation() {
             <h3 className="font-medium text-foreground">
               {t('compliance.automation.cert_expiry_tracking', 'Certificate Expiry Tracking')}
             </h3>
-            <button className="flex items-center gap-2 px-3 py-1.5 bg-success hover:bg-success/90 text-success-foreground rounded-lg text-sm transition-colors">
+            <Link
+              to="/assurance/certificates"
+              className="flex items-center gap-2 px-3 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-sm transition-colors"
+              data-testid="monitoring-certificates-open-shelf"
+            >
               <Award className="w-4 h-4" />
-              {t('compliance.automation.add_certificate', 'Add Certificate')}
-            </button>
+              {t('assurance.cert_shelf.open_shelf', 'Open certificate shelf')}
+            </Link>
           </div>
           {certificates.length === 0 ? (
             <div data-testid="monitoring-certificates-empty">

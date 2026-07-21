@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Search,
@@ -11,6 +11,8 @@ import {
   LayoutGrid,
   List,
   Rows3,
+  ArrowDown,
+  ArrowUp,
 } from 'lucide-react'
 import { CardSkeleton } from '../../components/ui/SkeletonLoader'
 import { useNavigate } from 'react-router-dom'
@@ -36,9 +38,46 @@ import {
 import { UserEmailSearch } from '../../components/UserEmailSearch'
 import type { UserSearchResult } from '../../api/client'
 import { cn } from '../../helpers/utils'
+import { isWorkforceManager } from '../../utils/workforceAccess'
 
 type ActiveFilter = '' | 'true' | 'false'
+type LinkFilter = '' | 'linked' | 'unlinked'
 type ViewMode = 'cards' | 'list' | 'compact'
+type SortKey = 'name' | 'role' | 'site' | 'status' | 'login'
+type SortDirection = 'asc' | 'desc'
+
+const SORTABLE_COLUMNS: { key: SortKey; label: string }[] = [
+  { key: 'name', label: 'Name' },
+  { key: 'role', label: 'Role' },
+  { key: 'site', label: 'Site' },
+  { key: 'status', label: 'Status' },
+  { key: 'login', label: 'Login' },
+]
+
+function engineerSortValue(eng: EngineerProfile, key: SortKey): string | number {
+  switch (key) {
+    case 'name':
+      return engineerLabel(eng).toLowerCase()
+    case 'role':
+      return (eng.job_title || '').toLowerCase()
+    case 'site':
+      return (eng.site || '').toLowerCase()
+    case 'status':
+      return eng.is_active ? 1 : 0
+    case 'login':
+      return eng.user_id == null ? -1 : eng.user_id
+  }
+}
+
+function compareEngineers(a: EngineerProfile, b: EngineerProfile, key: SortKey, dir: SortDirection): number {
+  const aVal = engineerSortValue(a, key)
+  const bVal = engineerSortValue(b, key)
+  if (aVal === '' && bVal !== '') return 1
+  if (bVal === '' && aVal !== '') return -1
+  if (aVal < bVal) return dir === 'asc' ? -1 : 1
+  if (aVal > bVal) return dir === 'asc' ? 1 : -1
+  return a.id - b.id
+}
 
 type EmployeeFormState = {
   display_name: string
@@ -90,7 +129,11 @@ export default function Engineers() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   // Best-in-class default: active engineers only (roster for assignment / reporting).
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('true')
+  const [linkFilter, setLinkFilter] = useState<LinkFilter>('')
+  const [linkCoverage, setLinkCoverage] = useState<{ linked: number; active: number; percent: number } | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('cards')
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortDir, setSortDir] = useState<SortDirection>('asc')
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
 
@@ -100,6 +143,12 @@ export default function Engineers() {
   const [createFormError, setCreateFormError] = useState<string | null>(null)
   const [createLinkEmail, setCreateLinkEmail] = useState('')
   const [createLinkUser, setCreateLinkUser] = useState<UserSearchResult | undefined>()
+  const [selectedEngineerIds, setSelectedEngineerIds] = useState<number[]>([])
+  const [bulkLinkOpen, setBulkLinkOpen] = useState(false)
+  const [bulkLinkUsers, setBulkLinkUsers] = useState<Record<number, UserSearchResult | undefined>>({})
+  const [bulkLinkEmails, setBulkLinkEmails] = useState<Record<number, string>>({})
+  const [bulkLinkSaving, setBulkLinkSaving] = useState(false)
+  const [bulkLinkError, setBulkLinkError] = useState<string | null>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchTerm), 300)
@@ -113,19 +162,40 @@ export default function Engineers() {
       const params: Record<string, string> = { page: '1', page_size: '50' }
       if (debouncedSearch) params.search = debouncedSearch
       if (activeFilter) params.is_active = activeFilter
+      if (linkFilter) params.link_status = linkFilter
       const res = await workforceApi.listEngineers(params)
       setEngineers(res.data.items || [])
+      setLinkCoverage({
+        linked: res.data.linked_active_engineers ?? 0,
+        active: res.data.active_engineers ?? 0,
+        percent: res.data.linked_coverage_percent ?? 0,
+      })
     } catch (err) {
       setEngineers([])
+      setLinkCoverage(null)
       setError(getApiErrorMessage(err))
     } finally {
       setLoading(false)
     }
-  }, [debouncedSearch, activeFilter])
+  }, [debouncedSearch, activeFilter, linkFilter])
 
   useEffect(() => {
     void loadEngineers()
   }, [loadEngineers])
+
+  const sortedEngineers = useMemo(
+    () => [...engineers].sort((a, b) => compareEngineers(a, b, sortKey, sortDir)),
+    [engineers, sortKey, sortDir],
+  )
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setSortKey(key)
+    setSortDir('asc')
+  }
 
   const handleSyncFromPams = async () => {
     setSyncing(true)
@@ -195,6 +265,56 @@ export default function Engineers() {
     }
   }
 
+  const canManageRoster = isWorkforceManager()
+  const selectedUnlinkedEngineers = engineers.filter(
+    (engineer) => selectedEngineerIds.includes(engineer.id) && engineer.user_id == null,
+  )
+
+  const toggleEngineerSelection = (engineerId: number) => {
+    setSelectedEngineerIds((selected) =>
+      selected.includes(engineerId)
+        ? selected.filter((id) => id !== engineerId)
+        : [...selected, engineerId],
+    )
+  }
+
+  const openBulkLinkDialog = () => {
+    setBulkLinkError(null)
+    setBulkLinkUsers({})
+    setBulkLinkEmails({})
+    setBulkLinkOpen(true)
+  }
+
+  const closeBulkLinkDialog = () => {
+    if (bulkLinkSaving) return
+    setBulkLinkOpen(false)
+    setBulkLinkError(null)
+  }
+
+  const handleBulkLink = async () => {
+    if (selectedUnlinkedEngineers.some((engineer) => !bulkLinkUsers[engineer.id])) {
+      setBulkLinkError('Choose a QGP user for every selected employee.')
+      return
+    }
+    setBulkLinkSaving(true)
+    setBulkLinkError(null)
+    try {
+      // Keep the existing server-side dual gate authoritative. Each link is
+      // deliberately sent through the dedicated endpoint, never PATCH user_id.
+      for (const engineer of selectedUnlinkedEngineers) {
+        await workforceApi.linkEngineerUser(engineer.id, bulkLinkUsers[engineer.id]!.id)
+      }
+      setSelectedEngineerIds([])
+      setBulkLinkOpen(false)
+      setSyncMessage(`Linked ${selectedUnlinkedEngineers.length} employee login(s).`)
+      await loadEngineers()
+    } catch (err) {
+      setBulkLinkError(getApiErrorMessage(err))
+    } finally {
+      setBulkLinkSaving(false)
+    }
+  }
+
   const rosterEmpty =
     !loading && engineers.length === 0 && !debouncedSearch && activeFilter === 'true'
 
@@ -206,21 +326,44 @@ export default function Engineers() {
           <p className="text-muted-foreground mt-1">{t('workforce.engineers.subtitle')}</p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
-          <Button type="button" onClick={openCreateDialog} disabled={loading}>
-            <Plus className="w-4 h-4 mr-2" />
-            {t('workforce.engineers.add')}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void handleSyncFromPams()}
-            disabled={syncing || loading}
-          >
-            <RefreshCw className={cn('w-4 h-4 mr-2', syncing && 'animate-spin')} />
-            {syncing ? t('workforce.engineers.syncing') : t('workforce.engineers.sync_from_pams')}
-          </Button>
+          {canManageRoster ? (
+            <>
+              {selectedUnlinkedEngineers.length > 0 && (
+                <Button type="button" variant="outline" onClick={openBulkLinkDialog} disabled={loading}>
+                  Link selected ({selectedUnlinkedEngineers.length})
+                </Button>
+              )}
+              <Button type="button" onClick={openCreateDialog} disabled={loading}>
+                <Plus className="w-4 h-4 mr-2" />
+                {t('workforce.engineers.add')}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleSyncFromPams()}
+                disabled={syncing || loading}
+              >
+                <RefreshCw className={cn('w-4 h-4 mr-2', syncing && 'animate-spin')} />
+                {syncing ? t('workforce.engineers.syncing') : t('workforce.engineers.sync_from_pams')}
+              </Button>
+            </>
+          ) : (
+            <Button type="button" disabled title={t('workforce.engineers.manager_gate_honesty')}>
+              <Plus className="w-4 h-4 mr-2" />
+              {t('workforce.engineers.add')}
+            </Button>
+          )}
         </div>
       </div>
+
+      {!canManageRoster && (
+        <div
+          className="rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-foreground"
+          data-testid="engineers-manager-gate-honesty"
+        >
+          {t('workforce.engineers.manager_gate_honesty')}
+        </div>
+      )}
 
       <Card>
         <CardContent className="pt-6">
@@ -254,6 +397,21 @@ export default function Engineers() {
               <option value="true">{t('common.active')}</option>
               <option value="false">{t('common.inactive')}</option>
             </select>
+            <select
+              value={linkFilter}
+              onChange={(e) => setLinkFilter(e.target.value as LinkFilter)}
+              className="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
+              aria-label="Engineer link status"
+            >
+              <option value="">All links</option>
+              <option value="linked">Linked</option>
+              <option value="unlinked">Unlinked</option>
+            </select>
+            {linkCoverage && (
+              <span className="text-sm text-muted-foreground" data-testid="engineer-link-coverage">
+                {linkCoverage.linked}/{linkCoverage.active} linked ({linkCoverage.percent}%)
+              </span>
+            )}
             <div
               className="inline-flex rounded-md border border-border p-0.5"
               role="group"
@@ -277,7 +435,7 @@ export default function Engineers() {
                   )}
                   aria-pressed={viewMode === id}
                   onClick={() => setViewMode(id)}
-                  data-testid={`employees-view-${id}`}
+                  data-testid={`employees-view-mode-${id}`}
                 >
                   <Icon className="w-3.5 h-3.5" />
                   {label}
@@ -294,7 +452,7 @@ export default function Engineers() {
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground space-y-4">
             <p>{rosterEmpty ? t('workforce.engineers.empty') : t('common.no_results')}</p>
-            {rosterEmpty && (
+            {rosterEmpty && canManageRoster && (
               <Button
                 type="button"
                 variant="outline"
@@ -309,7 +467,7 @@ export default function Engineers() {
         </Card>
       ) : viewMode === 'cards' ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="employees-view-cards-grid">
-          {engineers.map((eng) => (
+          {sortedEngineers.map((eng) => (
             <Card
               key={eng.id}
               hoverable
@@ -320,6 +478,15 @@ export default function Engineers() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
+                      {canManageRoster && eng.user_id == null && (
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${engineerLabel(eng)} for user linking`}
+                          checked={selectedEngineerIds.includes(eng.id)}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={() => toggleEngineerSelection(eng.id)}
+                        />
+                      )}
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                         <Users className="w-5 h-5 text-primary" />
                       </div>
@@ -371,16 +538,43 @@ export default function Engineers() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">Name</th>
-                  <th className="px-4 py-3 font-medium">Role</th>
-                  <th className="px-4 py-3 font-medium">Site</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Login</th>
+                  {SORTABLE_COLUMNS.map(({ key, label }) => {
+                    const active = sortKey === key
+                    return (
+                      <th
+                        key={key}
+                        className="px-4 py-3 font-medium"
+                        scope="col"
+                        aria-sort={
+                          active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'
+                        }
+                      >
+                        <button
+                          type="button"
+                          className={cn(
+                            'inline-flex items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            active ? 'text-foreground' : 'text-muted-foreground',
+                          )}
+                          onClick={() => handleSort(key)}
+                          data-testid={`employees-sort-${key}`}
+                        >
+                          {label}
+                          {active ? (
+                            sortDir === 'asc' ? (
+                              <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
+                            ) : (
+                              <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
+                            )
+                          ) : null}
+                        </button>
+                      </th>
+                    )
+                  })}
                   <th className="px-4 py-3 font-medium w-10" />
                 </tr>
               </thead>
               <tbody>
-                {engineers.map((eng) => (
+                {sortedEngineers.map((eng) => (
                   <tr
                     key={eng.id}
                     className="border-b border-border last:border-0 hover:bg-muted/40 cursor-pointer"
@@ -419,7 +613,7 @@ export default function Engineers() {
           className="rounded-lg border border-border divide-y divide-border bg-card"
           data-testid="employees-view-compact"
         >
-          {engineers.map((eng) => (
+          {sortedEngineers.map((eng) => (
             <button
               key={eng.id}
               type="button"
@@ -541,6 +735,49 @@ export default function Engineers() {
             </Button>
             <Button type="button" onClick={() => void handleCreateEmployee()} disabled={createSaving}>
               {createSaving ? t('workforce.common.creating') : t('workforce.engineers.add')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={bulkLinkOpen}
+        onOpenChange={(open) => {
+          if (!open) closeBulkLinkDialog()
+          else setBulkLinkOpen(true)
+        }}
+      >
+        <DialogContent className="sm:max-w-lg" data-testid="employee-bulk-link-dialog">
+          <DialogHeader>
+            <DialogTitle>Link selected employees to QGP users</DialogTitle>
+            <DialogDescription>
+              Each employee needs a distinct active QGP user. Existing employee data is unchanged.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {bulkLinkError && (
+              <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{bulkLinkError}</div>
+            )}
+            {selectedUnlinkedEngineers.map((engineer) => (
+              <div key={engineer.id} className="space-y-2">
+                <Label>{engineerLabel(engineer)}</Label>
+                <UserEmailSearch
+                  value={bulkLinkEmails[engineer.id] ?? ''}
+                  onChange={(email, selectedUser) => {
+                    setBulkLinkEmails((current) => ({ ...current, [engineer.id]: email }))
+                    setBulkLinkUsers((current) => ({ ...current, [engineer.id]: selectedUser }))
+                  }}
+                  placeholder="Search active QGP user…"
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="secondary" onClick={closeBulkLinkDialog} disabled={bulkLinkSaving}>
+              {t('common.cancel')}
+            </Button>
+            <Button type="button" onClick={() => void handleBulkLink()} disabled={bulkLinkSaving}>
+              {bulkLinkSaving ? 'Linking…' : `Link ${selectedUnlinkedEngineers.length} employee(s)`}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -220,13 +220,14 @@ class RiskService:
             treatment_plan=data.get("treatment_plan"),
             risk_owner_id=data.get("risk_owner_id"),
             risk_owner_name=data.get("risk_owner_name"),
-            status="open",
+            status=data.get("status") or "active",
             review_frequency_days=data.get("review_frequency_days", 90),
             created_by=created_by,
             tenant_id=data.get("tenant_id"),
         )
 
-        risk.next_review_date = datetime.now(timezone.utc) + timedelta(days=risk.review_frequency_days)
+        # risks_v2 DateTime columns are naive UTC — aware values 500 on asyncpg insert.
+        risk.next_review_date = naive_utc_now() + timedelta(days=risk.review_frequency_days)
 
         self.db.add(risk)
         await self.db.commit()

@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Annotated, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
@@ -21,6 +21,11 @@ from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.near_miss import NearMiss, NearMissRunningSheetEntry
 from src.domain.models.user import User
+from src.domain.services.api_idempotency_service import (
+    SCOPE_NEAR_MISS_CREATE,
+    begin_idempotent_create,
+    complete_idempotent_create,
+)
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.case_risk_links import sync_case_risk_links_from_csv
 from src.domain.services.near_miss_risk_links import (
@@ -87,19 +92,38 @@ async def _get_near_miss_or_404(db, near_miss_id: int, current_user: CurrentUser
     return near_miss
 
 
+@router.post(
+    "",
+    response_model=NearMissResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
 @router.post("/", response_model=NearMissResponse, status_code=status.HTTP_201_CREATED)
 async def create_near_miss(
     data: NearMissCreate,
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("near_miss:create"))],
     request_id: str = Depends(get_request_id),
+    idempotency_key: Annotated[Optional[str], Header(alias="Idempotency-Key")] = None,
 ) -> NearMiss:
     """
     Report a new near miss.
 
     Near misses are events that could have resulted in injury, damage, or loss
     but didn't. Tracking these helps prevent future incidents.
+
+    Optional ``Idempotency-Key`` header (PX-001): retries return the same record.
     """
+    claim = await begin_idempotent_create(
+        db,
+        tenant_id=current_user.tenant_id,
+        scope=SCOPE_NEAR_MISS_CREATE,
+        idempotency_key=idempotency_key,
+        payload=data,
+    )
+    if claim is not None and claim.is_replay and claim.entity_id is not None:
+        return await _get_near_miss_or_404(db, claim.entity_id, current_user)
+
     reference_number = await ReferenceNumberService.generate(db, "near_miss", NearMiss)
 
     near_miss = NearMiss(
@@ -127,12 +151,20 @@ async def create_near_miss(
         request_id=request_id,
     )
 
+    await complete_idempotent_create(
+        db,
+        record_id=claim.record_id if claim else None,
+        entity_type="near_miss",
+        entity_id=near_miss.id,
+    )
+
     await db.commit()
     await db.refresh(near_miss)
     await _trigger_operational_standards_assess(db, near_miss, current_user)
     return near_miss
 
 
+@router.get("", response_model=NearMissListResponse, include_in_schema=False)
 @router.get("/", response_model=NearMissListResponse)
 async def list_near_misses(
     db: DbSession,

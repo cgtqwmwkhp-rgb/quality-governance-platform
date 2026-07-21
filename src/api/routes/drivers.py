@@ -100,6 +100,18 @@ async def create_driver_profile(
     return DriverProfileResponse.model_validate(profile)
 
 
+@router.get("/by-user/me")
+async def get_driver_by_user_me(db: DbSession, user: CurrentUser):
+    """Portal self-scope: resolve driver profile + van for the authenticated user."""
+    from src.api.schemas.portal_compliance import PortalDriverMeResponse
+    from src.api.utils.tenant import require_tenant_id
+    from src.domain.services.portal_compliance_service import PortalComplianceService
+
+    tenant_id = require_tenant_id(getattr(user, "tenant_id", None))
+    payload = await PortalComplianceService(db).my_driver(user_id=user.id, tenant_id=tenant_id)
+    return PortalDriverMeResponse.model_validate(payload)
+
+
 @router.get("/{driver_id}", response_model=DriverProfileResponse)
 async def get_driver(driver_id: int, db: DbSession, user: CurrentUser):
     """Get a single driver profile."""

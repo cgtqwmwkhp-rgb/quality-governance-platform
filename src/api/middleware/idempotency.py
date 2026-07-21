@@ -105,6 +105,76 @@ def _make_key(idempotency_key: str, tenant_fingerprint: str, method: str, path: 
 
 
 _IDEMPOTENT_METHODS = {"POST", "PUT", "PATCH"}
+_IDEMPOTENCY_TTL_S = 86400  # 24 hours
+_IN_FLIGHT_POLL_ATTEMPTS = 25
+_IN_FLIGHT_POLL_INTERVAL_S = 0.2
+
+
+def _conflict_response(idempotency_key: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": {
+                "code": "IDEMPOTENCY_CONFLICT",
+                "message": "Idempotency key conflict: request payload differs from original request",
+                "details": {"idempotency_key": idempotency_key},
+            }
+        },
+    )
+
+
+def _response_from_cache(cached_response: dict) -> Response:
+    """Rebuild an HTTP response from a completed Redis cache entry."""
+    body_content = cached_response["body"]
+    if cached_response.get("headers", {}).get("X-Idempotency-Body-Encoding") == "base64":
+        body_content = _base64.b64decode(body_content)
+        response_headers = {k: v for k, v in cached_response["headers"].items() if k != "X-Idempotency-Body-Encoding"}
+    else:
+        response_headers = cached_response.get("headers") or {}
+        body_content = body_content.encode("utf-8") if isinstance(body_content, str) else body_content
+
+    return Response(
+        content=body_content,
+        status_code=cached_response["status_code"],
+        headers=response_headers,
+    )
+
+
+async def _parse_cached(redis_client, redis_key: str) -> Optional[dict]:
+    cached_data = await redis_client.get(redis_key)
+    if not cached_data:
+        return None
+    if isinstance(cached_data, bytes):
+        cached_data = cached_data.decode("utf-8")
+    return json.loads(cached_data)
+
+
+async def _wait_for_cached_response(
+    redis_client,
+    redis_key: str,
+    payload_hash: str,
+    idempotency_key: str,
+) -> Optional[Response]:
+    """Poll while another request holds the in-flight claim (timeout-retry race)."""
+    import asyncio
+
+    for _ in range(_IN_FLIGHT_POLL_ATTEMPTS):
+        await asyncio.sleep(_IN_FLIGHT_POLL_INTERVAL_S)
+        try:
+            cached_response = await _parse_cached(redis_client, redis_key)
+        except Exception as e:
+            logger.warning(f"Idempotency middleware: Error polling Redis: {e}")
+            return None
+        if not cached_response:
+            continue
+        if cached_response.get("payload_hash") != payload_hash:
+            return _conflict_response(idempotency_key)
+        if cached_response.get("status") == "processing":
+            continue
+        if "body" in cached_response and "status_code" in cached_response:
+            logger.debug(f"Idempotency in-flight resolved: {idempotency_key}")
+            return _response_from_cache(cached_response)
+    return None
 
 
 class IdempotencyMiddleware(BaseHTTPMiddleware):
@@ -112,6 +182,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
     Middleware to handle idempotency keys for mutating requests.
 
     Intercepts POST/PUT/PATCH requests with Idempotency-Key header:
+    - Claims the Redis key with SET NX before executing (blocks concurrent duplicates)
     - Checks Redis for existing cached response
     - If found and payload hash matches, returns cached response
     - If found but payload hash differs, returns 409 Conflict
@@ -120,7 +191,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
     - Falls back gracefully if Redis is unavailable
     """
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next):  # noqa: C901
         if request.method not in _IDEMPOTENT_METHODS:
             return await call_next(request)
 
@@ -147,54 +218,40 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         # Build tenant + endpoint scoped Redis key (prevents cross-tenant collisions)
         tenant_fingerprint = _extract_tenant_fingerprint(request)
         redis_key = _make_key(idempotency_key, tenant_fingerprint, request.method, request.url.path)
+        claimed = False
         try:
-            cached_data = await redis_client.get(redis_key)
-            if cached_data:
-                # Parse cached response data (Redis may return bytes)
-                if isinstance(cached_data, bytes):
-                    cached_data = cached_data.decode("utf-8")
-                cached_response = json.loads(cached_data)
-
-                # Check if payload hash matches
-                cached_hash = cached_response.get("payload_hash")
-                if cached_hash != payload_hash:
-                    # Payload mismatch - return 409 Conflict
+            cached_response = await _parse_cached(redis_client, redis_key)
+            if cached_response:
+                if cached_response.get("payload_hash") != payload_hash:
                     logger.warning(
                         f"Idempotency key conflict: {idempotency_key}",
                         extra={"idempotency_key": idempotency_key},
                     )
-                    return JSONResponse(
-                        status_code=409,
-                        content={
-                            "error": {
-                                "code": "IDEMPOTENCY_CONFLICT",
-                                "message": "Idempotency key conflict: request payload differs from original request",
-                                "details": {"idempotency_key": idempotency_key},
-                            }
-                        },
-                    )
+                    return _conflict_response(idempotency_key)
 
-                # Return cached response
-                logger.debug(f"Idempotency cache hit: {idempotency_key}")
+                if cached_response.get("status") == "processing":
+                    waited = await _wait_for_cached_response(redis_client, redis_key, payload_hash, idempotency_key)
+                    if waited is not None:
+                        return waited
+                    # Timed out waiting — fall through without a second create if claim fails
+                elif "body" in cached_response and "status_code" in cached_response:
+                    logger.debug(f"Idempotency cache hit: {idempotency_key}")
+                    return _response_from_cache(cached_response)
 
-                # Handle body encoding (may be base64 if original was binary)
-                body_content = cached_response["body"]
-                if cached_response["headers"].get("X-Idempotency-Body-Encoding") == "base64":
-                    body_content = _base64.b64decode(body_content)
-                    # Remove the encoding header from response
-                    response_headers = {
-                        k: v for k, v in cached_response["headers"].items() if k != "X-Idempotency-Body-Encoding"
-                    }
-                else:
-                    response_headers = cached_response["headers"]
-                    body_content = body_content.encode("utf-8") if isinstance(body_content, str) else body_content
-
-                response = Response(
-                    content=body_content,
-                    status_code=cached_response["status_code"],
-                    headers=response_headers,
-                )
-                return response
+            # Claim the key before executing so concurrent retries cannot double-create
+            placeholder = json.dumps({"status": "processing", "payload_hash": payload_hash}).encode("utf-8")
+            claimed = await redis_client.set(redis_key, placeholder, nx=True, ex=_IDEMPOTENCY_TTL_S)
+            if not claimed:
+                cached_response = await _parse_cached(redis_client, redis_key)
+                if cached_response:
+                    if cached_response.get("payload_hash") != payload_hash:
+                        return _conflict_response(idempotency_key)
+                    if "body" in cached_response and "status_code" in cached_response:
+                        return _response_from_cache(cached_response)
+                    if cached_response.get("status") == "processing":
+                        waited = await _wait_for_cached_response(redis_client, redis_key, payload_hash, idempotency_key)
+                        if waited is not None:
+                            return waited
 
         except Exception as e:
             logger.warning(f"Idempotency middleware: Error reading from Redis: {e}")
@@ -247,7 +304,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
             await redis_client.setex(
                 redis_key,
-                86400,  # 24 hours
+                _IDEMPOTENCY_TTL_S,
                 json.dumps(cache_data).encode("utf-8"),
             )
 
@@ -262,6 +319,12 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
         except Exception as e:
             logger.warning(f"Idempotency middleware: Error caching response: {e}")
+            # If we held the in-flight claim but failed to cache, release it so retries can proceed
+            if claimed:
+                try:
+                    await redis_client.delete(redis_key)
+                except Exception:
+                    pass
             # Return response with body even if caching failed
             # Note: response_body_iterator was consumed above, so we return the body we read
             return Response(

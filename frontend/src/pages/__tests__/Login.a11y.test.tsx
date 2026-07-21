@@ -13,6 +13,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => {
       const translations: Record<string, string> = {
+        'brand.product_name': 'Quality Governance Platform',
+        'brand.company_line': 'Plantexpand Limited',
         'login.title': 'Sign In',
         'login.subtitle': 'Welcome back',
         'login.email': 'Email',
@@ -83,7 +85,8 @@ describe('Login page accessibility (real page /login)', () => {
   it('renders the real Login form without critical axe violations', async () => {
     const { container } = render(<Login onLogin={onLogin} />, { wrapper: Wrapper })
 
-    expect(screen.getByRole('heading', { name: 'Sign In' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Quality Governance Platform' })).toBeInTheDocument()
+    expect(screen.getByText('Plantexpand Limited')).toBeInTheDocument()
     expect(screen.getByTestId('email-input')).toBeInTheDocument()
     expect(screen.getByTestId('password-input')).toBeInTheDocument()
 

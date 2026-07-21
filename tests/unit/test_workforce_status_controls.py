@@ -20,11 +20,13 @@ class _FakeResult:
 
 @pytest.mark.asyncio
 async def test_update_assessment_run_rejects_direct_status_change():
-    run = types.SimpleNamespace(id="run-1", supervisor_id=11)
+    run = types.SimpleNamespace(id="run-1", supervisor_id=11, status="draft")
     db = types.SimpleNamespace(
         execute=AsyncMock(return_value=_FakeResult(run)),
         commit=AsyncMock(),
+        flush=AsyncMock(),
         refresh=AsyncMock(),
+        rollback=AsyncMock(),
     )
     user = types.SimpleNamespace(id=11, tenant_id=1, is_superuser=False, roles=[])
 

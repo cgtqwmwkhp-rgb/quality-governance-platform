@@ -57,6 +57,8 @@ const PortalTrack = lazy(() => import('./pages/PortalTrack'))
 const PortalHelp = lazy(() => import('./pages/PortalHelp'))
 const PortalWork = lazy(() => import('./pages/PortalWork'))
 const PortalReading = lazy(() => import('./pages/PortalReading'))
+const PortalMyTools = lazy(() => import('./pages/PortalMyTools'))
+const PortalMyVan = lazy(() => import('./pages/PortalMyVan'))
 const PortalIncidentForm = lazy(() => import('./pages/PortalIncidentForm'))
 const PortalRTAForm = lazy(() => import('./pages/PortalRTAForm'))
 const PortalNearMissForm = lazy(() => import('./pages/PortalNearMissForm'))
@@ -79,6 +81,7 @@ const IMSDashboard = lazy(() => import('./pages/IMSDashboard'))
 const AIIntelligence = lazy(() => import('./pages/AIIntelligence'))
 const UVDBAudits = lazy(() => import('./pages/UVDBAudits'))
 const PlanetMark = lazy(() => import('./pages/PlanetMark'))
+const AssuranceCertShelf = lazy(() => import('./pages/AssuranceCertShelf'))
 const CustomerAudits = lazy(() => import('./pages/CustomerAudits'))
 const DigitalSignatures = lazy(() => import('./pages/DigitalSignatures'))
 const VehicleChecklists = lazy(() => import('./pages/VehicleChecklists'))
@@ -108,6 +111,8 @@ const NotificationSettings = lazy(() => import('./pages/admin/NotificationSettin
 const CampaignCompliance = lazy(() => import('./pages/admin/CampaignCompliance'))
 const HsecQuestionInbox = lazy(() => import('./pages/admin/HsecQuestionInbox'))
 const PartnerWebhooks = lazy(() => import('./pages/admin/PartnerWebhooks'))
+const LibraryRoles = lazy(() => import('./pages/admin/LibraryRoles'))
+const EngineerGroups = lazy(() => import('./pages/admin/EngineerGroups'))
 const RequireRole = lazy(() => import('./components/RequireRole'))
 
 function PageLoader() {
@@ -259,6 +264,8 @@ function App() {
               <Route path="track/:referenceNumber" element={<PortalTrack />} />
               <Route path="work" element={<PortalWork />} />
               <Route path="reading" element={<PortalReading />} />
+              <Route path="tools" element={<PortalMyTools />} />
+              <Route path="van" element={<PortalMyVan />} />
               <Route path="help" element={<PortalHelp />} />
             </Route>
 
@@ -331,6 +338,7 @@ function App() {
                 <Route path="compliance" element={<ComplianceEvidence />} />
                 <Route path="uvdb" element={<UVDBAudits />} />
                 <Route path="planet-mark" element={<PlanetMark />} />
+                <Route path="assurance/certificates" element={<AssuranceCertShelf />} />
                 <Route path="customer-audits" element={<CustomerAudits />} />
                 <Route path="signatures" element={<DigitalSignatures />} />
               </Route>
@@ -346,6 +354,14 @@ function App() {
                 <Route path="notifications" element={<Notifications />} />
                 <Route path="exports" element={<ExportCenter />} />
                 <Route path="documents" element={<Documents />} />
+                <Route
+                  path="documents/campaigns"
+                  element={
+                    <RequireRole allowed={['admin', 'manager']}>
+                      <CampaignCompliance />
+                    </RequireRole>
+                  }
+                />
                 <Route path="documents/:id" element={<DocumentDetail />} />
                 <Route path="document-control" element={<DocumentControl />} />
                 <Route path="my-reading" element={<MyReading />} />
@@ -388,14 +404,7 @@ function App() {
                     </RequireRole>
                   }
                 />
-                <Route
-                  path="workforce/training"
-                  element={
-                    <RequireRole allowed={['admin', 'supervisor']}>
-                      <WorkforceTraining />
-                    </RequireRole>
-                  }
-                />
+                <Route path="workforce/training" element={<WorkforceTraining />} />
                 <Route
                   path="workforce/training/new"
                   element={
@@ -542,17 +551,29 @@ function App() {
                 />
                 <Route
                   path="admin/campaign-compliance"
-                  element={
-                    <RequireRole allowed={['admin', 'manager']}>
-                      <CampaignCompliance />
-                    </RequireRole>
-                  }
+                  element={<Navigate to="/documents/campaigns" replace />}
                 />
                 <Route
                   path="admin/hsec-inbox"
                   element={
                     <RequireRole allowed={['admin', 'manager']}>
                       <HsecQuestionInbox />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/library-roles"
+                  element={
+                    <RequireRole allowed={['admin']} requireSuperuser>
+                      <LibraryRoles />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/engineer-groups"
+                  element={
+                    <RequireRole allowed={['admin', 'manager']}>
+                      <EngineerGroups />
                     </RequireRole>
                   }
                 />

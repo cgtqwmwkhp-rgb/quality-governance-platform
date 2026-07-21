@@ -8,36 +8,59 @@ import {
   Loader2,
   Package,
   RefreshCw,
-  ShieldAlert,
+  Trash2,
 } from 'lucide-react'
 import {
-  EMPTY_SAFETY_ASSET_KPIS,
   safetyAssetsApi,
-  type ExpiryBand,
-  type MetricValue,
+  type CesAssetImportReport,
+  type CesLookupConfirmation,
+  type CesLookupProposal,
   type SafetyAsset,
-  type SafetyAssetKpis,
   type SafetyAssetType,
   type SafetyLocation,
 } from '../api/safetyAssetsClient'
-import { getApiErrorMessage } from '../api/client'
+import { getApiErrorMessage, workforceApi } from '../api/client'
 import { toast } from '../contexts/ToastContext'
 import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/Select'
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '../components/ui/Sheet'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
-
-function formatMetric(value: MetricValue): string {
-  return value == null ? '—' : String(value)
-}
+import {
+  BOARD_VIEWS,
+  EMPTY_ASSET_ROW_FILTERS,
+  EMPTY_ENTITY_ROLLUP_FILTERS,
+  HERO_BANDS,
+  assetMatchesHeroBand,
+  bandLabel,
+  buildEngineerRollups,
+  buildTypeRollups,
+  buildVehicleRollups,
+  computeHeroCounts,
+  filterAssetRows,
+  filterEntityRollups,
+  isOkAsset,
+  ownerLabel,
+  siteLabel,
+  sortAssetRows,
+  sortEntityRollups,
+  type AssetBoardView,
+  type AssetEntityRollup,
+  type AssetHeroBand,
+  type AssetRowColumnFilters,
+  type AssetRowSortKey,
+  type EntityRollupColumnFilters,
+  type EntityRollupSortKey,
+  type SortDirection,
+} from './safetyAssets/safetyAssetBoardHelpers'
 
 function statusVariant(status: string): BadgeVariant {
   switch (status) {
@@ -61,125 +84,54 @@ function formatDate(value?: string | null): string {
   return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleDateString()
 }
 
-const EXPIRY_BANDS: { value: ExpiryBand | 'all'; labelKey: string }[] = [
-  { value: 'all', labelKey: 'safetyAssets.filter.expiry_all' },
-  { value: 'overdue', labelKey: 'safetyAssets.filter.expiry_overdue' },
-  { value: 'due_30', labelKey: 'safetyAssets.filter.expiry_due_30' },
-  { value: 'due_60', labelKey: 'safetyAssets.filter.expiry_due_60' },
-  { value: 'due_90', labelKey: 'safetyAssets.filter.expiry_due_90' },
-]
+function heroIcon(band: AssetHeroBand) {
+  switch (band) {
+    case 'overdue':
+    case 'quarantined':
+      return AlertTriangle
+    case 'decommissioned':
+      return Trash2
+    case 'in_date':
+      return CheckCircle2
+    case 'due_30':
+    case 'due_60':
+    case 'due_90':
+      return Clock
+    default:
+      return Package
+  }
+}
 
 export default function SafetyAssetRegister() {
   const { t } = useTranslation()
 
-  const [assets, setAssets] = useState<SafetyAsset[]>([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
-  const [pages, setPages] = useState(1)
+  const [boardAssets, setBoardAssets] = useState<SafetyAsset[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-
-  const [kpis, setKpis] = useState<SafetyAssetKpis>(EMPTY_SAFETY_ASSET_KPIS)
-  const [kpisUnavailable, setKpisUnavailable] = useState(false)
-
   const [assetTypes, setAssetTypes] = useState<SafetyAssetType[]>([])
   const [locations, setLocations] = useState<SafetyLocation[]>([])
-  const [filtersUnavailable, setFiltersUnavailable] = useState(false)
+  const [ownerNames, setOwnerNames] = useState<Map<number, string>>(new Map())
 
-  const [typeFilter, setTypeFilter] = useState<string>('all')
-  const [locationFilter, setLocationFilter] = useState<string>('all')
-  const [vehicleFilter, setVehicleFilter] = useState('')
-  const [ownerFilter, setOwnerFilter] = useState('')
-  const [expiryFilter, setExpiryFilter] = useState<string>('all')
+  const [view, setView] = useState<AssetBoardView>('assets')
+  const [heroBand, setHeroBand] = useState<AssetHeroBand>('all')
+  const [search, setSearch] = useState('')
 
-  const pageSize = 20
+  const [assetSortKey, setAssetSortKey] = useState<AssetRowSortKey>('expiry')
+  const [assetSortDir, setAssetSortDir] = useState<SortDirection>('asc')
+  const [assetFilters, setAssetFilters] = useState<AssetRowColumnFilters>(EMPTY_ASSET_ROW_FILTERS)
+  const [entitySortKey, setEntitySortKey] = useState<EntityRollupSortKey>('overdue')
+  const [entitySortDir, setEntitySortDir] = useState<SortDirection>('desc')
+  const [entityFilters, setEntityFilters] =
+    useState<EntityRollupColumnFilters>(EMPTY_ENTITY_ROLLUP_FILTERS)
 
-  const listParams = useMemo(() => {
-    const params: Parameters<typeof safetyAssetsApi.listAssets>[0] = {
-      page,
-      page_size: pageSize,
-    }
-    if (typeFilter !== 'all') params.asset_type_id = Number(typeFilter)
-    if (locationFilter !== 'all') params.location_id = Number(locationFilter)
-    if (vehicleFilter.trim()) params.vehicle_reg = vehicleFilter.trim()
-    if (ownerFilter.trim() && !Number.isNaN(Number(ownerFilter.trim()))) {
-      params.owner_user_id = Number(ownerFilter.trim())
-    }
-    if (expiryFilter !== 'all') params.expiry_band = expiryFilter as ExpiryBand
-    return params
-  }, [page, typeFilter, locationFilter, vehicleFilter, ownerFilter, expiryFilter])
+  const [drilldown, setDrilldown] = useState<AssetEntityRollup | null>(null)
 
-  const kpiBaseFilters = useMemo(() => {
-    const base: Parameters<typeof safetyAssetsApi.getKpis>[0] = {}
-    if (typeFilter !== 'all') base.asset_type_id = Number(typeFilter)
-    if (locationFilter !== 'all') base.location_id = Number(locationFilter)
-    if (vehicleFilter.trim()) base.vehicle_reg = vehicleFilter.trim()
-    if (ownerFilter.trim() && !Number.isNaN(Number(ownerFilter.trim()))) {
-      base.owner_user_id = Number(ownerFilter.trim())
-    }
-    return base
-  }, [typeFilter, locationFilter, vehicleFilter, ownerFilter])
-
-  const loadFilterOptions = useCallback(async () => {
-    const [typesRes, locsRes] = await Promise.allSettled([
-      safetyAssetsApi.listAssetTypes({ page: 1, page_size: 200, is_active: true }),
-      safetyAssetsApi.listLocations({ page: 1, page_size: 200, is_active: true }),
-    ])
-    if (typesRes.status === 'fulfilled') {
-      setAssetTypes(typesRes.value.data.items ?? [])
-    }
-    if (locsRes.status === 'fulfilled') {
-      setLocations(locsRes.value.data.items ?? [])
-    }
-    setFiltersUnavailable(typesRes.status === 'rejected' || locsRes.status === 'rejected')
-  }, [])
-
-  const loadList = useCallback(async () => {
-    setLoading(true)
-    setLoadError(null)
-    try {
-      const res = await safetyAssetsApi.listAssets(listParams)
-      setAssets(res.data.items ?? [])
-      setTotal(res.data.total ?? 0)
-      setPages(res.data.pages ?? 1)
-    } catch (err) {
-      const message = getApiErrorMessage(
-        err,
-        t('safetyAssets.error.load_failed', 'Could not load safety assets.'),
-      )
-      setLoadError(message)
-      setAssets([])
-      setTotal(0)
-      toast.error(message)
-    } finally {
-      setLoading(false)
-    }
-  }, [listParams, t])
-
-  const loadKpis = useCallback(async () => {
-    setKpisUnavailable(false)
-    try {
-      const next = await safetyAssetsApi.getKpis(kpiBaseFilters)
-      setKpis(next)
-      const allNull = Object.values(next).every((v) => v == null)
-      setKpisUnavailable(allNull)
-    } catch {
-      setKpis(EMPTY_SAFETY_ASSET_KPIS)
-      setKpisUnavailable(true)
-    }
-  }, [kpiBaseFilters])
-
-  useEffect(() => {
-    void loadFilterOptions()
-  }, [loadFilterOptions])
-
-  useEffect(() => {
-    void loadList()
-  }, [loadList])
-
-  useEffect(() => {
-    void loadKpis()
-  }, [loadKpis])
+  const [cesFile, setCesFile] = useState<File | null>(null)
+  const [cesReport, setCesReport] = useState<CesAssetImportReport | null>(null)
+  const [cesBusy, setCesBusy] = useState(false)
+  const [cesError, setCesError] = useState<string | null>(null)
+  /** key = `${kind}:${name}` → confirmation choice for similar lookups */
+  const [cesConfirmations, setCesConfirmations] = useState<Record<string, CesLookupConfirmation>>({})
 
   const typeNameById = useMemo(() => {
     const map = new Map<number, string>()
@@ -193,62 +145,220 @@ export default function SafetyAssetRegister() {
     return map
   }, [locations])
 
-  const kpiCards: {
-    key: keyof SafetyAssetKpis
-    label: string
-    icon: typeof Package
-    tone?: string
-  }[] = [
-    {
-      key: 'total',
-      label: t('safetyAssets.kpi.total', 'Total'),
-      icon: Package,
-    },
-    {
-      key: 'in_date',
-      label: t('safetyAssets.kpi.in_date', 'In date'),
-      icon: CheckCircle2,
-      tone: 'text-success',
-    },
-    {
-      key: 'due_30',
-      label: t('safetyAssets.kpi.due_30', 'Due 30d'),
-      icon: Clock,
-      tone: 'text-info',
-    },
-    {
-      key: 'due_60',
-      label: t('safetyAssets.kpi.due_60', 'Due 60d'),
-      icon: Clock,
-      tone: 'text-warning',
-    },
-    {
-      key: 'due_90',
-      label: t('safetyAssets.kpi.due_90', 'Due 90d'),
-      icon: Clock,
-      tone: 'text-warning',
-    },
-    {
-      key: 'overdue',
-      label: t('safetyAssets.kpi.overdue', 'Overdue'),
-      icon: AlertTriangle,
-      tone: 'text-destructive',
-    },
-    {
-      key: 'quarantined',
-      label: t('safetyAssets.kpi.quarantined', 'Quarantined'),
-      icon: ShieldAlert,
-      tone: 'text-destructive',
-    },
-  ]
+  const loadBoard = useCallback(async () => {
+    setLoading(true)
+    setLoadError(null)
+    try {
+      const [assetsRes, typesRes, locsRes, engineersRes] = await Promise.allSettled([
+        safetyAssetsApi.listAllAssetsForBoard(),
+        // Include inactive/pending provisional lookups so CES-imported assets show names.
+        safetyAssetsApi.listAssetTypes({ page: 1, page_size: 200 }),
+        safetyAssetsApi.listLocations({ page: 1, page_size: 200 }),
+        workforceApi.listEngineers({ page: 1, page_size: 500, is_active: true }),
+      ])
+      if (assetsRes.status === 'rejected') {
+        throw assetsRes.reason
+      }
+      setBoardAssets(assetsRes.value)
+      if (typesRes.status === 'fulfilled') {
+        setAssetTypes(typesRes.value.data.items ?? [])
+      }
+      if (locsRes.status === 'fulfilled') {
+        setLocations(locsRes.value.data.items ?? [])
+      }
+      if (engineersRes.status === 'fulfilled') {
+        const names = new Map<number, string>()
+        for (const eng of engineersRes.value.data?.items ?? []) {
+          if (eng.user_id != null && eng.display_name) {
+            names.set(eng.user_id, eng.display_name)
+          }
+        }
+        setOwnerNames(names)
+      }
+    } catch (err) {
+      const message = getApiErrorMessage(err, 'Could not load safety assets.')
+      setLoadError(message)
+      setBoardAssets([])
+      toast.error(message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  const clearFilters = () => {
-    setTypeFilter('all')
-    setLocationFilter('all')
-    setVehicleFilter('')
-    setOwnerFilter('')
-    setExpiryFilter('all')
-    setPage(1)
+  useEffect(() => {
+    void loadBoard()
+  }, [loadBoard])
+
+  const heroCounts = useMemo(() => computeHeroCounts(boardAssets), [boardAssets])
+  const metricsReady = !loading && loadError == null
+  const kpisUnavailable = !loading && loadError != null
+
+  const bandFiltered = useMemo(
+    () => boardAssets.filter((asset) => assetMatchesHeroBand(asset, heroBand)),
+    [boardAssets, heroBand],
+  )
+
+  const searchFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return bandFiltered
+    return bandFiltered.filter((asset) => {
+      const type = typeNameById.get(asset.asset_type_id) || ''
+      const owner = ownerLabel(asset, ownerNames)
+      const haystack = [
+        asset.serial_number,
+        asset.asset_number,
+        asset.name,
+        type,
+        owner,
+        asset.vehicle_reg,
+        siteLabel(asset, locationNameById),
+        asset.status,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [bandFiltered, search, typeNameById, ownerNames, locationNameById])
+
+  const assetRows = useMemo(() => {
+    const filtered = filterAssetRows(
+      searchFiltered,
+      assetFilters,
+      typeNameById,
+      ownerNames,
+      locationNameById,
+    )
+    return sortAssetRows(
+      filtered,
+      assetSortKey,
+      assetSortDir,
+      typeNameById,
+      ownerNames,
+      locationNameById,
+    )
+  }, [
+    searchFiltered,
+    assetFilters,
+    assetSortKey,
+    assetSortDir,
+    typeNameById,
+    ownerNames,
+    locationNameById,
+  ])
+
+  const engineerRollups = useMemo(
+    () => buildEngineerRollups(searchFiltered, ownerNames),
+    [searchFiltered, ownerNames],
+  )
+  const vehicleRollups = useMemo(() => buildVehicleRollups(searchFiltered), [searchFiltered])
+  const typeRollups = useMemo(
+    () => buildTypeRollups(searchFiltered, typeNameById),
+    [searchFiltered, typeNameById],
+  )
+
+  const activeEntityRollups = useMemo(() => {
+    const source =
+      view === 'engineer' ? engineerRollups : view === 'vehicle' ? vehicleRollups : typeRollups
+    return sortEntityRollups(filterEntityRollups(source, entityFilters), entitySortKey, entitySortDir)
+  }, [
+    view,
+    engineerRollups,
+    vehicleRollups,
+    typeRollups,
+    entityFilters,
+    entitySortKey,
+    entitySortDir,
+  ])
+
+  const toggleAssetSort = (key: AssetRowSortKey) => {
+    if (assetSortKey === key) {
+      setAssetSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setAssetSortKey(key)
+      setAssetSortDir(key === 'expiry' || key === 'name' ? 'asc' : 'desc')
+    }
+  }
+
+  const toggleEntitySort = (key: EntityRollupSortKey) => {
+    if (entitySortKey === key) {
+      setEntitySortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setEntitySortKey(key)
+      setEntitySortDir(key === 'label' ? 'asc' : 'desc')
+    }
+  }
+
+  const similarProposals = useMemo(
+    () => (cesReport?.lookup_proposals || []).filter((p) => p.needs_confirmation),
+    [cesReport],
+  )
+  const newProposals = useMemo(
+    () => (cesReport?.lookup_proposals || []).filter((p) => p.intent === 'new'),
+    [cesReport],
+  )
+  const allSimilarConfirmed = similarProposals.every(
+    (p) => Boolean(cesConfirmations[`${p.kind}:${p.name}`]),
+  )
+  const canCommitCes = Boolean(cesReport?.ok && allSimilarConfirmed && !cesBusy)
+
+  const dryRunCesImport = async () => {
+    if (!cesFile) return
+    setCesBusy(true)
+    setCesError(null)
+    setCesConfirmations({})
+    try {
+      const response = await safetyAssetsApi.cesImportDryRun(cesFile)
+      setCesReport(response.data)
+    } catch (err) {
+      setCesError(getApiErrorMessage(err, 'Could not validate CES workbook.'))
+      setCesReport(null)
+    } finally {
+      setCesBusy(false)
+    }
+  }
+
+  const setProposalConfirmation = (
+    proposal: CesLookupProposal,
+    action: 'reuse' | 'create',
+    reuseId?: number | null,
+  ) => {
+    const key = `${proposal.kind}:${proposal.name}`
+    setCesConfirmations((prev) => ({
+      ...prev,
+      [key]: {
+        kind: proposal.kind,
+        name: proposal.name,
+        action,
+        reuse_id: action === 'reuse' ? reuseId ?? proposal.similar_matches[0]?.id : null,
+      },
+    }))
+  }
+
+  const commitCesImport = async () => {
+    if (!cesFile || !canCommitCes) return
+    setCesBusy(true)
+    setCesError(null)
+    try {
+      const response = await safetyAssetsApi.cesImportCommit(
+        cesFile,
+        Object.values(cesConfirmations),
+      )
+      setCesReport(response.data.report)
+      const pendingTypes = response.data.provisional_type_ids?.length || 0
+      const pendingLocs = response.data.provisional_location_ids?.length || 0
+      toast.success(
+        `CES import complete: ${response.data.created_count} created, ${response.data.updated_count} updated.` +
+          (pendingTypes + pendingLocs
+            ? ` ${pendingTypes + pendingLocs} lookup(s) awaiting approval.`
+            : ''),
+      )
+      void loadBoard()
+    } catch (err) {
+      setCesError(getApiErrorMessage(err, 'Could not commit CES workbook.'))
+    } finally {
+      setCesBusy(false)
+    }
   }
 
   return (
@@ -261,18 +371,11 @@ export default function SafetyAssetRegister() {
           <p className="mt-1 text-muted-foreground">
             {t(
               'safetyAssets.subtitle',
-              'KPI hub for safety equipment — assignment, expiry, and quarantine status.',
+              'CES-fed register — click hero bands, roll up by engineer/vehicle/type, drill into kits.',
             )}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            void loadList()
-            void loadKpis()
-          }}
-        >
+        <Button variant="outline" size="sm" onClick={() => void loadBoard()}>
           <RefreshCw className="mr-2 h-4 w-4" />
           {t('safetyAssets.refresh', 'Refresh')}
         </Button>
@@ -294,157 +397,80 @@ export default function SafetyAssetRegister() {
       ) : null}
 
       <div
-        className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8"
         data-testid="safety-assets-kpi-row"
+        role="tablist"
+        aria-label="Asset hero bands"
       >
-        {kpiCards.map((card) => {
-          const Icon = card.icon
+        {HERO_BANDS.map((band) => {
+          const Icon = heroIcon(band.id)
+          const active = heroBand === band.id
+          const value = heroCounts[band.id]
+          const tone =
+            band.id === 'overdue' || band.id === 'quarantined'
+              ? 'text-destructive'
+              : band.id === 'in_date'
+                ? 'text-success'
+                : band.id.startsWith('due_')
+                  ? 'text-warning'
+                  : 'text-foreground'
           return (
-            <Card key={card.key}>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Icon className="h-4 w-4" />
-                  <span className="text-xs font-medium">{card.label}</span>
-                </div>
-                <p
-                  className={`mt-2 text-2xl font-bold ${card.tone ?? 'text-foreground'}`}
-                  data-testid={`safety-assets-kpi-${card.key}`}
-                >
-                  {formatMetric(kpis[card.key])}
-                </p>
-              </CardContent>
-            </Card>
+            <button
+              key={band.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              data-testid={`safety-assets-kpi-${band.id === 'all' ? 'total' : band.id}`}
+              className={`rounded-lg border p-4 text-left transition-colors ${
+                active
+                  ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                  : 'border-border bg-card hover:border-primary/50'
+              }`}
+              onClick={() => setHeroBand(band.id)}
+            >
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Icon className="h-4 w-4" />
+                <span className="text-xs font-medium">{band.label}</span>
+              </div>
+              <p className={`mt-2 text-2xl font-bold ${tone}`}>
+                {metricsReady ? value : '—'}
+              </p>
+            </button>
           )
         })}
       </div>
 
-      <Card>
-        <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:flex-wrap md:items-end">
-          <div className="min-w-[160px] space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">
-              {t('safetyAssets.filter.type', 'Type')}
-            </label>
-            <Select
-              value={typeFilter}
-              onValueChange={(v) => {
-                setTypeFilter(v)
-                setPage(1)
-              }}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-1" role="tablist" aria-label="Board view">
+          {BOARD_VIEWS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={view === item.id}
+              data-testid={`safety-assets-view-${item.id}`}
+              className={`rounded-full border px-3 py-1.5 text-sm ${
+                view === item.id
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => setView(item.id)}
             >
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={t('safetyAssets.filter.type_all', 'All types')}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">
-                  {t('safetyAssets.filter.type_all', 'All types')}
-                </SelectItem>
-                {assetTypes.map((at) => (
-                  <SelectItem key={at.id} value={String(at.id)}>
-                    {at.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="min-w-[160px] space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">
-              {t('safetyAssets.filter.location', 'Location')}
-            </label>
-            <Select
-              value={locationFilter}
-              onValueChange={(v) => {
-                setLocationFilter(v)
-                setPage(1)
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={t('safetyAssets.filter.location_all', 'All locations')}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">
-                  {t('safetyAssets.filter.location_all', 'All locations')}
-                </SelectItem>
-                {locations.map((loc) => (
-                  <SelectItem key={loc.id} value={String(loc.id)}>
-                    {loc.name} ({loc.kind})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="min-w-[140px] space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">
-              {t('safetyAssets.filter.vehicle', 'Vehicle')}
-            </label>
-            <Input
-              value={vehicleFilter}
-              onChange={(e) => {
-                setVehicleFilter(e.target.value)
-                setPage(1)
-              }}
-              placeholder={t('safetyAssets.filter.vehicle_placeholder', 'Reg')}
-            />
-          </div>
-
-          <div className="min-w-[140px] space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">
-              {t('safetyAssets.filter.owner', 'Owner')}
-            </label>
-            <Input
-              value={ownerFilter}
-              onChange={(e) => {
-                setOwnerFilter(e.target.value)
-                setPage(1)
-              }}
-              placeholder={t('safetyAssets.filter.owner_placeholder', 'User ID')}
-              inputMode="numeric"
-            />
-          </div>
-
-          <div className="min-w-[160px] space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">
-              {t('safetyAssets.filter.expiry', 'Expiry band')}
-            </label>
-            <Select
-              value={expiryFilter}
-              onValueChange={(v) => {
-                setExpiryFilter(v)
-                setPage(1)
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {EXPIRY_BANDS.map((band) => (
-                  <SelectItem key={band.value} value={band.value}>
-                    {t(band.labelKey)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Button variant="outline" size="sm" onClick={clearFilters}>
-            {t('safetyAssets.filter.clear', 'Clear filters')}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {filtersUnavailable ? (
-        <p className="text-sm text-muted-foreground" role="status">
-          {t(
-            'safetyAssets.filter.options_unavailable',
-            'Some filter options could not be loaded.',
-          )}
-        </p>
-      ) : null}
+              {item.label}
+            </button>
+          ))}
+        </div>
+        {view !== 'upload' ? (
+          <Input
+            className="max-w-sm"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('safetyAssets.search', 'Search serial, owner, vehicle…')}
+            aria-label="Search assets"
+            data-testid="safety-assets-search"
+          />
+        ) : null}
+      </div>
 
       {loadError ? (
         <div
@@ -459,92 +485,251 @@ export default function SafetyAssetRegister() {
         </div>
       ) : null}
 
-      {loading ? (
-        <TableSkeleton rows={8} />
-      ) : (
+      {view === 'upload' ? (
+        <Card data-testid="ces-import-panel">
+          <CardContent className="space-y-3 p-4">
+            <div>
+              <h2 className="font-semibold text-foreground">CES Calibrations import</h2>
+              <p className="text-sm text-muted-foreground">
+                Admin-only XLSX import. Dry-run validates serial upserts before any assets are changed.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Input
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                aria-label="CES workbook"
+                onChange={(event) => {
+                  setCesFile(event.target.files?.[0] ?? null)
+                  setCesReport(null)
+                  setCesError(null)
+                  setCesConfirmations({})
+                }}
+              />
+              <Button size="sm" disabled={!cesFile || cesBusy} onClick={() => void dryRunCesImport()}>
+                {cesBusy ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Working…
+                  </>
+                ) : (
+                  'Dry run'
+                )}
+              </Button>
+              <Button
+                size="sm"
+                disabled={!canCommitCes}
+                data-testid="ces-import-commit"
+                onClick={() => void commitCesImport()}
+              >
+                Commit import
+              </Button>
+            </div>
+            {cesError ? (
+              <p className="text-sm text-destructive" role="alert">
+                {cesError}
+              </p>
+            ) : null}
+            {cesReport ? (
+              <div className="space-y-3 rounded-md bg-muted/50 p-3 text-sm" data-testid="ces-import-summary">
+                <p>
+                  {cesReport.valid_rows} valid, {cesReport.error_rows} error rows, {cesReport.creates}{' '}
+                  creates, {cesReport.updates} updates
+                  {newProposals.length ? `, ${newProposals.length} new lookups (pending approval)` : ''}
+                  {similarProposals.length
+                    ? `, ${similarProposals.length} similar lookups need confirmation`
+                    : ''}
+                  .
+                </p>
+                {newProposals.length ? (
+                  <div data-testid="ces-import-new-lookups">
+                    <p className="font-medium">Will create pending lookups</p>
+                    <ul className="mt-1 list-disc pl-5 text-muted-foreground">
+                      {newProposals.slice(0, 12).map((p) => (
+                        <li key={`${p.kind}:${p.name}`}>
+                          {p.kind === 'asset_type' ? 'Type' : 'Location'}: {p.name} ({p.row_count} rows)
+                        </li>
+                      ))}
+                      {newProposals.length > 12 ? (
+                        <li>…and {newProposals.length - 12} more</li>
+                      ) : null}
+                    </ul>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      After commit, approve in{' '}
+                      <Link className="underline" to="/admin/lookups?pending=safety">
+                        Admin → Lookup Tables
+                      </Link>
+                      .
+                    </p>
+                  </div>
+                ) : null}
+                {similarProposals.length ? (
+                  <div className="space-y-2" data-testid="ces-import-similar-lookups">
+                    <p className="font-medium text-warning-foreground">
+                      Confirm similar lookups (required before commit)
+                    </p>
+                    {similarProposals.map((proposal) => {
+                      const key = `${proposal.kind}:${proposal.name}`
+                      const chosen = cesConfirmations[key]
+                      const top = proposal.similar_matches[0]
+                      return (
+                        <div
+                          key={key}
+                          className="rounded border border-border bg-card p-2"
+                          data-testid={`ces-similar-${proposal.kind}-${proposal.name}`}
+                        >
+                          <p>
+                            Proposed {proposal.kind === 'asset_type' ? 'type' : 'location'}{' '}
+                            <strong>{proposal.name}</strong> looks like{' '}
+                            <strong>{top?.name}</strong>
+                            {top ? ` (${Math.round(top.score * 100)}% match)` : ''}.
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-3">
+                            <label className="inline-flex items-center gap-1.5">
+                              <input
+                                type="radio"
+                                name={key}
+                                checked={chosen?.action === 'reuse'}
+                                onChange={() => setProposalConfirmation(proposal, 'reuse', top?.id)}
+                              />
+                              Use existing “{top?.name}”
+                            </label>
+                            <label className="inline-flex items-center gap-1.5">
+                              <input
+                                type="radio"
+                                name={key}
+                                checked={chosen?.action === 'create'}
+                                onChange={() => setProposalConfirmation(proposal, 'create')}
+                              />
+                              Create new “{proposal.name}” anyway
+                            </label>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : null}
+                {(cesReport.errors?.length ?? 0) > 0 ? (
+                  <p className="text-destructive">
+                    {cesReport.errors
+                      .slice(0, 5)
+                      .map((issue) =>
+                        issue.row > 0 ? `Row ${issue.row}: ${issue.code}` : issue.message,
+                      )
+                      .join(' · ')}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {view !== 'upload' && loading ? <TableSkeleton rows={8} /> : null}
+
+      {view === 'assets' && !loading ? (
         <Card>
           <CardContent className="p-0">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <span className="text-sm text-muted-foreground" data-testid="safety-assets-list-total">
-                {t('safetyAssets.list.count', '{{count}} assets', { count: total })}
+                {t('safetyAssets.list.count', '{{count}} assets', { count: assetRows.length })}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                % OK = active and not overdue (Training-style SSOT)
               </span>
             </div>
-            {assets.length === 0 ? (
+            {assetRows.length === 0 ? (
               <div className="p-12 text-center" data-testid="safety-assets-empty">
                 <Package className="mx-auto mb-3 h-12 w-12 text-muted-foreground" />
                 <h3 className="text-lg font-semibold text-foreground">
                   {t('safetyAssets.empty.title', 'No safety assets found')}
                 </h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {t(
-                    'safetyAssets.empty.subtitle',
-                    'Adjust filters or register equipment via the assets API.',
-                  )}
-                </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm" data-testid="safety-assets-table">
                   <thead>
                     <tr className="border-b border-border bg-muted/50">
-                      <th className="p-3 text-left font-medium text-muted-foreground">
-                        {t('safetyAssets.table.number', 'Number')}
-                      </th>
-                      <th className="p-3 text-left font-medium text-muted-foreground">
-                        {t('safetyAssets.table.name', 'Name')}
-                      </th>
-                      <th className="p-3 text-left font-medium text-muted-foreground">
-                        {t('safetyAssets.table.type', 'Type')}
-                      </th>
-                      <th className="p-3 text-left font-medium text-muted-foreground">
-                        {t('safetyAssets.table.assignment', 'Assignment')}
-                      </th>
-                      <th className="p-3 text-left font-medium text-muted-foreground">
-                        {t('safetyAssets.table.owner', 'Owner')}
-                      </th>
-                      <th className="p-3 text-left font-medium text-muted-foreground">
-                        {t('safetyAssets.table.expiry', 'Expiry')}
-                      </th>
-                      <th className="p-3 text-left font-medium text-muted-foreground">
-                        {t('safetyAssets.table.status', 'Status')}
-                      </th>
+                      {(
+                        [
+                          ['serial', 'Serial'],
+                          ['name', 'Name'],
+                          ['type', 'Type'],
+                          ['owner', 'Owner'],
+                          ['vehicle', 'Vehicle'],
+                          ['site', 'Site'],
+                          ['expiry', 'Next'],
+                          ['status', 'Status'],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <th key={key} className="p-3 text-left font-medium text-muted-foreground">
+                          <button
+                            type="button"
+                            className="hover:text-foreground"
+                            onClick={() => toggleAssetSort(key)}
+                          >
+                            {label}
+                            {assetSortKey === key ? (assetSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                          </button>
+                        </th>
+                      ))}
+                      <th className="p-3 text-left font-medium text-muted-foreground">Band</th>
+                    </tr>
+                    <tr className="border-b border-border bg-muted/30">
+                      {(
+                        [
+                          'serial',
+                          'name',
+                          'type',
+                          'owner',
+                          'vehicle',
+                          'site',
+                          'expiry',
+                          'status',
+                        ] as const
+                      ).map((key) => (
+                        <th key={key} className="p-2">
+                          <Input
+                            className="h-8"
+                            value={assetFilters[key]}
+                            onChange={(e) =>
+                              setAssetFilters((prev) => ({ ...prev, [key]: e.target.value }))
+                            }
+                            aria-label={`Filter ${key}`}
+                          />
+                        </th>
+                      ))}
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
-                    {assets.map((asset) => (
+                    {assetRows.map((asset) => (
                       <tr
                         key={asset.id}
-                        className="border-b border-border/50 hover:bg-muted/30"
+                        className="border-b border-border hover:bg-muted/30"
                         data-testid={`safety-asset-row-${asset.id}`}
                       >
-                        <td className="p-3">
+                        <td className="p-3 font-medium">
                           <Link
                             to={`/safety-assets/${asset.id}`}
-                            className="font-medium text-primary hover:underline"
+                            className="text-primary hover:underline"
                           >
-                            {asset.asset_number}
+                            {asset.serial_number || asset.asset_number}
                           </Link>
                         </td>
-                        <td className="p-3 text-foreground">{asset.name}</td>
-                        <td className="p-3 text-muted-foreground">
-                          {typeNameById.get(asset.asset_type_id) ?? `#${asset.asset_type_id}`}
-                        </td>
-                        <td className="p-3 text-muted-foreground">
-                          {asset.vehicle_reg
-                            ? asset.vehicle_reg
-                            : asset.location_id
-                              ? (locationNameById.get(asset.location_id) ??
-                                `Loc #${asset.location_id}`)
-                              : (asset.site ?? '—')}
-                        </td>
-                        <td className="p-3 text-muted-foreground">
-                          {asset.owner_user_id != null ? `#${asset.owner_user_id}` : '—'}
-                        </td>
-                        <td className="p-3 text-muted-foreground">
-                          {formatDate(asset.expiry_date)}
-                        </td>
+                        <td className="p-3">{asset.name}</td>
+                        <td className="p-3">{typeNameById.get(asset.asset_type_id) || '—'}</td>
+                        <td className="p-3">{ownerLabel(asset, ownerNames)}</td>
+                        <td className="p-3">{asset.vehicle_reg || '—'}</td>
+                        <td className="p-3">{siteLabel(asset, locationNameById) || '—'}</td>
+                        <td className="p-3">{formatDate(asset.expiry_date)}</td>
                         <td className="p-3">
                           <Badge variant={statusVariant(asset.status)}>{asset.status}</Badge>
+                        </td>
+                        <td className="p-3">
+                          <Badge variant={isOkAsset(asset) ? 'success' : 'warning'}>
+                            {bandLabel(asset)}
+                          </Badge>
                         </td>
                       </tr>
                     ))}
@@ -552,40 +737,114 @@ export default function SafetyAssetRegister() {
                 </table>
               </div>
             )}
-
-            {pages > 1 ? (
-              <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  {t('safetyAssets.pagination.prev', 'Previous')}
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  {page} / {pages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= pages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  {t('safetyAssets.pagination.next', 'Next')}
-                </Button>
-              </div>
-            ) : null}
           </CardContent>
         </Card>
-      )}
-
-      {loading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          {t('safetyAssets.loading', 'Loading…')}
-        </div>
       ) : null}
+
+      {(view === 'engineer' || view === 'vehicle' || view === 'type') && !loading ? (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-testid={`safety-assets-${view}-table`}>
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    {(
+                      [
+                        ['label', view === 'engineer' ? 'Engineer' : view === 'vehicle' ? 'Vehicle' : 'Type'],
+                        ['total', 'Assets'],
+                        ['ok', 'OK'],
+                        ['overdue', 'Overdue'],
+                        ['quarantined', 'Fail'],
+                        ['pct', '% OK'],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <th key={key} className="p-3 text-left font-medium text-muted-foreground">
+                        <button
+                          type="button"
+                          className="hover:text-foreground"
+                          onClick={() => toggleEntitySort(key)}
+                        >
+                          {label}
+                          {entitySortKey === key ? (entitySortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                        </button>
+                      </th>
+                    ))}
+                  </tr>
+                  <tr className="border-b border-border bg-muted/30">
+                    {(
+                      ['label', 'total', 'ok', 'overdue', 'quarantined', 'pct'] as const
+                    ).map((key) => (
+                      <th key={key} className="p-2">
+                        <Input
+                          className="h-8"
+                          value={entityFilters[key]}
+                          onChange={(e) =>
+                            setEntityFilters((prev) => ({ ...prev, [key]: e.target.value }))
+                          }
+                          aria-label={`Filter ${key}`}
+                        />
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeEntityRollups.map((row) => (
+                    <tr
+                      key={row.key}
+                      className="cursor-pointer border-b border-border hover:bg-muted/30"
+                      data-testid={`safety-assets-rollup-${row.key}`}
+                      onClick={() => setDrilldown(row)}
+                    >
+                      <td className="p-3 font-medium text-primary">{row.label}</td>
+                      <td className="p-3">{row.total}</td>
+                      <td className="p-3">{row.ok}</td>
+                      <td className="p-3">{row.overdue}</td>
+                      <td className="p-3">{row.quarantined}</td>
+                      <td className="p-3 font-semibold">{row.pct}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Sheet open={drilldown != null} onOpenChange={(open) => !open && setDrilldown(null)}>
+        <SheetContent side="right" className="max-w-lg" data-testid="safety-assets-drilldown-sheet">
+          <SheetHeader>
+            <SheetTitle>{drilldown?.label || 'Kit'}</SheetTitle>
+            <SheetDescription>
+              {drilldown
+                ? `${drilldown.ok}/${drilldown.total} OK · ${drilldown.overdue} overdue · ${drilldown.pct}%`
+                : ''}
+            </SheetDescription>
+          </SheetHeader>
+          <SheetBody className="space-y-3">
+            {(drilldown?.assets || []).map((asset) => (
+              <div
+                key={asset.id}
+                className="rounded-md border border-border p-3 text-sm"
+                data-testid={`safety-assets-sheet-row-${asset.id}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <Link
+                    to={`/safety-assets/${asset.id}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {asset.serial_number || asset.asset_number}
+                  </Link>
+                  <Badge variant={isOkAsset(asset) ? 'success' : 'warning'}>{bandLabel(asset)}</Badge>
+                </div>
+                <p className="mt-1 text-muted-foreground">{asset.name}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {typeNameById.get(asset.asset_type_id) || '—'} · Next {formatDate(asset.expiry_date)}
+                </p>
+              </div>
+            ))}
+          </SheetBody>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

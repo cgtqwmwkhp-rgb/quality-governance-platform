@@ -137,6 +137,7 @@ class InvestigationRunUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     status: Optional[str] = None
+    level: Optional[str] = Field(None, description="HSG245 level: minimal|low|medium|high")
     data: Optional[Dict[str, Any]] = None
     assigned_to_user_id: Optional[int] = None
     reviewer_user_id: Optional[int] = None
@@ -151,6 +152,19 @@ class InvestigationRunUpdate(BaseModel):
         if v not in valid_statuses:
             raise ValueError(f"Invalid status: {v}. Must be one of {valid_statuses}")
         return v
+
+    @field_validator("level")
+    @classmethod
+    def validate_level(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        from src.domain.models.investigation import InvestigationLevel
+
+        lowered = v.lower()
+        valid = {level.value for level in InvestigationLevel}
+        if lowered not in valid:
+            raise ValueError(f"Invalid level: {v}. Must be one of {valid}")
+        return lowered
 
 
 class InvestigationRunResponse(BaseModel):
@@ -323,7 +337,8 @@ class InvestigationPackGeneratedResponse(BaseModel):
     investigation_id: int
     investigation_reference: str
     generated_at: datetime
-    content: str
+    # Pack body is structured JSON (sections + metadata), not a serialized string.
+    content: Dict[str, Any] = Field(default_factory=dict)
     redaction_log: List[Dict[str, Any]] = Field(default_factory=list)
     included_assets: List[Dict[str, Any]] = Field(default_factory=list)
     checksum_sha256: Optional[str] = None

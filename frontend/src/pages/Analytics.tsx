@@ -35,6 +35,7 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { cn } from '../helpers/utils'
 import { toast } from '../contexts/ToastContext'
+import { CampaignCommandKpis } from './CampaignCommandKpis'
 
 type TimeRange = '7d' | '30d' | '90d' | '1y'
 type SectionId =
@@ -45,6 +46,7 @@ type SectionId =
   | 'risks'
   | 'audits'
   | 'actions'
+  | 'document-campaigns'
 
 type HeroFilter =
   | 'all'
@@ -69,6 +71,7 @@ const SECTIONS: { id: SectionId; label: string; href: string }[] = [
   { id: 'risks', label: 'Risks', href: '/risk-register' },
   { id: 'audits', label: 'Audits', href: '/audits' },
   { id: 'actions', label: 'Actions', href: '/actions' },
+  { id: 'document-campaigns', label: 'Document campaigns', href: '/documents/campaigns' },
 ]
 
 type MetricValue = number | null
@@ -652,7 +655,7 @@ export default function Analytics() {
         </div>
       )}
 
-      {partialNotes.length > 0 && !error && (
+      {partialNotes.length > 0 && !error && section !== 'document-campaigns' && (
         <div
           className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-foreground"
           data-testid="analytics-partial"
@@ -661,6 +664,19 @@ export default function Analytics() {
         </div>
       )}
 
+      {section === 'document-campaigns' ? (
+        <Card className="p-6" data-testid="analytics-document-campaigns">
+          <div className="mb-4 space-y-1">
+            <h2 className="text-lg font-semibold text-foreground">Campaign command</h2>
+            <p className="text-sm text-muted-foreground">
+              Portfolio KPIs and recent completion activity for document campaigns. Open the full
+              Document campaigns page for reminder defaults, roster chase, and evidence packs.
+            </p>
+          </div>
+          <CampaignCommandKpis />
+        </Card>
+      ) : (
+      <>
       {/* Interactive hero KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {[
@@ -1038,6 +1054,8 @@ export default function Analytics() {
           </Button>
         </div>
       </Card>
+      </>
+      )}
     </div>
   )
 }
