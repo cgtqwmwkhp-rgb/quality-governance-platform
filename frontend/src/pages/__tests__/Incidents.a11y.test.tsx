@@ -29,6 +29,9 @@ vi.mock('../../api/client', () => ({
     list: (...args: unknown[]) => mockList(...args),
     create: vi.fn(),
   },
+  lookupsApi: {
+    list: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  },
   notificationsApi: {
     getDeliveryStatus: vi.fn().mockResolvedValue({ data: { email_configured: false } }),
   },
