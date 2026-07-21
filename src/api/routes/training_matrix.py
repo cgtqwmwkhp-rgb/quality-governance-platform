@@ -22,7 +22,9 @@ from src.api.schemas.training_matrix import (
     TrainingMatrixNameMapUpsert,
     TrainingMatrixNotifyRequest,
     TrainingMatrixNotifyResponse,
+    TrainingMatrixPersonComplianceResponse,
     TrainingMatrixPersonRoleUpdate,
+    TrainingMatrixPersonRollup,
     TrainingMatrixRequirementCreate,
     TrainingMatrixRequirementListResponse,
     TrainingMatrixRequirementResponse,
@@ -44,7 +46,14 @@ from src.domain.models.training_matrix import (
 )
 from src.domain.models.user import User
 from src.domain.services.email_service import email_service
-from src.domain.services.training_matrix_board import BOARD_ROLES, build_board_summary, normalize_board_role
+from src.domain.services.training_matrix_board import (
+    BOARD_ROLES,
+    build_board_summary,
+    is_gap_status,
+    normalize_board_role,
+    person_rollup,
+    resolve_board_role,
+)
 from src.domain.services.training_matrix_compliance import (
     ATLAS_HUB_URL,
     ComplianceInput,
@@ -726,6 +735,71 @@ async def list_compliance(
     )
 
 
+@router.get("/people/{person_id}/compliance", response_model=TrainingMatrixPersonComplianceResponse)
+async def person_compliance(person_id: int, db: DbSession, user: CurrentUser):
+    """Person drill-down: profile, rollup, full required module list, email eligibility."""
+    _require_manager(user)
+    tenant_id = _tenant(user)
+    person = (
+        await db.execute(
+            select(TrainingMatrixPerson).where(
+                TrainingMatrixPerson.id == person_id,
+                TrainingMatrixPerson.tenant_id == tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not person:
+        raise NotFoundError("Atlas person not found")
+
+    rows, import_id = await _build_compliance_rows(db, tenant_id=tenant_id)
+    person_rows = [r for r in rows if r.person_id == person.id]
+    rollup = person_rollup([r.model_dump() for r in person_rows])
+
+    can_email = False
+    email_skip_reason: Optional[str] = None
+    eng_name = None
+    if not person.engineer_id:
+        email_skip_reason = "Not mapped to an employee — map in Admin → People mapping."
+    else:
+        eng = (
+            await db.execute(select(Engineer).where(Engineer.id == person.engineer_id, Engineer.tenant_id == tenant_id))
+        ).scalar_one_or_none()
+        eng_name = eng.display_name if eng else None
+        if not eng or not eng.user_id:
+            email_skip_reason = "Employee has no linked user login."
+        else:
+            recipient = (await db.execute(select(User).where(User.id == eng.user_id))).scalar_one_or_none()
+            if not recipient or not recipient.email:
+                email_skip_reason = "Linked user has no email address."
+            elif not any(is_gap_status(r.status) for r in person_rows):
+                email_skip_reason = "No open training gaps to notify."
+            else:
+                can_email = True
+
+    return TrainingMatrixPersonComplianceResponse(
+        person_id=person.id,
+        atlas_name=person.atlas_name,
+        department=person.department,
+        board_role_override=person.board_role_override,
+        board_role=resolve_board_role(person.department, person.board_role_override),
+        engineer_id=person.engineer_id,
+        engineer_display_name=eng_name,
+        can_email=can_email,
+        email_skip_reason=email_skip_reason,
+        last_training_notified_at=person.last_training_notified_at,
+        rollup=TrainingMatrixPersonRollup(
+            complete=int(rollup["complete"]),
+            overdue=int(rollup["overdue"]),
+            need=int(rollup["need"]),
+            total=int(rollup["total"]),
+            pct=int(rollup["pct"]),
+        ),
+        items=person_rows,
+        atlas_hub_url=ATLAS_HUB_URL,
+        import_id=import_id,
+    )
+
+
 @router.get("/me", response_model=TrainingMatrixComplianceListResponse)
 async def my_training(db: DbSession, user: CurrentUser):
     tenant_id = _tenant(user)
@@ -793,7 +867,8 @@ async def notify_people(
             continue
 
         rows, _ = await _build_compliance_rows(db, tenant_id=tenant_id, engineer_id=person.engineer_id)
-        gaps = [row for row in rows if row.status != "compliant"]
+        # Align with board Complete definition: due_soon is in-cycle, not a gap email.
+        gaps = [row for row in rows if is_gap_status(row.status)]
         if not gaps:
             skipped += 1
             continue

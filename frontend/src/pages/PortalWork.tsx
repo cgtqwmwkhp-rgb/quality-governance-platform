@@ -38,6 +38,8 @@ import {
   unifiedReadingQueueCount,
 } from './campaignReadingHelpers'
 import {
+  isGapStatus,
+  isOkStatus,
   myTrainingSummary,
   statusLabel,
 } from './workforce/trainingMatrix/trainingMatrixBoardHelpers'
@@ -282,14 +284,14 @@ export default function PortalWork() {
     () =>
       training.status === 'ready'
         ? training.rows
-            .filter((row) => row.status !== 'compliant')
+            .filter((row) => isGapStatus(row.status))
             .sort((a, b) => (a.qgp_due_on || '9999').localeCompare(b.qgp_due_on || '9999'))
         : [],
     [training],
   )
   const trainingCompliant = useMemo(
     () =>
-      training.status === 'ready' ? training.rows.filter((row) => row.status === 'compliant') : [],
+      training.status === 'ready' ? training.rows.filter((row) => isOkStatus(row.status)) : [],
     [training],
   )
 
