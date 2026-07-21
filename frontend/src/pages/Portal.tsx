@@ -10,6 +10,7 @@ import {
   User,
   Briefcase,
   Bell,
+  GraduationCap,
 } from 'lucide-react'
 import { BrandMarkTile } from '../components/BrandMark'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
@@ -51,7 +52,8 @@ export default function Portal() {
       })
   }, [])
 
-  const myWorkBadgeCount = pendingCampaignCount + trainingGapCount
+  // Training has its own home tile — keep My Work badge for actions/reading only.
+  const myWorkBadgeCount = pendingCampaignCount
 
   const handleLogout = () => {
     logout()
@@ -140,7 +142,7 @@ export default function Portal() {
             aria-label={
               myWorkBadgeCount > 0
                 ? `My Work — ${myWorkBadgeCount} items needing attention`
-                : 'My Work — assigned actions, reading, and training'
+                : 'My Work — assigned actions and pending reading'
             }
             onClick={() => navigate('/portal/work')}
             className={cn(
@@ -176,7 +178,55 @@ export default function Portal() {
                 )}
               </div>
               <p className="text-sm text-muted-foreground">
-                Assigned actions, pending reading, training compliance
+                Assigned actions and pending reading
+              </p>
+            </div>
+            <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+          </button>
+
+          {/* Training — first-class (Atlas + QGP frequency), not buried under My Work */}
+          <button
+            data-testid="portal-training-btn"
+            type="button"
+            aria-label={
+              trainingGapCount > 0
+                ? `Training — ${trainingGapCount} modules need attention`
+                : 'Training — view your required modules and due dates'
+            }
+            onClick={() => navigate('/portal/work#training')}
+            className={cn(
+              'w-full flex items-center gap-4 p-5 rounded-2xl transition-all group relative',
+              'bg-card hover:bg-muted/40 border-2 border-border hover:border-primary/30',
+            )}
+          >
+            <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center relative">
+              <GraduationCap className="w-7 h-7 text-primary" />
+              {trainingGapCount > 0 && (
+                <span
+                  data-testid="portal-training-pending-badge"
+                  className="absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-xs font-semibold"
+                  aria-hidden="true"
+                >
+                  {trainingGapCount}
+                </span>
+              )}
+            </div>
+            <div className="flex-1 text-left">
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
+                  Training
+                </h3>
+                {trainingGapCount > 0 && (
+                  <span
+                    data-testid="portal-training-pending-count"
+                    className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-destructive/10 text-destructive text-xs font-semibold"
+                  >
+                    {trainingGapCount}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Required modules, due dates, and Atlas completion
               </p>
             </div>
             <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:translate-x-1 transition-transform" />
