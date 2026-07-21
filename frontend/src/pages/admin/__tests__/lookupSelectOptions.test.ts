@@ -11,7 +11,7 @@ describe('mergeLookupSelectOptions', () => {
     expect(mergeLookupSelectOptions(defaults, [])).toEqual(defaults)
   })
 
-  it('overrides labels and appends new lookup codes', () => {
+  it('overrides labels for known codes and ignores unknown lookup codes', () => {
     expect(
       mergeLookupSelectOptions(defaults, [
         {
@@ -34,7 +34,6 @@ describe('mergeLookupSelectOptions', () => {
     ).toEqual([
       { value: 'other', label: 'Other' },
       { value: 'service', label: 'Service quality' },
-      { value: 'defra_topic', label: 'DEFRA topic' },
     ])
   })
 })

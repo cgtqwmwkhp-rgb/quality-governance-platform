@@ -131,24 +131,25 @@ export default function Incidents() {
     reported_date: new Date().toISOString().slice(0, 16),
   })
   const [sessionReporterLabel, setSessionReporterLabel] = useState<string | null>(null)
-  const [typeOptions, setTypeOptions] = useState(() =>
-    [
-      'injury',
-      'near_miss',
-      'hazard',
-      'property_damage',
-      'environmental',
-      'security',
-      'quality',
-      'other',
-    ].map((value) => ({ value, label: value })),
-  )
-  const [severityOptions, setSeverityOptions] = useState(() =>
-    ['critical', 'high', 'medium', 'low', 'negligible'].map((value) => ({
-      value,
-      label: value,
-    })),
-  )
+  const defaultTypeOptions = [
+    { value: 'injury', label: t('incidents.type.injury') },
+    { value: 'near_miss', label: t('incidents.type.near_miss') },
+    { value: 'hazard', label: t('incidents.type.hazard') },
+    { value: 'property_damage', label: t('incidents.type.property_damage') },
+    { value: 'environmental', label: t('incidents.type.environmental') },
+    { value: 'security', label: t('incidents.type.security') },
+    { value: 'quality', label: t('incidents.type.quality') },
+    { value: 'other', label: t('incidents.type.other') },
+  ]
+  const defaultSeverityOptions = [
+    { value: 'critical', label: t('severity.critical') },
+    { value: 'high', label: t('severity.high') },
+    { value: 'medium', label: t('severity.medium') },
+    { value: 'low', label: t('severity.low') },
+    { value: 'negligible', label: t('severity.negligible') },
+  ]
+  const [typeOptions, setTypeOptions] = useState(defaultTypeOptions)
+  const [severityOptions, setSeverityOptions] = useState(defaultSeverityOptions)
 
   useEffect(() => {
     if (!showModal) {
@@ -156,6 +157,9 @@ export default function Incidents() {
       return
     }
     let cancelled = false
+    // Show translated defaults immediately; overlay Admin lookup labels when loaded.
+    setTypeOptions(defaultTypeOptions)
+    setSeverityOptions(defaultSeverityOptions)
     void resolvePlatformReporterIdentity().then((identity) => {
       if (cancelled) return
       const label =
@@ -175,33 +179,8 @@ export default function Incidents() {
         lookupsApi.list('severity_levels', true).catch(() => ({ items: [], total: 0 })),
       ])
       if (cancelled) return
-      setTypeOptions(
-        mergeLookupSelectOptions(
-          [
-            { value: 'injury', label: t('incidents.type.injury') },
-            { value: 'near_miss', label: t('incidents.type.near_miss') },
-            { value: 'hazard', label: t('incidents.type.hazard') },
-            { value: 'property_damage', label: t('incidents.type.property_damage') },
-            { value: 'environmental', label: t('incidents.type.environmental') },
-            { value: 'security', label: t('incidents.type.security') },
-            { value: 'quality', label: t('incidents.type.quality') },
-            { value: 'other', label: t('incidents.type.other') },
-          ],
-          typesRes.items,
-        ),
-      )
-      setSeverityOptions(
-        mergeLookupSelectOptions(
-          [
-            { value: 'critical', label: t('severity.critical') },
-            { value: 'high', label: t('severity.high') },
-            { value: 'medium', label: t('severity.medium') },
-            { value: 'low', label: t('severity.low') },
-            { value: 'negligible', label: t('severity.negligible') },
-          ],
-          severityRes.items,
-        ),
-      )
+      setTypeOptions(mergeLookupSelectOptions(defaultTypeOptions, typesRes.items))
+      setSeverityOptions(mergeLookupSelectOptions(defaultSeverityOptions, severityRes.items))
     })()
     return () => {
       cancelled = true
