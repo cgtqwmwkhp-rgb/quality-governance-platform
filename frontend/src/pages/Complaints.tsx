@@ -1,4 +1,4 @@
-import { useEffect, useState, useDeferredValue, useMemo } from 'react'
+import { useEffect, useState, useDeferredValue } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
