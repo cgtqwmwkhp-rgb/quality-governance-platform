@@ -10,7 +10,7 @@ import pytest
 from openpyxl import Workbook
 
 from src.domain.services.ces_asset_import_parser import normalise_ces_row, normalise_status, split_location
-from src.domain.services.ces_asset_import_service import CesAssetImportService
+from src.domain.services.ces_asset_import_service import CesAssetImportService, ValidatedCesRow
 
 
 def _row(**overrides):
@@ -95,6 +95,29 @@ async def test_dry_run_rejects_ambiguous_serial():
 
     assert report.ok is False
     assert any(issue.code == "AMBIGUOUS_SERIAL" for issue in report.errors)
+
+
+def test_update_payload_preserves_unmapped_assignments():
+    row = ValidatedCesRow(
+        row=2,
+        action="update",
+        asset_type_id=10,
+        asset_number="CES-001",
+        name="Gas Detector",
+        serial_number="CES-001",
+        status="active",
+        existing_id=99,
+        owner_user_id=None,
+        location_id=None,
+        vehicle_reg=None,
+        site=None,
+    )
+    payload = row.payload(for_update=True)
+    assert "owner_user_id" not in payload
+    assert "location_id" not in payload
+    assert "vehicle_reg" not in payload
+    assert "site" not in payload
+    assert "asset_number" not in payload
 
 
 @pytest.mark.asyncio

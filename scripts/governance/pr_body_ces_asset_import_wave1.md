@@ -33,6 +33,7 @@
 - [x] AC-06: Updates preserve existing `asset_number` and merge CES metadata keys
 - [x] AC-07: Commit is single-transaction (create/update flush, one commit; rollback on failure)
 - [x] AC-08: Same serial + different type with one existing asset → update matching type, create for mismatch
+- [x] AC-09: Updates omit unmapped owner/location/vehicle so warnings do not clear existing assignments
 
 ## 5) Testing Evidence (link to runs)
 - [x] Unit/integration CES import tests locally

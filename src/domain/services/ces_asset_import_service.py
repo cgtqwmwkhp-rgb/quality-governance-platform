@@ -71,6 +71,18 @@ class ValidatedCesRow:
         if for_update:
             # Serial is the upsert key; preserve existing asset_number on re-import.
             data.pop("asset_number", None)
+            # Unmapped CES owner/location only warn — do not wipe existing assignments.
+            if self.owner_user_id is None:
+                data.pop("owner_user_id", None)
+            if self.vehicle_reg:
+                data["location_id"] = None
+            elif self.location_id is not None:
+                data["vehicle_reg"] = None
+            else:
+                data.pop("location_id", None)
+                data.pop("vehicle_reg", None)
+            if self.site is None:
+                data.pop("site", None)
         return data
 
 
