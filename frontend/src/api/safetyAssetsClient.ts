@@ -260,7 +260,7 @@ export const safetyAssetsApi = {
       const batch = res.data.items ?? []
       items.push(...batch)
       pages = res.data.pages ?? 1
-      if (page >= pages || batch.length === 0) break
+      if (page >= pages) break
     }
     if (pages > maxPages) {
       throw new Error(

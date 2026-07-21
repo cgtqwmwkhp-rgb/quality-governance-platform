@@ -161,15 +161,15 @@ export default function SafetyAssetRegister() {
       if (locsRes.status === 'fulfilled') {
         setLocations(locsRes.value.data.items ?? [])
       }
-      const names = new Map<number, string>()
       if (engineersRes.status === 'fulfilled') {
+        const names = new Map<number, string>()
         for (const eng of engineersRes.value.data?.items ?? []) {
           if (eng.user_id != null && eng.display_name) {
             names.set(eng.user_id, eng.display_name)
           }
         }
+        setOwnerNames(names)
       }
-      setOwnerNames(names)
     } catch (err) {
       const message = getApiErrorMessage(err, 'Could not load safety assets.')
       setLoadError(message)
