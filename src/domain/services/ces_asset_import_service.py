@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import io
+import json
 from typing import Any
 
 from openpyxl import load_workbook
@@ -11,12 +12,16 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.exceptions import BadRequestError, ValidationError
-from src.domain.models.asset import Asset, AssetType
+from src.domain.models.asset import Asset, AssetCategory, AssetType
 from src.domain.models.engineer import Engineer
-from src.domain.models.location import Location
+from src.domain.models.location import Location, LocationKind
+from src.domain.models.notification import NotificationChannel, NotificationPriority, NotificationType
 from src.domain.models.training_matrix import TrainingMatrixNameMap
+from src.domain.models.user import User
 from src.domain.services.asset_service import AssetService
 from src.domain.services.ces_asset_import_parser import cell_text, normalise_ces_row
+from src.domain.services.lookup_similarity import classify_lookup_name, normalise_lookup_key
+from src.domain.services.notification_service import NotificationService
 from src.domain.services.training_matrix_parser import normalize_person_name
 
 EQUIPMENT_LIST_SHEET = "Equipment List"
@@ -29,6 +34,29 @@ class RowIssue:
     message: str
     field: str | None = None
     severity: str = "error"
+
+
+@dataclasses.dataclass(frozen=True)
+class LookupProposal:
+    kind: str
+    name: str
+    intent: str
+    reuse_id: int | None
+    reuse_name: str | None
+    similar_matches: list[dict[str, Any]]
+    row_count: int
+    needs_confirmation: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return dataclasses.asdict(self)
+
+
+@dataclasses.dataclass(frozen=True)
+class LookupConfirmation:
+    kind: str
+    name: str
+    action: str
+    reuse_id: int | None = None
 
 
 @dataclasses.dataclass
@@ -50,6 +78,8 @@ class ValidatedCesRow:
     expiry_date: Any = None
     qr_code_data: str | None = None
     metadata_json: dict[str, Any] = dataclasses.field(default_factory=dict)
+    create_type_name: str | None = None
+    create_location_name: str | None = None
 
     def payload(self, *, for_update: bool = False) -> dict[str, Any]:
         data = {
@@ -69,9 +99,7 @@ class ValidatedCesRow:
             "metadata_json": self.metadata_json or None,
         }
         if for_update:
-            # Serial is the upsert key; preserve existing asset_number on re-import.
             data.pop("asset_number", None)
-            # Unmapped CES owner/location only warn — do not wipe existing assignments.
             if self.owner_user_id is None:
                 data.pop("owner_user_id", None)
             if self.vehicle_reg:
@@ -97,6 +125,8 @@ class CesImportReport:
     errors: list[RowIssue] = dataclasses.field(default_factory=list)
     warnings: list[RowIssue] = dataclasses.field(default_factory=list)
     preview: list[dict[str, Any]] = dataclasses.field(default_factory=list)
+    lookup_proposals: list[LookupProposal] = dataclasses.field(default_factory=list)
+    requires_confirmation: bool = False
 
     @property
     def ok(self) -> bool:
@@ -114,9 +144,11 @@ class CesImportReport:
             "creates": self.creates,
             "updates": self.updates,
             "ok": self.ok,
+            "requires_confirmation": self.requires_confirmation,
             "errors": [issue(item) for item in self.errors],
             "warnings": [issue(item) for item in self.warnings],
             "preview": self.preview,
+            "lookup_proposals": [item.to_dict() for item in self.lookup_proposals],
         }
 
 
@@ -126,6 +158,8 @@ class CesImportCommitResult:
     updated_count: int
     created_asset_ids: list[int]
     updated_asset_ids: list[int]
+    provisional_type_ids: list[int]
+    provisional_location_ids: list[int]
     report: CesImportReport
 
     def to_dict(self) -> dict[str, Any]:
@@ -134,12 +168,48 @@ class CesImportCommitResult:
             "updated_count": self.updated_count,
             "created_asset_ids": self.created_asset_ids,
             "updated_asset_ids": self.updated_asset_ids,
+            "provisional_type_ids": self.provisional_type_ids,
+            "provisional_location_ids": self.provisional_location_ids,
             "report": self.report.to_dict(),
         }
 
 
+def parse_confirmations(raw: Any) -> list[LookupConfirmation]:
+    if raw is None or raw == "" or raw == []:
+        return []
+    if isinstance(raw, str):
+        raw = json.loads(raw)
+    if not isinstance(raw, list):
+        raise BadRequestError("confirmations must be a JSON list")
+    out: list[LookupConfirmation] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            raise BadRequestError("Each confirmation must be an object")
+        kind = str(item.get("kind") or "").strip()
+        name = str(item.get("name") or "").strip()
+        action = str(item.get("action") or "").strip()
+        reuse_id = item.get("reuse_id")
+        if kind not in {"asset_type", "location"} or not name or action not in {"reuse", "create"}:
+            raise BadRequestError("Invalid confirmation; need kind, name, action=reuse|create")
+        if action == "reuse" and not reuse_id:
+            raise BadRequestError(f"Confirmation for '{name}' reuse requires reuse_id")
+        out.append(
+            LookupConfirmation(
+                kind=kind,
+                name=name,
+                action=action,
+                reuse_id=int(reuse_id) if reuse_id is not None else None,
+            )
+        )
+    return out
+
+
 class CesAssetImportService:
     """Validate then upsert CES assets by serial number."""
+
+    def __init__(self, db: AsyncSession, *, asset_service: AssetService | None = None) -> None:
+        self.db = db
+        self.assets = asset_service or AssetService(db)
 
     @staticmethod
     def _duplicate_in_file(
@@ -180,28 +250,31 @@ class CesAssetImportService:
     ) -> tuple[Asset | None, list[RowIssue]]:
         issues: list[RowIssue] = []
         matched = list(candidates)
-        if asset_type is not None and matched:
-            # Always discriminate by equipment type so two CES rows with the same
-            # serial but different types cannot both update a single existing asset.
+        if asset_type is not None:
             typed = [asset for asset in matched if asset.asset_type_id == asset_type.id]
-            if qr:
-                qr_matched = [asset for asset in typed if asset.qr_code_data == qr]
-                if qr_matched:
-                    typed = qr_matched
-            if len(typed) > 1:
-                issues.append(
-                    RowIssue(
-                        row_number,
-                        "AMBIGUOUS_SERIAL",
-                        (
-                            f"Serial '{serial}' matches multiple existing assets; "
-                            "equipment type and QR must identify one"
-                        ),
-                        "serial_number",
+            if typed:
+                matched = typed
+            else:
+                # Different equipment type with same serial → create a new asset.
+                matched = []
+        if qr and matched:
+            by_qr = [asset for asset in matched if (asset.qr_code_data or "").strip() == qr.strip()]
+            if len(matched) > 1 or by_qr:
+                if by_qr:
+                    matched = by_qr
+                elif len(matched) > 1:
+                    issues.append(
+                        RowIssue(
+                            row_number,
+                            "AMBIGUOUS_SERIAL",
+                            (
+                                f"Serial '{serial}' matches multiple existing assets; "
+                                "equipment type and QR must identify one"
+                            ),
+                            "serial_number",
+                        )
                     )
-                )
-                return None, issues
-            matched = typed
+                    return None, issues
         elif len(matched) > 1:
             issues.append(
                 RowIssue(
@@ -212,11 +285,9 @@ class CesAssetImportService:
                 )
             )
             return None, issues
-
         existing = matched[0] if len(matched) == 1 else None
         if existing is not None and existing.id in claimed_existing:
             prior_row = claimed_existing[existing.id]
-            # Avoid SQL-ish wording ("update") that trips Bandit B608 on error text.
             message = (
                 f"Serial {serial!r} maps to the same register asset ({existing.id}) as "
                 f"row {prior_row}; equipment type/QR must identify distinct assets"
@@ -226,51 +297,8 @@ class CesAssetImportService:
         return existing, issues
 
     @staticmethod
-    def _resolve_assignment(
-        row: dict[str, Any],
-        row_number: int,
-        location_map: dict[str, Location],
-        owner_by_name: dict[str, int | None],
-    ) -> tuple[int | None, int | None, list[RowIssue]]:
-        warnings: list[RowIssue] = []
-        location_id = None
-        vehicle_reg = row["vehicle_reg"]
-        assignment = row["assignment_text"]
-        if not vehicle_reg and assignment:
-            location = location_map.get(assignment.lower())
-            if location:
-                location_id = location.id
-            else:
-                warnings.append(
-                    RowIssue(
-                        row_number,
-                        "UNMAPPED_LOCATION",
-                        f"Location '{assignment}' is not configured; asset will remain unassigned",
-                        "location",
-                        "warning",
-                    )
-                )
-        owner_user_id = None
-        owner_name = row["engineer_name"]
-        if owner_name:
-            key = normalize_person_name(owner_name).lower()
-            if key in owner_by_name and owner_by_name[key] is not None:
-                owner_user_id = owner_by_name[key]
-            else:
-                warnings.append(
-                    RowIssue(
-                        row_number,
-                        "UNMAPPED_OWNER",
-                        f"Engineer '{owner_name}' has no uniquely linked user",
-                        "location",
-                        "warning",
-                    )
-                )
-        return location_id, owner_user_id, warnings
-
-    def __init__(self, db: AsyncSession, *, asset_service: AssetService | None = None) -> None:
-        self.db = db
-        self.assets = asset_service or AssetService(db)
+    def _confirmation_map(confirmations: list[LookupConfirmation]) -> dict[tuple[str, str], LookupConfirmation]:
+        return {(item.kind, normalise_lookup_key(item.name)): item for item in confirmations}
 
     @staticmethod
     def parse_workbook(content: bytes) -> list[dict[str, Any]]:
@@ -286,11 +314,10 @@ class CesAssetImportService:
             raise BadRequestError(f"Workbook missing required sheet '{EQUIPMENT_LIST_SHEET}'")
         sheet = workbook[EQUIPMENT_LIST_SHEET]
         parsed: list[dict[str, Any]] = []
-        # CES export columns are fixed: A Location through L Status; I is unused.
         for row_number, values in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
             if not values or all(value is None or cell_text(value) == "" for value in values):
                 continue
-            padded = tuple(values) + (None,) * max(0, 12 - len(values))
+            padded = list(values) + [None] * max(0, 12 - len(values))
             raw = {
                 "__row__": row_number,
                 "location": padded[0],
@@ -315,23 +342,33 @@ class CesAssetImportService:
 
     async def _lookups(
         self, tenant_id: int, serials: set[str]
-    ) -> tuple[dict[str, AssetType], dict[str, Location], dict[str, int | None], dict[str, list[Asset]]]:
-        types = (
+    ) -> tuple[list[AssetType], list[Location], dict[str, int | None], dict[str, list[Asset]]]:
+        # Active approved + pending provisional (so re-imports reuse pending rows).
+        types = list(
             (
                 await self.db.execute(
                     select(AssetType).where(
                         or_(AssetType.tenant_id == tenant_id, AssetType.tenant_id.is_(None)),
-                        AssetType.is_active.is_(True),
+                        or_(
+                            AssetType.is_active.is_(True),
+                            AssetType.approval_status == "pending",
+                        ),
                     )
                 )
             )
             .scalars()
             .all()
         )
-        locations = (
+        locations = list(
             (
                 await self.db.execute(
-                    select(Location).where(Location.tenant_id == tenant_id, Location.is_active.is_(True))
+                    select(Location).where(
+                        Location.tenant_id == tenant_id,
+                        or_(
+                            Location.is_active.is_(True),
+                            Location.approval_status == "pending",
+                        ),
+                    )
                 )
             )
             .scalars()
@@ -382,29 +419,163 @@ class CesAssetImportService:
             )
             for asset in assets:
                 existing_by_serial.setdefault((asset.serial_number or "").strip(), []).append(asset)
-        return (
-            {asset_type.name.strip().lower(): asset_type for asset_type in types},
-            {location.name.strip().lower(): location for location in locations},
-            owner_by_name,
-            existing_by_serial,
-        )
+        return types, locations, owner_by_name, existing_by_serial
+
+    def _build_proposals(
+        self,
+        rows: list[dict[str, Any]],
+        types: list[AssetType],
+        locations: list[Location],
+    ) -> list[LookupProposal]:
+        type_candidates = [(item.id, item.name) for item in types]
+        location_candidates = [(item.id, item.name) for item in locations]
+        type_counts: dict[str, tuple[str, int]] = {}
+        location_counts: dict[str, tuple[str, int]] = {}
+        for row in rows:
+            if "__parse_error__" in row:
+                continue
+            type_name = str(row.get("equipment_type") or "").strip()
+            if type_name:
+                key = normalise_lookup_key(type_name)
+                display, count = type_counts.get(key, (type_name, 0))
+                type_counts[key] = (display, count + 1)
+            if row.get("vehicle_reg"):
+                continue
+            assignment = str(row.get("assignment_text") or "").strip()
+            if assignment:
+                key = normalise_lookup_key(assignment)
+                display, count = location_counts.get(key, (assignment, 0))
+                location_counts[key] = (display, count + 1)
+
+        proposals: list[LookupProposal] = []
+        for _key, (name, count) in sorted(type_counts.items(), key=lambda item: item[1][0].lower()):
+            intent, exact, similar = classify_lookup_name(name, type_candidates)
+            proposals.append(
+                LookupProposal(
+                    kind="asset_type",
+                    name=name,
+                    intent=intent,
+                    reuse_id=exact[0] if exact else None,
+                    reuse_name=exact[1] if exact else None,
+                    similar_matches=[{"id": m.id, "name": m.name, "score": m.score} for m in similar],
+                    row_count=count,
+                    needs_confirmation=intent == "similar",
+                )
+            )
+        for _key, (name, count) in sorted(location_counts.items(), key=lambda item: item[1][0].lower()):
+            intent, exact, similar = classify_lookup_name(name, location_candidates)
+            proposals.append(
+                LookupProposal(
+                    kind="location",
+                    name=name,
+                    intent=intent,
+                    reuse_id=exact[0] if exact else None,
+                    reuse_name=exact[1] if exact else None,
+                    similar_matches=[{"id": m.id, "name": m.name, "score": m.score} for m in similar],
+                    row_count=count,
+                    needs_confirmation=intent == "similar",
+                )
+            )
+        return proposals
+
+    def _resolve_lookup(
+        self,
+        *,
+        kind: str,
+        name: str,
+        proposals_by_key: dict[tuple[str, str], LookupProposal],
+        confirmations: dict[tuple[str, str], LookupConfirmation],
+        by_id: dict[int, Any],
+        enforce_confirmations: bool,
+    ) -> tuple[int | None, str | None, list[RowIssue]]:
+        """Return (existing_id, create_name, issues)."""
+        key = (kind, normalise_lookup_key(name))
+        proposal = proposals_by_key.get(key)
+        if proposal is None:
+            return None, None, []
+        if proposal.intent == "reuse" and proposal.reuse_id is not None:
+            return proposal.reuse_id, None, []
+        confirmation = confirmations.get(key)
+        if proposal.intent == "similar":
+            if not confirmation:
+                if enforce_confirmations:
+                    return (
+                        None,
+                        None,
+                        [
+                            RowIssue(
+                                0,
+                                "NEEDS_CONFIRMATION",
+                                (
+                                    f"{kind} '{name}' is similar to existing "
+                                    f"{[m['name'] for m in proposal.similar_matches]}; confirm reuse or create"
+                                ),
+                                kind,
+                            )
+                        ],
+                    )
+                # Dry-run: treat as pending create for validity preview.
+                return None, name, []
+            if confirmation.action == "reuse":
+                if confirmation.reuse_id not in by_id:
+                    return (
+                        None,
+                        None,
+                        [RowIssue(0, "INVALID_CONFIRMATION", f"reuse_id {confirmation.reuse_id} not found", kind)],
+                    )
+                return confirmation.reuse_id, None, []
+            return None, name, []
+        # new
+        return None, name, []
 
     async def validate_rows(
-        self, rows: list[dict[str, Any]], *, tenant_id: int, dry_run: bool
+        self,
+        rows: list[dict[str, Any]],
+        *,
+        tenant_id: int,
+        dry_run: bool,
+        confirmations: list[LookupConfirmation] | None = None,
+        enforce_confirmations: bool = False,
     ) -> tuple[CesImportReport, list[ValidatedCesRow]]:
         serials = {str(row.get("serial_number") or "").strip() for row in rows if row.get("serial_number")}
-        type_map, location_map, owner_by_name, existing_by_serial = await self._lookups(tenant_id, serials)
+        types, locations, owner_by_name, existing_by_serial = await self._lookups(tenant_id, serials)
+        type_by_id = {item.id: item for item in types}
+        location_by_id = {item.id: item for item in locations}
+        proposals = self._build_proposals(rows, types, locations)
+        proposals_by_key = {(p.kind, normalise_lookup_key(p.name)): p for p in proposals}
+        confirmation_map = self._confirmation_map(confirmations or [])
+
+        global_errors: list[RowIssue] = []
+        if enforce_confirmations:
+            for proposal in proposals:
+                if not proposal.needs_confirmation:
+                    continue
+                key = (proposal.kind, normalise_lookup_key(proposal.name))
+                if key not in confirmation_map:
+                    global_errors.append(
+                        RowIssue(
+                            0,
+                            "NEEDS_CONFIRMATION",
+                            (
+                                f"{proposal.kind} '{proposal.name}' looks similar to "
+                                f"{[m['name'] for m in proposal.similar_matches]}; confirm before commit"
+                            ),
+                            proposal.kind,
+                        )
+                    )
+
         serial_rows: dict[str, list[dict[str, Any]]] = {}
         for row in rows:
             serial = str(row.get("serial_number") or "").strip()
             if serial:
                 serial_rows.setdefault(serial, []).append(row)
 
-        errors: list[RowIssue] = []
+        errors: list[RowIssue] = list(global_errors)
         warnings: list[RowIssue] = []
         validated: list[ValidatedCesRow] = []
         claimed_existing: dict[int, int] = {}
         creates = updates = 0
+
         for row in rows:
             row_number = int(row["__row__"])
             row_errors: list[RowIssue] = []
@@ -417,16 +588,50 @@ class CesAssetImportService:
             qr = row["qr_code_data"]
             if not serial:
                 row_errors.append(RowIssue(row_number, "REQUIRED", "Serial Number is required", "serial_number"))
-            asset_type = type_map.get(equipment_type.lower())
             if not equipment_type:
                 row_errors.append(RowIssue(row_number, "REQUIRED", "Equipment Type is required", "equipment_type"))
-            elif asset_type is None:
-                row_errors.append(
-                    RowIssue(row_number, "UNKNOWN_TYPE", f"Unknown asset type '{equipment_type}'", "equipment_type")
-                )
             if not row["name"]:
                 row_errors.append(RowIssue(row_number, "REQUIRED", "Equipment name is required", "equipment_type"))
 
+            type_id: int | None = None
+            create_type_name: str | None = None
+            if equipment_type:
+                type_id, create_type_name, resolve_issues = self._resolve_lookup(
+                    kind="asset_type",
+                    name=equipment_type,
+                    proposals_by_key=proposals_by_key,
+                    confirmations=confirmation_map,
+                    by_id=type_by_id,
+                    enforce_confirmations=enforce_confirmations,
+                )
+                for issue in resolve_issues:
+                    row_errors.append(RowIssue(row_number, issue.code, issue.message, issue.field, issue.severity))
+                proposal = proposals_by_key.get(("asset_type", normalise_lookup_key(equipment_type)))
+                if proposal and proposal.intent == "similar" and not enforce_confirmations:
+                    warnings.append(
+                        RowIssue(
+                            row_number,
+                            "SIMILAR_TYPE",
+                            (
+                                f"Equipment type '{equipment_type}' is similar to "
+                                f"{[m['name'] for m in proposal.similar_matches]}; confirm before commit"
+                            ),
+                            "equipment_type",
+                            "warning",
+                        )
+                    )
+                elif proposal and proposal.intent == "new":
+                    warnings.append(
+                        RowIssue(
+                            row_number,
+                            "TYPE_WILL_CREATE_PENDING",
+                            f"Equipment type '{equipment_type}' will be created pending approval",
+                            "equipment_type",
+                            "warning",
+                        )
+                    )
+
+            asset_type = type_by_id.get(type_id) if type_id else None
             duplicate = self._duplicate_in_file(serial, equipment_type, qr, serial_rows.get(serial, []), row_number)
             if duplicate:
                 row_errors.append(duplicate)
@@ -441,10 +646,65 @@ class CesAssetImportService:
             )
             row_errors.extend(match_issues)
 
-            location_id, owner_user_id, assignment_warnings = self._resolve_assignment(
-                row, row_number, location_map, owner_by_name
-            )
-            warnings.extend(assignment_warnings)
+            location_id: int | None = None
+            create_location_name: str | None = None
+            owner_user_id = None
+            vehicle_reg = row["vehicle_reg"]
+            assignment = str(row.get("assignment_text") or "").strip()
+            if vehicle_reg:
+                # Vehicle path — no location lookup.
+                pass
+            elif assignment:
+                location_id, create_location_name, loc_issues = self._resolve_lookup(
+                    kind="location",
+                    name=assignment,
+                    proposals_by_key=proposals_by_key,
+                    confirmations=confirmation_map,
+                    by_id=location_by_id,
+                    enforce_confirmations=enforce_confirmations,
+                )
+                for issue in loc_issues:
+                    row_errors.append(RowIssue(row_number, issue.code, issue.message, issue.field, issue.severity))
+                proposal = proposals_by_key.get(("location", normalise_lookup_key(assignment)))
+                if proposal and proposal.intent == "similar" and not enforce_confirmations:
+                    warnings.append(
+                        RowIssue(
+                            row_number,
+                            "SIMILAR_LOCATION",
+                            (
+                                f"Location '{assignment}' is similar to "
+                                f"{[m['name'] for m in proposal.similar_matches]}; confirm before commit"
+                            ),
+                            "location",
+                            "warning",
+                        )
+                    )
+                elif proposal and proposal.intent == "new":
+                    warnings.append(
+                        RowIssue(
+                            row_number,
+                            "LOCATION_WILL_CREATE_PENDING",
+                            f"Location '{assignment}' will be created pending approval",
+                            "location",
+                            "warning",
+                        )
+                    )
+
+            owner_name = row["engineer_name"]
+            if owner_name:
+                key = normalize_person_name(owner_name).lower()
+                if key in owner_by_name and owner_by_name[key] is not None:
+                    owner_user_id = owner_by_name[key]
+                else:
+                    warnings.append(
+                        RowIssue(
+                            row_number,
+                            "UNMAPPED_OWNER",
+                            f"Engineer '{owner_name}' has no uniquely linked user",
+                            "location",
+                            "warning",
+                        )
+                    )
 
             if row["not_made_available"]:
                 warnings.append(
@@ -459,7 +719,12 @@ class CesAssetImportService:
             if row_errors:
                 errors.extend(row_errors)
                 continue
-            assert asset_type is not None
+            # Type must resolve to existing id or deferred create name.
+            if type_id is None and not create_type_name:
+                errors.append(
+                    RowIssue(row_number, "UNKNOWN_TYPE", f"Unknown asset type '{equipment_type}'", "equipment_type")
+                )
+                continue
             action = "update" if existing else "create"
             if existing is not None:
                 claimed_existing[existing.id] = row_number
@@ -476,8 +741,7 @@ class CesAssetImportService:
                 ValidatedCesRow(
                     row=row_number,
                     action=action,
-                    asset_type_id=asset_type.id,
-                    # Asset.number is mandatory. Serial is stable; QR is only a fallback.
+                    asset_type_id=type_id or 0,
                     asset_number=serial or qr or f"CES-{row_number}",
                     name=row["name"][:200],
                     serial_number=serial,
@@ -487,11 +751,13 @@ class CesAssetImportService:
                     model=row["model"],
                     owner_user_id=owner_user_id,
                     location_id=location_id,
-                    vehicle_reg=row["vehicle_reg"],
+                    vehicle_reg=vehicle_reg,
                     site=row["assignment_text"],
                     expiry_date=row["expiry_date"],
                     qr_code_data=qr,
                     metadata_json={key: value for key, value in metadata.items() if value is not None},
+                    create_type_name=create_type_name,
+                    create_location_name=create_location_name,
                 )
             )
         preview = [
@@ -509,40 +775,189 @@ class CesAssetImportService:
             }
             for item in validated[:50]
         ]
+        requires_confirmation = any(p.needs_confirmation for p in proposals)
         report = CesImportReport(
             dry_run=dry_run,
             total_rows=len(rows),
             valid_rows=len(validated),
-            error_rows=len({issue.row for issue in errors}),
+            error_rows=len({issue.row for issue in errors if issue.row > 0})
+            + (1 if any(issue.row == 0 for issue in errors) else 0),
             creates=creates,
             updates=updates,
             errors=errors,
             warnings=warnings,
             preview=preview,
+            lookup_proposals=proposals,
+            requires_confirmation=requires_confirmation,
         )
         return report, validated
 
     async def dry_run(self, content: bytes, *, tenant_id: int) -> CesImportReport:
-        report, _ = await self.validate_rows(self.parse_workbook(content), tenant_id=tenant_id, dry_run=True)
+        report, _ = await self.validate_rows(
+            self.parse_workbook(content),
+            tenant_id=tenant_id,
+            dry_run=True,
+            enforce_confirmations=False,
+        )
         return report
 
-    async def commit(self, content: bytes, *, user_id: int, tenant_id: int) -> CesImportCommitResult:
-        report, validated = await self.validate_rows(self.parse_workbook(content), tenant_id=tenant_id, dry_run=False)
+    async def _ensure_provisional_type(self, name: str, *, user_id: int, tenant_id: int) -> AssetType:
+        existing = (
+            (
+                await self.db.execute(
+                    select(AssetType).where(
+                        or_(AssetType.tenant_id == tenant_id, AssetType.tenant_id.is_(None)),
+                        AssetType.approval_status == "pending",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for item in existing:
+            if normalise_lookup_key(item.name) == normalise_lookup_key(name):
+                return item
+        asset_type = AssetType(
+            category=AssetCategory.SAFETY,
+            name=name[:200],
+            description="Provisional type from CES import — pending approval",
+            is_active=False,
+            approval_status="pending",
+            source="ces_import",
+            tenant_id=tenant_id,
+            created_by_id=user_id,
+            updated_by_id=user_id,
+        )
+        self.db.add(asset_type)
+        await self.db.flush()
+        return asset_type
+
+    async def _ensure_provisional_location(self, name: str, *, user_id: int, tenant_id: int) -> Location:
+        existing = (
+            (
+                await self.db.execute(
+                    select(Location).where(
+                        Location.tenant_id == tenant_id,
+                        Location.approval_status == "pending",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for item in existing:
+            if normalise_lookup_key(item.name) == normalise_lookup_key(name):
+                return item
+        location = Location(
+            name=name[:200],
+            kind=LocationKind.SITE,
+            is_active=False,
+            approval_status="pending",
+            source="ces_import",
+            tenant_id=tenant_id,
+            created_by_id=user_id,
+            updated_by_id=user_id,
+        )
+        self.db.add(location)
+        await self.db.flush()
+        return location
+
+    async def _notify_pending_lookups(
+        self,
+        *,
+        user_id: int,
+        type_count: int,
+        location_count: int,
+    ) -> None:
+        if type_count + location_count <= 0:
+            return
+        admins = list(
+            (
+                await self.db.execute(
+                    select(User).where(
+                        or_(User.is_superuser.is_(True), User.is_active.is_(True)),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        # Prefer superusers; otherwise notify active users with admin-like emails is too broad.
+        targets = [u for u in admins if getattr(u, "is_superuser", False)]
+        if not targets:
+            return
+        notifier = NotificationService(self.db)
+        for admin in targets[:10]:
+            if admin.id == user_id:
+                continue
+            await notifier.create_notification(
+                user_id=admin.id,
+                notification_type=NotificationType.APPROVAL_REQUESTED,
+                title="Safety lookups awaiting approval",
+                message=(
+                    f"CES import proposed {type_count} asset type(s) and {location_count} location(s) "
+                    "for approval in Admin → Lookup Tables."
+                ),
+                priority=NotificationPriority.HIGH,
+                entity_type="safety_lookup_proposal",
+                entity_id="pending",
+                action_url="/admin/lookups?pending=safety",
+                sender_id=user_id,
+                channels=[NotificationChannel.IN_APP, NotificationChannel.EMAIL],
+            )
+
+    async def commit(
+        self,
+        content: bytes,
+        *,
+        user_id: int,
+        tenant_id: int,
+        confirmations: list[LookupConfirmation] | None = None,
+    ) -> CesImportCommitResult:
+        report, validated = await self.validate_rows(
+            self.parse_workbook(content),
+            tenant_id=tenant_id,
+            dry_run=False,
+            confirmations=confirmations,
+            enforce_confirmations=True,
+        )
         if not report.ok:
             raise ValidationError(
-                "CES import validation failed; fix row errors before commit",
+                "CES import validation failed; fix row errors or confirm similar lookups before commit",
                 code="CES_ASSET_IMPORT_VALIDATION_FAILED",
                 details=report.to_dict(),
             )
         created_ids: list[int] = []
         updated_ids: list[int] = []
+        provisional_type_ids: list[int] = []
+        provisional_location_ids: list[int] = []
+        type_cache: dict[str, int] = {}
+        location_cache: dict[str, int] = {}
         try:
             for item in validated:
+                if item.create_type_name:
+                    key = normalise_lookup_key(item.create_type_name)
+                    if key not in type_cache:
+                        created = await self._ensure_provisional_type(
+                            item.create_type_name, user_id=user_id, tenant_id=tenant_id
+                        )
+                        type_cache[key] = created.id
+                        provisional_type_ids.append(created.id)
+                    item.asset_type_id = type_cache[key]
+                if item.create_location_name:
+                    key = normalise_lookup_key(item.create_location_name)
+                    if key not in location_cache:
+                        created = await self._ensure_provisional_location(
+                            item.create_location_name, user_id=user_id, tenant_id=tenant_id
+                        )
+                        location_cache[key] = created.id
+                        provisional_location_ids.append(created.id)
+                    item.location_id = location_cache[key]
+
                 if item.action == "update":
                     assert item.existing_id is not None
                     existing = await self.assets.get_asset(item.existing_id, tenant_id=tenant_id)
                     update_payload = item.payload(for_update=True)
-                    # Merge CES metadata keys; do not wipe unrelated asset metadata.
                     prior_meta = dict(existing.metadata_json or {})
                     ces_meta = dict(item.metadata_json or {})
                     update_payload["metadata_json"] = {**prior_meta, **ces_meta} or None
@@ -563,6 +978,11 @@ class CesAssetImportService:
                     )
                     created_ids.append(asset.id)
             await self.db.commit()
+            await self._notify_pending_lookups(
+                user_id=user_id,
+                type_count=len(set(provisional_type_ids)),
+                location_count=len(set(provisional_location_ids)),
+            )
         except Exception:
             await self.db.rollback()
             raise
@@ -572,5 +992,7 @@ class CesAssetImportService:
             updated_count=len(updated_ids),
             created_asset_ids=created_ids,
             updated_asset_ids=updated_ids,
+            provisional_type_ids=sorted(set(provisional_type_ids)),
+            provisional_location_ids=sorted(set(provisional_location_ids)),
             report=report,
         )

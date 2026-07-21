@@ -23,11 +23,17 @@ from src.api.schemas.asset import (
     LocationListResponse,
     LocationResponse,
     LocationUpdate,
+    SafetyLookupActionResponse,
+    SafetyLookupMergeRequest,
+    SafetyLookupPendingListResponse,
+    SafetyLookupPreviewRequest,
+    SafetyLookupPreviewResponse,
     TemplateListResponse,
 )
 from src.domain.models.asset import AssetType
 from src.domain.models.user import User
 from src.domain.services.asset_service import AssetService
+from src.domain.services.safety_lookup_approval_service import SafetyLookupApprovalService
 
 router = APIRouter()
 
@@ -86,10 +92,13 @@ async def create_location(
 ):
     """Create a site or workshop location."""
     service = AssetService(db)
+    payload = data.model_dump(exclude_unset=True)
+    force = bool(payload.pop("force", False))
     location = await service.create_location(
-        data=data.model_dump(exclude_unset=True),
+        data=payload,
         user_id=user.id,
         tenant_id=_tid(user),
+        force=force,
     )
     return LocationResponse.model_validate(location)
 
@@ -183,10 +192,13 @@ async def create_asset_type(
 ):
     """Create a new asset type."""
     service = AssetService(db)
+    payload = data.model_dump(exclude_unset=True)
+    force = bool(payload.pop("force", False))
     asset_type = await service.create_asset_type(
-        data=data.model_dump(exclude_unset=True),
+        data=payload,
         user_id=user.id,
         tenant_id=_tid(user),
+        force=force,
     )
     return AssetTypeResponse.model_validate(asset_type)
 
@@ -315,6 +327,113 @@ async def create_asset(
         tenant_id=_tid(user),
     )
     return AssetResponse.model_validate(asset)
+
+
+# ============== Safety lookup approval (CES provisional types/locations) ==============
+# Declared before /{asset_id} so "safety-lookups" is not captured as an id.
+
+
+@router.get("/safety-lookups/pending", response_model=SafetyLookupPendingListResponse)
+async def list_pending_safety_lookups(
+    db: DbSession,
+    user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("asset:create"))],
+):
+    result = await SafetyLookupApprovalService(db).list_pending(tenant_id=_tid(user))
+    return SafetyLookupPendingListResponse.model_validate(result)
+
+
+@router.post("/safety-lookups/preview", response_model=SafetyLookupPreviewResponse)
+async def preview_safety_lookup_create(
+    body: SafetyLookupPreviewRequest,
+    db: DbSession,
+    user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("asset:create"))],
+):
+    if body.kind not in {"asset_type", "location"}:
+        from src.domain.exceptions import ValidationError
+
+        raise ValidationError("kind must be asset_type or location")
+    result = await SafetyLookupApprovalService(db).preview_create(
+        body.kind, body.name, tenant_id=_tid(user)  # type: ignore[arg-type]
+    )
+    return SafetyLookupPreviewResponse.model_validate(result)
+
+
+@router.post(
+    "/safety-lookups/{kind}/{entity_id}/approve",
+    response_model=SafetyLookupActionResponse,
+)
+async def approve_safety_lookup(
+    kind: str,
+    entity_id: int,
+    db: DbSession,
+    user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("asset:create"))],
+):
+    if kind not in {"asset_type", "location"}:
+        from src.domain.exceptions import ValidationError
+
+        raise ValidationError("kind must be asset_type or location")
+    result = await SafetyLookupApprovalService(db).approve(
+        kind,  # type: ignore[arg-type]
+        entity_id,
+        tenant_id=_tid(user),
+        actor_user_id=user.id,
+    )
+    return SafetyLookupActionResponse.model_validate(result)
+
+
+@router.post(
+    "/safety-lookups/{kind}/{entity_id}/merge",
+    response_model=SafetyLookupActionResponse,
+)
+async def merge_safety_lookup(
+    kind: str,
+    entity_id: int,
+    body: SafetyLookupMergeRequest,
+    db: DbSession,
+    user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("asset:create"))],
+):
+    if kind not in {"asset_type", "location"}:
+        from src.domain.exceptions import ValidationError
+
+        raise ValidationError("kind must be asset_type or location")
+    result = await SafetyLookupApprovalService(db).merge(
+        kind,  # type: ignore[arg-type]
+        entity_id,
+        target_id=body.target_id,
+        tenant_id=_tid(user),
+        actor_user_id=user.id,
+    )
+    return SafetyLookupActionResponse.model_validate(result)
+
+
+@router.post(
+    "/safety-lookups/{kind}/{entity_id}/reject",
+    response_model=SafetyLookupActionResponse,
+)
+async def reject_safety_lookup(
+    kind: str,
+    entity_id: int,
+    body: SafetyLookupMergeRequest,
+    db: DbSession,
+    user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("asset:create"))],
+):
+    if kind not in {"asset_type", "location"}:
+        from src.domain.exceptions import ValidationError
+
+        raise ValidationError("kind must be asset_type or location")
+    result = await SafetyLookupApprovalService(db).reject(
+        kind,  # type: ignore[arg-type]
+        entity_id,
+        target_id=body.target_id,
+        tenant_id=_tid(user),
+        actor_user_id=user.id,
+    )
+    return SafetyLookupActionResponse.model_validate(result)
 
 
 @router.get("/{asset_id}", response_model=AssetResponse)

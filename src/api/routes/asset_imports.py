@@ -6,9 +6,9 @@ Commit re-validates then creates assets; row errors yield HTTP 422 with the repo
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.asset import (
@@ -20,7 +20,7 @@ from src.api.schemas.asset import (
 from src.domain.exceptions import BadRequestError
 from src.domain.models.user import User
 from src.domain.services.asset_import_service import AssetImportService
-from src.domain.services.ces_asset_import_service import CesAssetImportService
+from src.domain.services.ces_asset_import_service import CesAssetImportService, parse_confirmations
 
 router = APIRouter()
 
@@ -37,7 +37,6 @@ async def _read_csv_upload(file: UploadFile) -> bytes:
     content = await file.read()
     if not content:
         raise BadRequestError("CSV file is empty")
-    # Soft size guard (~2 MiB) to keep dry-run responsive
     if len(content) > 2 * 1024 * 1024:
         raise BadRequestError("CSV file exceeds 2 MiB limit")
     return content
@@ -118,7 +117,14 @@ async def commit_ces_asset_import(
     user: CurrentUser,
     _: Annotated[User, Depends(require_permission("asset:create"))],
     file: UploadFile = File(...),
+    confirmations: Optional[str] = Form(default=None),
 ) -> CesAssetImportCommitResponse:
     content = await _read_xlsx_upload(file)
-    result = await CesAssetImportService(db).commit(content, user_id=user.id, tenant_id=_tid(user))
+    parsed = parse_confirmations(confirmations)
+    result = await CesAssetImportService(db).commit(
+        content,
+        user_id=user.id,
+        tenant_id=_tid(user),
+        confirmations=parsed,
+    )
     return CesAssetImportCommitResponse.model_validate(result.to_dict())

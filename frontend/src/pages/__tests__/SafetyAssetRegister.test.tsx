@@ -8,6 +8,8 @@ const mockListAllAssetsForBoard = vi.fn()
 const mockListAssetTypes = vi.fn()
 const mockListLocations = vi.fn()
 const mockListEngineers = vi.fn()
+const mockCesImportDryRun = vi.fn()
+const mockCesImportCommit = vi.fn()
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -40,8 +42,8 @@ vi.mock('../../api/safetyAssetsClient', () => ({
     listAllAssetsForBoard: (...args: unknown[]) => mockListAllAssetsForBoard(...args),
     listAssetTypes: (...args: unknown[]) => mockListAssetTypes(...args),
     listLocations: (...args: unknown[]) => mockListLocations(...args),
-    cesImportDryRun: vi.fn(),
-    cesImportCommit: vi.fn(),
+    cesImportDryRun: (...args: unknown[]) => mockCesImportDryRun(...args),
+    cesImportCommit: (...args: unknown[]) => mockCesImportCommit(...args),
   },
 }))
 
@@ -150,5 +152,97 @@ describe('SafetyAssetRegister Wave 2 board', () => {
     })
     fireEvent.click(screen.getByTestId('safety-assets-view-upload'))
     expect(screen.getByTestId('ces-import-panel')).toBeInTheDocument()
+  })
+
+  it('gates CES commit until similar lookups are confirmed', async () => {
+    mockListAllAssetsForBoard.mockResolvedValue([])
+    mockCesImportDryRun.mockResolvedValue({
+      data: {
+        ok: true,
+        mode: 'dry_run',
+        total_rows: 2,
+        valid_rows: 2,
+        error_rows: 0,
+        warning_rows: 1,
+        creates: 2,
+        updates: 0,
+        skipped: 0,
+        errors: [],
+        warnings: [],
+        lookup_proposals: [
+          {
+            kind: 'asset_type',
+            name: 'D Shackel',
+            intent: 'similar',
+            needs_confirmation: true,
+            row_count: 2,
+            similar_matches: [{ id: 7, name: 'D Shackle', score: 0.92 }],
+          },
+          {
+            kind: 'location',
+            name: 'New Depot',
+            intent: 'new',
+            needs_confirmation: false,
+            row_count: 2,
+            similar_matches: [],
+          },
+        ],
+      },
+    })
+    mockCesImportCommit.mockResolvedValue({
+      data: {
+        report: {
+          ok: true,
+          mode: 'commit',
+          valid_rows: 2,
+          error_rows: 0,
+          creates: 2,
+          updates: 0,
+          lookup_proposals: [],
+          errors: [],
+          warnings: [],
+        },
+        provisional_type_ids: [],
+        provisional_location_ids: [99],
+      },
+    })
+
+    render(
+      <MemoryRouter>
+        <SafetyAssetRegister />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(await screen.findByTestId('safety-assets-view-upload'))
+    const fileInput = screen.getByLabelText('CES workbook')
+    const file = new File(['xlsx'], 'ces.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    fireEvent.change(fileInput, { target: { files: [file] } })
+    fireEvent.click(screen.getByRole('button', { name: 'Dry run' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ces-import-similar-lookups')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('ces-import-new-lookups')).toBeInTheDocument()
+    expect(screen.getByTestId('ces-import-commit')).toBeDisabled()
+
+    fireEvent.click(screen.getByLabelText('Use existing “D Shackle”'))
+    expect(screen.getByTestId('ces-import-commit')).not.toBeDisabled()
+
+    fireEvent.click(screen.getByTestId('ces-import-commit'))
+    await waitFor(() => {
+      expect(mockCesImportCommit).toHaveBeenCalledWith(
+        file,
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'asset_type',
+            name: 'D Shackel',
+            action: 'reuse',
+            reuse_id: 7,
+          }),
+        ]),
+      )
+    })
   })
 })
