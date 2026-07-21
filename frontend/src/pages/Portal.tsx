@@ -50,6 +50,24 @@ function clearStateCopy(state: PortalMyCompliance['clear_state']): { title: stri
   }
 }
 
+function vanHomeSubtitle(summary: PortalMyCompliance['van_summary']): string {
+  if (summary.vehicle_reg) {
+    return `${summary.vehicle_reg} · daily & monthly`
+  }
+  switch (summary.empty_reason) {
+    case 'no_driver_profile':
+      return 'Driver profile not linked'
+    case 'no_van':
+      return 'No van allocated'
+    case 'assignment_conflict':
+      return 'Assignment needs admin review'
+    case 'multiple_assigned':
+      return 'Multiple vans assigned — contact admin'
+    default:
+      return 'Daily and monthly checks · open faults'
+  }
+}
+
 export default function Portal() {
   const navigate = useNavigate()
   const { user, logout } = usePortalAuth()
@@ -268,11 +286,9 @@ export default function Portal() {
                 My van checks
               </h3>
               <p className="text-sm text-muted-foreground">
-                {compliance?.van_summary.vehicle_reg
-                  ? `${compliance.van_summary.vehicle_reg} · daily & monthly`
-                  : compliance?.van_summary.empty_reason
-                    ? 'Van not linked yet'
-                    : 'Daily and monthly checks · open faults'}
+                {compliance
+                  ? vanHomeSubtitle(compliance.van_summary)
+                  : 'Daily and monthly checks · open faults'}
               </p>
             </div>
             <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:translate-x-1 transition-transform" />

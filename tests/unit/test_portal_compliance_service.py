@@ -8,11 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.domain.models.asset import AssetStatus
-from src.domain.services.portal_compliance_service import (
-    derive_clear_state,
-    exclusive_expiry_band,
-    tool_display_band,
-)
+from src.domain.services.portal_compliance_service import derive_clear_state, exclusive_expiry_band, tool_display_band
 
 
 @pytest.mark.parametrize(
