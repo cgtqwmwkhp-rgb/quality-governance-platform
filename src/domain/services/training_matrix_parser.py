@@ -19,6 +19,23 @@ def normalize_person_name(name: str) -> str:
     return re.sub(r"\s+", " ", (name or "").strip())
 
 
+def person_name_match_keys(name: str | None) -> set[str]:
+    """Match Atlas 'David Harris' ↔ 'Harris, David' style variants (lowercased)."""
+    normalized = normalize_person_name(name or "").lower()
+    if not normalized:
+        return set()
+    keys = {normalized}
+    if "," in normalized:
+        last, first = [part.strip() for part in normalized.split(",", 1)]
+        if first and last:
+            keys.add(f"{first} {last}")
+    else:
+        parts = normalized.split()
+        if len(parts) >= 2:
+            keys.add(f"{parts[-1]}, {' '.join(parts[:-1])}")
+    return keys
+
+
 def parse_atlas_date(value: str | None) -> Optional[date]:
     raw = (value or "").strip()
     if not raw:
