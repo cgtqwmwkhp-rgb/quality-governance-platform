@@ -218,7 +218,10 @@ export const lookupsApi = {
     ),
 
   create: (category: string, data: Partial<LookupOption>) =>
-    apiRequest<LookupOption>(`/admin/config/lookup/${category}`, { method: 'POST', body: data }),
+    apiRequest<LookupOption>(`/admin/config/lookup/${category}`, {
+      method: 'POST',
+      body: { ...data, category },
+    }),
 
   update: (category: string, id: number, data: Partial<LookupOption>) =>
     apiRequest<LookupOption>(`/admin/config/lookup/${category}/${id}`, {

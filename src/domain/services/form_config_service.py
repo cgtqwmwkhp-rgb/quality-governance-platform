@@ -657,11 +657,11 @@ class FormConfigService:
         tenant_id: int,
     ) -> LookupOption:
         """Create a new lookup option."""
-        if getattr(data, "category", None) != category:
-            data.category = category  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+        # Path category is authoritative (body may omit category).
+        data.category = category  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
 
         option = LookupOption(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
-            category=data.category,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            category=category,
             code=data.code,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
             label=data.label,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
             description=data.description,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE

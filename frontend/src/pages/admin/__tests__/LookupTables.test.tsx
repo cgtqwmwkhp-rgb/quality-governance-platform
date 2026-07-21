@@ -4,12 +4,16 @@ import userEvent from '@testing-library/user-event'
 
 const mockList = vi.fn()
 const mockCreate = vi.fn()
+const mockDelete = vi.fn()
 
 vi.mock('../../../api/client', () => ({
   lookupsApi: {
     list: (...args: unknown[]) => mockList(...args),
     create: (...args: unknown[]) => mockCreate(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
   },
+  getApiErrorMessage: (err: unknown, fallback?: string) =>
+    err instanceof Error ? err.message : fallback || 'error',
 }))
 
 vi.mock('react-i18next', () => ({
@@ -30,6 +34,7 @@ describe('LookupTables configure CTA', () => {
   beforeEach(() => {
     mockList.mockReset()
     mockCreate.mockReset()
+    mockDelete.mockReset()
     mockList.mockImplementation(async (category: string) => {
       if (
         category === 'departments' ||
@@ -165,7 +170,11 @@ describe('LookupTables configure CTA', () => {
     await waitFor(() => {
       expect(mockCreate).toHaveBeenCalledWith(
         'locations',
-        expect.objectContaining({ code: 'oxford_depot', label: 'Oxford Depot' }),
+        expect.objectContaining({
+          category: 'locations',
+          code: 'oxford_depot',
+          label: 'Oxford Depot',
+        }),
       )
     })
   })
