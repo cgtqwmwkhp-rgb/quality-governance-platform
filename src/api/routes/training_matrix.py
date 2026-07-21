@@ -357,9 +357,7 @@ async def patch_person_board_role(
 
     eng_name: Optional[str] = None
     if person.engineer_id:
-        eng = (
-            await db.execute(select(Engineer).where(Engineer.id == person.engineer_id))
-        ).scalar_one_or_none()
+        eng = (await db.execute(select(Engineer).where(Engineer.id == person.engineer_id))).scalar_one_or_none()
         if eng:
             eng_name = eng.display_name or f"#{eng.id}"
 
@@ -630,9 +628,7 @@ async def _build_compliance_rows(
         # Admin Training group wins for requirement matching; else Atlas/employee dept.
         override = normalize_board_role(person.board_role_override)
         eng_dept = (
-            override
-            or (mapped_eng.department if mapped_eng and mapped_eng.department else None)
-            or person.department
+            override or (mapped_eng.department if mapped_eng and mapped_eng.department else None) or person.department
         )
         eng_title = mapped_eng.job_title if mapped_eng else None
         matched_reqs = [
