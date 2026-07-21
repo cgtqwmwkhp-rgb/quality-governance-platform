@@ -35,6 +35,7 @@ export type TrainingMatrixImportQa = {
 export type TrainingMatrixComplianceRow = {
   atlas_name: string
   department?: string | null
+  board_role_override?: string | null
   engineer_id?: number | null
   engineer_display_name?: string | null
   course_key: string
@@ -62,8 +63,10 @@ export type TrainingMatrixRequirement = {
 }
 
 export type TrainingMatrixNameMapItem = {
+  person_id?: number | null
   atlas_name: string
   department?: string | null
+  board_role_override?: string | null
   engineer_id?: number | null
   engineer_display_name?: string | null
   mapped: boolean
@@ -140,6 +143,12 @@ export function createTrainingMatrixApi(api: AxiosInstance) {
           from_auto_match: number
           still_unmatched: number
         }>('/api/v1/training-matrix/name-maps/auto-match')
+        .then((r) => r.data),
+    patchPersonBoardRole: (personId: number, board_role_override: string | null) =>
+      api
+        .patch<TrainingMatrixNameMapItem>(`/api/v1/training-matrix/people/${personId}`, {
+          board_role_override,
+        })
         .then((r) => r.data),
     listRequirements: () =>
       api

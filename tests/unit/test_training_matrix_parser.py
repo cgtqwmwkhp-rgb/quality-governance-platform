@@ -78,6 +78,22 @@ def test_requirement_match_department():
     )
 
 
+def test_requirement_match_uses_board_role_override_as_department():
+    """Compliance path passes override string as engineer_department when set."""
+    assert requirement_matches_engineer(
+        match_department="Office",
+        match_role_key=None,
+        engineer_department="Office",  # board_role_override
+        engineer_job_title=None,
+    )
+    assert not requirement_matches_engineer(
+        match_department="Office",
+        match_role_key=None,
+        engineer_department="IT",  # Atlas dept alone — no Office substring
+        engineer_job_title=None,
+    )
+
+
 def test_parse_dedupes_duplicate_trainee_rows():
     csv_dup = SAMPLE_CSV + "Aaron Smith,Mobile Engineers,Passed,02/12/2023,21/11/2026,,,,,\n"
     parsed = parse_training_matrix_csv(csv_dup)

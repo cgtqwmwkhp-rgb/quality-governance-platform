@@ -54,6 +54,9 @@ class TrainingMatrixPerson(Base, TimestampMixin):
     tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     atlas_name: Mapped[str] = mapped_column(String(200), nullable=False)
     department: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    # Admin-assigned Training group (Engineer/Workshop/Office/Management).
+    # Survives weekly Atlas CSV uploads; Atlas department text is never rewritten.
+    board_role_override: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
     engineer_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("engineers.id", ondelete="SET NULL"), nullable=True, index=True
     )

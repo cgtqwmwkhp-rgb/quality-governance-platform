@@ -250,6 +250,7 @@ async def persist_training_matrix_import(
             # Never wipe a prior link when this week's auto-match misses.
             if resolved is not None:
                 existing_person.engineer_id = resolved
+            # board_role_override is admin-owned — never clear/overwrite on CSV upsert.
             engineer_id = existing_person.engineer_id
             person_id = existing_person.id
         else:

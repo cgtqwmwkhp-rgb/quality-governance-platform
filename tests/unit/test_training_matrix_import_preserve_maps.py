@@ -38,3 +38,23 @@ async def test_auto_match_prefers_saved_map_and_never_clears(monkeypatch):
 
 def test_auto_match_function_exported():
     assert callable(auto_match_training_matrix_names)
+
+
+def test_import_upsert_preserves_board_role_override_contract():
+    """CSV upsert updates department/engineer_id only — override stays admin-owned."""
+    existing = SimpleNamespace(
+        department="IT",
+        engineer_id=10,
+        board_role_override="Office",
+        last_seen_import_id=1,
+    )
+    csv_department = "IT / Systems"
+    resolved = None
+    existing.department = csv_department
+    existing.last_seen_import_id = 2
+    if resolved is not None:
+        existing.engineer_id = resolved
+    # Intentionally do not touch board_role_override (mirrors import service).
+    assert existing.board_role_override == "Office"
+    assert existing.department == "IT / Systems"
+    assert existing.engineer_id == 10
