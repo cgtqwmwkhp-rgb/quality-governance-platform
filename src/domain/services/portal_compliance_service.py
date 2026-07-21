@@ -218,9 +218,7 @@ class PortalComplianceService:
 
     async def my_tools(self, *, user_id: int, tenant_id: int) -> dict[str, Any]:
         now = datetime.now(timezone.utc)
-        _profile, vehicle, van_empty, _conflict, _regs = await self._resolve_van(
-            user_id=user_id, tenant_id=tenant_id
-        )
+        _profile, vehicle, van_empty, _conflict, _regs = await self._resolve_van(user_id=user_id, tenant_id=tenant_id)
         owned = await self._owned_assets(user_id=user_id, tenant_id=tenant_id)
         van_kit: list[Asset] = []
         if vehicle is not None:
@@ -305,9 +303,7 @@ class PortalComplianceService:
             "empty_reason": None,
             "daily_last_at": vehicle.last_daily_check_at.isoformat() if vehicle.last_daily_check_at else None,
             "daily_pass": vehicle.last_daily_check_pass,
-            "monthly_last_at": (
-                vehicle.last_monthly_check_at.isoformat() if vehicle.last_monthly_check_at else None
-            ),
+            "monthly_last_at": (vehicle.last_monthly_check_at.isoformat() if vehicle.last_monthly_check_at else None),
             "open_defects": [
                 {
                     "id": d.id,
@@ -337,7 +333,7 @@ class PortalComplianceService:
             open_p1=counts["p1"],
             open_other_defects=counts["p2"] + counts["p3"],
         )
-        tool_badge = summary["overdue"] + summary["quarantined"]
+        tool_badge = summary["overdue"] + summary["quarantined"] + summary["due_30"]
         van_badge = counts["total"]
         return {
             "clear_state": clear_state,

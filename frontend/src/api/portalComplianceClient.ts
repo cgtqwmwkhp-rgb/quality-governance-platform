@@ -98,8 +98,9 @@ export type PortalMyVan = {
 
 export function createPortalComplianceApi(api: AxiosInstance) {
   return {
-    myCompliance: () => api.get<PortalMyCompliance>('/portal/my-compliance').then((r) => r.data),
-    myTools: () => api.get<PortalMyTools>('/portal/my-tools').then((r) => r.data),
-    myVan: () => api.get<PortalMyVan>('/portal/my-van').then((r) => r.data),
+    myCompliance: () =>
+      api.get<PortalMyCompliance>('/api/v1/portal/my-compliance').then((r) => r.data),
+    myTools: () => api.get<PortalMyTools>('/api/v1/portal/my-tools').then((r) => r.data),
+    myVan: () => api.get<PortalMyVan>('/api/v1/portal/my-van').then((r) => r.data),
   }
 }
