@@ -1014,6 +1014,8 @@ export {
   type TrainingMatrixNameMapItem,
   type TrainingMatrixMatrixCell,
   type TrainingMatrixMatrixUpsertResponse,
+  type TrainingMatrixFrequencyChangeRequest,
+  type TrainingMatrixFrequencyChangeRequestList,
   type TrainingMatrixNotifyResponse,
 } from './trainingMatrixClient'
 

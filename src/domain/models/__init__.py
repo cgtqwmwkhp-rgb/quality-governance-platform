@@ -246,6 +246,7 @@ from src.domain.models.training_matrix import (
     TrainingMatrixNameMap,
     TrainingMatrixPerson,
     TrainingMatrixRequirement,
+    TrainingMatrixFrequencyChangeRequest,
 )
 from src.domain.models.user import Role, User, UserRole
 
@@ -476,6 +477,7 @@ __all__ = [
     "TrainingMatrixCell",
     "TrainingMatrixNameMap",
     "TrainingMatrixRequirement",
+    "TrainingMatrixFrequencyChangeRequest",
     "TicketVerifyState",
     "CompetenceGapAction",
     "CompetenceGapSignalType",

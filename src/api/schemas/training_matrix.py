@@ -228,6 +228,33 @@ class TrainingMatrixMatrixUpsertResponse(BaseModel):
     deactivated: int
 
 
+class TrainingMatrixFrequencyChangeRequestResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    status: str
+    cell_count: int
+    proposed_cells: List[TrainingMatrixMatrixCell]
+    proposed_by_user_id: Optional[int] = None
+    proposed_by_name: Optional[str] = None
+    proposed_by_email: Optional[str] = None
+    reviewed_by_user_id: Optional[int] = None
+    reviewed_at: Optional[datetime] = None
+    review_note: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class TrainingMatrixFrequencyChangeRequestListResponse(BaseModel):
+    items: List[TrainingMatrixFrequencyChangeRequestResponse]
+    total: int
+    viewer_can_approve: bool = False
+    approver_email: str = "david.harris@plantexpand.com"
+
+
+class TrainingMatrixFrequencyChangeReviewRequest(BaseModel):
+    note: Optional[str] = None
+
+
 class TrainingMatrixNotifyRequest(BaseModel):
     atlas_names: List[str] = Field(min_length=1)
     message: Optional[str] = None

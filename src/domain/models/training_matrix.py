@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import Base, TimestampMixin
@@ -127,3 +127,23 @@ class TrainingMatrixRequirement(Base, TimestampMixin):
     frequency_years: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+class TrainingMatrixFrequencyChangeRequest(Base, TimestampMixin):
+    """Proposed frequency-matrix cell edits awaiting dual-control approval."""
+
+    __tablename__ = "training_matrix_frequency_change_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending", index=True)
+    proposed_cells: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    cell_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    proposed_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reviewed_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    review_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

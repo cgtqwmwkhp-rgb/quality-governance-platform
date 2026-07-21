@@ -30,6 +30,15 @@ vi.mock('../../../api/client', () => ({
     }),
     seedRequirements: vi.fn(),
     upsertRequirementsMatrix: vi.fn(),
+    proposeRequirementsMatrix: vi.fn(),
+    listMatrixProposals: vi.fn().mockResolvedValue({
+      items: [],
+      total: 0,
+      viewer_can_approve: false,
+      approver_email: 'david.harris@plantexpand.com',
+    }),
+    approveMatrixProposal: vi.fn(),
+    rejectMatrixProposal: vi.fn(),
     notify: vi.fn(),
   },
   workforceApi: {

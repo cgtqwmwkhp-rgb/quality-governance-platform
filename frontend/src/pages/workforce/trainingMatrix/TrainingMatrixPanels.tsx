@@ -16,6 +16,7 @@ import {
   workforceApi,
   type EngineerProfile,
   type TrainingMatrixComplianceRow,
+  type TrainingMatrixFrequencyChangeRequest,
   type TrainingMatrixImport,
   type TrainingMatrixMatrixCell,
   type TrainingMatrixNameMapItem,
@@ -30,6 +31,7 @@ import { Badge, type BadgeVariant } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card'
 import { Input } from '../../../components/ui/Input'
+import { Switch } from '../../../components/ui/Switch'
 import { cn } from '../../../helpers/utils'
 import {
   Sheet,
@@ -1296,12 +1298,30 @@ export function TrainingMatrixAdminPanel() {
   const [courses, setCourses] = useState<{ course_key: string; display_name: string }[]>([])
   const [grid, setGrid] = useState<MatrixGrid>({})
   const [savingMatrix, setSavingMatrix] = useState(false)
-  const [seedingMatrix, setSeedingMatrix] = useState(false)
   const [autoMatching, setAutoMatching] = useState(false)
   const [latestImport, setLatestImport] = useState<TrainingMatrixImport | null>(null)
   const [openUpload, setOpenUpload] = useState(true)
   const [openNameMap, setOpenNameMap] = useState(true)
   const [openMatrix, setOpenMatrix] = useState(true)
+  const [hideNonMandated, setHideNonMandated] = useState(true)
+  const [pendingProposals, setPendingProposals] = useState<TrainingMatrixFrequencyChangeRequest[]>([])
+  const [viewerCanApprove, setViewerCanApprove] = useState(false)
+  const [approverEmail, setApproverEmail] = useState('david.harris@plantexpand.com')
+  const [reviewingId, setReviewingId] = useState<number | null>(null)
+
+  const reloadProposals = () => {
+    trainingMatrixApi
+      .listMatrixProposals('pending')
+      .then((res) => {
+        setPendingProposals(res.items)
+        setViewerCanApprove(Boolean(res.viewer_can_approve))
+        if (res.approver_email) setApproverEmail(res.approver_email)
+      })
+      .catch(() => {
+        setPendingProposals([])
+        setViewerCanApprove(false)
+      })
+  }
 
   const reload = () => {
     setNameMapsLoaded(false)
@@ -1322,6 +1342,7 @@ export function TrainingMatrixAdminPanel() {
       .getLatestImport()
       .then(setLatestImport)
       .catch(() => setLatestImport(null))
+    reloadProposals()
     workforceApi
       .listEngineers({ page: '1', page_size: '500' })
       .then((res) => {
@@ -1355,6 +1376,17 @@ export function TrainingMatrixAdminPanel() {
     // Reset any unsaved edits whenever the server truth changes (after load/save).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(savedGrid)])
+
+  const visibleCourseRows = useMemo(() => {
+    if (!hideNonMandated) return courseRows
+    return courseRows.filter((row) => {
+      const cells = grid[row.course_key] || {}
+      return BOARD_ROLES.some((role) => {
+        const value = cells[role]
+        return typeof value === 'number' && value > 0
+      })
+    })
+  }, [courseRows, grid, hideNonMandated])
 
   const onUpload = async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.csv')) {
@@ -1403,7 +1435,7 @@ export function TrainingMatrixAdminPanel() {
     }))
   }
 
-  const onSaveMatrix = () => {
+  const onProposeMatrix = () => {
     const cells: TrainingMatrixMatrixCell[] = []
     for (const row of courseRows) {
       for (const role of BOARD_ROLES) {
@@ -1419,12 +1451,12 @@ export function TrainingMatrixAdminPanel() {
       }
     }
     if (cells.length === 0) {
-      setMessage('No changes to save.')
+      setMessage('No changes to propose.')
       return
     }
     if (
       !window.confirm(
-        `Save ${cells.length} cell change${cells.length === 1 ? '' : 's'} to the frequency matrix? This can move people into or out of overdue for the affected department(s) and course(s).`,
+        `Submit ${cells.length} cell change${cells.length === 1 ? '' : 's'} for approval by ${approverEmail}? Cells stay unchanged until approved.`,
       )
     ) {
       return
@@ -1433,13 +1465,48 @@ export function TrainingMatrixAdminPanel() {
     setError(null)
     setMessage(null)
     void trainingMatrixApi
-      .upsertRequirementsMatrix(cells)
+      .proposeRequirementsMatrix(cells)
       .then((res) => {
-        setMessage(`Matrix saved: ${res.upserted} active cell${res.upserted === 1 ? '' : 's'}, ${res.deactivated} deactivated.`)
+        setMessage(
+          `Proposed ${res.cell_count} frequency change${res.cell_count === 1 ? '' : 's'} for approval by ${approverEmail}.`,
+        )
+        setGrid(savedGrid)
+        reloadProposals()
+      })
+      .catch((err) => setError(getApiErrorMessage(err, 'Could not propose frequency matrix changes.')))
+      .finally(() => setSavingMatrix(false))
+  }
+
+  const onApproveProposal = (proposalId: number) => {
+    if (!window.confirm('Approve these frequency changes and apply them to the live matrix?')) return
+    setReviewingId(proposalId)
+    setError(null)
+    setMessage(null)
+    void trainingMatrixApi
+      .approveMatrixProposal(proposalId)
+      .then((res) => {
+        setMessage(
+          `Approved: ${res.upserted} active cell${res.upserted === 1 ? '' : 's'}, ${res.deactivated} deactivated.`,
+        )
         reload()
       })
-      .catch((err) => setError(getApiErrorMessage(err, 'Could not save the frequency matrix.')))
-      .finally(() => setSavingMatrix(false))
+      .catch((err) => setError(getApiErrorMessage(err, 'Could not approve frequency changes.')))
+      .finally(() => setReviewingId(null))
+  }
+
+  const onRejectProposal = (proposalId: number) => {
+    if (!window.confirm('Reject this frequency change request? Nothing will be applied.')) return
+    setReviewingId(proposalId)
+    setError(null)
+    setMessage(null)
+    void trainingMatrixApi
+      .rejectMatrixProposal(proposalId)
+      .then(() => {
+        setMessage('Frequency change request rejected.')
+        reloadProposals()
+      })
+      .catch((err) => setError(getApiErrorMessage(err, 'Could not reject frequency changes.')))
+      .finally(() => setReviewingId(null))
   }
 
   const onAutoMatchNames = () => {
@@ -1457,30 +1524,6 @@ export function TrainingMatrixAdminPanel() {
       })
       .catch((err) => setError(getApiErrorMessage(err, 'Could not auto-match Atlas names.')))
       .finally(() => setAutoMatching(false))
-  }
-
-  const onRestoreFrequencies = () => {
-    if (
-      !window.confirm(
-        'Restore the April 2024 Plantexpand frequency matrix into the editable grid? Existing seeded cells are refreshed; manual cells are left alone. You can still edit after.',
-      )
-    ) {
-      return
-    }
-    setSeedingMatrix(true)
-    setError(null)
-    setMessage(null)
-    void trainingMatrixApi
-      .seedRequirements({ template: 'plantexpand_2024_v1', mode: 'refresh_template' })
-      .then((res) => {
-        setMessage(
-          `Frequencies restored from ${res.template_label}: ${res.created} created, ${res.skipped_existing} kept, ${res.unmatched_modules.length} modules without an Atlas course match.`,
-        )
-        setOpenMatrix(true)
-        reload()
-      })
-      .catch((err) => setError(getApiErrorMessage(err, 'Could not restore the frequency matrix.')))
-      .finally(() => setSeedingMatrix(false))
   }
 
   const unmatched = nameMaps.filter((m) => !m.mapped)
@@ -1629,7 +1672,7 @@ export function TrainingMatrixAdminPanel() {
       <AdminSection
         testId="training-matrix-admin-matrix"
         title="Frequency matrix (role x course)"
-        subtitle="Select a cycle for each cell — course rows come from your Atlas courses and existing rules. Clear a cell (—) to deactivate that rule."
+        subtitle="Select a cycle for each cell — course rows come from your Atlas courses and existing rules. Clear a cell (—) to deactivate that rule. Changes require approval before they apply."
         open={openMatrix}
         onToggle={() => setOpenMatrix((v) => !v)}
         headerRight={
@@ -1637,29 +1680,87 @@ export function TrainingMatrixAdminPanel() {
             <div className="flex flex-wrap gap-2">
               <Button
                 type="button"
-                variant="outline"
-                disabled={seedingMatrix}
-                onClick={onRestoreFrequencies}
-                data-testid="training-matrix-restore-frequencies"
-              >
-                {seedingMatrix ? 'Restoring…' : 'Restore April 2024 frequencies'}
-              </Button>
-              <Button
-                type="button"
                 disabled={savingMatrix || courseRows.length === 0}
-                onClick={onSaveMatrix}
+                onClick={onProposeMatrix}
                 data-testid="training-matrix-save-matrix"
               >
-                {savingMatrix ? 'Saving…' : 'Save matrix'}
+                {savingMatrix ? 'Submitting…' : 'Propose for approval'}
               </Button>
             </div>
           ) : null
         }
       >
         <p className="text-xs text-muted-foreground mb-2">
-          If the grid looks empty after an upload, click <strong>Restore April 2024 frequencies</strong> —
-          weekly CSV overwrite keeps rules in the database, but a bad Save could clear cells.
+          Frequency edits are dual-controlled: propose here, then {approverEmail} approves. Weekly Atlas CSV
+          overwrite keeps frequency rules in the database.
         </p>
+        {pendingProposals.length > 0 ? (
+          <div
+            className="mb-3 rounded-md border border-border bg-muted/40 px-3 py-2 space-y-2"
+            data-testid="training-matrix-pending-proposals"
+          >
+            <p className="text-sm font-medium">
+              Pending frequency approvals ({pendingProposals.length})
+              {!viewerCanApprove ? (
+                <span className="font-normal text-muted-foreground"> — awaiting {approverEmail}</span>
+              ) : null}
+            </p>
+            {pendingProposals.map((proposal) => (
+              <div
+                key={proposal.id}
+                className="flex flex-wrap items-center gap-2 text-sm"
+                data-testid={`training-matrix-proposal-${proposal.id}`}
+              >
+                <span>
+                  #{proposal.id}: {proposal.cell_count} cell
+                  {proposal.cell_count === 1 ? '' : 's'}
+                  {proposal.proposed_by_name || proposal.proposed_by_email
+                    ? ` · ${proposal.proposed_by_name || proposal.proposed_by_email}`
+                    : ''}
+                </span>
+                {viewerCanApprove ? (
+                  <>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={reviewingId === proposal.id}
+                      onClick={() => onApproveProposal(proposal.id)}
+                      data-testid={`training-matrix-approve-${proposal.id}`}
+                    >
+                      {reviewingId === proposal.id ? 'Applying…' : 'Approve'}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={reviewingId === proposal.id}
+                      onClick={() => onRejectProposal(proposal.id)}
+                      data-testid={`training-matrix-reject-${proposal.id}`}
+                    >
+                      Reject
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <label
+            className="inline-flex items-center gap-2 text-sm"
+            data-testid="training-matrix-hide-non-mandated"
+          >
+            <Switch
+              checked={hideNonMandated}
+              onCheckedChange={setHideNonMandated}
+              aria-label="Hide courses with no mandated frequency"
+            />
+            Hide non-mandated courses
+          </label>
+          <span className="text-xs text-muted-foreground">
+            Showing {visibleCourseRows.length} of {courseRows.length} courses
+          </span>
+        </div>
         <div className="overflow-auto max-h-[min(70vh,48rem)] border border-border rounded-md">
           <table className="w-full text-sm" data-testid="training-matrix-matrix-grid">
             <thead>
@@ -1673,7 +1774,7 @@ export function TrainingMatrixAdminPanel() {
               </tr>
             </thead>
             <tbody>
-              {courseRows.map((row) => (
+              {visibleCourseRows.map((row) => (
                 <tr key={row.course_key} className="border-b border-border/50">
                   <td className="py-1.5 px-3 font-medium">{row.course_display_name}</td>
                   {BOARD_ROLES.map((role) => (
@@ -1700,6 +1801,14 @@ export function TrainingMatrixAdminPanel() {
                 <tr>
                   <td colSpan={BOARD_ROLES.length + 1} className="py-6 text-center text-muted-foreground">
                     No Atlas courses yet. Upload a matrix CSV to populate rows.
+                  </td>
+                </tr>
+              ) : null}
+              {courseRows.length > 0 && visibleCourseRows.length === 0 ? (
+                <tr>
+                  <td colSpan={BOARD_ROLES.length + 1} className="py-6 text-center text-muted-foreground">
+                    No mandated courses match the current filter. Turn off “Hide non-mandated courses” to see
+                    all Atlas rows.
                   </td>
                 </tr>
               ) : null}

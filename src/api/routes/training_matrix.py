@@ -6,15 +6,19 @@ from datetime import date, datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, File, Query, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.training_matrix import (
     TrainingMatrixComplianceListResponse,
     TrainingMatrixComplianceRow,
     TrainingMatrixCourseOption,
+    TrainingMatrixFrequencyChangeRequestListResponse,
+    TrainingMatrixFrequencyChangeRequestResponse,
+    TrainingMatrixFrequencyChangeReviewRequest,
     TrainingMatrixImportQaResponse,
     TrainingMatrixImportResponse,
+    TrainingMatrixMatrixCell,
     TrainingMatrixMatrixUpsertRequest,
     TrainingMatrixMatrixUpsertResponse,
     TrainingMatrixNameMapAutoMatchResponse,
@@ -36,9 +40,11 @@ from src.api.schemas.training_matrix import (
 from src.api.utils.tenant import require_tenant_id
 from src.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
 from src.domain.models.engineer import Engineer
+from src.domain.models.notification import NotificationChannel, NotificationPriority, NotificationType
 from src.domain.models.training_matrix import (
     TrainingMatrixCell,
     TrainingMatrixCourse,
+    TrainingMatrixFrequencyChangeRequest,
     TrainingMatrixImport,
     TrainingMatrixNameMap,
     TrainingMatrixPerson,
@@ -46,6 +52,7 @@ from src.domain.models.training_matrix import (
 )
 from src.domain.models.user import User
 from src.domain.services.email_service import email_service
+from src.domain.services.notification_service import NotificationService
 from src.domain.services.training_matrix_board import (
     BOARD_ROLES,
     build_board_summary,
@@ -69,6 +76,9 @@ from src.domain.services.training_matrix_requirement_seed import seed_plantexpan
 
 router = APIRouter()
 
+# Dual-control gate for frequency matrix writes (business owner).
+FREQUENCY_MATRIX_APPROVER_EMAIL = "david.harris@plantexpand.com"
+
 
 def _tenant(user: CurrentUser) -> int:
     return require_tenant_id(getattr(user, "tenant_id", None))
@@ -77,6 +87,19 @@ def _tenant(user: CurrentUser) -> int:
 def _is_admin(user: CurrentUser) -> bool:
     role_names = {r.name.lower() for r in getattr(user, "roles", []) or []}
     return bool(getattr(user, "is_superuser", False) or "admin" in role_names)
+
+
+def _is_frequency_approver(user: CurrentUser) -> bool:
+    email = (getattr(user, "email", None) or "").strip().lower()
+    return email == FREQUENCY_MATRIX_APPROVER_EMAIL or bool(getattr(user, "is_superuser", False))
+
+
+def _require_frequency_approver(user: CurrentUser) -> None:
+    if not _is_frequency_approver(user):
+        raise AuthorizationError(
+            "Frequency matrix changes must be approved by the Training frequency owner "
+            f"({FREQUENCY_MATRIX_APPROVER_EMAIL})"
+        )
 
 
 def _is_workforce_manager(user: CurrentUser) -> bool:
@@ -439,8 +462,12 @@ async def seed_requirements(
     user: CurrentUser,
     body: TrainingMatrixRequirementSeedRequest,
 ):
-    """Seed requirement rows from a SoR template into the DB (still fully editable)."""
-    _require_admin(user)
+    """Ops-only template seed — removed from Admin UI to prevent accidental wipe."""
+    if not getattr(user, "is_superuser", False):
+        raise AuthorizationError(
+            "Restore/seed of the April 2024 frequency template is locked. "
+            "Propose cell edits for approval instead of restoring the template."
+        )
     tenant_id = _tenant(user)
     if body.template != "plantexpand_2024_v1":
         raise ValidationError("Unknown template. Supported: plantexpand_2024_v1")
@@ -458,20 +485,13 @@ async def seed_requirements(
     )
 
 
-@router.post("/requirements/matrix", response_model=TrainingMatrixMatrixUpsertResponse)
-async def upsert_requirements_matrix(
+async def _apply_matrix_cells(
     db: DbSession,
-    user: CurrentUser,
-    body: TrainingMatrixMatrixUpsertRequest,
-):
-    """Bulk upsert the interactive Admin frequency matrix (dept x course cells).
-
-    A null/0 frequency deactivates the requirement for that department+course
-    instead of deleting it, so history/notes are preserved.
-    """
-    _require_admin(user)
-    tenant_id = _tenant(user)
-
+    *,
+    tenant_id: int,
+    cells: list[TrainingMatrixMatrixCell],
+) -> TrainingMatrixMatrixUpsertResponse:
+    """Apply cell edits in the current transaction (caller commits)."""
     existing = (
         (
             await db.execute(
@@ -490,7 +510,7 @@ async def upsert_requirements_matrix(
 
     upserted = 0
     deactivated = 0
-    for cell in body.cells:
+    for cell in cells:
         dept = (cell.match_department or "").strip()
         if not dept or not cell.course_key:
             continue
@@ -522,8 +542,199 @@ async def upsert_requirements_matrix(
             by_key[key] = current
         upserted += 1
 
-    await db.commit()
     return TrainingMatrixMatrixUpsertResponse(upserted=upserted, deactivated=deactivated)
+
+
+def _serialize_change_request(
+    row: TrainingMatrixFrequencyChangeRequest,
+    *,
+    proposer: Optional[User] = None,
+) -> TrainingMatrixFrequencyChangeRequestResponse:
+    cells = [TrainingMatrixMatrixCell.model_validate(cell) for cell in (row.proposed_cells or [])]
+    return TrainingMatrixFrequencyChangeRequestResponse(
+        id=row.id,
+        status=row.status,
+        cell_count=row.cell_count,
+        proposed_cells=cells,
+        proposed_by_user_id=row.proposed_by_user_id,
+        proposed_by_name=(proposer.full_name if proposer and getattr(proposer, "full_name", None) else None)
+        or (proposer.email if proposer else None),
+        proposed_by_email=proposer.email if proposer else None,
+        reviewed_by_user_id=row.reviewed_by_user_id,
+        reviewed_at=row.reviewed_at,
+        review_note=row.review_note,
+        created_at=row.created_at,
+    )
+
+
+@router.post("/requirements/matrix", response_model=TrainingMatrixMatrixUpsertResponse)
+async def upsert_requirements_matrix(
+    _db: DbSession,
+    _user: CurrentUser,
+    _body: TrainingMatrixMatrixUpsertRequest,
+):
+    """Direct matrix write is locked — use propose + approve dual-control instead."""
+    raise AuthorizationError(
+        "Direct frequency matrix saves are locked. Submit changes for approval "
+        f"({FREQUENCY_MATRIX_APPROVER_EMAIL}) via POST /requirements/matrix/propose."
+    )
+
+
+@router.post(
+    "/requirements/matrix/propose",
+    response_model=TrainingMatrixFrequencyChangeRequestResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def propose_requirements_matrix(
+    db: DbSession,
+    user: CurrentUser,
+    body: TrainingMatrixMatrixUpsertRequest,
+):
+    """Propose frequency cell edits for dual-control approval."""
+    _require_admin(user)
+    tenant_id = _tenant(user)
+    if not body.cells:
+        raise ValidationError("Provide at least one changed cell to propose")
+
+    payload = [cell.model_dump() for cell in body.cells]
+    row = TrainingMatrixFrequencyChangeRequest(
+        tenant_id=tenant_id,
+        status="pending",
+        proposed_cells=payload,
+        cell_count=len(payload),
+        proposed_by_user_id=getattr(user, "id", None),
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+
+    approver = (
+        await db.execute(
+            select(User).where(func.lower(User.email) == FREQUENCY_MATRIX_APPROVER_EMAIL)
+        )
+    ).scalar_one_or_none()
+    if approver is not None:
+        notifier = NotificationService(db)
+        await notifier.create_notification(
+            user_id=approver.id,
+            notification_type=NotificationType.APPROVAL_REQUESTED,
+            title="Training frequency matrix change awaiting approval",
+            message=(
+                f"{getattr(user, 'email', 'An admin')} proposed {row.cell_count} frequency "
+                "cell change(s). Review and approve in Training → Admin."
+            ),
+            priority=NotificationPriority.HIGH,
+            entity_type="training_matrix_frequency_change_request",
+            entity_id=str(row.id),
+            action_url="/workforce/training?tab=admin",
+            sender_id=getattr(user, "id", None),
+            channels=[NotificationChannel.IN_APP, NotificationChannel.EMAIL],
+        )
+
+    return _serialize_change_request(row, proposer=user)
+
+
+@router.get(
+    "/requirements/matrix/proposals",
+    response_model=TrainingMatrixFrequencyChangeRequestListResponse,
+)
+async def list_matrix_proposals(
+    db: DbSession,
+    user: CurrentUser,
+    status_filter: Optional[str] = Query(default="pending", alias="status"),
+):
+    _require_admin(user)
+    tenant_id = _tenant(user)
+    query = select(TrainingMatrixFrequencyChangeRequest).where(
+        TrainingMatrixFrequencyChangeRequest.tenant_id == tenant_id
+    )
+    if status_filter and status_filter != "all":
+        query = query.where(TrainingMatrixFrequencyChangeRequest.status == status_filter)
+    rows = list(
+        (await db.execute(query.order_by(TrainingMatrixFrequencyChangeRequest.id.desc()))).scalars().all()
+    )
+    proposer_ids = {row.proposed_by_user_id for row in rows if row.proposed_by_user_id}
+    proposers: dict[int, User] = {}
+    if proposer_ids:
+        for user_row in (await db.execute(select(User).where(User.id.in_(proposer_ids)))).scalars().all():
+            proposers[user_row.id] = user_row
+    return TrainingMatrixFrequencyChangeRequestListResponse(
+        items=[
+            _serialize_change_request(row, proposer=proposers.get(row.proposed_by_user_id or -1))
+            for row in rows
+        ],
+        total=len(rows),
+        viewer_can_approve=_is_frequency_approver(user),
+        approver_email=FREQUENCY_MATRIX_APPROVER_EMAIL,
+    )
+
+
+@router.post(
+    "/requirements/matrix/proposals/{proposal_id}/approve",
+    response_model=TrainingMatrixMatrixUpsertResponse,
+)
+async def approve_matrix_proposal(
+    proposal_id: int,
+    db: DbSession,
+    user: CurrentUser,
+    body: TrainingMatrixFrequencyChangeReviewRequest | None = None,
+):
+    _require_frequency_approver(user)
+    tenant_id = _tenant(user)
+    row = (
+        await db.execute(
+            select(TrainingMatrixFrequencyChangeRequest).where(
+                TrainingMatrixFrequencyChangeRequest.id == proposal_id,
+                TrainingMatrixFrequencyChangeRequest.tenant_id == tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise NotFoundError("Frequency change request not found")
+    if row.status != "pending":
+        raise ValidationError(f"Request is already {row.status}")
+
+    cells = [TrainingMatrixMatrixCell.model_validate(cell) for cell in (row.proposed_cells or [])]
+    result = await _apply_matrix_cells(db, tenant_id=tenant_id, cells=cells)
+    row.status = "approved"
+    row.reviewed_by_user_id = getattr(user, "id", None)
+    row.reviewed_at = datetime.now(timezone.utc)
+    row.review_note = body.note if body else None
+    await db.commit()
+    return result
+
+
+@router.post(
+    "/requirements/matrix/proposals/{proposal_id}/reject",
+    response_model=TrainingMatrixFrequencyChangeRequestResponse,
+)
+async def reject_matrix_proposal(
+    proposal_id: int,
+    db: DbSession,
+    user: CurrentUser,
+    body: TrainingMatrixFrequencyChangeReviewRequest | None = None,
+):
+    _require_frequency_approver(user)
+    tenant_id = _tenant(user)
+    row = (
+        await db.execute(
+            select(TrainingMatrixFrequencyChangeRequest).where(
+                TrainingMatrixFrequencyChangeRequest.id == proposal_id,
+                TrainingMatrixFrequencyChangeRequest.tenant_id == tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not row:
+        raise NotFoundError("Frequency change request not found")
+    if row.status != "pending":
+        raise ValidationError(f"Request is already {row.status}")
+    row.status = "rejected"
+    row.reviewed_by_user_id = getattr(user, "id", None)
+    row.reviewed_at = datetime.now(timezone.utc)
+    row.review_note = body.note if body else None
+    await db.commit()
+    await db.refresh(row)
+    return _serialize_change_request(row, proposer=None)
 
 
 @router.patch("/requirements/{requirement_id}", response_model=TrainingMatrixRequirementResponse)
