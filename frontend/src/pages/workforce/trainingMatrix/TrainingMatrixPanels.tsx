@@ -402,7 +402,10 @@ export function TrainingMatrixGapBoard() {
     [personRollups, personFilters, personSortKey, personSortDir],
   )
   const moduleRole: BoardRole = roleScope === 'Overall' ? 'Engineer' : roleScope
-  const moduleRollups = useMemo(() => moduleViewForRole(rows, moduleRole), [rows, moduleRole])
+  const moduleRollups = useMemo(
+    () => moduleViewForRole(rows, moduleRole, new Date(), filteredRows),
+    [rows, moduleRole, filteredRows],
+  )
 
   const activeEntityRollups = useMemo(() => {
     if (view === 'group') return groupRollups

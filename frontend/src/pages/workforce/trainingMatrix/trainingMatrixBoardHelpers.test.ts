@@ -376,6 +376,30 @@ describe('moduleViewForRole', () => {
     expect(view[0].pct).toBe(50)
   })
 
+  it('uses horizon membership for email recipients while keeping full-set Complete/Need', () => {
+    const rows = [
+      row({
+        atlas_name: 'Alice',
+        department: 'Mobile Engineers',
+        course_key: 'a',
+        status: 'compliant',
+        qgp_due_on: iso(100),
+      }),
+      row({
+        atlas_name: 'Bob',
+        department: 'Mobile Engineers',
+        course_key: 'a',
+        status: 'overdue',
+        qgp_due_on: iso(-1),
+      }),
+    ]
+    const view = moduleViewForRole(rows, 'Engineer', TODAY, [rows[1]])
+    expect(view).toHaveLength(1)
+    expect(view[0].complete).toBe(1)
+    expect(view[0].need).toBe(1)
+    expect(view[0].filteredRows.map((r) => r.atlas_name)).toEqual(['Bob'])
+  })
+
   it('uses board_role_override when Atlas department does not match a board role', () => {
     const rows = [
       row({

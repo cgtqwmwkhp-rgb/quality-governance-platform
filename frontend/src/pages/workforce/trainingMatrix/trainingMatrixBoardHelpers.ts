@@ -744,10 +744,16 @@ export function moduleViewForRole(
   rows: TrainingMatrixComplianceRow[],
   role: BoardRole,
   today: Date = new Date(),
+  /** Horizon-filtered rows; defaults to full role set. Email uses this membership set. */
+  filteredRows?: TrainingMatrixComplianceRow[],
 ): EntityMetricRollup[] {
   const scoped = rows.filter((r) => resolveBoardRole(r.department, r.board_role_override) === role)
-  // Module view shows the full role set (no horizon membership gate).
-  return buildCourseMetricRollups(scoped, scoped, today).sort((a, b) => a.pct - b.pct || a.label.localeCompare(b.label))
+  const membership = (filteredRows ?? scoped).filter(
+    (r) => resolveBoardRole(r.department, r.board_role_override) === role,
+  )
+  return buildCourseMetricRollups(scoped, membership, today).sort(
+    (a, b) => a.pct - b.pct || a.label.localeCompare(b.label),
+  )
 }
 
 /** CSV rows (header + data) for the currently filtered gap board rows. */
