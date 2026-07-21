@@ -45,6 +45,7 @@ import {
   CUSTOMERS_LOOKUP_CATEGORY,
   toCustomerSelectOptions,
 } from './admin/customersCatalog'
+import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
 
 const COMPLAINT_TYPE_VALUES = [
   'product',
@@ -216,14 +217,14 @@ export default function Complaints() {
         setCustomerOptions(fromLookup.length > 0 ? fromLookup : fromContracts)
         setContracts(contractRes.items || [])
         setCustomersLoaded(true)
-        const lookupByCode = new Map(
-          (lookupRes.items || []).map((item) => [item.code.toLowerCase(), item.label]),
-        )
         setTopicOptions(
-          COMPLAINT_TYPE_VALUES.map((code) => ({
-            value: code,
-            label: lookupByCode.get(code) || t(`complaints.type.${code}`, code),
-          })),
+          mergeLookupSelectOptions(
+            COMPLAINT_TYPE_VALUES.map((code) => ({
+              value: code,
+              label: t(`complaints.type.${code}`, code),
+            })),
+            lookupRes.items,
+          ),
         )
       } catch (err) {
         if (!cancelled) {

@@ -20,7 +20,7 @@ describe('createLookupsApi', () => {
     expect(api.get).toHaveBeenCalledWith('/api/v1/admin/config/lookup/roles')
   })
 
-  it('create/update/delete hit admin lookup paths', async () => {
+  it('create injects path category into the body', async () => {
     const api = mockApi()
     const lookups = createLookupsApi(api as never)
     const payload = { code: 'ops', label: 'Ops', is_active: true, display_order: 1 }
@@ -29,7 +29,10 @@ describe('createLookupsApi', () => {
     await lookups.update('roles', 9, { label: 'Operations' })
     await lookups.delete('roles', 9)
 
-    expect(api.post).toHaveBeenCalledWith('/api/v1/admin/config/lookup/roles', payload)
+    expect(api.post).toHaveBeenCalledWith('/api/v1/admin/config/lookup/roles', {
+      ...payload,
+      category: 'roles',
+    })
     expect(api.patch).toHaveBeenCalledWith('/api/v1/admin/config/lookup/roles/9', {
       label: 'Operations',
     })

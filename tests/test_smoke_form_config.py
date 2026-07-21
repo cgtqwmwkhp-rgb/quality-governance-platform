@@ -383,6 +383,29 @@ class TestLookupOptionEndpoints:
         assert data["code"] == sample_lookup_data["code"]
         assert data["label"] == sample_lookup_data["label"]
 
+    @pytest.mark.asyncio
+    async def test_create_lookup_option_without_body_category(
+        self,
+        async_client: AsyncClient,
+        auth_headers: dict,
+    ):
+        """Admin UI posts code/label only — path category must be accepted."""
+        response = await async_client.post(
+            "/api/v1/admin/config/lookup/customers",
+            headers=auth_headers,
+            json={
+                "code": "defra",
+                "label": "DEFRA",
+                "is_active": True,
+                "display_order": 0,
+            },
+        )
+        assert response.status_code == 201, response.text
+        data = response.json()
+        assert data["category"] == "customers"
+        assert data["code"] == "defra"
+        assert data["label"] == "DEFRA"
+
 
 class TestFormStepEndpoints:
     """Test form step CRUD operations."""

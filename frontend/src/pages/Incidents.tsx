@@ -7,9 +7,11 @@ import {
   Incident,
   IncidentCreate,
   getApiErrorMessage,
+  lookupsApi,
   notificationsApi,
   UserSearchResult,
 } from '../api/client'
+import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
 import { trackError } from '../utils/errorTracker'
 import { resolvePlatformReporterIdentity } from '../utils/platformSessionReporter'
 import { displayIncidentText } from './incidentTextDisplay'
@@ -129,6 +131,25 @@ export default function Incidents() {
     reported_date: new Date().toISOString().slice(0, 16),
   })
   const [sessionReporterLabel, setSessionReporterLabel] = useState<string | null>(null)
+  const defaultTypeOptions = [
+    { value: 'injury', label: t('incidents.type.injury') },
+    { value: 'near_miss', label: t('incidents.type.near_miss') },
+    { value: 'hazard', label: t('incidents.type.hazard') },
+    { value: 'property_damage', label: t('incidents.type.property_damage') },
+    { value: 'environmental', label: t('incidents.type.environmental') },
+    { value: 'security', label: t('incidents.type.security') },
+    { value: 'quality', label: t('incidents.type.quality') },
+    { value: 'other', label: t('incidents.type.other') },
+  ]
+  const defaultSeverityOptions = [
+    { value: 'critical', label: t('severity.critical') },
+    { value: 'high', label: t('severity.high') },
+    { value: 'medium', label: t('severity.medium') },
+    { value: 'low', label: t('severity.low') },
+    { value: 'negligible', label: t('severity.negligible') },
+  ]
+  const [typeOptions, setTypeOptions] = useState(defaultTypeOptions)
+  const [severityOptions, setSeverityOptions] = useState(defaultSeverityOptions)
 
   useEffect(() => {
     if (!showModal) {
@@ -136,6 +157,9 @@ export default function Incidents() {
       return
     }
     let cancelled = false
+    // Show translated defaults immediately; overlay Admin lookup labels when loaded.
+    setTypeOptions(defaultTypeOptions)
+    setSeverityOptions(defaultSeverityOptions)
     void resolvePlatformReporterIdentity().then((identity) => {
       if (cancelled) return
       const label =
@@ -149,9 +173,20 @@ export default function Incidents() {
         reporter_email: identity.reporter_email || prev.reporter_email,
       }))
     })
+    void (async () => {
+      const [typesRes, severityRes] = await Promise.all([
+        lookupsApi.list('incident_types', true).catch(() => ({ items: [], total: 0 })),
+        lookupsApi.list('severity_levels', true).catch(() => ({ items: [], total: 0 })),
+      ])
+      if (cancelled) return
+      setTypeOptions(mergeLookupSelectOptions(defaultTypeOptions, typesRes.items))
+      setSeverityOptions(mergeLookupSelectOptions(defaultSeverityOptions, severityRes.items))
+    })()
     return () => {
       cancelled = true
     }
+    // Intentional: load lookups when the create dialog opens (not on every t identity change).
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showModal is the dialog open gate
   }, [showModal])
 
   useEffect(() => {
@@ -799,18 +834,11 @@ export default function Incidents() {
                     <SelectValue placeholder={t('incidents.form.select_type')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="injury">{t('incidents.type.injury')}</SelectItem>
-                    <SelectItem value="near_miss">{t('incidents.type.near_miss')}</SelectItem>
-                    <SelectItem value="hazard">{t('incidents.type.hazard')}</SelectItem>
-                    <SelectItem value="property_damage">
-                      {t('incidents.type.property_damage')}
-                    </SelectItem>
-                    <SelectItem value="environmental">
-                      {t('incidents.type.environmental')}
-                    </SelectItem>
-                    <SelectItem value="security">{t('incidents.type.security')}</SelectItem>
-                    <SelectItem value="quality">{t('incidents.type.quality')}</SelectItem>
-                    <SelectItem value="other">{t('incidents.type.other')}</SelectItem>
+                    {typeOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -830,11 +858,11 @@ export default function Incidents() {
                     <SelectValue placeholder={t('incidents.form.select_severity')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="critical">{t('severity.critical')}</SelectItem>
-                    <SelectItem value="high">{t('severity.high')}</SelectItem>
-                    <SelectItem value="medium">{t('severity.medium')}</SelectItem>
-                    <SelectItem value="low">{t('severity.low')}</SelectItem>
-                    <SelectItem value="negligible">{t('severity.negligible')}</SelectItem>
+                    {severityOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

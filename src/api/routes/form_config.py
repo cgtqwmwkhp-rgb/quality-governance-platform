@@ -873,7 +873,10 @@ async def list_lookup_options(
     category: str,
     db: DbSession,
     current_user: CurrentUser,
-    is_active: Optional[bool] = Query(True),
+    is_active: Optional[bool] = Query(
+        None,
+        description="Filter by active flag. Omit to return all options (Admin editor).",
+    ),
 ) -> LookupOptionListResponse:
     """List lookup options by category."""
     query = select(LookupOption).where(
@@ -907,12 +910,11 @@ async def create_lookup_option(
     _: Annotated[User, Depends(require_permission("form:create"))],
 ) -> LookupOption:
     """Create a new lookup option."""
-    # Ensure category matches
-    if data.category != category:
-        data.category = category
+    # Path category is authoritative (body category may be omitted by Admin UI).
+    data.category = category
 
     option = LookupOption(
-        category=data.category,
+        category=category,
         code=data.code,
         label=data.label,
         description=data.description,

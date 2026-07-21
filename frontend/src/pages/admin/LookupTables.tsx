@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ClipboardList, Loader2, Plus, Settings2 } from 'lucide-react'
-import { lookupsApi, type LookupOption } from '../../api/client'
+import { ClipboardList, Loader2, Plus, Settings2, Trash2 } from 'lucide-react'
+import { getApiErrorMessage, lookupsApi, type LookupOption } from '../../api/client'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -164,6 +164,7 @@ export default function LookupTables() {
     setSaving(true)
     try {
       const created = await lookupsApi.create(editorCategory.key, {
+        category: editorCategory.key,
         code: resolvedCode,
         label: newLabel.trim(),
         is_active: true,
@@ -180,8 +181,40 @@ export default function LookupTables() {
         },
       }))
       toast.success(t('admin.lookups.option_added', 'Lookup option added'))
-    } catch {
-      toast.error(t('admin.lookups.save_failed', 'Failed to add lookup option'))
+    } catch (err) {
+      toast.error(
+        getApiErrorMessage(err, t('admin.lookups.save_failed', 'Failed to add lookup option')),
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleRemove = async (option: LookupOption) => {
+    if (!editorCategory) return
+    const confirmed = window.confirm(
+      t('admin.lookups.remove_confirm', 'Remove “{{label}}” from this lookup?', {
+        label: option.label,
+      }),
+    )
+    if (!confirmed) return
+    setSaving(true)
+    try {
+      await lookupsApi.delete(editorCategory.key, option.id)
+      setOptions((prev) => prev.filter((o) => o.id !== option.id))
+      setCounts((prev) => ({
+        ...prev,
+        [editorCategory.key]: {
+          total: Math.max(0, (prev[editorCategory.key]?.total ?? options.length) - 1),
+          loading: false,
+          error: false,
+        },
+      }))
+      toast.success(t('admin.lookups.option_removed', 'Lookup option removed'))
+    } catch (err) {
+      toast.error(
+        getApiErrorMessage(err, t('admin.lookups.remove_failed', 'Failed to remove lookup option')),
+      )
     } finally {
       setSaving(false)
     }
@@ -375,17 +408,31 @@ export default function LookupTables() {
                   {options.map((opt) => (
                     <li
                       key={opt.id}
-                      className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+                      className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
                     >
                       <span>
                         <span className="font-mono text-xs text-muted-foreground mr-2">
                           {opt.code}
                         </span>
                         {opt.label}
+                        {!opt.is_active ? (
+                          <span className="ml-2 text-xs text-muted-foreground">inactive</span>
+                        ) : null}
                       </span>
-                      {!opt.is_active ? (
-                        <span className="text-xs text-muted-foreground">inactive</span>
-                      ) : null}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 text-destructive hover:text-destructive"
+                        disabled={saving}
+                        onClick={() => void handleRemove(opt)}
+                        data-testid={`lookup-remove-${opt.code}`}
+                        aria-label={t('admin.lookups.remove_option', 'Remove {{label}}', {
+                          label: opt.label,
+                        })}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </li>
                   ))}
                 </ul>
