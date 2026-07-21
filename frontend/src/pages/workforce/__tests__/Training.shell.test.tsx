@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,7 +12,9 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('../../../api/client', () => ({
   trainingMatrixApi: {
-    listCompliance: vi.fn().mockResolvedValue({ items: [], total: 0, atlas_hub_url: 'https://atlas' }),
+    listCompliance: vi
+      .fn()
+      .mockResolvedValue({ items: [], total: 0, atlas_hub_url: 'https://atlas' }),
     getSummary: vi.fn().mockResolvedValue(null),
     myTraining: vi.fn().mockResolvedValue({ items: [], total: 0, atlas_hub_url: 'https://atlas' }),
     listNameMaps: vi.fn().mockResolvedValue([]),
@@ -126,18 +128,79 @@ describe('Training shell', () => {
     await waitFor(() =>
       expect(screen.getByTestId('training-matrix-briefing')).toHaveTextContent('Workshop Safety'),
     )
-    expect(screen.getByTestId('training-matrix-briefing')).not.toHaveTextContent(
-      'Engineer Safety',
+    expect(screen.getByTestId('training-matrix-briefing')).not.toHaveTextContent('Engineer Safety')
+  })
+
+  it('keeps entity Sheet email recipients aligned when the horizon changes', async () => {
+    const user = userEvent.setup()
+    const baseRow = {
+      department: 'Mobile Engineers',
+      course_key: 'shared-course',
+      course_display_name: 'Shared Course',
+      frequency_years: 1,
+      atlas_status: null,
+      passed_on: null,
+      expires_on: null,
+      qgp_due_on: null,
+      expiry_without_passed: false,
+      atlas_hub_url: 'https://atlas',
+    }
+    vi.mocked(trainingMatrixApi.listCompliance).mockResolvedValueOnce({
+      items: [
+        {
+          ...baseRow,
+          engineer_id: 1,
+          engineer_display_name: 'Alice',
+          atlas_name: 'Alice',
+          status: 'compliant',
+        },
+        {
+          ...baseRow,
+          engineer_id: 2,
+          engineer_display_name: 'Bob',
+          atlas_name: 'Bob',
+          status: 'overdue',
+        },
+      ],
+      total: 2,
+      atlas_hub_url: 'https://atlas',
+    })
+    vi.mocked(trainingMatrixApi.notify).mockResolvedValue({
+      sent: 2,
+      skipped: 0,
+      failed: 0,
+    })
+
+    render(
+      <MemoryRouter>
+        <Training />
+      </MemoryRouter>,
     )
+
+    await user.click(await screen.findByTestId('training-matrix-view-course'))
+    const courseTable = await screen.findByTestId('training-matrix-course-table')
+    await user.click(within(courseTable).getByText('Shared Course'))
+
+    const emailButton = screen.getByTestId('training-matrix-entity-email')
+    await user.click(emailButton)
+    await waitFor(() => expect(trainingMatrixApi.notify).toHaveBeenCalledWith(['Bob']))
+    await waitFor(() => expect(emailButton).toBeEnabled())
+
+    vi.mocked(trainingMatrixApi.notify).mockClear()
+    await user.click(screen.getByTestId('training-matrix-horizon-all'))
+    expect(screen.getByTestId('training-matrix-entity-sheet')).toBeInTheDocument()
+
+    await user.click(emailButton)
+    await waitFor(() => expect(trainingMatrixApi.notify).toHaveBeenCalledWith(['Alice', 'Bob']))
   })
 
   it('keeps latest import provenance when compliance loading fails', async () => {
-    vi.mocked(trainingMatrixApi.listCompliance).mockRejectedValueOnce(new Error('Compliance unavailable'))
+    vi.mocked(trainingMatrixApi.listCompliance).mockRejectedValueOnce(
+      new Error('Compliance unavailable'),
+    )
     vi.mocked(trainingMatrixApi.getSummary).mockResolvedValueOnce({
       module_ok: [{ role: 'Overall', ok: 8, total: 10, pct: 80, metric: 'module_ok' }],
-      people_fully_ok: [
-        { role: 'Overall', ok: 4, total: 5, pct: 80, metric: 'people_fully_ok' },
-      ],
+      people_fully_ok: [{ role: 'Overall', ok: 4, total: 5, pct: 80, metric: 'people_fully_ok' }],
       horizons: {},
       top_overdue_courses: [],
       required_row_count: 10,
