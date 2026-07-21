@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import {
   ArrowLeft,
@@ -83,9 +83,48 @@ function isOverdue(due?: string | null, status?: string): boolean {
 
 type TrainingState =
   | { status: 'loading' }
-  | { status: 'ready'; rows: TrainingMatrixComplianceRow[]; atlasUrl: string }
+  | {
+      status: 'ready'
+      rows: TrainingMatrixComplianceRow[]
+      atlasUrl: string
+      emptyReason?: string | null
+      atlasName?: string | null
+    }
   | { status: 'unlinked' }
   | { status: 'error'; message: string }
+
+function emptyTrainingCopy(reason?: string | null, atlasName?: string | null): {
+  title: string
+  description: string
+} {
+  if (reason === 'no_import') {
+    return {
+      title: 'No Atlas upload on file',
+      description:
+        'Ask your supervisor to upload the weekly Atlas Training Matrix before personal modules can appear.',
+    }
+  }
+  if (reason === 'not_mapped') {
+    return {
+      title: 'Your Atlas name is not mapped yet',
+      description:
+        'Your login is linked to a workforce profile, but Admin has not mapped your Atlas name to that profile. Ask your supervisor to map you under Training → People.',
+    }
+  }
+  if (reason === 'no_requirements') {
+    return {
+      title: 'No modules for your Training group',
+      description: atlasName
+        ? `You are mapped as ${atlasName}, but no frequency rules match your Training group / department. Ask Admin to set your Training group or allocate modules.`
+        : 'No frequency rules match your Training group / department. Ask Admin to set your Training group or allocate modules.',
+    }
+  }
+  return {
+    title: 'No required modules on file',
+    description:
+      'Once the weekly Atlas matrix is uploaded and your name is mapped, your modules will show here.',
+  }
+}
 
 function trainingBadgeVariant(status: string): BadgeVariant {
   if (status === 'compliant') return 'success'
@@ -150,6 +189,7 @@ function WorkSection({
 
 export default function PortalWork() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { announce } = useLiveAnnouncer()
 
   const [actions, setActions] = useState<LoadState<Action>>({
@@ -248,6 +288,8 @@ export default function PortalWork() {
         status: 'ready',
         rows: res.items || [],
         atlasUrl: res.atlas_hub_url || ATLAS_HUB_URL,
+        emptyReason: res.empty_reason,
+        atlasName: res.atlas_name,
       })
     } catch (err) {
       if (isNotFound(err)) {
@@ -266,6 +308,17 @@ export default function PortalWork() {
     void loadPassport()
     void loadTraining()
   }, [announce, loadActions, loadReading, loadCampaigns, loadPassport, loadTraining])
+
+  useEffect(() => {
+    if (location.hash !== '#training') return
+    setOpenTraining(true)
+    const timer = window.setTimeout(() => {
+      document
+        .querySelector('[data-testid="portal-work-training"]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 80)
+    return () => window.clearTimeout(timer)
+  }, [location.hash])
 
   const readingQueue = useMemo(
     () => partitionReadingQueue(reading.items, campaigns.items),
@@ -496,12 +549,14 @@ export default function PortalWork() {
               />
             </div>
           ) : training.rows.length === 0 ? (
-            <EmptyState
-              className="py-10"
-              icon={<GraduationCap className="w-8 h-8 text-muted-foreground" />}
-              title="No required modules on file"
-              description="Once the weekly Atlas matrix is uploaded and your name is mapped, your modules will show here."
-            />
+            <div data-testid="portal-work-training-empty">
+              <EmptyState
+                className="py-10"
+                icon={<GraduationCap className="w-8 h-8 text-muted-foreground" />}
+                title={emptyTrainingCopy(training.emptyReason, training.atlasName).title}
+                description={emptyTrainingCopy(training.emptyReason, training.atlasName).description}
+              />
+            </div>
           ) : (
             <div className="space-y-3">
               <Card className="p-4" data-testid="portal-work-training-summary">
