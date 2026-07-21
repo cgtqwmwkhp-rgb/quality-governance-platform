@@ -12,10 +12,22 @@ import {
   type TrainingMatrixNameMapItem,
   type TrainingMatrixRequirement,
 } from '../../../api/client'
-import { ATLAS_HUB_URL, type TrainingMatrixSummary } from '../../../api/trainingMatrixClient'
+import {
+  ATLAS_HUB_URL,
+  type TrainingMatrixPersonCompliance,
+  type TrainingMatrixSummary,
+} from '../../../api/trainingMatrixClient'
 import { Badge, type BadgeVariant } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card'
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '../../../components/ui/Sheet'
 import { TableSkeleton } from '../../../components/ui/SkeletonLoader'
 import { toast } from '../../../contexts/ToastContext'
 import {
@@ -31,6 +43,8 @@ import {
   type Horizon,
   HORIZON_FILTERS,
   horizonForRow,
+  isGapStatus,
+  isOkStatus,
   moduleViewForRole,
   myTrainingSummary,
   personRollupsToCsv,
@@ -39,6 +53,7 @@ import {
   statusLabel,
   topCoursesInHorizon,
 } from './trainingMatrixBoardHelpers'
+import { ComplianceBarChart, DueForwardBars, StatusPieChart } from './trainingMatrixCharts'
 
 type RoleScope = BoardRole | 'Overall'
 
@@ -196,13 +211,14 @@ function ComplianceTable({ rows, loading }: { rows: TrainingMatrixComplianceRow[
   )
 }
 
-type ViewId = 'group' | 'course' | 'individual' | 'module'
+type ViewId = 'group' | 'course' | 'individual' | 'module' | 'analytics'
 
 const VIEWS: { id: ViewId; label: string }[] = [
+  { id: 'individual', label: 'By individual' },
   { id: 'group', label: 'By group' },
   { id: 'course', label: 'By course' },
-  { id: 'individual', label: 'By individual' },
   { id: 'module', label: 'By module' },
+  { id: 'analytics', label: 'Analytics' },
 ]
 
 export function TrainingMatrixGapBoard() {
@@ -218,6 +234,9 @@ export function TrainingMatrixGapBoard() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [notifying, setNotifying] = useState(false)
   const [latestImport, setLatestImport] = useState<TrainingMatrixImport | null>(null)
+  const [drawerPersonId, setDrawerPersonId] = useState<number | null>(null)
+  const [personDetail, setPersonDetail] = useState<TrainingMatrixPersonCompliance | null>(null)
+  const [personLoading, setPersonLoading] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -311,6 +330,51 @@ export function TrainingMatrixGapBoard() {
   )
   const moduleRole: BoardRole = roleScope === 'Overall' ? 'Engineer' : roleScope
   const moduleRows = useMemo(() => moduleViewForRole(rows, moduleRole), [rows, moduleRole])
+
+  useEffect(() => {
+    if (drawerPersonId == null) {
+      setPersonDetail(null)
+      return
+    }
+    setPersonLoading(true)
+    trainingMatrixApi
+      .getPersonCompliance(drawerPersonId)
+      .then(setPersonDetail)
+      .catch((err) => {
+        setPersonDetail(null)
+        toast.error(getApiErrorMessage(err, 'Could not load person training detail.'))
+        setDrawerPersonId(null)
+      })
+      .finally(() => setPersonLoading(false))
+  }, [drawerPersonId])
+
+  const analyticsBars = useMemo(() => {
+    const stats = summary?.module_ok ?? computeModuleRoleStats(rows)
+    return stats
+      .filter((s) => s.role !== 'Overall')
+      .filter((s) => roleScope === 'Overall' || s.role === roleScope)
+      .map((s) => ({
+        label: s.role,
+        okPct: s.pct,
+        gapPct: s.total ? 100 - s.pct : 0,
+      }))
+  }, [summary, rows, roleScope])
+
+  const analyticsPie = useMemo(() => {
+    let ok = 0
+    let dueSoon = 0
+    let gap = 0
+    for (const r of scopedRows) {
+      if (r.status === 'due_soon') dueSoon += 1
+      else if (isOkStatus(r.status)) ok += 1
+      else if (isGapStatus(r.status)) gap += 1
+    }
+    return [
+      { label: 'OK', value: ok, color: '#059669' },
+      { label: 'Due soon', value: dueSoon, color: '#d97706' },
+      { label: 'Needs action', value: gap, color: '#e11d48' },
+    ]
+  }, [scopedRows])
 
   const toggleSelected = (atlasName: string) => {
     setSelected((prev) => {
@@ -605,8 +669,12 @@ export function TrainingMatrixGapBoard() {
                 </thead>
                 <tbody>
                   {personRollups.map((p) => (
-                    <tr key={p.atlas_name} className="border-b border-border/50">
-                      <td className="py-2 px-3">
+                    <tr
+                      key={p.atlas_name}
+                      className="border-b border-border/50 hover:bg-muted/40 cursor-pointer"
+                      onClick={() => p.person_id != null && setDrawerPersonId(p.person_id)}
+                    >
+                      <td className="py-2 px-3" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           aria-label={`Select ${p.atlas_name}`}
@@ -614,7 +682,9 @@ export function TrainingMatrixGapBoard() {
                           onChange={() => toggleSelected(p.atlas_name)}
                         />
                       </td>
-                      <td className="py-2 px-3 font-medium">{p.engineer_display_name || p.atlas_name}</td>
+                      <td className="py-2 px-3 font-medium text-primary underline-offset-2 hover:underline">
+                        {p.engineer_display_name || p.atlas_name}
+                      </td>
                       <td className="py-2 px-3 text-muted-foreground">{p.department || '—'}</td>
                       <td className="py-2 px-3">{p.complete}</td>
                       <td className="py-2 px-3">
@@ -636,7 +706,7 @@ export function TrainingMatrixGapBoard() {
                 </tbody>
               </table>
             </div>
-          ) : (
+          ) : view === 'module' ? (
             <div className="space-y-2">
               <div className="flex flex-wrap gap-2" role="tablist" aria-label="Module role">
                 {BOARD_ROLES.map((role) => (
@@ -691,9 +761,141 @@ export function TrainingMatrixGapBoard() {
                 </table>
               </div>
             </div>
+          ) : (
+            <div className="space-y-6" data-testid="training-matrix-analytics">
+              <div>
+                <p className="text-sm font-medium mb-1">Compliance vs gap by Training group</p>
+                <p className="text-xs text-muted-foreground mb-3">
+                  In-cycle modules (Passed within frequency) vs needs action. Scope: {roleScope}.
+                </p>
+                <ComplianceBarChart items={analyticsBars} />
+              </div>
+              <div className="grid sm:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-sm font-medium mb-2">Status mix{roleScope !== 'Overall' ? ` · ${roleScope}` : ''}</p>
+                  <StatusPieChart slices={analyticsPie} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium mb-2">What is due soon</p>
+                  <DueForwardBars
+                    d30={summary?.horizons?.d30 ?? 0}
+                    d90={summary?.horizons?.d90 ?? 0}
+                  />
+                </div>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
+
+      <Sheet open={drawerPersonId != null} onOpenChange={(open) => !open && setDrawerPersonId(null)}>
+        <SheetContent side="right" className="max-w-lg" data-testid="training-matrix-person-sheet">
+          <SheetHeader>
+            <SheetTitle>
+              {personDetail?.engineer_display_name || personDetail?.atlas_name || 'Training detail'}
+            </SheetTitle>
+            <SheetDescription>
+              {[personDetail?.department, personDetail?.board_role || 'Auto (Atlas)']
+                .filter(Boolean)
+                .join(' · ') || 'Loading…'}
+            </SheetDescription>
+          </SheetHeader>
+          <SheetBody className="space-y-4">
+            {personLoading || !personDetail ? (
+              <TableSkeleton rows={4} columns={2} />
+            ) : (
+              <>
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <div className="rounded-lg border border-border p-2">
+                    <p className="text-lg font-semibold">{personDetail.rollup.complete}</p>
+                    <p className="text-[11px] text-muted-foreground">Complete</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-2">
+                    <p className="text-lg font-semibold">{personDetail.rollup.overdue}</p>
+                    <p className="text-[11px] text-muted-foreground">Overdue</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-2">
+                    <p className="text-lg font-semibold">{personDetail.rollup.pct}%</p>
+                    <p className="text-[11px] text-muted-foreground">Percent</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-2">
+                    <p className="text-lg font-semibold">{personDetail.rollup.need}</p>
+                    <p className="text-[11px] text-muted-foreground">Need</p>
+                  </div>
+                </div>
+                {personDetail.last_training_notified_at ? (
+                  <p className="text-xs text-muted-foreground">
+                    Last notified: {new Date(personDetail.last_training_notified_at).toLocaleString()}
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!personDetail.can_email || notifying}
+                    onClick={() => runNotify([personDetail.atlas_name])}
+                    data-testid="training-matrix-person-email"
+                  >
+                    <Mail className="w-3.5 h-3.5 mr-1.5" />
+                    Email to complete
+                  </Button>
+                  <a href={personDetail.atlas_hub_url || ATLAS_HUB_URL} target="_blank" rel="noreferrer">
+                    <Button type="button" size="sm" variant="outline">
+                      <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                      Open Atlas
+                    </Button>
+                  </a>
+                </div>
+                {!personDetail.can_email && personDetail.email_skip_reason ? (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">{personDetail.email_skip_reason}</p>
+                ) : null}
+
+                <div>
+                  <p className="text-sm font-medium mb-2">Needs action</p>
+                  <ul className="space-y-2 text-sm">
+                    {personDetail.items.filter((r) => isGapStatus(r.status)).map((r) => (
+                      <li key={r.course_key} className="rounded-md border border-border px-3 py-2">
+                        <div className="flex justify-between gap-2">
+                          <span className="font-medium">{r.course_display_name}</span>
+                          <HorizonBadge row={r} />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {r.status === 'missing' || r.status === 'pending'
+                            ? 'Never completed'
+                            : 'Cycle expired / overdue'}
+                          {r.passed_on ? ` · Passed ${r.passed_on}` : ''}
+                          {r.qgp_due_on ? ` · QGP due ${r.qgp_due_on}` : ''}
+                        </p>
+                      </li>
+                    ))}
+                    {personDetail.items.filter((r) => isGapStatus(r.status)).length === 0 ? (
+                      <li className="text-muted-foreground text-xs">No open gaps.</li>
+                    ) : null}
+                  </ul>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium mb-2">In cycle</p>
+                  <ul className="space-y-2 text-sm">
+                    {personDetail.items.filter((r) => isOkStatus(r.status)).map((r) => (
+                      <li key={r.course_key} className="rounded-md border border-border/60 px-3 py-2">
+                        <div className="flex justify-between gap-2">
+                          <span>{r.course_display_name}</span>
+                          <HorizonBadge row={r} />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {r.passed_on ? `Passed ${r.passed_on}` : '—'}
+                          {r.qgp_due_on ? ` · OK until ${r.qgp_due_on}` : ''}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            )}
+          </SheetBody>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
@@ -735,7 +937,13 @@ export function TrainingMatrixMyTraining() {
               <strong>
                 {summary.okCount}/{summary.total}
               </strong>{' '}
-              modules OK
+              modules complete (in cycle)
+              {summary.total > 0 ? (
+                <span className="text-muted-foreground">
+                  {' '}
+                  · {Math.round((100 * summary.okCount) / summary.total)}%
+                </span>
+              ) : null}
             </p>
             {summary.nextDue ? (
               <p className="text-muted-foreground">

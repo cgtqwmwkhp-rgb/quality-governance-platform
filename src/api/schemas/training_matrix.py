@@ -180,6 +180,31 @@ class TrainingMatrixSummaryResponse(BaseModel):
     atlas_hub_url: str
 
 
+class TrainingMatrixPersonRollup(BaseModel):
+    complete: int
+    overdue: int
+    need: int
+    total: int
+    pct: int
+
+
+class TrainingMatrixPersonComplianceResponse(BaseModel):
+    person_id: int
+    atlas_name: str
+    department: Optional[str] = None
+    board_role_override: Optional[str] = None
+    board_role: Optional[str] = None
+    engineer_id: Optional[int] = None
+    engineer_display_name: Optional[str] = None
+    can_email: bool = False
+    email_skip_reason: Optional[str] = None
+    last_training_notified_at: Optional[datetime] = None
+    rollup: TrainingMatrixPersonRollup
+    items: List[TrainingMatrixComplianceRow]
+    atlas_hub_url: str
+    import_id: Optional[int] = None
+
+
 class TrainingMatrixCourseOption(BaseModel):
     course_key: str
     display_name: str

@@ -71,6 +71,23 @@ export type TrainingMatrixSummary = {
   atlas_hub_url: string
 }
 
+export type TrainingMatrixPersonCompliance = {
+  person_id: number
+  atlas_name: string
+  department?: string | null
+  board_role_override?: string | null
+  board_role?: string | null
+  engineer_id?: number | null
+  engineer_display_name?: string | null
+  can_email: boolean
+  email_skip_reason?: string | null
+  last_training_notified_at?: string | null
+  rollup: { complete: number; overdue: number; need: number; total: number; pct: number }
+  items: TrainingMatrixComplianceRow[]
+  atlas_hub_url: string
+  import_id?: number | null
+}
+
 export type TrainingMatrixRequirement = {
   id: number
   match_department?: string | null
@@ -139,6 +156,10 @@ export function createTrainingMatrixApi(api: AxiosInstance) {
         .then((r) => r.data),
     getSummary: () =>
       api.get<TrainingMatrixSummary>('/api/v1/training-matrix/summary').then((r) => r.data),
+    getPersonCompliance: (personId: number) =>
+      api
+        .get<TrainingMatrixPersonCompliance>(`/api/v1/training-matrix/people/${personId}/compliance`)
+        .then((r) => r.data),
     myTraining: () =>
       api
         .get<{ items: TrainingMatrixComplianceRow[]; total: number; atlas_hub_url: string }>(
