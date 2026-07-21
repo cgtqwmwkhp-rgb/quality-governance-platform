@@ -218,7 +218,7 @@ class PortalComplianceService:
 
     async def my_tools(self, *, user_id: int, tenant_id: int) -> dict[str, Any]:
         now = datetime.now(timezone.utc)
-        _profile, vehicle, van_empty, _conflict, _regs = await self._resolve_van(user_id=user_id, tenant_id=tenant_id)
+        _profile, vehicle, _van_empty, _conflict, _regs = await self._resolve_van(user_id=user_id, tenant_id=tenant_id)
         owned = await self._owned_assets(user_id=user_id, tenant_id=tenant_id)
         van_kit: list[Asset] = []
         if vehicle is not None:
@@ -259,9 +259,7 @@ class PortalComplianceService:
             "mine": len(owned),
             "on_van": len(van_kit),
         }
-        empty_reason = None
-        if not items:
-            empty_reason = "no_tools" if van_empty != "no_driver_profile" else "no_tools"
+        empty_reason = "no_tools" if not items else None
         return {"items": items, "summary": summary, "empty_reason": empty_reason}
 
     async def my_van_status(self, *, user_id: int, tenant_id: int) -> dict[str, Any]:
