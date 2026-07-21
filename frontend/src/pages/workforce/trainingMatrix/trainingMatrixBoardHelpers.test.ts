@@ -228,7 +228,7 @@ describe('filterRowsByHorizon', () => {
     row({ atlas_name: 'Alice', status: 'overdue', qgp_due_on: iso(-1) }),
     row({ atlas_name: 'Bob', status: 'compliant', qgp_due_on: iso(20) }),
     row({ atlas_name: 'Carl', status: 'compliant', qgp_due_on: iso(200) }),
-    row({ atlas_name: 'Dana', status: 'due_soon', qgp_due_on: iso(20) }),
+    row({ atlas_name: 'Dana', status: 'due_soon', qgp_due_on: iso(200) }),
   ]
 
   it('filters to a specific horizon bucket', () => {
