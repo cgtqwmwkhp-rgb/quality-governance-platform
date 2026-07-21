@@ -1358,6 +1358,8 @@ export function TrainingMatrixAdminPanel() {
 
   useEffect(() => {
     reload()
+    // Mount-only load for Admin panel datasets.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const courseRows = useMemo(() => {
@@ -1747,13 +1749,14 @@ export function TrainingMatrixAdminPanel() {
         ) : null}
         <div className="flex flex-wrap items-center gap-3 mb-3">
           <label
+            htmlFor="training-matrix-hide-non-mandated"
             className="inline-flex items-center gap-2 text-sm"
             data-testid="training-matrix-hide-non-mandated"
           >
             <Switch
+              id="training-matrix-hide-non-mandated"
               checked={hideNonMandated}
               onCheckedChange={setHideNonMandated}
-              aria-label="Hide courses with no mandated frequency"
             />
             Hide non-mandated courses
           </label>

@@ -609,9 +609,7 @@ async def propose_requirements_matrix(
     await db.refresh(row)
 
     approver = (
-        await db.execute(
-            select(User).where(func.lower(User.email) == FREQUENCY_MATRIX_APPROVER_EMAIL)
-        )
+        await db.execute(select(User).where(func.lower(User.email) == FREQUENCY_MATRIX_APPROVER_EMAIL))
     ).scalar_one_or_none()
     if approver is not None:
         notifier = NotificationService(db)
@@ -650,19 +648,14 @@ async def list_matrix_proposals(
     )
     if status_filter and status_filter != "all":
         query = query.where(TrainingMatrixFrequencyChangeRequest.status == status_filter)
-    rows = list(
-        (await db.execute(query.order_by(TrainingMatrixFrequencyChangeRequest.id.desc()))).scalars().all()
-    )
+    rows = list((await db.execute(query.order_by(TrainingMatrixFrequencyChangeRequest.id.desc()))).scalars().all())
     proposer_ids = {row.proposed_by_user_id for row in rows if row.proposed_by_user_id}
     proposers: dict[int, User] = {}
     if proposer_ids:
         for user_row in (await db.execute(select(User).where(User.id.in_(proposer_ids)))).scalars().all():
             proposers[user_row.id] = user_row
     return TrainingMatrixFrequencyChangeRequestListResponse(
-        items=[
-            _serialize_change_request(row, proposer=proposers.get(row.proposed_by_user_id or -1))
-            for row in rows
-        ],
+        items=[_serialize_change_request(row, proposer=proposers.get(row.proposed_by_user_id or -1)) for row in rows],
         total=len(rows),
         viewer_can_approve=_is_frequency_approver(user),
         approver_email=FREQUENCY_MATRIX_APPROVER_EMAIL,
