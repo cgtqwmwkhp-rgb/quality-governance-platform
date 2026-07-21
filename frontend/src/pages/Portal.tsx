@@ -18,6 +18,7 @@ import { documentCampaignApi, trainingMatrixApi } from '../api/client'
 import { Card } from '../components/ui/Card'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
 import { cn } from '../helpers/utils'
+import { isGapStatus } from './workforce/trainingMatrix/trainingMatrixBoardHelpers'
 
 export default function Portal() {
   const navigate = useNavigate()
@@ -43,7 +44,7 @@ export default function Portal() {
     void trainingMatrixApi
       .myTraining()
       .then((res) => {
-        setTrainingGapCount((res.items || []).filter((row) => row.status !== 'compliant').length)
+        setTrainingGapCount((res.items || []).filter((row) => isGapStatus(row.status)).length)
       })
       .catch(() => {
         setTrainingGapCount(0)
