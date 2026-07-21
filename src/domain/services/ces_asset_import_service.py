@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import io
 import json
+import logging
 from typing import Any
 
 from openpyxl import load_workbook
@@ -23,6 +24,8 @@ from src.domain.services.ces_asset_import_parser import cell_text, normalise_ces
 from src.domain.services.lookup_similarity import classify_lookup_name, normalise_lookup_key
 from src.domain.services.notification_service import NotificationService
 from src.domain.services.training_matrix_parser import normalize_person_name
+
+logger = logging.getLogger(__name__)
 
 EQUIPMENT_LIST_SHEET = "Equipment List"
 
@@ -249,14 +252,10 @@ class CesAssetImportService:
         claimed_existing: dict[int, int],
     ) -> tuple[Asset | None, list[RowIssue]]:
         issues: list[RowIssue] = []
-        matched = list(candidates)
-        if asset_type is not None:
-            typed = [asset for asset in matched if asset.asset_type_id == asset_type.id]
-            if typed:
-                matched = typed
-            else:
-                # Different equipment type with same serial → create a new asset.
-                matched = []
+        # Unresolved / provisional type must not absorb an existing serial of another type.
+        if asset_type is None:
+            return None, issues
+        matched = [asset for asset in candidates if asset.asset_type_id == asset_type.id]
         if qr and matched:
             by_qr = [asset for asset in matched if (asset.qr_code_data or "").strip() == qr.strip()]
             if len(matched) > 1 or by_qr:
@@ -528,6 +527,235 @@ class CesAssetImportService:
         # new
         return None, name, []
 
+    @staticmethod
+    def _missing_confirmation_errors(
+        proposals: list[LookupProposal],
+        confirmation_map: dict[tuple[str, str], LookupConfirmation],
+    ) -> list[RowIssue]:
+        errors: list[RowIssue] = []
+        for proposal in proposals:
+            if not proposal.needs_confirmation:
+                continue
+            key = (proposal.kind, normalise_lookup_key(proposal.name))
+            if key in confirmation_map:
+                continue
+            errors.append(
+                RowIssue(
+                    0,
+                    "NEEDS_CONFIRMATION",
+                    (
+                        f"{proposal.kind} '{proposal.name}' looks similar to "
+                        f"{[m['name'] for m in proposal.similar_matches]}; confirm before commit"
+                    ),
+                    proposal.kind,
+                )
+            )
+        return errors
+
+    @staticmethod
+    def _lookup_intent_warnings(
+        *,
+        proposal: LookupProposal | None,
+        row_number: int,
+        display_name: str,
+        field: str,
+        similar_code: str,
+        new_code: str,
+        enforce_confirmations: bool,
+    ) -> list[RowIssue]:
+        if proposal is None:
+            return []
+        if proposal.intent == "similar" and not enforce_confirmations:
+            return [
+                RowIssue(
+                    row_number,
+                    similar_code,
+                    (
+                        f"{field.replace('_', ' ').title()} '{display_name}' is similar to "
+                        f"{[m['name'] for m in proposal.similar_matches]}; confirm before commit"
+                    ),
+                    field,
+                    "warning",
+                )
+            ]
+        if proposal.intent == "new":
+            return [
+                RowIssue(
+                    row_number,
+                    new_code,
+                    f"{field.replace('_', ' ').title()} '{display_name}' will be created pending approval",
+                    field,
+                    "warning",
+                )
+            ]
+        return []
+
+    def _validate_one_row(
+        self,
+        row: dict[str, Any],
+        *,
+        proposals_by_key: dict[tuple[str, str], LookupProposal],
+        confirmation_map: dict[tuple[str, str], LookupConfirmation],
+        type_by_id: dict[int, AssetType],
+        location_by_id: dict[int, Location],
+        owner_by_name: dict[str, int | None],
+        existing_by_serial: dict[str, list[Asset]],
+        serial_rows: dict[str, list[dict[str, Any]]],
+        claimed_existing: dict[int, int],
+        enforce_confirmations: bool,
+    ) -> tuple[list[RowIssue], list[RowIssue], ValidatedCesRow | None]:
+        row_number = int(row["__row__"])
+        row_errors: list[RowIssue] = []
+        warnings: list[RowIssue] = []
+        if "__parse_error__" in row:
+            return [RowIssue(row_number, "INVALID_ROW", row["__parse_error__"])], [], None
+
+        serial = str(row["serial_number"]).strip()
+        equipment_type = str(row["equipment_type"]).strip()
+        qr = row["qr_code_data"]
+        if not serial:
+            row_errors.append(RowIssue(row_number, "REQUIRED", "Serial Number is required", "serial_number"))
+        if not equipment_type:
+            row_errors.append(RowIssue(row_number, "REQUIRED", "Equipment Type is required", "equipment_type"))
+        if not row["name"]:
+            row_errors.append(RowIssue(row_number, "REQUIRED", "Equipment name is required", "equipment_type"))
+
+        type_id: int | None = None
+        create_type_name: str | None = None
+        if equipment_type:
+            type_id, create_type_name, resolve_issues = self._resolve_lookup(
+                kind="asset_type",
+                name=equipment_type,
+                proposals_by_key=proposals_by_key,
+                confirmations=confirmation_map,
+                by_id=type_by_id,
+                enforce_confirmations=enforce_confirmations,
+            )
+            for issue in resolve_issues:
+                row_errors.append(RowIssue(row_number, issue.code, issue.message, issue.field, issue.severity))
+            warnings.extend(
+                self._lookup_intent_warnings(
+                    proposal=proposals_by_key.get(("asset_type", normalise_lookup_key(equipment_type))),
+                    row_number=row_number,
+                    display_name=equipment_type,
+                    field="equipment_type",
+                    similar_code="SIMILAR_TYPE",
+                    new_code="TYPE_WILL_CREATE_PENDING",
+                    enforce_confirmations=enforce_confirmations,
+                )
+            )
+
+        asset_type = type_by_id.get(type_id) if type_id else None
+        duplicate = self._duplicate_in_file(serial, equipment_type, qr, serial_rows.get(serial, []), row_number)
+        if duplicate:
+            row_errors.append(duplicate)
+
+        existing, match_issues = self._match_existing(
+            serial,
+            asset_type,
+            qr,
+            list(existing_by_serial.get(serial, [])),
+            row_number,
+            claimed_existing,
+        )
+        row_errors.extend(match_issues)
+
+        location_id: int | None = None
+        create_location_name: str | None = None
+        owner_user_id = None
+        vehicle_reg = row["vehicle_reg"]
+        assignment = str(row.get("assignment_text") or "").strip()
+        if not vehicle_reg and assignment:
+            location_id, create_location_name, loc_issues = self._resolve_lookup(
+                kind="location",
+                name=assignment,
+                proposals_by_key=proposals_by_key,
+                confirmations=confirmation_map,
+                by_id=location_by_id,
+                enforce_confirmations=enforce_confirmations,
+            )
+            for issue in loc_issues:
+                row_errors.append(RowIssue(row_number, issue.code, issue.message, issue.field, issue.severity))
+            warnings.extend(
+                self._lookup_intent_warnings(
+                    proposal=proposals_by_key.get(("location", normalise_lookup_key(assignment))),
+                    row_number=row_number,
+                    display_name=assignment,
+                    field="location",
+                    similar_code="SIMILAR_LOCATION",
+                    new_code="LOCATION_WILL_CREATE_PENDING",
+                    enforce_confirmations=enforce_confirmations,
+                )
+            )
+
+        owner_name = row["engineer_name"]
+        if owner_name:
+            key = normalize_person_name(owner_name).lower()
+            if key in owner_by_name and owner_by_name[key] is not None:
+                owner_user_id = owner_by_name[key]
+            else:
+                warnings.append(
+                    RowIssue(
+                        row_number,
+                        "UNMAPPED_OWNER",
+                        f"Engineer '{owner_name}' has no uniquely linked user",
+                        "location",
+                        "warning",
+                    )
+                )
+
+        if row["not_made_available"]:
+            warnings.append(
+                RowIssue(
+                    row_number,
+                    "NOT_MADE_AVAILABLE",
+                    "CES status is Not Made Available; imported as active and flagged in metadata",
+                    "status",
+                    "warning",
+                )
+            )
+        if row_errors:
+            return row_errors, warnings, None
+        if type_id is None and not create_type_name:
+            return (
+                [RowIssue(row_number, "UNKNOWN_TYPE", f"Unknown asset type '{equipment_type}'", "equipment_type")],
+                warnings,
+                None,
+            )
+
+        action = "update" if existing else "create"
+        if existing is not None:
+            claimed_existing[existing.id] = row_number
+        metadata = {
+            "ces_location": row["location_raw"],
+            "ces_company": row["company"],
+            "ces_last_inspection": row["last_inspection"].isoformat() if row["last_inspection"] else None,
+            "ces_asset_id": row["asset_id"],
+            "ces_not_made_available": row["not_made_available"],
+        }
+        validated = ValidatedCesRow(
+            row=row_number,
+            action=action,
+            asset_type_id=type_id or 0,
+            asset_number=serial or qr or f"CES-{row_number}",
+            name=row["name"][:200],
+            serial_number=serial,
+            status=row["status"],
+            existing_id=existing.id if existing else None,
+            make=row["make"],
+            model=row["model"],
+            owner_user_id=owner_user_id,
+            location_id=location_id,
+            vehicle_reg=vehicle_reg,
+            site=row["assignment_text"],
+            expiry_date=row["expiry_date"],
+            qr_code_data=qr,
+            metadata_json={key: value for key, value in metadata.items() if value is not None},
+            create_type_name=create_type_name,
+            create_location_name=create_location_name,
+        )
+        return [], warnings, validated
+
     async def validate_rows(
         self,
         rows: list[dict[str, Any]],
@@ -545,24 +773,9 @@ class CesAssetImportService:
         proposals_by_key = {(p.kind, normalise_lookup_key(p.name)): p for p in proposals}
         confirmation_map = self._confirmation_map(confirmations or [])
 
-        global_errors: list[RowIssue] = []
+        errors: list[RowIssue] = []
         if enforce_confirmations:
-            for proposal in proposals:
-                if not proposal.needs_confirmation:
-                    continue
-                key = (proposal.kind, normalise_lookup_key(proposal.name))
-                if key not in confirmation_map:
-                    global_errors.append(
-                        RowIssue(
-                            0,
-                            "NEEDS_CONFIRMATION",
-                            (
-                                f"{proposal.kind} '{proposal.name}' looks similar to "
-                                f"{[m['name'] for m in proposal.similar_matches]}; confirm before commit"
-                            ),
-                            proposal.kind,
-                        )
-                    )
+            errors.extend(self._missing_confirmation_errors(proposals, confirmation_map))
 
         serial_rows: dict[str, list[dict[str, Any]]] = {}
         for row in rows:
@@ -570,196 +783,32 @@ class CesAssetImportService:
             if serial:
                 serial_rows.setdefault(serial, []).append(row)
 
-        errors: list[RowIssue] = list(global_errors)
         warnings: list[RowIssue] = []
         validated: list[ValidatedCesRow] = []
         claimed_existing: dict[int, int] = {}
         creates = updates = 0
 
         for row in rows:
-            row_number = int(row["__row__"])
-            row_errors: list[RowIssue] = []
-            if "__parse_error__" in row:
-                row_errors.append(RowIssue(row_number, "INVALID_ROW", row["__parse_error__"]))
-                errors.extend(row_errors)
-                continue
-            serial = str(row["serial_number"]).strip()
-            equipment_type = str(row["equipment_type"]).strip()
-            qr = row["qr_code_data"]
-            if not serial:
-                row_errors.append(RowIssue(row_number, "REQUIRED", "Serial Number is required", "serial_number"))
-            if not equipment_type:
-                row_errors.append(RowIssue(row_number, "REQUIRED", "Equipment Type is required", "equipment_type"))
-            if not row["name"]:
-                row_errors.append(RowIssue(row_number, "REQUIRED", "Equipment name is required", "equipment_type"))
-
-            type_id: int | None = None
-            create_type_name: str | None = None
-            if equipment_type:
-                type_id, create_type_name, resolve_issues = self._resolve_lookup(
-                    kind="asset_type",
-                    name=equipment_type,
-                    proposals_by_key=proposals_by_key,
-                    confirmations=confirmation_map,
-                    by_id=type_by_id,
-                    enforce_confirmations=enforce_confirmations,
-                )
-                for issue in resolve_issues:
-                    row_errors.append(RowIssue(row_number, issue.code, issue.message, issue.field, issue.severity))
-                proposal = proposals_by_key.get(("asset_type", normalise_lookup_key(equipment_type)))
-                if proposal and proposal.intent == "similar" and not enforce_confirmations:
-                    warnings.append(
-                        RowIssue(
-                            row_number,
-                            "SIMILAR_TYPE",
-                            (
-                                f"Equipment type '{equipment_type}' is similar to "
-                                f"{[m['name'] for m in proposal.similar_matches]}; confirm before commit"
-                            ),
-                            "equipment_type",
-                            "warning",
-                        )
-                    )
-                elif proposal and proposal.intent == "new":
-                    warnings.append(
-                        RowIssue(
-                            row_number,
-                            "TYPE_WILL_CREATE_PENDING",
-                            f"Equipment type '{equipment_type}' will be created pending approval",
-                            "equipment_type",
-                            "warning",
-                        )
-                    )
-
-            asset_type = type_by_id.get(type_id) if type_id else None
-            duplicate = self._duplicate_in_file(serial, equipment_type, qr, serial_rows.get(serial, []), row_number)
-            if duplicate:
-                row_errors.append(duplicate)
-
-            existing, match_issues = self._match_existing(
-                serial,
-                asset_type,
-                qr,
-                list(existing_by_serial.get(serial, [])),
-                row_number,
-                claimed_existing,
+            row_errors, row_warnings, item = self._validate_one_row(
+                row,
+                proposals_by_key=proposals_by_key,
+                confirmation_map=confirmation_map,
+                type_by_id=type_by_id,
+                location_by_id=location_by_id,
+                owner_by_name=owner_by_name,
+                existing_by_serial=existing_by_serial,
+                serial_rows=serial_rows,
+                claimed_existing=claimed_existing,
+                enforce_confirmations=enforce_confirmations,
             )
-            row_errors.extend(match_issues)
-
-            location_id: int | None = None
-            create_location_name: str | None = None
-            owner_user_id = None
-            vehicle_reg = row["vehicle_reg"]
-            assignment = str(row.get("assignment_text") or "").strip()
-            if vehicle_reg:
-                # Vehicle path — no location lookup.
-                pass
-            elif assignment:
-                location_id, create_location_name, loc_issues = self._resolve_lookup(
-                    kind="location",
-                    name=assignment,
-                    proposals_by_key=proposals_by_key,
-                    confirmations=confirmation_map,
-                    by_id=location_by_id,
-                    enforce_confirmations=enforce_confirmations,
-                )
-                for issue in loc_issues:
-                    row_errors.append(RowIssue(row_number, issue.code, issue.message, issue.field, issue.severity))
-                proposal = proposals_by_key.get(("location", normalise_lookup_key(assignment)))
-                if proposal and proposal.intent == "similar" and not enforce_confirmations:
-                    warnings.append(
-                        RowIssue(
-                            row_number,
-                            "SIMILAR_LOCATION",
-                            (
-                                f"Location '{assignment}' is similar to "
-                                f"{[m['name'] for m in proposal.similar_matches]}; confirm before commit"
-                            ),
-                            "location",
-                            "warning",
-                        )
-                    )
-                elif proposal and proposal.intent == "new":
-                    warnings.append(
-                        RowIssue(
-                            row_number,
-                            "LOCATION_WILL_CREATE_PENDING",
-                            f"Location '{assignment}' will be created pending approval",
-                            "location",
-                            "warning",
-                        )
-                    )
-
-            owner_name = row["engineer_name"]
-            if owner_name:
-                key = normalize_person_name(owner_name).lower()
-                if key in owner_by_name and owner_by_name[key] is not None:
-                    owner_user_id = owner_by_name[key]
-                else:
-                    warnings.append(
-                        RowIssue(
-                            row_number,
-                            "UNMAPPED_OWNER",
-                            f"Engineer '{owner_name}' has no uniquely linked user",
-                            "location",
-                            "warning",
-                        )
-                    )
-
-            if row["not_made_available"]:
-                warnings.append(
-                    RowIssue(
-                        row_number,
-                        "NOT_MADE_AVAILABLE",
-                        "CES status is Not Made Available; imported as active and flagged in metadata",
-                        "status",
-                        "warning",
-                    )
-                )
-            if row_errors:
-                errors.extend(row_errors)
+            errors.extend(row_errors)
+            warnings.extend(row_warnings)
+            if item is None:
                 continue
-            # Type must resolve to existing id or deferred create name.
-            if type_id is None and not create_type_name:
-                errors.append(
-                    RowIssue(row_number, "UNKNOWN_TYPE", f"Unknown asset type '{equipment_type}'", "equipment_type")
-                )
-                continue
-            action = "update" if existing else "create"
-            if existing is not None:
-                claimed_existing[existing.id] = row_number
-            creates += action == "create"
-            updates += action == "update"
-            metadata = {
-                "ces_location": row["location_raw"],
-                "ces_company": row["company"],
-                "ces_last_inspection": row["last_inspection"].isoformat() if row["last_inspection"] else None,
-                "ces_asset_id": row["asset_id"],
-                "ces_not_made_available": row["not_made_available"],
-            }
-            validated.append(
-                ValidatedCesRow(
-                    row=row_number,
-                    action=action,
-                    asset_type_id=type_id or 0,
-                    asset_number=serial or qr or f"CES-{row_number}",
-                    name=row["name"][:200],
-                    serial_number=serial,
-                    status=row["status"],
-                    existing_id=existing.id if existing else None,
-                    make=row["make"],
-                    model=row["model"],
-                    owner_user_id=owner_user_id,
-                    location_id=location_id,
-                    vehicle_reg=vehicle_reg,
-                    site=row["assignment_text"],
-                    expiry_date=row["expiry_date"],
-                    qr_code_data=qr,
-                    metadata_json={key: value for key, value in metadata.items() if value is not None},
-                    create_type_name=create_type_name,
-                    create_location_name=create_location_name,
-                )
-            )
+            creates += item.action == "create"
+            updates += item.action == "update"
+            validated.append(item)
+
         preview = [
             {
                 "row": item.row,
@@ -978,14 +1027,18 @@ class CesAssetImportService:
                     )
                     created_ids.append(asset.id)
             await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+        # Notify after durable commit so notification failures cannot roll back assets.
+        try:
             await self._notify_pending_lookups(
                 user_id=user_id,
                 type_count=len(set(provisional_type_ids)),
                 location_count=len(set(provisional_location_ids)),
             )
-        except Exception:
-            await self.db.rollback()
-            raise
+        except Exception:  # noqa: BLE001
+            logger.exception("CES import succeeded but pending-lookup notification failed")
         report.dry_run = False
         return CesImportCommitResult(
             created_count=len(created_ids),

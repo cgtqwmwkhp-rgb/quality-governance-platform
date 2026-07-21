@@ -154,11 +154,13 @@ class SafetyLookupApprovalService:
                     select(AssetType).where(
                         AssetType.id == target_id,
                         or_(AssetType.tenant_id == tenant_id, AssetType.tenant_id.is_(None)),
+                        AssetType.approval_status == "approved",
+                        AssetType.is_active.is_(True),
                     )
                 )
             ).scalar_one_or_none()
             if target is None:
-                raise NotFoundError(f"Target asset type {target_id} not found")
+                raise NotFoundError(f"Target asset type {target_id} not found or not an approved active type")
             await self.db.execute(
                 update(Asset)
                 .where(
@@ -169,10 +171,17 @@ class SafetyLookupApprovalService:
             )
         else:
             target = (
-                await self.db.execute(select(Location).where(Location.id == target_id, Location.tenant_id == tenant_id))
+                await self.db.execute(
+                    select(Location).where(
+                        Location.id == target_id,
+                        Location.tenant_id == tenant_id,
+                        Location.approval_status == "approved",
+                        Location.is_active.is_(True),
+                    )
+                )
             ).scalar_one_or_none()
             if target is None:
-                raise NotFoundError(f"Target location {target_id} not found")
+                raise NotFoundError(f"Target location {target_id} not found or not an approved active location")
             await self.db.execute(
                 update(Asset)
                 .where(Asset.location_id == entity_id, Asset.tenant_id == tenant_id)
