@@ -16,6 +16,7 @@ import {
   type ExpiryBand,
   type MetricValue,
   type SafetyAsset,
+  type CesAssetImportReport,
   type SafetyAssetKpis,
   type SafetyAssetType,
   type SafetyLocation,
@@ -91,6 +92,10 @@ export default function SafetyAssetRegister() {
   const [vehicleFilter, setVehicleFilter] = useState('')
   const [ownerFilter, setOwnerFilter] = useState('')
   const [expiryFilter, setExpiryFilter] = useState<string>('all')
+  const [cesFile, setCesFile] = useState<File | null>(null)
+  const [cesReport, setCesReport] = useState<CesAssetImportReport | null>(null)
+  const [cesBusy, setCesBusy] = useState(false)
+  const [cesError, setCesError] = useState<string | null>(null)
 
   const pageSize = 20
 
@@ -251,6 +256,38 @@ export default function SafetyAssetRegister() {
     setPage(1)
   }
 
+  const dryRunCesImport = async () => {
+    if (!cesFile) return
+    setCesBusy(true)
+    setCesError(null)
+    try {
+      const response = await safetyAssetsApi.cesImportDryRun(cesFile)
+      setCesReport(response.data)
+    } catch (err) {
+      setCesError(getApiErrorMessage(err, 'Could not validate CES workbook.'))
+      setCesReport(null)
+    } finally {
+      setCesBusy(false)
+    }
+  }
+
+  const commitCesImport = async () => {
+    if (!cesFile || !cesReport?.ok) return
+    setCesBusy(true)
+    setCesError(null)
+    try {
+      const response = await safetyAssetsApi.cesImportCommit(cesFile)
+      setCesReport(response.data.report)
+      toast.success(`CES import complete: ${response.data.created_count} created, ${response.data.updated_count} updated.`)
+      void loadList()
+      void loadKpis()
+    } catch (err) {
+      setCesError(getApiErrorMessage(err, 'Could not commit CES workbook.'))
+    } finally {
+      setCesBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -277,6 +314,58 @@ export default function SafetyAssetRegister() {
           {t('safetyAssets.refresh', 'Refresh')}
         </Button>
       </div>
+
+      <Card data-testid="ces-import-panel">
+        <CardContent className="space-y-3 p-4">
+          <div>
+            <h2 className="font-semibold text-foreground">CES Calibrations import</h2>
+            <p className="text-sm text-muted-foreground">
+              Admin-only XLSX import. Dry-run validates serial upserts before any assets are changed.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Input
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              aria-label="CES workbook"
+              onChange={(event) => {
+                setCesFile(event.target.files?.[0] ?? null)
+                setCesReport(null)
+                setCesError(null)
+              }}
+            />
+            <Button size="sm" disabled={!cesFile || cesBusy} onClick={() => void dryRunCesImport()}>
+              {cesBusy ? 'Working…' : 'Dry run'}
+            </Button>
+            <Button
+              size="sm"
+              disabled={!cesReport?.ok || cesBusy}
+              onClick={() => void commitCesImport()}
+            >
+              Commit import
+            </Button>
+          </div>
+          {cesError ? <p className="text-sm text-destructive" role="alert">{cesError}</p> : null}
+          {cesReport ? (
+            <div className="rounded-md bg-muted/50 p-3 text-sm" data-testid="ces-import-summary">
+              <p>
+                {cesReport.valid_rows} valid, {cesReport.error_rows} error rows, {cesReport.creates} creates,{' '}
+                {cesReport.updates} updates, {cesReport.warnings.length} warnings.
+              </p>
+              {cesReport.errors.length ? (
+                <p className="mt-1 text-destructive">
+                  {cesReport.errors.slice(0, 3).map((issue) => `Row ${issue.row}: ${issue.code}`).join(' · ')}
+                </p>
+              ) : null}
+              {cesReport.warnings.length ? (
+                <p className="mt-1 text-warning-foreground">
+                  {cesReport.warnings.slice(0, 3).map((issue) => `Row ${issue.row}: ${issue.code}`).join(' · ')}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
 
       {kpisUnavailable ? (
         <div

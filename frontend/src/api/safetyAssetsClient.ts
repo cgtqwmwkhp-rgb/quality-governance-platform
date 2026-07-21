@@ -117,6 +117,46 @@ export interface SafetyAssetUpdate {
   department?: string | null
 }
 
+export interface CesAssetImportIssue {
+  row: number
+  code: string
+  message: string
+  field?: string | null
+  severity: 'error' | 'warning'
+}
+
+export interface CesAssetImportReport {
+  dry_run: boolean
+  total_rows: number
+  valid_rows: number
+  error_rows: number
+  creates: number
+  updates: number
+  ok: boolean
+  errors: CesAssetImportIssue[]
+  warnings: CesAssetImportIssue[]
+  preview: Array<{
+    row: number
+    action: 'create' | 'update'
+    asset_number: string
+    name: string
+    serial_number: string
+    owner_user_id?: number | null
+    location_id?: number | null
+    vehicle_reg?: string | null
+    status: string
+    not_made_available: boolean
+  }>
+}
+
+export interface CesAssetImportCommitResult {
+  created_count: number
+  updated_count: number
+  created_asset_ids: number[]
+  updated_asset_ids: number[]
+  report: CesAssetImportReport
+}
+
 /** KPI metrics — null means unavailable (never silent-zero on fetch failure). */
 export type MetricValue = number | null
 
@@ -158,6 +198,24 @@ export const safetyAssetsApi = {
 
   updateAsset: (id: number, data: SafetyAssetUpdate) =>
     api.patch<SafetyAsset>(`${BASE}/${id}`, data),
+
+  cesImportDryRun: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    // Full CES workbooks are large; allow long parse/validate wall-clock.
+    return api.post<CesAssetImportReport>('/api/v1/asset-imports/ces/dry-run', form, {
+      timeout: 300000,
+    })
+  },
+
+  cesImportCommit: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    // Commit upserts ~1.8k rows; keep above default 45s write timeout.
+    return api.post<CesAssetImportCommitResult>('/api/v1/asset-imports/ces/commit', form, {
+      timeout: 300000,
+    })
+  },
 
   listAssetTypes: (params?: {
     page?: number
