@@ -13,6 +13,7 @@ vi.mock('react-i18next', () => ({
 vi.mock('../../../api/client', () => ({
   trainingMatrixApi: {
     listCompliance: vi.fn().mockResolvedValue({ items: [], total: 0, atlas_hub_url: 'https://atlas' }),
+    getSummary: vi.fn().mockResolvedValue(null),
     myTraining: vi.fn().mockResolvedValue({ items: [], total: 0, atlas_hub_url: 'https://atlas' }),
     listNameMaps: vi.fn().mockResolvedValue([]),
     listRequirements: vi.fn().mockResolvedValue({ items: [], total: 0 }),
@@ -43,6 +44,7 @@ vi.mock('../../../api/client', () => ({
   ATLAS_HUB_URL: 'https://www.atlas-hub.co.uk/o/98b88f4e-2c3f-44c1-a812-36ea66222c7d/',
 }))
 
+import { trainingMatrixApi } from '../../../api/client'
 import Training from '../Training'
 
 describe('Training shell', () => {
@@ -63,5 +65,28 @@ describe('Training shell', () => {
 
     await user.click(screen.getByTestId('training-tab-admin'))
     expect(await screen.findByTestId('training-matrix-admin')).toBeInTheDocument()
+  })
+
+  it('keeps latest import provenance when compliance loading fails', async () => {
+    vi.mocked(trainingMatrixApi.listCompliance).mockRejectedValueOnce(new Error('Compliance unavailable'))
+    vi.mocked(trainingMatrixApi.getLatestImport).mockResolvedValueOnce({
+      id: 7,
+      filename: 'matrix.csv',
+      status: 'complete',
+      person_count: 10,
+      course_count: 4,
+      cell_count: 40,
+      nonempty_cell_count: 36,
+      expiry_without_passed_count: 0,
+      created_at: '2026-07-21T11:00:00Z',
+    })
+
+    render(
+      <MemoryRouter>
+        <Training />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('training-matrix-last-upload')).toHaveTextContent('matrix.csv')
   })
 })

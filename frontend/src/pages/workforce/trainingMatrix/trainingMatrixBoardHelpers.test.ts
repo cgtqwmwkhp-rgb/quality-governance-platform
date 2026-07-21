@@ -228,6 +228,7 @@ describe('filterRowsByHorizon', () => {
     row({ atlas_name: 'Alice', status: 'overdue', qgp_due_on: iso(-1) }),
     row({ atlas_name: 'Bob', status: 'compliant', qgp_due_on: iso(20) }),
     row({ atlas_name: 'Carl', status: 'compliant', qgp_due_on: iso(200) }),
+    row({ atlas_name: 'Dana', status: 'due_soon', qgp_due_on: iso(20) }),
   ]
 
   it('filters to a specific horizon bucket', () => {
@@ -235,10 +236,9 @@ describe('filterRowsByHorizon', () => {
     expect(filterRowsByHorizon(rows, 'd30', TODAY)).toHaveLength(1)
   })
 
-  it('keeps every non-compliant row for "all"', () => {
+  it('keeps every non-OK row for "all"', () => {
     const filtered = filterRowsByHorizon(rows, 'all', TODAY)
-    expect(filtered).toHaveLength(1)
-    expect(filtered[0].atlas_name).toBe('Alice')
+    expect(filtered.map((item) => item.atlas_name)).toEqual(['Alice'])
   })
 })
 

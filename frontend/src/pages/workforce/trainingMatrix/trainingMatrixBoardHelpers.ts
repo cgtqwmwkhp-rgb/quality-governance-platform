@@ -246,7 +246,7 @@ export type Briefing = { title: string; detail: string }
 /** Up to 5 grounded, data-derived insights for the rotating status banner. */
 export function buildStatusBriefings(
   rows: TrainingMatrixComplianceRow[],
-  roleStats: RoleStat[],
+  roleStats: Pick<RoleStat, 'role' | 'pct' | 'total'>[],
   today: Date = new Date(),
 ): Briefing[] {
   const briefings: Briefing[] = []
@@ -336,7 +336,7 @@ export function filterRowsByHorizon(
   horizon: Horizon | 'all',
   today: Date = new Date(),
 ): TrainingMatrixComplianceRow[] {
-  if (horizon === 'all') return rows.filter((r) => r.status !== 'compliant')
+  if (horizon === 'all') return rows.filter((r) => !isOkStatus(r.status))
   return rows.filter((r) => horizonForRow(r.status, r.qgp_due_on, today) === horizon)
 }
 

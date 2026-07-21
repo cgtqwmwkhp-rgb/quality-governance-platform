@@ -223,7 +223,7 @@ export function TrainingMatrixGapBoard() {
     setLoading(true)
     setError(null)
     Promise.all([
-      trainingMatrixApi.listCompliance(),
+      trainingMatrixApi.listCompliance().catch(() => ({ items: [] })),
       trainingMatrixApi.getSummary().catch(() => null),
       trainingMatrixApi.getLatestImport().catch(() => null),
     ])
