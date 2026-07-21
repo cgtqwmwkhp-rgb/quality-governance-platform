@@ -61,10 +61,11 @@ def derive_clear_state(
     due_30: int,
     open_p1: int,
     open_other_defects: int,
+    van_assignment_issue: bool = False,
 ) -> ClearState:
     if quarantined > 0 or open_p1 > 0:
         return "blocked"
-    if overdue > 0 or due_30 > 0 or open_other_defects > 0:
+    if overdue > 0 or due_30 > 0 or open_other_defects > 0 or van_assignment_issue:
         return "attention"
     return "clear"
 
@@ -129,10 +130,13 @@ class PortalComplianceService:
         conflict = vehicle.assigned_driver_id not in (None, user_id) or (
             len(claimed) > 0 and allocated not in claimed_regs
         )
+        # Hard conflict: registry says another driver owns this van — do not trust kit/status.
         if conflict and vehicle.assigned_driver_id not in (None, user_id):
             return profile, None, "assignment_conflict", True, claimed_regs
+        # Soft conflict: multiple claims, but DriverProfile allocation still resolves — keep van,
+        # surface conflict so admin can clean up assigned_driver_id duplicates.
         if len(claimed) > 1:
-            return profile, None, "multiple_assigned", True, claimed_regs
+            return profile, vehicle, None, True, claimed_regs
         return profile, vehicle, None, bool(conflict), claimed_regs
 
     async def _owned_assets(self, *, user_id: int, tenant_id: int) -> list[Asset]:
@@ -324,12 +328,16 @@ class PortalComplianceService:
         van = await self.my_van_status(user_id=user_id, tenant_id=tenant_id)
         summary = tools["summary"]
         counts = van["defect_counts"]
+        van_assignment_issue = bool(
+            van.get("assignment_conflict") or van.get("empty_reason") in {"assignment_conflict", "multiple_assigned"}
+        )
         clear_state = derive_clear_state(
             overdue=summary["overdue"],
             quarantined=summary["quarantined"],
             due_30=summary["due_30"],
             open_p1=counts["p1"],
             open_other_defects=counts["p2"] + counts["p3"],
+            van_assignment_issue=van_assignment_issue,
         )
         tool_badge = summary["overdue"] + summary["quarantined"] + summary["due_30"]
         van_badge = counts["total"]

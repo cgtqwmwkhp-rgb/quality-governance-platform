@@ -48,6 +48,17 @@ def test_derive_clear_state_attention() -> None:
     assert derive_clear_state(overdue=1, quarantined=0, due_30=0, open_p1=0, open_other_defects=0) == "attention"
     assert derive_clear_state(overdue=0, quarantined=0, due_30=1, open_p1=0, open_other_defects=0) == "attention"
     assert derive_clear_state(overdue=0, quarantined=0, due_30=0, open_p1=0, open_other_defects=2) == "attention"
+    assert (
+        derive_clear_state(
+            overdue=0,
+            quarantined=0,
+            due_30=0,
+            open_p1=0,
+            open_other_defects=0,
+            van_assignment_issue=True,
+        )
+        == "attention"
+    )
 
 
 def test_derive_clear_state_clear() -> None:
