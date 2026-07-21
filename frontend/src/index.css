@@ -290,6 +290,20 @@
   to   { width: 0%; }
 }
 
+/* Live Highlight Rail auto-scroll (Dashboard). Pauses on hover/focus via
+   Tailwind arbitrary variants in HighlightRail.tsx. Disabled entirely when
+   the user prefers reduced motion — the rail then just wraps statically. */
+@keyframes highlight-rail-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-highlight-rail {
+    animation: highlight-rail-scroll 24s linear infinite;
+  }
+}
+
 @layer components {
   /* Responsive Header */
   .responsive-header {
