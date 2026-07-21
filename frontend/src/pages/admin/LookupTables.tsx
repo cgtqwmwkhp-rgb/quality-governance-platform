@@ -15,6 +15,11 @@ import {
 import { toast } from '../../contexts/ToastContext'
 import { cn } from '../../helpers/utils'
 import {
+  CUSTOMERS_LOOKUP_CATEGORY,
+  CUSTOMER_CODE_HINTS,
+  customerHintCodes,
+} from './customersCatalog'
+import {
   WORKFORCE_ROLES_LOOKUP_CATEGORY,
   WORKFORCE_ROLE_CODE_HINTS,
   workforceRoleHintCodes,
@@ -27,6 +32,7 @@ const LOOKUP_CATEGORIES = [
   { key: 'severity_levels', label: 'Severity Levels' },
   { key: 'departments', label: 'Departments' },
   { key: 'locations', label: 'Locations' },
+  { key: CUSTOMERS_LOOKUP_CATEGORY, label: 'Customers' },
   { key: 'tools', label: 'Tools' },
   { key: 'assets', label: 'Assets' },
   { key: WORKFORCE_ROLES_LOOKUP_CATEGORY, label: 'Workforce Roles' },
@@ -256,10 +262,15 @@ export default function LookupTables() {
                         'admin.lookups.workforce_roles_desc',
                         'Configure role codes for employees (job_title / competency role matching). Nothing is pre-seeded.',
                       )
-                    : t(
-                        `admin.lookups.${cat.key}_desc`,
-                        `Configure ${cat.label.toLowerCase()} for your organisation`,
-                      )}
+                    : cat.key === CUSTOMERS_LOOKUP_CATEGORY
+                      ? t(
+                          'admin.lookups.customers_desc',
+                          'Configure customer names for forms and dropdowns across the platform. Nothing is pre-seeded.',
+                        )
+                      : t(
+                          `admin.lookups.${cat.key}_desc`,
+                          `Configure ${cat.label.toLowerCase()} for your organisation`,
+                        )}
                 </p>
                 {cat.key === WORKFORCE_ROLES_LOOKUP_CATEGORY ? (
                   <p
@@ -268,6 +279,15 @@ export default function LookupTables() {
                   >
                     {t('admin.lookups.workforce_roles_hint', 'Suggested codes')}:{' '}
                     <span className="font-mono">{workforceRoleHintCodes()}</span>
+                  </p>
+                ) : null}
+                {cat.key === CUSTOMERS_LOOKUP_CATEGORY ? (
+                  <p
+                    className="text-xs text-muted-foreground font-mono"
+                    data-testid="lookup-customers-hints"
+                  >
+                    {t('admin.lookups.customers_hint', 'Suggested codes')}:{' '}
+                    <span className="font-mono">{customerHintCodes()}</span>
                   </p>
                 ) : null}
                 {notConfigured ? (
@@ -329,6 +349,19 @@ export default function LookupTables() {
                       data-testid="lookup-editor-workforce-role-hints"
                     >
                       {WORKFORCE_ROLE_CODE_HINTS.map((hint) => (
+                        <li key={hint.code} className="font-mono">
+                          {hint.code}
+                          <span className="font-sans text-muted-foreground/80"> — {hint.label}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {editorCategory?.key === CUSTOMERS_LOOKUP_CATEGORY ? (
+                    <ul
+                      className="text-xs text-muted-foreground space-y-1"
+                      data-testid="lookup-editor-customer-hints"
+                    >
+                      {CUSTOMER_CODE_HINTS.map((hint) => (
                         <li key={hint.code} className="font-mono">
                           {hint.code}
                           <span className="font-sans text-muted-foreground/80"> — {hint.label}</span>
