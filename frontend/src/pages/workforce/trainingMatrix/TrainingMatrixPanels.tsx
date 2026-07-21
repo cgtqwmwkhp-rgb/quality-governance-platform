@@ -44,15 +44,21 @@ import { toast } from '../../../contexts/ToastContext'
 import {
   BOARD_ROLES,
   type BoardRole,
+  buildCourseMetricRollups,
+  buildDepartmentMetricRollups,
   buildPersonRollups,
   buildStatusBriefings,
   computeModuleRoleStats,
   computePeopleFullyOkStats,
+  EMPTY_ENTITY_METRIC_FILTERS,
   EMPTY_PERSON_ROLLUP_FILTERS,
+  type EntityMetricColumnFilters,
+  type EntityMetricRollup,
+  type EntityMetricSortKey,
+  entityMetricRollupsToCsv,
+  filterEntityMetricRollups,
   filterPersonRollups,
   filterRowsByHorizon,
-  groupRowsByCourse,
-  groupRowsByDepartment,
   type Horizon,
   HORIZON_FILTERS,
   horizonForRow,
@@ -66,10 +72,12 @@ import {
   resolveBoardRole,
   rowsToCsv,
   type SortDirection,
+  sortEntityMetricRollups,
   sortPersonRollups,
   statusLabel,
   topCoursesInHorizon,
 } from './trainingMatrixBoardHelpers'
+import { ComplianceBarChart, DueForwardBars, StatusPieChart } from './trainingMatrixCharts'
 
 const PERSON_ROLLUP_COLUMNS: { key: PersonRollupSortKey; label: string; filterPlaceholder: string }[] =
   [
@@ -80,7 +88,26 @@ const PERSON_ROLLUP_COLUMNS: { key: PersonRollupSortKey; label: string; filterPl
     { key: 'pct', label: '%', filterPlaceholder: '=' },
     { key: 'need', label: 'Need to complete', filterPlaceholder: '=' },
   ]
-import { ComplianceBarChart, DueForwardBars, StatusPieChart } from './trainingMatrixCharts'
+
+function entityMetricColumns(nameLabel: string): {
+  key: EntityMetricSortKey
+  label: string
+  filterPlaceholder: string
+}[] {
+  return [
+    { key: 'label', label: nameLabel, filterPlaceholder: 'Filter' },
+    { key: 'complete', label: 'Complete', filterPlaceholder: '=' },
+    { key: 'overdue', label: 'Overdue', filterPlaceholder: '=' },
+    { key: 'pct', label: '%', filterPlaceholder: '=' },
+    { key: 'need', label: 'Need to complete', filterPlaceholder: '=' },
+  ]
+}
+
+type EntityDrilldown = {
+  title: string
+  subtitle?: string
+  rollup: EntityMetricRollup
+}
 
 type RoleScope = BoardRole | 'Overall'
 
@@ -268,6 +295,11 @@ export function TrainingMatrixGapBoard() {
   const [personSortDir, setPersonSortDir] = useState<SortDirection>('desc')
   const [personFilters, setPersonFilters] =
     useState<PersonRollupColumnFilters>(EMPTY_PERSON_ROLLUP_FILTERS)
+  const [entitySortKey, setEntitySortKey] = useState<EntityMetricSortKey>('overdue')
+  const [entitySortDir, setEntitySortDir] = useState<SortDirection>('desc')
+  const [entityFilters, setEntityFilters] =
+    useState<EntityMetricColumnFilters>(EMPTY_ENTITY_METRIC_FILTERS)
+  const [entityDrilldown, setEntityDrilldown] = useState<EntityDrilldown | null>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -353,8 +385,14 @@ export function TrainingMatrixGapBoard() {
     return topCoursesInHorizon(scopedRows, horizon, 5)
   }, [scopedRows, filteredRows, horizon])
 
-  const groupRows = useMemo(() => groupRowsByDepartment(filteredRows), [filteredRows])
-  const courseRows = useMemo(() => groupRowsByCourse(filteredRows), [filteredRows])
+  const groupRollups = useMemo(
+    () => buildDepartmentMetricRollups(scopedRows, filteredRows),
+    [scopedRows, filteredRows],
+  )
+  const courseRollups = useMemo(
+    () => buildCourseMetricRollups(scopedRows, filteredRows),
+    [scopedRows, filteredRows],
+  )
   const personRollups = useMemo(
     () => buildPersonRollups(scopedRows, filteredRows),
     [scopedRows, filteredRows],
@@ -364,7 +402,31 @@ export function TrainingMatrixGapBoard() {
     [personRollups, personFilters, personSortKey, personSortDir],
   )
   const moduleRole: BoardRole = roleScope === 'Overall' ? 'Engineer' : roleScope
-  const moduleRows = useMemo(() => moduleViewForRole(rows, moduleRole), [rows, moduleRole])
+  const moduleRollups = useMemo(() => moduleViewForRole(rows, moduleRole), [rows, moduleRole])
+
+  const activeEntityRollups = useMemo(() => {
+    if (view === 'group') return groupRollups
+    if (view === 'course') return courseRollups
+    if (view === 'module') return moduleRollups
+    return []
+  }, [view, groupRollups, courseRollups, moduleRollups])
+
+  const displayedEntityRollups = useMemo(
+    () =>
+      sortEntityMetricRollups(
+        filterEntityMetricRollups(activeEntityRollups, entityFilters),
+        entitySortKey,
+        entitySortDir,
+      ),
+    [activeEntityRollups, entityFilters, entitySortKey, entitySortDir],
+  )
+
+  useEffect(() => {
+    setEntityFilters(EMPTY_ENTITY_METRIC_FILTERS)
+    setEntitySortKey(view === 'module' ? 'pct' : 'overdue')
+    setEntitySortDir(view === 'module' ? 'asc' : 'desc')
+    setEntityDrilldown(null)
+  }, [view])
 
   const handlePersonSort = (key: PersonRollupSortKey) => {
     if (personSortKey === key) {
@@ -377,6 +439,117 @@ export function TrainingMatrixGapBoard() {
 
   const setPersonFilter = (key: keyof PersonRollupColumnFilters, value: string) => {
     setPersonFilters((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const handleEntitySort = (key: EntityMetricSortKey) => {
+    if (entitySortKey === key) {
+      setEntitySortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setEntitySortKey(key)
+    setEntitySortDir(key === 'label' ? 'asc' : key === 'pct' && view === 'module' ? 'asc' : 'desc')
+  }
+
+  const setEntityFilter = (key: keyof EntityMetricColumnFilters, value: string) => {
+    setEntityFilters((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const openEntityDrilldown = (rollup: EntityMetricRollup, nameLabel: string) => {
+    setEntityDrilldown({
+      title: rollup.label,
+      subtitle: `${nameLabel} · ${rollup.complete}/${rollup.total} complete · ${rollup.overdue} overdue`,
+      rollup,
+    })
+  }
+
+  const renderEntityMetricTable = (nameLabel: string, testId: string) => {
+    const columns = entityMetricColumns(nameLabel)
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm" data-testid={testId}>
+          <thead>
+            <tr className="border-b border-border text-left text-muted-foreground">
+              {columns.map(({ key, label }) => {
+                const active = entitySortKey === key
+                return (
+                  <th
+                    key={key}
+                    className="py-2 px-3 font-medium"
+                    scope="col"
+                    aria-sort={
+                      active ? (entitySortDir === 'asc' ? 'ascending' : 'descending') : 'none'
+                    }
+                  >
+                    <button
+                      type="button"
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        active ? 'text-foreground' : 'text-muted-foreground',
+                      )}
+                      onClick={() => handleEntitySort(key)}
+                      data-testid={`${testId}-sort-${key}`}
+                    >
+                      {label}
+                      {active ? (
+                        entitySortDir === 'asc' ? (
+                          <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
+                        ) : (
+                          <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
+                        )
+                      ) : null}
+                    </button>
+                  </th>
+                )
+              })}
+            </tr>
+            <tr className="border-b border-border bg-muted/20" data-testid={`${testId}-filters`}>
+              {columns.map(({ key, filterPlaceholder }) => (
+                <th key={`filter-${key}`} className="py-1.5 px-2 font-normal">
+                  <Input
+                    value={entityFilters[key]}
+                    onChange={(e) => setEntityFilter(key, e.target.value)}
+                    placeholder={filterPlaceholder}
+                    aria-label={`Filter ${key}`}
+                    data-testid={`${testId}-filter-${key}`}
+                    className="h-8 text-xs"
+                  />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {displayedEntityRollups.map((r) => (
+              <tr
+                key={r.key}
+                className="border-b border-border/50 hover:bg-muted/40 cursor-pointer"
+                onClick={() => openEntityDrilldown(r, nameLabel)}
+              >
+                <td className="py-2 px-3 font-medium text-primary underline-offset-2 hover:underline">
+                  {r.label}
+                </td>
+                <td className="py-2 px-3">{r.complete}</td>
+                <td className="py-2 px-3">
+                  <Badge variant={r.overdue > 0 ? 'destructive' : 'success'}>{r.overdue}</Badge>
+                </td>
+                <td className="py-2 px-3 font-medium">{r.pct}%</td>
+                <td className="py-2 px-3 text-muted-foreground">{r.need}</td>
+              </tr>
+            ))}
+            {displayedEntityRollups.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                  {view === 'module'
+                    ? `No required modules mapped to ${moduleRole} yet.`
+                    : roleScope !== 'Overall' && scopedRows.length === 0
+                      ? 'No matrix requirements for this group — check Admin Training group mapping and frequency matrix.'
+                      : 'No rows in this filter.'}
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    )
   }
 
   useEffect(() => {
@@ -452,6 +625,16 @@ export function TrainingMatrixGapBoard() {
       const csv = personRollupsToCsv(displayedPersonRollups)
       downloadCsv(`training-matrix-people-${horizon}-${new Date().toISOString().slice(0, 10)}.csv`, csv)
       toast.success(`Exported ${displayedPersonRollups.length} people`)
+      return
+    }
+    if (view === 'group' || view === 'course' || view === 'module') {
+      const labelHeader = view === 'group' ? 'Group' : view === 'course' ? 'Course' : 'Module'
+      const csv = entityMetricRollupsToCsv(displayedEntityRollups, labelHeader)
+      downloadCsv(
+        `training-matrix-${view}-${horizon}-${new Date().toISOString().slice(0, 10)}.csv`,
+        csv,
+      )
+      toast.success(`Exported ${displayedEntityRollups.length} ${view} rows`)
       return
     }
     const csv = rowsToCsv(filteredRows)
@@ -624,15 +807,27 @@ export function TrainingMatrixGapBoard() {
                 disabled={
                   (view === 'individual'
                     ? displayedPersonRollups.length === 0
-                    : filteredRows.length === 0) || notifying
+                    : view === 'group' || view === 'course' || view === 'module'
+                      ? displayedEntityRollups.length === 0
+                      : filteredRows.length === 0) || notifying
                 }
-                onClick={() =>
-                  runNotify(
-                    view === 'individual'
-                      ? displayedPersonRollups.map((p) => p.atlas_name)
-                      : [...new Set(filteredRows.map((r) => r.atlas_name))],
-                  )
-                }
+                onClick={() => {
+                  if (view === 'individual') {
+                    runNotify(displayedPersonRollups.map((p) => p.atlas_name))
+                    return
+                  }
+                  if (view === 'group' || view === 'course' || view === 'module') {
+                    runNotify([
+                      ...new Set(
+                        displayedEntityRollups.flatMap((r) =>
+                          r.filteredRows.map((row) => row.atlas_name),
+                        ),
+                      ),
+                    ])
+                    return
+                  }
+                  runNotify([...new Set(filteredRows.map((r) => r.atlas_name))])
+                }}
                 data-testid="training-matrix-email-filter"
               >
                 <Mail className="w-3.5 h-3.5 mr-1.5" />
@@ -648,69 +843,9 @@ export function TrainingMatrixGapBoard() {
           {loading ? (
             <TableSkeleton rows={6} columns={4} />
           ) : view === 'group' ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="py-2 px-3">Group</th>
-                    <th className="py-2 px-3">Overdue</th>
-                    <th className="py-2 px-3">Total lines</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {groupRows.map((g) => (
-                    <tr key={g.department} className="border-b border-border/50">
-                      <td className="py-2 px-3 font-medium">{g.department}</td>
-                      <td className="py-2 px-3">
-                        <Badge variant={g.overdue > 0 ? 'destructive' : 'success'}>{g.overdue}</Badge>
-                      </td>
-                      <td className="py-2 px-3 text-muted-foreground">{g.total}</td>
-                    </tr>
-                  ))}
-                  {groupRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={3} className="py-6 text-center text-muted-foreground">
-                        No rows in this filter.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
+            renderEntityMetricTable('Group', 'training-matrix-group-table')
           ) : view === 'course' ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="py-2 px-3">Course</th>
-                    <th className="py-2 px-3">Overdue</th>
-                    <th className="py-2 px-3">30d</th>
-                    <th className="py-2 px-3">60d</th>
-                    <th className="py-2 px-3">180d</th>
-                    <th className="py-2 px-3">OK</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {courseRows.map((c) => (
-                    <tr key={c.course_key} className="border-b border-border/50">
-                      <td className="py-2 px-3 font-medium">{c.course_display_name}</td>
-                      <td className="py-2 px-3">{c.overdue}</td>
-                      <td className="py-2 px-3">{c.d30}</td>
-                      <td className="py-2 px-3">{c.d60}</td>
-                      <td className="py-2 px-3">{c.d180}</td>
-                      <td className="py-2 px-3">{c.ok}</td>
-                    </tr>
-                  ))}
-                  {courseRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-6 text-center text-muted-foreground">
-                        No rows in this filter.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
+            renderEntityMetricTable('Course', 'training-matrix-course-table')
           ) : view === 'individual' ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm" data-testid="training-matrix-individual-table">
@@ -826,39 +961,7 @@ export function TrainingMatrixGapBoard() {
                   </button>
                 ))}
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-muted-foreground">
-                      <th className="py-2 px-3">Module</th>
-                      <th className="py-2 px-3">% compliant</th>
-                      <th className="py-2 px-3">People</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {moduleRows.map((m) => (
-                      <tr key={m.course_key} className="border-b border-border/50">
-                        <td className="py-2 px-3 font-medium">{m.course_display_name}</td>
-                        <td className="py-2 px-3">
-                          <Badge variant={m.pct >= 90 ? 'success' : m.pct >= 60 ? 'warning' : 'destructive'}>
-                            {m.pct}%
-                          </Badge>
-                        </td>
-                        <td className="py-2 px-3 text-muted-foreground">
-                          {m.compliant}/{m.total}
-                        </td>
-                      </tr>
-                    ))}
-                    {moduleRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="py-6 text-center text-muted-foreground">
-                          No required modules mapped to {moduleRole} yet.
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
+              {renderEntityMetricTable('Module', 'training-matrix-module-table')}
             </div>
           ) : (
             <div className="space-y-6" data-testid="training-matrix-analytics">
@@ -992,6 +1095,103 @@ export function TrainingMatrixGapBoard() {
                 </div>
               </>
             )}
+          </SheetBody>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet
+        open={entityDrilldown != null}
+        onOpenChange={(open) => !open && setEntityDrilldown(null)}
+      >
+        <SheetContent side="right" className="max-w-lg" data-testid="training-matrix-entity-sheet">
+          <SheetHeader>
+            <SheetTitle>{entityDrilldown?.title || 'Detail'}</SheetTitle>
+            <SheetDescription>{entityDrilldown?.subtitle || ''}</SheetDescription>
+          </SheetHeader>
+          <SheetBody className="space-y-4">
+            {entityDrilldown ? (
+              <>
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <div className="rounded-lg border border-border p-2">
+                    <p className="text-lg font-semibold">{entityDrilldown.rollup.complete}</p>
+                    <p className="text-[11px] text-muted-foreground">Complete</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-2">
+                    <p className="text-lg font-semibold text-destructive">
+                      {entityDrilldown.rollup.overdue}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">Overdue</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-2">
+                    <p className="text-lg font-semibold">{entityDrilldown.rollup.pct}%</p>
+                    <p className="text-[11px] text-muted-foreground">Percent</p>
+                  </div>
+                  <div className="rounded-lg border border-border p-2">
+                    <p className="text-lg font-semibold">{entityDrilldown.rollup.need}</p>
+                    <p className="text-[11px] text-muted-foreground">Need</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={notifying || entityDrilldown.rollup.filteredRows.length === 0}
+                    onClick={() =>
+                      runNotify([
+                        ...new Set(entityDrilldown.rollup.filteredRows.map((r) => r.atlas_name)),
+                      ])
+                    }
+                    data-testid="training-matrix-entity-email"
+                  >
+                    <Mail className="w-3.5 h-3.5 mr-1.5" />
+                    Email people in filter
+                  </Button>
+                  <a href={ATLAS_HUB_URL} target="_blank" rel="noreferrer">
+                    <Button type="button" size="sm" variant="outline">
+                      <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                      Open Atlas
+                    </Button>
+                  </a>
+                </div>
+                <div>
+                  <p className="text-sm font-medium mb-2">Needs action</p>
+                  <ul className="space-y-2 text-sm">
+                    {entityDrilldown.rollup.allRows
+                      .filter((r) => isGapStatus(r.status))
+                      .map((r) => (
+                        <li key={`${r.atlas_name}-${r.course_key}`}>
+                          <button
+                            type="button"
+                            className="w-full rounded-md border border-border px-3 py-2 text-left hover:bg-muted/40"
+                            onClick={() => {
+                              if (r.person_id != null) {
+                                setEntityDrilldown(null)
+                                setDrawerPersonId(r.person_id)
+                              }
+                            }}
+                          >
+                            <div className="flex justify-between gap-2">
+                              <span className="font-medium text-primary underline-offset-2">
+                                {r.engineer_display_name || r.atlas_name}
+                              </span>
+                              <HorizonBadge row={r} />
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {r.course_display_name}
+                              {r.department ? ` · ${r.department}` : ''}
+                              {r.qgp_due_on ? ` · QGP due ${r.qgp_due_on}` : ''}
+                            </p>
+                          </button>
+                        </li>
+                      ))}
+                    {entityDrilldown.rollup.allRows.filter((r) => isGapStatus(r.status)).length ===
+                    0 ? (
+                      <li className="text-muted-foreground text-xs">No open gaps.</li>
+                    ) : null}
+                  </ul>
+                </div>
+              </>
+            ) : null}
           </SheetBody>
         </SheetContent>
       </Sheet>

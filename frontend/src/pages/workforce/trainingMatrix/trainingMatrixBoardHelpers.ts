@@ -342,6 +342,189 @@ export function sortPersonRollups(
   })
 }
 
+/** Shared metric shape for By group / By course / By module (mirrors person Complete/Overdue/%/Need). */
+export type EntityMetricRollup = {
+  key: string
+  label: string
+  complete: number
+  overdue: number
+  need: number
+  total: number
+  pct: number
+  allRows: TrainingMatrixComplianceRow[]
+  filteredRows: TrainingMatrixComplianceRow[]
+}
+
+export type EntityMetricSortKey = 'label' | 'complete' | 'overdue' | 'pct' | 'need'
+
+export type EntityMetricColumnFilters = {
+  label: string
+  complete: string
+  overdue: string
+  pct: string
+  need: string
+}
+
+export const EMPTY_ENTITY_METRIC_FILTERS: EntityMetricColumnFilters = {
+  label: '',
+  complete: '',
+  overdue: '',
+  pct: '',
+  need: '',
+}
+
+function metricCounts(
+  personRows: TrainingMatrixComplianceRow[],
+  today: Date,
+): Pick<EntityMetricRollup, 'complete' | 'overdue' | 'need' | 'total' | 'pct'> {
+  const total = personRows.length
+  const complete = personRows.filter((r) => isOkStatus(r.status)).length
+  const overdue = personRows.filter(
+    (r) => horizonForRow(r.status, r.qgp_due_on, today) === 'overdue',
+  ).length
+  return {
+    complete,
+    overdue,
+    need: total - complete,
+    total,
+    pct: total ? Math.round((100 * complete) / total) : 0,
+  }
+}
+
+function buildEntityMetricRollups(
+  allRows: TrainingMatrixComplianceRow[],
+  filteredRows: TrainingMatrixComplianceRow[],
+  keyOf: (row: TrainingMatrixComplianceRow) => string,
+  labelOf: (row: TrainingMatrixComplianceRow) => string,
+  today: Date,
+): EntityMetricRollup[] {
+  const byKey = new Map<string, TrainingMatrixComplianceRow[]>()
+  for (const row of allRows) {
+    const key = keyOf(row)
+    const bucket = byKey.get(key)
+    if (bucket) bucket.push(row)
+    else byKey.set(key, [row])
+  }
+  const filteredKeys = new Set(filteredRows.map((r) => keyOf(r)))
+  const filteredByKey = new Map<string, TrainingMatrixComplianceRow[]>()
+  for (const row of filteredRows) {
+    const key = keyOf(row)
+    const bucket = filteredByKey.get(key)
+    if (bucket) bucket.push(row)
+    else filteredByKey.set(key, [row])
+  }
+
+  const rollups: EntityMetricRollup[] = []
+  for (const [key, entityRows] of byKey) {
+    if (!filteredKeys.has(key)) continue
+    const counts = metricCounts(entityRows, today)
+    rollups.push({
+      key,
+      label: labelOf(entityRows[0]),
+      ...counts,
+      allRows: entityRows,
+      filteredRows: filteredByKey.get(key) || [],
+    })
+  }
+  return rollups.sort((a, b) => b.overdue - a.overdue || a.label.localeCompare(b.label))
+}
+
+/** Course rollups with full-set Complete/Need; horizon filters which courses appear. */
+export function buildCourseMetricRollups(
+  allRows: TrainingMatrixComplianceRow[],
+  filteredRows: TrainingMatrixComplianceRow[],
+  today: Date = new Date(),
+): EntityMetricRollup[] {
+  return buildEntityMetricRollups(
+    allRows,
+    filteredRows,
+    (r) => r.course_key,
+    (r) => r.course_display_name,
+    today,
+  )
+}
+
+/** Department (group) rollups with full-set Complete/Need; horizon filters which groups appear. */
+export function buildDepartmentMetricRollups(
+  allRows: TrainingMatrixComplianceRow[],
+  filteredRows: TrainingMatrixComplianceRow[],
+  today: Date = new Date(),
+): EntityMetricRollup[] {
+  return buildEntityMetricRollups(
+    allRows,
+    filteredRows,
+    (r) => r.department || 'Unspecified',
+    (r) => r.department || 'Unspecified',
+    today,
+  )
+}
+
+export function filterEntityMetricRollups(
+  rollups: EntityMetricRollup[],
+  filters: EntityMetricColumnFilters,
+): EntityMetricRollup[] {
+  return rollups.filter(
+    (r) =>
+      matchesTextFilter(r.label, filters.label) &&
+      matchesExactNumberFilter(r.complete, filters.complete) &&
+      matchesExactNumberFilter(r.overdue, filters.overdue) &&
+      matchesExactNumberFilter(r.pct, filters.pct) &&
+      matchesExactNumberFilter(r.need, filters.need),
+  )
+}
+
+export function sortEntityMetricRollups(
+  rollups: EntityMetricRollup[],
+  sortKey: EntityMetricSortKey,
+  sortDir: SortDirection,
+): EntityMetricRollup[] {
+  const dir = sortDir === 'asc' ? 1 : -1
+  return [...rollups].sort((a, b) => {
+    let cmp = 0
+    switch (sortKey) {
+      case 'label':
+        cmp = a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
+        break
+      case 'complete':
+        cmp = a.complete - b.complete
+        break
+      case 'overdue':
+        cmp = a.overdue - b.overdue
+        break
+      case 'pct':
+        cmp = a.pct - b.pct
+        break
+      case 'need':
+        cmp = a.need - b.need
+        break
+      default:
+        cmp = 0
+    }
+    if (cmp !== 0) return cmp * dir
+    return a.key.localeCompare(b.key)
+  })
+}
+
+export function entityMetricRollupsToCsv(
+  rollups: EntityMetricRollup[],
+  labelHeader: string,
+): string {
+  const header = [labelHeader, 'Complete', 'Overdue', 'Need', 'Total', 'Percent']
+  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`
+  const lines = [header]
+  for (const r of rollups) {
+    lines.push([
+      r.label,
+      String(r.complete),
+      String(r.overdue),
+      String(r.need),
+      String(r.total),
+      String(r.pct),
+    ])
+  }
+  return lines.map((cols) => cols.map((c) => escape(String(c))).join(',')).join('\n')
+}
+
 export type Briefing = { title: string; detail: string }
 
 /** Up to 5 grounded, data-derived insights for the rotating status banner. */
@@ -556,31 +739,15 @@ export function groupRowsByPerson(rows: TrainingMatrixComplianceRow[], today: Da
   return [...byPerson.values()].sort((a, b) => b.overdue - a.overdue || a.atlas_name.localeCompare(b.atlas_name))
 }
 
-/** Required modules for a role with % compliant across people mapped to that role — "By module" view. */
+/** Required modules for a role with Complete/Overdue/%/Need — "By module" view. */
 export function moduleViewForRole(
   rows: TrainingMatrixComplianceRow[],
   role: BoardRole,
-): { course_key: string; course_display_name: string; compliant: number; total: number; pct: number }[] {
+  today: Date = new Date(),
+): EntityMetricRollup[] {
   const scoped = rows.filter((r) => resolveBoardRole(r.department, r.board_role_override) === role)
-  const byCourse = new Map<string, { course_display_name: string; compliant: number; total: number }>()
-  for (const row of scoped) {
-    let agg = byCourse.get(row.course_key)
-    if (!agg) {
-      agg = { course_display_name: row.course_display_name, compliant: 0, total: 0 }
-      byCourse.set(row.course_key, agg)
-    }
-    agg.total += 1
-    if (isOkStatus(row.status)) agg.compliant += 1
-  }
-  return [...byCourse.entries()]
-    .map(([course_key, v]) => ({
-      course_key,
-      course_display_name: v.course_display_name,
-      compliant: v.compliant,
-      total: v.total,
-      pct: v.total ? Math.round((100 * v.compliant) / v.total) : 0,
-    }))
-    .sort((a, b) => a.pct - b.pct)
+  // Module view shows the full role set (no horizon membership gate).
+  return buildCourseMetricRollups(scoped, scoped, today).sort((a, b) => a.pct - b.pct || a.label.localeCompare(b.label))
 }
 
 /** CSV rows (header + data) for the currently filtered gap board rows. */

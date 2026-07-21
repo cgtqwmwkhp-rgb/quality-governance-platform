@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { TrainingMatrixComplianceRow } from '../../../api/trainingMatrixClient'
 import {
   BOARD_ROLES,
+  buildCourseMetricRollups,
+  buildDepartmentMetricRollups,
   buildPersonRollups,
+  filterEntityMetricRollups,
   filterPersonRollups,
+  sortEntityMetricRollups,
   sortPersonRollups,
   buildStatusBriefings,
   computeModuleRoleStats,
@@ -357,16 +361,18 @@ describe('groupRowsByPerson', () => {
 })
 
 describe('moduleViewForRole', () => {
-  it('scopes to a role and computes % compliant per course', () => {
+  it('scopes to a role and computes Complete/Overdue/%/Need per course', () => {
     const rows = [
       row({ atlas_name: 'Alice', department: 'Mobile Engineers', course_key: 'a', status: 'compliant' }),
       row({ atlas_name: 'Bob', department: 'Mobile Engineers', course_key: 'a', status: 'overdue' }),
       row({ atlas_name: 'Carl', department: 'Workshop', course_key: 'a', status: 'compliant' }),
     ]
-    const view = moduleViewForRole(rows, 'Engineer')
+    const view = moduleViewForRole(rows, 'Engineer', TODAY)
     expect(view).toHaveLength(1)
     expect(view[0].total).toBe(2)
-    expect(view[0].compliant).toBe(1)
+    expect(view[0].complete).toBe(1)
+    expect(view[0].overdue).toBe(1)
+    expect(view[0].need).toBe(1)
     expect(view[0].pct).toBe(50)
   })
 
@@ -380,10 +386,97 @@ describe('moduleViewForRole', () => {
         status: 'compliant',
       }),
     ]
-    const view = moduleViewForRole(rows, 'Office')
+    const view = moduleViewForRole(rows, 'Office', TODAY)
     expect(view).toHaveLength(1)
     expect(view[0].total).toBe(1)
-    expect(moduleViewForRole(rows, 'Engineer')).toHaveLength(0)
+    expect(moduleViewForRole(rows, 'Engineer', TODAY)).toHaveLength(0)
+  })
+})
+
+describe('buildCourseMetricRollups / buildDepartmentMetricRollups', () => {
+  it('keeps Complete/Need from the full set while horizon filters membership', () => {
+    const all = [
+      row({
+        atlas_name: 'Alice',
+        course_key: 'gdpr',
+        course_display_name: 'GDPR',
+        status: 'compliant',
+        qgp_due_on: iso(100),
+      }),
+      row({
+        atlas_name: 'Bob',
+        course_key: 'gdpr',
+        course_display_name: 'GDPR',
+        status: 'overdue',
+        qgp_due_on: iso(-1),
+      }),
+      row({
+        atlas_name: 'Carl',
+        course_key: 'first-aid',
+        course_display_name: 'First Aid',
+        status: 'compliant',
+        qgp_due_on: iso(100),
+      }),
+    ]
+    const filtered = [all[1]]
+    const courses = buildCourseMetricRollups(all, filtered, TODAY)
+    expect(courses).toHaveLength(1)
+    expect(courses[0].label).toBe('GDPR')
+    expect(courses[0].complete).toBe(1)
+    expect(courses[0].overdue).toBe(1)
+    expect(courses[0].need).toBe(1)
+    expect(courses[0].pct).toBe(50)
+
+    const depts = buildDepartmentMetricRollups(
+      [
+        row({ department: 'Workshop', status: 'overdue', qgp_due_on: iso(-1) }),
+        row({ department: 'Workshop', course_key: 'b', status: 'compliant', qgp_due_on: iso(10) }),
+        row({ department: 'Office', status: 'compliant', qgp_due_on: iso(10) }),
+      ],
+      [row({ department: 'Workshop', status: 'overdue', qgp_due_on: iso(-1) })],
+      TODAY,
+    )
+    expect(depts).toHaveLength(1)
+    expect(depts[0].label).toBe('Workshop')
+    expect(depts[0].complete).toBe(1)
+    expect(depts[0].need).toBe(1)
+  })
+
+  it('filters and sorts entity metric rollups', () => {
+    const rollups = [
+      {
+        key: 'a',
+        label: 'Anti-Bribery',
+        complete: 0,
+        overdue: 10,
+        need: 10,
+        total: 10,
+        pct: 0,
+        allRows: [],
+        filteredRows: [],
+      },
+      {
+        key: 'b',
+        label: 'GDPR',
+        complete: 8,
+        overdue: 2,
+        need: 2,
+        total: 10,
+        pct: 80,
+        allRows: [],
+        filteredRows: [],
+      },
+    ]
+    expect(
+      filterEntityMetricRollups(rollups, {
+        label: 'gdpr',
+        complete: '',
+        overdue: '',
+        pct: '',
+        need: '',
+      }).map((r) => r.key),
+    ).toEqual(['b'])
+    expect(sortEntityMetricRollups(rollups, 'pct', 'desc').map((r) => r.key)).toEqual(['b', 'a'])
   })
 })
 
