@@ -242,6 +242,7 @@ from src.domain.models.token_blacklist import TokenBlacklist
 from src.domain.models.training_matrix import (
     TrainingMatrixCell,
     TrainingMatrixCourse,
+    TrainingMatrixFrequencyChangeRequest,
     TrainingMatrixImport,
     TrainingMatrixNameMap,
     TrainingMatrixPerson,
@@ -476,6 +477,7 @@ __all__ = [
     "TrainingMatrixCell",
     "TrainingMatrixNameMap",
     "TrainingMatrixRequirement",
+    "TrainingMatrixFrequencyChangeRequest",
     "TicketVerifyState",
     "CompetenceGapAction",
     "CompetenceGapSignalType",
