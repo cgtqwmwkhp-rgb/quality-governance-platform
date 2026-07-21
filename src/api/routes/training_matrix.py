@@ -638,9 +638,7 @@ async def _resolve_portal_people(
     ):
         if label and "@" not in str(label):
             candidate_keys |= person_name_match_keys(str(label))
-    by_name = [
-        person for person in people if person_name_match_keys(person.atlas_name) & candidate_keys
-    ]
+    by_name = [person for person in people if person_name_match_keys(person.atlas_name) & candidate_keys]
     if by_name:
         healed = False
         for person in by_name:
@@ -901,9 +899,7 @@ async def my_training(db: DbSession, user: CurrentUser):
     if not eng:
         raise NotFoundError("No employee profile is linked to your user account")
 
-    people, import_id, resolve_reason = await _resolve_portal_people(
-        db, tenant_id=tenant_id, engineer=eng, user=user
-    )
+    people, import_id, resolve_reason = await _resolve_portal_people(db, tenant_id=tenant_id, engineer=eng, user=user)
     if not people:
         return TrainingMatrixComplianceListResponse(
             items=[],
@@ -915,9 +911,7 @@ async def my_training(db: DbSession, user: CurrentUser):
             atlas_name=eng.display_name,
         )
 
-    rows, import_id = await _build_compliance_rows(
-        db, tenant_id=tenant_id, people_override=people
-    )
+    rows, import_id = await _build_compliance_rows(db, tenant_id=tenant_id, people_override=people)
     empty_reason = None
     if not rows:
         empty_reason = "no_requirements"
