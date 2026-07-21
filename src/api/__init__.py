@@ -61,6 +61,7 @@ from src.api.routes import (
     planet_mark,
     policies,
     policy_acknowledgment,
+    portal_compliance,
     privacy,
     push_notifications,
     rca_tools,
@@ -119,6 +120,7 @@ router.include_router(document_categories.router, prefix="/document-categories",
 router.include_router(library_review.router, prefix="/library-review", tags=["Governance Library Review"])
 router.include_router(global_search.router, prefix="/search", tags=["Global Search"])
 router.include_router(employee_portal.router, prefix="/portal", tags=["Employee Portal"])
+router.include_router(portal_compliance.router, prefix="/portal", tags=["Employee Portal"])
 router.include_router(compliance.router, prefix="/compliance", tags=["ISO Compliance & Evidence"])
 router.include_router(
     governed_knowledge.router,
