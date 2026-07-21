@@ -79,18 +79,15 @@ import {
 } from './trainingMatrixBoardHelpers'
 import { ComplianceBarChart, DueForwardBars, StatusPieChart } from './trainingMatrixCharts'
 
-const PERSON_ROLLUP_COLUMNS: {
-  key: PersonRollupSortKey
-  label: string
-  filterPlaceholder: string
-}[] = [
-  { key: 'person', label: 'Person', filterPlaceholder: 'Filter name' },
-  { key: 'department', label: 'Department', filterPlaceholder: 'Filter dept' },
-  { key: 'complete', label: 'Complete', filterPlaceholder: '=' },
-  { key: 'overdue', label: 'Overdue', filterPlaceholder: '=' },
-  { key: 'pct', label: '%', filterPlaceholder: '=' },
-  { key: 'need', label: 'Need to complete', filterPlaceholder: '=' },
-]
+const PERSON_ROLLUP_COLUMNS: { key: PersonRollupSortKey; label: string; filterPlaceholder: string }[] =
+  [
+    { key: 'person', label: 'Person', filterPlaceholder: 'Filter name' },
+    { key: 'department', label: 'Department', filterPlaceholder: 'Filter dept' },
+    { key: 'complete', label: 'Complete', filterPlaceholder: '=' },
+    { key: 'overdue', label: 'Overdue', filterPlaceholder: '=' },
+    { key: 'pct', label: '%', filterPlaceholder: '=' },
+    { key: 'need', label: 'Need to complete', filterPlaceholder: '=' },
+  ]
 
 function entityMetricColumns(nameLabel: string): {
   key: EntityMetricSortKey
@@ -212,21 +209,12 @@ function downloadCsv(filename: string, csv: string) {
   URL.revokeObjectURL(url)
 }
 
-function ComplianceTable({
-  rows,
-  loading,
-}: {
-  rows: TrainingMatrixComplianceRow[]
-  loading: boolean
-}) {
+function ComplianceTable({ rows, loading }: { rows: TrainingMatrixComplianceRow[]; loading: boolean }) {
   const { t } = useTranslation()
   if (loading) return <TableSkeleton rows={6} columns={6} />
   if (rows.length === 0) {
     return (
-      <p
-        className="text-sm text-muted-foreground py-8 text-center"
-        data-testid="training-matrix-empty"
-      >
+      <p className="text-sm text-muted-foreground py-8 text-center" data-testid="training-matrix-empty">
         {t(
           'workforce.training_matrix.empty_compliance',
           'No compliance rows yet. Upload an Atlas matrix and configure role/department requirements.',
@@ -266,9 +254,7 @@ function ComplianceTable({
               <td className="py-2 px-3 text-muted-foreground">{row.qgp_due_on || '—'}</td>
               <td className="py-2 px-3 text-muted-foreground">{row.expires_on || '—'}</td>
               <td className="py-2 px-3">
-                {row.status === 'compliant' ? null : (
-                  <AtlasCta url={row.atlas_hub_url || ATLAS_HUB_URL} />
-                )}
+                {row.status === 'compliant' ? null : <AtlasCta url={row.atlas_hub_url || ATLAS_HUB_URL} />}
               </td>
             </tr>
           ))}
@@ -306,14 +292,12 @@ export function TrainingMatrixGapBoard() {
   const [personLoading, setPersonLoading] = useState(false)
   const [personSortKey, setPersonSortKey] = useState<PersonRollupSortKey>('overdue')
   const [personSortDir, setPersonSortDir] = useState<SortDirection>('desc')
-  const [personFilters, setPersonFilters] = useState<PersonRollupColumnFilters>(
-    EMPTY_PERSON_ROLLUP_FILTERS,
-  )
+  const [personFilters, setPersonFilters] =
+    useState<PersonRollupColumnFilters>(EMPTY_PERSON_ROLLUP_FILTERS)
   const [entitySortKey, setEntitySortKey] = useState<EntityMetricSortKey>('overdue')
   const [entitySortDir, setEntitySortDir] = useState<SortDirection>('desc')
-  const [entityFilters, setEntityFilters] = useState<EntityMetricColumnFilters>(
-    EMPTY_ENTITY_METRIC_FILTERS,
-  )
+  const [entityFilters, setEntityFilters] =
+    useState<EntityMetricColumnFilters>(EMPTY_ENTITY_METRIC_FILTERS)
   const [entityDrilldown, setEntityDrilldown] = useState<EntityDrilldown | null>(null)
 
   useEffect(() => {
@@ -333,7 +317,9 @@ export function TrainingMatrixGapBoard() {
           setSummary(null)
           setError(getApiErrorMessage(complianceResult.reason))
         }
-        setLatestImport(latestImportResult.status === 'fulfilled' ? latestImportResult.value : null)
+        setLatestImport(
+          latestImportResult.status === 'fulfilled' ? latestImportResult.value : null,
+        )
       })
       .finally(() => setLoading(false))
   }, [])
@@ -389,8 +375,7 @@ export function TrainingMatrixGapBoard() {
   const topCourses = useMemo(() => {
     if (horizon === 'all') {
       const counts = new Map<string, number>()
-      for (const row of filteredRows)
-        counts.set(row.course_display_name, (counts.get(row.course_display_name) || 0) + 1)
+      for (const row of filteredRows) counts.set(row.course_display_name, (counts.get(row.course_display_name) || 0) + 1)
       return [...counts.entries()]
         .map(([course_display_name, count]) => ({ course_display_name, count }))
         .sort((a, b) => b.count - a.count)
@@ -412,12 +397,7 @@ export function TrainingMatrixGapBoard() {
     [scopedRows, filteredRows],
   )
   const displayedPersonRollups = useMemo(
-    () =>
-      sortPersonRollups(
-        filterPersonRollups(personRollups, personFilters),
-        personSortKey,
-        personSortDir,
-      ),
+    () => sortPersonRollups(filterPersonRollups(personRollups, personFilters), personSortKey, personSortDir),
     [personRollups, personFilters, personSortKey, personSortDir],
   )
   const moduleRole: BoardRole = roleScope === 'Overall' ? 'Engineer' : roleScope
@@ -445,7 +425,7 @@ export function TrainingMatrixGapBoard() {
   const entityDrilldownRollup = useMemo(
     () =>
       entityDrilldown
-        ? (displayedEntityRollups.find((rollup) => rollup.key === entityDrilldown.key) ?? null)
+        ? displayedEntityRollups.find((rollup) => rollup.key === entityDrilldown.key) ?? null
         : null,
     [displayedEntityRollups, entityDrilldown],
   )
@@ -655,10 +635,7 @@ export function TrainingMatrixGapBoard() {
   const onExportCsv = () => {
     if (view === 'individual') {
       const csv = personRollupsToCsv(displayedPersonRollups)
-      downloadCsv(
-        `training-matrix-people-${horizon}-${new Date().toISOString().slice(0, 10)}.csv`,
-        csv,
-      )
+      downloadCsv(`training-matrix-people-${horizon}-${new Date().toISOString().slice(0, 10)}.csv`, csv)
       toast.success(`Exported ${displayedPersonRollups.length} people`)
       return
     }
@@ -682,9 +659,7 @@ export function TrainingMatrixGapBoard() {
       <Card>
         <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <p className="font-medium">
-              {t('workforce.training_matrix.gap_title', 'Training matrix board')}
-            </p>
+            <p className="font-medium">{t('workforce.training_matrix.gap_title', 'Training matrix board')}</p>
             <p className="text-sm text-muted-foreground">
               {t(
                 'workforce.training_matrix.gap_subtitle',
@@ -692,17 +667,11 @@ export function TrainingMatrixGapBoard() {
               )}
             </p>
             {latestImport ? (
-              <p
-                className="text-xs text-muted-foreground mt-1"
-                data-testid="training-matrix-last-upload"
-              >
+              <p className="text-xs text-muted-foreground mt-1" data-testid="training-matrix-last-upload">
                 Atlas data on file: {formatImportStamp(latestImport)}
               </p>
             ) : (
-              <p
-                className="text-xs text-muted-foreground mt-1"
-                data-testid="training-matrix-last-upload"
-              >
+              <p className="text-xs text-muted-foreground mt-1" data-testid="training-matrix-last-upload">
                 No Atlas matrix uploaded yet — use Admin → Upload CSV.
               </p>
             )}
@@ -711,9 +680,7 @@ export function TrainingMatrixGapBoard() {
         </CardHeader>
         <CardContent className="space-y-4">
           {error ? (
-            <div className="mb-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-              {error}
-            </div>
+            <div className="mb-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
           ) : null}
 
           {briefings.length > 0 ? (
@@ -722,9 +689,7 @@ export function TrainingMatrixGapBoard() {
               data-testid="training-matrix-briefing"
             >
               <div>
-                <p className="text-sm font-medium">
-                  {briefings[briefingIndex % briefings.length].title}
-                </p>
+                <p className="text-sm font-medium">{briefings[briefingIndex % briefings.length].title}</p>
                 <p className="text-sm text-muted-foreground">
                   {briefings[briefingIndex % briefings.length].detail}
                 </p>
@@ -746,8 +711,8 @@ export function TrainingMatrixGapBoard() {
 
           <div className="space-y-2" data-testid="training-matrix-role-bar">
             <p className="text-xs text-muted-foreground">
-              Module compliance (in-cycle) from the Training Matrix — blank frequency cells are
-              excluded. Click a group to filter the board.
+              Module compliance (in-cycle) from the Training Matrix — blank frequency cells are excluded.
+              Click a group to filter the board.
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
               {heroModuleStats.map((stat) => {
@@ -782,11 +747,7 @@ export function TrainingMatrixGapBoard() {
             </div>
           </div>
 
-          <div
-            className="flex flex-wrap items-center gap-2"
-            role="tablist"
-            aria-label="Horizon filter"
-          >
+          <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Horizon filter">
             {HORIZON_FILTERS.map((f) => (
               <button
                 key={f.id}
@@ -884,13 +845,7 @@ export function TrainingMatrixGapBoard() {
                 <Mail className="w-3.5 h-3.5 mr-1.5" />
                 Email everyone in filter
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={onExportCsv}
-                data-testid="training-matrix-export-csv"
-              >
+              <Button type="button" variant="outline" size="sm" onClick={onExportCsv} data-testid="training-matrix-export-csv">
                 <Download className="w-3.5 h-3.5 mr-1.5" />
                 Export CSV
               </Button>
@@ -942,10 +897,7 @@ export function TrainingMatrixGapBoard() {
                       )
                     })}
                   </tr>
-                  <tr
-                    className="border-b border-border bg-muted/20"
-                    data-testid="training-matrix-individual-filters"
-                  >
+                  <tr className="border-b border-border bg-muted/20" data-testid="training-matrix-individual-filters">
                     <th className="py-1.5 px-3" />
                     {PERSON_ROLLUP_COLUMNS.map(({ key, filterPlaceholder }) => (
                       <th key={`filter-${key}`} className="py-1.5 px-2 font-normal">
@@ -982,9 +934,7 @@ export function TrainingMatrixGapBoard() {
                       <td className="py-2 px-3 text-muted-foreground">{p.department || '—'}</td>
                       <td className="py-2 px-3">{p.complete}</td>
                       <td className="py-2 px-3">
-                        <Badge variant={p.overdue > 0 ? 'destructive' : 'success'}>
-                          {p.overdue}
-                        </Badge>
+                        <Badge variant={p.overdue > 0 ? 'destructive' : 'success'}>{p.overdue}</Badge>
                       </td>
                       <td className="py-2 px-3 font-medium">{p.pct}%</td>
                       <td className="py-2 px-3 text-muted-foreground">{p.need}</td>
@@ -1036,9 +986,7 @@ export function TrainingMatrixGapBoard() {
               </div>
               <div className="grid sm:grid-cols-2 gap-6">
                 <div>
-                  <p className="text-sm font-medium mb-2">
-                    Status mix{roleScope !== 'Overall' ? ` · ${roleScope}` : ''}
-                  </p>
+                  <p className="text-sm font-medium mb-2">Status mix{roleScope !== 'Overall' ? ` · ${roleScope}` : ''}</p>
                   <StatusPieChart slices={analyticsPie} />
                 </div>
                 <div>
@@ -1054,10 +1002,7 @@ export function TrainingMatrixGapBoard() {
         </CardContent>
       </Card>
 
-      <Sheet
-        open={drawerPersonId != null}
-        onOpenChange={(open) => !open && setDrawerPersonId(null)}
-      >
+      <Sheet open={drawerPersonId != null} onOpenChange={(open) => !open && setDrawerPersonId(null)}>
         <SheetContent side="right" className="max-w-lg" data-testid="training-matrix-person-sheet">
           <SheetHeader>
             <SheetTitle>
@@ -1094,8 +1039,7 @@ export function TrainingMatrixGapBoard() {
                 </div>
                 {personDetail.last_training_notified_at ? (
                   <p className="text-xs text-muted-foreground">
-                    Last notified:{' '}
-                    {new Date(personDetail.last_training_notified_at).toLocaleString()}
+                    Last notified: {new Date(personDetail.last_training_notified_at).toLocaleString()}
                   </p>
                 ) : null}
                 <div className="flex flex-wrap gap-2">
@@ -1109,11 +1053,7 @@ export function TrainingMatrixGapBoard() {
                     <Mail className="w-3.5 h-3.5 mr-1.5" />
                     Email to complete
                   </Button>
-                  <a
-                    href={personDetail.atlas_hub_url || ATLAS_HUB_URL}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
+                  <a href={personDetail.atlas_hub_url || ATLAS_HUB_URL} target="_blank" rel="noreferrer">
                     <Button type="button" size="sm" variant="outline">
                       <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
                       Open Atlas
@@ -1121,34 +1061,27 @@ export function TrainingMatrixGapBoard() {
                   </a>
                 </div>
                 {!personDetail.can_email && personDetail.email_skip_reason ? (
-                  <p className="text-xs text-amber-700 dark:text-amber-400">
-                    {personDetail.email_skip_reason}
-                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400">{personDetail.email_skip_reason}</p>
                 ) : null}
 
                 <div>
                   <p className="text-sm font-medium mb-2">Needs action</p>
                   <ul className="space-y-2 text-sm">
-                    {personDetail.items
-                      .filter((r) => isGapStatus(r.status))
-                      .map((r) => (
-                        <li
-                          key={r.course_key}
-                          className="rounded-md border border-border px-3 py-2"
-                        >
-                          <div className="flex justify-between gap-2">
-                            <span className="font-medium">{r.course_display_name}</span>
-                            <HorizonBadge row={r} />
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {r.status === 'missing' || r.status === 'pending'
-                              ? 'Never completed'
-                              : 'Cycle expired / overdue'}
-                            {r.passed_on ? ` · Passed ${r.passed_on}` : ''}
-                            {r.qgp_due_on ? ` · QGP due ${r.qgp_due_on}` : ''}
-                          </p>
-                        </li>
-                      ))}
+                    {personDetail.items.filter((r) => isGapStatus(r.status)).map((r) => (
+                      <li key={r.course_key} className="rounded-md border border-border px-3 py-2">
+                        <div className="flex justify-between gap-2">
+                          <span className="font-medium">{r.course_display_name}</span>
+                          <HorizonBadge row={r} />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {r.status === 'missing' || r.status === 'pending'
+                            ? 'Never completed'
+                            : 'Cycle expired / overdue'}
+                          {r.passed_on ? ` · Passed ${r.passed_on}` : ''}
+                          {r.qgp_due_on ? ` · QGP due ${r.qgp_due_on}` : ''}
+                        </p>
+                      </li>
+                    ))}
                     {personDetail.items.filter((r) => isGapStatus(r.status)).length === 0 ? (
                       <li className="text-muted-foreground text-xs">No open gaps.</li>
                     ) : null}
@@ -1158,23 +1091,18 @@ export function TrainingMatrixGapBoard() {
                 <div>
                   <p className="text-sm font-medium mb-2">In cycle</p>
                   <ul className="space-y-2 text-sm">
-                    {personDetail.items
-                      .filter((r) => isOkStatus(r.status))
-                      .map((r) => (
-                        <li
-                          key={r.course_key}
-                          className="rounded-md border border-border/60 px-3 py-2"
-                        >
-                          <div className="flex justify-between gap-2">
-                            <span>{r.course_display_name}</span>
-                            <HorizonBadge row={r} />
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {r.passed_on ? `Passed ${r.passed_on}` : '—'}
-                            {r.qgp_due_on ? ` · OK until ${r.qgp_due_on}` : ''}
-                          </p>
-                        </li>
-                      ))}
+                    {personDetail.items.filter((r) => isOkStatus(r.status)).map((r) => (
+                      <li key={r.course_key} className="rounded-md border border-border/60 px-3 py-2">
+                        <div className="flex justify-between gap-2">
+                          <span>{r.course_display_name}</span>
+                          <HorizonBadge row={r} />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {r.passed_on ? `Passed ${r.passed_on}` : '—'}
+                          {r.qgp_due_on ? ` · OK until ${r.qgp_due_on}` : ''}
+                        </p>
+                      </li>
+                    ))}
                   </ul>
                 </div>
               </>
@@ -1319,10 +1247,7 @@ export function TrainingMatrixMyTraining() {
       </CardHeader>
       <CardContent className="space-y-4">
         {!loading && rows.length > 0 ? (
-          <div
-            className="flex flex-wrap items-center gap-4 p-3 rounded-lg bg-muted/50 text-sm"
-            data-testid="training-matrix-my-progress"
-          >
+          <div className="flex flex-wrap items-center gap-4 p-3 rounded-lg bg-muted/50 text-sm" data-testid="training-matrix-my-progress">
             <p>
               <strong>
                 {summary.okCount}/{summary.total}
@@ -1337,8 +1262,7 @@ export function TrainingMatrixMyTraining() {
             </p>
             {summary.nextDue ? (
               <p className="text-muted-foreground">
-                Next due: <strong>{summary.nextDue.course_display_name}</strong> on{' '}
-                {summary.nextDue.qgp_due_on}
+                Next due: <strong>{summary.nextDue.course_display_name}</strong> on {summary.nextDue.qgp_due_on}
               </p>
             ) : (
               <p className="text-muted-foreground">Nothing outstanding right now.</p>
@@ -1346,9 +1270,7 @@ export function TrainingMatrixMyTraining() {
           </div>
         ) : null}
         {error ? (
-          <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-            {error}
-          </div>
+          <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
         ) : null}
         <ComplianceTable rows={rows} loading={loading} />
       </CardContent>
@@ -1366,9 +1288,7 @@ function buildGridFromRequirements(
   for (const row of courseRows) grid[row.course_key] = {}
   for (const req of requirements) {
     if (req.match_role_key) continue
-    const role = BOARD_ROLES.find(
-      (r) => (req.match_department || '').trim().toLowerCase() === r.toLowerCase(),
-    )
+    const role = BOARD_ROLES.find((r) => (req.match_department || '').trim().toLowerCase() === r.toLowerCase())
     if (!role) continue
     if (!grid[req.course_key]) grid[req.course_key] = {}
     grid[req.course_key][role] = req.is_active ? req.frequency_years : null
@@ -1409,14 +1329,8 @@ export function TrainingMatrixAdminPanel() {
         setError(getApiErrorMessage(err, 'Could not load name maps (admin only).'))
       })
       .finally(() => setNameMapsLoaded(true))
-    trainingMatrixApi
-      .listRequirements()
-      .then((r) => setRequirements(r.items))
-      .catch(() => setRequirements([]))
-    trainingMatrixApi
-      .listCourses()
-      .then(setCourses)
-      .catch(() => setCourses([]))
+    trainingMatrixApi.listRequirements().then((r) => setRequirements(r.items)).catch(() => setRequirements([]))
+    trainingMatrixApi.listCourses().then(setCourses).catch(() => setCourses([]))
     trainingMatrixApi
       .getLatestImport()
       .then(setLatestImport)
@@ -1441,17 +1355,13 @@ export function TrainingMatrixAdminPanel() {
   const courseRows = useMemo(() => {
     const byKey = new Map<string, string>()
     for (const c of courses) byKey.set(c.course_key, c.display_name)
-    for (const r of requirements)
-      if (!byKey.has(r.course_key)) byKey.set(r.course_key, r.course_display_name)
+    for (const r of requirements) if (!byKey.has(r.course_key)) byKey.set(r.course_key, r.course_display_name)
     return [...byKey.entries()]
       .map(([course_key, course_display_name]) => ({ course_key, course_display_name }))
       .sort((a, b) => a.course_display_name.localeCompare(b.course_display_name))
   }, [courses, requirements])
 
-  const savedGrid = useMemo(
-    () => buildGridFromRequirements(courseRows, requirements),
-    [courseRows, requirements],
-  )
+  const savedGrid = useMemo(() => buildGridFromRequirements(courseRows, requirements), [courseRows, requirements])
 
   useEffect(() => {
     setGrid(savedGrid)
@@ -1538,9 +1448,7 @@ export function TrainingMatrixAdminPanel() {
     void trainingMatrixApi
       .upsertRequirementsMatrix(cells)
       .then((res) => {
-        setMessage(
-          `Matrix saved: ${res.upserted} active cell${res.upserted === 1 ? '' : 's'}, ${res.deactivated} deactivated.`,
-        )
+        setMessage(`Matrix saved: ${res.upserted} active cell${res.upserted === 1 ? '' : 's'}, ${res.deactivated} deactivated.`)
         reload()
       })
       .catch((err) => setError(getApiErrorMessage(err, 'Could not save the frequency matrix.')))
@@ -1609,8 +1517,7 @@ export function TrainingMatrixAdminPanel() {
               <p className="font-medium">Last upload</p>
               <p className="text-muted-foreground">{formatImportStamp(latestImport)}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {latestImport.person_count} people · {latestImport.course_count} courses · retained
-                until next overwrite
+                {latestImport.person_count} people · {latestImport.course_count} courses · retained until next overwrite
               </p>
             </>
           ) : (
@@ -1638,8 +1545,8 @@ export function TrainingMatrixAdminPanel() {
           {uploading ? 'Uploading…' : latestImport ? 'Upload CSV (overwrite)' : 'Upload CSV'}
         </Button>
         <p className="text-xs text-muted-foreground">
-          Export the Training Matrix Report from Atlas as CSV. XLSX/PDF will be rejected. You will
-          be asked to confirm before overwriting an existing snapshot.
+          Export the Training Matrix Report from Atlas as CSV. XLSX/PDF will be rejected. You will be asked
+          to confirm before overwriting an existing snapshot.
         </p>
         {message ? <p className="text-sm text-foreground">{message}</p> : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
@@ -1672,10 +1579,7 @@ export function TrainingMatrixAdminPanel() {
               data-testid="training-matrix-person-row"
             >
               <span className="min-w-[10rem] font-medium">{row.atlas_name}</span>
-              <span
-                className="text-muted-foreground min-w-[8rem]"
-                title="Atlas department (unchanged)"
-              >
+              <span className="text-muted-foreground min-w-[8rem]" title="Atlas department (unchanged)">
                 {row.department || '—'}
               </span>
               <label className="sr-only" htmlFor={`tm-role-${row.person_id}`}>
@@ -1706,9 +1610,7 @@ export function TrainingMatrixAdminPanel() {
                 ))}
               </select>
               {row.mapped ? (
-                <span className="text-muted-foreground">
-                  {row.engineer_display_name || 'Mapped'}
-                </span>
+                <span className="text-muted-foreground">{row.engineer_display_name || 'Mapped'}</span>
               ) : (
                 <select
                   className="h-8 rounded-md border border-border bg-card px-2 text-sm"
@@ -1768,9 +1670,8 @@ export function TrainingMatrixAdminPanel() {
         }
       >
         <p className="text-xs text-muted-foreground mb-2">
-          If the grid looks empty after an upload, click{' '}
-          <strong>Restore April 2024 frequencies</strong> — weekly CSV overwrite keeps rules in the
-          database, but a bad Save could clear cells.
+          If the grid looks empty after an upload, click <strong>Restore April 2024 frequencies</strong> —
+          weekly CSV overwrite keeps rules in the database, but a bad Save could clear cells.
         </p>
         <div className="overflow-auto max-h-[min(70vh,48rem)] border border-border rounded-md">
           <table className="w-full text-sm" data-testid="training-matrix-matrix-grid">
@@ -1810,10 +1711,7 @@ export function TrainingMatrixAdminPanel() {
               ))}
               {courseRows.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={BOARD_ROLES.length + 1}
-                    className="py-6 text-center text-muted-foreground"
-                  >
+                  <td colSpan={BOARD_ROLES.length + 1} className="py-6 text-center text-muted-foreground">
                     No Atlas courses yet. Upload a matrix CSV to populate rows.
                   </td>
                 </tr>
