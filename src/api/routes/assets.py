@@ -333,6 +333,16 @@ async def create_asset(
 # Declared before /{asset_id} so "safety-lookups" is not captured as an id.
 
 
+def _parse_safety_lookup_kind(kind: str):
+    from src.domain.exceptions import ValidationError
+    from src.domain.services.safety_lookup_approval_service import Kind
+
+    if kind == "asset_type" or kind == "location":
+        parsed: Kind = kind
+        return parsed
+    raise ValidationError("kind must be asset_type or location")
+
+
 @router.get("/safety-lookups/pending", response_model=SafetyLookupPendingListResponse)
 async def list_pending_safety_lookups(
     db: DbSession,
@@ -350,12 +360,8 @@ async def preview_safety_lookup_create(
     user: CurrentUser,
     _: Annotated[User, Depends(require_permission("asset:create"))],
 ):
-    if body.kind not in {"asset_type", "location"}:
-        from src.domain.exceptions import ValidationError
-
-        raise ValidationError("kind must be asset_type or location")
     result = await SafetyLookupApprovalService(db).preview_create(
-        body.kind, body.name, tenant_id=_tid(user)  # type: ignore[arg-type]
+        _parse_safety_lookup_kind(body.kind), body.name, tenant_id=_tid(user)
     )
     return SafetyLookupPreviewResponse.model_validate(result)
 
@@ -371,12 +377,8 @@ async def approve_safety_lookup(
     user: CurrentUser,
     _: Annotated[User, Depends(require_permission("asset:create"))],
 ):
-    if kind not in {"asset_type", "location"}:
-        from src.domain.exceptions import ValidationError
-
-        raise ValidationError("kind must be asset_type or location")
     result = await SafetyLookupApprovalService(db).approve(
-        kind,  # type: ignore[arg-type]
+        _parse_safety_lookup_kind(kind),
         entity_id,
         tenant_id=_tid(user),
         actor_user_id=user.id,
@@ -396,12 +398,8 @@ async def merge_safety_lookup(
     user: CurrentUser,
     _: Annotated[User, Depends(require_permission("asset:create"))],
 ):
-    if kind not in {"asset_type", "location"}:
-        from src.domain.exceptions import ValidationError
-
-        raise ValidationError("kind must be asset_type or location")
     result = await SafetyLookupApprovalService(db).merge(
-        kind,  # type: ignore[arg-type]
+        _parse_safety_lookup_kind(kind),
         entity_id,
         target_id=body.target_id,
         tenant_id=_tid(user),
@@ -422,12 +420,8 @@ async def reject_safety_lookup(
     user: CurrentUser,
     _: Annotated[User, Depends(require_permission("asset:create"))],
 ):
-    if kind not in {"asset_type", "location"}:
-        from src.domain.exceptions import ValidationError
-
-        raise ValidationError("kind must be asset_type or location")
     result = await SafetyLookupApprovalService(db).reject(
-        kind,  # type: ignore[arg-type]
+        _parse_safety_lookup_kind(kind),
         entity_id,
         target_id=body.target_id,
         tenant_id=_tid(user),
