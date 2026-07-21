@@ -67,7 +67,10 @@ def split_location(value: Any) -> dict[str, str | None]:
     assignment_text = remainder or company or ""
     if labelled_engineer:
         assignment_text = re.sub(
-            r"(?:engineer|technician)\s*[:\-]\s*[^;,(]+", "", assignment_text, flags=re.IGNORECASE
+            r"(?:engineer|technician)\s*[:\-]\s*[^;,(]+",
+            "",
+            assignment_text,
+            flags=re.IGNORECASE,
         ).strip(" ;,-")
     without_vehicle = UK_VEHICLE_REG_PATTERN.sub("", assignment_text).strip(" ,-()")
     if engineer_name is None and without_vehicle:
@@ -92,7 +95,7 @@ def split_location(value: Any) -> dict[str, str | None]:
             and not candidate.lower().startswith(site_prefixes)
         ):
             engineer_name = candidate
-            assignment_text = without_vehicle[: -len(candidate)].strip(" ,-") or None
+            assignment_text = without_vehicle[: -len(candidate)].strip(" ,-")
         else:
             assignment_text = without_vehicle
     elif vehicle_reg:

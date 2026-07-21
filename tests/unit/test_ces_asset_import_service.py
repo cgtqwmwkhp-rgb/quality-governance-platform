@@ -97,6 +97,44 @@ async def test_dry_run_rejects_ambiguous_serial():
     assert any(issue.code == "AMBIGUOUS_SERIAL" for issue in report.errors)
 
 
+@pytest.mark.asyncio
+async def test_same_serial_different_type_creates_when_existing_type_mismatches():
+    """One existing Gas Detector must not absorb a Torch row with the same serial."""
+    existing = SimpleNamespace(id=99, asset_type_id=10, qr_code_data="PLA-QR-1")
+    service = _service({"CES-001": [existing]})
+    gas = SimpleNamespace(id=10, name="Gas Detector")
+    torch = SimpleNamespace(id=11, name="Torch")
+    service._lookups = AsyncMock(
+        return_value=(
+            {"gas detector": gas, "torch": torch},
+            {"main depot": SimpleNamespace(id=5, name="Main Depot")},
+            {"jane smith": 21},
+            {"CES-001": [existing]},
+        )
+    )
+    report, validated = await service.validate_rows(
+        [
+            _row(equipment_type="Gas Detector", qr_code="PLA-QR-1"),
+            _row(
+                __row__=3,
+                equipment_type="Torch",
+                qr_code="PLA-QR-2",
+                make="LedLenser",
+                model="P7",
+            ),
+        ],
+        tenant_id=3,
+        dry_run=True,
+    )
+
+    assert report.ok is True
+    assert report.updates == 1
+    assert report.creates == 1
+    assert {item.action for item in validated} == {"update", "create"}
+    assert next(item for item in validated if item.action == "update").existing_id == 99
+    assert next(item for item in validated if item.action == "create").existing_id is None
+
+
 def test_parse_workbook_uses_equipment_list_sheet():
     workbook = Workbook()
     sheet = workbook.active

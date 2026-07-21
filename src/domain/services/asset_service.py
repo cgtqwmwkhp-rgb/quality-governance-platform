@@ -407,6 +407,7 @@ class AssetService:
         *,
         user_id: int,
         tenant_id: int,
+        commit: bool = True,
     ) -> Asset:
         if "status" in data:
             data["status"] = AssetStatus(data["status"])
@@ -437,8 +438,9 @@ class AssetService:
                 to_owner_user_id=asset.owner_user_id,
                 note="initial assignment",
             )
-        await self.db.commit()
-        await self.db.refresh(asset)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(asset)
         return asset
 
     async def get_asset(
@@ -469,6 +471,7 @@ class AssetService:
         *,
         tenant_id: int,
         actor_user_id: int,
+        commit: bool = True,
     ) -> Asset:
         asset: Asset = await self._get_entity(Asset, asset_id, tenant_id=tenant_id)
         if "status" in update_data:
@@ -502,8 +505,11 @@ class AssetService:
             to_owner_user_id=asset.owner_user_id,
         )
 
-        await self.db.commit()
-        await self.db.refresh(asset)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(asset)
+        else:
+            await self.db.flush()
         return asset
 
     # ==================================================================

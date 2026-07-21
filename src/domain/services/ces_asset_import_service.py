@@ -264,6 +264,7 @@ class CesAssetImportService:
         errors: list[RowIssue] = []
         warnings: list[RowIssue] = []
         validated: list[ValidatedCesRow] = []
+        claimed_existing: dict[int, int] = {}
         creates = updates = 0
         for row in rows:
             row_number = int(row["__row__"])
@@ -310,12 +311,16 @@ class CesAssetImportService:
                         )
                     )
 
-            candidates = existing_by_serial.get(serial, [])
-            if asset_type is not None and len(candidates) > 1:
-                candidates = [asset for asset in candidates if asset.asset_type_id == asset_type.id]
+            candidates = list(existing_by_serial.get(serial, []))
+            if asset_type is not None and candidates:
+                # Always discriminate by equipment type so two CES rows with the same
+                # serial but different types cannot both update a single existing asset.
+                typed = [asset for asset in candidates if asset.asset_type_id == asset_type.id]
                 if qr:
-                    candidates = [asset for asset in candidates if asset.qr_code_data == qr]
-                if len(candidates) != 1:
+                    qr_matched = [asset for asset in typed if asset.qr_code_data == qr]
+                    if qr_matched:
+                        typed = qr_matched
+                if len(typed) > 1:
                     row_errors.append(
                         RowIssue(
                             row_number,
@@ -324,7 +329,33 @@ class CesAssetImportService:
                             "serial_number",
                         )
                     )
+                    candidates = []
+                else:
+                    candidates = typed
+            elif len(candidates) > 1:
+                row_errors.append(
+                    RowIssue(
+                        row_number,
+                        "AMBIGUOUS_SERIAL",
+                        f"Serial '{serial}' matches multiple existing assets; equipment type and QR must identify one",
+                        "serial_number",
+                    )
+                )
+                candidates = []
             existing = candidates[0] if len(candidates) == 1 else None
+            if existing is not None and existing.id in claimed_existing:
+                row_errors.append(
+                    RowIssue(
+                        row_number,
+                        "AMBIGUOUS_SERIAL",
+                        (
+                            f"Serial '{serial}' would update asset #{existing.id} already claimed by "
+                            f"row {claimed_existing[existing.id]}; equipment type/QR must identify distinct assets"
+                        ),
+                        "serial_number",
+                    )
+                )
+                existing = None
 
             location_id = None
             vehicle_reg = row["vehicle_reg"]
@@ -375,6 +406,8 @@ class CesAssetImportService:
                 continue
             assert asset_type is not None
             action = "update" if existing else "create"
+            if existing is not None:
+                claimed_existing[existing.id] = row_number
             creates += action == "create"
             updates += action == "update"
             metadata = {
@@ -448,25 +481,36 @@ class CesAssetImportService:
             )
         created_ids: list[int] = []
         updated_ids: list[int] = []
-        for item in validated:
-            if item.action == "update":
-                assert item.existing_id is not None
-                existing = await self.assets.get_asset(item.existing_id, tenant_id=tenant_id)
-                update_payload = item.payload(for_update=True)
-                # Merge CES metadata keys; do not wipe unrelated asset metadata.
-                prior_meta = dict(existing.metadata_json or {})
-                ces_meta = dict(item.metadata_json or {})
-                update_payload["metadata_json"] = {**prior_meta, **ces_meta} or None
-                asset = await self.assets.update_asset(
-                    item.existing_id,
-                    update_payload,
-                    tenant_id=tenant_id,
-                    actor_user_id=user_id,
-                )
-                updated_ids.append(asset.id)
-            else:
-                asset = await self.assets.create_asset(item.payload(), user_id=user_id, tenant_id=tenant_id)
-                created_ids.append(asset.id)
+        try:
+            for item in validated:
+                if item.action == "update":
+                    assert item.existing_id is not None
+                    existing = await self.assets.get_asset(item.existing_id, tenant_id=tenant_id)
+                    update_payload = item.payload(for_update=True)
+                    # Merge CES metadata keys; do not wipe unrelated asset metadata.
+                    prior_meta = dict(existing.metadata_json or {})
+                    ces_meta = dict(item.metadata_json or {})
+                    update_payload["metadata_json"] = {**prior_meta, **ces_meta} or None
+                    asset = await self.assets.update_asset(
+                        item.existing_id,
+                        update_payload,
+                        tenant_id=tenant_id,
+                        actor_user_id=user_id,
+                        commit=False,
+                    )
+                    updated_ids.append(asset.id)
+                else:
+                    asset = await self.assets.create_asset(
+                        item.payload(),
+                        user_id=user_id,
+                        tenant_id=tenant_id,
+                        commit=False,
+                    )
+                    created_ids.append(asset.id)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
         report.dry_run = False
         return CesImportCommitResult(
             created_count=len(created_ids),
