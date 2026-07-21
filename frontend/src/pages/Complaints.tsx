@@ -90,10 +90,11 @@ function freshComplaintForm(): ComplaintCreate {
 
 function isComplaintCreateDirty(
   form: ComplaintCreate,
-  extras: { subjectEmail: string; pendingFiles: File[] },
+  extras: { subjectEmail: string; pendingFiles: File[]; selectedCustomerCode: string },
 ): boolean {
   if (extras.pendingFiles.length > 0) return true
   if (extras.subjectEmail.trim()) return true
+  if (extras.selectedCustomerCode.trim()) return true
   if (form.title.trim() || form.description.trim()) return true
   if (
     form.complainant_name.trim() ||
@@ -388,7 +389,7 @@ export default function Complaints() {
 
   const requestCloseCreateModal = (): boolean => {
     if (
-      isComplaintCreateDirty(formData, { subjectEmail, pendingFiles }) &&
+      isComplaintCreateDirty(formData, { subjectEmail, pendingFiles, selectedCustomerCode }) &&
       !window.confirm(
         t(
           'complaints.dialog.discard_confirm',
