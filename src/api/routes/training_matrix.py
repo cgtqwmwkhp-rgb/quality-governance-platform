@@ -680,7 +680,7 @@ async def _build_compliance_rows(
     if people_override is not None:
         people = list(people_override)
     else:
-        people = (
+        people = list(
             (
                 await db.execute(
                     select(TrainingMatrixPerson).where(
