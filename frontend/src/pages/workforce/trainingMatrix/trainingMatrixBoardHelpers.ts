@@ -241,6 +241,107 @@ export function buildPersonRollups(
   return rollups.sort((a, b) => b.overdue - a.overdue || a.atlas_name.localeCompare(b.atlas_name))
 }
 
+export type PersonRollupSortKey =
+  | 'person'
+  | 'department'
+  | 'complete'
+  | 'overdue'
+  | 'pct'
+  | 'need'
+
+export type SortDirection = 'asc' | 'desc'
+
+export type PersonRollupColumnFilters = {
+  person: string
+  department: string
+  complete: string
+  overdue: string
+  pct: string
+  need: string
+}
+
+export const EMPTY_PERSON_ROLLUP_FILTERS: PersonRollupColumnFilters = {
+  person: '',
+  department: '',
+  complete: '',
+  overdue: '',
+  pct: '',
+  need: '',
+}
+
+function personRollupDisplayName(p: PersonRollup): string {
+  return (p.engineer_display_name || p.atlas_name || '').trim()
+}
+
+function matchesTextFilter(value: string | null | undefined, filter: string): boolean {
+  const q = filter.trim().toLowerCase()
+  if (!q) return true
+  return (value || '').toLowerCase().includes(q)
+}
+
+/** Numeric column filter: empty = pass; otherwise match exact integer value. */
+function matchesExactNumberFilter(value: number, filter: string): boolean {
+  const q = filter.trim()
+  if (!q) return true
+  const n = Number(q)
+  if (!Number.isFinite(n)) return String(value).includes(q)
+  return value === n
+}
+
+export function filterPersonRollups(
+  rollups: PersonRollup[],
+  filters: PersonRollupColumnFilters,
+): PersonRollup[] {
+  return rollups.filter(
+    (p) =>
+      matchesTextFilter(personRollupDisplayName(p), filters.person) &&
+      matchesTextFilter(p.department, filters.department) &&
+      matchesExactNumberFilter(p.complete, filters.complete) &&
+      matchesExactNumberFilter(p.overdue, filters.overdue) &&
+      matchesExactNumberFilter(p.pct, filters.pct) &&
+      matchesExactNumberFilter(p.need, filters.need),
+  )
+}
+
+export function sortPersonRollups(
+  rollups: PersonRollup[],
+  sortKey: PersonRollupSortKey,
+  sortDir: SortDirection,
+): PersonRollup[] {
+  const dir = sortDir === 'asc' ? 1 : -1
+  return [...rollups].sort((a, b) => {
+    let cmp = 0
+    switch (sortKey) {
+      case 'person':
+        cmp = personRollupDisplayName(a).localeCompare(personRollupDisplayName(b), undefined, {
+          sensitivity: 'base',
+        })
+        break
+      case 'department':
+        cmp = (a.department || '').localeCompare(b.department || '', undefined, {
+          sensitivity: 'base',
+        })
+        break
+      case 'complete':
+        cmp = a.complete - b.complete
+        break
+      case 'overdue':
+        cmp = a.overdue - b.overdue
+        break
+      case 'pct':
+        cmp = a.pct - b.pct
+        break
+      case 'need':
+        cmp = a.need - b.need
+        break
+      default:
+        cmp = 0
+    }
+    if (cmp !== 0) return cmp * dir
+    return a.atlas_name.localeCompare(b.atlas_name)
+  })
+}
+
 export type Briefing = { title: string; detail: string }
 
 /** Up to 5 grounded, data-derived insights for the rotating status banner. */

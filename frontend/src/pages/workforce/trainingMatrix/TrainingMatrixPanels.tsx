@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown, ChevronRight, Download, ExternalLink, Mail, Upload } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  ExternalLink,
+  Mail,
+  Upload,
+} from 'lucide-react'
 import {
   getApiErrorMessage,
   trainingMatrixApi,
@@ -20,6 +29,8 @@ import {
 import { Badge, type BadgeVariant } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card'
+import { Input } from '../../../components/ui/Input'
+import { cn } from '../../../helpers/utils'
 import {
   Sheet,
   SheetBody,
@@ -37,6 +48,8 @@ import {
   buildStatusBriefings,
   computeModuleRoleStats,
   computePeopleFullyOkStats,
+  EMPTY_PERSON_ROLLUP_FILTERS,
+  filterPersonRollups,
   filterRowsByHorizon,
   groupRowsByCourse,
   groupRowsByDepartment,
@@ -47,12 +60,26 @@ import {
   isOkStatus,
   moduleViewForRole,
   myTrainingSummary,
+  type PersonRollupColumnFilters,
+  type PersonRollupSortKey,
   personRollupsToCsv,
   resolveBoardRole,
   rowsToCsv,
+  type SortDirection,
+  sortPersonRollups,
   statusLabel,
   topCoursesInHorizon,
 } from './trainingMatrixBoardHelpers'
+
+const PERSON_ROLLUP_COLUMNS: { key: PersonRollupSortKey; label: string; filterPlaceholder: string }[] =
+  [
+    { key: 'person', label: 'Person', filterPlaceholder: 'Filter name' },
+    { key: 'department', label: 'Department', filterPlaceholder: 'Filter dept' },
+    { key: 'complete', label: 'Complete', filterPlaceholder: '=' },
+    { key: 'overdue', label: 'Overdue', filterPlaceholder: '=' },
+    { key: 'pct', label: '%', filterPlaceholder: '=' },
+    { key: 'need', label: 'Need to complete', filterPlaceholder: '=' },
+  ]
 import { ComplianceBarChart, DueForwardBars, StatusPieChart } from './trainingMatrixCharts'
 
 type RoleScope = BoardRole | 'Overall'
@@ -237,6 +264,10 @@ export function TrainingMatrixGapBoard() {
   const [drawerPersonId, setDrawerPersonId] = useState<number | null>(null)
   const [personDetail, setPersonDetail] = useState<TrainingMatrixPersonCompliance | null>(null)
   const [personLoading, setPersonLoading] = useState(false)
+  const [personSortKey, setPersonSortKey] = useState<PersonRollupSortKey>('overdue')
+  const [personSortDir, setPersonSortDir] = useState<SortDirection>('desc')
+  const [personFilters, setPersonFilters] =
+    useState<PersonRollupColumnFilters>(EMPTY_PERSON_ROLLUP_FILTERS)
 
   useEffect(() => {
     setLoading(true)
@@ -328,8 +359,25 @@ export function TrainingMatrixGapBoard() {
     () => buildPersonRollups(scopedRows, filteredRows),
     [scopedRows, filteredRows],
   )
+  const displayedPersonRollups = useMemo(
+    () => sortPersonRollups(filterPersonRollups(personRollups, personFilters), personSortKey, personSortDir),
+    [personRollups, personFilters, personSortKey, personSortDir],
+  )
   const moduleRole: BoardRole = roleScope === 'Overall' ? 'Engineer' : roleScope
   const moduleRows = useMemo(() => moduleViewForRole(rows, moduleRole), [rows, moduleRole])
+
+  const handlePersonSort = (key: PersonRollupSortKey) => {
+    if (personSortKey === key) {
+      setPersonSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setPersonSortKey(key)
+    setPersonSortDir(key === 'person' || key === 'department' ? 'asc' : 'desc')
+  }
+
+  const setPersonFilter = (key: keyof PersonRollupColumnFilters, value: string) => {
+    setPersonFilters((prev) => ({ ...prev, [key]: value }))
+  }
 
   useEffect(() => {
     if (drawerPersonId == null) {
@@ -401,9 +449,9 @@ export function TrainingMatrixGapBoard() {
 
   const onExportCsv = () => {
     if (view === 'individual') {
-      const csv = personRollupsToCsv(personRollups)
+      const csv = personRollupsToCsv(displayedPersonRollups)
       downloadCsv(`training-matrix-people-${horizon}-${new Date().toISOString().slice(0, 10)}.csv`, csv)
-      toast.success(`Exported ${personRollups.length} people`)
+      toast.success(`Exported ${displayedPersonRollups.length} people`)
       return
     }
     const csv = rowsToCsv(filteredRows)
@@ -573,8 +621,18 @@ export function TrainingMatrixGapBoard() {
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={filteredRows.length === 0 || notifying}
-                onClick={() => runNotify([...new Set(filteredRows.map((r) => r.atlas_name))])}
+                disabled={
+                  (view === 'individual'
+                    ? displayedPersonRollups.length === 0
+                    : filteredRows.length === 0) || notifying
+                }
+                onClick={() =>
+                  runNotify(
+                    view === 'individual'
+                      ? displayedPersonRollups.map((p) => p.atlas_name)
+                      : [...new Set(filteredRows.map((r) => r.atlas_name))],
+                  )
+                }
                 data-testid="training-matrix-email-filter"
               >
                 <Mail className="w-3.5 h-3.5 mr-1.5" />
@@ -659,16 +717,57 @@ export function TrainingMatrixGapBoard() {
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
                     <th className="py-2 px-3" />
-                    <th className="py-2 px-3">Person</th>
-                    <th className="py-2 px-3">Department</th>
-                    <th className="py-2 px-3">Complete</th>
-                    <th className="py-2 px-3">Overdue</th>
-                    <th className="py-2 px-3">%</th>
-                    <th className="py-2 px-3">Need to complete</th>
+                    {PERSON_ROLLUP_COLUMNS.map(({ key, label }) => {
+                      const active = personSortKey === key
+                      return (
+                        <th
+                          key={key}
+                          className="py-2 px-3 font-medium"
+                          scope="col"
+                          aria-sort={
+                            active ? (personSortDir === 'asc' ? 'ascending' : 'descending') : 'none'
+                          }
+                        >
+                          <button
+                            type="button"
+                            className={cn(
+                              'inline-flex items-center gap-1 rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                              active ? 'text-foreground' : 'text-muted-foreground',
+                            )}
+                            onClick={() => handlePersonSort(key)}
+                            data-testid={`training-matrix-individual-sort-${key}`}
+                          >
+                            {label}
+                            {active ? (
+                              personSortDir === 'asc' ? (
+                                <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
+                              ) : (
+                                <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
+                              )
+                            ) : null}
+                          </button>
+                        </th>
+                      )
+                    })}
+                  </tr>
+                  <tr className="border-b border-border bg-muted/20" data-testid="training-matrix-individual-filters">
+                    <th className="py-1.5 px-3" />
+                    {PERSON_ROLLUP_COLUMNS.map(({ key, filterPlaceholder }) => (
+                      <th key={`filter-${key}`} className="py-1.5 px-2 font-normal">
+                        <Input
+                          value={personFilters[key]}
+                          onChange={(e) => setPersonFilter(key, e.target.value)}
+                          placeholder={filterPlaceholder}
+                          aria-label={`Filter ${key}`}
+                          data-testid={`training-matrix-individual-filter-${key}`}
+                          className="h-8 text-xs"
+                        />
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {personRollups.map((p) => (
+                  {displayedPersonRollups.map((p) => (
                     <tr
                       key={p.atlas_name}
                       className="border-b border-border/50 hover:bg-muted/40 cursor-pointer"
@@ -694,7 +793,7 @@ export function TrainingMatrixGapBoard() {
                       <td className="py-2 px-3 text-muted-foreground">{p.need}</td>
                     </tr>
                   ))}
-                  {personRollups.length === 0 ? (
+                  {displayedPersonRollups.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-6 text-center text-muted-foreground">
                         {roleScope !== 'Overall' && scopedRows.length === 0

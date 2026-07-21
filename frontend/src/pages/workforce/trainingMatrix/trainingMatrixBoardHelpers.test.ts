@@ -3,6 +3,8 @@ import type { TrainingMatrixComplianceRow } from '../../../api/trainingMatrixCli
 import {
   BOARD_ROLES,
   buildPersonRollups,
+  filterPersonRollups,
+  sortPersonRollups,
   buildStatusBriefings,
   computeModuleRoleStats,
   computePeopleFullyOkStats,
@@ -188,6 +190,72 @@ describe('buildPersonRollups', () => {
     expect(rollups[0].need).toBe(1)
     expect(rollups[0].pct).toBe(50)
     expect(rollups[0].overdue).toBe(1)
+  })
+})
+
+describe('filterPersonRollups / sortPersonRollups', () => {
+  const rollups = [
+    {
+      atlas_name: 'Thompson, L',
+      engineer_display_name: 'Thompson, L',
+      department: 'Workshop',
+      role: 'Workshop' as const,
+      complete: 2,
+      overdue: 5,
+      need: 8,
+      total: 10,
+      pct: 20,
+      allRows: [],
+      filteredRows: [],
+    },
+    {
+      atlas_name: 'Hepburn, G',
+      engineer_display_name: 'Hepburn, G',
+      department: 'Mobile Engineers',
+      role: 'Engineer' as const,
+      complete: 8,
+      overdue: 1,
+      need: 2,
+      total: 10,
+      pct: 80,
+      allRows: [],
+      filteredRows: [],
+    },
+  ]
+
+  it('filters by person and department text and exact numeric columns', () => {
+    expect(
+      filterPersonRollups(rollups, {
+        person: 'hep',
+        department: '',
+        complete: '',
+        overdue: '',
+        pct: '',
+        need: '',
+      }).map((p) => p.atlas_name),
+    ).toEqual(['Hepburn, G'])
+
+    expect(
+      filterPersonRollups(rollups, {
+        person: '',
+        department: 'workshop',
+        complete: '',
+        overdue: '5',
+        pct: '',
+        need: '',
+      }).map((p) => p.atlas_name),
+    ).toEqual(['Thompson, L'])
+  })
+
+  it('sorts by person ascending and overdue descending', () => {
+    expect(sortPersonRollups(rollups, 'person', 'asc').map((p) => p.atlas_name)).toEqual([
+      'Hepburn, G',
+      'Thompson, L',
+    ])
+    expect(sortPersonRollups(rollups, 'overdue', 'desc').map((p) => p.atlas_name)).toEqual([
+      'Thompson, L',
+      'Hepburn, G',
+    ])
   })
 })
 
