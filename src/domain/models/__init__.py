@@ -242,11 +242,11 @@ from src.domain.models.token_blacklist import TokenBlacklist
 from src.domain.models.training_matrix import (
     TrainingMatrixCell,
     TrainingMatrixCourse,
+    TrainingMatrixFrequencyChangeRequest,
     TrainingMatrixImport,
     TrainingMatrixNameMap,
     TrainingMatrixPerson,
     TrainingMatrixRequirement,
-    TrainingMatrixFrequencyChangeRequest,
 )
 from src.domain.models.user import Role, User, UserRole
 
