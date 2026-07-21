@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -65,6 +65,70 @@ describe('Training shell', () => {
 
     await user.click(screen.getByTestId('training-tab-admin'))
     expect(await screen.findByTestId('training-matrix-admin')).toBeInTheDocument()
+  })
+
+  it('scopes status briefings to the selected training group', async () => {
+    const user = userEvent.setup()
+    const baseRow = {
+      engineer_id: 1,
+      engineer_display_name: 'Alice',
+      frequency_years: 1,
+      status: 'overdue',
+      atlas_status: 'Expired',
+      passed_on: null,
+      expires_on: null,
+      qgp_due_on: '2026-07-01',
+      expiry_without_passed: false,
+      atlas_hub_url: 'https://atlas',
+    }
+    vi.mocked(trainingMatrixApi.listCompliance).mockResolvedValueOnce({
+      items: [
+        {
+          ...baseRow,
+          atlas_name: 'Alice',
+          department: 'Mobile Engineers',
+          course_key: 'engineer-safety',
+          course_display_name: 'Engineer Safety',
+        },
+        {
+          ...baseRow,
+          atlas_name: 'Bob',
+          engineer_id: 2,
+          engineer_display_name: 'Bob',
+          department: 'Mobile Engineers',
+          course_key: 'engineer-safety',
+          course_display_name: 'Engineer Safety',
+        },
+        {
+          ...baseRow,
+          atlas_name: 'Casey',
+          engineer_id: 3,
+          engineer_display_name: 'Casey',
+          department: 'Workshop',
+          course_key: 'workshop-safety',
+          course_display_name: 'Workshop Safety',
+        },
+      ],
+      total: 3,
+      atlas_hub_url: 'https://atlas',
+    })
+
+    render(
+      <MemoryRouter>
+        <Training />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('training-matrix-briefing')).toHaveTextContent(
+      'Engineer Safety',
+    )
+    await user.click(screen.getByTestId('training-matrix-hero-Workshop'))
+    await waitFor(() =>
+      expect(screen.getByTestId('training-matrix-briefing')).toHaveTextContent('Workshop Safety'),
+    )
+    expect(screen.getByTestId('training-matrix-briefing')).not.toHaveTextContent(
+      'Engineer Safety',
+    )
   })
 
   it('keeps latest import provenance when compliance loading fails', async () => {

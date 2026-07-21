@@ -265,7 +265,14 @@ export function TrainingMatrixGapBoard() {
     }
     return computePeopleFullyOkStats(rows)
   }, [summary, rows])
-  const briefings = useMemo(() => buildStatusBriefings(rows, peopleStats), [rows, peopleStats])
+  const briefingRoleStats = useMemo(
+    () => (roleScope === 'Overall' ? peopleStats : computePeopleFullyOkStats(scopedRows)),
+    [peopleStats, roleScope, scopedRows],
+  )
+  const briefings = useMemo(
+    () => buildStatusBriefings(scopedRows, briefingRoleStats),
+    [scopedRows, briefingRoleStats],
+  )
 
   useEffect(() => {
     if (briefings.length <= 1) return
