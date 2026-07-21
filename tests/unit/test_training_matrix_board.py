@@ -45,6 +45,70 @@ def test_resolve_board_role_prefers_override():
     assert resolve_board_role("IT", "Sales") is None
 
 
+def test_module_ok_stats_count_due_soon_as_ok():
+    from src.domain.services.training_matrix_board import (
+        build_board_summary,
+        compute_module_role_stats,
+        compute_people_fully_ok_stats,
+        is_ok_status,
+        person_rollup,
+    )
+
+    assert is_ok_status("compliant")
+    assert is_ok_status("due_soon")
+    assert not is_ok_status("missing")
+
+    rows = [
+        {
+            "atlas_name": "Alice",
+            "department": "Mobile Engineers",
+            "board_role_override": None,
+            "status": "compliant",
+            "qgp_due_on": TODAY + timedelta(days=100),
+            "course_display_name": "A",
+        },
+        {
+            "atlas_name": "Alice",
+            "department": "Mobile Engineers",
+            "board_role_override": None,
+            "status": "missing",
+            "qgp_due_on": None,
+            "course_display_name": "B",
+        },
+        {
+            "atlas_name": "Bob",
+            "department": "IT",
+            "board_role_override": "Office",
+            "status": "due_soon",
+            "qgp_due_on": TODAY + timedelta(days=10),
+            "course_display_name": "GDPR",
+        },
+    ]
+    module = {s["role"]: s for s in compute_module_role_stats(rows)}
+    assert module["Overall"]["ok"] == 2
+    assert module["Overall"]["total"] == 3
+    assert module["Overall"]["pct"] == 67
+    assert module["Engineer"]["ok"] == 1
+    assert module["Engineer"]["total"] == 2
+    assert module["Office"]["ok"] == 1
+    assert module["Office"]["total"] == 1
+
+    people = {s["role"]: s for s in compute_people_fully_ok_stats(rows)}
+    assert people["Overall"]["ok"] == 1  # Bob fully OK; Alice has a gap
+    assert people["Overall"]["total"] == 2
+
+    rollup = person_rollup(rows[:2], today=TODAY)
+    assert rollup["complete"] == 1
+    assert rollup["need"] == 1
+    assert rollup["pct"] == 50
+    assert rollup["overdue"] == 1
+
+    summary = build_board_summary(rows, today=TODAY)
+    assert summary["required_row_count"] == 3
+    assert summary["person_count"] == 2
+    assert "d90" in summary["horizons"]
+
+
 def test_horizon_overdue_status_without_due_date():
     for status in ("overdue", "missing", "pending", "failed"):
         assert horizon_for_row(status, None, TODAY) == "overdue"

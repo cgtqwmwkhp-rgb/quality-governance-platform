@@ -9,8 +9,18 @@ export type BoardRole = (typeof BOARD_ROLES)[number]
 export type Horizon = 'overdue' | 'd30' | 'd60' | 'd180' | 'ok'
 
 const OVERDUE_STATUSES = new Set(['overdue', 'missing', 'pending', 'failed'])
+/** In-cycle: has Passed within frequency (includes due_soon). Mirrors BE _OK_STATUSES. */
+const OK_STATUSES = new Set(['compliant', 'due_soon'])
 
 const DAY_MS = 24 * 60 * 60 * 1000
+
+export function isOkStatus(status?: string | null): boolean {
+  return OK_STATUSES.has((status || '').trim().toLowerCase())
+}
+
+export function isGapStatus(status?: string | null): boolean {
+  return OVERDUE_STATUSES.has((status || '').trim().toLowerCase())
+}
 
 function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
@@ -88,16 +98,36 @@ export type RoleStat = {
   pct: number
   ok: number
   total: number
+  metric?: 'module_ok' | 'people_fully_ok'
 }
 
-/** % of people (grouped by atlas_name) with every required course at status "compliant", overall + per role. */
-export function computeRoleStats(rows: TrainingMatrixComplianceRow[]): RoleStat[] {
+/** Module-level OK% (compliant + due_soon) — hero primary. Mirrors BE compute_module_role_stats. */
+export function computeModuleRoleStats(rows: TrainingMatrixComplianceRow[]): RoleStat[] {
+  const scopes: Array<BoardRole | 'Overall'> = ['Overall', ...BOARD_ROLES]
+  return scopes.map((scope) => {
+    const scoped =
+      scope === 'Overall'
+        ? rows
+        : rows.filter((r) => resolveBoardRole(r.department, r.board_role_override) === scope)
+    const total = scoped.length
+    const ok = scoped.filter((r) => isOkStatus(r.status)).length
+    return {
+      role: scope,
+      ok,
+      total,
+      pct: total ? Math.round((100 * ok) / total) : 0,
+      metric: 'module_ok' as const,
+    }
+  })
+}
+
+/** People with every required module OK — hero secondary caption. */
+export function computePeopleFullyOkStats(rows: TrainingMatrixComplianceRow[]): RoleStat[] {
   const byPerson = new Map<string, TrainingMatrixComplianceRow[]>()
   for (const row of rows) {
-    const key = row.atlas_name
-    const bucket = byPerson.get(key)
+    const bucket = byPerson.get(row.atlas_name)
     if (bucket) bucket.push(row)
-    else byPerson.set(key, [row])
+    else byPerson.set(row.atlas_name, [row])
   }
 
   const roleCounts: Record<string, { ok: number; total: number }> = {}
@@ -107,13 +137,13 @@ export function computeRoleStats(rows: TrainingMatrixComplianceRow[]): RoleStat[
 
   for (const [, personRows] of byPerson) {
     if (personRows.length === 0) continue
-    const isOk = personRows.every((r) => r.status === 'compliant')
+    const fullyOk = personRows.every((r) => isOkStatus(r.status))
     overallTotal += 1
-    if (isOk) overallOk += 1
+    if (fullyOk) overallOk += 1
     const role = resolveBoardRole(personRows[0].department, personRows[0].board_role_override)
     if (role) {
       roleCounts[role].total += 1
-      if (isOk) roleCounts[role].ok += 1
+      if (fullyOk) roleCounts[role].ok += 1
     }
   }
 
@@ -123,13 +153,92 @@ export function computeRoleStats(rows: TrainingMatrixComplianceRow[]): RoleStat[
       pct: overallTotal ? Math.round((100 * overallOk) / overallTotal) : 0,
       ok: overallOk,
       total: overallTotal,
+      metric: 'people_fully_ok',
     },
   ]
   for (const role of BOARD_ROLES) {
     const { ok, total } = roleCounts[role]
-    stats.push({ role, pct: total ? Math.round((100 * ok) / total) : 0, ok, total })
+    stats.push({
+      role,
+      pct: total ? Math.round((100 * ok) / total) : 0,
+      ok,
+      total,
+      metric: 'people_fully_ok',
+    })
   }
   return stats
+}
+
+/** @deprecated Prefer computeModuleRoleStats for hero; kept as alias to people-fully-OK for briefings. */
+export function computeRoleStats(rows: TrainingMatrixComplianceRow[]): RoleStat[] {
+  return computePeopleFullyOkStats(rows)
+}
+
+export type PersonRollup = {
+  atlas_name: string
+  person_id?: number | null
+  engineer_display_name?: string | null
+  department?: string | null
+  board_role_override?: string | null
+  role: BoardRole | null
+  complete: number
+  overdue: number
+  need: number
+  total: number
+  pct: number
+  /** Rows used for the rollup (full required set). */
+  allRows: TrainingMatrixComplianceRow[]
+  /** Subset matching the active horizon filter (for list membership / selection). */
+  filteredRows: TrainingMatrixComplianceRow[]
+}
+
+/** Full-set person rollups; optional filteredRows decide who appears under a horizon. */
+export function buildPersonRollups(
+  allRows: TrainingMatrixComplianceRow[],
+  filteredRows: TrainingMatrixComplianceRow[],
+  today: Date = new Date(),
+): PersonRollup[] {
+  const byPerson = new Map<string, TrainingMatrixComplianceRow[]>()
+  for (const row of allRows) {
+    const bucket = byPerson.get(row.atlas_name)
+    if (bucket) bucket.push(row)
+    else byPerson.set(row.atlas_name, [row])
+  }
+  const filteredNames = new Set(filteredRows.map((r) => r.atlas_name))
+  const filteredByPerson = new Map<string, TrainingMatrixComplianceRow[]>()
+  for (const row of filteredRows) {
+    const bucket = filteredByPerson.get(row.atlas_name)
+    if (bucket) bucket.push(row)
+    else filteredByPerson.set(row.atlas_name, [row])
+  }
+
+  const rollups: PersonRollup[] = []
+  for (const [atlasName, personRows] of byPerson) {
+    if (!filteredNames.has(atlasName)) continue
+    const complete = personRows.filter((r) => isOkStatus(r.status)).length
+    const overdue = personRows.filter(
+      (r) => horizonForRow(r.status, r.qgp_due_on, today) === 'overdue',
+    ).length
+    const total = personRows.length
+    const need = total - complete
+    const first = personRows[0]
+    rollups.push({
+      atlas_name: atlasName,
+      person_id: first.person_id,
+      engineer_display_name: first.engineer_display_name,
+      department: first.department,
+      board_role_override: first.board_role_override,
+      role: resolveBoardRole(first.department, first.board_role_override),
+      complete,
+      overdue,
+      need,
+      total,
+      pct: total ? Math.round((100 * complete) / total) : 0,
+      allRows: personRows,
+      filteredRows: filteredByPerson.get(atlasName) || [],
+    })
+  }
+  return rollups.sort((a, b) => b.overdue - a.overdue || a.atlas_name.localeCompare(b.atlas_name))
 }
 
 export type Briefing = { title: string; detail: string }
@@ -137,7 +246,7 @@ export type Briefing = { title: string; detail: string }
 /** Up to 5 grounded, data-derived insights for the rotating status banner. */
 export function buildStatusBriefings(
   rows: TrainingMatrixComplianceRow[],
-  roleStats: RoleStat[],
+  roleStats: Pick<RoleStat, 'role' | 'pct' | 'total'>[],
   today: Date = new Date(),
 ): Briefing[] {
   const briefings: Briefing[] = []
@@ -227,7 +336,7 @@ export function filterRowsByHorizon(
   horizon: Horizon | 'all',
   today: Date = new Date(),
 ): TrainingMatrixComplianceRow[] {
-  if (horizon === 'all') return rows.filter((r) => r.status !== 'compliant')
+  if (horizon === 'all') return rows.filter((r) => !isOkStatus(r.status))
   return rows.filter((r) => horizonForRow(r.status, r.qgp_due_on, today) === horizon)
 }
 
@@ -360,7 +469,7 @@ export function moduleViewForRole(
       byCourse.set(row.course_key, agg)
     }
     agg.total += 1
-    if (row.status === 'compliant') agg.compliant += 1
+    if (isOkStatus(row.status)) agg.compliant += 1
   }
   return [...byCourse.entries()]
     .map(([course_key, v]) => ({
@@ -398,14 +507,34 @@ export type MyTrainingSummary = {
   nextDue: { course_display_name: string; qgp_due_on: string } | null
 }
 
-/** Progress counts + next due module for the "My training" panel. */
+/** Progress counts + next due module for the "My training" panel (Complete = compliant + due_soon). */
 export function myTrainingSummary(rows: TrainingMatrixComplianceRow[]): MyTrainingSummary {
-  const okCount = rows.filter((r) => r.status === 'compliant').length
+  const okCount = rows.filter((r) => isOkStatus(r.status)).length
   const withDue = rows
-    .filter((r) => r.qgp_due_on && r.status !== 'compliant')
+    .filter((r) => r.qgp_due_on && isGapStatus(r.status))
     .sort((a, b) => (a.qgp_due_on! < b.qgp_due_on! ? -1 : 1))
   const nextDue = withDue[0]
     ? { course_display_name: withDue[0].course_display_name, qgp_due_on: withDue[0].qgp_due_on! }
     : null
   return { total: rows.length, okCount, nextDue }
+}
+
+/** CSV for By individual person rollups. */
+export function personRollupsToCsv(rollups: PersonRollup[]): string {
+  const header = ['Person', 'Department', 'Training group', 'Complete', 'Overdue', 'Need', 'Total', 'Percent']
+  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`
+  const lines = [header]
+  for (const p of rollups) {
+    lines.push([
+      p.engineer_display_name || p.atlas_name,
+      p.department || '',
+      p.role || '',
+      String(p.complete),
+      String(p.overdue),
+      String(p.need),
+      String(p.total),
+      String(p.pct),
+    ])
+  }
+  return lines.map((cols) => cols.map((c) => escape(String(c))).join(',')).join('\n')
 }
