@@ -13,6 +13,8 @@ import {
 import {
   safetyAssetsApi,
   type CesAssetImportReport,
+  type CesLookupConfirmation,
+  type CesLookupProposal,
   type SafetyAsset,
   type SafetyAssetType,
   type SafetyLocation,
@@ -128,6 +130,8 @@ export default function SafetyAssetRegister() {
   const [cesReport, setCesReport] = useState<CesAssetImportReport | null>(null)
   const [cesBusy, setCesBusy] = useState(false)
   const [cesError, setCesError] = useState<string | null>(null)
+  /** key = `${kind}:${name}` → confirmation choice for similar lookups */
+  const [cesConfirmations, setCesConfirmations] = useState<Record<string, CesLookupConfirmation>>({})
 
   const typeNameById = useMemo(() => {
     const map = new Map<number, string>()
@@ -147,8 +151,9 @@ export default function SafetyAssetRegister() {
     try {
       const [assetsRes, typesRes, locsRes, engineersRes] = await Promise.allSettled([
         safetyAssetsApi.listAllAssetsForBoard(),
-        safetyAssetsApi.listAssetTypes({ page: 1, page_size: 200, is_active: true }),
-        safetyAssetsApi.listLocations({ page: 1, page_size: 200, is_active: true }),
+        // Include inactive/pending provisional lookups so CES-imported assets show names.
+        safetyAssetsApi.listAssetTypes({ page: 1, page_size: 200 }),
+        safetyAssetsApi.listLocations({ page: 1, page_size: 200 }),
         workforceApi.listEngineers({ page: 1, page_size: 500, is_active: true }),
       ])
       if (assetsRes.status === 'rejected') {
@@ -284,10 +289,24 @@ export default function SafetyAssetRegister() {
     }
   }
 
+  const similarProposals = useMemo(
+    () => (cesReport?.lookup_proposals || []).filter((p) => p.needs_confirmation),
+    [cesReport],
+  )
+  const newProposals = useMemo(
+    () => (cesReport?.lookup_proposals || []).filter((p) => p.intent === 'new'),
+    [cesReport],
+  )
+  const allSimilarConfirmed = similarProposals.every(
+    (p) => Boolean(cesConfirmations[`${p.kind}:${p.name}`]),
+  )
+  const canCommitCes = Boolean(cesReport?.ok && allSimilarConfirmed && !cesBusy)
+
   const dryRunCesImport = async () => {
     if (!cesFile) return
     setCesBusy(true)
     setCesError(null)
+    setCesConfirmations({})
     try {
       const response = await safetyAssetsApi.cesImportDryRun(cesFile)
       setCesReport(response.data)
@@ -299,15 +318,40 @@ export default function SafetyAssetRegister() {
     }
   }
 
+  const setProposalConfirmation = (
+    proposal: CesLookupProposal,
+    action: 'reuse' | 'create',
+    reuseId?: number | null,
+  ) => {
+    const key = `${proposal.kind}:${proposal.name}`
+    setCesConfirmations((prev) => ({
+      ...prev,
+      [key]: {
+        kind: proposal.kind,
+        name: proposal.name,
+        action,
+        reuse_id: action === 'reuse' ? reuseId ?? proposal.similar_matches[0]?.id : null,
+      },
+    }))
+  }
+
   const commitCesImport = async () => {
-    if (!cesFile || !cesReport?.ok) return
+    if (!cesFile || !canCommitCes) return
     setCesBusy(true)
     setCesError(null)
     try {
-      const response = await safetyAssetsApi.cesImportCommit(cesFile)
+      const response = await safetyAssetsApi.cesImportCommit(
+        cesFile,
+        Object.values(cesConfirmations),
+      )
       setCesReport(response.data.report)
+      const pendingTypes = response.data.provisional_type_ids?.length || 0
+      const pendingLocs = response.data.provisional_location_ids?.length || 0
       toast.success(
-        `CES import complete: ${response.data.created_count} created, ${response.data.updated_count} updated.`,
+        `CES import complete: ${response.data.created_count} created, ${response.data.updated_count} updated.` +
+          (pendingTypes + pendingLocs
+            ? ` ${pendingTypes + pendingLocs} lookup(s) awaiting approval.`
+            : ''),
       )
       void loadBoard()
     } catch (err) {
@@ -459,6 +503,7 @@ export default function SafetyAssetRegister() {
                   setCesFile(event.target.files?.[0] ?? null)
                   setCesReport(null)
                   setCesError(null)
+                  setCesConfirmations({})
                 }}
               />
               <Button size="sm" disabled={!cesFile || cesBusy} onClick={() => void dryRunCesImport()}>
@@ -473,7 +518,8 @@ export default function SafetyAssetRegister() {
               </Button>
               <Button
                 size="sm"
-                disabled={!cesReport?.ok || cesBusy}
+                disabled={!canCommitCes}
+                data-testid="ces-import-commit"
                 onClick={() => void commitCesImport()}
               >
                 Commit import
@@ -485,24 +531,91 @@ export default function SafetyAssetRegister() {
               </p>
             ) : null}
             {cesReport ? (
-              <div className="rounded-md bg-muted/50 p-3 text-sm" data-testid="ces-import-summary">
+              <div className="space-y-3 rounded-md bg-muted/50 p-3 text-sm" data-testid="ces-import-summary">
                 <p>
                   {cesReport.valid_rows} valid, {cesReport.error_rows} error rows, {cesReport.creates}{' '}
-                  creates, {cesReport.updates} updates, {cesReport.warnings.length} warnings.
+                  creates, {cesReport.updates} updates
+                  {newProposals.length ? `, ${newProposals.length} new lookups (pending approval)` : ''}
+                  {similarProposals.length
+                    ? `, ${similarProposals.length} similar lookups need confirmation`
+                    : ''}
+                  .
                 </p>
-                {cesReport.errors.length ? (
-                  <p className="mt-1 text-destructive">
+                {newProposals.length ? (
+                  <div data-testid="ces-import-new-lookups">
+                    <p className="font-medium">Will create pending lookups</p>
+                    <ul className="mt-1 list-disc pl-5 text-muted-foreground">
+                      {newProposals.slice(0, 12).map((p) => (
+                        <li key={`${p.kind}:${p.name}`}>
+                          {p.kind === 'asset_type' ? 'Type' : 'Location'}: {p.name} ({p.row_count} rows)
+                        </li>
+                      ))}
+                      {newProposals.length > 12 ? (
+                        <li>…and {newProposals.length - 12} more</li>
+                      ) : null}
+                    </ul>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      After commit, approve in{' '}
+                      <Link className="underline" to="/admin/lookups?pending=safety">
+                        Admin → Lookup Tables
+                      </Link>
+                      .
+                    </p>
+                  </div>
+                ) : null}
+                {similarProposals.length ? (
+                  <div className="space-y-2" data-testid="ces-import-similar-lookups">
+                    <p className="font-medium text-warning-foreground">
+                      Confirm similar lookups (required before commit)
+                    </p>
+                    {similarProposals.map((proposal) => {
+                      const key = `${proposal.kind}:${proposal.name}`
+                      const chosen = cesConfirmations[key]
+                      const top = proposal.similar_matches[0]
+                      return (
+                        <div
+                          key={key}
+                          className="rounded border border-border bg-card p-2"
+                          data-testid={`ces-similar-${proposal.kind}-${proposal.name}`}
+                        >
+                          <p>
+                            Proposed {proposal.kind === 'asset_type' ? 'type' : 'location'}{' '}
+                            <strong>{proposal.name}</strong> looks like{' '}
+                            <strong>{top?.name}</strong>
+                            {top ? ` (${Math.round(top.score * 100)}% match)` : ''}.
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-3">
+                            <label className="inline-flex items-center gap-1.5">
+                              <input
+                                type="radio"
+                                name={key}
+                                checked={chosen?.action === 'reuse'}
+                                onChange={() => setProposalConfirmation(proposal, 'reuse', top?.id)}
+                              />
+                              Use existing “{top?.name}”
+                            </label>
+                            <label className="inline-flex items-center gap-1.5">
+                              <input
+                                type="radio"
+                                name={key}
+                                checked={chosen?.action === 'create'}
+                                onChange={() => setProposalConfirmation(proposal, 'create')}
+                              />
+                              Create new “{proposal.name}” anyway
+                            </label>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : null}
+                {(cesReport.errors?.length ?? 0) > 0 ? (
+                  <p className="text-destructive">
                     {cesReport.errors
                       .slice(0, 5)
-                      .map((issue) => `Row ${issue.row}: ${issue.code}`)
-                      .join(' · ')}
-                  </p>
-                ) : null}
-                {cesReport.warnings.length ? (
-                  <p className="mt-1 text-muted-foreground">
-                    {cesReport.warnings
-                      .slice(0, 5)
-                      .map((issue) => `Row ${issue.row}: ${issue.code}`)
+                      .map((issue) =>
+                        issue.row > 0 ? `Row ${issue.row}: ${issue.code}` : issue.message,
+                      )
                       .join(' · ')}
                   </p>
                 ) : null}

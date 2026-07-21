@@ -32,14 +32,14 @@ def _row(**overrides):
     return normalise_ces_row(raw)
 
 
-def _service(existing=None):
+def _service(existing=None, types=None, locations=None):
     service = CesAssetImportService(MagicMock(), asset_service=MagicMock())
     asset_type = SimpleNamespace(id=10, name="Gas Detector")
     location = SimpleNamespace(id=5, name="Main Depot")
     service._lookups = AsyncMock(
         return_value=(
-            {"gas detector": asset_type},
-            {"main depot": location},
+            types if types is not None else [asset_type],
+            locations if locations is not None else [location],
             {"jane smith": 21},
             existing or {},
         )
@@ -129,8 +129,8 @@ async def test_same_serial_different_type_creates_when_existing_type_mismatches(
     torch = SimpleNamespace(id=11, name="Torch")
     service._lookups = AsyncMock(
         return_value=(
-            {"gas detector": gas, "torch": torch},
-            {"main depot": SimpleNamespace(id=5, name="Main Depot")},
+            [gas, torch],
+            [SimpleNamespace(id=5, name="Main Depot")],
             {"jane smith": 21},
             {"CES-001": [existing]},
         )
@@ -156,6 +156,34 @@ async def test_same_serial_different_type_creates_when_existing_type_mismatches(
     assert {item.action for item in validated} == {"update", "create"}
     assert next(item for item in validated if item.action == "update").existing_id == 99
     assert next(item for item in validated if item.action == "create").existing_id is None
+
+
+@pytest.mark.asyncio
+async def test_unknown_type_becomes_pending_proposal_not_hard_error():
+    report, validated = await _service(types=[], locations=[]).validate_rows(
+        [_row(location="Plantexpand; Main Depot", equipment_type="Torque Wrench")],
+        tenant_id=3,
+        dry_run=True,
+    )
+    assert report.ok is True
+    assert len(validated) == 1
+    assert validated[0].create_type_name == "Torque Wrench"
+    assert any(p.kind == "asset_type" and p.intent == "new" for p in report.lookup_proposals)
+    assert any(issue.code == "TYPE_WILL_CREATE_PENDING" for issue in report.warnings)
+
+
+@pytest.mark.asyncio
+async def test_similar_type_requires_confirmation_on_commit_gate():
+    existing_type = SimpleNamespace(id=10, name="D Shackle")
+    report, _ = await _service(types=[existing_type], locations=[]).validate_rows(
+        [_row(location="Plantexpand; Main Depot", equipment_type="D Shackel")],
+        tenant_id=3,
+        dry_run=False,
+        enforce_confirmations=True,
+    )
+    assert report.ok is False
+    assert report.requires_confirmation is True
+    assert any(issue.code == "NEEDS_CONFIRMATION" for issue in report.errors)
 
 
 def test_parse_workbook_uses_equipment_list_sheet():

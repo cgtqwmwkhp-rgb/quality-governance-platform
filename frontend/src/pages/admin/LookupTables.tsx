@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ClipboardList, Loader2, Plus, Settings2, Trash2 } from 'lucide-react'
 import { getApiErrorMessage, lookupsApi, type LookupOption } from '../../api/client'
+import {
+  safetyAssetsApi,
+  type SafetyLookupPendingItem,
+} from '../../api/safetyAssetsClient'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -70,6 +75,7 @@ function uniqueLookupCode(base: string, existing: LookupOption[]): string {
 
 export default function LookupTables() {
   const { t } = useTranslation()
+  const [searchParams] = useSearchParams()
   const [counts, setCounts] = useState<Record<string, CategoryState>>(() =>
     Object.fromEntries(
       LOOKUP_CATEGORIES.map((c) => [c.key, { total: null, loading: true, error: false }]),
@@ -87,6 +93,18 @@ export default function LookupTables() {
   const [codeManual, setCodeManual] = useState(false)
   const [showAdvancedCode, setShowAdvancedCode] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [pendingSafety, setPendingSafety] = useState<SafetyLookupPendingItem[]>([])
+  const [pendingLoading, setPendingLoading] = useState(true)
+  const [pendingBusyId, setPendingBusyId] = useState<string | null>(null)
+  const [safetyCreateKind, setSafetyCreateKind] = useState<'asset_type' | 'location' | null>(null)
+  const [safetyCreateName, setSafetyCreateName] = useState('')
+  const [safetyCreatePreview, setSafetyCreatePreview] = useState<{
+    intent: string
+    similar_matches: { id: number; name: string; score: number }[]
+    blocked_exact_duplicate: boolean
+  } | null>(null)
+  const [safetyCreateBusy, setSafetyCreateBusy] = useState(false)
+  const highlightPending = searchParams.get('pending') === 'safety'
 
   const visibleCategories =
     hubFilter === 'all'
@@ -115,6 +133,22 @@ export default function LookupTables() {
   useEffect(() => {
     void refreshCounts()
   }, [refreshCounts])
+
+  const refreshPendingSafety = useCallback(async () => {
+    setPendingLoading(true)
+    try {
+      const res = await safetyAssetsApi.listPendingSafetyLookups()
+      setPendingSafety(res.data.items ?? [])
+    } catch {
+      setPendingSafety([])
+    } finally {
+      setPendingLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshPendingSafety()
+  }, [refreshPendingSafety])
 
   const resetCreateForm = () => {
     setNewLabel('')
@@ -220,6 +254,81 @@ export default function LookupTables() {
     }
   }
 
+  const handleApprovePending = async (item: SafetyLookupPendingItem) => {
+    const key = `${item.kind}:${item.id}`
+    setPendingBusyId(key)
+    try {
+      await safetyAssetsApi.approveSafetyLookup(item.kind, item.id)
+      toast.success(`Approved “${item.name}”`)
+      await refreshPendingSafety()
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not approve lookup'))
+    } finally {
+      setPendingBusyId(null)
+    }
+  }
+
+  const handleMergePending = async (item: SafetyLookupPendingItem, targetId: number) => {
+    const key = `${item.kind}:${item.id}`
+    setPendingBusyId(key)
+    try {
+      await safetyAssetsApi.mergeSafetyLookup(item.kind, item.id, targetId)
+      toast.success(`Merged “${item.name}” into existing lookup`)
+      await refreshPendingSafety()
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not merge lookup'))
+    } finally {
+      setPendingBusyId(null)
+    }
+  }
+
+  const runSafetyCreatePreview = async (name: string) => {
+    setSafetyCreateName(name)
+    if (!safetyCreateKind || name.trim().length < 2) {
+      setSafetyCreatePreview(null)
+      return
+    }
+    try {
+      const res = await safetyAssetsApi.previewSafetyLookup(safetyCreateKind, name.trim())
+      setSafetyCreatePreview({
+        intent: res.data.intent,
+        similar_matches: res.data.similar_matches || [],
+        blocked_exact_duplicate: res.data.blocked_exact_duplicate,
+      })
+    } catch {
+      setSafetyCreatePreview(null)
+    }
+  }
+
+  const handleSafetyCreate = async (force: boolean) => {
+    if (!safetyCreateKind || !safetyCreateName.trim()) return
+    setSafetyCreateBusy(true)
+    try {
+      if (safetyCreateKind === 'asset_type') {
+        await safetyAssetsApi.createAssetType({
+          category: 'safety',
+          name: safetyCreateName.trim(),
+          force,
+        })
+      } else {
+        await safetyAssetsApi.createLocation({
+          name: safetyCreateName.trim(),
+          kind: 'site',
+          force,
+        })
+      }
+      toast.success('Safety lookup created')
+      setSafetyCreateKind(null)
+      setSafetyCreateName('')
+      setSafetyCreatePreview(null)
+      await refreshPendingSafety()
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not create safety lookup'))
+    } finally {
+      setSafetyCreateBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-6" data-testid="admin-lookup-tables">
       <div>
@@ -228,6 +337,176 @@ export default function LookupTables() {
           {t('admin.lookups.subtitle', 'Manage dropdown options and reference data')}
         </p>
       </div>
+
+      <Card
+        className={cn(highlightPending && 'ring-2 ring-primary')}
+        data-testid="safety-lookup-pending-panel"
+      >
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold">Safety Asset Types &amp; Site Locations</h2>
+              <p className="text-sm text-muted-foreground">
+                CES import provisional lookups awaiting approval. Exact duplicates are blocked;
+                near-matches must be confirmed.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setSafetyCreateKind('asset_type')
+                  setSafetyCreateName('')
+                  setSafetyCreatePreview(null)
+                }}
+              >
+                Add asset type
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setSafetyCreateKind('location')
+                  setSafetyCreateName('')
+                  setSafetyCreatePreview(null)
+                }}
+              >
+                Add location
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {pendingLoading ? (
+            <p className="text-sm text-muted-foreground">Loading pending approvals…</p>
+          ) : pendingSafety.length === 0 ? (
+            <p className="text-sm text-muted-foreground" data-testid="safety-lookup-pending-empty">
+              No pending Safety lookups.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">
+                Pending approval ({pendingSafety.length})
+              </p>
+              {pendingSafety.map((item) => {
+                const busyKey = `${item.kind}:${item.id}`
+                const top = item.similar_matches[0]
+                return (
+                  <div
+                    key={busyKey}
+                    className="flex flex-col gap-2 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
+                    data-testid={`safety-pending-${item.kind}-${item.id}`}
+                  >
+                    <div className="text-sm">
+                      <p className="font-medium">
+                        {item.kind === 'asset_type' ? 'Asset type' : 'Location'}: {item.name}
+                      </p>
+                      <p className="text-muted-foreground">
+                        Source: {item.source || 'manual'}
+                        {top
+                          ? ` · similar to “${top.name}” (${Math.round(top.score * 100)}%)`
+                          : ''}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={pendingBusyId === busyKey}
+                        data-testid={`safety-pending-approve-${item.kind}-${item.id}`}
+                        onClick={() => void handleApprovePending(item)}
+                      >
+                        Approve
+                      </Button>
+                      {top ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={pendingBusyId === busyKey}
+                          data-testid={`safety-pending-merge-${item.kind}-${item.id}`}
+                          onClick={() => void handleMergePending(item, top.id)}
+                        >
+                          Use “{top.name}”
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog
+        open={safetyCreateKind !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSafetyCreateKind(null)
+            setSafetyCreatePreview(null)
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Add Safety {safetyCreateKind === 'location' ? 'location' : 'asset type'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              value={safetyCreateName}
+              onChange={(e) => void runSafetyCreatePreview(e.target.value)}
+              placeholder="Name"
+              aria-label="Safety lookup name"
+            />
+            {safetyCreatePreview?.blocked_exact_duplicate ? (
+              <p className="text-sm text-destructive">
+                An exact match already exists — create is blocked to prevent duplicates.
+              </p>
+            ) : null}
+            {safetyCreatePreview?.intent === 'similar' ? (
+              <div className="rounded-md border border-border p-2 text-sm">
+                <p className="font-medium">Are you sure? Similar entries already exist:</p>
+                <ul className="mt-1 list-disc pl-5 text-muted-foreground">
+                  {safetyCreatePreview.similar_matches.map((m) => (
+                    <li key={m.id}>
+                      {m.name} ({Math.round(m.score * 100)}%)
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSafetyCreateKind(null)}
+              disabled={safetyCreateBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={
+                safetyCreateBusy ||
+                !safetyCreateName.trim() ||
+                Boolean(safetyCreatePreview?.blocked_exact_duplicate)
+              }
+              onClick={() =>
+                void handleSafetyCreate(safetyCreatePreview?.intent === 'similar')
+              }
+            >
+              {safetyCreatePreview?.intent === 'similar' ? 'Create anyway' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         <label htmlFor="lookup-hub-filter" className="text-sm font-medium text-muted-foreground">

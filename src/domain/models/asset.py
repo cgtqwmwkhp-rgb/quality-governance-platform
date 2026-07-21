@@ -42,6 +42,9 @@ class AssetType(Base, TimestampMixin, AuditTrailMixin):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     icon: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # approved | pending | rejected — provisional CES rows use pending + is_active=False
+    approval_status: Mapped[str] = mapped_column(String(40), nullable=False, default="approved", index=True)
+    source: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
 
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 

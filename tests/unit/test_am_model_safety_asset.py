@@ -30,7 +30,10 @@ def _mock_db() -> MagicMock:
     db.flush = AsyncMock()
     db.refresh = AsyncMock()
     db.delete = AsyncMock()
-    db.execute = AsyncMock()
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = []
+    result.scalar_one_or_none.return_value = None
+    db.execute = AsyncMock(return_value=result)
     return db
 
 
