@@ -15,7 +15,7 @@
 - **Database:** None (uses existing Asset fields + metadata_json)
 - **Workflows/jobs/queues:** None
 - **Config/env/flags:** None
-- **Dependencies:** openpyxl (already in stack via risk import)
+- **Dependencies:** openpyxl (already in stack via risk import); `requirements.lock` refreshed for Lockfile Freshness (upstream google-auth/genai pins)
 
 ## 3) Compatibility & Data Safety
 - **Compatibility strategy:** Additive endpoints; CSV AM-IMPORT unchanged
