@@ -342,16 +342,12 @@ class CesAssetImportService:
     async def _lookups(
         self, tenant_id: int, serials: set[str]
     ) -> tuple[list[AssetType], list[Location], dict[str, int | None], dict[str, list[Asset]]]:
-        # Active approved + pending provisional (so re-imports reuse pending rows).
+        # Include inactive/rejected names so similarity/duplicate guards stay honest.
         types = list(
             (
                 await self.db.execute(
                     select(AssetType).where(
                         or_(AssetType.tenant_id == tenant_id, AssetType.tenant_id.is_(None)),
-                        or_(
-                            AssetType.is_active.is_(True),
-                            AssetType.approval_status == "pending",
-                        ),
                     )
                 )
             )
@@ -363,10 +359,6 @@ class CesAssetImportService:
                 await self.db.execute(
                     select(Location).where(
                         Location.tenant_id == tenant_id,
-                        or_(
-                            Location.is_active.is_(True),
-                            Location.approval_status == "pending",
-                        ),
                     )
                 )
             )
@@ -516,11 +508,25 @@ class CesAssetImportService:
                 # Dry-run: treat as pending create for validity preview.
                 return None, name, []
             if confirmation.action == "reuse":
-                if confirmation.reuse_id not in by_id:
+                allowed_ids = {int(m["id"]) for m in proposal.similar_matches if m.get("id") is not None}
+                if confirmation.reuse_id is None or confirmation.reuse_id not in by_id:
                     return (
                         None,
                         None,
                         [RowIssue(0, "INVALID_CONFIRMATION", f"reuse_id {confirmation.reuse_id} not found", kind)],
+                    )
+                if confirmation.reuse_id not in allowed_ids:
+                    return (
+                        None,
+                        None,
+                        [
+                            RowIssue(
+                                0,
+                                "INVALID_CONFIRMATION",
+                                f"reuse_id {confirmation.reuse_id} is not a proposed similar match for '{name}'",
+                                kind,
+                            )
+                        ],
                     )
                 return confirmation.reuse_id, None, []
             return None, name, []
@@ -850,7 +856,8 @@ class CesAssetImportService:
         )
         return report
 
-    async def _ensure_provisional_type(self, name: str, *, user_id: int, tenant_id: int) -> AssetType:
+    async def _ensure_provisional_type(self, name: str, *, user_id: int, tenant_id: int) -> tuple[AssetType, bool]:
+        """Return (type, newly_created)."""
         existing = (
             (
                 await self.db.execute(
@@ -865,7 +872,7 @@ class CesAssetImportService:
         )
         for item in existing:
             if normalise_lookup_key(item.name) == normalise_lookup_key(name):
-                return item
+                return item, False
         asset_type = AssetType(
             category=AssetCategory.SAFETY,
             name=name[:200],
@@ -879,9 +886,10 @@ class CesAssetImportService:
         )
         self.db.add(asset_type)
         await self.db.flush()
-        return asset_type
+        return asset_type, True
 
-    async def _ensure_provisional_location(self, name: str, *, user_id: int, tenant_id: int) -> Location:
+    async def _ensure_provisional_location(self, name: str, *, user_id: int, tenant_id: int) -> tuple[Location, bool]:
+        """Return (location, newly_created)."""
         existing = (
             (
                 await self.db.execute(
@@ -896,7 +904,7 @@ class CesAssetImportService:
         )
         for item in existing:
             if normalise_lookup_key(item.name) == normalise_lookup_key(name):
-                return item
+                return item, False
         location = Location(
             name=name[:200],
             kind=LocationKind.SITE,
@@ -909,7 +917,7 @@ class CesAssetImportService:
         )
         self.db.add(location)
         await self.db.flush()
-        return location
+        return location, True
 
     async def _notify_pending_lookups(
         self,
@@ -987,20 +995,22 @@ class CesAssetImportService:
                 if item.create_type_name:
                     key = normalise_lookup_key(item.create_type_name)
                     if key not in type_cache:
-                        created_type = await self._ensure_provisional_type(
+                        created_type, newly_created = await self._ensure_provisional_type(
                             item.create_type_name, user_id=user_id, tenant_id=tenant_id
                         )
                         type_cache[key] = created_type.id
-                        provisional_type_ids.append(created_type.id)
+                        if newly_created:
+                            provisional_type_ids.append(created_type.id)
                     item.asset_type_id = type_cache[key]
                 if item.create_location_name:
                     key = normalise_lookup_key(item.create_location_name)
                     if key not in location_cache:
-                        created_location = await self._ensure_provisional_location(
+                        created_location, newly_created = await self._ensure_provisional_location(
                             item.create_location_name, user_id=user_id, tenant_id=tenant_id
                         )
                         location_cache[key] = created_location.id
-                        provisional_location_ids.append(created_location.id)
+                        if newly_created:
+                            provisional_location_ids.append(created_location.id)
                     item.location_id = location_cache[key]
 
                 if item.action == "update":

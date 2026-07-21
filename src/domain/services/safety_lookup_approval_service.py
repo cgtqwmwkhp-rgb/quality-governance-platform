@@ -186,7 +186,10 @@ class SafetyLookupApprovalService:
                 raise NotFoundError(f"Target location {target_id} not found or not an approved active location")
             await self.db.execute(
                 update(Asset)
-                .where(Asset.location_id == entity_id, Asset.tenant_id == tenant_id)
+                .where(
+                    Asset.location_id == entity_id,
+                    or_(Asset.tenant_id == tenant_id, Asset.tenant_id.is_(None)),
+                )
                 .values(location_id=target_id, updated_by_id=actor_user_id)
             )
         row.is_active = False
@@ -232,7 +235,6 @@ class SafetyLookupApprovalService:
                     await self.db.execute(
                         select(AssetType).where(
                             or_(AssetType.tenant_id == tenant_id, AssetType.tenant_id.is_(None)),
-                            or_(AssetType.is_active.is_(True), AssetType.approval_status == "pending"),
                         )
                     )
                 )
@@ -246,7 +248,6 @@ class SafetyLookupApprovalService:
                     await self.db.execute(
                         select(Location).where(
                             Location.tenant_id == tenant_id,
-                            or_(Location.is_active.is_(True), Location.approval_status == "pending"),
                         )
                     )
                 )

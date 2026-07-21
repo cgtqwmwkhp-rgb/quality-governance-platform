@@ -151,8 +151,9 @@ export default function SafetyAssetRegister() {
     try {
       const [assetsRes, typesRes, locsRes, engineersRes] = await Promise.allSettled([
         safetyAssetsApi.listAllAssetsForBoard(),
-        safetyAssetsApi.listAssetTypes({ page: 1, page_size: 200, is_active: true }),
-        safetyAssetsApi.listLocations({ page: 1, page_size: 200, is_active: true }),
+        // Include inactive/pending provisional lookups so CES-imported assets show names.
+        safetyAssetsApi.listAssetTypes({ page: 1, page_size: 200 }),
+        safetyAssetsApi.listLocations({ page: 1, page_size: 200 }),
         workforceApi.listEngineers({ page: 1, page_size: 500, is_active: true }),
       ])
       if (assetsRes.status === 'rejected') {

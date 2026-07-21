@@ -220,7 +220,6 @@ class AssetService:
                 await self.db.execute(
                     select(Location).where(
                         Location.tenant_id == tenant_id,
-                        or_(Location.is_active.is_(True), Location.approval_status == "pending"),
                     )
                 )
             )
@@ -329,7 +328,6 @@ class AssetService:
                 await self.db.execute(
                     select(AssetType).where(
                         or_(AssetType.tenant_id == tenant_id, AssetType.tenant_id.is_(None)),
-                        or_(AssetType.is_active.is_(True), AssetType.approval_status == "pending"),
                     )
                 )
             )
