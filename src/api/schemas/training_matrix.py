@@ -152,6 +152,10 @@ class TrainingMatrixComplianceListResponse(BaseModel):
     total: int
     atlas_hub_url: str
     import_id: Optional[int] = None
+    # Portal diagnostics when items is empty (tolerant readers may ignore).
+    empty_reason: Optional[str] = None
+    engineer_id: Optional[int] = None
+    atlas_name: Optional[str] = None
 
 
 class TrainingMatrixRoleMetric(BaseModel):

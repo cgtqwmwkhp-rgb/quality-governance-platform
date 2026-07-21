@@ -183,9 +183,15 @@ export function createTrainingMatrixApi(api: AxiosInstance) {
         .then((r) => r.data),
     myTraining: () =>
       api
-        .get<{ items: TrainingMatrixComplianceRow[]; total: number; atlas_hub_url: string }>(
-          '/api/v1/training-matrix/me',
-        )
+        .get<{
+          items: TrainingMatrixComplianceRow[]
+          total: number
+          atlas_hub_url: string
+          import_id?: number | null
+          empty_reason?: string | null
+          engineer_id?: number | null
+          atlas_name?: string | null
+        }>('/api/v1/training-matrix/me')
         .then((r) => r.data),
     listNameMaps: () =>
       api

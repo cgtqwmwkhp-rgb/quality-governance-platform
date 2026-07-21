@@ -7,7 +7,7 @@ from src.domain.services.training_matrix_compliance import (
     evaluate_compliance,
     requirement_matches_engineer,
 )
-from src.domain.services.training_matrix_parser import parse_training_matrix_csv
+from src.domain.services.training_matrix_parser import parse_training_matrix_csv, person_name_match_keys
 
 SAMPLE_CSV = """Training matrix ,,
 ,,Asbestos Awareness,,,Fire Safety Awareness,,,Manual Handling
@@ -101,3 +101,10 @@ def test_parse_dedupes_duplicate_trainee_rows():
     aaron = next(p for p in parsed.people if p.atlas_name == "Aaron Smith")
     asbestos = next(c for c in aaron.cells if c.course_key == "asbestos_awareness")
     assert asbestos.passed_on == date(2023, 12, 2)
+
+
+def test_person_name_match_keys_handles_comma_order():
+    keys = person_name_match_keys("Harris, David")
+    assert "harris, david" in keys
+    assert "david harris" in keys
+    assert person_name_match_keys("David Harris") & keys

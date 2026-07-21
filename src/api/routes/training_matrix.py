@@ -71,7 +71,11 @@ from src.domain.services.training_matrix_import_service import (
     auto_match_training_matrix_names,
     persist_training_matrix_import,
 )
-from src.domain.services.training_matrix_parser import normalize_person_name, parse_training_matrix_csv
+from src.domain.services.training_matrix_parser import (
+    normalize_person_name,
+    parse_training_matrix_csv,
+    person_name_match_keys,
+)
 from src.domain.services.training_matrix_requirement_seed import seed_plantexpand_2024_requirements
 
 router = APIRouter()
@@ -775,6 +779,83 @@ async def delete_requirement(requirement_id: int, db: DbSession, user: CurrentUs
     await db.commit()
 
 
+async def _resolve_portal_people(
+    db: DbSession,
+    *,
+    tenant_id: int,
+    engineer: Engineer,
+    user: CurrentUser,
+) -> tuple[list[TrainingMatrixPerson], Optional[int], Optional[str]]:
+    """Find latest-import Atlas people for a linked engineer (name-map aware)."""
+    imp = await _latest_import(db, tenant_id)
+    if not imp:
+        return [], None, "no_import"
+
+    people = list(
+        (
+            await db.execute(
+                select(TrainingMatrixPerson).where(
+                    TrainingMatrixPerson.tenant_id == tenant_id,
+                    TrainingMatrixPerson.last_seen_import_id == imp.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    direct = [person for person in people if person.engineer_id == engineer.id]
+    if direct:
+        return direct, imp.id, None
+
+    name_maps = list(
+        (
+            await db.execute(
+                select(TrainingMatrixNameMap).where(
+                    TrainingMatrixNameMap.tenant_id == tenant_id,
+                    TrainingMatrixNameMap.engineer_id == engineer.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    mapped_keys: set[str] = set()
+    for row in name_maps:
+        mapped_keys |= person_name_match_keys(row.atlas_name)
+    by_map = [person for person in people if person_name_match_keys(person.atlas_name) & mapped_keys]
+    if by_map:
+        healed = False
+        for person in by_map:
+            if person.engineer_id != engineer.id:
+                person.engineer_id = engineer.id
+                healed = True
+        if healed:
+            await db.commit()
+        return by_map, imp.id, None
+
+    candidate_keys: set[str] = set()
+    for label in (
+        engineer.display_name,
+        getattr(user, "full_name", None),
+        getattr(user, "name", None),
+        getattr(user, "email", None),
+    ):
+        if label and "@" not in str(label):
+            candidate_keys |= person_name_match_keys(str(label))
+    by_name = [person for person in people if person_name_match_keys(person.atlas_name) & candidate_keys]
+    if by_name:
+        healed = False
+        for person in by_name:
+            if person.engineer_id != engineer.id:
+                person.engineer_id = engineer.id
+                healed = True
+        if healed:
+            await db.commit()
+        return by_name, imp.id, None
+
+    return [], imp.id, "not_mapped"
+
+
 async def _build_compliance_rows(
     db: DbSession,
     *,
@@ -782,6 +863,7 @@ async def _build_compliance_rows(
     status_filter: Optional[str] = None,
     department: Optional[str] = None,
     engineer_id: Optional[int] = None,
+    people_override: Optional[list[TrainingMatrixPerson]] = None,
 ) -> tuple[list[TrainingMatrixComplianceRow], Optional[int]]:
     imp = await _latest_import(db, tenant_id)
     if not imp:
@@ -799,20 +881,23 @@ async def _build_compliance_rows(
         .scalars()
         .all()
     )
-    people = (
-        (
-            await db.execute(
-                select(TrainingMatrixPerson).where(
-                    TrainingMatrixPerson.tenant_id == tenant_id,
-                    TrainingMatrixPerson.last_seen_import_id == imp.id,
+    if people_override is not None:
+        people = list(people_override)
+    else:
+        people = list(
+            (
+                await db.execute(
+                    select(TrainingMatrixPerson).where(
+                        TrainingMatrixPerson.tenant_id == tenant_id,
+                        TrainingMatrixPerson.last_seen_import_id == imp.id,
+                    )
                 )
             )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .all()
-    )
-    if engineer_id is not None:
-        people = [p for p in people if p.engineer_id == engineer_id]
+        if engineer_id is not None:
+            people = [p for p in people if p.engineer_id == engineer_id]
     if department:
         people = [p for p in people if p.department and department.lower() in p.department.lower()]
 
@@ -1017,12 +1102,31 @@ async def my_training(db: DbSession, user: CurrentUser):
     ).scalar_one_or_none()
     if not eng:
         raise NotFoundError("No employee profile is linked to your user account")
-    rows, import_id = await _build_compliance_rows(db, tenant_id=tenant_id, engineer_id=eng.id)
+
+    people, import_id, resolve_reason = await _resolve_portal_people(db, tenant_id=tenant_id, engineer=eng, user=user)
+    if not people:
+        return TrainingMatrixComplianceListResponse(
+            items=[],
+            total=0,
+            atlas_hub_url=ATLAS_HUB_URL,
+            import_id=import_id,
+            empty_reason=resolve_reason or "not_mapped",
+            engineer_id=eng.id,
+            atlas_name=eng.display_name,
+        )
+
+    rows, import_id = await _build_compliance_rows(db, tenant_id=tenant_id, people_override=people)
+    empty_reason = None
+    if not rows:
+        empty_reason = "no_requirements"
     return TrainingMatrixComplianceListResponse(
         items=rows,
         total=len(rows),
         atlas_hub_url=ATLAS_HUB_URL,
         import_id=import_id,
+        empty_reason=empty_reason,
+        engineer_id=eng.id,
+        atlas_name=people[0].atlas_name if people else eng.display_name,
     )
 
 
