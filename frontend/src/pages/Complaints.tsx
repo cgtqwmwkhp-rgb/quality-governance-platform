@@ -41,6 +41,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import {
+  CUSTOMERS_LOOKUP_CATEGORY,
+  toCustomerSelectOptions,
+} from './admin/customersCatalog'
 
 const COMPLAINT_TYPE_VALUES = [
   'product',
@@ -164,7 +168,9 @@ export default function Complaints() {
   >({})
   const [formData, setFormData] = useState<ComplaintCreate>(freshComplaintForm)
   const [contracts, setContracts] = useState<Contract[]>([])
-  const [contractsLoaded, setContractsLoaded] = useState(false)
+  const [customerOptions, setCustomerOptions] = useState<{ value: string; label: string }[]>([])
+  const [selectedCustomerCode, setSelectedCustomerCode] = useState('')
+  const [customersLoaded, setCustomersLoaded] = useState(false)
   const [topicOptions, setTopicOptions] = useState<{ value: string; label: string }[]>([])
   const [subjectEmail, setSubjectEmail] = useState('')
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
@@ -184,23 +190,31 @@ export default function Complaints() {
     }
   }, [])
 
-  // Load customer contracts + topic labels when create dialog opens.
+  // Load Customers lookup (SSOT) + contracts (optional FK) + topic labels when create opens.
   useEffect(() => {
     if (!showModal) {
-      setContractsLoaded(false)
+      setCustomersLoaded(false)
       return
     }
     let cancelled = false
-    setContractsLoaded(false)
+    setCustomersLoaded(false)
     ;(async () => {
       try {
-        const [contractRes, lookupRes] = await Promise.all([
-          contractsApi.list(true),
+        const [customerRes, contractRes, lookupRes] = await Promise.all([
+          lookupsApi.list(CUSTOMERS_LOOKUP_CATEGORY, true).catch(() => ({ items: [], total: 0 })),
+          contractsApi.list(true).catch(() => ({ items: [] as Contract[] })),
           lookupsApi.list('complaint_types', true).catch(() => ({ items: [], total: 0 })),
         ])
         if (cancelled) return
+        const fromLookup = toCustomerSelectOptions(customerRes.items || [])
+        const fromContracts = (contractRes.items || []).map((c) => ({
+          value: `contract:${c.id}`,
+          label: c.client_name ? `${c.client_name} (${c.code})` : `${c.name} (${c.code})`,
+        }))
+        // Prefer Admin → Lookups → Customers; fall back to Contracts only if lookup empty.
+        setCustomerOptions(fromLookup.length > 0 ? fromLookup : fromContracts)
         setContracts(contractRes.items || [])
-        setContractsLoaded(true)
+        setCustomersLoaded(true)
         const lookupByCode = new Map(
           (lookupRes.items || []).map((item) => [item.code.toLowerCase(), item.label]),
         )
@@ -212,7 +226,7 @@ export default function Complaints() {
         )
       } catch (err) {
         if (!cancelled) {
-          setContractsLoaded(true)
+          setCustomersLoaded(true)
           trackError(err, { component: 'Complaints', action: 'loadCreateLookups' })
           setTopicOptions(
             COMPLAINT_TYPE_VALUES.map((code) => ({
@@ -228,17 +242,42 @@ export default function Complaints() {
     }
   }, [showModal, t])
 
-  const contractOptions = useMemo(
-    () =>
-      contracts.map((c) => ({
-        value: String(c.id),
-        label: c.client_name ? `${c.client_name} (${c.code})` : `${c.name} (${c.code})`,
-        sublabel: c.name !== c.client_name ? c.name : c.code,
-      })),
-    [contracts],
-  )
+  const customersUnavailable = customersLoaded && customerOptions.length === 0
 
-  const customersUnavailable = contractsLoaded && contractOptions.length === 0
+  const applyCustomerSelection = (value: string) => {
+    setSelectedCustomerCode(value)
+    if (!value) {
+      setFormData((prev) => ({
+        ...prev,
+        contract_id: null,
+        complainant_company: '',
+      }))
+      return
+    }
+    if (value.startsWith('contract:')) {
+      const id = Number(value.slice('contract:'.length))
+      const contract = contracts.find((c) => c.id === id)
+      setFormData((prev) => ({
+        ...prev,
+        contract_id: Number.isFinite(id) ? id : null,
+        complainant_company: contract?.client_name || contract?.name || '',
+      }))
+      return
+    }
+    const option = customerOptions.find((o) => o.value === value)
+    const label = option?.label || value
+    const matched = contracts.find(
+      (c) =>
+        c.code?.toLowerCase() === value.toLowerCase() ||
+        c.client_name?.toLowerCase() === label.toLowerCase() ||
+        c.name?.toLowerCase() === label.toLowerCase(),
+    )
+    setFormData((prev) => ({
+      ...prev,
+      contract_id: matched?.id ?? null,
+      complainant_company: label,
+    }))
+  }
 
   // Hydrate list filters from shareable URL (back/forward + deep links).
   useEffect(() => {
@@ -343,6 +382,7 @@ export default function Complaints() {
     setPendingFiles([])
     setSubjectEmail('')
     setFormError(null)
+    setSelectedCustomerCode('')
     setFormData(freshComplaintForm())
   }
 
@@ -369,7 +409,7 @@ export default function Complaints() {
       setFormError(t('complaints.form.required_error'))
       return
     }
-    if (!formData.contract_id) {
+    if (!selectedCustomerCode) {
       setFormError(t('complaints.form.customer_required', 'Select which customer this complaint is from.'))
       return
     }
@@ -377,7 +417,7 @@ export default function Complaints() {
       setFormError(
         t(
           'complaints.form.customer_unavailable',
-          'No customer contracts are available — add contracts in Admin before creating a complaint.',
+          'No customers are available — add customers in Admin → Lookups before creating a complaint.',
         ),
       )
       return
@@ -435,9 +475,7 @@ export default function Complaints() {
         }
         setComplaints((prev) => [created, ...prev])
         setShowModal(false)
-        setFormData(freshComplaintForm())
-        setSubjectEmail('')
-        setPendingFiles([])
+        resetCreateForm()
         toast.success(`Complaint ${created.reference_number} recorded`)
         navigate(`/complaints/${created.id}`)
       }
@@ -860,15 +898,10 @@ export default function Complaints() {
               <FuzzySearchDropdown
                 label={`${t('complaints.form.customer', 'Which customer')} *`}
                 required
-                options={contractOptions}
-                value={formData.contract_id ? String(formData.contract_id) : ''}
-                onChange={(value) =>
-                  setFormData({
-                    ...formData,
-                    contract_id: value ? Number(value) : null,
-                  })
-                }
-                placeholder={t('complaints.form.customer_search', 'Search customer / contract…')}
+                options={customerOptions}
+                value={selectedCustomerCode}
+                onChange={applyCustomerSelection}
+                placeholder={t('complaints.form.customer_search', 'Search customer…')}
               />
               {customersUnavailable ? (
                 <div
@@ -878,21 +911,21 @@ export default function Complaints() {
                   <p className="font-medium">
                     {t(
                       'complaints.form.customer_empty_title',
-                      'No customer contracts are loaded',
+                      'No customers are configured',
                     )}
                   </p>
                   <p className="text-muted-foreground mt-1">
                     {t(
                       'complaints.form.customer_empty_body',
-                      'Complaint intake needs at least one contract/customer. This is a setup gap — not an empty search result.',
+                      'Complaint intake needs at least one customer in Admin → Lookups → Customers. This is a setup gap — not an empty search result.',
                     )}
                   </p>
                   <Link
-                    to="/admin/contracts"
+                    to="/admin/lookups"
                     className="inline-flex mt-2 text-sm font-medium text-primary hover:underline"
                     data-testid="complaints-customer-admin-link"
                   >
-                    {t('complaints.form.customer_admin_cta', 'Open Admin → Contracts')}
+                    {t('complaints.form.customer_admin_cta', 'Open Admin → Lookups → Customers')}
                   </Link>
                 </div>
               ) : null}

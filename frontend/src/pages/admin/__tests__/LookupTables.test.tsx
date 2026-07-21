@@ -35,6 +35,7 @@ describe('LookupTables configure CTA', () => {
         category === 'departments' ||
         category === 'locations' ||
         category === 'workforce_roles' ||
+        category === 'customers' ||
         category === 'tools' ||
         category === 'assets'
       ) {
@@ -89,6 +90,14 @@ describe('LookupTables configure CTA', () => {
     )
   })
 
+  it('shows customers catalog card with documented code hints', async () => {
+    render(<LookupTables />)
+
+    expect(await screen.findByTestId('lookup-card-customers')).toBeInTheDocument()
+    expect(screen.getByTestId('lookup-count-customers')).toHaveTextContent('Not configured')
+    expect(screen.getByTestId('lookup-customers-hints')).toHaveTextContent('ukpn, openreach')
+  })
+
   it('exposes tools and assets lookup categories on the hub', async () => {
     render(<LookupTables />)
 
@@ -116,6 +125,21 @@ describe('LookupTables configure CTA', () => {
     expect(screen.getByTestId('lookup-editor-workforce-role-hints')).toHaveTextContent(
       'process_scheduler',
     )
+  })
+
+  it('opens customers editor and shows suggested customer codes when empty', async () => {
+    const user = userEvent.setup()
+    render(<LookupTables />)
+
+    await screen.findByTestId('lookup-configure-customers')
+    await user.click(screen.getByTestId('lookup-configure-customers'))
+
+    expect(await screen.findByTestId('lookup-editor-dialog')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalledWith('customers', false)
+    })
+    expect(screen.getByTestId('lookup-editor-customer-hints')).toHaveTextContent('ukpn')
+    expect(screen.getByTestId('lookup-editor-customer-hints')).toHaveTextContent('openreach')
   })
 
   it('adds an option from name only and auto-generates the system code', async () => {
