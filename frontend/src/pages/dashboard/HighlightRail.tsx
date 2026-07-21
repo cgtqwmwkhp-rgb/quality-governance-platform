@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertTriangle, AlertCircle, Info, Radio } from 'lucide-react'
 import { cn } from '../../helpers/utils'
@@ -41,6 +42,21 @@ function Chip({ chip }: { chip: HighlightChip }) {
  * on hover/focus so the chips stay clickable deep-links.
  */
 export function HighlightRail({ chips }: { chips: HighlightChip[] }) {
+  const [reduceMotion, setReduceMotion] = useState(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false,
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const onChange = () => setReduceMotion(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+
   if (chips.length === 0) {
     return (
       <div
@@ -53,7 +69,9 @@ export function HighlightRail({ chips }: { chips: HighlightChip[] }) {
     )
   }
 
-  const shouldScroll = chips.length > 4
+  // Duplicate chips only when the marquee animation is active. Reduced-motion
+  // users get a single wrapping row (no duplicated / clipped copy).
+  const shouldScroll = chips.length > 4 && !reduceMotion
 
   return (
     <div

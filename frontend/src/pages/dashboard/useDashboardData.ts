@@ -4,25 +4,23 @@ import {
   auditsApi,
   complaintsApi,
   engineersApi,
+  executiveDashboardApi,
   incidentsApi,
-  nearMissesApi,
   notificationsApi,
   portalComplianceApi,
   riskRegisterApi,
   trainingMatrixApi,
-  type Complaint,
   type Incident,
 } from '../../api/client'
-import type { NearMiss } from '../../api/nearMissesClient'
 import { assetHealthAnalyticsApi, type AssetHealthSummary } from '../../api/assetHealthAnalyticsClient'
 import { hasRole, isSuperuser } from '../../utils/auth'
 import { isGapStatus } from '../workforce/trainingMatrix/trainingMatrixBoardHelpers'
 import {
   buildHighlightChips,
   computeRiskTrendDirection,
-  countCreatedWithinDays,
   derivePersona,
   metricFromSettled,
+  metricOk,
   metricUnavailable,
   personaShowsMyDay,
   personaShowsOrgStrip,
@@ -100,6 +98,8 @@ export function useDashboardData(): DashboardData {
   const [error, setError] = useState<string | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
   const [linked, setLinked] = useState(false)
+  /** True when getByUserMe failed — treat as possibly-linked so we don't hide My Day. */
+  const [linkCheckFailed, setLinkCheckFailed] = useState(false)
   const [isOrgRole] = useState(() => isSuperuser() || hasRole(...ORG_ROLE_NAMES))
   const [myDay, setMyDay] = useState<MyDayData>({
     compliance: metricUnavailable(),
@@ -131,11 +131,26 @@ export function useDashboardData(): DashboardData {
     setError(null)
     setLoading(true)
     try {
-      const engineerResult = await engineersApi.getByUserMe().catch(() => null)
-      const isLinked = engineerResult?.data?.linked === true
+      let isLinked = false
+      let linkFailed = false
+      try {
+        const engineerResult = await engineersApi.getByUserMe()
+        isLinked = engineerResult?.data?.linked === true
+      } catch {
+        // Do not misclassify as unlinked — keep My Day fetches so linked engineers
+        // are not dropped onto an org-only shell when the link probe fails.
+        linkFailed = true
+        setError(
+          'Could not verify your engineer profile link. Showing personal My Day where possible — retry to refresh.',
+        )
+      }
       setLinked(isLinked)
+      setLinkCheckFailed(linkFailed)
 
-      const persona = derivePersona({ linked: isLinked, isOrgRole })
+      const persona = derivePersona({
+        linked: isLinked || linkFailed,
+        isOrgRole,
+      })
       const wantMyDay = personaShowsMyDay(persona)
       const wantOrg = personaShowsOrgStrip(persona)
 
@@ -145,8 +160,7 @@ export function useDashboardData(): DashboardData {
         trainingRes,
         actionCountsRes,
         incidentsRes,
-        complaintsRes,
-        nearMissesRes,
+        execDashRes,
         auditRunsRes,
         trainingSummaryRes,
         assetHealthRes,
@@ -160,8 +174,8 @@ export function useDashboardData(): DashboardData {
         wantMyDay ? trainingMatrixApi.myTraining() : Promise.reject(new Error('skip')),
         wantMyDay ? actionsApi.viewCounts() : Promise.reject(new Error('skip')),
         wantOrg ? incidentsApi.list(1, 100) : Promise.reject(new Error('skip')),
-        wantOrg ? complaintsApi.list(1, 100) : Promise.reject(new Error('skip')),
-        wantOrg ? nearMissesApi.list(1, 100) : Promise.reject(new Error('skip')),
+        // Period totals (not page-capped) for 7d pulse tiles.
+        wantOrg ? executiveDashboardApi.getDashboard(7) : Promise.reject(new Error('skip')),
         wantOrg ? auditsApi.listRuns(1, 100) : Promise.reject(new Error('skip')),
         wantOrg ? trainingMatrixApi.getSummary() : Promise.reject(new Error('skip')),
         wantOrg ? assetHealthAnalyticsApi.getSummary() : Promise.reject(new Error('skip')),
@@ -200,8 +214,7 @@ export function useDashboardData(): DashboardData {
 
       // ---- Pulse & trends (tenant-wide) ----
       const incidentsMetric = metricFromSettled(incidentsRes, (r) => r.data.items as Incident[])
-      const complaintsMetric = metricFromSettled(complaintsRes, (r) => r.data.items as Complaint[])
-      const nearMissesMetric = metricFromSettled(nearMissesRes, (r) => r.data.items as NearMiss[])
+      const execDashMetric = metricFromSettled(execDashRes, (r) => r.data)
       const auditRunsMetric = metricFromSettled(auditRunsRes, (r) => r.data.items)
       // trainingMatrixApi.getSummary() also unwraps `.data` inside the client.
       const trainingSummaryMetric = metricFromSettled(trainingSummaryRes)
@@ -219,29 +232,31 @@ export function useDashboardData(): DashboardData {
               }
             : metricUnavailable(),
         toolCompliancePct:
-          assetHealthMetric.status === 'ok' && assetHealthMetric.value.total > 0
-            ? {
-                status: 'ok',
-                value: Math.round(
-                  (100 *
-                    (assetHealthMetric.value.total -
-                      (assetHealthMetric.value.expiry_bands.overdue ?? 0) -
-                      (assetHealthMetric.value.by_status.quarantined ?? 0))) /
-                    assetHealthMetric.value.total,
-                ),
-              }
+          assetHealthMetric.status === 'ok'
+            ? assetHealthMetric.value.total > 0
+              ? {
+                  status: 'ok',
+                  value: Math.round(
+                    (100 *
+                      (assetHealthMetric.value.total -
+                        (assetHealthMetric.value.expiry_bands.overdue ?? 0) -
+                        (assetHealthMetric.value.by_status.quarantined ?? 0))) /
+                      assetHealthMetric.value.total,
+                  ),
+                }
+              : metricOk(100) // empty registry = nothing overdue/quarantined
             : metricUnavailable(),
         incidents7d:
-          incidentsMetric.status === 'ok'
-            ? { status: 'ok', value: countCreatedWithinDays(incidentsMetric.value, 7) }
+          execDashMetric.status === 'ok'
+            ? metricOk(execDashMetric.value.incidents?.total_in_period ?? 0)
             : metricUnavailable(),
         complaints7d:
-          complaintsMetric.status === 'ok'
-            ? { status: 'ok', value: countCreatedWithinDays(complaintsMetric.value, 7) }
+          execDashMetric.status === 'ok'
+            ? metricOk(execDashMetric.value.complaints?.total_in_period ?? 0)
             : metricUnavailable(),
         nearMisses7d:
-          nearMissesMetric.status === 'ok'
-            ? { status: 'ok', value: countCreatedWithinDays(nearMissesMetric.value, 7) }
+          execDashMetric.status === 'ok'
+            ? metricOk(execDashMetric.value.near_misses?.total_in_period ?? 0)
             : metricUnavailable(),
         auditScorePct:
           auditRunsMetric.status === 'ok'
@@ -325,7 +340,7 @@ export function useDashboardData(): DashboardData {
     void load()
   }, [load])
 
-  const persona = derivePersona({ linked, isOrgRole })
+  const persona = derivePersona({ linked: linked || linkCheckFailed, isOrgRole })
 
   const highlights = buildHighlightChips({
     myDay: personaShowsMyDay(persona)

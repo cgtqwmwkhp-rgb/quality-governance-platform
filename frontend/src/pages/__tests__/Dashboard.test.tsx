@@ -22,7 +22,7 @@ const trainingMatrixApi = { myTraining: vi.fn(), getSummary: vi.fn() }
 const actionsApi = { viewCounts: vi.fn() }
 const incidentsApi = { list: vi.fn() }
 const complaintsApi = { list: vi.fn() }
-const nearMissesApi = { list: vi.fn() }
+const executiveDashboardApi = { getDashboard: vi.fn() }
 const auditsApi = { listRuns: vi.fn() }
 const riskRegisterApi = { getSummary: vi.fn(), getTrends: vi.fn() }
 const notificationsApi = { getUnreadCount: vi.fn() }
@@ -36,7 +36,7 @@ vi.mock('../../api/client', () => ({
   actionsApi,
   incidentsApi,
   complaintsApi,
-  nearMissesApi,
+  executiveDashboardApi,
   auditsApi,
   riskRegisterApi,
   notificationsApi,
@@ -73,7 +73,13 @@ function applyDefaultMocks() {
   actionsApi.viewCounts.mockResolvedValue({ data: { all: 0, my: 0, overdue: 0, my_overdue: 0 } })
   incidentsApi.list.mockResolvedValue(emptyPage)
   complaintsApi.list.mockResolvedValue(emptyPage)
-  nearMissesApi.list.mockResolvedValue(emptyPage)
+  executiveDashboardApi.getDashboard.mockResolvedValue({
+    data: {
+      incidents: { total_in_period: 0 },
+      complaints: { total_in_period: 0 },
+      near_misses: { total_in_period: 0 },
+    },
+  })
   auditsApi.listRuns.mockResolvedValue(emptyPage)
   riskRegisterApi.getSummary.mockResolvedValue({ data: { total_risks: 0, by_category: {} } })
   riskRegisterApi.getTrends.mockResolvedValue({ data: { series: [] } })
@@ -192,6 +198,48 @@ describe('Dashboard (role-aware living dashboard)', () => {
       const toolComplianceValue = await screen.findByTestId('pulse-tool-compliance-value')
       expect(toolComplianceValue).toHaveTextContent('—')
       expect(toolComplianceValue).not.toHaveTextContent('0')
+    })
+
+    it('empty asset registry shows 100% tool compliance (not unavailable)', async () => {
+      authMocks.hasRole.mockReturnValue(true)
+      assetHealthAnalyticsApi.getSummary.mockResolvedValue({
+        data: {
+          total: 0,
+          expiry_bands: { overdue: 0, due_30: 0, due_60: 0, due_90: 0, in_date: 0 },
+          by_type: {},
+          by_status: { quarantined: 0 },
+          generated_at: '2026-07-21T00:00:00Z',
+        },
+      })
+
+      const Dashboard = (await import('../Dashboard')).default
+      render(
+        <BrowserRouter>
+          <Dashboard />
+        </BrowserRouter>,
+      )
+      await screen.findByRole('heading', { name: 'Dashboard' })
+
+      const toolComplianceValue = await screen.findByTestId('pulse-tool-compliance-value')
+      expect(toolComplianceValue).toHaveTextContent('100%')
+    })
+
+    it('keeps My Day when engineer link probe fails (does not treat as unlinked)', async () => {
+      engineersApi.getByUserMe.mockRejectedValue(new Error('timeout'))
+      authMocks.hasRole.mockReturnValue(false)
+      authMocks.isSuperuser.mockReturnValue(false)
+
+      const Dashboard = (await import('../Dashboard')).default
+      render(
+        <BrowserRouter>
+          <Dashboard />
+        </BrowserRouter>,
+      )
+      await screen.findByRole('heading', { name: 'Dashboard' })
+
+      expect(await screen.findByTestId('my-day-section')).toBeInTheDocument()
+      expect(screen.queryByTestId('org-command-strip')).not.toBeInTheDocument()
+      expect(await screen.findByText(/Could not verify your engineer profile link/i)).toBeInTheDocument()
     })
 
     it('shows an unavailable dash on the org asset-health tile when the fetch fails', async () => {
