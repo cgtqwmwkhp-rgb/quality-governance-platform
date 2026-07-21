@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockGet = vi.fn()
 const mockPatch = vi.fn()
+const mockPost = vi.fn()
 
 vi.mock('./client', () => ({
   default: {
     get: (...args: unknown[]) => mockGet(...args),
     patch: (...args: unknown[]) => mockPatch(...args),
+    post: (...args: unknown[]) => mockPost(...args),
   },
 }))
 
@@ -91,5 +93,18 @@ describe('safetyAssetsApi', () => {
       photo_evidence_id: 99,
       status: 'quarantined',
     })
+  })
+
+  it('posts CES workbook as multipart form data', async () => {
+    mockPost.mockResolvedValue({ data: { ok: true } })
+    const { safetyAssetsApi } = await import('./safetyAssetsClient')
+    const file = new File(['xlsx'], 'ces.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    await safetyAssetsApi.cesImportDryRun(file)
+
+    expect(mockPost).toHaveBeenCalledWith('/api/v1/asset-imports/ces/dry-run', expect.any(FormData))
+    const form = mockPost.mock.calls[0][1] as FormData
+    expect(form.get('file')).toBe(file)
   })
 })

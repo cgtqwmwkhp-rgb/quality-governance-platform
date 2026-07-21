@@ -327,3 +327,48 @@ class AssetImportCommitResponse(BaseModel):
     created_count: int
     created_asset_ids: List[int]
     report: AssetImportValidationReportResponse
+
+
+# ============== CES XLSX Import Schemas ==============
+
+
+class CesAssetImportRowIssue(BaseModel):
+    row: int
+    code: str
+    message: str
+    field: Optional[str] = None
+    severity: str = "error"
+
+
+class CesAssetImportPreviewRow(BaseModel):
+    row: int
+    action: str
+    asset_number: str
+    name: str
+    serial_number: str
+    owner_user_id: Optional[int] = None
+    location_id: Optional[int] = None
+    vehicle_reg: Optional[str] = None
+    status: str
+    not_made_available: bool = False
+
+
+class CesAssetImportValidationReportResponse(BaseModel):
+    dry_run: bool
+    total_rows: int
+    valid_rows: int
+    error_rows: int
+    creates: int
+    updates: int
+    ok: bool
+    errors: List[CesAssetImportRowIssue] = Field(default_factory=list)
+    warnings: List[CesAssetImportRowIssue] = Field(default_factory=list)
+    preview: List[CesAssetImportPreviewRow] = Field(default_factory=list)
+
+
+class CesAssetImportCommitResponse(BaseModel):
+    created_count: int
+    updated_count: int
+    created_asset_ids: List[int]
+    updated_asset_ids: List[int]
+    report: CesAssetImportValidationReportResponse
