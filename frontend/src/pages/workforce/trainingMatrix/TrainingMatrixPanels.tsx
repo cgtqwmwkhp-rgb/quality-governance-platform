@@ -104,8 +104,9 @@ function entityMetricColumns(nameLabel: string): {
 }
 
 type EntityDrilldown = {
-  key: string
-  nameLabel: string
+  title: string
+  subtitle?: string
+  rollup: EntityMetricRollup
 }
 
 type RoleScope = BoardRole | 'Overall'
@@ -422,13 +423,6 @@ export function TrainingMatrixGapBoard() {
       ),
     [activeEntityRollups, entityFilters, entitySortKey, entitySortDir],
   )
-  const entityDrilldownRollup = useMemo(
-    () =>
-      entityDrilldown
-        ? displayedEntityRollups.find((rollup) => rollup.key === entityDrilldown.key) ?? null
-        : null,
-    [displayedEntityRollups, entityDrilldown],
-  )
 
   useEffect(() => {
     setEntityFilters(EMPTY_ENTITY_METRIC_FILTERS)
@@ -436,10 +430,6 @@ export function TrainingMatrixGapBoard() {
     setEntitySortDir(view === 'module' ? 'asc' : 'desc')
     setEntityDrilldown(null)
   }, [view])
-
-  useEffect(() => {
-    if (entityDrilldown && !entityDrilldownRollup) setEntityDrilldown(null)
-  }, [entityDrilldown, entityDrilldownRollup])
 
   const handlePersonSort = (key: PersonRollupSortKey) => {
     if (personSortKey === key) {
@@ -469,8 +459,9 @@ export function TrainingMatrixGapBoard() {
 
   const openEntityDrilldown = (rollup: EntityMetricRollup, nameLabel: string) => {
     setEntityDrilldown({
-      key: rollup.key,
-      nameLabel,
+      title: rollup.label,
+      subtitle: `${nameLabel} · ${rollup.complete}/${rollup.total} complete · ${rollup.overdue} overdue`,
+      rollup,
     })
   }
 
@@ -1112,38 +1103,34 @@ export function TrainingMatrixGapBoard() {
       </Sheet>
 
       <Sheet
-        open={entityDrilldownRollup != null}
+        open={entityDrilldown != null}
         onOpenChange={(open) => !open && setEntityDrilldown(null)}
       >
         <SheetContent side="right" className="max-w-lg" data-testid="training-matrix-entity-sheet">
           <SheetHeader>
-            <SheetTitle>{entityDrilldownRollup?.label || 'Detail'}</SheetTitle>
-            <SheetDescription>
-              {entityDrilldown && entityDrilldownRollup
-                ? `${entityDrilldown.nameLabel} · ${entityDrilldownRollup.complete}/${entityDrilldownRollup.total} complete · ${entityDrilldownRollup.overdue} overdue`
-                : ''}
-            </SheetDescription>
+            <SheetTitle>{entityDrilldown?.title || 'Detail'}</SheetTitle>
+            <SheetDescription>{entityDrilldown?.subtitle || ''}</SheetDescription>
           </SheetHeader>
           <SheetBody className="space-y-4">
-            {entityDrilldownRollup ? (
+            {entityDrilldown ? (
               <>
                 <div className="grid grid-cols-4 gap-2 text-center">
                   <div className="rounded-lg border border-border p-2">
-                    <p className="text-lg font-semibold">{entityDrilldownRollup.complete}</p>
+                    <p className="text-lg font-semibold">{entityDrilldown.rollup.complete}</p>
                     <p className="text-[11px] text-muted-foreground">Complete</p>
                   </div>
                   <div className="rounded-lg border border-border p-2">
                     <p className="text-lg font-semibold text-destructive">
-                      {entityDrilldownRollup.overdue}
+                      {entityDrilldown.rollup.overdue}
                     </p>
                     <p className="text-[11px] text-muted-foreground">Overdue</p>
                   </div>
                   <div className="rounded-lg border border-border p-2">
-                    <p className="text-lg font-semibold">{entityDrilldownRollup.pct}%</p>
+                    <p className="text-lg font-semibold">{entityDrilldown.rollup.pct}%</p>
                     <p className="text-[11px] text-muted-foreground">Percent</p>
                   </div>
                   <div className="rounded-lg border border-border p-2">
-                    <p className="text-lg font-semibold">{entityDrilldownRollup.need}</p>
+                    <p className="text-lg font-semibold">{entityDrilldown.rollup.need}</p>
                     <p className="text-[11px] text-muted-foreground">Need</p>
                   </div>
                 </div>
@@ -1151,10 +1138,10 @@ export function TrainingMatrixGapBoard() {
                   <Button
                     type="button"
                     size="sm"
-                    disabled={notifying || entityDrilldownRollup.filteredRows.length === 0}
+                    disabled={notifying || entityDrilldown.rollup.filteredRows.length === 0}
                     onClick={() =>
                       runNotify([
-                        ...new Set(entityDrilldownRollup.filteredRows.map((r) => r.atlas_name)),
+                        ...new Set(entityDrilldown.rollup.filteredRows.map((r) => r.atlas_name)),
                       ])
                     }
                     data-testid="training-matrix-entity-email"
@@ -1172,7 +1159,7 @@ export function TrainingMatrixGapBoard() {
                 <div>
                   <p className="text-sm font-medium mb-2">Needs action</p>
                   <ul className="space-y-2 text-sm">
-                    {entityDrilldownRollup.allRows
+                    {entityDrilldown.rollup.allRows
                       .filter((r) => isGapStatus(r.status))
                       .map((r) => (
                         <li key={`${r.atlas_name}-${r.course_key}`}>
@@ -1200,7 +1187,7 @@ export function TrainingMatrixGapBoard() {
                           </button>
                         </li>
                       ))}
-                    {entityDrilldownRollup.allRows.filter((r) => isGapStatus(r.status)).length ===
+                    {entityDrilldown.rollup.allRows.filter((r) => isGapStatus(r.status)).length ===
                     0 ? (
                       <li className="text-muted-foreground text-xs">No open gaps.</li>
                     ) : null}
