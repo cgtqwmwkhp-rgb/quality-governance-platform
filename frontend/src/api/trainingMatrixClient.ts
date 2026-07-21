@@ -33,6 +33,7 @@ export type TrainingMatrixImportQa = {
 }
 
 export type TrainingMatrixComplianceRow = {
+  person_id?: number | null
   atlas_name: string
   department?: string | null
   board_role_override?: string | null
@@ -49,6 +50,25 @@ export type TrainingMatrixComplianceRow = {
   expiry_without_passed: boolean
   atlas_hub_url: string
   last_training_notified_at?: string | null
+}
+
+export type TrainingMatrixRoleMetric = {
+  role: string
+  ok: number
+  total: number
+  pct: number
+  metric: string
+}
+
+export type TrainingMatrixSummary = {
+  module_ok: TrainingMatrixRoleMetric[]
+  people_fully_ok: TrainingMatrixRoleMetric[]
+  horizons: Record<string, number>
+  top_overdue_courses: { course_display_name: string; count: number }[]
+  required_row_count: number
+  person_count: number
+  import_id?: number | null
+  atlas_hub_url: string
 }
 
 export type TrainingMatrixRequirement = {
@@ -117,6 +137,8 @@ export function createTrainingMatrixApi(api: AxiosInstance) {
           { params },
         )
         .then((r) => r.data),
+    getSummary: () =>
+      api.get<TrainingMatrixSummary>('/api/v1/training-matrix/summary').then((r) => r.data),
     myTraining: () =>
       api
         .get<{ items: TrainingMatrixComplianceRow[]; total: number; atlas_hub_url: string }>(

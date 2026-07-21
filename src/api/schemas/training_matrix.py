@@ -128,6 +128,7 @@ class TrainingMatrixRequirementSeedResponse(BaseModel):
 
 
 class TrainingMatrixComplianceRow(BaseModel):
+    person_id: Optional[int] = None
     atlas_name: str
     department: Optional[str] = None
     board_role_override: Optional[str] = None
@@ -151,6 +152,32 @@ class TrainingMatrixComplianceListResponse(BaseModel):
     total: int
     atlas_hub_url: str
     import_id: Optional[int] = None
+
+
+class TrainingMatrixRoleMetric(BaseModel):
+    role: str
+    ok: int
+    total: int
+    pct: int
+    metric: str
+
+
+class TrainingMatrixTopCourse(BaseModel):
+    course_display_name: str
+    count: int
+
+
+class TrainingMatrixSummaryResponse(BaseModel):
+    """Board SSOT: module OK% (hero primary) + people fully OK (caption) + horizons."""
+
+    module_ok: List[TrainingMatrixRoleMetric]
+    people_fully_ok: List[TrainingMatrixRoleMetric]
+    horizons: dict[str, int]
+    top_overdue_courses: List[TrainingMatrixTopCourse]
+    required_row_count: int
+    person_count: int
+    import_id: Optional[int] = None
+    atlas_hub_url: str
 
 
 class TrainingMatrixCourseOption(BaseModel):

@@ -29,6 +29,7 @@ from src.api.schemas.training_matrix import (
     TrainingMatrixRequirementSeedRequest,
     TrainingMatrixRequirementSeedResponse,
     TrainingMatrixRequirementUpdate,
+    TrainingMatrixSummaryResponse,
 )
 from src.api.utils.tenant import require_tenant_id
 from src.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
@@ -43,7 +44,7 @@ from src.domain.models.training_matrix import (
 )
 from src.domain.models.user import User
 from src.domain.services.email_service import email_service
-from src.domain.services.training_matrix_board import BOARD_ROLES, normalize_board_role
+from src.domain.services.training_matrix_board import BOARD_ROLES, build_board_summary, normalize_board_role
 from src.domain.services.training_matrix_compliance import (
     ATLAS_HUB_URL,
     ComplianceInput,
@@ -664,6 +665,7 @@ async def _build_compliance_rows(
                 continue
             rows.append(
                 TrainingMatrixComplianceRow(
+                    person_id=person.id,
                     atlas_name=person.atlas_name,
                     department=person.department,
                     board_role_override=person.board_role_override,
@@ -683,6 +685,25 @@ async def _build_compliance_rows(
                 )
             )
     return rows, imp.id
+
+
+@router.get("/summary", response_model=TrainingMatrixSummaryResponse)
+async def training_matrix_summary(db: DbSession, user: CurrentUser):
+    """Board SSOT: module OK% (hero), people fully OK (caption), horizons, top overdue courses."""
+    _require_manager(user)
+    tenant_id = _tenant(user)
+    rows, import_id = await _build_compliance_rows(db, tenant_id=tenant_id)
+    payload = build_board_summary([r.model_dump() for r in rows])
+    return TrainingMatrixSummaryResponse(
+        module_ok=payload["module_ok"],
+        people_fully_ok=payload["people_fully_ok"],
+        horizons=payload["horizons"],
+        top_overdue_courses=payload["top_overdue_courses"],
+        required_row_count=payload["required_row_count"],
+        person_count=payload["person_count"],
+        import_id=import_id,
+        atlas_hub_url=ATLAS_HUB_URL,
+    )
 
 
 @router.get("/compliance", response_model=TrainingMatrixComplianceListResponse)

@@ -12,7 +12,7 @@ import {
   type TrainingMatrixNameMapItem,
   type TrainingMatrixRequirement,
 } from '../../../api/client'
-import { ATLAS_HUB_URL } from '../../../api/trainingMatrixClient'
+import { ATLAS_HUB_URL, type TrainingMatrixSummary } from '../../../api/trainingMatrixClient'
 import { Badge, type BadgeVariant } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../../components/ui/Card'
@@ -21,21 +21,26 @@ import { toast } from '../../../contexts/ToastContext'
 import {
   BOARD_ROLES,
   type BoardRole,
+  buildPersonRollups,
   buildStatusBriefings,
-  computeRoleStats,
+  computeModuleRoleStats,
+  computePeopleFullyOkStats,
   filterRowsByHorizon,
   groupRowsByCourse,
   groupRowsByDepartment,
-  groupRowsByPerson,
   type Horizon,
   HORIZON_FILTERS,
   horizonForRow,
   moduleViewForRole,
   myTrainingSummary,
+  personRollupsToCsv,
+  resolveBoardRole,
   rowsToCsv,
   statusLabel,
   topCoursesInHorizon,
 } from './trainingMatrixBoardHelpers'
+
+type RoleScope = BoardRole | 'Overall'
 
 const HORIZON_VARIANT: Record<Horizon, BadgeVariant> = {
   overdue: 'destructive',
@@ -203,11 +208,12 @@ const VIEWS: { id: ViewId; label: string }[] = [
 export function TrainingMatrixGapBoard() {
   const { t } = useTranslation()
   const [rows, setRows] = useState<TrainingMatrixComplianceRow[]>([])
+  const [summary, setSummary] = useState<TrainingMatrixSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [horizon, setHorizon] = useState<Horizon | 'all'>('overdue')
-  const [view, setView] = useState<ViewId>('group')
-  const [moduleRole, setModuleRole] = useState<BoardRole>('Engineer')
+  const [view, setView] = useState<ViewId>('individual')
+  const [roleScope, setRoleScope] = useState<RoleScope>('Overall')
   const [briefingIndex, setBriefingIndex] = useState(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [notifying, setNotifying] = useState(false)
@@ -216,22 +222,39 @@ export function TrainingMatrixGapBoard() {
   useEffect(() => {
     setLoading(true)
     setError(null)
-    trainingMatrixApi
-      .listCompliance()
-      .then((res) => setRows(res.items || []))
+    Promise.all([
+      trainingMatrixApi.listCompliance(),
+      trainingMatrixApi.getSummary().catch(() => null),
+      trainingMatrixApi.getLatestImport().catch(() => null),
+    ])
+      .then(([compliance, summaryRes, latest]) => {
+        setRows(compliance.items || [])
+        setSummary(summaryRes)
+        setLatestImport(latest)
+      })
       .catch((err) => {
         setRows([])
+        setSummary(null)
         setError(getApiErrorMessage(err))
       })
       .finally(() => setLoading(false))
-    trainingMatrixApi
-      .getLatestImport()
-      .then(setLatestImport)
-      .catch(() => setLatestImport(null))
   }, [])
 
-  const roleStats = useMemo(() => computeRoleStats(rows), [rows])
-  const briefings = useMemo(() => buildStatusBriefings(rows, roleStats), [rows, roleStats])
+  const scopedRows = useMemo(() => {
+    if (roleScope === 'Overall') return rows
+    return rows.filter((r) => resolveBoardRole(r.department, r.board_role_override) === roleScope)
+  }, [rows, roleScope])
+
+  // Hero always shows all roles from summary (full workforce); fallback computes from all rows.
+  const heroModuleStats = useMemo(
+    () => summary?.module_ok ?? computeModuleRoleStats(rows),
+    [summary, rows],
+  )
+  const peopleStats = useMemo(
+    () => summary?.people_fully_ok ?? computePeopleFullyOkStats(rows),
+    [summary, rows],
+  )
+  const briefings = useMemo(() => buildStatusBriefings(rows, peopleStats), [rows, peopleStats])
 
   useEffect(() => {
     if (briefings.length <= 1) return
@@ -245,7 +268,10 @@ export function TrainingMatrixGapBoard() {
     setBriefingIndex(0)
   }, [briefings.length])
 
-  const filteredRows = useMemo(() => filterRowsByHorizon(rows, horizon), [rows, horizon])
+  const filteredRows = useMemo(
+    () => filterRowsByHorizon(scopedRows, horizon),
+    [scopedRows, horizon],
+  )
 
   const topCourses = useMemo(() => {
     if (horizon === 'all') {
@@ -256,12 +282,16 @@ export function TrainingMatrixGapBoard() {
         .sort((a, b) => b.count - a.count)
         .slice(0, 5)
     }
-    return topCoursesInHorizon(rows, horizon, 5)
-  }, [rows, filteredRows, horizon])
+    return topCoursesInHorizon(scopedRows, horizon, 5)
+  }, [scopedRows, filteredRows, horizon])
 
   const groupRows = useMemo(() => groupRowsByDepartment(filteredRows), [filteredRows])
   const courseRows = useMemo(() => groupRowsByCourse(filteredRows), [filteredRows])
-  const personRows = useMemo(() => groupRowsByPerson(filteredRows), [filteredRows])
+  const personRollups = useMemo(
+    () => buildPersonRollups(scopedRows, filteredRows),
+    [scopedRows, filteredRows],
+  )
+  const moduleRole: BoardRole = roleScope === 'Overall' ? 'Engineer' : roleScope
   const moduleRows = useMemo(() => moduleViewForRole(rows, moduleRole), [rows, moduleRole])
 
   const toggleSelected = (atlasName: string) => {
@@ -288,12 +318,16 @@ export function TrainingMatrixGapBoard() {
   }
 
   const onExportCsv = () => {
+    if (view === 'individual') {
+      const csv = personRollupsToCsv(personRollups)
+      downloadCsv(`training-matrix-people-${horizon}-${new Date().toISOString().slice(0, 10)}.csv`, csv)
+      toast.success(`Exported ${personRollups.length} people`)
+      return
+    }
     const csv = rowsToCsv(filteredRows)
     downloadCsv(`training-matrix-${horizon}-${new Date().toISOString().slice(0, 10)}.csv`, csv)
     toast.success(`Exported ${filteredRows.length} row${filteredRows.length === 1 ? '' : 's'}`)
   }
-
-  const overall = roleStats.find((s) => s.role === 'Overall')
 
   return (
     <div className="space-y-4" data-testid="training-matrix-gap-board">
@@ -351,18 +385,40 @@ export function TrainingMatrixGapBoard() {
           ) : null}
 
           <div className="space-y-2" data-testid="training-matrix-role-bar">
+            <p className="text-xs text-muted-foreground">
+              Module compliance (in-cycle) from the Training Matrix — blank frequency cells are excluded.
+              Click a group to filter the board.
+            </p>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-              {[overall, ...roleStats.filter((s) => s.role !== 'Overall')].map((stat) =>
-                stat ? (
-                  <div key={stat.role} className="p-2.5 rounded-lg border border-border">
+              {heroModuleStats.map((stat) => {
+                const people = peopleStats.find((p) => p.role === stat.role)
+                const active = roleScope === stat.role
+                return (
+                  <button
+                    key={stat.role}
+                    type="button"
+                    data-testid={`training-matrix-hero-${stat.role}`}
+                    className={`p-2.5 rounded-lg border text-left transition-colors ${
+                      active
+                        ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                        : 'border-border hover:border-primary/50'
+                    }`}
+                    onClick={() => setRoleScope(stat.role as RoleScope)}
+                  >
                     <p className="text-xs text-muted-foreground">{stat.role}</p>
                     <p className="text-lg font-semibold">{stat.pct}%</p>
                     <p className="text-xs text-muted-foreground">
-                      {stat.ok}/{stat.total} people with every required module OK
+                      {stat.ok}/{stat.total} modules OK
+                      {stat.total === 0 ? ' — no matrix rules for this group' : ''}
                     </p>
-                  </div>
-                ) : null,
-              )}
+                    {people && people.total > 0 ? (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {people.ok}/{people.total} people fully OK
+                      </p>
+                    ) : null}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -517,18 +573,20 @@ export function TrainingMatrixGapBoard() {
             </div>
           ) : view === 'individual' ? (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm" data-testid="training-matrix-individual-table">
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
                     <th className="py-2 px-3" />
                     <th className="py-2 px-3">Person</th>
                     <th className="py-2 px-3">Department</th>
+                    <th className="py-2 px-3">Complete</th>
                     <th className="py-2 px-3">Overdue</th>
-                    <th className="py-2 px-3">Lines in filter</th>
+                    <th className="py-2 px-3">%</th>
+                    <th className="py-2 px-3">Need to complete</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {personRows.map((p) => (
+                  {personRollups.map((p) => (
                     <tr key={p.atlas_name} className="border-b border-border/50">
                       <td className="py-2 px-3">
                         <input
@@ -540,16 +598,20 @@ export function TrainingMatrixGapBoard() {
                       </td>
                       <td className="py-2 px-3 font-medium">{p.engineer_display_name || p.atlas_name}</td>
                       <td className="py-2 px-3 text-muted-foreground">{p.department || '—'}</td>
+                      <td className="py-2 px-3">{p.complete}</td>
                       <td className="py-2 px-3">
                         <Badge variant={p.overdue > 0 ? 'destructive' : 'success'}>{p.overdue}</Badge>
                       </td>
-                      <td className="py-2 px-3 text-muted-foreground">{p.total}</td>
+                      <td className="py-2 px-3 font-medium">{p.pct}%</td>
+                      <td className="py-2 px-3 text-muted-foreground">{p.need}</td>
                     </tr>
                   ))}
-                  {personRows.length === 0 ? (
+                  {personRollups.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-6 text-center text-muted-foreground">
-                        No rows in this filter.
+                      <td colSpan={7} className="py-6 text-center text-muted-foreground">
+                        {roleScope !== 'Overall' && scopedRows.length === 0
+                          ? 'No matrix requirements for this group — check Admin Training group mapping and frequency matrix.'
+                          : 'No rows in this filter.'}
                       </td>
                     </tr>
                   ) : null}
@@ -571,7 +633,7 @@ export function TrainingMatrixGapBoard() {
                         ? 'bg-primary text-primary-foreground border-primary'
                         : 'border-border text-muted-foreground hover:text-foreground'
                     }`}
-                    onClick={() => setModuleRole(role)}
+                    onClick={() => setRoleScope(role)}
                   >
                     {role}
                   </button>

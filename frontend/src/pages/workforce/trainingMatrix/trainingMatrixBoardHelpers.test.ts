@@ -2,13 +2,17 @@ import { describe, expect, it } from 'vitest'
 import type { TrainingMatrixComplianceRow } from '../../../api/trainingMatrixClient'
 import {
   BOARD_ROLES,
+  buildPersonRollups,
   buildStatusBriefings,
+  computeModuleRoleStats,
+  computePeopleFullyOkStats,
   computeRoleStats,
   filterRowsByHorizon,
   groupRowsByCourse,
   groupRowsByDepartment,
   groupRowsByPerson,
   horizonForRow,
+  isOkStatus,
   moduleViewForRole,
   myTrainingSummary,
   resolveBoardRole,
@@ -110,15 +114,38 @@ describe('statusLabel', () => {
   })
 })
 
-describe('computeRoleStats', () => {
-  it('computes overall + per-role % of people with every course compliant', () => {
+describe('computeModuleRoleStats', () => {
+  it('counts due_soon as OK and reports module-level %', () => {
+    const rows = [
+      row({ atlas_name: 'Alice', department: 'Mobile Engineers', course_key: 'a', status: 'compliant' }),
+      row({ atlas_name: 'Alice', department: 'Mobile Engineers', course_key: 'b', status: 'missing' }),
+      row({
+        atlas_name: 'Dana',
+        department: 'IT',
+        board_role_override: 'Office',
+        course_key: 'gdpr',
+        status: 'due_soon',
+      }),
+    ]
+    expect(isOkStatus('due_soon')).toBe(true)
+    const stats = computeModuleRoleStats(rows)
+    const overall = stats.find((s) => s.role === 'Overall')!
+    expect(overall.ok).toBe(2)
+    expect(overall.total).toBe(3)
+    expect(overall.pct).toBe(67)
+    expect(stats.find((s) => s.role === 'Office')?.pct).toBe(100)
+  })
+})
+
+describe('computeRoleStats / people fully OK', () => {
+  it('computes overall + per-role % of people with every course OK', () => {
     const rows = [
       row({ atlas_name: 'Alice', department: 'Mobile Engineers', course_key: 'a', status: 'compliant' }),
       row({ atlas_name: 'Alice', department: 'Mobile Engineers', course_key: 'b', status: 'compliant' }),
       row({ atlas_name: 'Bob', department: 'Mobile Engineers', course_key: 'a', status: 'overdue' }),
       row({ atlas_name: 'Carl', department: 'Workshop', course_key: 'a', status: 'compliant' }),
     ]
-    const stats = computeRoleStats(rows)
+    const stats = computePeopleFullyOkStats(rows)
     const overall = stats.find((s) => s.role === 'Overall')!
     const engineer = stats.find((s) => s.role === 'Engineer')!
     const workshop = stats.find((s) => s.role === 'Workshop')!
@@ -127,6 +154,7 @@ describe('computeRoleStats', () => {
     expect(engineer.total).toBe(2)
     expect(engineer.ok).toBe(1)
     expect(workshop.pct).toBe(100)
+    expect(computeRoleStats(rows)).toEqual(stats)
   })
 
   it('buckets people by override when set', () => {
@@ -142,6 +170,24 @@ describe('computeRoleStats', () => {
     const office = stats.find((s) => s.role === 'Office')
     expect(office?.total).toBe(1)
     expect(office?.ok).toBe(1)
+  })
+})
+
+describe('buildPersonRollups', () => {
+  it('uses full required set for Complete/Need while horizon filters who appears', () => {
+    const all = [
+      row({ atlas_name: 'Alice', course_key: 'a', status: 'compliant', qgp_due_on: iso(100) }),
+      row({ atlas_name: 'Alice', course_key: 'b', status: 'missing', qgp_due_on: null }),
+      row({ atlas_name: 'Bob', course_key: 'a', status: 'compliant', qgp_due_on: iso(100) }),
+    ]
+    const filtered = [all[1]] // overdue/missing horizon would include Alice only
+    const rollups = buildPersonRollups(all, filtered, TODAY)
+    expect(rollups).toHaveLength(1)
+    expect(rollups[0].atlas_name).toBe('Alice')
+    expect(rollups[0].complete).toBe(1)
+    expect(rollups[0].need).toBe(1)
+    expect(rollups[0].pct).toBe(50)
+    expect(rollups[0].overdue).toBe(1)
   })
 })
 
@@ -284,7 +330,7 @@ describe('rowsToCsv', () => {
 })
 
 describe('myTrainingSummary', () => {
-  it('counts OK modules and finds the next due module', () => {
+  it('counts OK modules (including due_soon) and finds the next gap due', () => {
     const rows = [
       row({ course_display_name: 'Asbestos Awareness', status: 'compliant', qgp_due_on: iso(100) }),
       row({ course_display_name: 'GDPR', status: 'overdue', qgp_due_on: iso(-1) }),
@@ -292,7 +338,7 @@ describe('myTrainingSummary', () => {
     ]
     const summary = myTrainingSummary(rows)
     expect(summary.total).toBe(3)
-    expect(summary.okCount).toBe(1)
+    expect(summary.okCount).toBe(2) // compliant + due_soon
     expect(summary.nextDue?.course_display_name).toBe('GDPR')
   })
 })
