@@ -459,6 +459,35 @@ describe('Complaints', () => {
     confirmSpy.mockRestore()
   })
 
+  it('keeps selected customer on create when optional company field is cleared', async () => {
+    render(<Complaints />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('CMP-001')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('complaints.new'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('complaints-create-form')).toBeInTheDocument()
+    })
+    await waitFor(() => {
+      expect(mockLookupsList).toHaveBeenCalled()
+    })
+
+    await fillRequiredCreateFields()
+    fireEvent.change(screen.getByPlaceholderText('Organisation (optional)'), {
+      target: { value: '' },
+    })
+    fireEvent.click(screen.getByText('complaints.create'))
+
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledTimes(1)
+    })
+
+    expect(mockCreate.mock.calls[0][0].complainant_company).toBe('Acme Corp')
+  })
+
   it('shows honest customer-unavailable state when customers lookup and contracts are empty', async () => {
     mockContractsList.mockResolvedValueOnce({ items: [], total: 0 })
     mockLookupsList.mockImplementation(async () => ({ items: [], total: 0 }))

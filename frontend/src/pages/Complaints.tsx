@@ -425,6 +425,12 @@ export default function Complaints() {
     setFormError(null)
     setCreating(true)
 
+    const selectedCustomerLabel =
+      customerOptions.find((o) => o.value === selectedCustomerCode)?.label?.trim() ||
+      selectedCustomerCode
+    const complainantCompany =
+      formData.complainant_company?.trim() || selectedCustomerLabel || undefined
+
     const payload: ComplaintCreate = {
       ...formData,
       received_date: new Date(formData.received_date).toISOString(),
@@ -432,7 +438,7 @@ export default function Complaints() {
         ? new Date(formData.alleged_event_at).toISOString()
         : null,
       subject_name: formData.subject_name?.trim() || null,
-      complainant_company: formData.complainant_company?.trim() || undefined,
+      complainant_company: complainantCompany,
       source_type: formData.source_type || 'manual',
     }
 
