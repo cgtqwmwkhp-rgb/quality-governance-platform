@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 import type { TrainingMatrixComplianceRow } from '../../../api/trainingMatrixClient'
 import {
   BOARD_ROLES,
+  buildCourseMetricRollups,
+  buildDepartmentMetricRollups,
   buildPersonRollups,
+  filterEntityMetricRollups,
+  filterPersonRollups,
+  sortEntityMetricRollups,
+  sortPersonRollups,
   buildStatusBriefings,
   computeModuleRoleStats,
   computePeopleFullyOkStats,
@@ -191,6 +197,72 @@ describe('buildPersonRollups', () => {
   })
 })
 
+describe('filterPersonRollups / sortPersonRollups', () => {
+  const rollups = [
+    {
+      atlas_name: 'Thompson, L',
+      engineer_display_name: 'Thompson, L',
+      department: 'Workshop',
+      role: 'Workshop' as const,
+      complete: 2,
+      overdue: 5,
+      need: 8,
+      total: 10,
+      pct: 20,
+      allRows: [],
+      filteredRows: [],
+    },
+    {
+      atlas_name: 'Hepburn, G',
+      engineer_display_name: 'Hepburn, G',
+      department: 'Mobile Engineers',
+      role: 'Engineer' as const,
+      complete: 8,
+      overdue: 1,
+      need: 2,
+      total: 10,
+      pct: 80,
+      allRows: [],
+      filteredRows: [],
+    },
+  ]
+
+  it('filters by person and department text and exact numeric columns', () => {
+    expect(
+      filterPersonRollups(rollups, {
+        person: 'hep',
+        department: '',
+        complete: '',
+        overdue: '',
+        pct: '',
+        need: '',
+      }).map((p) => p.atlas_name),
+    ).toEqual(['Hepburn, G'])
+
+    expect(
+      filterPersonRollups(rollups, {
+        person: '',
+        department: 'workshop',
+        complete: '',
+        overdue: '5',
+        pct: '',
+        need: '',
+      }).map((p) => p.atlas_name),
+    ).toEqual(['Thompson, L'])
+  })
+
+  it('sorts by person ascending and overdue descending', () => {
+    expect(sortPersonRollups(rollups, 'person', 'asc').map((p) => p.atlas_name)).toEqual([
+      'Hepburn, G',
+      'Thompson, L',
+    ])
+    expect(sortPersonRollups(rollups, 'overdue', 'desc').map((p) => p.atlas_name)).toEqual([
+      'Thompson, L',
+      'Hepburn, G',
+    ])
+  })
+})
+
 describe('buildStatusBriefings', () => {
   it('surfaces the highest-risk module and due-in-30 pulse', () => {
     const rows = [
@@ -289,17 +361,43 @@ describe('groupRowsByPerson', () => {
 })
 
 describe('moduleViewForRole', () => {
-  it('scopes to a role and computes % compliant per course', () => {
+  it('scopes to a role and computes Complete/Overdue/%/Need per course', () => {
     const rows = [
       row({ atlas_name: 'Alice', department: 'Mobile Engineers', course_key: 'a', status: 'compliant' }),
       row({ atlas_name: 'Bob', department: 'Mobile Engineers', course_key: 'a', status: 'overdue' }),
       row({ atlas_name: 'Carl', department: 'Workshop', course_key: 'a', status: 'compliant' }),
     ]
-    const view = moduleViewForRole(rows, 'Engineer')
+    const view = moduleViewForRole(rows, 'Engineer', TODAY)
     expect(view).toHaveLength(1)
     expect(view[0].total).toBe(2)
-    expect(view[0].compliant).toBe(1)
+    expect(view[0].complete).toBe(1)
+    expect(view[0].overdue).toBe(1)
+    expect(view[0].need).toBe(1)
     expect(view[0].pct).toBe(50)
+  })
+
+  it('uses horizon membership for email recipients while keeping full-set Complete/Need', () => {
+    const rows = [
+      row({
+        atlas_name: 'Alice',
+        department: 'Mobile Engineers',
+        course_key: 'a',
+        status: 'compliant',
+        qgp_due_on: iso(100),
+      }),
+      row({
+        atlas_name: 'Bob',
+        department: 'Mobile Engineers',
+        course_key: 'a',
+        status: 'overdue',
+        qgp_due_on: iso(-1),
+      }),
+    ]
+    const view = moduleViewForRole(rows, 'Engineer', TODAY, [rows[1]])
+    expect(view).toHaveLength(1)
+    expect(view[0].complete).toBe(1)
+    expect(view[0].need).toBe(1)
+    expect(view[0].filteredRows.map((r) => r.atlas_name)).toEqual(['Bob'])
   })
 
   it('uses board_role_override when Atlas department does not match a board role', () => {
@@ -312,10 +410,97 @@ describe('moduleViewForRole', () => {
         status: 'compliant',
       }),
     ]
-    const view = moduleViewForRole(rows, 'Office')
+    const view = moduleViewForRole(rows, 'Office', TODAY)
     expect(view).toHaveLength(1)
     expect(view[0].total).toBe(1)
-    expect(moduleViewForRole(rows, 'Engineer')).toHaveLength(0)
+    expect(moduleViewForRole(rows, 'Engineer', TODAY)).toHaveLength(0)
+  })
+})
+
+describe('buildCourseMetricRollups / buildDepartmentMetricRollups', () => {
+  it('keeps Complete/Need from the full set while horizon filters membership', () => {
+    const all = [
+      row({
+        atlas_name: 'Alice',
+        course_key: 'gdpr',
+        course_display_name: 'GDPR',
+        status: 'compliant',
+        qgp_due_on: iso(100),
+      }),
+      row({
+        atlas_name: 'Bob',
+        course_key: 'gdpr',
+        course_display_name: 'GDPR',
+        status: 'overdue',
+        qgp_due_on: iso(-1),
+      }),
+      row({
+        atlas_name: 'Carl',
+        course_key: 'first-aid',
+        course_display_name: 'First Aid',
+        status: 'compliant',
+        qgp_due_on: iso(100),
+      }),
+    ]
+    const filtered = [all[1]]
+    const courses = buildCourseMetricRollups(all, filtered, TODAY)
+    expect(courses).toHaveLength(1)
+    expect(courses[0].label).toBe('GDPR')
+    expect(courses[0].complete).toBe(1)
+    expect(courses[0].overdue).toBe(1)
+    expect(courses[0].need).toBe(1)
+    expect(courses[0].pct).toBe(50)
+
+    const depts = buildDepartmentMetricRollups(
+      [
+        row({ department: 'Workshop', status: 'overdue', qgp_due_on: iso(-1) }),
+        row({ department: 'Workshop', course_key: 'b', status: 'compliant', qgp_due_on: iso(10) }),
+        row({ department: 'Office', status: 'compliant', qgp_due_on: iso(10) }),
+      ],
+      [row({ department: 'Workshop', status: 'overdue', qgp_due_on: iso(-1) })],
+      TODAY,
+    )
+    expect(depts).toHaveLength(1)
+    expect(depts[0].label).toBe('Workshop')
+    expect(depts[0].complete).toBe(1)
+    expect(depts[0].need).toBe(1)
+  })
+
+  it('filters and sorts entity metric rollups', () => {
+    const rollups = [
+      {
+        key: 'a',
+        label: 'Anti-Bribery',
+        complete: 0,
+        overdue: 10,
+        need: 10,
+        total: 10,
+        pct: 0,
+        allRows: [],
+        filteredRows: [],
+      },
+      {
+        key: 'b',
+        label: 'GDPR',
+        complete: 8,
+        overdue: 2,
+        need: 2,
+        total: 10,
+        pct: 80,
+        allRows: [],
+        filteredRows: [],
+      },
+    ]
+    expect(
+      filterEntityMetricRollups(rollups, {
+        label: 'gdpr',
+        complete: '',
+        overdue: '',
+        pct: '',
+        need: '',
+      }).map((r) => r.key),
+    ).toEqual(['b'])
+    expect(sortEntityMetricRollups(rollups, 'pct', 'desc').map((r) => r.key)).toEqual(['b', 'a'])
   })
 })
 
