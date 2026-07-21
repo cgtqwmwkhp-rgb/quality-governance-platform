@@ -126,6 +126,27 @@ export type TrainingMatrixMatrixUpsertResponse = {
   deactivated: number
 }
 
+export type TrainingMatrixFrequencyChangeRequest = {
+  id: number
+  status: string
+  cell_count: number
+  proposed_cells: TrainingMatrixMatrixCell[]
+  proposed_by_user_id?: number | null
+  proposed_by_name?: string | null
+  proposed_by_email?: string | null
+  reviewed_by_user_id?: number | null
+  reviewed_at?: string | null
+  review_note?: string | null
+  created_at?: string | null
+}
+
+export type TrainingMatrixFrequencyChangeRequestList = {
+  items: TrainingMatrixFrequencyChangeRequest[]
+  total: number
+  viewer_can_approve: boolean
+  approver_email: string
+}
+
 export type TrainingMatrixNotifyResponse = {
   sent: number
   skipped: number
@@ -251,6 +272,34 @@ export function createTrainingMatrixApi(api: AxiosInstance) {
         .post<TrainingMatrixMatrixUpsertResponse>('/api/v1/training-matrix/requirements/matrix', {
           cells,
         })
+        .then((r) => r.data),
+    proposeRequirementsMatrix: (cells: TrainingMatrixMatrixCell[]) =>
+      api
+        .post<TrainingMatrixFrequencyChangeRequest>(
+          '/api/v1/training-matrix/requirements/matrix/propose',
+          { cells },
+        )
+        .then((r) => r.data),
+    listMatrixProposals: (status: string = 'pending') =>
+      api
+        .get<TrainingMatrixFrequencyChangeRequestList>(
+          '/api/v1/training-matrix/requirements/matrix/proposals',
+          { params: { status } },
+        )
+        .then((r) => r.data),
+    approveMatrixProposal: (proposalId: number, note?: string) =>
+      api
+        .post<TrainingMatrixMatrixUpsertResponse>(
+          `/api/v1/training-matrix/requirements/matrix/proposals/${proposalId}/approve`,
+          note ? { note } : {},
+        )
+        .then((r) => r.data),
+    rejectMatrixProposal: (proposalId: number, note?: string) =>
+      api
+        .post<TrainingMatrixFrequencyChangeRequest>(
+          `/api/v1/training-matrix/requirements/matrix/proposals/${proposalId}/reject`,
+          note ? { note } : {},
+        )
         .then((r) => r.data),
     notify: (atlas_names: string[], message?: string) =>
       api
