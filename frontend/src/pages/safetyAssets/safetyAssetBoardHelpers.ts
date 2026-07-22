@@ -75,8 +75,20 @@ export function isOkAsset(asset: SafetyAsset, today: Date = new Date()): boolean
   return horizon === 'in_date' || horizon === 'due_30' || horizon === 'due_60' || horizon === 'due_90'
 }
 
+export function isRemovedAsset(asset: SafetyAsset): boolean {
+  return (asset.status || '').toLowerCase() === 'decommissioned'
+}
+
+export function isActiveFailAsset(asset: SafetyAsset): boolean {
+  return (asset.status || '').toLowerCase() === 'quarantined'
+}
+
+export function applyHideRemoved(assets: SafetyAsset[], hide: boolean): SafetyAsset[] {
+  return hide ? assets.filter((asset) => !isRemovedAsset(asset)) : assets
+}
+
 export function isOverdueAsset(asset: SafetyAsset, today: Date = new Date()): boolean {
-  return horizonForAsset(asset, today) === 'overdue'
+  return !isRemovedAsset(asset) && horizonForAsset(asset, today) === 'overdue'
 }
 
 export type AssetHeroCounts = Record<AssetHeroBand, number>
@@ -93,9 +105,11 @@ export function computeHeroCounts(assets: SafetyAsset[], today: Date = new Date(
     decommissioned: 0,
   }
   for (const asset of assets) {
-    const status = (asset.status || '').toLowerCase()
-    if (status === 'quarantined') counts.quarantined += 1
-    if (status === 'decommissioned') counts.decommissioned += 1
+    if (isActiveFailAsset(asset)) counts.quarantined += 1
+    if (isRemovedAsset(asset)) {
+      counts.decommissioned += 1
+      continue
+    }
     const horizon = horizonForAsset(asset, today)
     if (horizon === 'overdue') counts.overdue += 1
     else if (horizon === 'due_30') counts.due_30 += 1
@@ -112,9 +126,9 @@ export function assetMatchesHeroBand(
   today: Date = new Date(),
 ): boolean {
   if (band === 'all') return true
-  if (band === 'quarantined') return (asset.status || '').toLowerCase() === 'quarantined'
-  if (band === 'decommissioned') return (asset.status || '').toLowerCase() === 'decommissioned'
-  return horizonForAsset(asset, today) === band
+  if (band === 'quarantined') return isActiveFailAsset(asset)
+  if (band === 'decommissioned') return isRemovedAsset(asset)
+  return !isRemovedAsset(asset) && horizonForAsset(asset, today) === band
 }
 
 export type AssetEntityRollup = {
@@ -176,7 +190,7 @@ export function buildVehicleRollups(
 ): AssetEntityRollup[] {
   const groups = new Map<string, SafetyAsset[]>()
   for (const asset of assets) {
-    const reg = (asset.vehicle_reg || '').trim().toUpperCase()
+    const reg = normalizeVehicleRegKey(asset.vehicle_reg)
     const key = reg || 'no-vehicle'
     const bucket = groups.get(key)
     if (bucket) bucket.push(asset)
@@ -187,6 +201,10 @@ export function buildVehicleRollups(
       metricRollup(key === 'no-vehicle' ? 'No vehicle' : key, key, rows, today),
     )
     .sort((a, b) => b.overdue - a.overdue || a.label.localeCompare(b.label))
+}
+
+export function normalizeVehicleRegKey(reg?: string | null): string {
+  return (reg || '').replace(/\s+/g, '').toUpperCase()
 }
 
 export function buildTypeRollups(

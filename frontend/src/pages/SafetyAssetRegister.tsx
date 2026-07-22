@@ -39,6 +39,7 @@ import {
   EMPTY_ASSET_ROW_FILTERS,
   EMPTY_ENTITY_ROLLUP_FILTERS,
   HERO_BANDS,
+  applyHideRemoved,
   assetMatchesHeroBand,
   bandLabel,
   buildEngineerRollups,
@@ -47,7 +48,9 @@ import {
   computeHeroCounts,
   filterAssetRows,
   filterEntityRollups,
+  isActiveFailAsset,
   isOkAsset,
+  isRemovedAsset,
   ownerLabel,
   siteLabel,
   sortAssetRows,
@@ -115,6 +118,13 @@ export default function SafetyAssetRegister() {
   const [view, setView] = useState<AssetBoardView>('assets')
   const [heroBand, setHeroBand] = useState<AssetHeroBand>('all')
   const [search, setSearch] = useState('')
+  const [hideRemoved, setHideRemoved] = useState(() => {
+    try {
+      return window.localStorage.getItem('qgp.safetyAssets.hideRemoved') !== 'false'
+    } catch {
+      return true
+    }
+  })
 
   const [assetSortKey, setAssetSortKey] = useState<AssetRowSortKey>('expiry')
   const [assetSortDir, setAssetSortDir] = useState<SortDirection>('asc')
@@ -189,13 +199,31 @@ export default function SafetyAssetRegister() {
     void loadBoard()
   }, [loadBoard])
 
-  const heroCounts = useMemo(() => computeHeroCounts(boardAssets), [boardAssets])
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('qgp.safetyAssets.hideRemoved', String(hideRemoved))
+    } catch {
+      // Storage may be unavailable in private browsing contexts.
+    }
+  }, [hideRemoved])
+
+  const scopeAssets = useMemo(
+    () => applyHideRemoved(boardAssets, hideRemoved && heroBand !== 'decommissioned'),
+    [boardAssets, hideRemoved, heroBand],
+  )
+  const heroCounts = useMemo(
+    () => ({
+      ...computeHeroCounts(scopeAssets),
+      decommissioned: boardAssets.filter(isRemovedAsset).length,
+    }),
+    [scopeAssets, boardAssets],
+  )
   const metricsReady = !loading && loadError == null
   const kpisUnavailable = !loading && loadError != null
 
   const bandFiltered = useMemo(
-    () => boardAssets.filter((asset) => assetMatchesHeroBand(asset, heroBand)),
-    [boardAssets, heroBand],
+    () => scopeAssets.filter((asset) => assetMatchesHeroBand(asset, heroBand)),
+    [scopeAssets, heroBand],
   )
 
   const searchFiltered = useMemo(() => {
@@ -439,7 +467,9 @@ export default function SafetyAssetRegister() {
               className={`rounded-lg border p-4 text-left transition-colors ${
                 active
                   ? 'border-primary bg-primary/10 ring-1 ring-primary'
-                  : 'border-border bg-card hover:border-primary/50'
+                  : band.id === 'quarantined'
+                    ? 'border-destructive/50 bg-destructive/10 hover:border-destructive'
+                    : 'border-border bg-card hover:border-primary/50'
               }`}
               onClick={() => setHeroBand(band.id)}
             >
@@ -475,16 +505,27 @@ export default function SafetyAssetRegister() {
             </button>
           ))}
         </div>
-        {view !== 'upload' ? (
-          <Input
-            className="max-w-sm"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('safetyAssets.search', 'Search serial, owner, vehicle…')}
-            aria-label="Search assets"
-            data-testid="safety-assets-search"
-          />
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={hideRemoved}
+              onChange={(event) => setHideRemoved(event.target.checked)}
+              data-testid="safety-assets-hide-removed"
+            />
+            Hide removed
+          </label>
+          {view !== 'upload' ? (
+            <Input
+              className="max-w-sm"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t('safetyAssets.search', 'Search serial, owner, vehicle…')}
+              aria-label="Search assets"
+              data-testid="safety-assets-search"
+            />
+          ) : null}
+        </div>
       </div>
 
       {loadError ? (
@@ -744,7 +785,11 @@ export default function SafetyAssetRegister() {
                     {assetRows.map((asset) => (
                       <tr
                         key={asset.id}
-                        className="border-b border-border hover:bg-muted/30"
+                        className={`border-b border-border ${
+                          isActiveFailAsset(asset)
+                            ? 'bg-destructive/10 hover:bg-destructive/20'
+                            : 'hover:bg-muted/30'
+                        }`}
                         data-testid={`safety-asset-row-${asset.id}`}
                       >
                         <td className="p-3 font-medium">

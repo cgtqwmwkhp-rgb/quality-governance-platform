@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SafetyAsset } from '../../api/safetyAssetsClient'
 import {
+  applyHideRemoved,
   bandLabel,
   buildEngineerRollups,
   buildTypeRollups,
@@ -8,7 +9,10 @@ import {
   computeHeroCounts,
   filterAssetRows,
   horizonForAsset,
+  isActiveFailAsset,
   isOkAsset,
+  isRemovedAsset,
+  normalizeVehicleRegKey,
   sortAssetRows,
   sortEntityRollups,
 } from './safetyAssetBoardHelpers'
@@ -56,7 +60,7 @@ describe('safetyAssetBoardHelpers OK SSOT', () => {
     ]
     const hero = computeHeroCounts(rows, today)
     expect(hero.all).toBe(5)
-    expect(hero.overdue).toBe(2) // id 2 + decommissioned past date
+    expect(hero.overdue).toBe(1) // decommissioned assets are excluded from active horizons
     expect(hero.quarantined).toBe(1)
     expect(hero.decommissioned).toBe(1)
 
@@ -68,11 +72,25 @@ describe('safetyAssetBoardHelpers OK SSOT', () => {
     expect(bandLabel(rows[2], today)).toBe('Fail')
   })
 
+  it('hides removed assets without mutating the source list', () => {
+    const rows = [
+      asset({ id: 1 }),
+      asset({ id: 2, status: 'decommissioned' }),
+      asset({ id: 3, status: 'quarantined' }),
+    ]
+
+    expect(isRemovedAsset(rows[1])).toBe(true)
+    expect(isActiveFailAsset(rows[2])).toBe(true)
+    expect(applyHideRemoved(rows, true).map((row) => row.id)).toEqual([1, 3])
+    expect(applyHideRemoved(rows, false)).toBe(rows)
+    expect(rows).toHaveLength(3)
+  })
+
   it('rolls up vehicle and type, and sorts/filters asset rows', () => {
     const rows = [
       asset({
         id: 1,
-        vehicle_reg: 'LA23HXM',
+        vehicle_reg: 'GF67 FWD',
         asset_type_id: 10,
         name: 'Torque',
         serial_number: 'TW1',
@@ -81,7 +99,7 @@ describe('safetyAssetBoardHelpers OK SSOT', () => {
       }),
       asset({
         id: 2,
-        vehicle_reg: 'LA23HXM',
+        vehicle_reg: 'GF67FWD',
         asset_type_id: 11,
         name: 'RCD',
         serial_number: 'RCD1',
@@ -89,7 +107,9 @@ describe('safetyAssetBoardHelpers OK SSOT', () => {
       }),
     ]
     const vehicles = buildVehicleRollups(rows, today)
-    expect(vehicles[0].label).toBe('LA23HXM')
+    expect(normalizeVehicleRegKey(' gf67 fwd ')).toBe('GF67FWD')
+    expect(normalizeVehicleRegKey('   ')).toBe('')
+    expect(vehicles[0].label).toBe('GF67FWD')
     expect(vehicles[0].total).toBe(2)
     expect(vehicles[0].overdue).toBe(1)
 
