@@ -54,6 +54,10 @@
 - **Steps:** Revert the feature commit and redeploy the previous SHA.
 - **Owner:** Platform team.
 
+## 10) Evidence Pack
+- CI linked on PR; Vitest `EvidenceGallery` coverage for signed-url render + lightbox nav.
+- Staging: RTA Photos show real images + download (e.g. RTA-2026-0008 when available).
+
 ---
 
 # Gate Checklist
