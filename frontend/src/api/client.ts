@@ -2197,9 +2197,14 @@ export const evidenceAssetsApi = {
   /**
    * Get a signed download URL for an evidence asset.
    */
-  getSignedUrl: (assetId: number, expiresIn?: number) => {
+  getSignedUrl: (
+    assetId: number,
+    expiresIn?: number,
+    disposition: 'attachment' | 'inline' = 'attachment',
+  ) => {
     const params = new URLSearchParams()
     if (expiresIn) params.set('expires_in', String(expiresIn))
+    params.set('disposition', disposition)
     return api.get<SignedUrlResponse>(`/api/v1/evidence-assets/${assetId}/signed-url?${params}`)
   },
 }

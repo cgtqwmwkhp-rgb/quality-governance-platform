@@ -65,6 +65,7 @@ import {
 } from '../components/ui/Select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
+import { EvidenceGallery } from '../components/EvidenceGallery'
 import { SubmissionSections } from '../components/case/SubmissionSections'
 import { RunningSheetPanel } from '../components/case/RunningSheetPanel'
 import {
@@ -1257,35 +1258,18 @@ export default function ComplaintDetail() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {evidenceLoading ? (
-                    <p className="text-sm text-muted-foreground">Loading evidence…</p>
-                  ) : evidenceLoadFailed ? (
-                    <p className="text-sm text-muted-foreground">
-                      Evidence assets could not be loaded. Reporter-submission filenames are shown
-                      separately.
-                    </p>
-                  ) : evidenceAssets.length === 0 ? (
-                    <p
-                      className="text-sm text-muted-foreground"
-                      data-testid="complaint-evidence-assets-empty"
-                    >
-                      {t(
+                  <div data-testid="complaint-evidence-assets">
+                    <EvidenceGallery
+                      assets={evidenceAssets}
+                      loading={evidenceLoading}
+                      loadFailed={evidenceLoadFailed}
+                      emptyTitle={t(
                         'complaints.detail.evidence_assets_empty',
-                        'No evidence assets are linked to this complaint. Portal uploads record filenames only until staff attach files here.',
+                        'No evidence assets are linked to this complaint.',
                       )}
-                    </p>
-                  ) : (
-                    <ul className="space-y-2" data-testid="complaint-evidence-assets">
-                      {evidenceAssets.map((asset) => (
-                        <li key={asset.id} className="rounded-lg border border-border p-3">
-                          <p className="font-medium text-foreground">
-                            {asset.title || asset.original_filename || `Evidence #${asset.id}`}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{asset.content_type}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                      emptyDescription="Portal uploads record filenames only until staff attach files here."
+                    />
+                  </div>
                 </CardContent>
               </Card>
 
