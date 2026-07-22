@@ -41,7 +41,7 @@
 - [x] AC-04: Essential-fail gate — `complete_run` sets `passed=False` whenever any applicable essential question has an open finding/fail, even if the overall score is above threshold
 - [x] AC-05: Conditional logic end-to-end — backend `audit_conditional.py` + FE mirror `evaluateConditionalLogic.ts` share evaluation semantics; builder UI to add/remove show/hide rules; execution UI filters/skips hidden questions and persists `applicability='hidden_by_logic'` on save
 - [x] AC-06: Template ↔ asset-type linking — `POST/DELETE /audits/templates/{id}/asset-types/{asset_type_id}` using `TemplateAssetType`
-- [x] AC-07: Reporting pack UI — `AuditAnalytics.tsx` with KPI cards, dimensions table, critical queue, CSV export; reachable from `Audits.tsx`
+- [x] AC-07: Reporting pack UI — `AuditAnalytics.tsx` with KPI cards, dimensions table, critical queue, CSV export; reachable from `Audits.tsx`; `AdvancedAnalytics` Audit Score card now uses live `/analytics/kpis` audits data and deep-links to `/audits/analytics`
 - [x] AC-08: Test coverage — new backend unit/integration tests (composition, conditional, essential gate, analytics service, schema patterns) and frontend unit tests (evaluators, template helper mapping) all green; no regressions in existing suites
 
 ## 5) Testing Evidence (link to runs)

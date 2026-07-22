@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   BarChart3,
@@ -37,6 +38,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../helpers/utils'
 import { Button } from '../components/ui/Button'
+import { analyticsApi } from '../api/client'
 
 interface KPIData {
   incidents: {
@@ -117,6 +119,7 @@ const timeRanges = [
 
 export default function AdvancedAnalytics() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [timeRange, setTimeRange] = useState('last_30_days')
   const [activeTab, setActiveTab] = useState<
     'overview' | 'trends' | 'benchmarks' | 'costs' | 'roi'
@@ -130,18 +133,44 @@ export default function AdvancedAnalytics() {
   const [drillDownData, setDrillDownData] = useState<any>(null)
 
   useEffect(() => {
-    loadData()
+    void loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeRange])
 
   const loadData = async () => {
     setLoading(true)
-    // Simulate API calls
-    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    // Audits KPIs come from the live /analytics/kpis endpoint (wired to
+    // AuditAnalyticsService). Remaining modules stay on placeholder data until
+    // their live reporting packs land.
+    let liveAudits: KPIData['audits'] = {
+      total: 0,
+      completed: 0,
+      in_progress: 0,
+      avg_score: 0,
+      trend: 0,
+    }
+    try {
+      const { data } = await analyticsApi.getKPIs(timeRange)
+      const payload = data as { audits?: Partial<KPIData['audits']> } | null
+      const audits = payload?.audits
+      if (audits) {
+        liveAudits = {
+          total: Number(audits.total ?? 0),
+          completed: Number(audits.completed ?? 0),
+          in_progress: Number(audits.in_progress ?? 0),
+          avg_score: Number(audits.avg_score ?? 0),
+          trend: Number(audits.trend ?? 0),
+        }
+      }
+    } catch {
+      // Keep zeroed audits rather than inventing mock numbers.
+    }
 
     setKpis({
       incidents: { total: 47, open: 12, closed: 35, trend: -8.5, avg_resolution_days: 4.2 },
       actions: { total: 156, open: 34, overdue: 8, completed_on_time_rate: 87.5, trend: 12.3 },
-      audits: { total: 23, completed: 18, in_progress: 5, avg_score: 89.4, trend: 3.2 },
+      audits: liveAudits,
       risks: { total: 89, high: 12, medium: 34, low: 43, mitigated: 67 },
       compliance: { overall_score: 94.2, iso_9001: 96.1, iso_14001: 92.8, iso_45001: 93.7 },
       training: { completion_rate: 91.2, expiring_soon: 14, overdue: 3 },
@@ -159,7 +188,7 @@ export default function AdvancedAnalytics() {
         trend: 'improving',
       },
       audit_score: {
-        your_value: 89.4,
+        your_value: liveAudits.avg_score,
         industry_average: 82.1,
         industry_median: 83.5,
         percentile_25: 78.0,
@@ -518,7 +547,7 @@ export default function AdvancedAnalytics() {
               trend={kpis.audits.trend}
               icon={Shield}
               color="purple"
-              onClick={() => handleDrillDown('audits', 'status', 'all')}
+              onClick={() => navigate('/audits/analytics')}
             />
             <KPICard
               title="Compliance"
