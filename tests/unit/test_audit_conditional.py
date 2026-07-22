@@ -4,11 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from src.domain.services.audit_conditional import (
-    evaluate_rule,
-    filter_visible_question_ids,
-    is_question_visible,
-)
+from src.domain.services.audit_conditional import evaluate_rule, filter_visible_question_ids, is_question_visible
 
 
 class TestEvaluateRule:

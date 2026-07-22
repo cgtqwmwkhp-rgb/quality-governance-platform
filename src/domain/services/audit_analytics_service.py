@@ -283,7 +283,7 @@ class AuditAnalyticsService:
             if (run_id, question_id) in finding_pairs:
                 bucket["failed"] += 1
 
-        results = []
+        results: list[dict[str, Any]] = []
         for crit_value, bucket in buckets.items():
             fail_rate = (bucket["failed"] / bucket["total"] * 100) if bucket["total"] else 0.0
             results.append(

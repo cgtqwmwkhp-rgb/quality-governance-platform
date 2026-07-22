@@ -565,6 +565,8 @@ class AuditService:
     @staticmethod
     def _question_criticality_value(question: AuditQuestion) -> str | None:
         criticality = getattr(question, "criticality", None)
+        if criticality is None:
+            return None
         return criticality.value if hasattr(criticality, "value") else criticality
 
     @staticmethod
