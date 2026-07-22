@@ -84,6 +84,7 @@ def test_location_split_strips_plantexpand_brand_from_site(raw, expected_assignm
 
 def test_strip_company_brand_prefix_helpers():
     assert strip_company_brand_prefix("Plantexpand Ltd Wickford", "Plantexpand Ltd") == "Wickford"
+    assert strip_company_brand_prefix("Plantexpand Ltd Wickford", "Plantexpand") == "Wickford"
     assert strip_company_brand_prefix("Plantexpand Workshop Ashford") == "Workshop Ashford"
     assert strip_company_brand_prefix("Plantexpand Ltd", "Plantexpand Ltd") == ""
 

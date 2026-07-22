@@ -82,6 +82,50 @@ def upgrade() -> None:
                     """),
                 {"target_id": target_id, "new_name": new_name, "loc_id": loc_id},
             )
+            # Preserve every relationship to the merged location, not just assets.
+            conn.execute(
+                sa.text("""
+                    UPDATE documents
+                    SET site_location_id = :target_id
+                    WHERE site_location_id = :loc_id
+                    """),
+                {"target_id": target_id, "loc_id": loc_id},
+            )
+            conn.execute(
+                sa.text("""
+                    UPDATE audit_runs
+                    SET location_id = :target_id
+                    WHERE location_id = :loc_id
+                    """),
+                {"target_id": target_id, "loc_id": loc_id},
+            )
+            conn.execute(
+                sa.text("""
+                    UPDATE asset_assignment_events
+                    SET from_location_id = :target_id
+                    WHERE from_location_id = :loc_id
+                    """),
+                {"target_id": target_id, "loc_id": loc_id},
+            )
+            conn.execute(
+                sa.text("""
+                    UPDATE asset_assignment_events
+                    SET to_location_id = :target_id
+                    WHERE to_location_id = :loc_id
+                    """),
+                {"target_id": target_id, "loc_id": loc_id},
+            )
+            conn.execute(
+                sa.text("""
+                    UPDATE locations
+                    SET parent_id = CASE
+                      WHEN id = :target_id THEN NULL
+                      ELSE :target_id
+                    END
+                    WHERE parent_id = :loc_id
+                    """),
+                {"target_id": target_id, "loc_id": loc_id},
+            )
             conn.execute(
                 sa.text("""
                     UPDATE locations
@@ -113,18 +157,16 @@ def upgrade() -> None:
     # Free-text site leftovers not linked (or already linked) that still carry the brand.
     conn.execute(sa.text("""
             UPDATE assets
-            SET site = regexp_replace(
-              regexp_replace(site, '^(?i)plantexpand(\\s+limited|\\s+ltd)?[\\s,.-]*', '', 'g'),
-              '^(?i)ltd[\\s,.-]*',
-              '',
-              'g'
+            SET site = NULLIF(
+              TRIM(BOTH ' ,-' FROM regexp_replace(
+                site,
+                '^(?i)((plantexpand(\\s+limited|\\s+ltd)?|ltd)[\\s,.-]*)+',
+                '',
+                'g'
+              )),
+              ''
             )
             WHERE site ILIKE 'plantexpand%'
-            """))
-    conn.execute(sa.text("""
-            UPDATE assets
-            SET site = NULLIF(TRIM(BOTH ' ,-' FROM site), '')
-            WHERE site IS NOT NULL
             """))
 
 
