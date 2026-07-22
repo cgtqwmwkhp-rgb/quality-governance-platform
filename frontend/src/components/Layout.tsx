@@ -291,7 +291,8 @@ export default function Layout({ onLogout }: LayoutProps) {
       .listPendingSafetyLookups()
       .then((res) => setPendingSafetyLookups(res.data?.total ?? res.data?.items?.length ?? 0))
       .catch(() => {
-        /* fail closed — do not invent a badge count */
+        // Fail closed — clear stale badge rather than leave an outdated count.
+        setPendingSafetyLookups(0)
       })
   }, [canManageUsers, adminUserManagementEnabled])
 
@@ -304,6 +305,16 @@ export default function Layout({ onLogout }: LayoutProps) {
     }, 60_000)
     return () => clearInterval(handle)
   }, [fetchUnreadCount, fetchPendingSafetyLookups])
+
+  // Refresh pending badge when navigating Admin/Lookups (e.g. after approvals).
+  useEffect(() => {
+    if (
+      location.pathname.startsWith('/admin') ||
+      location.pathname.startsWith('/safety-assets')
+    ) {
+      fetchPendingSafetyLookups()
+    }
+  }, [location.pathname, location.search, fetchPendingSafetyLookups])
 
   // Keyboard shortcut for global search (Cmd+K or Ctrl+K)
   useEffect(() => {

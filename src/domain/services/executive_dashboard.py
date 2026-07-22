@@ -9,7 +9,7 @@ compatibility re-export at ``src.services.executive_dashboard``.
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -460,8 +460,9 @@ class ExecutiveDashboardService:
             return out
 
         incidents_weekly = await _count_in_window(Incident, Incident.incident_date)
-        complaints_weekly = await _count_in_window(Complaint, Complaint.created_at)
-        near_misses_weekly = await _count_in_window(NearMiss, NearMiss.created_at)
+        # Align with list APIs / pulse semantics: when the event happened, not when logged.
+        complaints_weekly = await _count_in_window(Complaint, Complaint.received_date)
+        near_misses_weekly = await _count_in_window(NearMiss, NearMiss.event_date)
 
         # Audit score: average completed-run score_percentage per week.
         audits_weekly: List[Dict[str, Any]] = []
@@ -509,15 +510,15 @@ class ExecutiveDashboardService:
                     for at, st, exp, created_at in asset_rows_raw
                     if created_at is None or created_at <= week_end
                 ]
-                summary = aggregate_asset_health_kpis(rows_as_of, as_of=week_end)
-                total = int(summary["total"])  # type: ignore[arg-type]
+                summary_map = cast(Dict[str, Any], aggregate_asset_health_kpis(rows_as_of, as_of=week_end))
+                total = int(summary_map.get("total") or 0)
                 if total == 0:
                     pct = 100.0
                 else:
-                    bands = summary["expiry_bands"]  # type: ignore[index]
-                    by_status = summary["by_status"]  # type: ignore[index]
-                    overdue = int(bands.get("overdue", 0))  # type: ignore[union-attr]
-                    quarantined = int(by_status.get(AssetStatus.QUARANTINED.value, 0))  # type: ignore[union-attr]
+                    bands = cast(Dict[str, Any], summary_map.get("expiry_bands") or {})
+                    by_status = cast(Dict[str, Any], summary_map.get("by_status") or {})
+                    overdue = int(bands.get("overdue", 0) or 0)
+                    quarantined = int(by_status.get(AssetStatus.QUARANTINED.value, 0) or 0)
                     pct = round(100.0 * (total - overdue - quarantined) / total, 1)
                 tool_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
         except Exception:

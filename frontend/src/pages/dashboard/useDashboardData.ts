@@ -337,7 +337,9 @@ export function useDashboardData(): DashboardData {
           auditRunsMetric.status === 'ok'
             ? { status: 'ok', value: auditAverageScore(auditRunsMetric.value) }
             : metricUnavailable(),
-        trainingSeries: seriesMetric(trendsOk, trends?.training_compliance_weekly),
+        // Training headline is Atlas module_ok %; cell expiry backcast is a different
+        // metric — omit sparkline until we have honest historical module_ok snapshots.
+        trainingSeries: metricUnavailable(),
         toolSeries: seriesMetric(trendsOk, trends?.tool_compliance_weekly),
         incidentsSeries: seriesMetric(trendsOk, trends?.incidents_weekly),
         complaintsSeries: seriesMetric(trendsOk, trends?.complaints_weekly),
