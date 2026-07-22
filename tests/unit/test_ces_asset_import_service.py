@@ -9,7 +9,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from openpyxl import Workbook
 
-from src.domain.services.ces_asset_import_parser import normalise_ces_row, normalise_status, split_location
+from src.domain.services.ces_asset_import_parser import (
+    normalise_ces_row,
+    normalise_status,
+    split_location,
+    strip_company_brand_prefix,
+)
 from src.domain.services.ces_asset_import_service import CesAssetImportService, ValidatedCesRow
 
 
@@ -52,9 +57,35 @@ def test_location_split_extracts_engineer_and_vehicle():
     vehicle = split_location("Plantexpand; AB12 CDE")
     assert vehicle["vehicle_reg"] == "AB12CDE"
     assert vehicle["company"] == "Plantexpand"
+    assert vehicle["assignment_text"] is None
     unlabelled = split_location("Plantexpand Ltd; Plantexpand AB12 CDE Jane Smith")
     assert unlabelled["vehicle_reg"] == "AB12CDE"
     assert unlabelled["engineer_name"] == "Jane Smith"
+    assert unlabelled["assignment_text"] is None
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_assignment"),
+    [
+        ("Plantexpand Ltd ; Plantexpand Ltd Wickford", "Wickford"),
+        ("Plantexpand Ltd ; Plantexpand Marlow", "Marlow"),
+        ("Plantexpand Ltd ; Plantexpand Workshop Hampton", "Workshop Hampton"),
+        ("Plantexpand Ltd ; Plantexpand UK Power Networks", "UK Power Networks"),
+        ("Plantexpand; Main Depot", "Main Depot"),
+        ("Plantexpand Ltd ; Plantexpand Ltd", None),
+        ("Plantexpand Ltd ; Plantexpand", None),
+        ("Plantexpand Ltd ; Plantexpand GY71SXM John Chapman", None),
+    ],
+)
+def test_location_split_strips_plantexpand_brand_from_site(raw, expected_assignment):
+    parsed = split_location(raw)
+    assert parsed["assignment_text"] == expected_assignment
+
+
+def test_strip_company_brand_prefix_helpers():
+    assert strip_company_brand_prefix("Plantexpand Ltd Wickford", "Plantexpand Ltd") == "Wickford"
+    assert strip_company_brand_prefix("Plantexpand Workshop Ashford") == "Workshop Ashford"
+    assert strip_company_brand_prefix("Plantexpand Ltd", "Plantexpand Ltd") == ""
 
 
 @pytest.mark.parametrize(
