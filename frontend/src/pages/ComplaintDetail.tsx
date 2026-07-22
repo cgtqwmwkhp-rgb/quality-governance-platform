@@ -1268,7 +1268,6 @@ export default function ComplaintDetail() {
                         'complaints.detail.evidence_assets_empty',
                         'No evidence assets are linked to this complaint.',
                       )}
-                      emptyDescription="Portal uploads record filenames only until staff attach files here."
                     />
                   </div>
                 </CardContent>

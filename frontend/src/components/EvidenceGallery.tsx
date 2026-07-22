@@ -49,9 +49,12 @@ export function EvidenceGallery({
   useEffect(() => {
     let cancelled = false
     const images = assets.filter(isImage)
+    const imageIds = new Set(images.map((asset) => asset.id))
 
-    setPreviewUrls({})
-    setPreviewFailures(new Set())
+    setPreviewUrls((current) =>
+      Object.fromEntries(Object.entries(current).filter(([id]) => imageIds.has(Number(id)))),
+    )
+    setPreviewFailures((current) => new Set([...current].filter((id) => imageIds.has(id))))
 
     void Promise.all(
       images.map(async (asset) => {
