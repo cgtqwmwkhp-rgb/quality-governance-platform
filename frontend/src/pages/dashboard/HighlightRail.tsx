@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, AlertCircle, Info, Radio } from 'lucide-react'
+import { AlertTriangle, AlertCircle, Info, Pause, Play, Radio } from 'lucide-react'
 import { cn } from '../../helpers/utils'
 import type { HighlightChip, HighlightTone } from './dashboardMetrics'
 
@@ -14,6 +14,20 @@ const TONE_ICON: Record<HighlightTone, React.ElementType> = {
   critical: AlertTriangle,
   warning: AlertCircle,
   info: Info,
+}
+
+/** Persisted preference: auto-scroll the highlight rail when chips overflow. */
+export const HIGHLIGHT_RAIL_SCROLL_KEY = 'qgp.dashboard.highlightRail.autoScroll'
+
+function readAutoScrollPref(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const raw = window.localStorage.getItem(HIGHLIGHT_RAIL_SCROLL_KEY)
+    if (raw === null) return false // calm static wrap by default
+    return raw === 'true'
+  } catch {
+    return false
+  }
 }
 
 function Chip({ chip }: { chip: HighlightChip }) {
@@ -37,9 +51,11 @@ function Chip({ chip }: { chip: HighlightChip }) {
  * Live Highlight Rail (locked design §1).
  *
  * Renders nothing when there are no priority items — an empty rail is honest
- * signal ("all clear"), not a loading placeholder or fabricated zero. When
- * there are more chips than comfortably fit, the rail auto-scrolls and pauses
- * on hover/focus so the chips stay clickable deep-links.
+ * signal ("all clear"), not a loading placeholder or fabricated zero.
+ *
+ * When chips overflow, auto-scroll is off by default (static wrap / manual
+ * horizontal scroll). Users can opt into marquee via a toggle; preference is
+ * persisted. System prefers-reduced-motion always disables marquee.
  */
 export function HighlightRail({ chips }: { chips: HighlightChip[] }) {
   const [reduceMotion, setReduceMotion] = useState(() =>
@@ -47,6 +63,7 @@ export function HighlightRail({ chips }: { chips: HighlightChip[] }) {
       ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
       : false,
   )
+  const [autoScroll, setAutoScroll] = useState(readAutoScrollPref)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -56,6 +73,15 @@ export function HighlightRail({ chips }: { chips: HighlightChip[] }) {
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
   }, [])
+
+  const setAutoScrollPref = (next: boolean) => {
+    setAutoScroll(next)
+    try {
+      window.localStorage.setItem(HIGHLIGHT_RAIL_SCROLL_KEY, String(next))
+    } catch {
+      // ignore quota / private-mode failures — in-memory toggle still works
+    }
+  }
 
   if (chips.length === 0) {
     return (
@@ -69,28 +95,57 @@ export function HighlightRail({ chips }: { chips: HighlightChip[] }) {
     )
   }
 
-  // Duplicate chips only when the marquee animation is active. Reduced-motion
-  // users get a single wrapping row (no duplicated / clipped copy).
-  const shouldScroll = chips.length > 4 && !reduceMotion
+  const canMarquee = chips.length > 4 && !reduceMotion
+  const shouldScroll = canMarquee && autoScroll
 
   return (
     <div
       data-testid="highlight-rail"
       className="relative overflow-hidden rounded-xl border border-border bg-card p-2"
     >
-      <div
-        className={cn(
-          'flex gap-2',
-          shouldScroll
-            ? 'w-max animate-highlight-rail hover:[animation-play-state:paused] focus-within:[animation-play-state:paused]'
-            : 'flex-wrap',
+      <div className="flex items-start gap-2">
+        <div
+          className={cn(
+            'min-w-0 flex-1',
+            shouldScroll ? 'overflow-hidden' : 'overflow-x-auto',
+          )}
+        >
+          <div
+            className={cn(
+              'flex gap-2',
+              shouldScroll
+                ? 'w-max animate-highlight-rail hover:[animation-play-state:paused] focus-within:[animation-play-state:paused]'
+                : 'flex-wrap',
+            )}
+          >
+            {chips.map((chip) => (
+              <Chip key={chip.id} chip={chip} />
+            ))}
+            {shouldScroll &&
+              chips.map((chip) => <Chip key={`${chip.id}-repeat`} chip={chip} />)}
+          </div>
+        </div>
+
+        {canMarquee && (
+          <button
+            type="button"
+            data-testid="highlight-rail-scroll-toggle"
+            aria-pressed={autoScroll}
+            aria-label={autoScroll ? 'Stop auto-scroll' : 'Start auto-scroll'}
+            title={autoScroll ? 'Stop auto-scroll' : 'Start auto-scroll'}
+            onClick={() => setAutoScrollPref(!autoScroll)}
+            className={cn(
+              'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+              autoScroll && 'border-primary/30 text-primary',
+            )}
+          >
+            {autoScroll ? (
+              <Pause className="h-4 w-4" aria-hidden />
+            ) : (
+              <Play className="h-4 w-4" aria-hidden />
+            )}
+          </button>
         )}
-      >
-        {chips.map((chip) => (
-          <Chip key={chip.id} chip={chip} />
-        ))}
-        {shouldScroll &&
-          chips.map((chip) => <Chip key={`${chip.id}-repeat`} chip={chip} />)}
       </div>
     </div>
   )
