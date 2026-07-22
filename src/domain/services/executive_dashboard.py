@@ -457,9 +457,7 @@ class ExecutiveDashboardService:
             out: List[Dict[str, Any]] = []
             for week_start, week_end, label in week_windows:
                 result = await self.db.execute(
-                    select(func.count(model.id)).where(
-                        and_(tf, date_col >= week_start, date_col < week_end)
-                    )
+                    select(func.count(model.id)).where(and_(tf, date_col >= week_start, date_col < week_end))
                 )
                 out.append({"week_start": label, "count": result.scalar() or 0})
             return out
@@ -496,9 +494,7 @@ class ExecutiveDashboardService:
             asset_q = select(AssetType.name, Asset.status, Asset.expiry_date)
             asset_q = asset_q.outerjoin(AssetType, Asset.asset_type_id == AssetType.id)
             if self.tenant_id is not None:
-                asset_q = asset_q.where(
-                    or_(Asset.tenant_id == self.tenant_id, Asset.tenant_id.is_(None))
-                )
+                asset_q = asset_q.where(or_(Asset.tenant_id == self.tenant_id, Asset.tenant_id.is_(None)))
             asset_result = await self.db.execute(asset_q)
             asset_rows = [
                 AssetHealthRow(
@@ -519,9 +515,7 @@ class ExecutiveDashboardService:
                     overdue = int(bands.get("overdue", 0))  # type: ignore[union-attr]
                     quarantined = int(by_status.get(AssetStatus.QUARANTINED.value, 0))  # type: ignore[union-attr]
                     pct = round(100.0 * (total - overdue - quarantined) / total, 1)
-                tool_compliance_weekly.append(
-                    {"week_start": label, "count": int(pct), "value": pct}
-                )
+                tool_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
         except Exception:
             logger.exception("tool_compliance_weekly trend failed")
             tool_compliance_weekly = []
@@ -552,9 +546,7 @@ class ExecutiveDashboardService:
                 for _ws, week_end, label in week_windows:
                     as_of = week_end.date()
                     if not scored:
-                        training_compliance_weekly.append(
-                            {"week_start": label, "count": 0, "value": None}
-                        )
+                        training_compliance_weekly.append({"week_start": label, "count": 0, "value": None})
                         continue
                     ok = 0
                     for cell in scored:
@@ -563,9 +555,7 @@ class ExecutiveDashboardService:
                         if cell.expires_on is None or cell.expires_on >= as_of:
                             ok += 1
                     pct = round(100.0 * ok / len(scored), 1)
-                    training_compliance_weekly.append(
-                        {"week_start": label, "count": int(pct), "value": pct}
-                    )
+                    training_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
         except Exception:
             logger.exception("training_compliance_weekly trend failed")
             training_compliance_weekly = []

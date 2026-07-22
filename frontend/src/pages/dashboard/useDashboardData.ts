@@ -371,65 +371,49 @@ export function useDashboardData(): DashboardData {
         nearMisses:
           nearMissesMetric.status === 'ok'
             ? metricOk(
-                [...nearMissesMetric.value]
-                  .sort(
-                    (a, b) =>
-                      new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-                  )
-                  .slice(0, 5)
-                  .map(
-                    (n): RecentCaseRow => ({
-                      id: n.id,
-                      reference: n.reference_number,
-                      title: n.description?.slice(0, 80) || n.location || 'Near miss',
-                      severity: n.potential_severity || n.priority || 'medium',
-                      status: n.status,
-                      date: n.created_at,
-                    }),
-                  ),
+                // API paginates by event_date desc — keep that order (do not re-sort by created_at).
+                nearMissesMetric.value.slice(0, 5).map(
+                  (n): RecentCaseRow => ({
+                    id: n.id,
+                    reference: n.reference_number,
+                    title: n.description?.slice(0, 80) || n.location || 'Near miss',
+                    severity: n.potential_severity || n.priority || 'medium',
+                    status: n.status,
+                    date: n.event_date || n.created_at,
+                  }),
+                ),
               )
             : metricUnavailable(),
         complaints:
           complaintsMetric.status === 'ok'
             ? metricOk(
-                [...complaintsMetric.value]
-                  .sort(
-                    (a, b) =>
-                      new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-                  )
-                  .slice(0, 5)
-                  .map(
-                    (c): RecentCaseRow => ({
-                      id: c.id,
-                      reference: c.reference_number,
-                      title: c.title,
-                      severity: c.priority || 'medium',
-                      status: c.status,
-                      date: c.created_at,
-                    }),
-                  ),
+                // API paginates by received_date desc — keep that order.
+                complaintsMetric.value.slice(0, 5).map(
+                  (c): RecentCaseRow => ({
+                    id: c.id,
+                    reference: c.reference_number,
+                    title: c.title,
+                    severity: c.priority || 'medium',
+                    status: c.status,
+                    date: c.received_date || c.created_at,
+                  }),
+                ),
               )
             : metricUnavailable(),
         rtas:
           rtasMetric.status === 'ok'
             ? metricOk(
-                [...rtasMetric.value]
-                  .sort(
-                    (a, b) =>
-                      new Date(b.reported_date || b.collision_date).getTime() -
-                      new Date(a.reported_date || a.collision_date).getTime(),
-                  )
-                  .slice(0, 5)
-                  .map(
-                    (r): RecentCaseRow => ({
-                      id: r.id,
-                      reference: r.reference_number,
-                      title: r.title,
-                      severity: r.severity,
-                      status: r.status,
-                      date: r.reported_date || r.collision_date,
-                    }),
-                  ),
+                // API paginates by created_at desc — keep first page order.
+                rtasMetric.value.slice(0, 5).map(
+                  (r): RecentCaseRow => ({
+                    id: r.id,
+                    reference: r.reference_number,
+                    title: r.title,
+                    severity: r.severity,
+                    status: r.status,
+                    date: r.reported_date || r.collision_date,
+                  }),
+                ),
               )
             : metricUnavailable(),
       }

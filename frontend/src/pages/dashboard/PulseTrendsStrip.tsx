@@ -148,6 +148,7 @@ export function PulseTrendsStrip({ data }: { data: PulseData }) {
         href="/near-misses"
         metric={data.nearMisses7d}
         series={data.nearMissesSeries}
+        lowerIsBetter
       />
       <PulseTile
         testId="pulse-audit-score"
