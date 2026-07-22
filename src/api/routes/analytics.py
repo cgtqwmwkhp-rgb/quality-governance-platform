@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.domain.models.user import User
 from src.domain.services.analytics_service import analytics_service
+from src.domain.services.audit_analytics_service import AuditAnalyticsService
 from src.domain.services.executive_dashboard import ExecutiveDashboardService
 
 router = APIRouter()
@@ -247,6 +248,25 @@ async def get_kpi_summary(
     complaints = dash.get("complaints") or {}
     risks = dash.get("risks") or {}
     compliance = dash.get("compliance") or {}
+
+    audits_summary = dict(analytics_service.get_kpi_summary(time_range).get("audits") or {})
+    if current_user.tenant_id is not None:
+        try:
+            audit_stats = await AuditAnalyticsService(db).get_summary(current_user.tenant_id, days=days)
+            audits_summary.update(
+                {
+                    "total": audit_stats["totals"],
+                    "completed": audit_stats["completed"],
+                    "in_progress": audit_stats["in_progress"],
+                    "avg_score": audit_stats["avg_score"],
+                    "pass_rate": audit_stats["pass_rate"],
+                    "essential_compliance_pct": audit_stats["essential_compliance_pct"],
+                    "incomplete_critical_count": audit_stats["incomplete_critical_count"],
+                }
+            )
+        except Exception:  # noqa: BLE001 — KPI endpoint must degrade, not 500
+            pass
+
     return {
         "period_days": days,
         "generated_at": dash.get("generated_at"),
@@ -272,7 +292,7 @@ async def get_kpi_summary(
             "total": (dash.get("rtas") or {}).get("total_in_period", 0),
         },
         "actions": analytics_service.get_kpi_summary(time_range).get("actions"),
-        "audits": analytics_service.get_kpi_summary(time_range).get("audits"),
+        "audits": audits_summary,
         "risks": {
             "total": risks.get("total_active", 0),
             "high": risks.get("high_critical", 0),

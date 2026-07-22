@@ -97,6 +97,18 @@ class SLASummary(BaseModel):
     compliance_rate: float
 
 
+class AuditSummary(BaseModel):
+    """Audit reporting-pack summary (Branching Assessments + World-Class Reporting)."""
+
+    totals: int = 0
+    completed: int = 0
+    in_progress: int = 0
+    avg_score: Optional[float] = None
+    pass_rate: Optional[float] = None
+    essential_compliance_pct: Optional[float] = None
+    incomplete_critical_count: int = 0
+
+
 class TrendDataPoint(BaseModel):
     """Single trend data point.
 
@@ -143,6 +155,7 @@ class ExecutiveDashboardResponse(BaseModel):
     kris: KRISummary
     compliance: ComplianceSummary
     sla_performance: SLASummary
+    audits: AuditSummary = Field(default_factory=AuditSummary)
     trends: TrendData
     alerts: List[ActiveAlert]
 

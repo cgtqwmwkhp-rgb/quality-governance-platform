@@ -27,8 +27,9 @@ from src.domain.models.base import AuditTrailMixin, Base, CaseInsensitiveEnum, R
 from src.domain.models.risk_register import EnterpriseRisk
 
 if TYPE_CHECKING:
-    from src.domain.models.asset import Asset
+    from src.domain.models.asset import Asset, AssetType
     from src.domain.models.engineer import Engineer
+    from src.domain.models.location import Location
 
 audit_finding_risks = Table(
     "audit_finding_risks",
@@ -91,7 +92,16 @@ class QuestionCriticality(str, enum.Enum):
     """Criticality level distinguishing mandatory-pass from scored items."""
 
     ESSENTIAL = "essential"
+    REQUIRED = "required"
     GOOD_TO_HAVE = "good_to_have"
+
+
+class ResponseApplicability(str, enum.Enum):
+    """Whether a response's question is in-scope for the run's composition."""
+
+    APPLICABLE = "applicable"
+    NOT_APPLICABLE_BY_COMPOSITION = "not_applicable_by_composition"
+    HIDDEN_BY_LOGIC = "hidden_by_logic"
 
 
 class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
@@ -209,6 +219,10 @@ class AuditSection(Base, TimestampMixin):
     max_repeats: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # Branching composition: {"assessment_modes": [...]|None, "asset_type_ids": [...]|None}.
+    # None/empty/missing means the section is always applicable.
+    applicability_rules_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
     # Relationships
     template: Mapped["AuditTemplate"] = relationship("AuditTemplate", back_populates="sections")
     questions: Mapped[List["AuditQuestion"]] = relationship(
@@ -310,6 +324,9 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
         Index("ix_audit_runs_tenant_created", "tenant_id", "created_at"),
         Index("ix_audit_runs_tenant_asset", "tenant_id", "asset_id"),
         Index("ix_audit_runs_tenant_engineer", "tenant_id", "engineer_id"),
+        Index("ix_audit_runs_tenant_asset_type", "tenant_id", "asset_type_id"),
+        Index("ix_audit_runs_tenant_mode", "tenant_id", "assessment_mode"),
+        Index("ix_audit_runs_tenant_location_id", "tenant_id", "location_id"),
         CheckConstraint("score >= 0", name="ck_audit_run_score_positive"),
         CheckConstraint(
             "score_percentage >= 0 AND score_percentage <= 100",
@@ -348,6 +365,18 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
         nullable=True,
     )
 
+    # Reporting / branching dimensions (Phase 0-1)
+    assessment_mode: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    asset_type_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("asset_types.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    location_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("locations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    customer_code: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
     # GPS coordinates
     latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -376,6 +405,8 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     template: Mapped["AuditTemplate"] = relationship("AuditTemplate", back_populates="runs")
     asset: Mapped[Optional["Asset"]] = relationship("Asset")
     engineer: Mapped[Optional["Engineer"]] = relationship("Engineer")
+    asset_type: Mapped[Optional["AssetType"]] = relationship("AssetType")
+    run_location: Mapped[Optional["Location"]] = relationship("Location")
     responses: Mapped[List["AuditResponse"]] = relationship(
         "AuditResponse",
         back_populates="run",
@@ -395,7 +426,13 @@ class AuditResponse(Base, TimestampMixin):
     """Audit response model for individual question answers."""
 
     __tablename__ = "audit_responses"
-    __table_args__ = (UniqueConstraint("run_id", "question_id", name="uq_audit_responses_run_question"),)
+    __table_args__ = (
+        UniqueConstraint("run_id", "question_id", name="uq_audit_responses_run_question"),
+        CheckConstraint(
+            "applicability IN ('applicable','not_applicable_by_composition','hidden_by_logic')",
+            name="ck_audit_responses_applicability",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False)
@@ -411,6 +448,11 @@ class AuditResponse(Base, TimestampMixin):
 
     # N/A handling
     is_na: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Branching composition: applicable | not_applicable_by_composition | hidden_by_logic
+    applicability: Mapped[Optional[str]] = mapped_column(
+        String(40), nullable=True, default="applicable", server_default=text("'applicable'")
+    )
 
     # Scoring
     score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

@@ -30,6 +30,7 @@ import {
   mapApiToTemplate,
   mapAISectionsToLocal,
   buildQuestionPayload,
+  buildSectionPayload,
   getUnpublishableQuestionIssues,
 } from './audit-builder/templateHelpers'
 import { QUESTION_TYPES } from './audit-builder/QuestionEditor'
@@ -436,12 +437,7 @@ export default function AuditTemplateBuilder() {
 
       for (const [sIdx, section] of template.sections.entries()) {
         let sid = sectionIdMap.current[section.id]
-        const sp = {
-          title: section.title,
-          description: section.description,
-          sort_order: sIdx,
-          weight: section.weight,
-        }
+        const sp = buildSectionPayload(section, sIdx)
         if (sid) await auditsApi.updateSection(sid, sp)
         else {
           const { data } = await auditsApi.createSection(tid!, sp)
@@ -756,6 +752,7 @@ export default function AuditTemplateBuilder() {
                         onDuplicateQuestion={(qId) => handleDuplicateQuestion(section.id, qId)}
                         sectionValidationErrors={validation.sectionErrors[section.id] || []}
                         questionValidationErrors={validation.questionErrors}
+                        allQuestions={allQuestions}
                       />
                     ))}
                     <button

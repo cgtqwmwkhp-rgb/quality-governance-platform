@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -46,6 +47,14 @@ from src.api.schemas.audit import (
     CreateFindingCapaRequest,
     FlagFindingRiskRequest,
     PurgeExpiredTemplatesResponse,
+    TemplateAssetTypeLinkResponse,
+)
+from src.api.schemas.audit_analytics import (
+    AuditAnalyticsDimensionItem,
+    AuditAnalyticsDimensionsResponse,
+    AuditAnalyticsSummaryResponse,
+    CriticalQueueItemResponse,
+    CriticalQueueResponse,
 )
 from src.api.schemas.capa import CAPAResponse
 from src.api.schemas.error_codes import ErrorCode
@@ -65,6 +74,7 @@ from src.domain.models.audit import (
 )
 from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
+from src.domain.services.audit_analytics_service import SUPPORTED_GROUP_BY, AuditAnalyticsService
 from src.domain.services.audit_scoring_service import AuditScoringService
 from src.domain.services.audit_service import AuditService
 from src.domain.services.external_audit_intake_template_resolver import (
@@ -77,6 +87,82 @@ from src.infrastructure.monitoring.azure_monitor import StructuredLogger
 router = APIRouter()
 logger = logging.getLogger(__name__)
 observability_logger = StructuredLogger("audit.observability")
+
+
+# ============== Reporting / Analytics Endpoints ==============
+# Declared before templates/{id} etc. so path-shape stays unambiguous for readers
+# (these are all distinct literal sub-paths and don't actually collide, but the
+# convention keeps reporting endpoints easy to find at the top of the module).
+
+
+@router.get("/analytics/summary", response_model=AuditAnalyticsSummaryResponse)
+async def get_audit_analytics_summary(
+    db: DbSession,
+    current_user: CurrentUser,
+    days: int = Query(90, ge=1, le=3650),
+) -> AuditAnalyticsSummaryResponse:
+    """Headline KPIs for the audit reporting pack."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = AuditAnalyticsService(db)
+    summary = await service.get_summary(tenant_id, days=days)
+    return AuditAnalyticsSummaryResponse(**summary)
+
+
+@router.get("/analytics/dimensions", response_model=AuditAnalyticsDimensionsResponse)
+async def get_audit_analytics_dimensions(
+    db: DbSession,
+    current_user: CurrentUser,
+    group_by: str = Query(..., description=f"One of: {', '.join(SUPPORTED_GROUP_BY)}"),
+    days: int = Query(90, ge=1, le=3650),
+) -> AuditAnalyticsDimensionsResponse:
+    """Dimensional breakdown (fail rate / essential compliance) by asset type,
+    assessment mode, template, criticality, customer, location, engineer, or week.
+    """
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    if group_by not in SUPPORTED_GROUP_BY:
+        raise BadRequestError(f"group_by must be one of: {', '.join(SUPPORTED_GROUP_BY)}")
+    service = AuditAnalyticsService(db)
+    items = await service.get_dimensions(tenant_id, group_by=group_by, days=days)
+    return AuditAnalyticsDimensionsResponse(
+        group_by=group_by,
+        period_days=days,
+        items=[AuditAnalyticsDimensionItem(**item) for item in items],
+    )
+
+
+@router.get("/analytics/export.csv")
+async def export_audit_analytics_csv(
+    db: DbSession,
+    current_user: CurrentUser,
+    days: int = Query(90, ge=1, le=3650),
+) -> StreamingResponse:
+    """Run×response grain CSV export including dimensions, applicability, criticality."""
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = AuditAnalyticsService(db)
+    csv_text = await service.export_runs_csv(tenant_id, days=days)
+    return StreamingResponse(
+        iter([csv_text]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=audit_analytics_export.csv"},
+    )
+
+
+@router.get("/analytics/critical-queue", response_model=CriticalQueueResponse)
+async def get_audit_analytics_critical_queue(
+    db: DbSession,
+    current_user: CurrentUser,
+    limit: int = Query(200, ge=1, le=1000),
+) -> CriticalQueueResponse:
+    """Incomplete essential items: applicable-and-unanswered, or failed with an
+    open finding, across the tenant's active (non-terminal) audit runs.
+    """
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = AuditAnalyticsService(db)
+    items = await service.get_critical_queue(tenant_id, limit=limit)
+    return CriticalQueueResponse(
+        total=len(items),
+        items=[CriticalQueueItemResponse.model_validate(item) for item in items],
+    )
 
 
 async def _trigger_operational_standards_assess(
@@ -605,6 +691,46 @@ async def clone_template(
         tenant_id=current_user.tenant_id,
     )
     return AuditTemplateResponse.model_validate(cloned)
+
+
+@router.post(
+    "/templates/{template_id}/asset-types/{asset_type_id}",
+    response_model=TemplateAssetTypeLinkResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def link_template_asset_type(
+    template_id: int,
+    asset_type_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> TemplateAssetTypeLinkResponse:
+    """Associate a template with an asset type for branching composition scoping."""
+    service = AuditService(db)
+    link = await service.link_template_asset_type(
+        template_id,
+        asset_type_id,
+        tenant_id=current_user.tenant_id,
+    )
+    return TemplateAssetTypeLinkResponse.model_validate(link)
+
+
+@router.delete(
+    "/templates/{template_id}/asset-types/{asset_type_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unlink_template_asset_type(
+    template_id: int,
+    asset_type_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> None:
+    """Remove a template ↔ asset type composition link."""
+    service = AuditService(db)
+    await service.unlink_template_asset_type(
+        template_id,
+        asset_type_id,
+        tenant_id=current_user.tenant_id,
+    )
 
 
 @router.delete(

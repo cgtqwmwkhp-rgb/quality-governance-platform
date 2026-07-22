@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildQuestionPayload, mapApiToTemplate } from './templateHelpers'
+import { buildQuestionPayload, buildSectionPayload, mapApiToTemplate } from './templateHelpers'
 import {
   EXECUTABLE_QUESTION_TYPES,
   UNSUPPORTED_PUBLISH_QUESTION_TYPES,
+  buildApplicabilityRulesPayload,
   getUnpublishableQuestionIssues,
   isPublishableQuestionType,
 } from './templateHelpers'
@@ -124,6 +125,153 @@ describe('templateHelpers', () => {
         min_attachments: 1,
         allowed_types: ['document'],
       },
+    })
+  })
+
+  it('maps criticality and conditional_logic from backend questions', () => {
+    const sectionIdMap: Record<string, number> = {}
+    const questionIdMap: Record<string, number> = {}
+
+    const template = mapApiToTemplate(
+      {
+        id: 8,
+        name: 'Lifting equipment inspection',
+        description: '',
+        version: 1,
+        is_published: false,
+        category: 'safety',
+        scoring_method: 'weighted',
+        passing_score: 80,
+        created_at: '2026-03-20T10:00:00Z',
+        sections: [
+          {
+            id: 21,
+            title: 'Structural checks',
+            weight: 1,
+            sort_order: 0,
+            applicability_rules: { assessment_modes: ['full'], asset_type_ids: [3, 4] },
+            questions: [
+              {
+                id: 31,
+                question_text: 'Are the chains free of damage?',
+                question_type: 'yes_no',
+                criticality: 'essential',
+                conditional_logic: [
+                  { source_question_id: 30, operator: 'equals', value: 'yes', action: 'show' },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      sectionIdMap,
+      questionIdMap,
+    )
+
+    const section = template.sections[0]
+    const question = section.questions[0]
+    expect(question.criticality).toBe('essential')
+    expect(question.conditionalLogicRules).toEqual([
+      { source_question_id: 30, operator: 'equals', value: 'yes', action: 'show' },
+    ])
+    expect(section.applicabilityRules).toEqual({
+      assessmentModes: ['full'],
+      assetTypeIds: [3, 4],
+    })
+  })
+
+  it('ignores unrecognized criticality values from the backend', () => {
+    const template = mapApiToTemplate(
+      {
+        id: 9,
+        name: 'Test',
+        version: 1,
+        is_published: false,
+        created_at: '2026-01-01T00:00:00Z',
+        sections: [
+          {
+            id: 1,
+            title: 'Section',
+            weight: 1,
+            sort_order: 0,
+            questions: [
+              { id: 1, question_text: 'Q1', question_type: 'yes_no', criticality: 'nonsense' },
+            ],
+          },
+        ],
+      },
+      {},
+      {},
+    )
+    expect(template.sections[0].questions[0].criticality).toBeUndefined()
+  })
+
+  it('builds question payloads carrying criticality and conditional_logic rules', () => {
+    const payload = buildQuestionPayload(
+      {
+        id: 'q-2',
+        text: 'Any spillages found?',
+        type: 'yes_no',
+        required: true,
+        weight: 1,
+        evidenceRequired: false,
+        failureTriggersAction: false,
+        criticality: 'essential',
+        conditionalLogicRules: [
+          { source_question_id: 'q-1', operator: 'equals', value: 'yes', action: 'show' },
+        ],
+      },
+      0,
+      5,
+    )
+
+    expect(payload).toMatchObject({
+      section_id: 5,
+      criticality: 'essential',
+      conditional_logic: [{ source_question_id: 'q-1', operator: 'equals', value: 'yes', action: 'show' }],
+    })
+  })
+
+  it('sends null conditional_logic when a question has no rules', () => {
+    const payload = buildQuestionPayload(
+      {
+        id: 'q-3',
+        text: 'Is area clean?',
+        type: 'yes_no',
+        required: true,
+        weight: 1,
+        evidenceRequired: false,
+        failureTriggersAction: false,
+      },
+      0,
+      5,
+    )
+    expect(payload.conditional_logic).toBeNull()
+  })
+
+  it('builds section applicability_rules payloads, collapsing empty arrays to null', () => {
+    expect(
+      buildApplicabilityRulesPayload({ assessmentModes: ['full'], assetTypeIds: [1, 2] }),
+    ).toEqual({ assessment_modes: ['full'], asset_type_ids: [1, 2] })
+    expect(buildApplicabilityRulesPayload({ assessmentModes: [], assetTypeIds: [] })).toBeNull()
+    expect(buildApplicabilityRulesPayload(null)).toBeNull()
+    expect(buildApplicabilityRulesPayload(undefined)).toBeNull()
+  })
+
+  it('buildSectionPayload carries applicability_rules through to the API payload', () => {
+    const payload = buildSectionPayload(
+      {
+        title: 'Vehicle checks',
+        description: 'Core checks',
+        weight: 1,
+        applicabilityRules: { assessmentModes: ['spot_check'], assetTypeIds: null },
+      },
+      2,
+    )
+    expect(payload).toMatchObject({
+      title: 'Vehicle checks',
+      sort_order: 2,
+      applicability_rules: { assessment_modes: ['spot_check'], asset_type_ids: null },
     })
   })
 })

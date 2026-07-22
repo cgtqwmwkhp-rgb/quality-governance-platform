@@ -47,6 +47,13 @@ export interface AuditRun {
   score_percentage?: number | null
   passed?: boolean | null
   created_at: string
+  /** Branching/reporting dimensions (PR: audit-branching-reporting). */
+  assessment_mode?: string | null
+  asset_id?: number | null
+  asset_type_id?: number | null
+  engineer_id?: number | null
+  location_id?: number | null
+  customer_code?: string | null
 }
 
 export interface AuditFinding {
@@ -169,6 +176,13 @@ export interface AuditRunCreate {
   external_reference?: string
   source_document_asset_id?: number
   source_document_label?: string
+  /** Branching/reporting dimensions (PR: audit-branching-reporting). */
+  assessment_mode?: string
+  asset_id?: number
+  asset_type_id?: number
+  engineer_id?: number
+  location_id?: number
+  customer_code?: string
 }
 
 export interface AuditRunUpdate {
@@ -187,6 +201,13 @@ export interface AuditRunUpdate {
   external_reference?: string
   source_document_asset_id?: number
   source_document_label?: string
+  /** Branching/reporting dimensions (PR: audit-branching-reporting). */
+  assessment_mode?: string | null
+  asset_id?: number | null
+  asset_type_id?: number | null
+  engineer_id?: number | null
+  location_id?: number | null
+  customer_code?: string | null
 }
 
 export interface AuditTemplateDetail {
@@ -215,11 +236,18 @@ export interface AuditTemplateDetail {
   updated_at: string
 }
 
+/** Section-level composition rule. Null/missing dimension = unrestricted. */
+export interface SectionApplicabilityRules {
+  assessment_modes?: string[] | null
+  asset_type_ids?: number[] | null
+}
+
 export interface AuditSectionCreate {
   title: string
   description?: string
   sort_order?: number
   weight?: number
+  applicability_rules?: SectionApplicabilityRules | null
 }
 
 export interface AuditSectionUpdate {
@@ -227,6 +255,7 @@ export interface AuditSectionUpdate {
   description?: string
   sort_order?: number
   weight?: number
+  applicability_rules?: SectionApplicabilityRules | null
 }
 
 export interface QuestionOptionBase {
@@ -247,6 +276,16 @@ export interface EvidenceRequirement {
   require_signature?: boolean
 }
 
+/** Mirrors backend `ConditionalLogicRule` (src/api/schemas/audit.py). */
+export interface ConditionalLogicRule {
+  source_question_id: string | number
+  operator: 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty'
+  value?: string | number | boolean | null
+  action: 'show' | 'hide'
+}
+
+export type QuestionCriticality = 'essential' | 'required' | 'good_to_have'
+
 export interface AuditQuestionCreate {
   section_id?: number
   question_text: string
@@ -265,6 +304,8 @@ export interface AuditQuestionCreate {
   risk_weight?: number
   failure_triggers_action?: boolean
   positive_answer?: 'yes' | 'no'
+  criticality?: QuestionCriticality
+  conditional_logic?: ConditionalLogicRule[] | null
 }
 
 export interface AuditQuestionUpdate {
@@ -289,6 +330,8 @@ export interface AuditQuestionUpdate {
   failure_triggers_action?: boolean
   positive_answer?: 'yes' | 'no'
   is_active?: boolean
+  criticality?: QuestionCriticality
+  conditional_logic?: ConditionalLogicRule[] | null
 }
 
 export interface AuditSection {
@@ -302,6 +345,7 @@ export interface AuditSection {
   max_repeats?: number
   is_active: boolean
   questions: AuditQuestion[]
+  applicability_rules?: SectionApplicabilityRules | null
   created_at: string
   updated_at: string
 }
@@ -332,9 +376,12 @@ export interface AuditQuestion {
   failure_triggers_action: boolean
   positive_answer?: 'yes' | 'no'
   criticality?: string
+  conditional_logic?: ConditionalLogicRule[] | null
   created_at: string
   updated_at: string
 }
+
+export type ResponseApplicability = 'applicable' | 'not_applicable_by_composition' | 'hidden_by_logic'
 
 export interface AuditResponse {
   id: number
@@ -346,6 +393,7 @@ export interface AuditResponse {
   score?: number
   max_score?: number
   notes?: string
+  applicability?: ResponseApplicability | null
   created_at: string
 }
 
@@ -357,6 +405,7 @@ export interface AuditResponseCreate {
   score?: number | null
   max_score?: number | null
   notes?: string | null
+  applicability?: ResponseApplicability | null
 }
 
 export interface AuditResponseUpdate {
@@ -366,6 +415,7 @@ export interface AuditResponseUpdate {
   score?: number | null
   max_score?: number | null
   notes?: string | null
+  applicability?: ResponseApplicability | null
 }
 
 export interface AuditFindingCreate {
@@ -395,8 +445,87 @@ export interface AuditFindingUpdate {
   closure_override_reason?: string
 }
 
+// ============ Audit Analytics (reporting pack) ============
+
+export interface AuditAnalyticsSummary {
+  period_days: number
+  totals: number
+  completed: number
+  in_progress: number
+  avg_score: number
+  pass_rate: number
+  essential_compliance_pct: number
+  incomplete_critical_count: number
+}
+
+export type AuditAnalyticsGroupBy =
+  | 'asset_type'
+  | 'assessment_mode'
+  | 'template'
+  | 'criticality'
+  | 'customer'
+  | 'location'
+  | 'engineer'
+  | 'week'
+
+export interface AuditAnalyticsDimensionItem {
+  key: string
+  label: string
+  run_count: number
+  completed_count: number
+  avg_score: number
+  fail_rate: number
+  essential_compliance_pct?: number | null
+}
+
+export interface AuditAnalyticsDimensionsResponse {
+  group_by: string
+  period_days: number
+  items: AuditAnalyticsDimensionItem[]
+}
+
+export interface CriticalQueueItem {
+  run_id: number
+  run_reference_number?: string | null
+  template_id: number
+  template_name?: string | null
+  question_id: number
+  question_text: string
+  reason: 'unanswered' | 'failed_open_finding'
+  finding_id?: number | null
+  finding_status?: string | null
+}
+
+export interface CriticalQueueResponse {
+  total: number
+  items: CriticalQueueItem[]
+}
+
 export function createAuditsApi(api: AxiosInstance) {
   return {
+  // Analytics / reporting pack
+  getAnalyticsSummary: (days = 90) =>
+    api.get<AuditAnalyticsSummary>('/api/v1/audits/analytics/summary', { params: { days } }),
+  getAnalyticsDimensions: (groupBy: AuditAnalyticsGroupBy, days = 90) =>
+    api.get<AuditAnalyticsDimensionsResponse>('/api/v1/audits/analytics/dimensions', {
+      params: { group_by: groupBy, days },
+    }),
+  getCriticalQueue: (limit = 200) =>
+    api.get<CriticalQueueResponse>('/api/v1/audits/analytics/critical-queue', {
+      params: { limit },
+    }),
+  exportAnalyticsCsv: (days = 90) =>
+    api.get<Blob>('/api/v1/audits/analytics/export.csv', {
+      params: { days },
+      responseType: 'blob',
+    }),
+
+  // Template ↔ asset type composition links
+  linkTemplateAssetType: (templateId: number, assetTypeId: number) =>
+    api.post(`/api/v1/audits/templates/${templateId}/asset-types/${assetTypeId}`),
+  unlinkTemplateAssetType: (templateId: number, assetTypeId: number) =>
+    api.delete(`/api/v1/audits/templates/${templateId}/asset-types/${assetTypeId}`),
+
   // Category summary
   listCategories: () => api.get<CategoryCount[]>('/api/v1/audit-templates/categories'),
   // Batch import

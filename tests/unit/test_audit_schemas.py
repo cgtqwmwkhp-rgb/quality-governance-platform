@@ -11,12 +11,16 @@ from src.api.schemas.audit import (
     AuditQuestionCreate,
     AuditQuestionUpdate,
     AuditResponseCreate,
+    AuditResponseUpdate,
     AuditRunCreate,
+    AuditRunUpdate,
     AuditSectionCreate,
+    AuditSectionUpdate,
     AuditTemplateCreate,
     ConditionalLogicRule,
     EvidenceRequirement,
     QuestionOptionBase,
+    SectionApplicabilityRules,
 )
 
 
@@ -469,3 +473,136 @@ class TestAuditFindingResponseSerialization:
         resp = AuditFindingResponse.model_validate(FakeORM())
         assert resp.clause_ids == ["8.1", "14.2"]
         assert resp.risk_ids == [42]
+
+
+class TestQuestionCriticalityPattern:
+    """Tests for the essential|required|good_to_have criticality pattern."""
+
+    @pytest.mark.parametrize("criticality", ["essential", "required", "good_to_have"])
+    def test_create_accepts_valid_criticality(self, criticality):
+        question = AuditQuestionCreate(
+            question_text="Are guards fitted?",
+            question_type="yes_no",
+            criticality=criticality,
+        )
+        assert question.criticality == criticality
+
+    def test_create_criticality_defaults_to_none(self):
+        question = AuditQuestionCreate(question_text="Test", question_type="yes_no")
+        assert question.criticality is None
+
+    def test_create_rejects_invalid_criticality(self):
+        with pytest.raises(ValidationError):
+            AuditQuestionCreate(
+                question_text="Test",
+                question_type="yes_no",
+                criticality="nice_to_have",
+            )
+
+    @pytest.mark.parametrize("criticality", ["essential", "required", "good_to_have"])
+    def test_update_accepts_valid_criticality(self, criticality):
+        update = AuditQuestionUpdate(criticality=criticality)
+        assert update.criticality == criticality
+
+    def test_update_rejects_invalid_criticality(self):
+        with pytest.raises(ValidationError):
+            AuditQuestionUpdate(criticality="optional")
+
+
+class TestSectionApplicabilityRules:
+    """Tests for section-level composition/applicability rules."""
+
+    def test_unrestricted_rules_default_to_none(self):
+        rules = SectionApplicabilityRules()
+        assert rules.assessment_modes is None
+        assert rules.asset_type_ids is None
+
+    def test_restricted_rules(self):
+        rules = SectionApplicabilityRules(
+            assessment_modes=["full", "spot_check"],
+            asset_type_ids=[1, 2],
+        )
+        assert rules.assessment_modes == ["full", "spot_check"]
+        assert rules.asset_type_ids == [1, 2]
+
+    def test_section_create_maps_applicability_rules_alias(self):
+        section = AuditSectionCreate(
+            title="Lifting equipment checks",
+            applicability_rules=SectionApplicabilityRules(asset_type_ids=[3]),
+        )
+        assert section.applicability_rules.asset_type_ids == [3]
+
+    def test_section_update_accepts_null_rules(self):
+        update = AuditSectionUpdate(applicability_rules=None)
+        assert update.applicability_rules is None
+
+
+class TestAuditRunReportingDimensions:
+    """Tests for the branching/reporting dimensions added to AuditRun schemas."""
+
+    def test_create_accepts_reporting_dimensions(self):
+        run = AuditRunCreate(
+            template_id=1,
+            assessment_mode="spot_check",
+            asset_id=7,
+            asset_type_id=2,
+            engineer_id=9,
+            location_id=4,
+            customer_code="ACME-001",
+        )
+        assert run.assessment_mode == "spot_check"
+        assert run.asset_type_id == 2
+        assert run.engineer_id == 9
+        assert run.location_id == 4
+        assert run.customer_code == "ACME-001"
+
+    def test_create_dimensions_are_optional(self):
+        run = AuditRunCreate(template_id=1)
+        assert run.assessment_mode is None
+        assert run.asset_type_id is None
+        assert run.location_id is None
+        assert run.customer_code is None
+
+    def test_update_accepts_reporting_dimensions(self):
+        update = AuditRunUpdate(
+            assessment_mode="post_incident",
+            asset_type_id=5,
+            location_id=8,
+            customer_code="B2B-42",
+        )
+        assert update.assessment_mode == "post_incident"
+        assert update.asset_type_id == 5
+        assert update.location_id == 8
+        assert update.customer_code == "B2B-42"
+
+
+class TestAuditResponseApplicability:
+    """Tests for the response-level applicability field."""
+
+    @pytest.mark.parametrize(
+        "applicability",
+        ["applicable", "not_applicable_by_composition", "hidden_by_logic"],
+    )
+    def test_create_accepts_valid_applicability(self, applicability):
+        response = AuditResponseCreate(
+            question_id=1,
+            response_text="ok",
+            applicability=applicability,
+        )
+        assert response.applicability == applicability
+
+    def test_create_applicability_defaults_to_none(self):
+        response = AuditResponseCreate(question_id=1, response_text="ok")
+        assert response.applicability is None
+
+    def test_create_rejects_invalid_applicability(self):
+        with pytest.raises(ValidationError):
+            AuditResponseCreate(
+                question_id=1,
+                response_text="ok",
+                applicability="not_a_real_state",
+            )
+
+    def test_update_accepts_valid_applicability(self):
+        update = AuditResponseUpdate(applicability="hidden_by_logic")
+        assert update.applicability == "hidden_by_logic"
