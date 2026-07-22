@@ -23,11 +23,15 @@ vi.mock('react-i18next', () => ({
 }))
 
 const mockList = vi.fn()
+const mockContractsList = vi.fn()
 
 vi.mock('../../api/client', () => ({
   nearMissesApi: {
     list: (...args: unknown[]) => mockList(...args),
     create: vi.fn(),
+  },
+  contractsApi: {
+    list: (...args: unknown[]) => mockContractsList(...args),
   },
   getApiErrorMessage: (error: unknown) =>
     error instanceof Error ? error.message : 'Something went wrong',
@@ -44,6 +48,19 @@ function Wrapper({ children }: { children: ReactNode }) {
 describe('Near Misses page accessibility (real page /near-misses)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockContractsList.mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          name: 'UKPN',
+          code: 'ukpn',
+          client_name: 'UK Power Networks',
+          is_active: true,
+          display_order: 1,
+        },
+      ],
+      total: 1,
+    })
     mockList.mockResolvedValue({
       data: {
         items: [

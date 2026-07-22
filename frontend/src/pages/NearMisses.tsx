@@ -348,7 +348,6 @@ export default function NearMisses() {
                 <Select
                   value={formData.contract || undefined}
                   onValueChange={(value) => setFormData({ ...formData, contract: value })}
-                  required
                 >
                   <SelectTrigger id="near-miss-contract" className="mt-1" data-testid="near-miss-contract">
                     <SelectValue placeholder={t('near_misses.form.contract_placeholder', 'Select contract')} />
