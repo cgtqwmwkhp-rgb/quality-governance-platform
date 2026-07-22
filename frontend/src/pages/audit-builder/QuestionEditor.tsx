@@ -23,6 +23,9 @@ import {
   Plus,
   Trash2,
   ArrowRightLeft,
+  User,
+  MapPin,
+  Building2,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Question, QuestionType, QuestionOption } from './types'
@@ -63,6 +66,19 @@ export const QUESTION_TYPES: {
   { type: 'date', label: 'Date', icon: Calendar, description: 'Date picker' },
   { type: 'photo', label: 'Photo', icon: Camera, description: 'Image capture' },
   { type: 'signature', label: 'Signature', icon: FileSignature, description: 'Digital signature' },
+  { type: 'user_select', label: 'User', icon: User, description: 'Pick a user from a search' },
+  {
+    type: 'location_select',
+    label: 'Location',
+    icon: MapPin,
+    description: 'Pick a location from a list',
+  },
+  {
+    type: 'customer_select',
+    label: 'Customer',
+    icon: Building2,
+    description: 'Pick a customer from a list',
+  },
 ]
 
 export interface QuestionEditorProps {

@@ -5,7 +5,10 @@ import { buildEvidenceResponseJson } from './auditExecutionPhotoEvidence'
 type ResponseJsonInput = {
   response: unknown
   evidenceAssetIds?: number[]
+  entityLabel?: string
 }
+
+const ENTITY_SELECT_QUESTION_TYPES = new Set(['user_select', 'location_select', 'customer_select'])
 
 /** Merge evidence spine ids with checklist/radio selected values for response_json. */
 export function mergeAuditResponseJson(
@@ -25,6 +28,16 @@ export function mergeAuditResponseJson(
     resp.response.trim()
   ) {
     json.selected = resp.response
+  } else if (
+    questionType &&
+    ENTITY_SELECT_QUESTION_TYPES.has(questionType) &&
+    resp.entityLabel?.trim() &&
+    typeof resp.response === 'string' &&
+    resp.response.trim()
+  ) {
+    // Best-effort label snapshot so the run summary can show a name instead
+    // of a bare id — scoring only relies on response_value being present.
+    json.entity_label = resp.entityLabel.trim()
   }
   return Object.keys(json).length > 0 ? json : undefined
 }
@@ -80,6 +93,7 @@ type SavePayloadResponse = {
   response: unknown
   notes?: string
   evidenceAssetIds?: number[]
+  entityLabel?: string
 }
 
 export type AuditResponseSavePayload = {
@@ -112,7 +126,7 @@ export function buildAuditResponseSavePayload(
     ? scorePayloadForQuestion(question, resp)
     : { score: null, max_score: null }
   const responseJson = mergeAuditResponseJson(
-    { response: resp.response, evidenceAssetIds: resp.evidenceAssetIds },
+    { response: resp.response, evidenceAssetIds: resp.evidenceAssetIds, entityLabel: resp.entityLabel },
     question?.type,
   )
 

@@ -17,6 +17,15 @@ describe('templateHelpers', () => {
     expect(isPublishableQuestionType('unknown_type')).toBe(false)
   })
 
+  it('publishes the entity-select question types added for user/location/customer pickers', () => {
+    expect(EXECUTABLE_QUESTION_TYPES).toContain('user_select')
+    expect(EXECUTABLE_QUESTION_TYPES).toContain('location_select')
+    expect(EXECUTABLE_QUESTION_TYPES).toContain('customer_select')
+    expect(isPublishableQuestionType('user_select')).toBe(true)
+    expect(isPublishableQuestionType('location_select')).toBe(true)
+    expect(isPublishableQuestionType('customer_select')).toBe(true)
+  })
+
   it('flags unpublishable API question types', () => {
     expect(isPublishableQuestionType('file')).toBe(false)
     expect(getUnpublishableQuestionIssues([])).toEqual([])

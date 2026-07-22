@@ -35,6 +35,9 @@ _FE_TO_API_CASES: list[tuple[str, ApiQuestionTypeSpec]] = [
     ("multi_choice", ApiQuestionTypeSpec(question_type="radio")),
     ("checklist", ApiQuestionTypeSpec(question_type="checkbox")),
     ("pass_fail", ApiQuestionTypeSpec(question_type="pass_fail")),
+    ("user_select", ApiQuestionTypeSpec(question_type="user_select")),
+    ("location_select", ApiQuestionTypeSpec(question_type="location_select")),
+    ("customer_select", ApiQuestionTypeSpec(question_type="customer_select")),
 ]
 
 
@@ -73,6 +76,9 @@ _API_TO_FE_CASES: list[tuple[str, dict[str, object], str]] = [
     ("date", {}, "date"),
     ("photo", {}, "photo"),
     ("signature", {}, "signature"),
+    ("user_select", {}, "user_select"),
+    ("location_select", {}, "location_select"),
+    ("customer_select", {}, "customer_select"),
 ]
 
 
@@ -117,6 +123,9 @@ def test_api_allowlist_matches_schema_pattern() -> None:
             "yes_no",
             "pass_fail",
             "score",
+            "user_select",
+            "location_select",
+            "customer_select",
         }
     )
 
