@@ -130,11 +130,11 @@ def split_location(value: Any) -> dict[str, str | None]:
     elif vehicle_reg:
         assignment_text = without_vehicle
 
-    assignment_text = strip_company_brand_prefix(assignment_text, company) or None
+    cleaned_assignment = strip_company_brand_prefix(assignment_text, company)
     return {
         "location_raw": raw,
         "company": company,
-        "assignment_text": assignment_text,
+        "assignment_text": cleaned_assignment or None,
         "vehicle_reg": vehicle_reg,
         "engineer_name": engineer_name,
     }
