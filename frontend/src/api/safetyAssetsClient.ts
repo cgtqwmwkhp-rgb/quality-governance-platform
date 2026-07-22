@@ -270,6 +270,32 @@ export const safetyAssetsApi = {
     is_active?: boolean
   }) => api.get<SafetyAssetTypeListResponse>(`${BASE}/asset-types`, { params }),
 
+  /** Page through all asset types for Lookups SSOT editor (API page_size max 500). */
+  listAllAssetTypes: async (options?: {
+    pageSize?: number
+    maxPages?: number
+  }): Promise<{ items: SafetyAssetType[]; total: number }> => {
+    const pageSize = options?.pageSize ?? 500
+    const maxPages = options?.maxPages ?? 40
+    const items: SafetyAssetType[] = []
+    let total = 0
+    let pages = 1
+    for (let page = 1; page <= maxPages; page += 1) {
+      const res = await safetyAssetsApi.listAssetTypes({ page, page_size: pageSize })
+      const batch = res.data.items ?? []
+      items.push(...batch)
+      total = res.data.total ?? items.length
+      pages = res.data.pages ?? 1
+      if (page >= pages) break
+    }
+    if (pages > maxPages) {
+      throw new Error(
+        `Asset types have ${pages} pages; Lookups fetch capped at ${maxPages}. Raise the cap if needed.`,
+      )
+    }
+    return { items, total }
+  },
+
   listLocations: (params?: {
     page?: number
     page_size?: number

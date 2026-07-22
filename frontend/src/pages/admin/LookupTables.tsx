@@ -180,26 +180,24 @@ export default function LookupTables() {
     resetCreateForm()
     try {
       const assetData =
-        cat.key === 'assets'
-          ? await safetyAssetsApi.listAssetTypes({ page: 1, page_size: 100 })
-          : null
+        cat.key === 'assets' ? await safetyAssetsApi.listAllAssetTypes() : null
       const lookupData = cat.key === 'assets' ? null : await lookupsApi.list(cat.key, false)
       const items = assetData
-        ? assetData.data.items.map((assetType) => ({
-              id: assetType.id,
-              category: 'assets',
-              code: assetType.name,
-              label: assetType.name,
-              description: assetType.description ?? undefined,
-              is_active: assetType.is_active,
-              display_order: assetType.id,
-            }))
-        : lookupData?.items ?? []
+        ? assetData.items.map((assetType) => ({
+            id: assetType.id,
+            category: 'assets',
+            code: assetType.name,
+            label: assetType.name,
+            description: assetType.description ?? undefined,
+            is_active: assetType.is_active,
+            display_order: assetType.id,
+          }))
+        : (lookupData?.items ?? [])
       setOptions(items)
       setCounts((prev) => ({
         ...prev,
         [cat.key]: {
-          total: assetData?.data.total ?? lookupData?.total ?? items.length,
+          total: assetData?.total ?? lookupData?.total ?? items.length,
           loading: false,
           error: false,
         },

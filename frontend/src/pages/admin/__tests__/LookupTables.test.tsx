@@ -28,6 +28,10 @@ vi.mock('../../../api/safetyAssetsClient', () => ({
     approveSafetyLookup: (...args: unknown[]) => mockApproveSafetyLookup(...args),
     mergeSafetyLookup: (...args: unknown[]) => mockMergeSafetyLookup(...args),
     listAssetTypes: (...args: unknown[]) => mockListAssetTypes(...args),
+    listAllAssetTypes: async () => {
+      const res = await mockListAssetTypes({ page: 1, page_size: 500 })
+      return { items: res.data.items ?? [], total: res.data.total ?? 0 }
+    },
     previewSafetyLookup: vi.fn(),
     createAssetType: vi.fn(),
     createLocation: vi.fn(),
