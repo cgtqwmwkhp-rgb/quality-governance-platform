@@ -84,7 +84,7 @@ export function EvidenceGallery({
   useEffect(() => {
     if (selectedAssetId === null) return
 
-    if (selectedIndex === -1) {
+    if (!assets.some((asset) => asset.id === selectedAssetId)) {
       setSelectedAssetId(null)
       return
     }
@@ -102,7 +102,7 @@ export function EvidenceGallery({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [moveSelection, selectedAssetId])
+  }, [assets, moveSelection, selectedAssetId])
 
   const selectedPreviewUrl = selectedAsset ? previewUrls[selectedAsset.id] : undefined
   const selectedPreviewFailed = selectedAsset ? previewFailures.has(selectedAsset.id) : false
