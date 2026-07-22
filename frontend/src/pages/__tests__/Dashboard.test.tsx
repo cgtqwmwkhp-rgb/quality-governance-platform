@@ -323,7 +323,9 @@ describe('Dashboard (role-aware living dashboard)', () => {
       await screen.findByRole('heading', { name: 'Dashboard' })
 
       expect(await screen.findByTestId('pulse-incidents-7d-sparkline')).toBeInTheDocument()
-      expect(screen.getByTestId('pulse-training-compliance-sparkline')).toBeInTheDocument()
+      // Training sparkline intentionally omitted (module_ok ≠ expiry backcast).
+      expect(screen.queryByTestId('pulse-training-compliance-sparkline')).not.toBeInTheDocument()
+      expect(screen.getByTestId('pulse-tool-compliance-sparkline')).toBeInTheDocument()
     })
   })
 
