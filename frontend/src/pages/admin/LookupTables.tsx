@@ -139,8 +139,9 @@ export default function LookupTables() {
     try {
       const res = await safetyAssetsApi.listPendingSafetyLookups()
       setPendingSafety(res.data.items ?? [])
-    } catch {
+    } catch (err) {
       setPendingSafety([])
+      toast.error(getApiErrorMessage(err, 'Could not load pending Safety lookups'))
     } finally {
       setPendingLoading(false)
     }
@@ -579,10 +580,15 @@ export default function LookupTables() {
                           'admin.lookups.customers_desc',
                           'Configure customer names for forms and dropdowns across the platform. Nothing is pre-seeded.',
                         )
-                      : t(
-                          `admin.lookups.${cat.key}_desc`,
-                          `Configure ${cat.label.toLowerCase()} for your organisation`,
-                        )}
+                      : cat.key === 'tools' || cat.key === 'locations' || cat.key === 'assets'
+                        ? t(
+                            'admin.lookups.form_lookup_not_ces',
+                            'Form-builder dropdown options only. CES calibrations use the Safety Asset Types & Site Locations panel above — not this card.',
+                          )
+                        : t(
+                            `admin.lookups.${cat.key}_desc`,
+                            `Configure ${cat.label.toLowerCase()} for your organisation`,
+                          )}
                 </p>
                 {cat.key === WORKFORCE_ROLES_LOOKUP_CATEGORY ? (
                   <p

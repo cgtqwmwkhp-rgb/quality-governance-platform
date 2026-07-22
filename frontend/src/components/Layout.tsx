@@ -43,6 +43,7 @@ import { BrandMarkTile } from './BrandMark'
 import { useState, useEffect, useCallback, lazy, Suspense, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import { notificationsApi } from '../api/client'
+import { safetyAssetsApi } from '../api/safetyAssetsClient'
 import OfflineIndicator from './OfflineIndicator'
 import KeyboardShortcutHelp from './KeyboardShortcutHelp'
 import { ThemeToggle } from './ui/ThemeToggle'
@@ -270,6 +271,7 @@ export default function Layout({ onLogout }: LayoutProps) {
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
+  const [pendingSafetyLookups, setPendingSafetyLookups] = useState(0)
   const [copilotOpen, setCopilotOpen] = useState(false)
   const navigate = useNavigate()
 
@@ -280,11 +282,28 @@ export default function Layout({ onLogout }: LayoutProps) {
       .catch(() => {})
   }, [])
 
+  const fetchPendingSafetyLookups = useCallback(() => {
+    if (!(canManageUsers && adminUserManagementEnabled)) {
+      setPendingSafetyLookups(0)
+      return
+    }
+    safetyAssetsApi
+      .listPendingSafetyLookups()
+      .then((res) => setPendingSafetyLookups(res.data?.total ?? res.data?.items?.length ?? 0))
+      .catch(() => {
+        /* fail closed — do not invent a badge count */
+      })
+  }, [canManageUsers, adminUserManagementEnabled])
+
   useEffect(() => {
     fetchUnreadCount()
-    const handle = setInterval(fetchUnreadCount, 60_000)
+    fetchPendingSafetyLookups()
+    const handle = setInterval(() => {
+      fetchUnreadCount()
+      fetchPendingSafetyLookups()
+    }, 60_000)
     return () => clearInterval(handle)
-  }, [fetchUnreadCount])
+  }, [fetchUnreadCount, fetchPendingSafetyLookups])
 
   // Keyboard shortcut for global search (Cmd+K or Ctrl+K)
   useEffect(() => {
@@ -466,6 +485,15 @@ export default function Layout({ onLogout }: LayoutProps) {
                           )}
                         />
                         <span className="min-w-0 flex-1 leading-snug">{hub.title}</span>
+                        {hub.id === 'admin' && pendingSafetyLookups > 0 ? (
+                          <span
+                            className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground"
+                            data-testid="nav-admin-pending-lookups-badge"
+                            aria-label={`${pendingSafetyLookups} Safety lookups awaiting approval`}
+                          >
+                            {pendingSafetyLookups > 99 ? '99+' : pendingSafetyLookups}
+                          </span>
+                        ) : null}
                         <ChevronDown
                           className={cn(
                             'w-4 h-4 shrink-0 transition-transform',
@@ -505,6 +533,15 @@ export default function Layout({ onLogout }: LayoutProps) {
                                   )}
                                 />
                                 <span className="min-w-0 flex-1 leading-snug">{item.label}</span>
+                                {item.path === '/admin/lookups' && pendingSafetyLookups > 0 ? (
+                                  <span
+                                    className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-destructive-foreground"
+                                    data-testid="nav-lookups-pending-badge"
+                                    aria-label={`${pendingSafetyLookups} pending`}
+                                  >
+                                    {pendingSafetyLookups > 99 ? '99+' : pendingSafetyLookups}
+                                  </span>
+                                ) : null}
                                 {itemActive && (
                                   <div className="ml-auto w-1.5 h-1.5 shrink-0 rounded-full bg-primary" />
                                 )}

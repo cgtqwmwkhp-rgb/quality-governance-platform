@@ -300,7 +300,15 @@ export default function SafetyAssetRegister() {
   const allSimilarConfirmed = similarProposals.every(
     (p) => Boolean(cesConfirmations[`${p.kind}:${p.name}`]),
   )
-  const canCommitCes = Boolean(cesReport?.ok && allSimilarConfirmed && !cesBusy)
+  // Commit valid rows even when some rows failed; similar-lookup confirmations still required.
+  const canCommitCes = Boolean(
+    cesReport &&
+      !cesBusy &&
+      allSimilarConfirmed &&
+      (typeof cesReport.can_commit === 'boolean'
+        ? cesReport.can_commit
+        : cesReport.valid_rows > 0 && !cesReport.requires_confirmation),
+  )
 
   const dryRunCesImport = async () => {
     if (!cesFile) return
@@ -347,10 +355,12 @@ export default function SafetyAssetRegister() {
       setCesReport(response.data.report)
       const pendingTypes = response.data.provisional_type_ids?.length || 0
       const pendingLocs = response.data.provisional_location_ids?.length || 0
+      const skipped = response.data.report?.skipped_error_rows || response.data.report?.error_rows || 0
       toast.success(
         `CES import complete: ${response.data.created_count} created, ${response.data.updated_count} updated.` +
+          (skipped ? ` ${skipped} error row(s) skipped.` : '') +
           (pendingTypes + pendingLocs
-            ? ` ${pendingTypes + pendingLocs} lookup(s) awaiting approval.`
+            ? ` ${pendingTypes + pendingLocs} Safety lookup(s) awaiting approval in Admin → Lookups.`
             : ''),
       )
       void loadBoard()
@@ -535,15 +545,29 @@ export default function SafetyAssetRegister() {
                 <p>
                   {cesReport.valid_rows} valid, {cesReport.error_rows} error rows, {cesReport.creates}{' '}
                   creates, {cesReport.updates} updates
-                  {newProposals.length ? `, ${newProposals.length} new lookups (pending approval)` : ''}
+                  {newProposals.length
+                    ? `, ${newProposals.length} new lookups will be queued for approval on commit`
+                    : ''}
                   {similarProposals.length
                     ? `, ${similarProposals.length} similar lookups need confirmation`
                     : ''}
                   .
                 </p>
+                {cesReport.error_rows > 0 && canCommitCes ? (
+                  <p className="text-xs text-warning-foreground" data-testid="ces-import-skip-errors">
+                    Commit will import {cesReport.valid_rows} valid row(s) and skip{' '}
+                    {cesReport.error_rows} error row(s). Fix skipped rows and re-import later if needed.
+                  </p>
+                ) : null}
+                {cesReport.error_rows > 0 && !canCommitCes && !similarProposals.length ? (
+                  <p className="text-xs text-destructive" data-testid="ces-import-blocked">
+                    Commit is blocked until there is at least one valid row (or similar lookups are
+                    confirmed).
+                  </p>
+                ) : null}
                 {newProposals.length ? (
                   <div data-testid="ces-import-new-lookups">
-                    <p className="font-medium">Will create pending lookups</p>
+                    <p className="font-medium">Will create pending Safety lookups on commit</p>
                     <ul className="mt-1 list-disc pl-5 text-muted-foreground">
                       {newProposals.slice(0, 12).map((p) => (
                         <li key={`${p.kind}:${p.name}`}>
@@ -555,11 +579,11 @@ export default function SafetyAssetRegister() {
                       ) : null}
                     </ul>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      After commit, approve in{' '}
+                      New equipment types and site locations appear under{' '}
                       <Link className="underline" to="/admin/lookups?pending=safety">
-                        Admin → Lookup Tables
-                      </Link>
-                      .
+                        Admin → Lookups → Safety Asset Types &amp; Site Locations
+                      </Link>{' '}
+                      (not the form Tools/Locations cards below).
                     </p>
                   </div>
                 ) : null}
@@ -610,14 +634,23 @@ export default function SafetyAssetRegister() {
                   </div>
                 ) : null}
                 {(cesReport.errors?.length ?? 0) > 0 ? (
-                  <p className="text-destructive">
-                    {cesReport.errors
-                      .slice(0, 5)
-                      .map((issue) =>
-                        issue.row > 0 ? `Row ${issue.row}: ${issue.code}` : issue.message,
-                      )
-                      .join(' · ')}
-                  </p>
+                  <div className="space-y-1 text-destructive" data-testid="ces-import-errors">
+                    <p className="font-medium">
+                      {cesReport.error_rows} error row(s)
+                      {canCommitCes ? ' (will be skipped on commit)' : ''}:
+                    </p>
+                    <ul className="list-disc pl-5 text-xs">
+                      {cesReport.errors.slice(0, 25).map((issue, idx) => (
+                        <li key={`${issue.row}-${issue.code}-${idx}`}>
+                          {issue.row > 0 ? `Row ${issue.row}: ${issue.code}` : issue.message}
+                          {issue.message && issue.row > 0 ? ` — ${issue.message}` : ''}
+                        </li>
+                      ))}
+                      {cesReport.errors.length > 25 ? (
+                        <li>…and {cesReport.errors.length - 25} more</li>
+                      ) : null}
+                    </ul>
+                  </div>
                 ) : null}
               </div>
             ) : null}

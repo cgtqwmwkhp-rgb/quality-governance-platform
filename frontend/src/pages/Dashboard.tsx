@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
-  ArrowRight,
   Bell,
   BarChart3,
   ClipboardCheck,
@@ -11,7 +10,7 @@ import {
   Search,
   Shield,
 } from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
+import { Card } from '../components/ui/Card'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -19,6 +18,7 @@ import { HighlightRail } from './dashboard/HighlightRail'
 import { MyDaySection } from './dashboard/MyDaySection'
 import { PulseTrendsStrip } from './dashboard/PulseTrendsStrip'
 import { OrgCommandStrip } from './dashboard/OrgCommandStrip'
+import { RecentCasesPanel } from './dashboard/RecentCasesPanel'
 import { useDashboardData } from './dashboard/useDashboardData'
 import {
   personaOrgStripIsCompact,
@@ -114,96 +114,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Recent incidents (org personas only) */}
-      {showOrg && org.recentIncidents.status === 'ok' && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Recent Incidents</CardTitle>
-            <Button variant="link" size="sm" asChild>
-              <Link to="/incidents">
-                View All <ArrowRight className="w-4 h-4 ml-1" />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                      Reference
-                    </th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                      Title
-                    </th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                      Severity
-                    </th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                      Status
-                    </th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                      Date
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {org.recentIncidents.value.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="text-center py-8 text-muted-foreground">
-                        No incidents found
-                      </td>
-                    </tr>
-                  ) : (
-                    org.recentIncidents.value.map((incident) => (
-                      <tr
-                        key={incident.id}
-                        className="border-b border-border/50 hover:bg-surface transition-colors"
-                      >
-                        <td className="py-3 px-4 text-sm text-primary font-mono">
-                          {incident.reference_number}
-                        </td>
-                        <td className="py-3 px-4 text-sm text-foreground">{incident.title}</td>
-                        <td className="py-3 px-4">
-                          <Badge
-                            variant={
-                              incident.severity === 'critical'
-                                ? 'critical'
-                                : incident.severity === 'high'
-                                  ? 'high'
-                                  : incident.severity === 'medium'
-                                    ? 'medium'
-                                    : 'low'
-                            }
-                          >
-                            {incident.severity}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge
-                            variant={
-                              incident.status === 'closed'
-                                ? 'resolved'
-                                : incident.status === 'under_investigation'
-                                  ? 'in-progress'
-                                  : 'submitted'
-                            }
-                          >
-                            {incident.status.replace('_', ' ')}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">
-                          {new Date(incident.created_at).toLocaleDateString()}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Recent cases — Incidents / Near misses / Complaints / RTAs (org personas) */}
+      {showOrg && <RecentCasesPanel data={org.recentCases} />}
 
       {/* Persona-aware quick actions */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
