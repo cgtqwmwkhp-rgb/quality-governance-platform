@@ -13,6 +13,15 @@ UK_VEHICLE_REG_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# CES Location remainders often repeat the company brand after the ';' split
+# ("Plantexpand Ltd ; Plantexpand Ltd Wickford"). Strip brand so site lookups
+# store "Wickford" / "Workshop Hampton", never "Plantexpand …".
+_BRAND_PREFIX_RE = re.compile(
+    r"^(?:plantexpand(?:\s+limited|\s+ltd)?)\b[\s,.-]*",
+    re.IGNORECASE,
+)
+_LEADING_LTD_RE = re.compile(r"^ltd\b[\s,.-]*", re.IGNORECASE)
+
 CES_STATUS_MAP = {
     "fail": AssetStatus.QUARANTINED.value,
     "removed from service": AssetStatus.DECOMMISSIONED.value,
@@ -52,6 +61,26 @@ def normalise_vehicle_reg(value: str) -> str | None:
     if not match:
         return None
     return re.sub(r"\s+", "", match.group(0)).upper()
+
+
+def strip_company_brand_prefix(text: str | None, company: str | None = None) -> str:
+    """Remove leading Plantexpand / company brand tokens from a CES site label."""
+    if not text:
+        return ""
+    result = re.sub(r"\s+", " ", str(text)).strip(" ,-")
+    if company:
+        company_norm = re.sub(r"\s+", " ", company).strip()
+        if company_norm and result.lower().startswith(company_norm.lower()):
+            result = result[len(company_norm) :].strip(" ,-")
+    # Repeat for remainders like "Plantexpand Ltd Wickford" or "Plantexpand Workshop".
+    while True:
+        match = _BRAND_PREFIX_RE.match(result)
+        if not match:
+            break
+        result = result[match.end() :].strip(" ,-")
+    # After stripping "Plantexpand Ltd", a bare leading "Ltd" can remain.
+    result = _LEADING_LTD_RE.sub("", result).strip(" ,-")
+    return result
 
 
 def split_location(value: Any) -> dict[str, str | None]:
@@ -100,10 +129,12 @@ def split_location(value: Any) -> dict[str, str | None]:
             assignment_text = without_vehicle
     elif vehicle_reg:
         assignment_text = without_vehicle
+
+    cleaned_assignment = strip_company_brand_prefix(assignment_text, company)
     return {
         "location_raw": raw,
         "company": company,
-        "assignment_text": assignment_text or None,
+        "assignment_text": cleaned_assignment or None,
         "vehicle_reg": vehicle_reg,
         "engineer_name": engineer_name,
     }
