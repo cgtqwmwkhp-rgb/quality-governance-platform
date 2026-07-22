@@ -5,10 +5,66 @@ import type {
   QuestionType,
   ScoringMethod,
   QuestionStandardLink,
+  ConditionalLogicRule,
+  QuestionCriticality,
+  SectionApplicabilityRules,
 } from './types'
-import type { AuditQuestionCreate, AuditQuestionUpdate, EvidenceRequirement } from '../../api/client'
+import type {
+  AuditQuestionCreate,
+  AuditQuestionUpdate,
+  AuditSectionCreate,
+  EvidenceRequirement,
+} from '../../api/client'
 import { generateId, createNewSection, SECTION_COLORS } from './types'
 import { fromApiQuestionType, toApiQuestionType } from './questionTypeRegistry'
+
+const VALID_CRITICALITIES: QuestionCriticality[] = ['essential', 'required', 'good_to_have']
+
+function mapCriticalityFromApi(value: unknown): QuestionCriticality | undefined {
+  return VALID_CRITICALITIES.includes(value as QuestionCriticality)
+    ? (value as QuestionCriticality)
+    : undefined
+}
+
+function mapApplicabilityRulesFromApi(
+  raw: unknown,
+): SectionApplicabilityRules | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const rules = raw as { assessment_modes?: string[] | null; asset_type_ids?: number[] | null }
+  if (!rules.assessment_modes && !rules.asset_type_ids) return undefined
+  return {
+    assessmentModes: rules.assessment_modes ?? null,
+    assetTypeIds: rules.asset_type_ids ?? null,
+  }
+}
+
+/**
+ * Remap `conditional_logic[].source_question_id` from builder client ids
+ * (generated string ids used while editing an unsaved question) to the
+ * persisted numeric DB ids, using the same `questionIdMap` populated by the
+ * create/update save loop. Rules already carrying a numeric/mapped id (e.g.
+ * loaded from the API) pass through unchanged.
+ */
+export function remapConditionalLogicSourceIds(
+  rules: ConditionalLogicRule[] | null | undefined,
+  questionIdMap: Record<string, number>,
+): ConditionalLogicRule[] | null | undefined {
+  if (!rules || rules.length === 0) return rules
+  return rules.map((rule) => {
+    const backendId = questionIdMap[String(rule.source_question_id)]
+    return backendId !== undefined ? { ...rule, source_question_id: backendId } : rule
+  })
+}
+
+export function buildApplicabilityRulesPayload(
+  rules: SectionApplicabilityRules | null | undefined,
+): AuditSectionCreate['applicability_rules'] {
+  if (!rules) return null
+  const assessmentModes = rules.assessmentModes && rules.assessmentModes.length > 0 ? rules.assessmentModes : null
+  const assetTypeIds = rules.assetTypeIds && rules.assetTypeIds.length > 0 ? rules.assetTypeIds : null
+  if (!assessmentModes && !assetTypeIds) return null
+  return { assessment_modes: assessmentModes, asset_type_ids: assetTypeIds }
+}
 
 /** Backend question types executable in AuditExecution (mirrors PR-A publish gate). */
 export const EXECUTABLE_QUESTION_TYPES = [
@@ -89,6 +145,8 @@ type BackendQuestion = {
   regulatory_reference?: string | null
   assessor_guidance?: Record<string, unknown> | null
   assessor_guidance_json?: Record<string, unknown> | null
+  criticality?: string | null
+  conditional_logic?: ConditionalLogicRule[] | null
 }
 
 function mapBackendQuestionType(q: BackendQuestion): QuestionType {
@@ -192,6 +250,8 @@ function mapApiQuestion(q: BackendQuestion, questionIdMap: Record<string, number
     positiveAnswer: q.positive_answer || undefined,
     isoClause: q.regulatory_reference || undefined,
     standardLinks,
+    criticality: mapCriticalityFromApi(q.criticality),
+    conditionalLogicRules: q.conditional_logic ?? undefined,
   }
 }
 
@@ -212,6 +272,7 @@ export function mapApiToTemplate(
       weight: s.weight,
       order: s.sort_order,
       color: SECTION_COLORS[idx % SECTION_COLORS.length],
+      applicabilityRules: mapApplicabilityRulesFromApi(s.applicability_rules ?? s.applicability_rules_json),
     }
   })
 
@@ -297,7 +358,23 @@ export function buildQuestionPayload(
     failure_triggers_action: q.failureTriggersAction,
     risk_category: q.riskLevel,
     positive_answer: q.positiveAnswer || undefined,
+    criticality: q.criticality,
+    conditional_logic: q.conditionalLogicRules?.length ? q.conditionalLogicRules : null,
   }
   if (sectionId !== undefined) return { ...base, section_id: sectionId }
   return base
+}
+
+/** Build the section create/update payload, including composition rules. */
+export function buildSectionPayload(
+  section: Pick<Section, 'title' | 'description' | 'weight' | 'applicabilityRules'>,
+  sortOrder: number,
+): AuditSectionCreate {
+  return {
+    title: section.title,
+    description: section.description,
+    sort_order: sortOrder,
+    weight: section.weight,
+    applicability_rules: buildApplicabilityRulesPayload(section.applicabilityRules),
+  }
 }

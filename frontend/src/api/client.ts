@@ -895,8 +895,11 @@ export type {
   AuditTemplateDetail,
   AuditSectionCreate,
   AuditSectionUpdate,
+  SectionApplicabilityRules,
   QuestionOptionBase,
   EvidenceRequirement,
+  ConditionalLogicRule,
+  QuestionCriticality,
   AuditQuestionCreate,
   AuditQuestionUpdate,
   AuditSection,
@@ -904,8 +907,15 @@ export type {
   AuditResponse,
   AuditResponseCreate,
   AuditResponseUpdate,
+  ResponseApplicability,
   AuditFindingCreate,
   AuditFindingUpdate,
+  AuditAnalyticsSummary,
+  AuditAnalyticsGroupBy,
+  AuditAnalyticsDimensionItem,
+  AuditAnalyticsDimensionsResponse,
+  CriticalQueueItem,
+  CriticalQueueResponse,
 } from './auditsClient'
 
 // ============ Workforce Development Types (extracted: workforceClient.ts) ============

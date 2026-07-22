@@ -47,6 +47,7 @@ const KnowledgeExceptions = lazy(() => import('./pages/KnowledgeExceptions'))
 const AuditTemplateLibrary = lazy(() => import('./pages/AuditTemplateLibrary'))
 const AuditTemplateBuilder = lazy(() => import('./pages/AuditTemplateBuilder'))
 const AuditExecution = lazy(() => import('./pages/AuditExecution'))
+const AuditAnalytics = lazy(() => import('./pages/AuditAnalytics'))
 const AuditImportReview = lazy(() => import('./pages/AuditImportReview'))
 const Portal = lazy(() => import('./pages/Portal'))
 const PortalLogin = lazy(() => import('./pages/PortalLogin'))
@@ -323,6 +324,7 @@ function App() {
                 <Route path="audits/:auditId/execute" element={<AuditExecution />} />
                 <Route path="audits/:auditId/import-review" element={<AuditImportReview />} />
                 <Route path="audits/:auditId/mobile" element={<AuditExecution />} />
+                <Route path="audits/analytics" element={<AuditAnalytics />} />
                 <Route path="investigations" element={<Investigations />} />
                 <Route path="investigations/templates/builder" element={<InvestigationTemplateBuilder />} />
                 <Route path="investigations/templates/builder/new" element={<InvestigationTemplateBuilder />} />

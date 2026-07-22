@@ -263,4 +263,119 @@ describe('AuditExecution', () => {
       { timeout: 2500 },
     )
   })
+
+  describe('conditional-logic navigation visibility', () => {
+    const conditionalRun = {
+      id: 41,
+      reference_number: 'AUD-00041',
+      template_id: 11,
+      template_version: 1,
+      title: 'Warehouse inspection',
+      location: 'London',
+      status: 'in_progress',
+      responses: [],
+      findings: [],
+      completion_percentage: 0,
+      created_at: '2026-03-24T10:05:00Z',
+    }
+    const conditionalTemplate = {
+      id: 11,
+      name: 'Warehouse inspection',
+      audit_type: 'internal',
+      version: 1,
+      scoring_method: 'percentage',
+      allow_offline: false,
+      require_gps: false,
+      require_signature: false,
+      require_approval: false,
+      auto_create_findings: true,
+      is_active: true,
+      is_published: true,
+      sections: [
+        {
+          id: 5,
+          title: 'Section A',
+          is_active: true,
+          sort_order: 1,
+          questions: [
+            {
+              id: 1,
+              question_text: 'Any issues?',
+              question_type: 'yes_no',
+              is_required: true,
+              is_active: true,
+              sort_order: 1,
+              weight: 1,
+              failure_triggers_action: false,
+            },
+          ],
+        },
+        {
+          id: 6,
+          title: 'Section B',
+          is_active: true,
+          sort_order: 2,
+          questions: [
+            {
+              id: 2,
+              question_text: 'Describe the issue',
+              question_type: 'text',
+              is_required: false,
+              is_active: true,
+              sort_order: 1,
+              weight: 1,
+              failure_triggers_action: false,
+              conditional_logic: [{ source_question_id: 1, operator: 'equals', value: 'never-matches', action: 'show' }],
+            },
+            {
+              id: 3,
+              question_text: 'Any other comments?',
+              question_type: 'text',
+              is_required: false,
+              is_active: true,
+              sort_order: 2,
+              weight: 1,
+              failure_triggers_action: false,
+            },
+          ],
+        },
+      ],
+    }
+
+    it('goNext skips a question hidden by conditional logic instead of landing on it', async () => {
+      mockGetRunDetail.mockResolvedValue({ data: conditionalRun })
+      mockGetTemplate.mockResolvedValue({ data: conditionalTemplate })
+
+      renderPage()
+
+      fireEvent.click(await screen.findByRole('button', { name: 'YES' }))
+
+      // Auto-advance (600ms) fires goNext, which must skip "Describe the
+      // issue" (always hidden — its show-rule can never match) and land on
+      // "Any other comments?" instead.
+      expect(await screen.findByText('Any other comments?', {}, { timeout: 2000 })).toBeInTheDocument()
+      expect(screen.queryByText('Describe the issue')).not.toBeInTheDocument()
+    })
+
+    it('snaps the current question forward when navigation lands on a hidden question', async () => {
+      mockGetRunDetail.mockResolvedValue({ data: conditionalRun })
+      mockGetTemplate.mockResolvedValue({ data: conditionalTemplate })
+
+      renderPage()
+
+      // Land on Section A / Q1 first.
+      await screen.findByText('Any issues?')
+
+      // Section-nav always jumps to raw index 0 of the target section
+      // ("Describe the issue"), which is permanently hidden by conditional
+      // logic — the snap-effect must move forward to the next visible
+      // question instead of ever rendering the hidden one.
+      const sectionBButton = screen.getByText('Section B').closest('button')
+      expect(sectionBButton).toBeTruthy()
+      fireEvent.click(sectionBButton!)
+
+      expect(await screen.findByText('Any other comments?')).toBeInTheDocument()
+      expect(screen.queryByText('Describe the issue')).not.toBeInTheDocument()
+    })
+  })
 })

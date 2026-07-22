@@ -28,9 +28,29 @@ import {
   Building2,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import type { Question, QuestionType, QuestionOption } from './types'
+import type { Question, QuestionType, QuestionOption, QuestionCriticality, ConditionalLogicRule } from './types'
 import { generateId } from './types'
 import { standardsHrefForIsoRef } from '../builderMapAssistApi'
+
+const CRITICALITY_OPTIONS: { value: QuestionCriticality; label: string; description: string }[] = [
+  {
+    value: 'essential',
+    label: 'Essential',
+    description: 'Blocks completion; a finding here fails the whole run',
+  },
+  { value: 'required', label: 'Required', description: 'Must be answered to complete the run' },
+  { value: 'good_to_have', label: 'Nice to have', description: 'Never blocks completion' },
+]
+
+const CONDITIONAL_OPERATORS: { value: ConditionalLogicRule['operator']; label: string }[] = [
+  { value: 'equals', label: 'equals' },
+  { value: 'not_equals', label: 'does not equal' },
+  { value: 'contains', label: 'contains' },
+  { value: 'greater_than', label: 'is greater than' },
+  { value: 'less_than', label: 'is less than' },
+  { value: 'is_empty', label: 'is empty' },
+  { value: 'is_not_empty', label: 'is not empty' },
+]
 
 export const QUESTION_TYPES: {
   type: QuestionType
@@ -87,6 +107,8 @@ export interface QuestionEditorProps {
   onDelete: (questionId: string) => void
   onDuplicate: (questionId: string) => void
   validationErrors?: string[]
+  /** All questions across the template, used to pick conditional-logic source questions. */
+  allQuestions?: Question[]
 }
 
 const CHOICE_BASED_TYPES: QuestionType[] = ['multi_choice', 'checklist']
@@ -271,6 +293,7 @@ export default function QuestionEditor({
   onDelete,
   onDuplicate,
   validationErrors = [],
+  allQuestions = [],
 }: QuestionEditorProps) {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
@@ -348,6 +371,29 @@ export default function QuestionEditor({
               />
               Required
             </label>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Criticality:</span>
+              <select
+                id={`criticality-${question.id}`}
+                value={question.criticality ?? 'good_to_have'}
+                onChange={(e) => {
+                  const criticality = e.target.value as QuestionCriticality
+                  onUpdate(question.id, {
+                    criticality,
+                    required: criticality === 'good_to_have' ? question.required : true,
+                  })
+                }}
+                title={CRITICALITY_OPTIONS.find((c) => c.value === (question.criticality ?? 'good_to_have'))?.description}
+                className="px-2 py-1.5 bg-input border border-input rounded-lg text-sm text-foreground"
+              >
+                {CRITICALITY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <label
               htmlFor={`evidence-${question.id}`}
@@ -666,6 +712,128 @@ export default function QuestionEditor({
                   rows={2}
                   className="w-full px-2 py-1 bg-input border border-input rounded text-sm text-foreground resize-none"
                 />
+              </div>
+
+              <div className="col-span-2" data-testid={`conditional-logic-${question.id}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="block text-xs text-muted-foreground">
+                    Conditional logic (show/hide based on another question&apos;s answer)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdate(question.id, {
+                        conditionalLogicRules: [
+                          ...(question.conditionalLogicRules || []),
+                          {
+                            source_question_id:
+                              allQuestions.find((q) => q.id !== question.id)?.id || '',
+                            operator: 'equals',
+                            value: '',
+                            action: 'show',
+                          },
+                        ],
+                      })
+                    }
+                    className="flex items-center gap-1 text-xs text-primary hover:text-primary"
+                    data-testid={`conditional-logic-add-${question.id}`}
+                  >
+                    <Plus className="w-3 h-3" /> Add rule
+                  </button>
+                </div>
+                {(question.conditionalLogicRules || []).length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">
+                    Always visible — no rules configured.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {(question.conditionalLogicRules || []).map((rule, ruleIdx) => {
+                      const needsValue = rule.operator !== 'is_empty' && rule.operator !== 'is_not_empty'
+                      return (
+                        <div
+                          key={ruleIdx}
+                          className="flex flex-wrap items-center gap-1.5 p-2 bg-input rounded border border-input"
+                          data-testid={`conditional-logic-rule-${question.id}-${ruleIdx}`}
+                        >
+                          <select
+                            value={rule.action}
+                            onChange={(e) => {
+                              const rules = [...(question.conditionalLogicRules || [])]
+                              rules[ruleIdx] = { ...rule, action: e.target.value as 'show' | 'hide' }
+                              onUpdate(question.id, { conditionalLogicRules: rules })
+                            }}
+                            className="px-1.5 py-1 bg-secondary border border-border rounded text-xs text-foreground"
+                          >
+                            <option value="show">Show</option>
+                            <option value="hide">Hide</option>
+                          </select>
+                          <span className="text-xs text-muted-foreground">this question if</span>
+                          <select
+                            value={String(rule.source_question_id)}
+                            onChange={(e) => {
+                              const rules = [...(question.conditionalLogicRules || [])]
+                              rules[ruleIdx] = { ...rule, source_question_id: e.target.value }
+                              onUpdate(question.id, { conditionalLogicRules: rules })
+                            }}
+                            className="px-1.5 py-1 bg-secondary border border-border rounded text-xs text-foreground max-w-[10rem]"
+                          >
+                            {allQuestions
+                              .filter((q) => q.id !== question.id)
+                              .map((q) => (
+                                <option key={q.id} value={q.id}>
+                                  {q.text || `Question ${q.id}`}
+                                </option>
+                              ))}
+                          </select>
+                          <select
+                            value={rule.operator}
+                            onChange={(e) => {
+                              const rules = [...(question.conditionalLogicRules || [])]
+                              rules[ruleIdx] = {
+                                ...rule,
+                                operator: e.target.value as ConditionalLogicRule['operator'],
+                              }
+                              onUpdate(question.id, { conditionalLogicRules: rules })
+                            }}
+                            className="px-1.5 py-1 bg-secondary border border-border rounded text-xs text-foreground"
+                          >
+                            {CONDITIONAL_OPERATORS.map((op) => (
+                              <option key={op.value} value={op.value}>
+                                {op.label}
+                              </option>
+                            ))}
+                          </select>
+                          {needsValue && (
+                            <input
+                              type="text"
+                              value={rule.value == null ? '' : String(rule.value)}
+                              onChange={(e) => {
+                                const rules = [...(question.conditionalLogicRules || [])]
+                                rules[ruleIdx] = { ...rule, value: e.target.value }
+                                onUpdate(question.id, { conditionalLogicRules: rules })
+                              }}
+                              placeholder="value"
+                              className="w-24 px-1.5 py-1 bg-secondary border border-border rounded text-xs text-foreground"
+                            />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const rules = (question.conditionalLogicRules || []).filter(
+                                (_, idx) => idx !== ruleIdx,
+                              )
+                              onUpdate(question.id, { conditionalLogicRules: rules })
+                            }}
+                            className="ml-auto p-1 text-muted-foreground hover:text-destructive"
+                            data-testid={`conditional-logic-remove-${question.id}-${ruleIdx}`}
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}

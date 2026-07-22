@@ -26,12 +26,40 @@ export interface QuestionOption {
   isCorrect?: boolean
 }
 
+/** @deprecated Superseded by ConditionalLogicRule[] (array, show/hide semantics). */
 export interface ConditionalLogic {
   enabled: boolean
   showWhen: 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than'
   dependsOnQuestionId: string
   value: string
 }
+
+/** Mirrors backend `ConditionalLogicRule` (src/api/schemas/audit.py) and the
+ * evaluator in `evaluateConditionalLogic.ts` / `audit_conditional.py`. */
+export interface ConditionalLogicRule {
+  source_question_id: string | number
+  operator: 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty'
+  value?: string | number | boolean | null
+  action: 'show' | 'hide'
+}
+
+/** Criticality gates: essential questions block completion + fail the run when
+ * answered as a finding; required blocks completion; good_to_have never blocks. */
+export type QuestionCriticality = 'essential' | 'required' | 'good_to_have'
+
+/** Section-level composition/branching rule. Null/empty dimension = unrestricted. */
+export interface SectionApplicabilityRules {
+  assessmentModes?: string[] | null
+  assetTypeIds?: number[] | null
+}
+
+/** Known assessment modes offered in the builder/execution header. Backend accepts any
+ * string (free text up to 50 chars) but these are the modes the UI curates. */
+export const ASSESSMENT_MODES: { value: string; label: string }[] = [
+  { value: 'full', label: 'Full Assessment' },
+  { value: 'spot_check', label: 'Spot Check' },
+  { value: 'post_incident', label: 'Post-Incident' },
+]
 
 export interface QuestionStandardLink {
   id: string
@@ -53,7 +81,10 @@ export interface Question {
   required: boolean
   weight: number
   options?: QuestionOption[]
+  /** @deprecated use conditionalLogicRules */
   conditionalLogic?: ConditionalLogic
+  /** Show/hide rule array — evaluated with AND semantics (all must pass to show). */
+  conditionalLogicRules?: ConditionalLogicRule[]
   evidenceRequired: boolean
   evidenceType?: 'photo' | 'document' | 'signature' | 'any'
   isoClause?: string
@@ -64,6 +95,8 @@ export interface Question {
   failureTriggersAction: boolean
   tags?: string[]
   positiveAnswer?: 'yes' | 'no'
+  /** Essential/required/good_to_have — drives completion gates + the essential-fail scoring override. */
+  criticality?: QuestionCriticality
 }
 
 export interface Section {
@@ -76,6 +109,8 @@ export interface Section {
   isExpanded: boolean
   weight: number
   order: number
+  /** Branching/composition rule: which assessment modes / asset types this section applies to. */
+  applicabilityRules?: SectionApplicabilityRules | null
 }
 
 export interface AuditTemplate {

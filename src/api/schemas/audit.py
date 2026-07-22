@@ -97,7 +97,7 @@ class AuditQuestionBase(BaseModel):
 
     # Workforce Development fields
     guidance: Optional[str] = None
-    criticality: Optional[str] = Field(None, pattern="^(essential|good_to_have)$")
+    criticality: Optional[str] = Field(None, pattern="^(essential|required|good_to_have)$")
     regulatory_reference: Optional[str] = Field(None, max_length=200)
     guidance_notes: Optional[str] = None
     sign_off_required: bool = False
@@ -141,7 +141,7 @@ class AuditQuestionUpdate(BaseModel):
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
     guidance: Optional[str] = None
-    criticality: Optional[str] = None
+    criticality: Optional[str] = Field(None, pattern="^(essential|required|good_to_have)$")
     regulatory_reference: Optional[str] = None
     guidance_notes: Optional[str] = None
     sign_off_required: Optional[bool] = None
@@ -208,8 +208,21 @@ class AuditQuestionResponse(BaseModel):
 # ============== Audit Section Schemas ==============
 
 
+class SectionApplicabilityRules(BaseModel):
+    """Branching composition rules for a section.
+
+    ``None``/missing/empty on either field means that dimension is
+    unrestricted (the section always applies for that dimension).
+    """
+
+    assessment_modes: Optional[List[str]] = None
+    asset_type_ids: Optional[List[int]] = None
+
+
 class AuditSectionBase(BaseModel):
     """Base schema for Audit Section."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=1000)
@@ -217,6 +230,7 @@ class AuditSectionBase(BaseModel):
     weight: float = 1.0
     is_repeatable: bool = False
     max_repeats: Optional[int] = None
+    applicability_rules: Optional[SectionApplicabilityRules] = Field(None, validation_alias="applicability_rules_json")
 
 
 class AuditSectionCreate(AuditSectionBase):
@@ -228,6 +242,8 @@ class AuditSectionCreate(AuditSectionBase):
 class AuditSectionUpdate(BaseModel):
     """Schema for updating an Audit Section."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     sort_order: Optional[int] = None
@@ -235,6 +251,7 @@ class AuditSectionUpdate(BaseModel):
     is_repeatable: Optional[bool] = None
     max_repeats: Optional[int] = None
     is_active: Optional[bool] = None
+    applicability_rules: Optional[SectionApplicabilityRules] = Field(None, validation_alias="applicability_rules_json")
 
 
 class AuditSectionResponse(BaseModel):
@@ -255,6 +272,7 @@ class AuditSectionResponse(BaseModel):
     is_repeatable: bool = False
     max_repeats: Optional[int] = None
     is_active: bool = True
+    applicability_rules: Optional[Dict[str, Any]] = Field(None, validation_alias="applicability_rules_json")
     created_at: datetime
     updated_at: datetime
     questions: List[AuditQuestionResponse] = []
@@ -401,6 +419,15 @@ class ArchiveTemplateResponse(AuditTemplateResponse):
     archived_at: Optional[datetime] = None
 
 
+class TemplateAssetTypeLinkResponse(BaseModel):
+    """Response for a template ↔ asset type composition link."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    template_id: int
+    asset_type_id: int
+
+
 class PurgeExpiredTemplatesResponse(BaseModel):
     """Schema for purge expired templates response."""
 
@@ -440,6 +467,14 @@ class AuditRunBase(BaseModel):
     # GPS coordinates
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+
+    # Branching / reporting dimensions (Phase 0-1)
+    assessment_mode: Optional[str] = Field(None, max_length=50)
+    asset_id: Optional[int] = None
+    asset_type_id: Optional[int] = None
+    engineer_id: Optional[int] = None
+    location_id: Optional[int] = None
+    customer_code: Optional[str] = Field(None, max_length=100)
 
     @field_validator("source_origin")
     @classmethod
@@ -495,6 +530,14 @@ class AuditRunUpdate(BaseModel):
     source_document_asset_id: Optional[int] = None
     source_document_label: Optional[str] = Field(None, max_length=255)
 
+    # Branching / reporting dimensions (Phase 0-1)
+    assessment_mode: Optional[str] = Field(None, max_length=50)
+    asset_id: Optional[int] = None
+    asset_type_id: Optional[int] = None
+    engineer_id: Optional[int] = None
+    location_id: Optional[int] = None
+    customer_code: Optional[str] = Field(None, max_length=100)
+
     @field_validator("source_origin")
     @classmethod
     def validate_source_origin(cls, value: Optional[str]) -> Optional[str]:
@@ -535,6 +578,12 @@ class AuditRunResponse(BaseModel):
     is_external_import_intake: bool = False
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    assessment_mode: Optional[str] = None
+    asset_id: Optional[int] = None
+    asset_type_id: Optional[int] = None
+    engineer_id: Optional[int] = None
+    location_id: Optional[int] = None
+    customer_code: Optional[str] = None
     status: str
     assigned_to_id: Optional[int] = None
     started_at: Optional[datetime] = None
@@ -570,6 +619,9 @@ class AuditRunListResponse(BaseModel):
 # ============== Audit Response Schemas ==============
 
 
+_APPLICABILITY_PATTERN = "^(applicable|not_applicable_by_composition|hidden_by_logic)$"
+
+
 class AuditResponseBase(BaseModel):
     """Base schema for Audit Response (answer to a question)."""
 
@@ -583,6 +635,7 @@ class AuditResponseBase(BaseModel):
     score: Optional[float] = None
     max_score: Optional[float] = None
     notes: Optional[str] = None
+    applicability: Optional[str] = Field(None, pattern=_APPLICABILITY_PATTERN)
 
 
 class AuditResponseCreate(AuditResponseBase):
@@ -604,6 +657,7 @@ class AuditResponseUpdate(BaseModel):
     score: Optional[float] = None
     max_score: Optional[float] = None
     notes: Optional[str] = None
+    applicability: Optional[str] = Field(None, pattern=_APPLICABILITY_PATTERN)
 
 
 class AuditResponseResponse(AuditResponseBase):

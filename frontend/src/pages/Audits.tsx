@@ -996,6 +996,10 @@ export default function Audits() {
               </button>
             ))}
           </div>
+          <Button variant="outline" onClick={() => navigate('/audits/analytics')}>
+            <BarChart3 size={20} />
+            Analytics
+          </Button>
           <Button variant="outline" onClick={() => handleOpenModal('import')}>
             <FileText size={20} />
             Import External Audit

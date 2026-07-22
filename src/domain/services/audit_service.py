@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.domain.exceptions import NotFoundError, StateTransitionError, ValidationError
+from src.domain.models.asset import AssetType, TemplateAssetType
 from src.domain.models.audit import (
     AuditFinding,
     AuditQuestion,
@@ -32,6 +33,8 @@ from src.domain.models.audit import (
     AuditStatus,
     AuditTemplate,
     FindingStatus,
+    QuestionCriticality,
+    ResponseApplicability,
     TemplateVersion,
     audit_finding_risks,
 )
@@ -39,6 +42,8 @@ from src.domain.models.audit_log import AuditEvent
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.user import User
+from src.domain.services.audit_composition import section_is_applicable
+from src.domain.services.audit_conditional import is_question_visible
 from src.domain.services.audit_escalation_risk_title import (
     build_audit_escalation_risk_title,
     upgrade_generic_escalation_title,
@@ -99,6 +104,10 @@ _QUESTION_JSON_REMAPS: dict[str, str] = {
 
 _TEMPLATE_JSON_REMAPS: dict[str, str] = {
     "tags": "tags_json",
+}
+
+_SECTION_JSON_REMAPS: dict[str, str] = {
+    "applicability_rules": "applicability_rules_json",
 }
 
 _FINDING_JSON_REMAPS: dict[str, str] = {
@@ -531,27 +540,161 @@ class AuditService:
             "questions": [_question_snapshot(q) for q in (template.questions or [])],
         }
 
+    @staticmethod
+    def _response_answer_for_conditional(response: AuditResponse) -> Any:
+        """Best-effort answer extraction for conditional-logic evaluation.
+
+        Tolerant of partially-populated response objects (e.g. lightweight
+        test doubles) unlike ``_response_display_value``, which assumes every
+        ``response_*`` attribute exists.
+        """
+        value = getattr(response, "response_value", None)
+        if value not in (None, ""):
+            return value
+        text = getattr(response, "response_text", None)
+        if text not in (None, ""):
+            return text
+        number = getattr(response, "response_number", None)
+        if number is not None:
+            return number
+        boolean = getattr(response, "response_bool", None)
+        if boolean is not None:
+            return "yes" if boolean else "no"
+        return None
+
+    @staticmethod
+    def _question_criticality_value(question: AuditQuestion) -> str | None:
+        criticality = getattr(question, "criticality", None)
+        if criticality is None:
+            return None
+        return criticality.value if hasattr(criticality, "value") else criticality
+
+    @staticmethod
+    def _question_section_applicable(
+        question: AuditQuestion,
+        *,
+        section_by_id: dict[int, AuditSection],
+        assessment_mode: str | None,
+        asset_type_id: int | None,
+    ) -> bool:
+        section_id = getattr(question, "section_id", None)
+        if section_id is None:
+            return True
+        section = section_by_id.get(section_id)
+        if section is None:
+            # Section not in the supplied set — fail open (unsectioned behaviour).
+            return True
+        return section_is_applicable(
+            section,
+            assessment_mode=assessment_mode,
+            asset_type_id=asset_type_id,
+        )
+
     @classmethod
     def _missing_required_question_ids(
         cls,
         *,
         questions: list[AuditQuestion],
         responses: list[AuditResponse],
+        sections: list[AuditSection] | None = None,
+        assessment_mode: str | None = None,
+        asset_type_id: int | None = None,
     ) -> list[int]:
         response_by_question = {response.question_id: response for response in responses}
+        answers_by_question = {
+            response.question_id: cls._response_answer_for_conditional(response) for response in responses
+        }
+        section_by_id = {section.id: section for section in (sections or [])}
         missing: list[int] = []
         for question in questions:
             if not getattr(question, "is_active", True):
                 continue
-            if not getattr(question, "is_required", True):
+
+            # Composition: skip questions whose section is out of scope for this
+            # run's assessment_mode / asset_type_id.
+            if not cls._question_section_applicable(
+                question,
+                section_by_id=section_by_id,
+                assessment_mode=assessment_mode,
+                asset_type_id=asset_type_id,
+            ):
                 continue
+
             response = response_by_question.get(question.id)
+
+            # Conditional logic: skip questions explicitly marked hidden on their
+            # response, or currently evaluated as hidden given live answers.
+            if (
+                response is not None
+                and getattr(response, "applicability", None) == ResponseApplicability.HIDDEN_BY_LOGIC.value
+            ):
+                continue
+            rules = getattr(question, "conditional_logic_json", None)
+            if rules and not is_question_visible(rules, answers_by_question):
+                continue
+
+            criticality_value = cls._question_criticality_value(question)
+            is_required_effective = bool(getattr(question, "is_required", True)) or criticality_value in (
+                QuestionCriticality.ESSENTIAL.value,
+                QuestionCriticality.REQUIRED.value,
+            )
+            if not is_required_effective:
+                # good_to_have (and non-required, non-essential/required questions)
+                # never block completion.
+                continue
+
             if response is None or not AuditScoringService.response_is_answered(response):
                 missing.append(question.id)
                 continue
             if not AuditScoringService.evidence_requirements_met(question, response):
                 missing.append(question.id)
         return sorted(missing)
+
+    @classmethod
+    def _has_failed_essential_question(
+        cls,
+        questions: list[AuditQuestion],
+        responses: list[AuditResponse],
+        *,
+        sections: list[AuditSection] | None = None,
+        assessment_mode: str | None = None,
+        asset_type_id: int | None = None,
+    ) -> bool:
+        """True when an applicable essential question's response is a fail/finding.
+
+        Essential items are mandatory-pass gates: a single failed essential
+        answer must fail the run even when the overall weighted score clears
+        the template's passing threshold.
+        """
+        section_by_id = {section.id: section for section in (sections or [])}
+        response_by_question = {response.question_id: response for response in responses}
+        answers_by_question = {
+            response.question_id: cls._response_answer_for_conditional(response) for response in responses
+        }
+        for question in questions:
+            if cls._question_criticality_value(question) != QuestionCriticality.ESSENTIAL.value:
+                continue
+            if not cls._question_section_applicable(
+                question,
+                section_by_id=section_by_id,
+                assessment_mode=assessment_mode,
+                asset_type_id=asset_type_id,
+            ):
+                continue
+            response = response_by_question.get(question.id)
+            if response is None:
+                continue
+            if getattr(response, "applicability", None) == ResponseApplicability.HIDDEN_BY_LOGIC.value:
+                continue
+            # Conditional logic: a stored fail/finding on an essential question
+            # that is currently hidden by live conditional-logic rules must not
+            # force the run to fail (mirrors _missing_required_question_ids).
+            rules = getattr(question, "conditional_logic_json", None)
+            if rules and not is_question_visible(rules, answers_by_question):
+                continue
+            if cls._response_creates_finding(question, response):
+                return True
+        return False
 
     # ==================================================================
     # Template methods
@@ -1010,6 +1153,65 @@ class AuditService:
         )
 
     # ==================================================================
+    # Template ↔ asset type composition links
+    # ==================================================================
+
+    async def link_template_asset_type(
+        self,
+        template_id: int,
+        asset_type_id: int,
+        *,
+        tenant_id: int,
+    ) -> TemplateAssetType:
+        """Idempotently associate a template with an asset type (composition scoping)."""
+        await self._get_entity(AuditTemplate, template_id, tenant_id=tenant_id)
+
+        asset_type_result = await self.db.execute(
+            select(AssetType).where(
+                AssetType.id == asset_type_id,
+                or_(AssetType.tenant_id == tenant_id, AssetType.tenant_id.is_(None)),
+            )
+        )
+        if asset_type_result.scalar_one_or_none() is None:
+            raise NotFoundError(f"AssetType {asset_type_id} not found")
+
+        existing = await self.db.execute(
+            select(TemplateAssetType).where(
+                TemplateAssetType.template_id == template_id,
+                TemplateAssetType.asset_type_id == asset_type_id,
+            )
+        )
+        link = existing.scalar_one_or_none()
+        if link is not None:
+            return link
+
+        link = TemplateAssetType(template_id=template_id, asset_type_id=asset_type_id, tenant_id=tenant_id)
+        self.db.add(link)
+        await self.db.flush()
+        await self.db.refresh(link)
+        return link
+
+    async def unlink_template_asset_type(
+        self,
+        template_id: int,
+        asset_type_id: int,
+        *,
+        tenant_id: int,
+    ) -> None:
+        await self._get_entity(AuditTemplate, template_id, tenant_id=tenant_id)
+        existing = await self.db.execute(
+            select(TemplateAssetType).where(
+                TemplateAssetType.template_id == template_id,
+                TemplateAssetType.asset_type_id == asset_type_id,
+            )
+        )
+        link = existing.scalar_one_or_none()
+        if link is None:
+            raise NotFoundError("Template/asset-type link not found")
+        await self.db.delete(link)
+        await self.db.flush()
+
+    # ==================================================================
     # Section methods
     # ==================================================================
 
@@ -1022,7 +1224,8 @@ class AuditService:
     ) -> AuditSection:
         await self._get_entity(AuditTemplate, template_id, tenant_id=tenant_id)
 
-        section = AuditSection(template_id=template_id, **data)
+        section_dict = self._remap_json_fields(data, _SECTION_JSON_REMAPS)
+        section = AuditSection(template_id=template_id, **section_dict)
         self.db.add(section)
         await self.db.flush()
 
@@ -1051,7 +1254,8 @@ class AuditService:
             tenant_id=tenant_id,
         )
 
-        self._apply_dict(section, update_data)
+        handled = self._apply_json_field_updates(section, update_data, _SECTION_JSON_REMAPS)
+        self._apply_dict(section, update_data, exclude=handled)
         await self.db.flush()
 
         refreshed = await self.db.execute(
@@ -1742,9 +1946,14 @@ class AuditService:
             )
         )
         active_questions = list(question_result.scalars().all())
+        section_result = await self.db.execute(select(AuditSection).where(AuditSection.template_id == run.template_id))
+        template_sections = list(section_result.scalars().all())
         missing_question_ids = self._missing_required_question_ids(
             questions=active_questions,
             responses=list(run.responses or []),
+            sections=template_sections,
+            assessment_mode=run.assessment_mode,
+            asset_type_id=run.asset_type_id,
         )
         if missing_question_ids:
             raise ValidationError(
@@ -1790,6 +1999,18 @@ class AuditService:
 
         if template and template.passing_score is not None:
             run.passed = run.score_percentage >= template.passing_score
+
+        # Essential questions are mandatory-pass gates: a failed/finding-triggering
+        # applicable essential answer fails the run outright, regardless of the
+        # overall weighted score clearing the template's passing threshold.
+        if self._has_failed_essential_question(
+            active_questions,
+            list(run.responses or []),
+            sections=template_sections,
+            assessment_mode=run.assessment_mode,
+            asset_type_id=run.asset_type_id,
+        ):
+            run.passed = False
 
         await self._auto_generate_findings_actions_and_risks(
             run=run,

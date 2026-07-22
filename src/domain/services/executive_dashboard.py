@@ -74,6 +74,15 @@ _EMPTY_SLA_SUMMARY: Dict[str, Any] = {
     "breached": 0,
     "compliance_rate": 100.0,
 }
+_EMPTY_AUDIT_SUMMARY: Dict[str, Any] = {
+    "totals": 0,
+    "completed": 0,
+    "in_progress": 0,
+    "avg_score": None,
+    "pass_rate": None,
+    "essential_compliance_pct": None,
+    "incomplete_critical_count": 0,
+}
 _EMPTY_TRENDS: Dict[str, Any] = {
     "incidents_weekly": [],
     "complaints_weekly": [],
@@ -132,6 +141,7 @@ class ExecutiveDashboardService:
             dict(_EMPTY_COMPLIANCE_SUMMARY),
         )
         sla_summary = await self._safe_call(self._get_sla_summary(), dict(_EMPTY_SLA_SUMMARY))
+        audit_summary = await self._safe_call(self._get_audit_summary(period_days), dict(_EMPTY_AUDIT_SUMMARY))
 
         health_score = self._calculate_health_score(
             incident_summary,
@@ -161,6 +171,7 @@ class ExecutiveDashboardService:
             "kris": kri_summary,
             "compliance": compliance_summary,
             "sla_performance": sla_summary,
+            "audits": audit_summary,
             "trends": trends,
             "alerts": alerts,
         }
@@ -443,6 +454,26 @@ class ExecutiveDashboardService:
             "met": met,
             "breached": breached,
             "compliance_rate": round((met / total * 100), 1) if total > 0 else 100,
+        }
+
+    async def _get_audit_summary(self, period_days: int) -> Dict[str, Any]:
+        """Live audit reporting-pack summary (essential compliance, pass rate, etc)."""
+        if self.tenant_id is None:
+            return dict(_EMPTY_AUDIT_SUMMARY)
+
+        # Local import avoids a hard dependency for callers that only need the base
+        # dashboard (audit_analytics_service imports several audit domain models).
+        from src.domain.services.audit_analytics_service import AuditAnalyticsService
+
+        stats = await AuditAnalyticsService(self.db).get_summary(self.tenant_id, days=period_days)
+        return {
+            "totals": stats["totals"],
+            "completed": stats["completed"],
+            "in_progress": stats["in_progress"],
+            "avg_score": stats["avg_score"],
+            "pass_rate": stats["pass_rate"],
+            "essential_compliance_pct": stats["essential_compliance_pct"],
+            "incomplete_critical_count": stats["incomplete_critical_count"],
         }
 
     async def _get_trends(self, period_days: int) -> Dict[str, Any]:

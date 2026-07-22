@@ -21,10 +21,17 @@ import {
   MinusCircle,
   ClipboardCheck,
   Loader2,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { auditsApi, evidenceAssetsApi, getApiErrorMessage } from '../api/client'
 import { DownstreamWorkflowProof } from '../components/audit-import/DownstreamWorkflowProof'
 import EntitySelectAnswer, { type EntitySelectKind } from './audit-builder/EntitySelectAnswer'
+import AssessmentDimensionsPanel, {
+  type AssessmentDimensionsValue,
+} from './audit-builder/AssessmentDimensionsPanel'
+import { filterApplicableSections, type CompositionRules } from './audit-builder/evaluateComposition'
+import { isQuestionVisible, type AnswerMap } from './audit-builder/evaluateConditionalLogic'
+import type { ConditionalLogicRule } from './audit-builder/types'
 import {
   registerDraftSnapshot,
   getAuditDraft,
@@ -40,6 +47,7 @@ import {
 } from './auditExecutionPhotoEvidence'
 import {
   buildAuditResponseSavePayload,
+  type AuditResponseSavePayload,
   type SavePayloadQuestion,
   formatMissingQuestionsMessage,
   parseMissingQuestionIdsFromError,
@@ -76,6 +84,8 @@ interface AuditSection {
   color: string
   questions: AuditQuestion[]
   isComplete: boolean
+  /** Branching/composition rule inherited from the template section. */
+  applicabilityRules?: CompositionRules | null
 }
 
 interface AuditQuestion {
@@ -94,6 +104,10 @@ interface AuditQuestion {
   isoClause?: string
   positiveAnswer?: 'yes' | 'no'
   failureTriggersAction: boolean
+  /** Essential/required/good_to_have — essential findings fail the whole run. */
+  criticality?: string
+  /** Show/hide rules evaluated against live answers (Phase 2). */
+  conditionalLogicRules?: ConditionalLogicRule[] | null
 }
 
 interface AuditData {
@@ -106,6 +120,12 @@ interface AuditData {
   auditor: string
   referenceNumber?: string
   sections: AuditSection[]
+  /** Branching/reporting dimensions (Phase 0-1). */
+  assessmentMode: string | null
+  assetId: number | null
+  assetTypeId: number | null
+  locationId: number | null
+  customerCode: string | null
 }
 
 interface CompletionSummary {
@@ -711,6 +731,10 @@ export default function AuditExecution() {
   const [highlightedQuestionId, setHighlightedQuestionId] = useState<string | null>(null)
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const evidenceCaptureRef = useRef<HTMLButtonElement>(null)
+  const [reloadToken, setReloadToken] = useState(0)
+  const [showDimensionsPanel, setShowDimensionsPanel] = useState(false)
+  const [dimensionsSaving, setDimensionsSaving] = useState(false)
+  const [dimensionsError, setDimensionsError] = useState<string | null>(null)
 
   // Periodic-autosave + soft-recovery state
   // -----------------------------------------------------------------------
@@ -781,6 +805,35 @@ export default function AuditExecution() {
     }
   }, [])
 
+  // Conditional logic (Phase 2) can hide the question currently on screen once
+  // an earlier answer changes (e.g. the auditor edits a prior response). Snap
+  // forward to the next still-visible question (or back to the nearest one if
+  // we were already at the end) so the auditor never gets stuck viewing — or
+  // navigating relative to — a question that's no longer applicable.
+  useEffect(() => {
+    if (!audit) return
+    const flatPositions = audit.sections.flatMap((section, sectionIndex) =>
+      section.questions.map((_, questionIndex) => ({ sectionIndex, questionIndex })),
+    )
+    const liveAnswers: AnswerMap = Object.fromEntries(
+      Object.entries(responses).map(([questionId, resp]) => [questionId, resp.response]),
+    )
+    const isVisible = (pos: { sectionIndex: number; questionIndex: number }): boolean => {
+      const question = audit.sections[pos.sectionIndex]?.questions[pos.questionIndex]
+      return Boolean(question) && isQuestionVisible(question.conditionalLogicRules, liveAnswers)
+    }
+    const currentIdx = flatPositions.findIndex(
+      (pos) => pos.sectionIndex === currentSectionIndex && pos.questionIndex === currentQuestionIndex,
+    )
+    if (currentIdx === -1 || isVisible(flatPositions[currentIdx])) return
+    const nextVisible = flatPositions.slice(currentIdx + 1).find(isVisible)
+    const target = nextVisible ?? [...flatPositions.slice(0, currentIdx)].reverse().find(isVisible)
+    if (target) {
+      setCurrentSectionIndex(target.sectionIndex)
+      setCurrentQuestionIndex(target.questionIndex)
+    }
+  }, [audit, responses, currentSectionIndex, currentQuestionIndex])
+
   // Load audit run from API
   useEffect(() => {
     if (!runIdNum || isNaN(runIdNum)) return
@@ -816,7 +869,7 @@ export default function AuditExecution() {
           return
         }
 
-        const sections: AuditSection[] = templateData.sections
+        const allSections: AuditSection[] = templateData.sections
           .filter((s) => s.is_active)
           .sort((a, b) => a.sort_order - b.sort_order)
           .map((s, idx) => ({
@@ -824,6 +877,7 @@ export default function AuditExecution() {
             title: s.title,
             description: s.description || undefined,
             color: SECTION_COLORS[idx % SECTION_COLORS.length],
+            applicabilityRules: s.applicability_rules ?? null,
             questions: s.questions
               .filter((q) => q.is_active)
               .sort((a, b) => a.sort_order - b.sort_order)
@@ -848,9 +902,18 @@ export default function AuditExecution() {
                 isoClause: undefined,
                 positiveAnswer: q.positive_answer || undefined,
                 failureTriggersAction: q.failure_triggers_action ?? false,
+                criticality: q.criticality ?? undefined,
+                conditionalLogicRules: q.conditional_logic ?? null,
               })),
             isComplete: false,
           }))
+
+        // Composition (Phase 1): drop sections that aren't in scope for this
+        // run's assessment_mode / asset_type_id before anything else sees them.
+        const sections = filterApplicableSections(allSections, {
+          assessmentMode: runData.assessment_mode,
+          assetTypeId: runData.asset_type_id,
+        })
 
         const hasExecutableQuestions = sections.some((section) => section.questions.length > 0)
         if (!hasExecutableQuestions) {
@@ -963,6 +1026,11 @@ export default function AuditExecution() {
           auditor: '',
           referenceNumber: runData.reference_number || undefined,
           sections,
+          assessmentMode: runData.assessment_mode ?? null,
+          assetId: runData.asset_id ?? null,
+          assetTypeId: runData.asset_type_id ?? null,
+          locationId: runData.location_id ?? null,
+          customerCode: runData.customer_code ?? null,
         })
         setResponses(existingResponses)
         setResponseIdMap(idMap)
@@ -1001,7 +1069,7 @@ export default function AuditExecution() {
     return () => {
       cancelled = true
     }
-  }, [runIdNum])
+  }, [runIdNum, reloadToken])
 
   // Soft-recovery: on mount, see if we have a stashed local draft that's
   // newer than what came back from the server (e.g. user got logged out
@@ -1161,9 +1229,14 @@ export default function AuditExecution() {
         if (isEmpty && !existingId) continue
 
         const question = allQuestions.find((candidate) => candidate.id === questionId)
-        const payload = buildAuditResponseSavePayload(resp, question as SavePayloadQuestion | undefined, (q, r) =>
+        const payload: AuditResponseSavePayload & {
+          applicability?: 'applicable' | 'hidden_by_logic'
+        } = buildAuditResponseSavePayload(resp, question as SavePayloadQuestion | undefined, (q, r) =>
           scorePayloadForQuestion(q, r),
         )
+        // Persist conditional-logic applicability (Phase 2) so the backend's
+        // completion gate + analytics can skip questions the auditor never saw.
+        payload.applicability = question && !isQuestionCurrentlyVisible(question) ? 'hidden_by_logic' : 'applicable'
 
         if (existingId) {
           await auditsApi.updateResponse(existingId, payload)
@@ -1199,6 +1272,31 @@ export default function AuditExecution() {
 
   const handleSaveDraft = async () => {
     await saveAllResponses()
+  }
+
+  const handleSaveDimensions = async (next: AssessmentDimensionsValue) => {
+    if (!runIdNum) return
+    setDimensionsSaving(true)
+    setDimensionsError(null)
+    try {
+      await auditsApi.updateRun(runIdNum, {
+        assessment_mode: next.assessmentMode,
+        asset_id: next.assetId,
+        asset_type_id: next.assetTypeId,
+        location_id: next.locationId,
+        customer_code: next.customerCode,
+      })
+      setShowDimensionsPanel(false)
+      setCurrentSectionIndex(0)
+      setCurrentQuestionIndex(0)
+      // Composition depends on assessment_mode / asset_type_id, so reload the
+      // run + template to re-filter sections against the new dimensions.
+      setReloadToken((token) => token + 1)
+    } catch (err) {
+      setDimensionsError(getApiErrorMessage(err, 'Could not save assessment details.'))
+    } finally {
+      setDimensionsSaving(false)
+    }
   }
 
   const handleRestoreDraft = () => {
@@ -1352,25 +1450,50 @@ export default function AuditExecution() {
   const currentResponse = responses[currentQuestion.id]
   const allQuestions = audit.sections.flatMap((s) => s.questions)
 
+  // Conditional logic (Phase 2): evaluate visibility against live answers so
+  // hidden questions never block navigation/completion and get flagged for
+  // the backend on save.
+  const liveAnswers: AnswerMap = Object.fromEntries(
+    Object.entries(responses).map(([questionId, resp]) => [questionId, resp.response]),
+  )
+  const isQuestionCurrentlyVisible = (question: AuditQuestion) =>
+    isQuestionVisible(question.conditionalLogicRules, liveAnswers)
+  const isCurrentQuestionHidden = !isQuestionCurrentlyVisible(currentQuestion)
+
+  // Flat (section, question) positions across the whole run, used so
+  // Next/Previous walk only *visible* questions (composition + conditional
+  // logic), never raw index — a hidden question is skipped entirely rather
+  // than shown or counted.
+  type QuestionPosition = { sectionIndex: number; questionIndex: number }
+  const flatQuestionPositions: QuestionPosition[] = audit.sections.flatMap((section, sectionIndex) =>
+    section.questions.map((_, questionIndex) => ({ sectionIndex, questionIndex })),
+  )
+  const isPositionVisible = (pos: QuestionPosition): boolean =>
+    isQuestionCurrentlyVisible(audit.sections[pos.sectionIndex].questions[pos.questionIndex])
+  const currentFlatIndex = flatQuestionPositions.findIndex(
+    (pos) => pos.sectionIndex === currentSectionIndex && pos.questionIndex === currentQuestionIndex,
+  )
+
   // Auto-advance — question types that advance immediately on tap
   const AUTO_ADVANCE_TYPES = new Set(['pass_fail', 'yes_no', 'yes_no_na'])
   const isAutoAdvanceType = AUTO_ADVANCE_TYPES.has(currentQuestion.type)
 
-  // Navigation helpers
-  const isLastQuestion =
-    currentSectionIndex === audit.sections.length - 1 &&
-    currentQuestionIndex === currentSection.questions.length - 1
+  // Navigation helpers — "last" means no visible question remains after this one.
+  const isLastQuestion = !flatQuestionPositions.slice(currentFlatIndex + 1).some(isPositionVisible)
   const canAdvance =
-    (!currentQuestion.required ||
+    isCurrentQuestionHidden ||
+    ((!currentQuestion.required ||
       Boolean(currentResponse?.response) ||
       (currentQuestion.type === 'photo' && (currentResponse?.photos?.length ?? 0) > 0)) &&
-    canAdvancePastFailEvidenceGate(currentQuestion, currentResponse)
+      canAdvancePastFailEvidenceGate(currentQuestion, currentResponse))
   const failEvidenceErrorId = `fail-evidence-error-${currentQuestion.id}`
   const showEvidencePanel = shouldShowFailEvidencePanel(currentQuestion, currentResponse)
   const failEvidenceGateActive = isFailEvidenceGateActive(currentQuestion, currentResponse)
-  const globalQuestionIndex =
-    audit.sections.slice(0, currentSectionIndex).reduce((sum, s) => sum + s.questions.length, 0) +
-    currentQuestionIndex
+  // Position within *visible* questions only, so the counter matches totalQuestions below.
+  const globalQuestionIndex = Math.max(
+    0,
+    flatQuestionPositions.slice(0, currentFlatIndex + 1).filter(isPositionVisible).length - 1,
+  )
 
   const isFindingResponse = (response: QuestionResponse): boolean => {
     const question = allQuestions.find((q) => q.id === response.questionId)
@@ -1378,9 +1501,11 @@ export default function AuditExecution() {
     return isQuestionFinding(question, response.response)
   }
 
-  // Calculate progress
-  const totalQuestions = audit.sections.reduce((sum, s) => sum + s.questions.length, 0)
-  const answeredQuestions = Object.keys(responses).length
+  // Calculate progress — questions hidden by conditional logic never count
+  // toward the total, so the bar reflects what the auditor will actually see.
+  const visibleQuestions = allQuestions.filter(isQuestionCurrentlyVisible)
+  const totalQuestions = visibleQuestions.length
+  const answeredQuestions = visibleQuestions.filter((q) => Boolean(responses[q.id])).length
   const progressPercentage = totalQuestions > 0 ? (answeredQuestions / totalQuestions) * 100 : 0
 
   // Calculate score
@@ -1590,11 +1715,10 @@ export default function AuditExecution() {
       return
     }
     setFailEvidenceGateError(false)
-    if (currentQuestionIndex < currentSection.questions.length - 1) {
-      setCurrentQuestionIndex((prev) => prev + 1)
-    } else if (currentSectionIndex < audit.sections.length - 1) {
-      setCurrentSectionIndex((prev) => prev + 1)
-      setCurrentQuestionIndex(0)
+    const nextVisible = flatQuestionPositions.slice(currentFlatIndex + 1).find(isPositionVisible)
+    if (nextVisible) {
+      setCurrentSectionIndex(nextVisible.sectionIndex)
+      setCurrentQuestionIndex(nextVisible.questionIndex)
     } else {
       setShowSummary(true)
     }
@@ -1607,11 +1731,10 @@ export default function AuditExecution() {
       autoAdvanceTimerRef.current = null
       setAutoAdvancePending(false)
     }
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex((prev) => prev - 1)
-    } else if (currentSectionIndex > 0) {
-      setCurrentSectionIndex((prev) => prev - 1)
-      setCurrentQuestionIndex(audit.sections[currentSectionIndex - 1].questions.length - 1)
+    const prevVisible = [...flatQuestionPositions.slice(0, currentFlatIndex)].reverse().find(isPositionVisible)
+    if (prevVisible) {
+      setCurrentSectionIndex(prevVisible.sectionIndex)
+      setCurrentQuestionIndex(prevVisible.questionIndex)
     }
   }
 
@@ -2078,6 +2201,20 @@ export default function AuditExecution() {
                 {isPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
               </button>
 
+              {/* Assessment details */}
+              <button
+                onClick={() => setShowDimensionsPanel((open) => !open)}
+                aria-label="Assessment details"
+                aria-pressed={showDimensionsPanel}
+                className={`p-2 rounded-lg transition-colors ${
+                  showDimensionsPanel
+                    ? 'bg-primary/20 text-primary'
+                    : 'bg-secondary text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <SlidersHorizontal className="w-5 h-5" />
+              </button>
+
               {/* Save Draft */}
               <button
                 onClick={handleSaveDraft}
@@ -2112,6 +2249,22 @@ export default function AuditExecution() {
         </div>
       </header>
 
+      {showDimensionsPanel && (
+        <AssessmentDimensionsPanel
+          value={{
+            assessmentMode: audit.assessmentMode,
+            assetId: audit.assetId,
+            assetTypeId: audit.assetTypeId,
+            locationId: audit.locationId,
+            customerCode: audit.customerCode,
+          }}
+          onSave={handleSaveDimensions}
+          onClose={() => setShowDimensionsPanel(false)}
+          saving={dimensionsSaving}
+          error={dimensionsError}
+        />
+      )}
+
       {/* Error Banner */}
       {error && (
         <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-3 flex items-center justify-between">
@@ -2129,8 +2282,9 @@ export default function AuditExecution() {
       <div className="bg-card/50 border-b border-border overflow-x-auto">
         <div className="flex px-4 py-2 gap-2">
           {audit.sections.map((section, idx) => {
-            const sectionAnswered = section.questions.filter((q) => responses[q.id]).length
-            const isComplete = sectionAnswered === section.questions.length
+            const sectionVisibleQuestions = section.questions.filter(isQuestionCurrentlyVisible)
+            const sectionAnswered = sectionVisibleQuestions.filter((q) => responses[q.id]).length
+            const isComplete = sectionAnswered === sectionVisibleQuestions.length
             const isCurrent = idx === currentSectionIndex
 
             return (
@@ -2157,7 +2311,7 @@ export default function AuditExecution() {
                 )}
                 <span className="text-sm font-medium">{section.title}</span>
                 <span className="text-xs opacity-75">
-                  {sectionAnswered}/{section.questions.length}
+                  {sectionAnswered}/{sectionVisibleQuestions.length}
                 </span>
               </button>
             )
@@ -2400,7 +2554,7 @@ export default function AuditExecution() {
           {/* Compact Previous — icon only to maximise Next button width */}
           <button
             onClick={goPrev}
-            disabled={currentSectionIndex === 0 && currentQuestionIndex === 0}
+            disabled={!flatQuestionPositions.slice(0, currentFlatIndex).some(isPositionVisible)}
             aria-label="Previous question"
             className="w-12 h-12 shrink-0 flex items-center justify-center bg-secondary text-foreground rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-colors hover:bg-muted"
           >

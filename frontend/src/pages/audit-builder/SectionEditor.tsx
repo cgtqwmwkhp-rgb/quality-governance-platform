@@ -1,7 +1,18 @@
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { GripVertical, ChevronDown, ChevronRight, ListChecks, Plus, Trash2 } from 'lucide-react'
+import {
+  GripVertical,
+  ChevronDown,
+  ChevronRight,
+  ListChecks,
+  Plus,
+  Trash2,
+  GitBranch,
+} from 'lucide-react'
 import type { Section, Question } from './types'
+import { ASSESSMENT_MODES } from './types'
 import QuestionEditor from './QuestionEditor'
+import { safetyAssetsApi, type SafetyAssetType } from '../../api/safetyAssetsClient'
 
 export interface SectionEditorProps {
   section: Section
@@ -13,6 +24,126 @@ export interface SectionEditorProps {
   onDuplicateQuestion: (questionId: string) => void
   sectionValidationErrors?: string[]
   questionValidationErrors?: Record<string, string[]>
+  /** All questions across the template (for conditional-logic source pickers). */
+  allQuestions?: Question[]
+}
+
+function toggleValue<T>(list: T[] | null | undefined, value: T): T[] {
+  const current = list ?? []
+  return current.includes(value) ? current.filter((v) => v !== value) : [...current, value]
+}
+
+/** Simple multi-select applicability editor: which assessment modes / asset types a
+ * section applies to. Empty selection on a dimension means "always applicable". */
+function SectionApplicabilityEditor({
+  section,
+  onUpdate,
+}: {
+  section: Section
+  onUpdate: (updates: Partial<Section>) => void
+}) {
+  const [assetTypes, setAssetTypes] = useState<SafetyAssetType[]>([])
+  const [isOpen, setIsOpen] = useState(false)
+
+  useEffect(() => {
+    if (!isOpen || assetTypes.length > 0) return
+    safetyAssetsApi
+      .listAssetTypes({ page_size: 100, is_active: true })
+      .then(({ data }) => setAssetTypes(data.items))
+      .catch(() => setAssetTypes([]))
+  }, [isOpen, assetTypes.length])
+
+  const rules = section.applicabilityRules
+  const selectedModes = rules?.assessmentModes ?? []
+  const selectedAssetTypeIds = rules?.assetTypeIds ?? []
+  const hasRestrictions = selectedModes.length > 0 || selectedAssetTypeIds.length > 0
+
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        data-testid={`section-applicability-toggle-${section.id}`}
+      >
+        <GitBranch className="w-3 h-3" />
+        Applicability rules
+        {hasRestrictions && (
+          <span className="px-1.5 py-0.5 bg-primary/20 text-primary rounded text-[10px]">
+            Restricted
+          </span>
+        )}
+        <ChevronRight className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="mt-2 grid grid-cols-2 gap-3 p-3 bg-muted rounded-lg">
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">
+              Assessment modes (blank = all modes)
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {ASSESSMENT_MODES.map((mode) => (
+                <button
+                  key={mode.value}
+                  type="button"
+                  data-testid={`section-mode-${section.id}-${mode.value}`}
+                  onClick={() =>
+                    onUpdate({
+                      applicabilityRules: {
+                        ...section.applicabilityRules,
+                        assessmentModes: toggleValue(selectedModes, mode.value),
+                      },
+                    })
+                  }
+                  className={`px-2 py-1 rounded text-xs transition-colors ${
+                    selectedModes.includes(mode.value)
+                      ? 'bg-primary/20 text-primary border border-primary/40'
+                      : 'bg-secondary text-muted-foreground border border-border hover:bg-secondary/70'
+                  }`}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">
+              Asset types (blank = all asset types)
+            </p>
+            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+              {assetTypes.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No asset types found</p>
+              ) : (
+                assetTypes.map((assetType) => (
+                  <button
+                    key={assetType.id}
+                    type="button"
+                    data-testid={`section-asset-type-${section.id}-${assetType.id}`}
+                    onClick={() =>
+                      onUpdate({
+                        applicabilityRules: {
+                          ...section.applicabilityRules,
+                          assetTypeIds: toggleValue(selectedAssetTypeIds, assetType.id),
+                        },
+                      })
+                    }
+                    className={`px-2 py-1 rounded text-xs transition-colors ${
+                      selectedAssetTypeIds.includes(assetType.id)
+                        ? 'bg-primary/20 text-primary border border-primary/40'
+                        : 'bg-secondary text-muted-foreground border border-border hover:bg-secondary/70'
+                    }`}
+                  >
+                    {assetType.name}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function SectionEditor({
@@ -25,6 +156,7 @@ export default function SectionEditor({
   onDuplicateQuestion,
   sectionValidationErrors = [],
   questionValidationErrors = {},
+  allQuestions = [],
 }: SectionEditorProps) {
   const { t } = useTranslation()
 
@@ -94,6 +226,7 @@ export default function SectionEditor({
               </button>
             </div>
           </div>
+          <SectionApplicabilityEditor section={section} onUpdate={onUpdate} />
         </div>
       </div>
 
@@ -129,6 +262,7 @@ export default function SectionEditor({
                   onDelete={onDeleteQuestion}
                   onDuplicate={onDuplicateQuestion}
                   validationErrors={questionValidationErrors[question.id] || []}
+                  allQuestions={allQuestions}
                 />
               ))}
               <button
