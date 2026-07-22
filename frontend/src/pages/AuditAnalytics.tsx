@@ -40,6 +40,18 @@ function formatPercent(value: number | null | undefined): string {
   return value == null ? '—' : `${value.toFixed(1)}%`
 }
 
+/** Queue title uses the uncapped KPI total; list may still be capped (e.g. 200). */
+export function formatCriticalQueueHeading(
+  totalCount: number | null | undefined,
+  shownCount: number,
+): string {
+  const total = totalCount ?? shownCount
+  if (shownCount > 0 && total > shownCount) {
+    return `Critical items queue (showing ${shownCount} of ${total})`
+  }
+  return `Critical items queue (${total})`
+}
+
 /** Heatmap-style cell shading: green for healthy, amber/red as fail rate climbs. */
 function failRateClass(failRate: number): string {
   if (failRate >= 25) return 'bg-destructive/15 text-destructive'
@@ -289,7 +301,7 @@ export default function AuditAnalytics() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-warning" />
-              Critical items queue ({criticalQueue.length})
+              {formatCriticalQueueHeading(summary?.incomplete_critical_count, criticalQueue.length)}
             </CardTitle>
           </CardHeader>
           <CardContent>

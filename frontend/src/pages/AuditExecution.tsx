@@ -360,6 +360,32 @@ export function scorePayloadForQuestion(
   return { score: maxScore, max_score: maxScore }
 }
 
+/** Live on-screen score: only questions currently visible contribute. */
+export function calculateVisibleRunScore<
+  TQuestion extends SavePayloadQuestion & { id: string },
+>(
+  questions: TQuestion[],
+  responses: Record<string, { response: unknown }>,
+  isVisible: (question: TQuestion) => boolean,
+): number {
+  let totalScore = 0
+  let totalMax = 0
+
+  for (const question of questions) {
+    if (!isVisible(question)) continue
+    const response = responses[question.id]
+    if (!response) continue
+
+    const { score, max_score } = scorePayloadForQuestion(question, response)
+    if (score === null || max_score === null || max_score <= 0) continue
+
+    totalScore += score
+    totalMax += max_score
+  }
+
+  return totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0
+}
+
 export function shouldShowFailEvidencePanel(
   question: FailEvidenceQuestion,
   response: FailEvidenceResponse | undefined,
@@ -1214,8 +1240,17 @@ export default function AuditExecution() {
     }
   }
 
+  // Hoisted before any early return so autosave / dimension-reload can safely
+  // close over these without hitting a TDZ ReferenceError while `loading` is true.
+  const allQuestions = audit?.sections.flatMap((s) => s.questions) ?? []
+  const liveAnswers: AnswerMap = Object.fromEntries(
+    Object.entries(responses).map(([questionId, resp]) => [questionId, resp.response]),
+  )
+  const isQuestionCurrentlyVisible = (question: AuditQuestion) =>
+    isQuestionVisible(question.conditionalLogicRules, liveAnswers)
+
   const saveAllResponses = async (): Promise<boolean> => {
-    if (!runIdNum) return false
+    if (!runIdNum || !audit) return false
 
     setSaving(true)
     setError(null)
@@ -1279,6 +1314,11 @@ export default function AuditExecution() {
     setDimensionsSaving(true)
     setDimensionsError(null)
     try {
+      // Flush dirty answers (incl. applicability) before composition reload
+      // sets loading=true — autosave must not race a TDZ / dropped persist.
+      if (dirtyRef.current) {
+        await saveAllResponses()
+      }
       await auditsApi.updateRun(runIdNum, {
         assessment_mode: next.assessmentMode,
         asset_id: next.assetId,
@@ -1448,16 +1488,6 @@ export default function AuditExecution() {
   const currentSection = audit.sections[currentSectionIndex]
   const currentQuestion = currentSection.questions[currentQuestionIndex]
   const currentResponse = responses[currentQuestion.id]
-  const allQuestions = audit.sections.flatMap((s) => s.questions)
-
-  // Conditional logic (Phase 2): evaluate visibility against live answers so
-  // hidden questions never block navigation/completion and get flagged for
-  // the backend on save.
-  const liveAnswers: AnswerMap = Object.fromEntries(
-    Object.entries(responses).map(([questionId, resp]) => [questionId, resp.response]),
-  )
-  const isQuestionCurrentlyVisible = (question: AuditQuestion) =>
-    isQuestionVisible(question.conditionalLogicRules, liveAnswers)
   const isCurrentQuestionHidden = !isQuestionCurrentlyVisible(currentQuestion)
 
   // Flat (section, question) positions across the whole run, used so
@@ -1508,27 +1538,9 @@ export default function AuditExecution() {
   const answeredQuestions = visibleQuestions.filter((q) => Boolean(responses[q.id])).length
   const progressPercentage = totalQuestions > 0 ? (answeredQuestions / totalQuestions) * 100 : 0
 
-  // Calculate score
-  const calculateScore = () => {
-    // Match API calculate_run_score: sum(score) / sum(max_score).
-    let totalScore = 0
-    let totalMax = 0
-
-    audit.sections.forEach((section) => {
-      section.questions.forEach((question) => {
-        const response = responses[question.id]
-        if (!response) return
-
-        const { score, max_score } = scorePayloadForQuestion(question, response)
-        if (score === null || max_score === null || max_score <= 0) return
-
-        totalScore += score
-        totalMax += max_score
-      })
-    })
-
-    return totalMax > 0 ? Math.round((totalScore / totalMax) * 100) : 0
-  }
+  // Live score matches progress: hidden-by-logic questions never contribute.
+  const calculateScore = () =>
+    calculateVisibleRunScore(allQuestions, responses, isQuestionCurrentlyVisible)
 
   const findingsNeedingActions = Object.values(responses).filter((response) => {
     const question = allQuestions.find((candidate) => candidate.id === response.questionId)

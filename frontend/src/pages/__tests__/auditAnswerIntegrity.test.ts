@@ -8,7 +8,7 @@ import {
   parseMissingQuestionIdsFromError,
   responseRowIsEmpty,
 } from '../auditAnswerIntegrity'
-import { scorePayloadForQuestion } from '../AuditExecution'
+import { calculateVisibleRunScore, scorePayloadForQuestion } from '../AuditExecution'
 
 describe('auditAnswerIntegrity helpers', () => {
   it('merges evidence_asset_ids with checklist selected values', () => {
@@ -86,5 +86,21 @@ describe('auditAnswerIntegrity helpers', () => {
 
     expect(parseMissingQuestionIdsFromError(error)).toEqual([12, 15])
     expect(formatMissingQuestionsMessage(2)).toMatch(/2 required questions/)
+  })
+
+  it('live score ignores answers on hidden questions', () => {
+    const questions = [
+      { id: '1', type: 'pass_fail', maxScore: 1, positiveAnswer: 'pass' as const },
+      { id: '2', type: 'pass_fail', maxScore: 1, positiveAnswer: 'pass' as const },
+    ]
+    const responses = {
+      '1': { response: 'pass' },
+      '2': { response: 'fail' },
+    }
+    const allVisible = calculateVisibleRunScore(questions, responses, () => true)
+    expect(allVisible).toBe(50)
+
+    const hiddenFail = calculateVisibleRunScore(questions, responses, (q) => q.id !== '2')
+    expect(hiddenFail).toBe(100)
   })
 })
