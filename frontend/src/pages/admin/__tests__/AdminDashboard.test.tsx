@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
 const mockListTemplates = vi.fn()
-const mockContractsList = vi.fn()
+const mockCustomersList = vi.fn()
 const mockAuditList = vi.fn()
 const mockLibrarySummary = vi.fn()
 
@@ -16,8 +16,8 @@ vi.mock('../../../api/client', async () => {
   const actual = await vi.importActual<typeof import('../../../api/client')>('../../../api/client')
   return {
     ...actual,
-    contractsApi: {
-      list: (...args: unknown[]) => mockContractsList(...args),
+    lookupsApi: {
+      list: (...args: unknown[]) => mockCustomersList(...args),
     },
     auditTrailApi: {
       list: (...args: unknown[]) => mockAuditList(...args),
@@ -51,12 +51,12 @@ import AdminDashboard from '../AdminDashboard'
 describe('AdminDashboard soft-fail honesty', () => {
   beforeEach(() => {
     mockListTemplates.mockReset()
-    mockContractsList.mockReset()
+    mockCustomersList.mockReset()
     mockAuditList.mockReset()
     mockLibrarySummary.mockReset()
 
     mockListTemplates.mockResolvedValue({ items: [], total: 3, page: 1, page_size: 1 })
-    mockContractsList.mockResolvedValue({ items: [], total: 2 })
+    mockCustomersList.mockResolvedValue({ items: [], total: 2 })
     mockAuditList.mockResolvedValue({ data: { items: [], total: 0, page: 1, per_page: 5 } })
     mockLibrarySummary.mockResolvedValue({
       data: { statutory_documents: 4, overdue_reviews: 1, open_review_packs: 2 },
@@ -64,7 +64,7 @@ describe('AdminDashboard soft-fail honesty', () => {
   })
 
   it('renders partial dashboard when contracts API fails instead of crashing', async () => {
-    mockContractsList.mockRejectedValue(new Error('503'))
+    mockCustomersList.mockRejectedValue(new Error('503'))
 
     render(<AdminDashboard />)
 

@@ -168,7 +168,6 @@ describe('Layout', () => {
           '/admin/notifications',
           '/admin/hsec-inbox',
           '/admin/lookups',
-          '/admin/contracts',
         ],
       ],
     ] as const

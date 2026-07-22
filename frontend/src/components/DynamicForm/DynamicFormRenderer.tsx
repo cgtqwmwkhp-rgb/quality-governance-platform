@@ -295,8 +295,9 @@ function FieldRenderer({
       )
 
     case 'select':
-      // Use contract options if field name contains 'contract'
-      const selectOptions = field.name.toLowerCase().includes('contract')
+      // Use customer options for compatibility fields named either customer or contract.
+      const selectOptions =
+        field.name.toLowerCase().includes('customer') || field.name.toLowerCase().includes('contract')
         ? contractOptions?.map((c) => ({ value: c.value, label: c.label, sublabel: c.sublabel })) ||
           []
         : field.name.toLowerCase().includes('role')

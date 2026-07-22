@@ -327,7 +327,7 @@ describe('Complaints', () => {
       expect(screen.getByTestId('complaints-create-form')).toBeInTheDocument()
     })
     await waitFor(() => {
-      expect(mockContractsList).toHaveBeenCalled()
+      expect(mockLookupsList).toHaveBeenCalledWith('customers', true)
     })
 
     await fillRequiredCreateFields()
@@ -340,7 +340,7 @@ describe('Complaints', () => {
     const callArgs = mockCreate.mock.calls[0][0]
     expect(callArgs.title).toBe('New complaint')
     expect(callArgs.description).toBe('Detailed description')
-    expect(callArgs.contract_id).toBe(10)
+    expect(callArgs.contract_id).toBeNull()
     expect(callArgs.complainant_company).toBe('Acme Corp')
     expect(callArgs.source_type).toBe('manual')
     expect(mockToastSuccess).toHaveBeenCalled()
@@ -362,7 +362,7 @@ describe('Complaints', () => {
       expect(screen.getByTestId('complaints-create-form')).toBeInTheDocument()
     })
     await waitFor(() => {
-      expect(mockContractsList).toHaveBeenCalled()
+      expect(mockLookupsList).toHaveBeenCalledWith('customers', true)
     })
 
     await fillRequiredCreateFields()
@@ -488,8 +488,7 @@ describe('Complaints', () => {
     expect(mockCreate.mock.calls[0][0].complainant_company).toBe('Acme Corp')
   })
 
-  it('shows honest customer-unavailable state when customers lookup and contracts are empty', async () => {
-    mockContractsList.mockResolvedValueOnce({ items: [], total: 0 })
+  it('shows honest customer-unavailable state when customers lookup is empty', async () => {
     mockLookupsList.mockImplementation(async () => ({ items: [], total: 0 }))
 
     render(<Complaints />, { wrapper: Wrapper })

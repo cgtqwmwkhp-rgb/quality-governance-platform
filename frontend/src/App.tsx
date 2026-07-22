@@ -104,7 +104,6 @@ const NotFound = lazy(() => import('./pages/NotFound'))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const FormsList = lazy(() => import('./pages/admin/FormsList'))
 const FormBuilder = lazy(() => import('./pages/admin/FormBuilder'))
-const ContractsManagement = lazy(() => import('./pages/admin/ContractsManagement'))
 const SystemSettings = lazy(() => import('./pages/admin/SystemSettings'))
 const AdminUserManagement = lazy(() => import('./pages/admin/UserManagement'))
 const LookupTables = lazy(() => import('./pages/admin/LookupTables'))
@@ -509,11 +508,7 @@ function App() {
                 />
                 <Route
                   path="admin/contracts"
-                  element={
-                    <RequireRole allowed={['admin', 'manager']}>
-                      <ContractsManagement />
-                    </RequireRole>
-                  }
+                  element={<Navigate to="/admin/lookups?category=customers" replace />}
                 />
                 <Route
                   path="admin/settings"

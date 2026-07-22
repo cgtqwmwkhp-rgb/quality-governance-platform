@@ -3,7 +3,7 @@
  *
  * This page:
  * 1. Loads form template from API or uses fallback config
- * 2. Loads contracts and lookup options from API
+ * 2. Loads customers and lookup options from API
  * 3. Renders the form using DynamicFormRenderer
  * 4. Handles submission to the portal API
  */
@@ -18,13 +18,7 @@ import { Button } from '../components/ui/Button'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import { cn } from '../helpers/utils'
 import { API_BASE_URL } from '../config/apiBase'
-import {
-  contractsApi,
-  formTemplatesApi,
-  getApiErrorMessage,
-  lookupsApi,
-  type Contract,
-} from '../api/client'
+import { formTemplatesApi, getApiErrorMessage, lookupsApi } from '../api/client'
 import type { LookupOption } from '../api/lookupsClient'
 import type { FormTemplate } from '../services/api'
 import type { DynamicFormData } from '../components/DynamicForm'
@@ -44,8 +38,10 @@ interface PortalReportPayload {
   reporter_name?: string
   reporter_email?: string
   reporter_phone?: string
+  /** Legacy bridge for near_miss customer → NearMiss.contract only. */
   department?: string
   is_anonymous: boolean
+  reporter_submission?: Record<string, unknown>
 }
 
 interface PortalReportResponse {
@@ -93,14 +89,14 @@ const FALLBACK_TEMPLATES: Record<string, FormTemplate> = {
     steps: [
       {
         id: 1,
-        name: 'Contract Details',
-        description: 'Which contract does this relate to?',
+        name: 'Customer Details',
+        description: 'Which customer does this relate to?',
         order: 0,
         fields: [
           {
             id: 1,
             name: 'contract',
-            label: 'Select Contract',
+            label: 'Select Customer',
             field_type: 'select',
             order: 0,
             is_required: true,
@@ -316,14 +312,14 @@ const FALLBACK_TEMPLATES: Record<string, FormTemplate> = {
     steps: [
       {
         id: 1,
-        name: 'Contract Details',
-        description: 'Which contract does this relate to?',
+        name: 'Customer Details',
+        description: 'Which customer does this relate to?',
         order: 0,
         fields: [
           {
             id: 1,
             name: 'contract',
-            label: 'Select Contract',
+            label: 'Select Customer',
             field_type: 'select',
             order: 0,
             is_required: true,
@@ -435,14 +431,14 @@ const FALLBACK_TEMPLATES: Record<string, FormTemplate> = {
     steps: [
       {
         id: 1,
-        name: 'Contract Details',
-        description: 'Which contract does this relate to?',
+        name: 'Customer Details',
+        description: 'Which customer does this relate to?',
         order: 0,
         fields: [
           {
             id: 1,
             name: 'contract',
-            label: 'Select Contract',
+            label: 'Select Customer',
             field_type: 'select',
             order: 0,
             is_required: true,
@@ -575,14 +571,14 @@ const FALLBACK_TEMPLATES: Record<string, FormTemplate> = {
     steps: [
       {
         id: 1,
-        name: 'Contract Details',
-        description: 'Which contract does this relate to?',
+        name: 'Customer Details',
+        description: 'Which customer does this relate to?',
         order: 0,
         fields: [
           {
             id: 1,
             name: 'contract',
-            label: 'Select Contract',
+            label: 'Select Customer',
             field_type: 'select',
             order: 0,
             is_required: true,
@@ -746,13 +742,13 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
   }
 
   const [template, setTemplate] = useState<FormTemplate | null>(null)
-  const [contracts, setContracts] = useState<Contract[]>([])
+  const [customers, setCustomers] = useState<LookupOption[]>([])
   const [roles, setRoles] = useState<LookupOption[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [catalogWarning, setCatalogWarning] = useState<string | null>(null)
 
-  // Load template structure + live Admin Contracts / Lookups (never silent fake catalogs).
+  // Load template structure + live Admin Lookups catalogs (never silent fake catalogs).
   useEffect(() => {
     let cancelled = false
 
@@ -771,17 +767,17 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
         if (cancelled) return
         setTemplate(loadedTemplate || FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident)
 
-        const contractsResult = await Promise.allSettled([contractsApi.list(true)])
+        const customersResult = await Promise.allSettled([lookupsApi.list('customers', true)])
         if (cancelled) return
-        const contractsOutcome = contractsResult[0]
-        if (contractsOutcome.status === 'fulfilled') {
-          setContracts(contractsOutcome.value.items || [])
+        const customersOutcome = customersResult[0]
+        if (customersOutcome.status === 'fulfilled') {
+          setCustomers(customersOutcome.value.items || [])
         } else {
-          setContracts([])
+          setCustomers([])
           setError(
             getApiErrorMessage(
-              contractsOutcome.reason,
-              'Contracts unavailable — ask an admin to configure Admin → Contracts.',
+              customersOutcome.reason,
+              'Customers unavailable — ask an admin to configure Admin → Lookups → Customers.',
             ),
           )
           return
@@ -794,26 +790,18 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
         } catch {
           roleItems = []
         }
-        if (roleItems.length === 0) {
-          try {
-            const legacyRoles = await lookupsApi.list('roles', true)
-            roleItems = legacyRoles.items || []
-          } catch {
-            roleItems = []
-          }
-        }
         if (cancelled) return
         setRoles(roleItems)
 
         const warnings: string[] = []
-        if ((contractsOutcome.value.items || []).length === 0) {
+        if ((customersOutcome.value.items || []).length === 0) {
           warnings.push(
-            'No active contracts found. An admin must add Contracts under Admin → Contracts.',
+            'No active customers found. An admin must add Customers under Admin → Lookups → Customers.',
           )
         }
         if (roleItems.length === 0) {
           warnings.push(
-            'No workforce roles found. An admin must configure Lookups → Workforce Roles (or Roles).',
+            'No workforce roles found. An admin must configure Lookups → Workforce Roles.',
           )
         }
         setCatalogWarning(warnings.length ? warnings.join(' ') : null)
@@ -821,7 +809,7 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
         if (cancelled) return
         console.error('Failed to load form configuration:', err)
         setTemplate(FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident)
-        setContracts([])
+        setCustomers([])
         setRoles([])
         setError(getApiErrorMessage(err, 'Could not load form catalogs from Admin.'))
       } finally {
@@ -885,6 +873,8 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
     const titleSuffix = contractName || locationName || 'Report'
     const title = `${template?.name || 'Incident Report'} - ${titleSuffix}`.substring(0, 200)
 
+    const customerCode = formData.contract ? String(formData.contract) : ''
+
     const payload: PortalReportPayload = {
       report_type: reportType,
       title: title.length >= 5 ? title : `${template?.name || 'Report'} - Submitted`,
@@ -902,8 +892,10 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       reporter_phone: formData.complainant_contact
         ? String(formData.complainant_contact)
         : undefined,
-      department: formData.contract ? String(formData.contract) : undefined,
+      // Near miss only: department bridges customer → NearMiss.contract (do not stuff incidents).
+      ...(reportType === 'near_miss' && customerCode ? { department: customerCode } : {}),
       is_anonymous: false,
+      reporter_submission: { ...formData },
     }
 
     if (import.meta.env.DEV) {
@@ -970,10 +962,10 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
     )
   }
 
-  const contractOptions = contracts.map((c) => ({
-    value: c.code,
-    label: c.name,
-    sublabel: c.client_name,
+  const contractOptions = customers.map((customer) => ({
+    value: customer.code,
+    label: customer.label,
+    sublabel: customer.description,
   }))
 
   const roleOptions = roles.map((r) => ({

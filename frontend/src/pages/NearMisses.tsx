@@ -3,12 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, Loader2, Plus, Search } from 'lucide-react'
 import {
-  contractsApi,
   nearMissesApi,
   NearMiss,
   NearMissCreate,
   getApiErrorMessage,
-  type Contract,
+  lookupsApi,
+  type LookupOption,
 } from '../api/client'
 import { trackError } from '../utils/errorTracker'
 import { toast } from '../contexts/ToastContext'
@@ -89,28 +89,28 @@ export default function NearMisses() {
     was_involved: true,
     witnesses_present: false,
   })
-  const [contracts, setContracts] = useState<Contract[]>([])
-  const [contractsError, setContractsError] = useState<string | null>(null)
+  const [customers, setCustomers] = useState<LookupOption[]>([])
+  const [customersError, setCustomersError] = useState<string | null>(null)
   const eventDateInput = formData.event_date ? formData.event_date.slice(0, 16) : ''
 
   useEffect(() => {
     let cancelled = false
-    void contractsApi
-      .list(true)
+    void lookupsApi
+      .list('customers', true)
       .then((res) => {
         if (!cancelled) {
-          setContracts(res.items || [])
-          setContractsError(
+          setCustomers(res.items || [])
+          setCustomersError(
             (res.items || []).length === 0
-              ? 'No active contracts configured. Ask an admin to add Contracts.'
+              ? 'No active customers configured. Ask an admin to add Customers in Admin → Lookups → Customers.'
               : null,
           )
         }
       })
       .catch((err) => {
         if (!cancelled) {
-          setContracts([])
-          setContractsError(getApiErrorMessage(err, 'Could not load contracts.'))
+          setCustomers([])
+          setCustomersError(getApiErrorMessage(err, 'Could not load customers.'))
         }
       })
     return () => {
@@ -343,27 +343,27 @@ export default function NearMisses() {
               </div>
               <div>
                 <label htmlFor="near-miss-contract" className="text-sm font-medium text-muted-foreground">
-                  {t('near_misses.form.contract', 'Contract')}
+                  {t('near_misses.form.contract', 'Customer')}
                 </label>
                 <Select
                   value={formData.contract || undefined}
                   onValueChange={(value) => setFormData({ ...formData, contract: value })}
                 >
                   <SelectTrigger id="near-miss-contract" className="mt-1" data-testid="near-miss-contract">
-                    <SelectValue placeholder={t('near_misses.form.contract_placeholder', 'Select contract')} />
+                    <SelectValue placeholder={t('near_misses.form.contract_placeholder', 'Select customer')} />
                   </SelectTrigger>
                   <SelectContent>
-                    {contracts.map((contract) => (
-                      <SelectItem key={contract.id} value={contract.code}>
-                        {contract.name}
-                        {contract.client_name ? ` · ${contract.client_name}` : ''}
+                    {customers.map((customer) => (
+                      <SelectItem key={customer.id} value={customer.code}>
+                        {customer.label}
+                        {customer.description ? ` · ${customer.description}` : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {contractsError ? (
+                {customersError ? (
                   <p className="mt-1 text-xs text-destructive" role="alert">
-                    {contractsError}
+                    {customersError}
                   </p>
                 ) : null}
               </div>

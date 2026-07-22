@@ -15,8 +15,10 @@ interface PortalReportPayload {
   reporter_name?: string
   reporter_email?: string
   reporter_phone?: string
+  /** Legacy bridge → NearMiss.contract; prefer reporter_submission.contract. */
   department?: string
   is_anonymous: boolean
+  reporter_submission?: Record<string, unknown>
 }
 
 interface PortalReportResponse {
@@ -74,7 +76,6 @@ import {
   HardHat,
   Truck,
   CircleAlert,
-  Construction,
 } from 'lucide-react'
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
 import { Card } from '../components/ui/Card'
@@ -84,27 +85,7 @@ import { Textarea } from '../components/ui/Textarea'
 import { cn } from '../helpers/utils'
 import { useGeolocation } from '../hooks/useGeolocation'
 import { useVoiceToText } from '../hooks/useVoiceToText'
-
-// Contract options
-const CONTRACT_OPTIONS = [
-  { value: 'TfL-Central', label: 'TfL Central Line', sublabel: 'London Underground' },
-  { value: 'TfL-Jubilee', label: 'TfL Jubilee Line', sublabel: 'London Underground' },
-  { value: 'NR-Southern', label: 'Network Rail Southern', sublabel: 'Maintenance' },
-  { value: 'NR-Western', label: 'Network Rail Western', sublabel: 'Maintenance' },
-  { value: 'HS2-Midlands', label: 'HS2 Midlands', sublabel: 'Construction' },
-  { value: 'Crossrail', label: 'Elizabeth Line', sublabel: 'Operations' },
-  { value: 'other', label: 'Other', sublabel: 'Enter manually' },
-]
-
-// Role options
-const ROLE_OPTIONS = [
-  { value: 'driver', label: 'Driver', icon: Truck },
-  { value: 'technician', label: 'Technician', icon: Wrench },
-  { value: 'engineer', label: 'Engineer', icon: Construction },
-  { value: 'supervisor', label: 'Supervisor', icon: HardHat },
-  { value: 'office', label: 'Office Staff', icon: User },
-  { value: 'visitor', label: 'Visitor', icon: User },
-]
+import { lookupsApi, type LookupOption } from '../api/client'
 
 // Risk categories
 const RISK_CATEGORIES = [
@@ -168,6 +149,8 @@ export default function PortalNearMissForm() {
   const [canOpenStaff, setCanOpenStaff] = useState(false)
   const [submittedEntityType, setSubmittedEntityType] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [customers, setCustomers] = useState<LookupOption[]>([])
+  const [roles, setRoles] = useState<LookupOption[]>([])
 
   const {
     latitude,
@@ -210,6 +193,27 @@ export default function PortalNearMissForm() {
   })
 
   const totalSteps = 4
+
+  useEffect(() => {
+    let cancelled = false
+    void Promise.all([
+      lookupsApi.list('customers', true),
+      lookupsApi.list('workforce_roles', true),
+    ]).then(([customerResult, roleResult]) => {
+      if (!cancelled) {
+        setCustomers(customerResult.items || [])
+        setRoles(roleResult.items || [])
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setCustomers([])
+        setRoles([])
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Pre-fill user details from SSO
   useEffect(() => {
@@ -279,9 +283,11 @@ export default function PortalNearMissForm() {
 
     try {
       // Build portal report payload - Near miss goes to Near Miss/Incidents dashboard
+      const customerCode =
+        formData.contract === 'other' ? formData.contractOther : formData.contract
       const payload: PortalReportPayload = {
         report_type: 'near_miss', // Routes to Near Miss records, not general Incidents
-        title: `Near Miss - ${formData.contract === 'other' ? formData.contractOther : formData.contract} - ${formData.location}`,
+        title: `Near Miss - ${customerCode} - ${formData.location}`,
         description: `${formData.description}${formData.potentialConsequences ? `\n\nPotential consequences: ${formData.potentialConsequences}` : ''}${formData.preventiveActionSuggested ? `\n\nPreventive action suggested: ${formData.preventiveActionSuggested}` : ''}`,
         location: formData.location,
         severity:
@@ -294,8 +300,17 @@ export default function PortalNearMissForm() {
         // CRITICAL: reporter_email MUST match authenticated user's email for My Reports linkage
         reporter_email: user?.email || formData.reporterEmail || undefined,
         reporter_phone: formData.reporterPhone || undefined,
-        department: formData.contract === 'other' ? formData.contractOther : formData.contract,
+        // Legacy bridge for NearMiss.contract; primary path is reporter_submission.contract
+        department: customerCode,
         is_anonymous: false,
+        reporter_submission: {
+          contract: customerCode,
+          location: formData.location,
+          potential_severity: formData.potentialSeverity,
+          potential_consequences: formData.potentialConsequences,
+          preventive_action_suggested: formData.preventiveActionSuggested,
+          reporter_role: formData.reporterRole,
+        },
       }
 
       const response = await submitPortalReport(payload, platformToken)
@@ -457,22 +472,22 @@ export default function PortalNearMissForm() {
                 {t('portal.your_role')} *
               </span>
               <div className="grid grid-cols-3 gap-2">
-                {ROLE_OPTIONS.map((role) => (
+                {roles.map((role) => (
                   <button
-                    key={role.value}
+                    key={role.code}
                     type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, reporterRole: role.value }))}
+                    onClick={() => setFormData((prev) => ({ ...prev, reporterRole: role.code }))}
                     className={cn(
                       'flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all',
-                      formData.reporterRole === role.value
+                      formData.reporterRole === role.code
                         ? 'bg-primary/10 border-primary'
                         : 'bg-card border-border hover:border-border-strong',
                     )}
                   >
-                    <role.icon
+                    <User
                       className={cn(
                         'w-5 h-5',
-                        formData.reporterRole === role.value
+                        formData.reporterRole === role.code
                           ? 'text-primary'
                           : 'text-muted-foreground',
                       )}
@@ -485,22 +500,17 @@ export default function PortalNearMissForm() {
 
             <FuzzySearchDropdown
               label={`${t('portal.contract_site')} *`}
-              options={CONTRACT_OPTIONS}
+              options={customers.map((customer) => ({
+                value: customer.code,
+                label: customer.label,
+                sublabel: customer.description,
+              }))}
               value={formData.contract}
               onChange={(val) => setFormData((prev) => ({ ...prev, contract: val }))}
               placeholder={t('portal.search_contract_nm')}
               required
             />
 
-            {formData.contract === 'other' && (
-              <Input
-                value={formData.contractOther}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, contractOther: e.target.value }))
-                }
-                placeholder={t('portal.enter_contract')}
-              />
-            )}
 
             <div>
               <span className="block text-sm font-medium text-foreground mb-2">
