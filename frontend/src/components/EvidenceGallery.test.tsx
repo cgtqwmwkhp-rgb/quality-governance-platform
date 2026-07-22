@@ -59,4 +59,24 @@ describe('EvidenceGallery', () => {
       expect(within(dialog).getByAltText('first.jpg')).not.toBeNull()
     })
   })
+
+  it('keeps the selected evidence open when assets reorder', async () => {
+    vi.mocked(evidenceAssetsApi.getSignedUrl).mockImplementation((id) =>
+      Promise.resolve({ data: { signed_url: `https://example.test/${id}.jpg` } } as never),
+    )
+
+    const first = asset(1, 'first.jpg')
+    const second = asset(2, 'second.jpg')
+    const { rerender } = render(<EvidenceGallery assets={[first, second]} />)
+
+    await screen.findByAltText('first.jpg')
+    fireEvent.click(screen.getByRole('button', { name: 'Preview second.jpg' }))
+    const dialog = await screen.findByRole('dialog')
+
+    rerender(<EvidenceGallery assets={[second, first]} />)
+
+    await waitFor(() => {
+      expect(within(dialog).getByAltText('second.jpg')).not.toBeNull()
+    })
+  })
 })

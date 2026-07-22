@@ -39,8 +39,10 @@ export function EvidenceGallery({
 }: Props) {
   const [previewUrls, setPreviewUrls] = useState<PreviewUrls>({})
   const [previewFailures, setPreviewFailures] = useState<Set<number>>(new Set())
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  const [selectedAssetId, setSelectedAssetId] = useState<number | null>(null)
   const [downloadError, setDownloadError] = useState<string | null>(null)
+  const selectedIndex = selectedAssetId === null ? -1 : assets.findIndex((asset) => asset.id === selectedAssetId)
+  const selectedAsset = selectedIndex === -1 ? null : assets[selectedIndex]
 
   useEffect(() => {
     let cancelled = false
@@ -70,29 +72,33 @@ export function EvidenceGallery({
   }, [assets])
 
   useEffect(() => {
-    if (selectedIndex === null) return
+    if (selectedAssetId === null) return
+
+    if (selectedIndex === -1) {
+      setSelectedAssetId(null)
+      return
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'ArrowLeft') {
         event.preventDefault()
-        setSelectedIndex((current) => (current === null ? null : (current - 1 + assets.length) % assets.length))
+        setSelectedAssetId(assets[(selectedIndex - 1 + assets.length) % assets.length].id)
       }
       if (event.key === 'ArrowRight') {
         event.preventDefault()
-        setSelectedIndex((current) => (current === null ? null : (current + 1) % assets.length))
+        setSelectedAssetId(assets[(selectedIndex + 1) % assets.length].id)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [assets.length, selectedIndex])
+  }, [assets, selectedAssetId, selectedIndex])
 
-  const selectedAsset = selectedIndex === null ? null : assets[selectedIndex]
   const selectedPreviewUrl = selectedAsset ? previewUrls[selectedAsset.id] : undefined
 
   const openAsset = (index: number) => {
     setDownloadError(null)
-    setSelectedIndex(index)
+    setSelectedAssetId(assets[index].id)
   }
 
   const downloadAsset = async (asset: EvidenceAsset) => {
@@ -192,7 +198,7 @@ export function EvidenceGallery({
         })}
       </div>
 
-      <Dialog open={selectedAsset !== null} onOpenChange={(open) => !open && setSelectedIndex(null)}>
+      <Dialog open={selectedAsset !== null} onOpenChange={(open) => !open && setSelectedAssetId(null)}>
         {selectedAsset ? (
           <DialogContent className="max-w-4xl">
             <DialogHeader>
@@ -225,9 +231,7 @@ export function EvidenceGallery({
                     size="icon"
                     className="absolute left-3"
                     onClick={() =>
-                      setSelectedIndex((current) =>
-                        current === null ? null : (current - 1 + assets.length) % assets.length,
-                      )
+                      setSelectedAssetId(assets[(selectedIndex - 1 + assets.length) % assets.length].id)
                     }
                     aria-label="Previous evidence"
                   >
@@ -239,9 +243,7 @@ export function EvidenceGallery({
                     size="icon"
                     className="absolute right-3"
                     onClick={() =>
-                      setSelectedIndex((current) =>
-                        current === null ? null : (current + 1) % assets.length,
-                      )
+                      setSelectedAssetId(assets[(selectedIndex + 1) % assets.length].id)
                     }
                     aria-label="Next evidence"
                   >
