@@ -302,12 +302,17 @@ export default function SafetyAssetRegister() {
   )
   // Dry-run sets can_commit=false while similar lookups need UI confirmation;
   // after every similar proposal is confirmed, allow Commit (server re-checks).
+  // Legacy mocks without can_commit still work when allSimilarConfirmed.
+  const serverAllowsCesCommit =
+    cesReport?.can_commit === true ||
+    Boolean(cesReport?.requires_confirmation) ||
+    typeof cesReport?.can_commit !== 'boolean'
   const canCommitCes = Boolean(
     cesReport &&
       !cesBusy &&
       allSimilarConfirmed &&
       cesReport.valid_rows > 0 &&
-      (cesReport.can_commit || cesReport.requires_confirmation),
+      serverAllowsCesCommit,
   )
 
   const dryRunCesImport = async () => {

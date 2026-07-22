@@ -167,6 +167,9 @@ describe('SafetyAssetRegister Wave 2 board', () => {
         creates: 2,
         updates: 0,
         skipped: 0,
+        // Dry-run: similar lookups block can_commit until UI confirms.
+        can_commit: false,
+        requires_confirmation: true,
         errors: [],
         warnings: [],
         lookup_proposals: [
