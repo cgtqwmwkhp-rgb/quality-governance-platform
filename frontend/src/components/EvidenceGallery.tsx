@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, Download, FileText, ImageOff, Trash2 } from 'lucide-react'
 import { evidenceAssetsApi, type EvidenceAsset } from '../api/client'
 import { cn } from '../helpers/utils'
@@ -15,6 +15,7 @@ type Props = {
   assets: EvidenceAsset[]
   loading?: boolean
   loadFailed?: boolean
+  loadFailureDescription?: string
   emptyTitle?: string
   emptyDescription?: string
   onDelete?: (id: number) => void
@@ -32,6 +33,7 @@ export function EvidenceGallery({
   assets,
   loading = false,
   loadFailed = false,
+  loadFailureDescription = 'Evidence assets could not be loaded. Reporter-submission evidence is shown separately.',
   emptyTitle = 'No evidence assets yet',
   emptyDescription = 'Files linked to this record will appear here.',
   onDelete,
@@ -71,6 +73,14 @@ export function EvidenceGallery({
     }
   }, [assets])
 
+  const moveSelection = useCallback((direction: -1 | 1) => {
+    setSelectedAssetId((currentId) => {
+      const currentIndex = assets.findIndex((asset) => asset.id === currentId)
+      if (currentIndex === -1 || assets.length === 0) return null
+      return assets[(currentIndex + direction + assets.length) % assets.length].id
+    })
+  }, [assets])
+
   useEffect(() => {
     if (selectedAssetId === null) return
 
@@ -82,19 +92,20 @@ export function EvidenceGallery({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'ArrowLeft') {
         event.preventDefault()
-        setSelectedAssetId(assets[(selectedIndex - 1 + assets.length) % assets.length].id)
+        moveSelection(-1)
       }
       if (event.key === 'ArrowRight') {
         event.preventDefault()
-        setSelectedAssetId(assets[(selectedIndex + 1) % assets.length].id)
+        moveSelection(1)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [assets, selectedAssetId, selectedIndex])
+  }, [moveSelection, selectedAssetId])
 
   const selectedPreviewUrl = selectedAsset ? previewUrls[selectedAsset.id] : undefined
+  const selectedPreviewFailed = selectedAsset ? previewFailures.has(selectedAsset.id) : false
 
   const openAsset = (index: number) => {
     setDownloadError(null)
@@ -118,7 +129,7 @@ export function EvidenceGallery({
   if (loadFailed) {
     return (
       <p className={cn('text-sm text-muted-foreground', className)}>
-        Evidence assets could not be loaded. Reporter-submission evidence is shown separately.
+        {loadFailureDescription}
       </p>
     )
   }
@@ -214,8 +225,14 @@ export function EvidenceGallery({
                 />
               ) : isImage(selectedAsset) ? (
                 <div className="p-8 text-center text-sm text-muted-foreground">
-                  <ImageOff className="mx-auto mb-2 h-10 w-10" aria-hidden="true" />
-                  Preview unavailable. You can still download this file.
+                  {selectedPreviewFailed ? (
+                    <>
+                      <ImageOff className="mx-auto mb-2 h-10 w-10" aria-hidden="true" />
+                      Preview unavailable. You can still download this file.
+                    </>
+                  ) : (
+                    <>Loading preview…</>
+                  )}
                 </div>
               ) : (
                 <div className="p-8 text-center text-sm text-muted-foreground">
@@ -230,9 +247,7 @@ export function EvidenceGallery({
                     variant="secondary"
                     size="icon"
                     className="absolute left-3"
-                    onClick={() =>
-                      setSelectedAssetId(assets[(selectedIndex - 1 + assets.length) % assets.length].id)
-                    }
+                    onClick={() => moveSelection(-1)}
                     aria-label="Previous evidence"
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -242,9 +257,7 @@ export function EvidenceGallery({
                     variant="secondary"
                     size="icon"
                     className="absolute right-3"
-                    onClick={() =>
-                      setSelectedAssetId(assets[(selectedIndex + 1) % assets.length].id)
-                    }
+                    onClick={() => moveSelection(1)}
                     aria-label="Next evidence"
                   >
                     <ChevronRight className="h-4 w-4" />

@@ -58,6 +58,12 @@ describe('EvidenceGallery', () => {
     await waitFor(() => {
       expect(within(dialog).getByAltText('first.jpg')).not.toBeNull()
     })
+
+    fireEvent.keyDown(window, { key: 'ArrowRight' })
+    fireEvent.keyDown(window, { key: 'ArrowRight' })
+    await waitFor(() => {
+      expect(within(dialog).getByAltText('first.jpg')).not.toBeNull()
+    })
   })
 
   it('keeps the selected evidence open when assets reorder', async () => {

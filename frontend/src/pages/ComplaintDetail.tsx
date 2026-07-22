@@ -1263,6 +1263,7 @@ export default function ComplaintDetail() {
                       assets={evidenceAssets}
                       loading={evidenceLoading}
                       loadFailed={evidenceLoadFailed}
+                      loadFailureDescription="Evidence assets could not be loaded. Reporter-submission filenames are shown separately."
                       emptyTitle={t(
                         'complaints.detail.evidence_assets_empty',
                         'No evidence assets are linked to this complaint.',
