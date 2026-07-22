@@ -622,9 +622,10 @@ class AuditService:
 
             # Conditional logic: skip questions explicitly marked hidden on their
             # response, or currently evaluated as hidden given live answers.
-            if response is not None and getattr(
-                response, "applicability", None
-            ) == ResponseApplicability.HIDDEN_BY_LOGIC.value:
+            if (
+                response is not None
+                and getattr(response, "applicability", None) == ResponseApplicability.HIDDEN_BY_LOGIC.value
+            ):
                 continue
             rules = getattr(question, "conditional_logic_json", None)
             if rules and not is_question_visible(rules, answers_by_question):
@@ -1934,9 +1935,7 @@ class AuditService:
             )
         )
         active_questions = list(question_result.scalars().all())
-        section_result = await self.db.execute(
-            select(AuditSection).where(AuditSection.template_id == run.template_id)
-        )
+        section_result = await self.db.execute(select(AuditSection).where(AuditSection.template_id == run.template_id))
         template_sections = list(section_result.scalars().all())
         missing_question_ids = self._missing_required_question_ids(
             questions=active_questions,

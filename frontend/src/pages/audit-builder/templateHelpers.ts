@@ -38,6 +38,24 @@ function mapApplicabilityRulesFromApi(
   }
 }
 
+/**
+ * Remap `conditional_logic[].source_question_id` from builder client ids
+ * (generated string ids used while editing an unsaved question) to the
+ * persisted numeric DB ids, using the same `questionIdMap` populated by the
+ * create/update save loop. Rules already carrying a numeric/mapped id (e.g.
+ * loaded from the API) pass through unchanged.
+ */
+export function remapConditionalLogicSourceIds(
+  rules: ConditionalLogicRule[] | null | undefined,
+  questionIdMap: Record<string, number>,
+): ConditionalLogicRule[] | null | undefined {
+  if (!rules || rules.length === 0) return rules
+  return rules.map((rule) => {
+    const backendId = questionIdMap[String(rule.source_question_id)]
+    return backendId !== undefined ? { ...rule, source_question_id: backendId } : rule
+  })
+}
+
 export function buildApplicabilityRulesPayload(
   rules: SectionApplicabilityRules | null | undefined,
 ): AuditSectionCreate['applicability_rules'] {

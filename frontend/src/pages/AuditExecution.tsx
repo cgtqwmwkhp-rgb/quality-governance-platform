@@ -805,6 +805,35 @@ export default function AuditExecution() {
     }
   }, [])
 
+  // Conditional logic (Phase 2) can hide the question currently on screen once
+  // an earlier answer changes (e.g. the auditor edits a prior response). Snap
+  // forward to the next still-visible question (or back to the nearest one if
+  // we were already at the end) so the auditor never gets stuck viewing — or
+  // navigating relative to — a question that's no longer applicable.
+  useEffect(() => {
+    if (!audit) return
+    const flatPositions = audit.sections.flatMap((section, sectionIndex) =>
+      section.questions.map((_, questionIndex) => ({ sectionIndex, questionIndex })),
+    )
+    const liveAnswers: AnswerMap = Object.fromEntries(
+      Object.entries(responses).map(([questionId, resp]) => [questionId, resp.response]),
+    )
+    const isVisible = (pos: { sectionIndex: number; questionIndex: number }): boolean => {
+      const question = audit.sections[pos.sectionIndex]?.questions[pos.questionIndex]
+      return Boolean(question) && isQuestionVisible(question.conditionalLogicRules, liveAnswers)
+    }
+    const currentIdx = flatPositions.findIndex(
+      (pos) => pos.sectionIndex === currentSectionIndex && pos.questionIndex === currentQuestionIndex,
+    )
+    if (currentIdx === -1 || isVisible(flatPositions[currentIdx])) return
+    const nextVisible = flatPositions.slice(currentIdx + 1).find(isVisible)
+    const target = nextVisible ?? [...flatPositions.slice(0, currentIdx)].reverse().find(isVisible)
+    if (target) {
+      setCurrentSectionIndex(target.sectionIndex)
+      setCurrentQuestionIndex(target.questionIndex)
+    }
+  }, [audit, responses, currentSectionIndex, currentQuestionIndex])
+
   // Load audit run from API
   useEffect(() => {
     if (!runIdNum || isNaN(runIdNum)) return
@@ -1431,14 +1460,26 @@ export default function AuditExecution() {
     isQuestionVisible(question.conditionalLogicRules, liveAnswers)
   const isCurrentQuestionHidden = !isQuestionCurrentlyVisible(currentQuestion)
 
+  // Flat (section, question) positions across the whole run, used so
+  // Next/Previous walk only *visible* questions (composition + conditional
+  // logic), never raw index — a hidden question is skipped entirely rather
+  // than shown or counted.
+  type QuestionPosition = { sectionIndex: number; questionIndex: number }
+  const flatQuestionPositions: QuestionPosition[] = audit.sections.flatMap((section, sectionIndex) =>
+    section.questions.map((_, questionIndex) => ({ sectionIndex, questionIndex })),
+  )
+  const isPositionVisible = (pos: QuestionPosition): boolean =>
+    isQuestionCurrentlyVisible(audit.sections[pos.sectionIndex].questions[pos.questionIndex])
+  const currentFlatIndex = flatQuestionPositions.findIndex(
+    (pos) => pos.sectionIndex === currentSectionIndex && pos.questionIndex === currentQuestionIndex,
+  )
+
   // Auto-advance — question types that advance immediately on tap
   const AUTO_ADVANCE_TYPES = new Set(['pass_fail', 'yes_no', 'yes_no_na'])
   const isAutoAdvanceType = AUTO_ADVANCE_TYPES.has(currentQuestion.type)
 
-  // Navigation helpers
-  const isLastQuestion =
-    currentSectionIndex === audit.sections.length - 1 &&
-    currentQuestionIndex === currentSection.questions.length - 1
+  // Navigation helpers — "last" means no visible question remains after this one.
+  const isLastQuestion = !flatQuestionPositions.slice(currentFlatIndex + 1).some(isPositionVisible)
   const canAdvance =
     isCurrentQuestionHidden ||
     ((!currentQuestion.required ||
@@ -1448,9 +1489,11 @@ export default function AuditExecution() {
   const failEvidenceErrorId = `fail-evidence-error-${currentQuestion.id}`
   const showEvidencePanel = shouldShowFailEvidencePanel(currentQuestion, currentResponse)
   const failEvidenceGateActive = isFailEvidenceGateActive(currentQuestion, currentResponse)
-  const globalQuestionIndex =
-    audit.sections.slice(0, currentSectionIndex).reduce((sum, s) => sum + s.questions.length, 0) +
-    currentQuestionIndex
+  // Position within *visible* questions only, so the counter matches totalQuestions below.
+  const globalQuestionIndex = Math.max(
+    0,
+    flatQuestionPositions.slice(0, currentFlatIndex + 1).filter(isPositionVisible).length - 1,
+  )
 
   const isFindingResponse = (response: QuestionResponse): boolean => {
     const question = allQuestions.find((q) => q.id === response.questionId)
@@ -1672,11 +1715,10 @@ export default function AuditExecution() {
       return
     }
     setFailEvidenceGateError(false)
-    if (currentQuestionIndex < currentSection.questions.length - 1) {
-      setCurrentQuestionIndex((prev) => prev + 1)
-    } else if (currentSectionIndex < audit.sections.length - 1) {
-      setCurrentSectionIndex((prev) => prev + 1)
-      setCurrentQuestionIndex(0)
+    const nextVisible = flatQuestionPositions.slice(currentFlatIndex + 1).find(isPositionVisible)
+    if (nextVisible) {
+      setCurrentSectionIndex(nextVisible.sectionIndex)
+      setCurrentQuestionIndex(nextVisible.questionIndex)
     } else {
       setShowSummary(true)
     }
@@ -1689,11 +1731,10 @@ export default function AuditExecution() {
       autoAdvanceTimerRef.current = null
       setAutoAdvancePending(false)
     }
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex((prev) => prev - 1)
-    } else if (currentSectionIndex > 0) {
-      setCurrentSectionIndex((prev) => prev - 1)
-      setCurrentQuestionIndex(audit.sections[currentSectionIndex - 1].questions.length - 1)
+    const prevVisible = [...flatQuestionPositions.slice(0, currentFlatIndex)].reverse().find(isPositionVisible)
+    if (prevVisible) {
+      setCurrentSectionIndex(prevVisible.sectionIndex)
+      setCurrentQuestionIndex(prevVisible.questionIndex)
     }
   }
 
@@ -2513,7 +2554,7 @@ export default function AuditExecution() {
           {/* Compact Previous — icon only to maximise Next button width */}
           <button
             onClick={goPrev}
-            disabled={currentSectionIndex === 0 && currentQuestionIndex === 0}
+            disabled={!flatQuestionPositions.slice(0, currentFlatIndex).some(isPositionVisible)}
             aria-label="Previous question"
             className="w-12 h-12 shrink-0 flex items-center justify-center bg-secondary text-foreground rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-colors hover:bg-muted"
           >

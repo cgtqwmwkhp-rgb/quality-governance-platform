@@ -111,9 +111,7 @@ class TestMissingRequiredQuestionIds:
         q2 = _question(
             2,
             criticality="essential",
-            conditional_logic_json=[
-                {"source_question_id": 1, "operator": "equals", "value": "yes", "action": "show"}
-            ],
+            conditional_logic_json=[{"source_question_id": 1, "operator": "equals", "value": "yes", "action": "show"}],
         )
         responses = [_response(1, response_value="no")]
         missing = AuditService._missing_required_question_ids(questions=[q1, q2], responses=responses)
@@ -154,14 +152,10 @@ class TestHasFailedEssentialQuestion:
         question = _question(1, criticality="essential", question_type="pass_fail", section_id=1)
         responses = [_response(1, response_value="fail")]
         assert (
-            AuditService._has_failed_essential_question(
-                [question], responses, sections=[section], asset_type_id=9
-            )
+            AuditService._has_failed_essential_question([question], responses, sections=[section], asset_type_id=9)
             is False
         )
         assert (
-            AuditService._has_failed_essential_question(
-                [question], responses, sections=[section], asset_type_id=5
-            )
+            AuditService._has_failed_essential_question([question], responses, sections=[section], asset_type_id=5)
             is True
         )

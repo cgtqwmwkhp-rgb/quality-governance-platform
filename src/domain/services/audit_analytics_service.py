@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.domain.models.asset import AssetType
 from src.domain.models.audit import (
     AuditFinding,
     AuditQuestion,
@@ -29,7 +30,6 @@ from src.domain.models.audit import (
     QuestionCriticality,
     ResponseApplicability,
 )
-from src.domain.models.asset import AssetType
 from src.domain.models.engineer import Engineer
 from src.domain.models.location import Location
 from src.domain.services.audit_scoring_service import AuditScoringService
@@ -44,6 +44,10 @@ SUPPORTED_GROUP_BY = (
     "engineer",
     "week",
 )
+
+# Findings in these statuses are resolved and must not continue to count
+# against essential compliance / fail-rate metrics once closed out.
+_CLOSED_FINDING_STATUSES = (FindingStatus.CLOSED.value, FindingStatus.DEFERRED.value)
 
 
 @dataclass
@@ -117,7 +121,7 @@ class AuditAnalyticsService:
                 AuditFinding,
                 (AuditFinding.run_id == AuditResponse.run_id) & (AuditFinding.question_id == AuditResponse.question_id),
             )
-            .where(*base_where)
+            .where(*base_where, AuditFinding.status.notin_(_CLOSED_FINDING_STATUSES))
         )
         failed = int((await self.db.scalar(failed_stmt)) or 0)
         return total, failed
@@ -167,9 +171,7 @@ class AuditAnalyticsService:
         passed_count = int(
             (
                 await self.db.scalar(
-                    select(func.count())
-                    .select_from(AuditRun)
-                    .where(*base_filters, AuditRun.passed.is_(True))
+                    select(func.count()).select_from(AuditRun).where(*base_filters, AuditRun.passed.is_(True))
                 )
             )
             or 0
@@ -177,9 +179,7 @@ class AuditAnalyticsService:
         decided_count = int(
             (
                 await self.db.scalar(
-                    select(func.count())
-                    .select_from(AuditRun)
-                    .where(*base_filters, AuditRun.passed.is_not(None))
+                    select(func.count()).select_from(AuditRun).where(*base_filters, AuditRun.passed.is_not(None))
                 )
             )
             or 0
@@ -187,11 +187,9 @@ class AuditAnalyticsService:
         pass_rate = (passed_count / decided_count * 100) if decided_count else 0.0
 
         essential_total, essential_failed = await self._essential_compliance_totals(tenant_id, cutoff)
-        essential_compliance_pct = (
-            (1 - (essential_failed / essential_total)) * 100 if essential_total else 100.0
-        )
+        essential_compliance_pct = (1 - (essential_failed / essential_total)) * 100 if essential_total else 100.0
 
-        critical_queue = await self.get_critical_queue(tenant_id)
+        incomplete_critical_count = await self.get_critical_count(tenant_id)
 
         return {
             "period_days": days,
@@ -201,7 +199,7 @@ class AuditAnalyticsService:
             "avg_score": round(float(avg_score), 2) if avg_score is not None else 0.0,
             "pass_rate": round(pass_rate, 2),
             "essential_compliance_pct": round(essential_compliance_pct, 2),
-            "incomplete_critical_count": len(critical_queue),
+            "incomplete_critical_count": incomplete_critical_count,
         }
 
     # ------------------------------------------------------------------
@@ -265,7 +263,10 @@ class AuditAnalyticsService:
             return []
 
         run_ids = {row.run_id for row in rows}
-        finding_stmt = select(AuditFinding.run_id, AuditFinding.question_id).where(AuditFinding.run_id.in_(run_ids))
+        finding_stmt = select(AuditFinding.run_id, AuditFinding.question_id).where(
+            AuditFinding.run_id.in_(run_ids),
+            AuditFinding.status.notin_(_CLOSED_FINDING_STATUSES),
+        )
         finding_pairs = {(r, q) for r, q in (await self.db.execute(finding_stmt)).all()}
 
         buckets: dict[str, dict[str, Any]] = {}
@@ -364,9 +365,7 @@ class AuditAnalyticsService:
         results = []
         for bucket in buckets.values():
             avg_score = sum(bucket["_scores"]) / len(bucket["_scores"]) if bucket["_scores"] else 0.0
-            fail_rate = (
-                (bucket["_failed_runs"] / bucket["completed_count"] * 100) if bucket["completed_count"] else 0.0
-            )
+            fail_rate = (bucket["_failed_runs"] / bucket["completed_count"] * 100) if bucket["completed_count"] else 0.0
             essential_compliance_pct = (
                 (1 - (bucket["_ess_failed"] / bucket["_ess_total"])) * 100 if bucket["_ess_total"] else 100.0
             )
@@ -401,7 +400,10 @@ class AuditAnalyticsService:
         rows = (await self.db.execute(stmt)).all()
         if not rows:
             return {}
-        finding_stmt = select(AuditFinding.run_id, AuditFinding.question_id).where(AuditFinding.run_id.in_(run_ids))
+        finding_stmt = select(AuditFinding.run_id, AuditFinding.question_id).where(
+            AuditFinding.run_id.in_(run_ids),
+            AuditFinding.status.notin_(_CLOSED_FINDING_STATUSES),
+        )
         finding_pairs = {(r, q) for r, q in (await self.db.execute(finding_stmt)).all()}
 
         stats: dict[int, list[int]] = {}
@@ -424,7 +426,19 @@ class AuditAnalyticsService:
     ) -> list[CriticalQueueItem]:
         """Applicable essential items that are unanswered, or answered-and-failed
         with a still-open linked finding, across the tenant's active runs.
+
+        Truncated to *limit* for the queue-listing endpoint — callers needing the
+        true total (e.g. summary KPIs) should use :meth:`get_critical_count`.
         """
+        items = await self._collect_critical_queue_items(tenant_id)
+        return items[:limit]
+
+    async def get_critical_count(self, tenant_id: int) -> int:
+        """Real, uncapped count of incomplete/failed essential items for *tenant_id*."""
+        items = await self._collect_critical_queue_items(tenant_id)
+        return len(items)
+
+    async def _collect_critical_queue_items(self, tenant_id: int) -> list[CriticalQueueItem]:
         active_statuses = (
             AuditStatus.SCHEDULED.value,
             AuditStatus.IN_PROGRESS.value,
@@ -501,10 +515,7 @@ class AuditAnalyticsService:
                     continue
 
                 finding = findings_by_question.get(question.id)
-                if finding is not None and _enum_value(finding.status) not in (
-                    FindingStatus.CLOSED.value,
-                    FindingStatus.DEFERRED.value,
-                ):
+                if finding is not None and _enum_value(finding.status) not in _CLOSED_FINDING_STATUSES:
                     items.append(
                         CriticalQueueItem(
                             run_id=run.id,
@@ -519,7 +530,7 @@ class AuditAnalyticsService:
                         )
                     )
 
-        return items[:limit]
+        return items
 
     # ------------------------------------------------------------------
     # CSV export

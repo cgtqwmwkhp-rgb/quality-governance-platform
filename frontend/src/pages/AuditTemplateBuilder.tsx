@@ -24,7 +24,13 @@ import AITemplateGenerator from '../components/AITemplateGenerator'
 import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
 import { Badge } from '../components/ui/Badge'
 import { auditsApi, getApiErrorMessage } from '../api/client'
-import type { AuditTemplate, Section, Question, ScoringMethod } from './audit-builder/types'
+import type {
+  AuditTemplate,
+  Section,
+  Question,
+  ScoringMethod,
+  ConditionalLogicRule,
+} from './audit-builder/types'
 import { generateId, createNewSection, createNewQuestion } from './audit-builder/types'
 import {
   mapApiToTemplate,
@@ -32,6 +38,7 @@ import {
   buildQuestionPayload,
   buildSectionPayload,
   getUnpublishableQuestionIssues,
+  remapConditionalLogicSourceIds,
 } from './audit-builder/templateHelpers'
 import { QUESTION_TYPES } from './audit-builder/QuestionEditor'
 import SectionEditor from './audit-builder/SectionEditor'
@@ -455,6 +462,42 @@ export default function AuditTemplateBuilder() {
             questionIdMap.current[q.id] = data.id
           }
         }
+      }
+
+      // Second pass: now that every question in this save has a persisted
+      // numeric id, remap any conditional-logic rules that still reference a
+      // builder client id (e.g. a rule added against a question created in
+      // this same save) so the backend stores/evaluates integer question ids.
+      const conditionalLogicUpdates: { sectionId: string; questionId: string; rules: ConditionalLogicRule[] }[] = []
+      for (const section of template.sections) {
+        for (const [qIdx, q] of section.questions.entries()) {
+          if (!q.conditionalLogicRules?.length) continue
+          const remapped = remapConditionalLogicSourceIds(q.conditionalLogicRules, questionIdMap.current)
+          if (!remapped) continue
+          const changed = remapped.some(
+            (rule, i) => rule.source_question_id !== q.conditionalLogicRules![i].source_question_id,
+          )
+          if (!changed) continue
+          const qbid = questionIdMap.current[q.id]
+          if (!qbid) continue
+          await auditsApi.updateQuestion(qbid, buildQuestionPayload({ ...q, conditionalLogicRules: remapped }, qIdx))
+          conditionalLogicUpdates.push({ sectionId: section.id, questionId: q.id, rules: remapped })
+        }
+      }
+      if (conditionalLogicUpdates.length > 0) {
+        updateSections((ss) =>
+          ss.map((s) => {
+            const updates = conditionalLogicUpdates.filter((u) => u.sectionId === s.id)
+            if (updates.length === 0) return s
+            return {
+              ...s,
+              questions: s.questions.map((q) => {
+                const update = updates.find((u) => u.questionId === q.id)
+                return update ? { ...q, conditionalLogicRules: update.rules } : q
+              }),
+            }
+          }),
+        )
       }
 
       for (const deletedQuestionId of [...new Set(deletedQuestionIds.current)]) {

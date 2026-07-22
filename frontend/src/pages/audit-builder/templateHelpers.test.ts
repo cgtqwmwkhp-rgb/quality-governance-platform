@@ -7,6 +7,7 @@ import {
   buildApplicabilityRulesPayload,
   getUnpublishableQuestionIssues,
   isPublishableQuestionType,
+  remapConditionalLogicSourceIds,
 } from './templateHelpers'
 
 describe('templateHelpers', () => {
@@ -256,6 +257,29 @@ describe('templateHelpers', () => {
     expect(buildApplicabilityRulesPayload({ assessmentModes: [], assetTypeIds: [] })).toBeNull()
     expect(buildApplicabilityRulesPayload(null)).toBeNull()
     expect(buildApplicabilityRulesPayload(undefined)).toBeNull()
+  })
+
+  it('remaps conditional_logic source_question_id from client ids to persisted DB ids', () => {
+    const questionIdMap: Record<string, number> = { 'client-abc': 101, 'client-def': 102 }
+    const remapped = remapConditionalLogicSourceIds(
+      [
+        { source_question_id: 'client-abc', operator: 'equals', value: 'yes', action: 'show' },
+        { source_question_id: 'client-def', operator: 'is_empty', action: 'hide' },
+      ],
+      questionIdMap,
+    )
+    expect(remapped).toEqual([
+      { source_question_id: 101, operator: 'equals', value: 'yes', action: 'show' },
+      { source_question_id: 102, operator: 'is_empty', action: 'hide' },
+    ])
+  })
+
+  it('leaves already-numeric (or unmapped) source_question_id untouched when remapping', () => {
+    const rules = [{ source_question_id: 30, operator: 'equals' as const, value: 'yes', action: 'show' as const }]
+    expect(remapConditionalLogicSourceIds(rules, {})).toEqual(rules)
+    expect(remapConditionalLogicSourceIds(null, {})).toBeNull()
+    expect(remapConditionalLogicSourceIds(undefined, {})).toBeUndefined()
+    expect(remapConditionalLogicSourceIds([], { a: 1 })).toEqual([])
   })
 
   it('buildSectionPayload carries applicability_rules through to the API payload', () => {

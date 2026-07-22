@@ -230,9 +230,7 @@ class AuditSectionBase(BaseModel):
     weight: float = 1.0
     is_repeatable: bool = False
     max_repeats: Optional[int] = None
-    applicability_rules: Optional[SectionApplicabilityRules] = Field(
-        None, validation_alias="applicability_rules_json"
-    )
+    applicability_rules: Optional[SectionApplicabilityRules] = Field(None, validation_alias="applicability_rules_json")
 
 
 class AuditSectionCreate(AuditSectionBase):
@@ -253,9 +251,7 @@ class AuditSectionUpdate(BaseModel):
     is_repeatable: Optional[bool] = None
     max_repeats: Optional[int] = None
     is_active: Optional[bool] = None
-    applicability_rules: Optional[SectionApplicabilityRules] = Field(
-        None, validation_alias="applicability_rules_json"
-    )
+    applicability_rules: Optional[SectionApplicabilityRules] = Field(None, validation_alias="applicability_rules_json")
 
 
 class AuditSectionResponse(BaseModel):

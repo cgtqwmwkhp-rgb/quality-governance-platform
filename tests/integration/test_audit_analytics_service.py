@@ -164,6 +164,121 @@ async def test_get_summary_reports_essential_compliance_and_pass_rate(db: AsyncS
 
 
 @pytest.mark.asyncio
+async def test_get_summary_ignores_closed_findings_for_essential_compliance(db: AsyncSession):
+    """A finding that has since been closed/deferred must not keep counting
+    against essential compliance — only still-open findings should fail an
+    essential response.
+    """
+    from sqlalchemy import select
+
+    template = await _seed_template_with_essential_question(db)
+    result = await db.execute(select(AuditQuestion).where(AuditQuestion.template_id == template.id))
+    open_question = result.scalars().first()
+
+    closed_question = AuditQuestion(
+        template_id=template.id,
+        section_id=open_question.section_id,
+        question_text="Are the forks free of cracks?",
+        question_type="pass_fail",
+        weight=1.0,
+        max_score=1.0,
+        is_required=True,
+        criticality="essential",
+    )
+    db.add(closed_question)
+    await db.flush()
+
+    run = await _make_run(db, template, status=AuditStatus.COMPLETED)
+    run.score_percentage = 50.0
+    db.add(
+        AuditResponse(
+            run_id=run.id,
+            question_id=open_question.id,
+            response_value="fail",
+            score=0.0,
+            max_score=1.0,
+            applicability="applicable",
+        )
+    )
+    db.add(
+        AuditResponse(
+            run_id=run.id,
+            question_id=closed_question.id,
+            response_value="fail",
+            score=0.0,
+            max_score=1.0,
+            applicability="applicable",
+        )
+    )
+    db.add(
+        AuditFinding(
+            run_id=run.id,
+            question_id=open_question.id,
+            title="Brakes not functional",
+            description="Observed defective brakes",
+            severity="high",
+            status=FindingStatus.OPEN,
+            tenant_id=TENANT_ID,
+            reference_number=generate_test_reference("FND"),
+        )
+    )
+    db.add(
+        AuditFinding(
+            run_id=run.id,
+            question_id=closed_question.id,
+            title="Forks cracked (resolved)",
+            description="Cracked fork — already repaired and verified",
+            severity="high",
+            status=FindingStatus.CLOSED,
+            tenant_id=TENANT_ID,
+            reference_number=generate_test_reference("FND"),
+        )
+    )
+    await db.commit()
+
+    service = AuditAnalyticsService(db)
+    summary = await service.get_summary(TENANT_ID, days=365)
+
+    # 2 essential responses, only 1 has a still-open finding -> 50% compliant.
+    assert summary["essential_compliance_pct"] == 50.0
+
+
+@pytest.mark.asyncio
+async def test_get_summary_incomplete_critical_count_is_not_capped_by_queue_limit(db: AsyncSession):
+    """`incomplete_critical_count` must reflect the true total, independent of
+    whatever page-size limit the queue-listing endpoint uses.
+    """
+    template = await _seed_template_with_essential_question(db)
+
+    # Three separate in-progress runs, each with the essential question left
+    # unanswered -> 3 incomplete-critical items across the tenant.
+    for _ in range(3):
+        run = AuditRun(
+            template_id=template.id,
+            template_version=1,
+            status=AuditStatus.IN_PROGRESS,
+            tenant_id=TENANT_ID,
+            reference_number=generate_test_reference("AUD"),
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(run)
+        await db.flush()
+    await db.commit()
+
+    service = AuditAnalyticsService(db)
+
+    # A small queue limit must not leak into the summary's count.
+    capped_queue = await service.get_critical_queue(TENANT_ID, limit=1)
+    assert len(capped_queue) == 1
+
+    count = await service.get_critical_count(TENANT_ID)
+    assert count == 3
+
+    summary = await service.get_summary(TENANT_ID, days=365)
+    assert summary["incomplete_critical_count"] == 3
+
+
+@pytest.mark.asyncio
 async def test_get_dimensions_group_by_asset_type(db: AsyncSession):
     template = await _seed_template_with_essential_question(db)
     asset_type = AssetType(category="lifting", name="Forklift", tenant_id=TENANT_ID)
@@ -302,14 +417,8 @@ async def test_complete_run_essential_fail_overrides_passing_score(db: AsyncSess
     await db.commit()
 
     run = await _make_run(db, template, status=AuditStatus.IN_PROGRESS)
-    db.add(
-        AuditResponse(run_id=run.id, question_id=question.id, response_value="fail", score=0.0, max_score=1.0)
-    )
-    db.add(
-        AuditResponse(
-            run_id=run.id, question_id=bonus_question.id, response_value="pass", score=4.0, max_score=4.0
-        )
-    )
+    db.add(AuditResponse(run_id=run.id, question_id=question.id, response_value="fail", score=0.0, max_score=1.0))
+    db.add(AuditResponse(run_id=run.id, question_id=bonus_question.id, response_value="pass", score=4.0, max_score=4.0))
     await db.commit()
 
     service = AuditService(db)
