@@ -37,6 +37,7 @@
 
 ## 6) Critical Journeys Verified (CUJ)
 - [x] CUJ-01: Dashboard with many priority chips loads calm (no scrolling); Play enables marquee; Pause returns to static
+- [x] CUJ-02: Reload keeps preference; reduced-motion users never see marquee/toggle
 
 ## 7) Observability & Ops
 - **Logs:** N/A
