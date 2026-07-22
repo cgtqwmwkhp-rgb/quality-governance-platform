@@ -1493,6 +1493,7 @@
   "near_misses.feedback.not_found": "Digwyddiad agos heb ei ganfod",
   "near_misses.feedback.saved": "Newidiadau wedi'u cadw",
   "near_misses.form.contract": "Contract",
+  "near_misses.form.contract_placeholder": "Dewis contract",
   "near_misses.form.description": "Disgrifiad",
   "near_misses.form.event_date": "Dyddiad y digwyddiad",
   "near_misses.form.potential_consequences": "Canlyniadau posibl",
