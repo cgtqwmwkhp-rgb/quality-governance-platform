@@ -7,6 +7,8 @@ export const BOARD_ROLES = ['Engineer', 'Workshop', 'Office', 'Management'] as c
 export type BoardRole = (typeof BOARD_ROLES)[number]
 
 export type Horizon = 'overdue' | 'd30' | 'd60' | 'd180' | 'ok'
+/** Board filter id: due-date horizons + open-gaps + full coverage roster. */
+export type BoardHorizon = Horizon | 'all' | 'coverage'
 
 const OVERDUE_STATUSES = new Set(['overdue', 'missing', 'pending', 'failed'])
 /** In-cycle: has Passed within frequency (includes due_soon). Mirrors BE _OK_STATUSES. */
@@ -606,22 +608,76 @@ export function buildStatusBriefings(
   return briefings.slice(0, 5)
 }
 
-export const HORIZON_FILTERS: { id: Horizon | 'all'; label: string }[] = [
+export const HORIZON_FILTERS: { id: BoardHorizon; label: string }[] = [
   { id: 'overdue', label: 'Overdue' },
   { id: 'd30', label: 'Next 30 days' },
   { id: 'd60', label: 'Next 60 days' },
   { id: 'd180', label: 'Next 180 days' },
   { id: 'all', label: 'All open' },
+  { id: 'coverage', label: 'All staff' },
 ]
 
-/** Rows matching a horizon filter. "all" keeps every non-compliant row (open gaps). */
+export function isCoverageHorizon(horizon: BoardHorizon): boolean {
+  return horizon === 'coverage'
+}
+
+export function isPlanningHorizon(horizon: BoardHorizon): boolean {
+  return horizon === 'd30' || horizon === 'd60' || horizon === 'd180'
+}
+
+export function horizonFilterLabel(horizon: BoardHorizon): string {
+  return HORIZON_FILTERS.find((f) => f.id === horizon)?.label ?? horizon
+}
+
+/**
+ * Rows matching a horizon filter.
+ * - "all" keeps every non-compliant row (open gaps / chase).
+ * - "coverage" keeps every row so person/entity membership includes 100% OK staff.
+ */
 export function filterRowsByHorizon(
   rows: TrainingMatrixComplianceRow[],
-  horizon: Horizon | 'all',
+  horizon: BoardHorizon,
   today: Date = new Date(),
 ): TrainingMatrixComplianceRow[] {
+  if (horizon === 'coverage') return rows
   if (horizon === 'all') return rows.filter((r) => !isOkStatus(r.status))
   return rows.filter((r) => horizonForRow(r.status, r.qgp_due_on, today) === horizon)
+}
+
+/** Mirror BE compute_horizon_counts — includes forward d90 (due within 90 days, not overdue). */
+export function computeHorizonCounts(
+  rows: TrainingMatrixComplianceRow[],
+  today: Date = new Date(),
+): { overdue: number; d30: number; d60: number; d90: number; d180: number; ok: number } {
+  const counts = { overdue: 0, d30: 0, d60: 0, d90: 0, d180: 0, ok: 0 }
+  const todayStart = startOfDay(today)
+  for (const row of rows) {
+    const h = horizonForRow(row.status, row.qgp_due_on, today)
+    if (h in counts) counts[h as keyof typeof counts] += 1
+    const due = parseDueDate(row.qgp_due_on)
+    if (due) {
+      const daysAway = Math.round((due.getTime() - todayStart.getTime()) / DAY_MS)
+      if (daysAway >= 0 && daysAway <= 90) counts.d90 += 1
+    }
+  }
+  return counts
+}
+
+/**
+ * Client-side notify honesty: backend only emails people with gap-status modules.
+ * (Linked-user / can_email is resolved server-side and may still skip further.)
+ */
+export function previewNotifyRecipients(
+  atlasNames: string[],
+  rows: TrainingMatrixComplianceRow[],
+): { willEmail: string[]; willSkip: string[] } {
+  const unique = [...new Set(atlasNames.filter(Boolean))]
+  const withGaps = new Set(
+    rows.filter((r) => isGapStatus(r.status)).map((r) => r.atlas_name),
+  )
+  const willEmail = unique.filter((name) => withGaps.has(name))
+  const willSkip = unique.filter((name) => !withGaps.has(name))
+  return { willEmail, willSkip }
 }
 
 export type CourseAggregate = {
