@@ -222,8 +222,11 @@ export default function SafetyAssetRegister() {
   const kpisUnavailable = !loading && loadError != null
 
   const bandFiltered = useMemo(
-    () => scopeAssets.filter((asset) => assetMatchesHeroBand(asset, heroBand)),
-    [scopeAssets, heroBand],
+    () =>
+      (heroBand === 'decommissioned' ? boardAssets : scopeAssets).filter((asset) =>
+        assetMatchesHeroBand(asset, heroBand),
+      ),
+    [boardAssets, scopeAssets, heroBand],
   )
 
   const searchFiltered = useMemo(() => {
