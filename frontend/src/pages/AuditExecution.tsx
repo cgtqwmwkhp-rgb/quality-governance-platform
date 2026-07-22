@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { auditsApi, evidenceAssetsApi, getApiErrorMessage } from '../api/client'
 import { DownstreamWorkflowProof } from '../components/audit-import/DownstreamWorkflowProof'
+import EntitySelectAnswer, { type EntitySelectKind } from './audit-builder/EntitySelectAnswer'
 import {
   registerDraftSnapshot,
   getAuditDraft,
@@ -64,6 +65,8 @@ interface QuestionResponse {
   flagged?: boolean
   timestamp: string
   duration?: number // seconds spent on question
+  /** Best-effort display label snapshot for user_select/location_select/customer_select answers. */
+  entityLabel?: string
 }
 
 interface AuditSection {
@@ -166,6 +169,10 @@ export function mapBackendQuestionType(q: {
     case 'rating':
     case 'score':
       return (q.max_score ?? q.max_value ?? 5) > 5 ? 'scale_1_10' : 'scale_1_5'
+    case 'user_select':
+    case 'location_select':
+    case 'customer_select':
+      return q.question_type
     default:
       return 'text_short'
   }
@@ -872,7 +879,7 @@ export default function AuditExecution() {
           const qType = questionTypeMap[qId] || 'text_short'
           const raw = r as {
             is_na?: boolean
-            response_json?: { selected?: string | string[] }
+            response_json?: { selected?: string | string[]; entity_label?: string }
           }
           const responseJson = raw.response_json || {}
           const assetIds = extractEvidenceAssetIds(responseJson)
@@ -889,6 +896,7 @@ export default function AuditExecution() {
             response: parsed,
             notes: r.notes || undefined,
             timestamp: r.created_at,
+            entityLabel: responseJson.entity_label,
             evidenceAssetIds: assetIds,
             photos: [],
           }
@@ -1905,6 +1913,27 @@ export default function AuditExecution() {
             onClear={() => clearSignatureFromCurrentQuestion()}
           />
         )
+
+      case 'user_select':
+      case 'location_select':
+      case 'customer_select': {
+        const kind: EntitySelectKind =
+          currentQuestion.type === 'user_select'
+            ? 'user'
+            : currentQuestion.type === 'location_select'
+              ? 'location'
+              : 'customer'
+        return (
+          <EntitySelectAnswer
+            kind={kind}
+            value={(currentResponse?.response as string) || ''}
+            label={currentResponse?.entityLabel}
+            variant="desktop"
+            disabled={runCompleted}
+            onChange={(value, entityLabel) => updateResponse({ response: value || null, entityLabel })}
+          />
+        )
+      }
 
       default:
         return null

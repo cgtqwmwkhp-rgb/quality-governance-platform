@@ -40,6 +40,7 @@ import {
   isFailEvidenceGateActive,
   shouldShowFailEvidencePanel,
 } from './AuditExecution'
+import EntitySelectAnswer, { type EntitySelectKind } from './audit-builder/EntitySelectAnswer'
 
 // ============================================================================
 // TYPES
@@ -59,6 +60,8 @@ interface QuestionResponse {
   location?: { lat: number; lng: number }
   aiSuggestion?: string
   aiAccepted?: boolean
+  /** Best-effort display label snapshot for user_select/location_select/customer_select answers. */
+  entityLabel?: string
 }
 
 interface AuditQuestion {
@@ -121,6 +124,10 @@ export function mapBackendQuestionType(q: {
     case 'rating':
     case 'score':
       return (q.max_score ?? q.max_value ?? 5) > 5 ? 'scale_1_10' : 'scale_1_5'
+    case 'user_select':
+    case 'location_select':
+    case 'customer_select':
+      return q.question_type
     default:
       return 'text_short'
   }
@@ -1037,6 +1044,26 @@ export default function MobileAuditExecution() {
             }}
           />
         )
+
+      case 'user_select':
+      case 'location_select':
+      case 'customer_select': {
+        const entityKind: EntitySelectKind =
+          currentQuestion.type === 'user_select'
+            ? 'user'
+            : currentQuestion.type === 'location_select'
+              ? 'location'
+              : 'customer'
+        return (
+          <EntitySelectAnswer
+            kind={entityKind}
+            value={(currentResponse?.response as string) || ''}
+            label={currentResponse?.entityLabel}
+            variant="mobile"
+            onChange={(val, entityLabel) => updateResponse({ response: val || null, entityLabel })}
+          />
+        )
+      }
 
       default:
         return (

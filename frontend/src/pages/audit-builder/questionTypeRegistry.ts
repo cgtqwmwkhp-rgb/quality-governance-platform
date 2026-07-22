@@ -22,6 +22,9 @@ export const API_QUESTION_TYPES = [
   'yes_no',
   'pass_fail',
   'score',
+  'user_select',
+  'location_select',
+  'customer_select',
 ] as const
 
 export type ApiQuestionType = (typeof API_QUESTION_TYPES)[number]
@@ -41,6 +44,9 @@ export const FE_BUILDER_QUESTION_TYPES: readonly QuestionType[] = [
   'date',
   'photo',
   'signature',
+  'user_select',
+  'location_select',
+  'customer_select',
 ] as const
 
 /** API types produced by the palette forward map. */
@@ -56,6 +62,9 @@ export const PALETTE_API_TYPES = [
   'date',
   'photo',
   'signature',
+  'user_select',
+  'location_select',
+  'customer_select',
 ] as const
 
 export interface ApiQuestionTypeSpec {
@@ -79,6 +88,9 @@ const FE_TO_API: Record<QuestionType, ApiQuestionTypeSpec> = {
   multi_choice: { questionType: 'radio', allowNa: false },
   checklist: { questionType: 'checkbox', allowNa: false },
   pass_fail: { questionType: 'pass_fail', allowNa: false },
+  user_select: { questionType: 'user_select', allowNa: false },
+  location_select: { questionType: 'location_select', allowNa: false },
+  customer_select: { questionType: 'customer_select', allowNa: false },
 }
 
 export function toApiQuestionType(feType: QuestionType): ApiQuestionTypeSpec {
@@ -133,6 +145,12 @@ export function fromApiQuestionType(
       return 'multi_choice'
     case 'checkbox':
       return 'checklist'
+    case 'user_select':
+      return 'user_select'
+    case 'location_select':
+      return 'location_select'
+    case 'customer_select':
+      return 'customer_select'
     case 'rating':
     case 'score': {
       const scale = maxScore ?? maxValue ?? 5

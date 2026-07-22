@@ -24,6 +24,12 @@ describe('mapBackendQuestionType', () => {
     expect(mapBackendQuestionType({ question_type: 'datetime' })).toBe('datetime')
   })
 
+  it('maps entity-select types to themselves (no collapse to dropdown)', () => {
+    expect(mapBackendQuestionType({ question_type: 'user_select' })).toBe('user_select')
+    expect(mapBackendQuestionType({ question_type: 'location_select' })).toBe('location_select')
+    expect(mapBackendQuestionType({ question_type: 'customer_select' })).toBe('customer_select')
+  })
+
   it('keeps unknown types as text_short fallback only', () => {
     expect(mapBackendQuestionType({ question_type: 'unknown_future_type' })).toBe('text_short')
   })

@@ -125,7 +125,16 @@ class AuditScoringService:
             "checklist",
         }:
             derived = cls._score_from_options(question, answer, resolved_max)
-        elif question_type in {"text", "textarea", "date", "photo", "signature"}:
+        elif question_type in {
+            "text",
+            "textarea",
+            "date",
+            "photo",
+            "signature",
+            "user_select",
+            "location_select",
+            "customer_select",
+        }:
             has_answer = bool(answer) or response_text not in (None, "") or response_number is not None
             derived = resolved_max if has_answer else None
         else:

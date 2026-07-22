@@ -131,6 +131,9 @@ _EXECUTABLE_QUESTION_TYPES = frozenset(
         "multi_select",
         "multi_choice",
         "checklist",
+        "user_select",
+        "location_select",
+        "customer_select",
     }
 )
 

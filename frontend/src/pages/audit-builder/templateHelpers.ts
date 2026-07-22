@@ -26,6 +26,9 @@ export const EXECUTABLE_QUESTION_TYPES = [
   'yes_no',
   'pass_fail',
   'score',
+  'user_select',
+  'location_select',
+  'customer_select',
 ] as const
 
 /** Rejected at publish until execution + persistence exist. */

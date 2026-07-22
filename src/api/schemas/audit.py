@@ -53,7 +53,10 @@ class AuditQuestionBase(BaseModel):
     question_text: str = Field(..., min_length=1, max_length=1000)
     question_type: str = Field(
         ...,
-        pattern="^(text|textarea|number|checkbox|radio|dropdown|date|datetime|signature|photo|file|rating|yes_no|pass_fail|score)$",
+        pattern=(
+            "^(text|textarea|number|checkbox|radio|dropdown|date|datetime|signature|photo|file|"
+            "rating|yes_no|pass_fail|score|user_select|location_select|customer_select)$"
+        ),
     )
     description: Optional[str] = Field(None, max_length=2000)
     help_text: Optional[str] = Field(None, max_length=500)

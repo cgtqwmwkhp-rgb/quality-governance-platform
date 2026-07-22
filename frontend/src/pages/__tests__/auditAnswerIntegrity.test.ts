@@ -47,6 +47,18 @@ describe('auditAnswerIntegrity helpers', () => {
       scorePayloadForQuestion,
     )
     expect(radioPayload.response_json).toEqual({ selected: 'major' })
+
+    const userSelectPayload = buildAuditResponseSavePayload(
+      { response: '42', entityLabel: 'Jane Doe' },
+      {
+        type: 'user_select',
+        weight: 1,
+      },
+      scorePayloadForQuestion,
+    )
+    expect(userSelectPayload.response_value).toBe('42')
+    expect(userSelectPayload.response_json).toEqual({ entity_label: 'Jane Doe' })
+    expect(userSelectPayload.score).toBe(1)
   })
 
   it('treats N/A and evidence rows as non-empty for save', () => {

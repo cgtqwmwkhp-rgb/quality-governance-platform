@@ -29,6 +29,9 @@ API_QUESTION_TYPES: frozenset[str] = frozenset(
         "yes_no",
         "pass_fail",
         "score",
+        "user_select",
+        "location_select",
+        "customer_select",
     }
 )
 
@@ -48,6 +51,9 @@ FE_BUILDER_QUESTION_TYPES: frozenset[str] = frozenset(
         "multi_choice",
         "checklist",
         "pass_fail",
+        "user_select",
+        "location_select",
+        "customer_select",
     }
 )
 
@@ -66,6 +72,9 @@ FE_PALETTE_ORDER: tuple[str, ...] = (
     "date",
     "photo",
     "signature",
+    "user_select",
+    "location_select",
+    "customer_select",
 )
 
 # API types produced by the palette forward map (round-trip reverse targets).
@@ -82,6 +91,9 @@ PALETTE_API_TYPES: frozenset[str] = frozenset(
         "date",
         "photo",
         "signature",
+        "user_select",
+        "location_select",
+        "customer_select",
     }
 )
 
@@ -110,6 +122,9 @@ _FE_TO_API: dict[str, ApiQuestionTypeSpec] = {
     "multi_choice": ApiQuestionTypeSpec(question_type="radio"),
     "checklist": ApiQuestionTypeSpec(question_type="checkbox"),
     "pass_fail": ApiQuestionTypeSpec(question_type="pass_fail"),
+    "user_select": ApiQuestionTypeSpec(question_type="user_select"),
+    "location_select": ApiQuestionTypeSpec(question_type="location_select"),
+    "customer_select": ApiQuestionTypeSpec(question_type="customer_select"),
 }
 
 
@@ -158,6 +173,12 @@ def from_api_question_type(
         return "multi_choice"
     if api_type == "checkbox":
         return "checklist"
+    if api_type == "user_select":
+        return "user_select"
+    if api_type == "location_select":
+        return "location_select"
+    if api_type == "customer_select":
+        return "customer_select"
     if api_type in {"rating", "score"}:
         scale = max_score if max_score is not None else max_value
         if scale is None:

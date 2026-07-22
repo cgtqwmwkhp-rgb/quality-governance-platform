@@ -157,6 +157,40 @@ class TestDeriveResponseScore:
         assert score == 10.0
         assert max_score == 10.0
 
+    @pytest.mark.parametrize("question_type", ["user_select", "location_select", "customer_select"])
+    def test_entity_select_presence_gives_full_credit(self, question_type):
+        question = SimpleNamespace(
+            question_type=question_type,
+            max_score=1.0,
+            weight=1.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=None,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_value="42",
+        )
+        assert score == 1.0
+        assert max_score == 1.0
+
+    @pytest.mark.parametrize("question_type", ["user_select", "location_select", "customer_select"])
+    def test_entity_select_unanswered_stays_unscored(self, question_type):
+        question = SimpleNamespace(
+            question_type=question_type,
+            max_score=1.0,
+            weight=1.0,
+            positive_answer="yes",
+            options_json=None,
+            max_value=None,
+        )
+        score, max_score = AuditScoringService.derive_response_score(
+            question,
+            response_value=None,
+        )
+        assert score is None
+        assert max_score is None
+
     def test_checklist_json_array_uses_option_scores(self):
         question = SimpleNamespace(
             question_type="checklist",

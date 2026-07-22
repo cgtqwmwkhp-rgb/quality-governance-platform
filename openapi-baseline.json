@@ -5128,7 +5128,7 @@
             "type": "string"
           },
           "question_type": {
-            "pattern": "^(text|textarea|number|checkbox|radio|dropdown|date|datetime|signature|photo|file|rating|yes_no|pass_fail|score)$",
+            "pattern": "^(text|textarea|number|checkbox|radio|dropdown|date|datetime|signature|photo|file|rating|yes_no|pass_fail|score|user_select|location_select|customer_select)$",
             "title": "Question Type",
             "type": "string"
           },

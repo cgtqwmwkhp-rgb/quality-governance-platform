@@ -12,6 +12,9 @@ export type QuestionType =
   | 'multi_choice'
   | 'checklist'
   | 'pass_fail'
+  | 'user_select'
+  | 'location_select'
+  | 'customer_select'
 
 export type ScoringMethod = 'weighted' | 'equal' | 'pass_fail' | 'points'
 
