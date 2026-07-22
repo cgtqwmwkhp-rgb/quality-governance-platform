@@ -21,6 +21,12 @@ vi.mock('../../api/client', () => ({
   },
 }))
 
+vi.mock('../../api/safetyAssetsClient', () => ({
+  safetyAssetsApi: {
+    listPendingSafetyLookups: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  },
+}))
+
 vi.mock('../../config/apiBase', () => ({
   API_BASE_URL: 'http://localhost:3000',
 }))

@@ -97,6 +97,37 @@ async def test_dry_run_rejects_ambiguous_serial():
     assert any(issue.code == "AMBIGUOUS_SERIAL" for issue in report.errors)
 
 
+@pytest.mark.asyncio
+async def test_can_commit_with_row_errors_when_other_rows_valid():
+    """Partial commit: skip AMBIGUOUS_SERIAL rows, still import clean rows."""
+    first = SimpleNamespace(id=99, asset_type_id=10, qr_code_data="QR-A")
+    second = SimpleNamespace(id=100, asset_type_id=10, qr_code_data="QR-B")
+    report, validated = await _service({"CES-001": [first, second]}).validate_rows(
+        [
+            _row(qr_code=""),  # ambiguous serial → error
+            _row(
+                __row__=3,
+                equipment_type="Gas Detector",
+                qr_code="PLA-QR-CLEAN",
+                make="Crowcon",
+                model="T4",
+                serial_number="CES-CLEAN-1",
+            ),
+        ],
+        tenant_id=3,
+        dry_run=True,
+    )
+
+    assert report.ok is False
+    assert report.error_rows >= 1
+    assert report.valid_rows >= 1
+    assert report.can_commit is True
+    assert len(validated) >= 1
+    payload = report.to_dict()
+    assert payload["can_commit"] is True
+    assert payload["skipped_error_rows"] == report.error_rows
+
+
 def test_update_payload_preserves_unmapped_assignments():
     row = ValidatedCesRow(
         row=2,
@@ -183,7 +214,24 @@ async def test_similar_type_requires_confirmation_on_commit_gate():
     )
     assert report.ok is False
     assert report.requires_confirmation is True
+    assert report.can_commit is False
     assert any(issue.code == "NEEDS_CONFIRMATION" for issue in report.errors)
+
+
+@pytest.mark.asyncio
+async def test_dry_run_can_commit_false_when_similar_needs_confirmation():
+    """Dry-run omits NEEDS_CONFIRMATION from errors but can_commit must stay false."""
+    existing_type = SimpleNamespace(id=10, name="D Shackle")
+    report, _ = await _service(types=[existing_type], locations=[]).validate_rows(
+        [_row(location="Plantexpand; Main Depot", equipment_type="D Shackel")],
+        tenant_id=3,
+        dry_run=True,
+        enforce_confirmations=False,
+    )
+    assert report.requires_confirmation is True
+    assert report.valid_rows >= 1
+    assert report.can_commit is False
+    assert report.to_dict()["can_commit"] is False
 
 
 def test_parse_workbook_uses_equipment_list_sheet():

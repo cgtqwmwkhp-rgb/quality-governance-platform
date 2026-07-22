@@ -22,6 +22,8 @@ const trainingMatrixApi = { myTraining: vi.fn(), getSummary: vi.fn() }
 const actionsApi = { viewCounts: vi.fn() }
 const incidentsApi = { list: vi.fn() }
 const complaintsApi = { list: vi.fn() }
+const nearMissesApi = { list: vi.fn() }
+const rtasApi = { list: vi.fn() }
 const executiveDashboardApi = { getDashboard: vi.fn() }
 const auditsApi = { listRuns: vi.fn() }
 const riskRegisterApi = { getSummary: vi.fn(), getTrends: vi.fn() }
@@ -36,6 +38,8 @@ vi.mock('../../api/client', () => ({
   actionsApi,
   incidentsApi,
   complaintsApi,
+  nearMissesApi,
+  rtasApi,
   executiveDashboardApi,
   auditsApi,
   riskRegisterApi,
@@ -73,13 +77,28 @@ function applyDefaultMocks() {
   actionsApi.viewCounts.mockResolvedValue({ data: { all: 0, my: 0, overdue: 0, my_overdue: 0 } })
   incidentsApi.list.mockResolvedValue(emptyPage)
   complaintsApi.list.mockResolvedValue(emptyPage)
-  executiveDashboardApi.getDashboard.mockResolvedValue({
+  nearMissesApi.list.mockResolvedValue(emptyPage)
+  rtasApi.list.mockResolvedValue(emptyPage)
+  const weekSeries = Array.from({ length: 8 }, (_, i) => ({
+    week_start: `2026-05-${String(i + 1).padStart(2, '0')}`,
+    count: i,
+    value: i * 10,
+  }))
+  executiveDashboardApi.getDashboard.mockImplementation(async (days: number) => ({
     data: {
-      incidents: { total_in_period: 0 },
-      complaints: { total_in_period: 0 },
-      near_misses: { total_in_period: 0 },
+      incidents: { total_in_period: days === 7 ? 2 : 10 },
+      complaints: { total_in_period: days === 7 ? 1 : 4 },
+      near_misses: { total_in_period: days === 7 ? 3 : 8 },
+      trends: {
+        incidents_weekly: weekSeries,
+        complaints_weekly: weekSeries,
+        near_misses_weekly: weekSeries,
+        audits_weekly: weekSeries,
+        training_compliance_weekly: weekSeries,
+        tool_compliance_weekly: weekSeries,
+      },
     },
-  })
+  }))
   auditsApi.listRuns.mockResolvedValue(emptyPage)
   riskRegisterApi.getSummary.mockResolvedValue({ data: { total_risks: 0, by_category: {} } })
   riskRegisterApi.getTrends.mockResolvedValue({ data: { series: [] } })
@@ -290,6 +309,43 @@ describe('Dashboard (role-aware living dashboard)', () => {
 
       const tile = await screen.findByTestId('pulse-incidents-7d')
       expect(tile).toHaveAttribute('href', '/incidents')
+    })
+
+    it('renders a sparkline on pulse tiles when weekly series is present', async () => {
+      authMocks.hasRole.mockReturnValue(true)
+
+      const Dashboard = (await import('../Dashboard')).default
+      render(
+        <BrowserRouter>
+          <Dashboard />
+        </BrowserRouter>,
+      )
+      await screen.findByRole('heading', { name: 'Dashboard' })
+
+      expect(await screen.findByTestId('pulse-incidents-7d-sparkline')).toBeInTheDocument()
+      // Training sparkline intentionally omitted (module_ok ≠ expiry backcast).
+      expect(screen.queryByTestId('pulse-training-compliance-sparkline')).not.toBeInTheDocument()
+      expect(screen.getByTestId('pulse-tool-compliance-sparkline')).toBeInTheDocument()
+    })
+  })
+
+  describe('recent cases cascade', () => {
+    it('shows tab switcher for incidents / near misses / complaints / RTAs', async () => {
+      authMocks.hasRole.mockReturnValue(true)
+
+      const Dashboard = (await import('../Dashboard')).default
+      render(
+        <BrowserRouter>
+          <Dashboard />
+        </BrowserRouter>,
+      )
+      await screen.findByRole('heading', { name: 'Dashboard' })
+
+      expect(await screen.findByTestId('recent-cases-panel')).toBeInTheDocument()
+      expect(screen.getByTestId('recent-cases-tab-incidents')).toBeInTheDocument()
+      expect(screen.getByTestId('recent-cases-tab-near_misses')).toBeInTheDocument()
+      expect(screen.getByTestId('recent-cases-tab-complaints')).toBeInTheDocument()
+      expect(screen.getByTestId('recent-cases-tab-rtas')).toBeInTheDocument()
     })
   })
 })

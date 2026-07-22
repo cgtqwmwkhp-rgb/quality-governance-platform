@@ -133,7 +133,29 @@ class CesImportReport:
 
     @property
     def ok(self) -> bool:
+        """True only when every row validated cleanly (no skips)."""
         return self.total_rows > 0 and self.error_rows == 0
+
+    @property
+    def can_commit(self) -> bool:
+        """True when at least one valid row can be imported.
+
+        Per-row data errors (AMBIGUOUS_SERIAL, INVALID_ROW, …) are skipped on
+        commit. Unresolved similar-lookup confirmations still block commit.
+
+        Dry-run leaves NEEDS_CONFIRMATION out of ``errors`` (preview-friendly);
+        ``requires_confirmation`` still blocks ``can_commit`` so clients that
+        gate on this flag alone do not enable Commit prematurely. Commit path
+        re-validates with confirmations + enforce_confirmations=True.
+        """
+        if self.valid_rows <= 0:
+            return False
+        blocking = {"NEEDS_CONFIRMATION", "INVALID_CONFIRMATION"}
+        if any(issue.code in blocking for issue in self.errors):
+            return False
+        if self.dry_run and self.requires_confirmation:
+            return False
+        return True
 
     def to_dict(self) -> dict[str, Any]:
         def issue(item: RowIssue) -> dict[str, Any]:
@@ -147,6 +169,8 @@ class CesImportReport:
             "creates": self.creates,
             "updates": self.updates,
             "ok": self.ok,
+            "can_commit": self.can_commit,
+            "skipped_error_rows": self.error_rows if self.can_commit and not self.ok else 0,
             "requires_confirmation": self.requires_confirmation,
             "errors": [issue(item) for item in self.errors],
             "warnings": [issue(item) for item in self.warnings],
@@ -978,9 +1002,9 @@ class CesAssetImportService:
             confirmations=confirmations,
             enforce_confirmations=True,
         )
-        if not report.ok:
+        if not report.can_commit:
             raise ValidationError(
-                "CES import validation failed; fix row errors or confirm similar lookups before commit",
+                "CES import cannot commit — confirm similar lookups, or ensure at least one valid row",
                 code="CES_ASSET_IMPORT_VALIDATION_FAILED",
                 details=report.to_dict(),
             )

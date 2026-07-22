@@ -98,16 +98,26 @@ class SLASummary(BaseModel):
 
 
 class TrendDataPoint(BaseModel):
-    """Single trend data point."""
+    """Single trend data point.
+
+    Count-series tiles use ``count``. Percentage / score tiles also set ``value``
+    (prefer ``value`` when present for sparklines).
+    """
 
     week_start: str
-    count: int
+    count: int = 0
+    value: Optional[float] = None
 
 
 class TrendData(BaseModel):
-    """Trend data for charts."""
+    """Trend data for charts — weekly buckets for pulse sparklines."""
 
-    incidents_weekly: List[TrendDataPoint]
+    incidents_weekly: List[TrendDataPoint] = Field(default_factory=list)
+    complaints_weekly: List[TrendDataPoint] = Field(default_factory=list)
+    near_misses_weekly: List[TrendDataPoint] = Field(default_factory=list)
+    audits_weekly: List[TrendDataPoint] = Field(default_factory=list)
+    training_compliance_weekly: List[TrendDataPoint] = Field(default_factory=list)
+    tool_compliance_weekly: List[TrendDataPoint] = Field(default_factory=list)
 
 
 class ActiveAlert(BaseModel):

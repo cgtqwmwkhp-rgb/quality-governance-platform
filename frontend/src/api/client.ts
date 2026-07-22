@@ -2286,7 +2286,12 @@ export interface ExecutiveDashboardData {
     compliance_rate: number
   }
   trends: {
-    incidents_weekly: { week_start: string; count: number }[]
+    incidents_weekly: { week_start: string; count: number; value?: number | null }[]
+    complaints_weekly?: { week_start: string; count: number; value?: number | null }[]
+    near_misses_weekly?: { week_start: string; count: number; value?: number | null }[]
+    audits_weekly?: { week_start: string; count: number; value?: number | null }[]
+    training_compliance_weekly?: { week_start: string; count: number; value?: number | null }[]
+    tool_compliance_weekly?: { week_start: string; count: number; value?: number | null }[]
   }
   alerts: {
     type: string

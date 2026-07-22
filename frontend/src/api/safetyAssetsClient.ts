@@ -157,6 +157,9 @@ export interface CesAssetImportReport {
   creates: number
   updates: number
   ok: boolean
+  /** Valid rows may be committed even when error_rows > 0 (those rows are skipped). */
+  can_commit?: boolean
+  skipped_error_rows?: number
   requires_confirmation?: boolean
   errors: CesAssetImportIssue[]
   warnings: CesAssetImportIssue[]

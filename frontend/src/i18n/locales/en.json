@@ -241,6 +241,7 @@
   "admin.lookups.editor_empty": "Not configured — add the first option below. Nothing is fabricated.",
   "admin.lookups.editor_title": "Configure {{label}}",
   "admin.lookups.empty_honesty": "No options yet — forms using this category will show an empty dropdown until you configure it.",
+  "admin.lookups.form_lookup_not_ces": "Form-builder dropdown options only. CES calibrations use the Safety Asset Types & Site Locations panel above — not this card.",
   "admin.lookups.hide_advanced_code": "Hide advanced code",
   "admin.lookups.item_count": "{{count}} items",
   "admin.lookups.label_placeholder": "Label",
