@@ -76,7 +76,6 @@ import {
   HardHat,
   Truck,
   CircleAlert,
-  Construction,
 } from 'lucide-react'
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
 import { Card } from '../components/ui/Card'
@@ -475,12 +474,12 @@ export default function PortalNearMissForm() {
               <div className="grid grid-cols-3 gap-2">
                 {roles.map((role) => (
                   <button
-                    key={role.value}
+                    key={role.code}
                     type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, reporterRole: role.value }))}
+                    onClick={() => setFormData((prev) => ({ ...prev, reporterRole: role.code }))}
                     className={cn(
                       'flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all',
-                      formData.reporterRole === role.value
+                      formData.reporterRole === role.code
                         ? 'bg-primary/10 border-primary'
                         : 'bg-card border-border hover:border-border-strong',
                     )}
@@ -488,7 +487,7 @@ export default function PortalNearMissForm() {
                     <User
                       className={cn(
                         'w-5 h-5',
-                        formData.reporterRole === role.value
+                        formData.reporterRole === role.code
                           ? 'text-primary'
                           : 'text-muted-foreground',
                       )}

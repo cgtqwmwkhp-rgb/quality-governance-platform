@@ -661,9 +661,7 @@ async def submit_quick_report(
 
         # Customer code lives on NearMiss.contract. Prefer reporter_submission.contract;
         # department is a legacy bridge from older portal clients.
-        customer_code = str(reporter_submission.get("contract") or "").strip() or (
-            (report.department or "").strip()
-        )
+        customer_code = str(reporter_submission.get("contract") or "").strip() or ((report.department or "").strip())
 
         # Create Near Miss record
         near_miss = NearMiss(
