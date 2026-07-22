@@ -432,7 +432,8 @@ export function useDashboardData(): DashboardData {
         rtas:
           rtasMetric.status === 'ok'
             ? metricOk(
-                // API paginates by created_at desc — keep first page order.
+                // API paginates by created_at desc — show that date so the
+                // column matches list order (reported/collision can diverge).
                 rtasMetric.value.slice(0, 5).map(
                   (r): RecentCaseRow => ({
                     id: r.id,
@@ -440,7 +441,7 @@ export function useDashboardData(): DashboardData {
                     title: r.title,
                     severity: r.severity,
                     status: r.status,
-                    date: r.reported_date || r.collision_date,
+                    date: r.created_at || r.reported_date || r.collision_date,
                   }),
                 ),
               )
