@@ -32,15 +32,12 @@ import {
 
 const LOOKUP_CATEGORIES = [
   { key: 'incident_types', label: 'Incident Types' },
-  { key: 'risk_categories', label: 'Risk Categories' },
   { key: 'complaint_types', label: 'Complaint Types' },
   { key: 'severity_levels', label: 'Severity Levels' },
-  { key: 'departments', label: 'Departments' },
-  { key: 'locations', label: 'Locations' },
   { key: CUSTOMERS_LOOKUP_CATEGORY, label: 'Customers' },
-  { key: 'tools', label: 'Tools' },
-  { key: 'assets', label: 'Assets' },
   { key: WORKFORCE_ROLES_LOOKUP_CATEGORY, label: 'Workforce Roles' },
+  { key: 'medical_assistance', label: 'Medical Assistance' },
+  { key: 'assets', label: 'Assets', kind: 'asset_types' },
 ] as const
 
 type CategoryKey = (typeof LOOKUP_CATEGORIES)[number]['key']
@@ -81,7 +78,10 @@ export default function LookupTables() {
       LOOKUP_CATEGORIES.map((c) => [c.key, { total: null, loading: true, error: false }]),
     ),
   )
-  const [hubFilter, setHubFilter] = useState<string>('all')
+  const [hubFilter, setHubFilter] = useState<string>(() => {
+    const category = searchParams.get('category')
+    return LOOKUP_CATEGORIES.some((item) => item.key === category) ? category! : 'all'
+  })
   const [editorCategory, setEditorCategory] = useState<(typeof LOOKUP_CATEGORIES)[number] | null>(
     null,
   )
@@ -115,10 +115,24 @@ export default function LookupTables() {
     await Promise.all(
       LOOKUP_CATEGORIES.map(async (cat) => {
         try {
-          const data = await lookupsApi.list(cat.key, false)
+          if (cat.key === 'assets') {
+            const assetTotal = (
+              await safetyAssetsApi.listAssetTypes({ page: 1, page_size: 1 })
+            ).data.total
+            setCounts((prev) => ({
+              ...prev,
+              [cat.key]: { total: assetTotal, loading: false, error: false },
+            }))
+            return
+          }
+          const lookupData = await lookupsApi.list(cat.key, false)
           setCounts((prev) => ({
             ...prev,
-            [cat.key]: { total: data.total ?? data.items?.length ?? 0, loading: false, error: false },
+            [cat.key]: {
+              total: lookupData?.total ?? lookupData?.items?.length ?? 0,
+              loading: false,
+              error: false,
+            },
           }))
         } catch {
           setCounts((prev) => ({
@@ -165,11 +179,30 @@ export default function LookupTables() {
     setOptions([])
     resetCreateForm()
     try {
-      const data = await lookupsApi.list(cat.key, false)
-      setOptions(data.items ?? [])
+      const assetData =
+        cat.key === 'assets'
+          ? await safetyAssetsApi.listAssetTypes({ page: 1, page_size: 100 })
+          : null
+      const lookupData = cat.key === 'assets' ? null : await lookupsApi.list(cat.key, false)
+      const items = assetData
+        ? assetData.data.items.map((assetType) => ({
+              id: assetType.id,
+              category: 'assets',
+              code: assetType.name,
+              label: assetType.name,
+              description: assetType.description ?? undefined,
+              is_active: assetType.is_active,
+              display_order: assetType.id,
+            }))
+        : lookupData?.items ?? []
+      setOptions(items)
       setCounts((prev) => ({
         ...prev,
-        [cat.key]: { total: data.total ?? data.items?.length ?? 0, loading: false, error: false },
+        [cat.key]: {
+          total: assetData?.data.total ?? lookupData?.total ?? items.length,
+          loading: false,
+          error: false,
+        },
       }))
     } catch {
       setEditorError(
@@ -198,14 +231,37 @@ export default function LookupTables() {
     if (!editorCategory || !newLabel.trim() || !resolvedCode) return
     setSaving(true)
     try {
-      const created = await lookupsApi.create(editorCategory.key, {
-        category: editorCategory.key,
-        code: resolvedCode,
-        label: newLabel.trim(),
-        is_active: true,
-        display_order: options.length,
-      })
-      setOptions((prev) => [...prev, created])
+      const createdOption =
+        editorCategory.key === 'assets'
+          ? (() => undefined)()
+          : await lookupsApi.create(editorCategory.key, {
+              category: editorCategory.key,
+              code: resolvedCode,
+              label: newLabel.trim(),
+              is_active: true,
+              display_order: options.length,
+            })
+      const assetCreated =
+        editorCategory.key === 'assets'
+          ? await safetyAssetsApi.createAssetType({
+              category: 'safety',
+              name: newLabel.trim(),
+              force: false,
+            })
+          : null
+      const option =
+        assetCreated
+          ? {
+              id: assetCreated.data.id,
+              category: 'assets',
+              code: assetCreated.data.name,
+              label: assetCreated.data.name,
+              description: assetCreated.data.description ?? undefined,
+              is_active: assetCreated.data.is_active,
+              display_order: assetCreated.data.id,
+            }
+          : createdOption!
+      setOptions((prev) => [...prev, option])
       resetCreateForm()
       setCounts((prev) => ({
         ...prev,
@@ -227,6 +283,7 @@ export default function LookupTables() {
 
   const handleRemove = async (option: LookupOption) => {
     if (!editorCategory) return
+    if (editorCategory.key === 'assets') return
     const confirmed = window.confirm(
       t('admin.lookups.remove_confirm', 'Remove “{{label}}” from this lookup?', {
         label: option.label,
@@ -580,10 +637,10 @@ export default function LookupTables() {
                           'admin.lookups.customers_desc',
                           'Configure customer names for forms and dropdowns across the platform. Nothing is pre-seeded.',
                         )
-                      : cat.key === 'tools' || cat.key === 'locations' || cat.key === 'assets'
+                      : cat.key === 'assets'
                         ? t(
-                            'admin.lookups.form_lookup_not_ces',
-                            'Form-builder dropdown options only. CES calibrations use the Safety Asset Types & Site Locations panel above — not this card.',
+                            'admin.lookups.assets_desc',
+                            'Asset types used by the Safety Asset Register (tools, extinguishers, gauges, etc.)',
                           )
                         : t(
                             `admin.lookups.${cat.key}_desc`,
@@ -704,6 +761,7 @@ export default function LookupTables() {
                           <span className="ml-2 text-xs text-muted-foreground">inactive</span>
                         ) : null}
                       </span>
+                      {editorCategory?.key !== 'assets' ? (
                       <Button
                         type="button"
                         variant="ghost"
@@ -718,6 +776,7 @@ export default function LookupTables() {
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
+                      ) : null}
                     </li>
                   ))}
                 </ul>

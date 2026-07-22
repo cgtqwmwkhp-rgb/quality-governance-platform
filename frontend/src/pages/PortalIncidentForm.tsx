@@ -44,6 +44,7 @@ import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { cn } from '../helpers/utils'
 import { API_BASE_URL } from '../config/apiBase'
+import { lookupsApi, type LookupOption } from '../api/client'
 import {
   trackExp001FormOpened,
   trackExp001FormSubmitted,
@@ -137,32 +138,6 @@ const REPORT_CONFIGS = {
     gradientTo: 'to-cyan-500',
   },
 }
-
-// Contract options
-const CONTRACT_OPTIONS = [
-  { value: 'ukpn', label: 'UKPN', sublabel: 'UK Power Networks' },
-  { value: 'openreach', label: 'Openreach', sublabel: 'BT Group' },
-  { value: 'thames-water', label: 'Thames Water', sublabel: 'Water & Sewerage' },
-  { value: 'plantexpand', label: 'Plantexpand Ltd', sublabel: 'Internal' },
-  { value: 'cadent', label: 'Cadent', sublabel: 'Gas Distribution' },
-  { value: 'sgn', label: 'SGN', sublabel: 'Southern Gas Networks' },
-  { value: 'southern-water', label: 'Southern Water', sublabel: 'Water Services' },
-  { value: 'zenith', label: 'Zenith', sublabel: 'Fleet Management' },
-  { value: 'novuna', label: 'Novuna', sublabel: 'Scottish Power' },
-  { value: 'enterprise', label: 'Enterprise', sublabel: 'Fleet Solutions' },
-  { value: 'other', label: 'Other', sublabel: 'Specify below' },
-]
-
-// Role options
-const ROLE_OPTIONS = [
-  { value: 'mobile-engineer', label: 'Mobile Engineer' },
-  { value: 'workshop-pehq', label: 'Workshop (PE HQ)' },
-  { value: 'workshop-fixed', label: 'Vehicle Workshop (Fixed Customer Site)' },
-  { value: 'office', label: 'Office Based Employee' },
-  { value: 'trainee', label: 'Trainee/Apprentice' },
-  { value: 'non-pe', label: 'Non-Plantexpand Employee' },
-  { value: 'other', label: 'Other' },
-]
 
 // Medical assistance options
 const MEDICAL_OPTIONS = [
@@ -261,6 +236,29 @@ export default function PortalIncidentForm() {
   }
 
   const [formData, setFormData] = useState<FormData>(initialFormData)
+  const [customers, setCustomers] = useState<LookupOption[]>([])
+  const [roles, setRoles] = useState<LookupOption[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    void Promise.all([
+      lookupsApi.list('customers', true),
+      lookupsApi.list('workforce_roles', true),
+    ]).then(([customerResult, roleResult]) => {
+      if (!cancelled) {
+        setCustomers(customerResult.items || [])
+        setRoles(roleResult.items || [])
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setCustomers([])
+        setRoles([])
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Autosave hook (EXP-001: portal_form_autosave)
   // Excludes photos from autosave (can't serialize File objects)
@@ -434,7 +432,7 @@ export default function PortalIncidentForm() {
         reporter_name: reportType === 'complaint' ? formData.complainantName : formData.personName,
         reporter_email: user?.email || undefined,
         reporter_phone: formData.complainantContact || undefined,
-        department: formData.contract !== 'other' ? formData.contract : formData.contractOther,
+        // Do not stuff customer into department — customer stays in reporter_submission.contract.
         is_anonymous: false, // Portal users are identified
         reporter_submission: reporterSubmission,
       }
@@ -608,7 +606,7 @@ export default function PortalIncidentForm() {
       </header>
 
       <main className="max-w-lg mx-auto px-4 sm:px-6 py-6 pb-28">
-        {/* Step 1: Contract */}
+        {/* Step 1: Customer */}
         {step === 1 && (
           <div className="space-y-6">
             <div>
@@ -620,22 +618,17 @@ export default function PortalIncidentForm() {
 
             <FuzzySearchDropdown
               label={t('portal.select_contract')}
-              options={CONTRACT_OPTIONS}
+              options={customers.map((customer) => ({
+                value: customer.code,
+                label: customer.label,
+                sublabel: customer.description,
+              }))}
               value={formData.contract}
               onChange={(val) => setFormData((prev) => ({ ...prev, contract: val }))}
               placeholder={t('portal.search_contract')}
               required
             />
 
-            {formData.contract === 'other' && (
-              <Input
-                value={formData.contractOther}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, contractOther: e.target.value }))
-                }
-                placeholder={t('portal.specify_contract')}
-              />
-            )}
           </div>
         )}
 
@@ -709,7 +702,7 @@ export default function PortalIncidentForm() {
                 {/* Role */}
                 <FuzzySearchDropdown
                   label={t('portal.role_label')}
-                  options={ROLE_OPTIONS}
+                  options={roles.map((role) => ({ value: role.code, label: role.label }))}
                   value={formData.personRole}
                   onChange={(val) => setFormData((prev) => ({ ...prev, personRole: val }))}
                   placeholder={t('portal.select_role')}

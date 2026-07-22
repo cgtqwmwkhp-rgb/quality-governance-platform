@@ -10,6 +10,7 @@ const mockDelete = vi.fn()
 const mockListPendingSafetyLookups = vi.fn()
 const mockApproveSafetyLookup = vi.fn()
 const mockMergeSafetyLookup = vi.fn()
+const mockListAssetTypes = vi.fn()
 
 vi.mock('../../../api/client', () => ({
   lookupsApi: {
@@ -26,6 +27,7 @@ vi.mock('../../../api/safetyAssetsClient', () => ({
     listPendingSafetyLookups: (...args: unknown[]) => mockListPendingSafetyLookups(...args),
     approveSafetyLookup: (...args: unknown[]) => mockApproveSafetyLookup(...args),
     mergeSafetyLookup: (...args: unknown[]) => mockMergeSafetyLookup(...args),
+    listAssetTypes: (...args: unknown[]) => mockListAssetTypes(...args),
     previewSafetyLookup: vi.fn(),
     createAssetType: vi.fn(),
     createLocation: vi.fn(),
@@ -61,12 +63,9 @@ describe('LookupTables configure CTA', () => {
     mockListPendingSafetyLookups.mockResolvedValue({ data: { items: [], total: 0 } })
     mockList.mockImplementation(async (category: string) => {
       if (
-        category === 'departments' ||
-        category === 'locations' ||
         category === 'workforce_roles' ||
         category === 'customers' ||
-        category === 'tools' ||
-        category === 'assets'
+        category === 'medical_assistance'
       ) {
         return { items: [], total: 0 }
       }
@@ -75,14 +74,15 @@ describe('LookupTables configure CTA', () => {
         total: 1,
       }
     })
+    mockListAssetTypes.mockResolvedValue({ data: { items: [], total: 0 } })
   })
 
   it('shows Not configured honesty and primary Configure CTA for empty categories', async () => {
     renderLookups(<LookupTables />)
 
-    expect(await screen.findByTestId('lookup-count-departments')).toHaveTextContent('Not configured')
-    expect(screen.getByTestId('lookup-empty-departments')).toBeInTheDocument()
-    expect(screen.getByTestId('lookup-configure-departments')).toHaveTextContent('Configure')
+    expect(await screen.findByTestId('lookup-count-medical_assistance')).toHaveTextContent('Not configured')
+    expect(screen.getByTestId('lookup-empty-medical_assistance')).toBeInTheDocument()
+    expect(screen.getByTestId('lookup-configure-medical_assistance')).toHaveTextContent('Configure')
   })
 
   it('opens editor from Configure CTA and loads real options', async () => {
@@ -103,7 +103,7 @@ describe('LookupTables configure CTA', () => {
     mockList.mockRejectedValue(new Error('network'))
     renderLookups(<LookupTables />)
 
-    expect(await screen.findByTestId('lookup-count-departments')).toHaveTextContent(
+    expect(await screen.findByTestId('lookup-count-medical_assistance')).toHaveTextContent(
       'Count unavailable',
     )
     expect(screen.queryByTestId('lookup-empty-departments')).not.toBeInTheDocument()
@@ -127,14 +127,18 @@ describe('LookupTables configure CTA', () => {
     expect(screen.getByTestId('lookup-customers-hints')).toHaveTextContent('ukpn, openreach')
   })
 
-  it('exposes tools and assets lookup categories on the hub', async () => {
+  it('exposes asset types and medical assistance categories on the hub', async () => {
     renderLookups(<LookupTables />)
 
-    expect(await screen.findByTestId('lookup-card-tools')).toBeInTheDocument()
-    expect(screen.getByTestId('lookup-card-assets')).toBeInTheDocument()
-    expect(screen.getByTestId('lookup-count-tools')).toHaveTextContent('Not configured')
-    expect(screen.getByTestId('lookup-count-assets')).toHaveTextContent('Not configured')
+    expect(await screen.findByTestId('lookup-card-assets')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByTestId('lookup-count-assets')).toHaveTextContent('Not configured')
+    })
+    expect(screen.getByTestId('lookup-card-medical_assistance')).toBeInTheDocument()
     expect(screen.getByTestId('lookup-hub-category-filter')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(mockListAssetTypes).toHaveBeenCalled()
+    })
   })
 
   it('opens workforce_roles editor and shows standard code hints when empty', async () => {
@@ -175,7 +179,7 @@ describe('LookupTables configure CTA', () => {
     const user = userEvent.setup()
     mockCreate.mockResolvedValue({
       id: 9,
-      category: 'locations',
+      category: 'medical_assistance',
       code: 'oxford_depot',
       label: 'Oxford Depot',
       is_active: true,
@@ -183,7 +187,7 @@ describe('LookupTables configure CTA', () => {
     })
     renderLookups(<LookupTables />)
 
-    await user.click(await screen.findByTestId('lookup-configure-locations'))
+    await user.click(await screen.findByTestId('lookup-configure-medical_assistance'))
     expect(await screen.findByTestId('lookup-editor-dialog')).toBeInTheDocument()
 
     await user.type(screen.getByTestId('lookup-new-label'), 'Oxford Depot')
@@ -193,9 +197,9 @@ describe('LookupTables configure CTA', () => {
     await user.click(screen.getByTestId('lookup-add-option'))
     await waitFor(() => {
       expect(mockCreate).toHaveBeenCalledWith(
-        'locations',
+        'medical_assistance',
         expect.objectContaining({
-          category: 'locations',
+          category: 'medical_assistance',
           code: 'oxford_depot',
           label: 'Oxford Depot',
         }),
@@ -207,7 +211,7 @@ describe('LookupTables configure CTA', () => {
     const user = userEvent.setup()
     mockCreate.mockResolvedValue({
       id: 10,
-      category: 'locations',
+      category: 'medical_assistance',
       code: 'ox5',
       label: 'Oxford Depot',
       is_active: true,
@@ -215,7 +219,7 @@ describe('LookupTables configure CTA', () => {
     })
     renderLookups(<LookupTables />)
 
-    await user.click(await screen.findByTestId('lookup-configure-locations'))
+    await user.click(await screen.findByTestId('lookup-configure-medical_assistance'))
     await screen.findByTestId('lookup-editor-dialog')
     await user.type(screen.getByTestId('lookup-new-label'), 'Oxford Depot')
     await user.click(screen.getByTestId('lookup-advanced-code-toggle'))
@@ -226,7 +230,7 @@ describe('LookupTables configure CTA', () => {
 
     await waitFor(() => {
       expect(mockCreate).toHaveBeenCalledWith(
-        'locations',
+        'medical_assistance',
         expect.objectContaining({ code: 'ox5', label: 'Oxford Depot' }),
       )
     })

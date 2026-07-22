@@ -21,7 +21,7 @@ import {
   Megaphone,
   MessageSquare,
 } from 'lucide-react'
-import { auditTrailApi, contractsApi, libraryReviewApi } from '../../api/client'
+import { auditTrailApi, libraryReviewApi, lookupsApi } from '../../api/client'
 import { formConfigApi } from '../../api/formConfigClient'
 import { Card } from '../../components/ui/Card'
 import { cn } from '../../helpers/utils'
@@ -53,10 +53,10 @@ const QUICK_ACTIONS: QuickAction[] = [
     color: 'bg-primary/10 text-primary',
   },
   {
-    title: 'Contracts',
-    description: 'Manage contract options',
+    title: 'Customers',
+    description: 'Manage customer options',
     icon: <Building className="w-6 h-6" />,
-    href: '/admin/contracts',
+    href: '/admin/lookups?category=customers',
     color: 'bg-blue-100 text-blue-600',
   },
   {
@@ -156,9 +156,9 @@ export default function AdminDashboard() {
     setActivityUnavailable(false)
 
     try {
-      const [formsRes, contractsRes, trailRes, librarySummaryRes] = await Promise.allSettled([
+      const [formsRes, customersRes, trailRes, librarySummaryRes] = await Promise.allSettled([
         formConfigApi.listTemplates({ page_size: 1, is_active: true }),
-        contractsApi.list(true),
+        lookupsApi.list('customers', true),
         auditTrailApi.list({ page: 1, per_page: 5 }),
         libraryReviewApi.getDashboardSummary(),
       ])
@@ -167,9 +167,9 @@ export default function AdminDashboard() {
         formsRes.status === 'fulfilled'
           ? formsRes.value.total ?? formsRes.value.items?.length ?? 0
           : null
-      const contractsTotal =
-        contractsRes.status === 'fulfilled'
-          ? contractsRes.value.total ?? contractsRes.value.items?.length ?? 0
+      const customersTotal =
+        customersRes.status === 'fulfilled'
+          ? customersRes.value.total ?? customersRes.value.items?.length ?? 0
           : null
       const librarySummary = librarySummaryRes.status === 'fulfilled' ? librarySummaryRes.value.data : null
 
@@ -180,10 +180,10 @@ export default function AdminDashboard() {
           '',
         )
       }
-      if (contractsRes.status === 'rejected') {
+      if (customersRes.status === 'rejected') {
         captureAdminLoadError(
-          contractsRes.reason,
-          { component: 'AdminDashboard', action: 'loadContracts' },
+          customersRes.reason,
+          { component: 'AdminDashboard', action: 'loadCustomers' },
           '',
         )
       }
@@ -215,15 +215,15 @@ export default function AdminDashboard() {
           unavailable: formsTotal === null,
         },
         {
-          label: t('admin.dashboard.stat_active_contracts', 'Active Contracts'),
-          value: contractsTotal === null ? '—' : String(contractsTotal),
+          label: t('admin.dashboard.stat_active_customers', 'Active Customers'),
+          value: customersTotal === null ? '—' : String(customersTotal),
           change:
-            contractsTotal === null
+            customersTotal === null
               ? t('admin.dashboard.stat_unavailable', 'Count unavailable')
               : t('admin.dashboard.stat_live', 'Live from API'),
           trend: 'neutral',
           icon: <Building className="w-5 h-5" />,
-          unavailable: contractsTotal === null,
+          unavailable: customersTotal === null,
         },
         {
           label: t('admin.dashboard.stat_statutory_documents', 'Statutory Documents'),
@@ -287,7 +287,7 @@ export default function AdminDashboard() {
         setActivityUnavailable(true)
       }
 
-      if (formsTotal === null || contractsTotal === null || librarySummary === null) {
+      if (formsTotal === null || customersTotal === null || librarySummary === null) {
         setLoadError(
           t(
             'admin.dashboard.load_unavailable',
@@ -324,7 +324,7 @@ export default function AdminDashboard() {
               <p className="text-muted-foreground mt-2">
                 {t(
                   'admin.dashboard.subtitle',
-                  'Manage forms, contracts, settings, and system configuration',
+                  'Manage forms, customers, settings, and system configuration',
                 )}
               </p>
             </div>

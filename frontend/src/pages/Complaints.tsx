@@ -7,8 +7,6 @@ import {
   complaintsApi,
   Complaint,
   ComplaintCreate,
-  Contract,
-  contractsApi,
   evidenceAssetsApi,
   getApiErrorMessage,
   lookupsApi,
@@ -169,7 +167,6 @@ export default function Complaints() {
     Record<number, { email: string; user?: UserSearchResult }>
   >({})
   const [formData, setFormData] = useState<ComplaintCreate>(freshComplaintForm)
-  const [contracts, setContracts] = useState<Contract[]>([])
   const [customerOptions, setCustomerOptions] = useState<{ value: string; label: string }[]>([])
   const [selectedCustomerCode, setSelectedCustomerCode] = useState('')
   const [customersLoaded, setCustomersLoaded] = useState(false)
@@ -192,7 +189,7 @@ export default function Complaints() {
     }
   }, [])
 
-  // Load Customers lookup (SSOT) + contracts (optional FK) + topic labels when create opens.
+  // Load Customers lookup (SSOT) + topic labels when create opens.
   useEffect(() => {
     if (!showModal) {
       setCustomersLoaded(false)
@@ -202,20 +199,12 @@ export default function Complaints() {
     setCustomersLoaded(false)
     ;(async () => {
       try {
-        const [customerRes, contractRes, lookupRes] = await Promise.all([
+        const [customerRes, lookupRes] = await Promise.all([
           lookupsApi.list(CUSTOMERS_LOOKUP_CATEGORY, true).catch(() => ({ items: [], total: 0 })),
-          contractsApi.list(true).catch(() => ({ items: [] as Contract[] })),
           lookupsApi.list('complaint_types', true).catch(() => ({ items: [], total: 0 })),
         ])
         if (cancelled) return
-        const fromLookup = toCustomerSelectOptions(customerRes.items || [])
-        const fromContracts = (contractRes.items || []).map((c) => ({
-          value: `contract:${c.id}`,
-          label: c.client_name ? `${c.client_name} (${c.code})` : `${c.name} (${c.code})`,
-        }))
-        // Prefer Admin → Lookups → Customers; fall back to Contracts only if lookup empty.
-        setCustomerOptions(fromLookup.length > 0 ? fromLookup : fromContracts)
-        setContracts(contractRes.items || [])
+        setCustomerOptions(toCustomerSelectOptions(customerRes.items || []))
         setCustomersLoaded(true)
         setTopicOptions(
           mergeLookupSelectOptions(
@@ -256,27 +245,11 @@ export default function Complaints() {
       }))
       return
     }
-    if (value.startsWith('contract:')) {
-      const id = Number(value.slice('contract:'.length))
-      const contract = contracts.find((c) => c.id === id)
-      setFormData((prev) => ({
-        ...prev,
-        contract_id: Number.isFinite(id) ? id : null,
-        complainant_company: contract?.client_name || contract?.name || '',
-      }))
-      return
-    }
     const option = customerOptions.find((o) => o.value === value)
     const label = option?.label || value
-    const matched = contracts.find(
-      (c) =>
-        c.code?.toLowerCase() === value.toLowerCase() ||
-        c.client_name?.toLowerCase() === label.toLowerCase() ||
-        c.name?.toLowerCase() === label.toLowerCase(),
-    )
     setFormData((prev) => ({
       ...prev,
-      contract_id: matched?.id ?? null,
+      contract_id: null,
       complainant_company: label,
     }))
   }

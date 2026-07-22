@@ -659,12 +659,18 @@ async def submit_quick_report(
         priority = priority_map.get(report.severity.lower(), "MEDIUM")
         display_name = require_portal_display_name(report, reporter_submission)
 
+        # Customer code lives on NearMiss.contract. Prefer reporter_submission.contract;
+        # department is a legacy bridge from older portal clients.
+        customer_code = str(reporter_submission.get("contract") or "").strip() or (
+            (report.department or "").strip()
+        )
+
         # Create Near Miss record
         near_miss = NearMiss(
             reference_number=ref_number,
             reporter_name=display_name,
             reporter_email=report.reporter_email if not report.is_anonymous else None,
-            contract=report.department or "Not specified",
+            contract=customer_code or "Not specified",
             location=report.location or "Not specified",
             event_date=datetime.now(timezone.utc),
             description=report.description,
