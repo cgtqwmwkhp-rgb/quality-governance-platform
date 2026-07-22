@@ -23,6 +23,8 @@ const DESKTOP_FIELD_CLASS =
 const MOBILE_FIELD_CLASS =
   'w-full px-4 py-4 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 text-lg'
 
+const LOCATION_PAGE_SIZE = 200
+
 function fieldClass(variant: 'desktop' | 'mobile', extra?: string): string {
   const base = variant === 'mobile' ? MOBILE_FIELD_CLASS : DESKTOP_FIELD_CLASS
   return extra ? `${base} ${extra}` : base
@@ -58,6 +60,7 @@ function UserEntitySelect({
   const [showDropdown, setShowDropdown] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const searchSeqRef = useRef(0)
 
   useEffect(() => {
     if (label !== undefined) setQuery(label)
@@ -80,21 +83,26 @@ function UserEntitySelect({
   }, [])
 
   const runSearch = async (search: string) => {
+    const seq = ++searchSeqRef.current
     if (search.trim().length < 2) {
-      setResults([])
-      setLoading(false)
+      if (seq === searchSeqRef.current) {
+        setResults([])
+        setLoading(false)
+      }
       return
     }
     setLoading(true)
     setError(null)
     try {
       const response = await usersApi.search(search.trim())
+      if (seq !== searchSeqRef.current) return
       setResults(response.data || [])
     } catch (err) {
+      if (seq !== searchSeqRef.current) return
       setError(getApiErrorMessage(err, 'Could not search users.'))
       setResults([])
     } finally {
-      setLoading(false)
+      if (seq === searchSeqRef.current) setLoading(false)
     }
   }
 
@@ -102,6 +110,8 @@ function UserEntitySelect({
     const next = event.target.value
     setQuery(next)
     setShowDropdown(true)
+    // Typing after a selection must clear the stale user id until a new pick.
+    if (value) onChange('', undefined)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       void runSearch(next)
@@ -200,6 +210,25 @@ function UserEntitySelect({
   )
 }
 
+async function loadAllLocations(): Promise<SafetyLocation[]> {
+  const all: SafetyLocation[] = []
+  let page = 1
+  // Cap pages so a runaway total cannot hang the picker.
+  for (let i = 0; i < 25; i += 1) {
+    const response = await safetyAssetsApi.listLocations({
+      page,
+      page_size: LOCATION_PAGE_SIZE,
+      search: undefined,
+    })
+    const items = response.data.items || []
+    all.push(...items)
+    const total = response.data.total ?? all.length
+    if (items.length < LOCATION_PAGE_SIZE || all.length >= total) break
+    page += 1
+  }
+  return all
+}
+
 function LocationEntitySelect({
   value,
   onChange,
@@ -216,15 +245,15 @@ function LocationEntitySelect({
   const [locations, setLocations] = useState<SafetyLocation[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState('')
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(null)
-    safetyAssetsApi
-      .listLocations({ page: 1, page_size: 200 })
-      .then((response) => {
-        if (!cancelled) setLocations(response.data.items || [])
+    loadAllLocations()
+      .then((items) => {
+        if (!cancelled) setLocations(items)
       })
       .catch((err) => {
         if (!cancelled) setError(getApiErrorMessage(err, 'Could not load locations.'))
@@ -263,25 +292,46 @@ function LocationEntitySelect({
     )
   }
 
+  const needle = filter.trim().toLowerCase()
+  const visible = needle
+    ? locations.filter((location) => location.name.toLowerCase().includes(needle))
+    : locations
+
   return (
-    <select
-      value={value}
-      onChange={(event) => {
-        const id = event.target.value
-        const match = locations.find((location) => String(location.id) === id)
-        onChange(id, match?.name)
-      }}
-      disabled={disabled}
-      aria-label="Select a location"
-      className={fieldClass(variant, className)}
-    >
-      <option value="">Select a location…</option>
-      {locations.map((location) => (
-        <option key={location.id} value={String(location.id)}>
-          {location.name}
-        </option>
-      ))}
-    </select>
+    <div className={`space-y-2 ${className ?? ''}`}>
+      {locations.length > 20 && (
+        <input
+          type="search"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          placeholder="Filter locations…"
+          disabled={disabled}
+          aria-label="Filter locations"
+          className={fieldClass(variant)}
+        />
+      )}
+      <select
+        value={value}
+        onChange={(event) => {
+          const id = event.target.value
+          const match = locations.find((location) => String(location.id) === id)
+          onChange(id, match?.name)
+        }}
+        disabled={disabled}
+        aria-label="Select a location"
+        className={fieldClass(variant)}
+      >
+        <option value="">Select a location…</option>
+        {visible.map((location) => (
+          <option key={location.id} value={String(location.id)}>
+            {location.name}
+          </option>
+        ))}
+      </select>
+      {needle && visible.length === 0 && (
+        <p className={`text-xs ${mutedTextClass(variant)}`}>No locations match “{filter}”.</p>
+      )}
+    </div>
   )
 }
 

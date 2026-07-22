@@ -6,7 +6,7 @@ const mockUsersSearch = vi.fn()
 const mockListLocations = vi.fn()
 const mockLookupsList = vi.fn()
 
-vi.mock('../../api/client', () => ({
+vi.mock('../../../api/client', () => ({
   usersApi: {
     search: (...args: unknown[]) => mockUsersSearch(...args),
   },
@@ -17,13 +17,13 @@ vi.mock('../../api/client', () => ({
     err instanceof Error ? err.message : fallback || 'error',
 }))
 
-vi.mock('../../api/safetyAssetsClient', () => ({
+vi.mock('../../../api/safetyAssetsClient', () => ({
   safetyAssetsApi: {
     listLocations: (...args: unknown[]) => mockListLocations(...args),
   },
 }))
 
-import EntitySelectAnswer from './EntitySelectAnswer'
+import EntitySelectAnswer from '../EntitySelectAnswer'
 
 describe('EntitySelectAnswer', () => {
   beforeEach(() => {
@@ -53,12 +53,48 @@ describe('EntitySelectAnswer', () => {
     expect(onChange).toHaveBeenCalledWith('42', 'Jane Doe')
   })
 
+  it('clears the selected user id when the search text is edited', async () => {
+    const onChange = vi.fn()
+    const { rerender } = render(
+      <EntitySelectAnswer kind="user" value="42" label="Jane Doe" onChange={onChange} />,
+    )
+
+    const input = screen.getByLabelText('Search for a user')
+    fireEvent.change(input, { target: { value: 'Jane D' } })
+    expect(onChange).toHaveBeenCalledWith('', undefined)
+
+    rerender(<EntitySelectAnswer kind="user" value="" label={undefined} onChange={onChange} />)
+    expect(input).toHaveValue('Jane D')
+  })
+
   it('shows an error message when location loading fails', async () => {
     mockListLocations.mockRejectedValue(new Error('network down'))
 
     render(<EntitySelectAnswer kind="location" value="" onChange={vi.fn()} />)
 
     expect(await screen.findByText('network down')).toBeInTheDocument()
+  })
+
+  it('paginates locations beyond the first page', async () => {
+    mockListLocations
+      .mockResolvedValueOnce({
+        data: {
+          items: Array.from({ length: 200 }, (_, i) => ({ id: i + 1, name: `Loc ${i + 1}` })),
+          total: 201,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          items: [{ id: 201, name: 'Loc 201' }],
+          total: 201,
+        },
+      })
+
+    render(<EntitySelectAnswer kind="location" value="" onChange={vi.fn()} />)
+
+    expect(await screen.findByLabelText('Select a location')).toBeInTheDocument()
+    await waitFor(() => expect(mockListLocations).toHaveBeenCalledTimes(2))
+    expect(screen.getByText('Loc 201')).toBeInTheDocument()
   })
 
   it('renders a customer select populated from active lookup options, keyed by code', async () => {
@@ -81,12 +117,10 @@ describe('EntitySelectAnswer', () => {
   })
 
   it('shows an empty state when no locations are configured', async () => {
-    mockListLocations.mockResolvedValue({ data: { items: [] } })
+    mockListLocations.mockResolvedValue({ data: { items: [], total: 0 } })
 
     render(<EntitySelectAnswer kind="location" value="" onChange={vi.fn()} />)
 
-    expect(
-      await screen.findByText(/No locations configured yet/),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/No locations configured yet/)).toBeInTheDocument()
   })
 })
