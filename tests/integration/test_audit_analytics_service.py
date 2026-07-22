@@ -357,6 +357,72 @@ async def test_get_critical_queue_lists_failed_open_finding(db: AsyncSession):
 
 
 @pytest.mark.asyncio
+async def test_get_critical_queue_skips_essential_question_hidden_by_live_conditional_logic(db: AsyncSession):
+    """An essential question that's currently hidden by a show/hide rule
+    (evaluated against live answers, not just a stored `applicability`
+    snapshot) must not appear in the critical queue or inflate
+    `incomplete_critical_count` — mirrors AuditService's completion gate.
+    """
+    from sqlalchemy import select
+
+    template = await _seed_template_with_essential_question(db)
+    result = await db.execute(select(AuditQuestion).where(AuditQuestion.template_id == template.id))
+    essential_question = result.scalars().first()
+
+    source_question = AuditQuestion(
+        template_id=template.id,
+        section_id=essential_question.section_id,
+        question_text="Is this a powered forklift?",
+        question_type="yes_no",
+        weight=1.0,
+        max_score=1.0,
+        is_required=True,
+        criticality="required",
+    )
+    db.add(source_question)
+    await db.flush()
+    essential_question.conditional_logic_json = [
+        {"source_question_id": source_question.id, "operator": "equals", "value": "yes", "action": "show"}
+    ]
+    await db.flush()
+
+    hidden_run = AuditRun(
+        template_id=template.id,
+        template_version=1,
+        status=AuditStatus.IN_PROGRESS,
+        tenant_id=TENANT_ID,
+        reference_number=generate_test_reference("AUD"),
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(hidden_run)
+    await db.flush()
+    db.add(AuditResponse(run_id=hidden_run.id, question_id=source_question.id, response_value="no"))
+
+    shown_run = AuditRun(
+        template_id=template.id,
+        template_version=1,
+        status=AuditStatus.IN_PROGRESS,
+        tenant_id=TENANT_ID,
+        reference_number=generate_test_reference("AUD"),
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(shown_run)
+    await db.flush()
+    db.add(AuditResponse(run_id=shown_run.id, question_id=source_question.id, response_value="yes"))
+    await db.commit()
+
+    service = AuditAnalyticsService(db)
+    queue = await service.get_critical_queue(TENANT_ID)
+
+    assert len(queue) == 1
+    assert queue[0].run_id == shown_run.id
+    assert queue[0].question_id == essential_question.id
+
+    count = await service.get_critical_count(TENANT_ID)
+    assert count == 1
+
+
+@pytest.mark.asyncio
 async def test_export_runs_csv_includes_dimensions_and_applicability(db: AsyncSession):
     from sqlalchemy import select
 

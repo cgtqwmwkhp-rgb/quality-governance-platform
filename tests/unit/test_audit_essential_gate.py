@@ -147,6 +147,25 @@ class TestHasFailedEssentialQuestion:
         responses = [_response(1, response_value="fail", applicability="hidden_by_logic")]
         assert AuditService._has_failed_essential_question([question], responses) is False
 
+    def test_live_conditional_logic_hides_failed_essential_question(self):
+        # Q2 (essential, failed) only applies when Q1 == "yes". The stored
+        # response's `applicability` snapshot may be stale/absent, so the gate
+        # must also re-evaluate conditional_logic_json against live answers
+        # (mirrors _missing_required_question_ids) instead of failing the run
+        # on a question that's actually hidden.
+        q1 = _question(1, criticality="required", question_type="yes_no")
+        q2 = _question(
+            2,
+            criticality="essential",
+            question_type="pass_fail",
+            conditional_logic_json=[{"source_question_id": 1, "operator": "equals", "value": "yes", "action": "show"}],
+        )
+        responses_hidden = [_response(1, response_value="no"), _response(2, response_value="fail")]
+        assert AuditService._has_failed_essential_question([q1, q2], responses_hidden) is False
+
+        responses_shown = [_response(1, response_value="yes"), _response(2, response_value="fail")]
+        assert AuditService._has_failed_essential_question([q1, q2], responses_shown) is True
+
     def test_out_of_composition_scope_essential_failure_is_ignored(self):
         section = _section(1, rules={"asset_type_ids": [5]})
         question = _question(1, criticality="essential", question_type="pass_fail", section_id=1)

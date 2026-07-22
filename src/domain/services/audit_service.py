@@ -668,6 +668,9 @@ class AuditService:
         """
         section_by_id = {section.id: section for section in (sections or [])}
         response_by_question = {response.question_id: response for response in responses}
+        answers_by_question = {
+            response.question_id: cls._response_answer_for_conditional(response) for response in responses
+        }
         for question in questions:
             if cls._question_criticality_value(question) != QuestionCriticality.ESSENTIAL.value:
                 continue
@@ -682,6 +685,12 @@ class AuditService:
             if response is None:
                 continue
             if getattr(response, "applicability", None) == ResponseApplicability.HIDDEN_BY_LOGIC.value:
+                continue
+            # Conditional logic: a stored fail/finding on an essential question
+            # that is currently hidden by live conditional-logic rules must not
+            # force the run to fail (mirrors _missing_required_question_ids).
+            rules = getattr(question, "conditional_logic_json", None)
+            if rules and not is_question_visible(rules, answers_by_question):
                 continue
             if cls._response_creates_finding(question, response):
                 return True

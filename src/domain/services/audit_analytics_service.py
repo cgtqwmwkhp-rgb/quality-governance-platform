@@ -32,6 +32,7 @@ from src.domain.models.audit import (
 )
 from src.domain.models.engineer import Engineer
 from src.domain.models.location import Location
+from src.domain.services.audit_conditional import is_question_visible
 from src.domain.services.audit_scoring_service import AuditScoringService
 
 SUPPORTED_GROUP_BY = (
@@ -71,6 +72,27 @@ def _enum_value(value: Any) -> Optional[str]:
 
 def _cutoff(days: int) -> datetime:
     return datetime.now(timezone.utc) - timedelta(days=max(days, 0))
+
+
+def _response_answer_for_conditional(response: AuditResponse) -> Any:
+    """Best-effort answer extraction for conditional-logic evaluation.
+
+    Mirrors ``AuditService._response_answer_for_conditional`` so the critical
+    queue evaluates the same live show/hide rules as run completion does.
+    """
+    value = getattr(response, "response_value", None)
+    if value not in (None, ""):
+        return value
+    text = getattr(response, "response_text", None)
+    if text not in (None, ""):
+        return text
+    number = getattr(response, "response_number", None)
+    if number is not None:
+        return number
+    boolean = getattr(response, "response_bool", None)
+    if boolean is not None:
+        return "yes" if boolean else "no"
+    return None
 
 
 class AuditAnalyticsService:
@@ -483,6 +505,7 @@ class AuditAnalyticsService:
                 continue
             responses_by_question = {r.question_id: r for r in (run.responses or [])}
             findings_by_question = {f.question_id: f for f in (run.findings or []) if f.question_id is not None}
+            answers_by_question = {r.question_id: _response_answer_for_conditional(r) for r in (run.responses or [])}
 
             for question in run_questions:
                 if question.section_id is not None:
@@ -496,6 +519,14 @@ class AuditAnalyticsService:
 
                 response = responses_by_question.get(question.id)
                 if response is not None and response.applicability == ResponseApplicability.HIDDEN_BY_LOGIC.value:
+                    continue
+                # Conditional logic: also re-evaluate live show/hide rules, not
+                # just the stored applicability snapshot (mirrors
+                # AuditService._missing_required_question_ids), so an essential
+                # question hidden by a since-changed answer stops inflating the
+                # critical queue / incomplete_critical_count KPI.
+                rules = getattr(question, "conditional_logic_json", None)
+                if rules and not is_question_visible(rules, answers_by_question):
                     continue
 
                 template_name = run.template.name if run.template else None
