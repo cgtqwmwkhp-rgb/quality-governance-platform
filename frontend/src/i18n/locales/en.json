@@ -1987,6 +1987,7 @@
   "near_misses.feedback.risk_raised": "Risk {{ref}} raised and linked",
   "near_misses.feedback.saved": "Changes saved",
   "near_misses.form.contract": "Contract",
+  "near_misses.form.contract_placeholder": "Select contract",
   "near_misses.form.description": "Description",
   "near_misses.form.event_date": "Event date",
   "near_misses.form.potential_consequences": "Potential consequences",
