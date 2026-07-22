@@ -218,7 +218,7 @@ async function loadAllLocations(): Promise<SafetyLocation[]> {
     const response = await safetyAssetsApi.listLocations({
       page,
       page_size: LOCATION_PAGE_SIZE,
-      search: undefined,
+      is_active: true,
     })
     const items = response.data.items || []
     all.push(...items)
@@ -293,9 +293,17 @@ function LocationEntitySelect({
   }
 
   const needle = filter.trim().toLowerCase()
-  const visible = needle
+  const selected = value
+    ? locations.find((location) => String(location.id) === value)
+    : undefined
+  const filtered = needle
     ? locations.filter((location) => location.name.toLowerCase().includes(needle))
     : locations
+  // Keep the current selection visible even when the filter would hide it.
+  const visible =
+    selected && !filtered.some((location) => location.id === selected.id)
+      ? [selected, ...filtered]
+      : filtered
 
   return (
     <div className={`space-y-2 ${className ?? ''}`}>
@@ -328,7 +336,7 @@ function LocationEntitySelect({
           </option>
         ))}
       </select>
-      {needle && visible.length === 0 && (
+      {needle && filtered.length === 0 && !selected && (
         <p className={`text-xs ${mutedTextClass(variant)}`}>No locations match “{filter}”.</p>
       )}
     </div>

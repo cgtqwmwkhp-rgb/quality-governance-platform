@@ -75,17 +75,21 @@ describe('EntitySelectAnswer', () => {
     expect(await screen.findByText('network down')).toBeInTheDocument()
   })
 
-  it('paginates locations beyond the first page', async () => {
+  it('paginates active locations beyond the first page', async () => {
     mockListLocations
       .mockResolvedValueOnce({
         data: {
-          items: Array.from({ length: 200 }, (_, i) => ({ id: i + 1, name: `Loc ${i + 1}` })),
+          items: Array.from({ length: 200 }, (_, i) => ({
+            id: i + 1,
+            name: `Loc ${i + 1}`,
+            is_active: true,
+          })),
           total: 201,
         },
       })
       .mockResolvedValueOnce({
         data: {
-          items: [{ id: 201, name: 'Loc 201' }],
+          items: [{ id: 201, name: 'Loc 201', is_active: true }],
           total: 201,
         },
       })
@@ -94,6 +98,9 @@ describe('EntitySelectAnswer', () => {
 
     expect(await screen.findByLabelText('Select a location')).toBeInTheDocument()
     await waitFor(() => expect(mockListLocations).toHaveBeenCalledTimes(2))
+    expect(mockListLocations).toHaveBeenCalledWith(
+      expect.objectContaining({ is_active: true }),
+    )
     expect(screen.getByText('Loc 201')).toBeInTheDocument()
   })
 
