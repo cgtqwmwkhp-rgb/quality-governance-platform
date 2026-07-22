@@ -142,11 +142,20 @@ class CesImportReport:
 
         Per-row data errors (AMBIGUOUS_SERIAL, INVALID_ROW, …) are skipped on
         commit. Unresolved similar-lookup confirmations still block commit.
+
+        Dry-run leaves NEEDS_CONFIRMATION out of ``errors`` (preview-friendly);
+        ``requires_confirmation`` still blocks ``can_commit`` so clients that
+        gate on this flag alone do not enable Commit prematurely. Commit path
+        re-validates with confirmations + enforce_confirmations=True.
         """
         if self.valid_rows <= 0:
             return False
         blocking = {"NEEDS_CONFIRMATION", "INVALID_CONFIRMATION"}
-        return not any(issue.code in blocking for issue in self.errors)
+        if any(issue.code in blocking for issue in self.errors):
+            return False
+        if self.dry_run and self.requires_confirmation:
+            return False
+        return True
 
     def to_dict(self) -> dict[str, Any]:
         def issue(item: RowIssue) -> dict[str, Any]:

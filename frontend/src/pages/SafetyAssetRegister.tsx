@@ -300,14 +300,14 @@ export default function SafetyAssetRegister() {
   const allSimilarConfirmed = similarProposals.every(
     (p) => Boolean(cesConfirmations[`${p.kind}:${p.name}`]),
   )
-  // Commit valid rows even when some rows failed; similar-lookup confirmations still required.
+  // Dry-run sets can_commit=false while similar lookups need UI confirmation;
+  // after every similar proposal is confirmed, allow Commit (server re-checks).
   const canCommitCes = Boolean(
     cesReport &&
       !cesBusy &&
       allSimilarConfirmed &&
-      (typeof cesReport.can_commit === 'boolean'
-        ? cesReport.can_commit
-        : cesReport.valid_rows > 0 && !cesReport.requires_confirmation),
+      cesReport.valid_rows > 0 &&
+      (cesReport.can_commit || cesReport.requires_confirmation),
   )
 
   const dryRunCesImport = async () => {

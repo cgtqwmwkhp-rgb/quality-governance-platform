@@ -236,12 +236,15 @@ class ExecutiveDashboardService:
         }
 
     async def _get_near_miss_summary(self, cutoff: datetime) -> Dict[str, Any]:
-        """Get near-miss summary statistics."""
-        tf = self._tenant_filter(NearMiss)
+        """Get near-miss summary statistics.
 
-        total_result = await self.db.execute(
-            select(func.count(NearMiss.id)).where(and_(tf, NearMiss.created_at >= cutoff))
-        )
+        Pulse totals use event_date (coalesced to created_at) so the 7-day
+        headline matches near_misses_weekly sparklines.
+        """
+        tf = self._tenant_filter(NearMiss)
+        nm_when = func.coalesce(NearMiss.event_date, NearMiss.created_at)
+
+        total_result = await self.db.execute(select(func.count(NearMiss.id)).where(and_(tf, nm_when >= cutoff)))
         total = total_result.scalar() or 0
 
         previous_cutoff = cutoff - timedelta(days=30)
@@ -249,8 +252,8 @@ class ExecutiveDashboardService:
             select(func.count(NearMiss.id)).where(
                 and_(
                     tf,
-                    NearMiss.created_at >= previous_cutoff,
-                    NearMiss.created_at < cutoff,
+                    nm_when >= previous_cutoff,
+                    nm_when < cutoff,
                 )
             )
         )
@@ -269,12 +272,15 @@ class ExecutiveDashboardService:
         }
 
     async def _get_complaint_summary(self, cutoff: datetime) -> Dict[str, Any]:
-        """Get complaint summary statistics."""
-        tf = self._tenant_filter(Complaint)
+        """Get complaint summary statistics.
 
-        total_result = await self.db.execute(
-            select(func.count(Complaint.id)).where(and_(tf, Complaint.created_at >= cutoff))
-        )
+        Pulse totals use received_date (coalesced to created_at) so the 7-day
+        headline matches complaints_weekly sparklines.
+        """
+        tf = self._tenant_filter(Complaint)
+        complaint_when = func.coalesce(Complaint.received_date, Complaint.created_at)
+
+        total_result = await self.db.execute(select(func.count(Complaint.id)).where(and_(tf, complaint_when >= cutoff)))
         total = total_result.scalar() or 0
 
         open_result = await self.db.execute(
@@ -460,9 +466,11 @@ class ExecutiveDashboardService:
             return out
 
         incidents_weekly = await _count_in_window(Incident, Incident.incident_date)
-        # Align with list APIs / pulse semantics: when the event happened, not when logged.
-        complaints_weekly = await _count_in_window(Complaint, Complaint.received_date)
-        near_misses_weekly = await _count_in_window(NearMiss, NearMiss.event_date)
+        # Same date semantics as pulse headlines (event/received, not logged-at).
+        complaints_weekly = await _count_in_window(
+            Complaint, func.coalesce(Complaint.received_date, Complaint.created_at)
+        )
+        near_misses_weekly = await _count_in_window(NearMiss, func.coalesce(NearMiss.event_date, NearMiss.created_at))
 
         # Audit score: average completed-run score_percentage per week.
         audits_weekly: List[Dict[str, Any]] = []

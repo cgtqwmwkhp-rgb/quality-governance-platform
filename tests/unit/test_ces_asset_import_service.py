@@ -218,6 +218,22 @@ async def test_similar_type_requires_confirmation_on_commit_gate():
     assert any(issue.code == "NEEDS_CONFIRMATION" for issue in report.errors)
 
 
+@pytest.mark.asyncio
+async def test_dry_run_can_commit_false_when_similar_needs_confirmation():
+    """Dry-run omits NEEDS_CONFIRMATION from errors but can_commit must stay false."""
+    existing_type = SimpleNamespace(id=10, name="D Shackle")
+    report, _ = await _service(types=[existing_type], locations=[]).validate_rows(
+        [_row(location="Plantexpand; Main Depot", equipment_type="D Shackel")],
+        tenant_id=3,
+        dry_run=True,
+        enforce_confirmations=False,
+    )
+    assert report.requires_confirmation is True
+    assert report.valid_rows >= 1
+    assert report.can_commit is False
+    assert report.to_dict()["can_commit"] is False
+
+
 def test_parse_workbook_uses_equipment_list_sheet():
     workbook = Workbook()
     sheet = workbook.active
