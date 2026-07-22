@@ -27,7 +27,6 @@ import {
   Users,
   MessageSquare,
   Upload,
-  Trash2,
   User,
 } from 'lucide-react'
 import {
@@ -56,6 +55,7 @@ import { Switch } from '../components/ui/Switch'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
 import { AssetPicker } from '../components/AssetPicker'
+import { EvidenceGallery } from '../components/EvidenceGallery'
 import { RunningSheetPanel } from '../components/case/RunningSheetPanel'
 import { SubmissionSections } from '../components/case/SubmissionSections'
 import {
@@ -1236,37 +1236,12 @@ export default function RTADetail() {
               </div>
             </CardHeader>
             <CardContent>
-              {photos.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Camera className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No photos or evidence uploaded yet</p>
-                  <p className="text-sm mt-1">Upload photos of the scene, vehicle damage, or other evidence</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {photos.map((photo) => (
-                    <div key={photo.id} className="group relative border rounded-lg overflow-hidden bg-muted/30">
-                      {photo.content_type?.startsWith('image/') ? (
-                        <div className="aspect-square bg-muted flex items-center justify-center">
-                          <Camera className="w-8 h-8 text-muted-foreground" />
-                        </div>
-                      ) : (
-                        <div className="aspect-square bg-muted flex flex-col items-center justify-center">
-                          <FileText className="w-8 h-8 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground mt-1">{photo.content_type?.split('/')[1]?.toUpperCase()}</span>
-                        </div>
-                      )}
-                      <div className="p-2">
-                        <p className="text-xs text-foreground truncate">{photo.title || photo.original_filename}</p>
-                        <p className="text-xs text-muted-foreground">{new Date(photo.created_at).toLocaleDateString()}</p>
-                      </div>
-                      <Button variant="ghost" size="sm" className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-destructive" onClick={() => handleDeletePhoto(photo.id)} aria-label={`Delete photo ${photo.title || photo.original_filename}`}>
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <EvidenceGallery
+                assets={photos}
+                emptyTitle="No photos or evidence uploaded yet"
+                emptyDescription="Upload photos of the scene, vehicle damage, or other evidence."
+                onDelete={handleDeletePhoto}
+              />
             </CardContent>
           </Card>
         </TabsContent>

@@ -12,7 +12,7 @@ import logging
 import math
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import func, select
@@ -21,7 +21,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.evidence_asset import (
-    EvidenceAssetCreate,
     EvidenceAssetListResponse,
     EvidenceAssetResponse,
     EvidenceAssetUpdate,
@@ -290,7 +289,7 @@ async def upload_evidence_asset(
                 "message": "Evidence upload is temporarily unavailable. Please try again later or contact support.",
             },
         )
-    except StorageError as e:
+    except StorageError:
         logger.exception(
             "Evidence upload failed",
             extra={"source_module": source_module, "source_id": upload_log_source_ref, "content_type": content_type},
@@ -629,10 +628,16 @@ async def get_signed_download_url(
     db: DbSession,
     current_user: CurrentUser,
     expires_in: int = Query(3600, ge=60, le=86400, description="URL expiry in seconds (1min to 24hrs)"),
+    disposition: Literal["attachment", "inline"] = Query(
+        "attachment",
+        description="Content disposition; inline is available only for images",
+    ),
 ):
-    """Get a signed URL for downloading an evidence asset.
+    """Get a signed URL for downloading or previewing an evidence asset.
 
-    Returns a time-limited signed URL for secure download.
+    Returns a time-limited signed URL for secure download. Image assets may be
+    requested inline for authenticated browser previews; all other assets are
+    served as attachments.
     """
     # Get asset — scoped to tenant
     query = select(EvidenceAsset).where(
@@ -649,7 +654,11 @@ async def get_signed_download_url(
     # Generate signed URL
     from src.infrastructure.storage import storage_service
 
-    content_disposition = f'attachment; filename="{asset.original_filename or "download"}"'
+    filename = asset.original_filename or "download"
+    effective_disposition = (
+        "inline" if disposition == "inline" and (asset.content_type or "").startswith("image/") else "attachment"
+    )
+    content_disposition = f'{effective_disposition}; filename="{filename}"'
     signed_url = storage_service().get_signed_url(
         storage_key=asset.storage_key,
         expires_in_seconds=expires_in,

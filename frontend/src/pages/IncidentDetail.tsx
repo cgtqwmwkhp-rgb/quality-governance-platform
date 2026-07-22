@@ -63,6 +63,7 @@ import {
 } from '../components/ui/Select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
+import { EvidenceGallery } from '../components/EvidenceGallery'
 import { SubmissionSections } from '../components/case/SubmissionSections'
 import {
   RunningSheetPanel,
@@ -1247,29 +1248,15 @@ export default function IncidentDetail() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {evidenceLoading ? (
-                    <p className="text-sm text-muted-foreground">Loading evidence…</p>
-                  ) : evidenceLoadFailed ? (
-                    <p className="text-sm text-muted-foreground">
-                      Evidence assets could not be loaded. Reporter-submission evidence is shown
-                      separately.
-                    </p>
-                  ) : evidenceAssets.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No evidence assets are linked to this incident.
-                    </p>
-                  ) : (
-                    <ul className="space-y-2" data-testid="incident-evidence-assets">
-                      {evidenceAssets.map((asset) => (
-                        <li key={asset.id} className="rounded-lg border border-border p-3">
-                          <p className="font-medium text-foreground">
-                            {asset.title || asset.original_filename || `Evidence #${asset.id}`}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{asset.content_type}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <div data-testid="incident-evidence-assets">
+                    <EvidenceGallery
+                      assets={evidenceAssets}
+                      loading={evidenceLoading}
+                      loadFailed={evidenceLoadFailed}
+                      emptyTitle="No evidence assets are linked to this incident."
+                      emptyDescription="Reporter-submission evidence is shown separately."
+                    />
+                  </div>
                 </CardContent>
               </Card>
 
