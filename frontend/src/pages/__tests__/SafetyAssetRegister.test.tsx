@@ -61,6 +61,7 @@ vi.mock('../../contexts/ToastContext', () => ({
 describe('SafetyAssetRegister Wave 2 board', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.localStorage.clear()
     mockListAssetTypes.mockResolvedValue({ data: { items: [], total: 0 } })
     mockListLocations.mockResolvedValue({ data: { items: [], total: 0 } })
     mockListEngineers.mockResolvedValue({ data: { items: [] } })
@@ -136,6 +137,49 @@ describe('SafetyAssetRegister Wave 2 board', () => {
       expect(screen.getByTestId('safety-assets-drilldown-sheet')).toBeInTheDocument()
     })
     expect(screen.getByTestId('safety-assets-sheet-row-55')).toBeInTheDocument()
+  })
+
+  it('shows removed assets when the Removed band is selected', async () => {
+    mockListAllAssetsForBoard.mockResolvedValue([
+      {
+        id: 55,
+        external_id: 'ext-55',
+        asset_type_id: 10,
+        asset_number: 'SA-001',
+        name: 'Active harness',
+        status: 'active',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+      {
+        id: 56,
+        external_id: 'ext-56',
+        asset_type_id: 10,
+        asset_number: 'SA-002',
+        name: 'Removed harness',
+        status: 'decommissioned',
+        expiry_date: '2025-01-01T00:00:00Z',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ])
+
+    render(
+      <MemoryRouter>
+        <SafetyAssetRegister />
+      </MemoryRouter>,
+    )
+
+    await screen.findByTestId('safety-assets-table')
+    expect(screen.getByTestId('safety-assets-hide-removed')).toBeChecked()
+    expect(screen.getByTestId('safety-assets-kpi-total')).toHaveTextContent('1')
+    expect(screen.getByTestId('safety-assets-kpi-decommissioned')).toHaveTextContent('1')
+    expect(screen.queryByTestId('safety-asset-row-56')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('safety-assets-kpi-decommissioned'))
+    expect(screen.getByTestId('safety-assets-kpi-total')).toHaveTextContent('1')
+    expect(screen.getByTestId('safety-asset-row-56')).toBeInTheDocument()
+    expect(screen.queryByTestId('safety-asset-row-55')).not.toBeInTheDocument()
   })
 
   it('shows CES upload panel on upload view', async () => {
