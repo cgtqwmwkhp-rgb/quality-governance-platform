@@ -160,7 +160,7 @@ def upgrade() -> None:
             SET site = NULLIF(
               TRIM(BOTH ' ,-' FROM regexp_replace(
                 site,
-                '^(?i)((plantexpand(\\s+limited|\\s+ltd)?|ltd)[\\s,.-]*)+',
+                '(?i)^(?:(?:plantexpand(?:\\s+limited|\\s+ltd)?\\b|ltd\\b)[\\s,.-]*)+',
                 '',
                 'g'
               )),

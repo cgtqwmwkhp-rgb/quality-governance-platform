@@ -208,8 +208,8 @@ export default function SafetyAssetRegister() {
   }, [hideRemoved])
 
   const scopeAssets = useMemo(
-    () => applyHideRemoved(boardAssets, hideRemoved && heroBand !== 'decommissioned'),
-    [boardAssets, hideRemoved, heroBand],
+    () => applyHideRemoved(boardAssets, hideRemoved),
+    [boardAssets, hideRemoved],
   )
   const heroCounts = useMemo(
     () => ({

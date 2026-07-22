@@ -139,7 +139,7 @@ describe('SafetyAssetRegister Wave 2 board', () => {
     expect(screen.getByTestId('safety-assets-sheet-row-55')).toBeInTheDocument()
   })
 
-  it('hides removed assets by default but shows them in the Removed band', async () => {
+  it('keeps removed assets hidden when the Removed band is selected', async () => {
     mockListAllAssetsForBoard.mockResolvedValue([
       {
         id: 55,
@@ -177,7 +177,8 @@ describe('SafetyAssetRegister Wave 2 board', () => {
     expect(screen.queryByTestId('safety-asset-row-56')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByTestId('safety-assets-kpi-decommissioned'))
-    expect(await screen.findByTestId('safety-asset-row-56')).toBeInTheDocument()
+    expect(screen.getByTestId('safety-assets-kpi-total')).toHaveTextContent('1')
+    expect(screen.queryByTestId('safety-asset-row-56')).not.toBeInTheDocument()
     expect(screen.queryByTestId('safety-asset-row-55')).not.toBeInTheDocument()
   })
 
