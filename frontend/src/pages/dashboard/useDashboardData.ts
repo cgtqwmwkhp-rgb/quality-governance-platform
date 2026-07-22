@@ -106,6 +106,32 @@ function seriesMetric(
   return points.length >= 2 ? metricOk(points) : metricUnavailable()
 }
 
+/** Weekly avg score from the same completed runs used for the audit headline %. */
+function auditSeriesFromRuns(
+  runs: { status: string; score_percentage?: number | null; completed_at?: string | null }[],
+): SparkPoint[] {
+  const buckets = new Map<string, number[]>()
+  for (const run of runs) {
+    if (run.status !== 'completed' || run.score_percentage == null || !run.completed_at) continue
+    const d = new Date(run.completed_at)
+    if (Number.isNaN(d.getTime())) continue
+    // Monday-start week key (UTC) — enough for a directional sparkline.
+    const day = d.getUTCDay()
+    const mondayOffset = day === 0 ? -6 : 1 - day
+    const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + mondayOffset))
+    const key = monday.toISOString().slice(0, 10)
+    const list = buckets.get(key) ?? []
+    list.push(run.score_percentage)
+    buckets.set(key, list)
+  }
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([t, scores]) => ({
+      t,
+      v: Math.round(scores.reduce((s, n) => s + n, 0) / scores.length),
+    }))
+}
+
 function emptyPulse(): PulseData {
   return {
     trainingCompliancePct: metricUnavailable(),
@@ -316,7 +342,14 @@ export function useDashboardData(): DashboardData {
         incidentsSeries: seriesMetric(trendsOk, trends?.incidents_weekly),
         complaintsSeries: seriesMetric(trendsOk, trends?.complaints_weekly),
         nearMissesSeries: seriesMetric(trendsOk, trends?.near_misses_weekly),
-        auditSeries: seriesMetric(trendsOk, trends?.audits_weekly),
+        // Same completed-run set as the headline % (not exec-dashboard weekly avg).
+        auditSeries:
+          auditRunsMetric.status === 'ok'
+            ? (() => {
+                const points = auditSeriesFromRuns(auditRunsMetric.value)
+                return points.length >= 2 ? metricOk(points) : metricUnavailable()
+              })()
+            : metricUnavailable(),
       })
 
       // ---- Org Command + recent cases ----
@@ -336,16 +369,10 @@ export function useDashboardData(): DashboardData {
             }
           : metricUnavailable()
 
+      // Keep API list order (incidents: reported_date DESC).
       const recentIncidents: Metric<Incident[]> =
         incidentsMetric.status === 'ok'
-          ? {
-              status: 'ok',
-              value: [...incidentsMetric.value]
-                .sort(
-                  (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-                )
-                .slice(0, 5),
-            }
+          ? { status: 'ok', value: incidentsMetric.value.slice(0, 5) }
           : metricUnavailable()
 
       const nearMissesMetric = metricFromSettled(nearMissesRes, (r) => r.data.items)
@@ -363,7 +390,7 @@ export function useDashboardData(): DashboardData {
                     title: i.title,
                     severity: i.severity,
                     status: i.status,
-                    date: i.created_at,
+                    date: i.reported_date || i.created_at,
                   }),
                 ),
               )

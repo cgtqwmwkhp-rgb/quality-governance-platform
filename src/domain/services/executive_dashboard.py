@@ -25,10 +25,7 @@ from src.domain.models.risk import Risk
 from src.domain.models.rta import RTA
 from src.domain.models.training_matrix import TrainingMatrixCell, TrainingMatrixImport
 from src.domain.models.workflow_rules import SLATracking
-from src.domain.services.asset_health_analytics_service import (
-    AssetHealthRow,
-    aggregate_asset_health_kpis,
-)
+from src.domain.services.asset_health_analytics_service import AssetHealthRow, aggregate_asset_health_kpis
 
 logger = logging.getLogger(__name__)
 
@@ -488,24 +485,31 @@ class ExecutiveDashboardService:
                 pct = round(float(avg), 1)
                 audits_weekly.append({"week_start": label, "count": int(pct), "value": pct})
 
-        # Tool compliance backcast from current asset expiry/status (as_of each week end).
+        # Tool compliance backcast: assets that existed by week_end, scored as_of week_end.
+        # Quarantine uses current status (no historical status table) — expiry banding is as_of.
         tool_compliance_weekly: List[Dict[str, Any]] = []
         try:
-            asset_q = select(AssetType.name, Asset.status, Asset.expiry_date)
+            asset_q = select(AssetType.name, Asset.status, Asset.expiry_date, Asset.created_at)
             asset_q = asset_q.outerjoin(AssetType, Asset.asset_type_id == AssetType.id)
             if self.tenant_id is not None:
                 asset_q = asset_q.where(or_(Asset.tenant_id == self.tenant_id, Asset.tenant_id.is_(None)))
             asset_result = await self.db.execute(asset_q)
-            asset_rows = [
-                AssetHealthRow(
-                    asset_type=asset_type,
-                    status=status.value if hasattr(status, "value") else str(status),
-                    expiry_date=expiry_date,
+            asset_rows_raw = [
+                (
+                    asset_type,
+                    status.value if hasattr(status, "value") else str(status),
+                    expiry_date,
+                    created_at,
                 )
-                for asset_type, status, expiry_date in asset_result.all()
+                for asset_type, status, expiry_date, created_at in asset_result.all()
             ]
             for _ws, week_end, label in week_windows:
-                summary = aggregate_asset_health_kpis(asset_rows, as_of=week_end)
+                rows_as_of = [
+                    AssetHealthRow(asset_type=at, status=st, expiry_date=exp)
+                    for at, st, exp, created_at in asset_rows_raw
+                    if created_at is None or created_at <= week_end
+                ]
+                summary = aggregate_asset_health_kpis(rows_as_of, as_of=week_end)
                 total = int(summary["total"])  # type: ignore[arg-type]
                 if total == 0:
                     pct = 100.0
