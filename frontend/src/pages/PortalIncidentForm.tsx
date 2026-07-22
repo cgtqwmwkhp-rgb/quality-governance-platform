@@ -29,7 +29,11 @@ import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
 import BodyInjurySelector, { InjurySelection } from '../components/BodyInjurySelector'
 import DraftRecoveryDialog from '../components/DraftRecoveryDialog'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
-import { canOfferStaffDeepLink, portalStaffRecordLabel, portalTriageRoutedHint } from './portalSubmitSuccess'
+import {
+  canOfferStaffDeepLink,
+  portalStaffRecordLabel,
+  portalTriageRoutedHint,
+} from './portalSubmitSuccess'
 import {
   buildPortalPhotoMetadataSummary,
   portalPhotoEvidenceHonestyCopy,
@@ -140,7 +144,7 @@ const REPORT_CONFIGS = {
 }
 
 // Medical assistance options
-const MEDICAL_OPTIONS = [
+const FALLBACK_MEDICAL_OPTIONS = [
   { value: 'none', label: 'No assistance needed' },
   { value: 'self', label: 'Self application' },
   { value: 'first-aider', label: 'First aider on site' },
@@ -238,27 +242,38 @@ export default function PortalIncidentForm() {
   const [formData, setFormData] = useState<FormData>(initialFormData)
   const [customers, setCustomers] = useState<LookupOption[]>([])
   const [roles, setRoles] = useState<LookupOption[]>([])
+  const [medicalAssistance, setMedicalAssistance] = useState<LookupOption[]>([])
 
   useEffect(() => {
     let cancelled = false
     void Promise.all([
       lookupsApi.list('customers', true),
       lookupsApi.list('workforce_roles', true),
-    ]).then(([customerResult, roleResult]) => {
-      if (!cancelled) {
-        setCustomers(customerResult.items || [])
-        setRoles(roleResult.items || [])
-      }
-    }).catch(() => {
-      if (!cancelled) {
-        setCustomers([])
-        setRoles([])
-      }
-    })
+      lookupsApi.list('medical_assistance', true).catch(() => ({ items: [] })),
+    ])
+      .then(([customerResult, roleResult, medicalResult]) => {
+        if (!cancelled) {
+          setCustomers(customerResult.items || [])
+          setRoles(roleResult.items || [])
+          setMedicalAssistance(medicalResult.items || [])
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCustomers([])
+          setRoles([])
+          setMedicalAssistance([])
+        }
+      })
     return () => {
       cancelled = true
     }
   }, [])
+
+  const medicalOptions =
+    medicalAssistance.length > 0
+      ? medicalAssistance.map((item) => ({ value: item.code, label: item.label }))
+      : FALLBACK_MEDICAL_OPTIONS
 
   // Autosave hook (EXP-001: portal_form_autosave)
   // Excludes photos from autosave (can't serialize File objects)
@@ -505,19 +520,28 @@ export default function PortalIncidentForm() {
           </h1>
           <p className="text-muted-foreground mb-6">{t('portal.reference_label')}</p>
           <div className="bg-surface border border-border rounded-xl px-6 py-4 mb-4">
-            <span className="text-2xl font-mono font-bold text-primary" data-testid="portal-tracking-ref">
+            <span
+              className="text-2xl font-mono font-bold text-primary"
+              data-testid="portal-tracking-ref"
+            >
               {submittedRef}
             </span>
           </div>
           {triageHint ? (
-            <p className="text-sm text-muted-foreground mb-4" data-testid="portal-triage-routed-hint">
+            <p
+              className="text-sm text-muted-foreground mb-4"
+              data-testid="portal-triage-routed-hint"
+            >
               {triageHint}
             </p>
           ) : null}
           {!offerStaff ? (
-            <p className="text-xs text-muted-foreground mb-4" data-testid="portal-tracking-code-hint">
-              Keep this tracking reference to check status. Staff deep-link is not available for this
-              session.
+            <p
+              className="text-xs text-muted-foreground mb-4"
+              data-testid="portal-tracking-code-hint"
+            >
+              Keep this tracking reference to check status. Staff deep-link is not available for
+              this session.
             </p>
           ) : null}
           <div className="flex flex-col gap-3">
@@ -628,7 +652,6 @@ export default function PortalIncidentForm() {
               placeholder={t('portal.search_contract')}
               required
             />
-
           </div>
         )}
 
@@ -1047,7 +1070,7 @@ export default function PortalIncidentForm() {
                 {/* Medical Assistance */}
                 <FuzzySearchDropdown
                   label={t('portal.medical_assistance')}
-                  options={MEDICAL_OPTIONS}
+                  options={medicalOptions}
                   value={formData.medicalAssistance}
                   onChange={(val) => setFormData((prev) => ({ ...prev, medicalAssistance: val }))}
                   placeholder="Select..."

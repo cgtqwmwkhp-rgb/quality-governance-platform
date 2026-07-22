@@ -34,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
 
 const ALL_FILTER = 'all'
 const PAGE_SIZE = 50
@@ -74,7 +75,9 @@ export default function NearMisses() {
   const [createError, setCreateError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '')
-  const [statusFilter, setStatusFilter] = useState(() => parseListFilter(searchParams.get('status')))
+  const [statusFilter, setStatusFilter] = useState(() =>
+    parseListFilter(searchParams.get('status')),
+  )
   const [severityFilter, setSeverityFilter] = useState(() =>
     parseListFilter(searchParams.get('severity')),
   )
@@ -91,6 +94,13 @@ export default function NearMisses() {
   })
   const [customers, setCustomers] = useState<LookupOption[]>([])
   const [customersError, setCustomersError] = useState<string | null>(null)
+  const defaultSeverityOptions = [
+    { value: 'low', label: t('severity.low') },
+    { value: 'medium', label: t('severity.medium') },
+    { value: 'high', label: t('severity.high') },
+    { value: 'critical', label: t('severity.critical') },
+  ]
+  const [severityOptions, setSeverityOptions] = useState(defaultSeverityOptions)
   const eventDateInput = formData.event_date ? formData.event_date.slice(0, 16) : ''
 
   useEffect(() => {
@@ -117,6 +127,27 @@ export default function NearMisses() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (!showModal) return
+    let cancelled = false
+    setSeverityOptions(defaultSeverityOptions)
+    void lookupsApi
+      .list('severity_levels', true)
+      .then((res) => {
+        if (!cancelled) {
+          setSeverityOptions(mergeLookupSelectOptions(defaultSeverityOptions, res.items))
+        }
+      })
+      .catch(() => {
+        // Keep fixed API-enum defaults when Lookups are unavailable.
+      })
+    return () => {
+      cancelled = true
+    }
+    // Intentional: lookup labels load only when the create dialog opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showModal])
 
   // Hydrate list filters from shareable URL (back/forward + deep links).
   useEffect(() => {
@@ -196,10 +227,7 @@ export default function NearMisses() {
   const deferredSearch = useDeferredValue(searchTerm)
   const filteredNearMisses = nearMisses.filter((item) => {
     if (statusFilter !== ALL_FILTER && item.status !== statusFilter) return false
-    if (
-      severityFilter !== ALL_FILTER &&
-      (item.potential_severity || 'medium') !== severityFilter
-    ) {
+    if (severityFilter !== ALL_FILTER && (item.potential_severity || 'medium') !== severityFilter) {
       return false
     }
     const needle = deferredSearch.trim().toLowerCase()
@@ -229,7 +257,9 @@ export default function NearMisses() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {loadError && <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{loadError}</div>}
+      {loadError && (
+        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{loadError}</div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{t('near_misses.title')}</h1>
@@ -299,7 +329,9 @@ export default function NearMisses() {
                     <td className="p-4 font-medium text-foreground">{item.reference_number}</td>
                     <td className="p-4">
                       <div className="font-medium text-foreground">{item.contract}</div>
-                      <div className="text-sm text-muted-foreground line-clamp-1">{item.location}</div>
+                      <div className="text-sm text-muted-foreground line-clamp-1">
+                        {item.location}
+                      </div>
                     </td>
                     <td className="p-4 text-sm text-muted-foreground">
                       {new Date(item.event_date).toLocaleDateString()}
@@ -342,15 +374,24 @@ export default function NearMisses() {
                 />
               </div>
               <div>
-                <label htmlFor="near-miss-contract" className="text-sm font-medium text-muted-foreground">
+                <label
+                  htmlFor="near-miss-contract"
+                  className="text-sm font-medium text-muted-foreground"
+                >
                   {t('near_misses.form.contract', 'Customer')}
                 </label>
                 <Select
                   value={formData.contract || undefined}
                   onValueChange={(value) => setFormData({ ...formData, contract: value })}
                 >
-                  <SelectTrigger id="near-miss-contract" className="mt-1" data-testid="near-miss-contract">
-                    <SelectValue placeholder={t('near_misses.form.contract_placeholder', 'Select customer')} />
+                  <SelectTrigger
+                    id="near-miss-contract"
+                    className="mt-1"
+                    data-testid="near-miss-contract"
+                  >
+                    <SelectValue
+                      placeholder={t('near_misses.form.contract_placeholder', 'Select customer')}
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {customers.map((customer) => (
@@ -370,7 +411,10 @@ export default function NearMisses() {
             </div>
 
             <div>
-              <label htmlFor="near-miss-location" className="text-sm font-medium text-muted-foreground">
+              <label
+                htmlFor="near-miss-location"
+                className="text-sm font-medium text-muted-foreground"
+              >
                 {t('common.location')}
               </label>
               <Input
@@ -384,7 +428,10 @@ export default function NearMisses() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="near-miss-event-date" className="text-sm font-medium text-muted-foreground">
+                <label
+                  htmlFor="near-miss-event-date"
+                  className="text-sm font-medium text-muted-foreground"
+                >
                   {t('near_misses.form.event_date', 'Event date')}
                 </label>
                 <Input
@@ -418,17 +465,21 @@ export default function NearMisses() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
+                    {severityOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
             <div>
-              <label htmlFor="near-miss-description" className="text-sm font-medium text-muted-foreground">
+              <label
+                htmlFor="near-miss-description"
+                className="text-sm font-medium text-muted-foreground"
+              >
                 {t('common.description')}
               </label>
               <Textarea

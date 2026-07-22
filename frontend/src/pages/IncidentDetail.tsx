@@ -38,6 +38,7 @@ import {
   evidenceAssetsApi,
   getApiErrorMessage,
   CreateFromRecordError,
+  lookupsApi,
 } from '../api/client'
 import { trackError } from '../utils/errorTracker'
 import { Button } from '../components/ui/Button'
@@ -63,7 +64,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
 import { SubmissionSections } from '../components/case/SubmissionSections'
-import { RunningSheetPanel, buildRunningSheetCreateActionHref } from '../components/case/RunningSheetPanel'
+import {
+  RunningSheetPanel,
+  buildRunningSheetCreateActionHref,
+} from '../components/case/RunningSheetPanel'
 import {
   buildIncidentSubmissionSections,
   getSubmissionPhotoSummary,
@@ -73,11 +77,8 @@ import { cn } from '../helpers/utils'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import { AssetPicker } from '../components/AssetPicker'
 import { getCapaHandoffLabelKey, getCapaLink } from '../components/investigations/handoffLinks'
-import {
-  parseLinkedRiskIds,
-  riskRegisterHref,
-  severityAllowsRaiseRisk,
-} from './incidentRiskLinks'
+import { parseLinkedRiskIds, riskRegisterHref, severityAllowsRaiseRisk } from './incidentRiskLinks'
+import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
 
 // Status options for action updates
 const ACTION_STATUS_OPTIONS = [
@@ -125,6 +126,25 @@ export default function IncidentDetail() {
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editForm, setEditForm] = useState<IncidentUpdate>({})
+  const defaultTypeOptions = [
+    { value: 'injury', label: t('incidents.type.injury') },
+    { value: 'near_miss', label: t('incidents.type.near_miss') },
+    { value: 'hazard', label: t('incidents.type.hazard') },
+    { value: 'property_damage', label: t('incidents.type.property_damage') },
+    { value: 'environmental', label: t('incidents.type.environmental') },
+    { value: 'security', label: t('incidents.type.security') },
+    { value: 'quality', label: t('incidents.type.quality') },
+    { value: 'other', label: t('incidents.type.other') },
+  ]
+  const defaultSeverityOptions = [
+    { value: 'critical', label: t('severity.critical') },
+    { value: 'high', label: t('severity.high') },
+    { value: 'medium', label: t('severity.medium') },
+    { value: 'low', label: t('severity.low') },
+    { value: 'negligible', label: t('severity.negligible') },
+  ]
+  const [typeOptions, setTypeOptions] = useState(defaultTypeOptions)
+  const [severityOptions, setSeverityOptions] = useState(defaultSeverityOptions)
 
   // Action detail modal state
   const [selectedAction, setSelectedAction] = useState<Action | null>(null)
@@ -172,6 +192,27 @@ export default function IncidentDetail() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [navigate, isEditing])
+
+  useEffect(() => {
+    if (!isEditing) return
+    let cancelled = false
+    setTypeOptions(defaultTypeOptions)
+    setSeverityOptions(defaultSeverityOptions)
+    void Promise.all([
+      lookupsApi.list('incident_types', true).catch(() => ({ items: [], total: 0 })),
+      lookupsApi.list('severity_levels', true).catch(() => ({ items: [], total: 0 })),
+    ]).then(([typesRes, severityRes]) => {
+      if (!cancelled) {
+        setTypeOptions(mergeLookupSelectOptions(defaultTypeOptions, typesRes.items))
+        setSeverityOptions(mergeLookupSelectOptions(defaultSeverityOptions, severityRes.items))
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+    // Intentional: lookup labels load when editing opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing])
 
   const loadIncident = async (incidentId: number) => {
     setError(null)
@@ -284,7 +325,9 @@ export default function IncidentDetail() {
       toast.success(t('incidents.detail.save_success', 'Incident updated'))
     } catch (err) {
       trackError(err, { component: 'IncidentDetail', action: 'updateIncident' })
-      toast.error(getApiErrorMessage(err, t('incidents.detail.save_failed', 'Could not save incident')))
+      toast.error(
+        getApiErrorMessage(err, t('incidents.detail.save_failed', 'Could not save incident')),
+      )
     } finally {
       setSaving(false)
     }
@@ -534,12 +577,15 @@ export default function IncidentDetail() {
     'Not provided'
   const contractLabel =
     incident.department ||
-    (typeof incidentSubmission?.contract === 'string' ? incidentSubmission.contract : 'Not provided')
+    (typeof incidentSubmission?.contract === 'string'
+      ? incidentSubmission.contract
+      : 'Not provided')
   const personRole =
     (typeof incidentSubmission?.person_role === 'string' && incidentSubmission.person_role) ||
     'Not provided'
   const medicalAssistance =
-    (typeof incidentSubmission?.medical_assistance === 'string' && incidentSubmission.medical_assistance) ||
+    (typeof incidentSubmission?.medical_assistance === 'string' &&
+      incidentSubmission.medical_assistance) ||
     (incident.emergency_services_called
       ? 'Emergency services called'
       : incident.first_aid_given
@@ -557,10 +603,10 @@ export default function IncidentDetail() {
   const investigationSummary = latestInvestigation
     ? `${latestInvestigation.reference_number || latestInvestigation.title || 'Linked investigation'}`
     : 'Not started'
-  const openActions = actions.filter((action) => action.status !== 'completed' && action.status !== 'cancelled')
-  const investigationHref = latestInvestigation
-    ? `/investigations/${latestInvestigation.id}`
-    : null
+  const openActions = actions.filter(
+    (action) => action.status !== 'completed' && action.status !== 'cancelled',
+  )
+  const investigationHref = latestInvestigation ? `/investigations/${latestInvestigation.id}` : null
   const capaHref = getCapaLink('incident', incident.id)
   const capaCountLabel = actionsLoading ? '…' : actionsLoadFailed ? '—' : String(actions.length)
   const openActionsLabel = actionsLoading
@@ -608,7 +654,9 @@ export default function IncidentDetail() {
                 {incident.status.replace('_', ' ')}
               </Badge>
             </div>
-            <h1 className="text-2xl font-bold text-foreground">{displayIncidentText(incident.title)}</h1>
+            <h1 className="text-2xl font-bold text-foreground">
+              {displayIncidentText(incident.title)}
+            </h1>
             <p className="text-muted-foreground mt-1">
               {t('incidents.detail.reported_on', {
                 date: new Date(incident.reported_date).toLocaleDateString(),
@@ -661,9 +709,7 @@ export default function IncidentDetail() {
               </Button>
               <Button
                 onClick={() =>
-                  investigationHref
-                    ? navigate(investigationHref)
-                    : setShowInvestigationModal(true)
+                  investigationHref ? navigate(investigationHref) : setShowInvestigationModal(true)
                 }
               >
                 <FlaskConical className="w-4 h-4 mr-2" />
@@ -678,7 +724,11 @@ export default function IncidentDetail() {
 
       <CaseSummaryRail
         items={[
-          { label: 'Reporter', value: incident.reporter_name || 'Not provided', icon: <User className="w-4 h-4" /> },
+          {
+            label: 'Reporter',
+            value: incident.reporter_name || 'Not provided',
+            icon: <User className="w-4 h-4" />,
+          },
           { label: 'Affected person', value: affectedPerson, icon: <User className="w-4 h-4" /> },
           {
             label: 'Occurred at',
@@ -690,7 +740,11 @@ export default function IncidentDetail() {
             value: incident.location || 'Not specified',
             icon: <MapPin className="w-4 h-4" />,
           },
-          { label: 'Evidence', value: surfacedEvidenceSummary, icon: <FileText className="w-4 h-4" /> },
+          {
+            label: 'Evidence',
+            value: surfacedEvidenceSummary,
+            icon: <FileText className="w-4 h-4" />,
+          },
           {
             label: 'Investigation',
             value: investigationSummary,
@@ -723,580 +777,574 @@ export default function IncidentDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column - Details */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Description Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-primary" />
+                    {t('incidents.detail.incident_details')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {isEditing ? (
+                    <>
+                      <div>
+                        <label
+                          htmlFor="incidentdetail-field-0"
+                          className="text-sm font-medium text-muted-foreground"
+                        >
+                          {t('incidents.detail.title')}
+                        </label>
+                        <Input
+                          id="incidentdetail-field-0"
+                          value={editForm.title || ''}
+                          onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="incidentdetail-field-1"
+                          className="text-sm font-medium text-muted-foreground"
+                        >
+                          {t('common.description')}
+                        </label>
+                        <Textarea
+                          id="incidentdetail-field-1"
+                          value={editForm.description || ''}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, description: e.target.value })
+                          }
+                          rows={4}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label
+                            htmlFor="incidentdetail-field-2"
+                            className="text-sm font-medium text-muted-foreground"
+                          >
+                            {t('incidents.detail.incident_type')}
+                          </label>
+                          <Select
+                            value={editForm.incident_type}
+                            onValueChange={(value) =>
+                              setEditForm({ ...editForm, incident_type: value })
+                            }
+                          >
+                            <SelectTrigger id="incidentdetail-field-2" className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {typeOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="incidentdetail-field-3"
+                            className="text-sm font-medium text-muted-foreground"
+                          >
+                            {t('incidents.detail.severity')}
+                          </label>
+                          <Select
+                            value={editForm.severity}
+                            onValueChange={(value) => setEditForm({ ...editForm, severity: value })}
+                          >
+                            <SelectTrigger id="incidentdetail-field-3" className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {severityOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="incidentdetail-field-4"
+                            className="text-sm font-medium text-muted-foreground"
+                          >
+                            {t('common.status')}
+                          </label>
+                          <Select
+                            value={editForm.status}
+                            onValueChange={(value) => setEditForm({ ...editForm, status: value })}
+                          >
+                            <SelectTrigger id="incidentdetail-field-4" className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="reported">
+                                {t('incidents.detail.status_reported', 'Reported')}
+                              </SelectItem>
+                              <SelectItem value="under_investigation">
+                                {t('incidents.detail.status_under_investigation')}
+                              </SelectItem>
+                              <SelectItem value="pending_actions">
+                                {t('incidents.detail.status_pending_actions')}
+                              </SelectItem>
+                              <SelectItem value="actions_in_progress">
+                                {t(
+                                  'incidents.detail.status_actions_in_progress',
+                                  'Actions in progress',
+                                )}
+                              </SelectItem>
+                              <SelectItem value="pending_review">
+                                {t('incidents.detail.status_pending_review', 'Pending review')}
+                              </SelectItem>
+                              <SelectItem value="closed">
+                                {t('incidents.detail.status_closed')}
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="incidentdetail-field-5"
+                            className="text-sm font-medium text-muted-foreground"
+                          >
+                            {t('common.location')}
+                          </label>
+                          <Input
+                            id="incidentdetail-field-5"
+                            value={editForm.location || ''}
+                            onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                            className="mt-1"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        <AssetPicker
+                          value={editForm.asset_id}
+                          onChange={(assetId) => setEditForm({ ...editForm, asset_id: assetId })}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <span className="text-sm font-medium text-muted-foreground">
+                          {t('common.description')}
+                        </span>
+                        <p className="mt-1 text-foreground whitespace-pre-wrap">
+                          {displayIncidentText(incident.description) ||
+                            t('incidents.detail.no_description')}
+                        </p>
+                      </div>
+                      {incident.asset_id != null && (
+                        <div className="mt-3">
+                          <span className="text-sm font-medium text-muted-foreground">
+                            Linked asset
+                          </span>
+                          <p className="mt-1 text-foreground">Asset #{incident.asset_id}</p>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {t('incidents.detail.incident_type')}
+                          </span>
+                          <p className="mt-1 text-foreground capitalize">
+                            {incident.incident_type.replace('_', ' ')}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {t('incidents.detail.severity')}
+                          </span>
+                          <p className="mt-1 text-foreground capitalize">{incident.severity}</p>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {t('incidents.detail.incident_date')}
+                          </span>
+                          <p className="mt-1 text-foreground">
+                            {new Date(incident.incident_date).toLocaleString()}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {t('common.location')}
+                          </span>
+                          <p className="mt-1 text-foreground">
+                            {incident.location || t('incidents.detail.not_specified')}
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Details */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Description Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-primary" />
-                {t('incidents.detail.incident_details')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {isEditing ? (
-                <>
-                  <div>
-                    <label
-                      htmlFor="incidentdetail-field-0"
-                      className="text-sm font-medium text-muted-foreground"
-                    >
-                      {t('incidents.detail.title')}
-                    </label>
-                    <Input
-                      id="incidentdetail-field-0"
-                      value={editForm.title || ''}
-                      onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="incidentdetail-field-1"
-                      className="text-sm font-medium text-muted-foreground"
-                    >
-                      {t('common.description')}
-                    </label>
-                    <Textarea
-                      id="incidentdetail-field-1"
-                      value={editForm.description || ''}
-                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                      rows={4}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label
-                        htmlFor="incidentdetail-field-2"
-                        className="text-sm font-medium text-muted-foreground"
-                      >
-                        {t('incidents.detail.incident_type')}
-                      </label>
-                      <Select
-                        value={editForm.incident_type}
-                        onValueChange={(value) =>
-                          setEditForm({ ...editForm, incident_type: value })
-                        }
-                      >
-                        <SelectTrigger id="incidentdetail-field-2" className="mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="safety">
-                            {t('incidents.detail.type_safety')}
-                          </SelectItem>
-                          <SelectItem value="environmental">
-                            {t('incidents.detail.type_environmental')}
-                          </SelectItem>
-                          <SelectItem value="quality">
-                            {t('incidents.detail.type_quality')}
-                          </SelectItem>
-                          <SelectItem value="security">
-                            {t('incidents.detail.type_security')}
-                          </SelectItem>
-                          <SelectItem value="near_miss">
-                            {t('incidents.detail.type_near_miss')}
-                          </SelectItem>
-                          <SelectItem value="other">{t('incidents.detail.type_other')}</SelectItem>
-                        </SelectContent>
-                      </Select>
+              {/* Actions Card */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <ClipboardList className="w-5 h-5 text-primary" />
+                    {t('incidents.detail.actions_count', { count: actions.length })}
+                  </CardTitle>
+                  <Button variant="outline" size="sm" onClick={() => setShowActionModal(true)}>
+                    <Plus className="w-4 h-4 mr-1" />
+                    {t('incidents.detail.add')}
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {actions.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p>{t('incidents.detail.no_actions')}</p>
+                      <p className="text-sm">{t('incidents.detail.no_actions_hint')}</p>
                     </div>
-                    <div>
-                      <label
-                        htmlFor="incidentdetail-field-3"
-                        className="text-sm font-medium text-muted-foreground"
-                      >
-                        {t('incidents.detail.severity')}
-                      </label>
-                      <Select
-                        value={editForm.severity}
-                        onValueChange={(value) => setEditForm({ ...editForm, severity: value })}
-                      >
-                        <SelectTrigger id="incidentdetail-field-3" className="mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="critical">
-                            {t('incidents.detail.severity_critical')}
-                          </SelectItem>
-                          <SelectItem value="high">
-                            {t('incidents.detail.severity_high')}
-                          </SelectItem>
-                          <SelectItem value="medium">
-                            {t('incidents.detail.severity_medium')}
-                          </SelectItem>
-                          <SelectItem value="low">{t('incidents.detail.severity_low')}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="incidentdetail-field-4"
-                        className="text-sm font-medium text-muted-foreground"
-                      >
-                        {t('common.status')}
-                      </label>
-                      <Select
-                        value={editForm.status}
-                        onValueChange={(value) => setEditForm({ ...editForm, status: value })}
-                      >
-                        <SelectTrigger id="incidentdetail-field-4" className="mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="reported">
-                            {t('incidents.detail.status_reported', 'Reported')}
-                          </SelectItem>
-                          <SelectItem value="under_investigation">
-                            {t('incidents.detail.status_under_investigation')}
-                          </SelectItem>
-                          <SelectItem value="pending_actions">
-                            {t('incidents.detail.status_pending_actions')}
-                          </SelectItem>
-                          <SelectItem value="actions_in_progress">
-                            {t('incidents.detail.status_actions_in_progress', 'Actions in progress')}
-                          </SelectItem>
-                          <SelectItem value="pending_review">
-                            {t('incidents.detail.status_pending_review', 'Pending review')}
-                          </SelectItem>
-                          <SelectItem value="closed">
-                            {t('incidents.detail.status_closed')}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="incidentdetail-field-5"
-                        className="text-sm font-medium text-muted-foreground"
-                      >
-                        {t('common.location')}
-                      </label>
-                      <Input
-                        id="incidentdetail-field-5"
-                        value={editForm.location || ''}
-                        onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
-                        className="mt-1"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <AssetPicker
-                      value={editForm.asset_id}
-                      onChange={(assetId) => setEditForm({ ...editForm, asset_id: assetId })}
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <span className="text-sm font-medium text-muted-foreground">
-                      {t('common.description')}
-                    </span>
-                    <p className="mt-1 text-foreground whitespace-pre-wrap">
-                      {displayIncidentText(incident.description) || t('incidents.detail.no_description')}
-                    </p>
-                  </div>
-                  {incident.asset_id != null && (
-                    <div className="mt-3">
-                      <span className="text-sm font-medium text-muted-foreground">Linked asset</span>
-                      <p className="mt-1 text-foreground">Asset #{incident.asset_id}</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {actions.slice(0, 5).map((action) => (
+                        <div
+                          key={action.id}
+                          className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors"
+                          onClick={() => handleOpenAction(action)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              handleOpenAction(action)
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={cn(
+                                'w-8 h-8 rounded-lg flex items-center justify-center',
+                                action.status === 'completed'
+                                  ? 'bg-success/10 text-success'
+                                  : action.status === 'cancelled'
+                                    ? 'bg-destructive/10 text-destructive'
+                                    : 'bg-warning/10 text-warning',
+                              )}
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">{action.title}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {action.due_date
+                                  ? t('incidents.detail.due_date_value', {
+                                      date: new Date(action.due_date).toLocaleDateString(),
+                                    })
+                                  : t('incidents.detail.no_due_date')}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant={
+                                action.status === 'completed'
+                                  ? 'resolved'
+                                  : action.status === 'cancelled'
+                                    ? 'destructive'
+                                    : action.status === 'in_progress'
+                                      ? 'in-progress'
+                                      : 'secondary'
+                              }
+                            >
+                              {action.status.replace(/_/g, ' ')}
+                            </Badge>
+                            <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
-                  <div className="grid grid-cols-2 gap-4">
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Column - Timeline & Quick Actions */}
+            <div className="space-y-6">
+              {/* Quick Info Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">{t('incidents.detail.quick_info')}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Calendar className="w-5 h-5 text-primary" />
+                    </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">
-                        {t('incidents.detail.incident_type')}
-                      </span>
-                      <p className="mt-1 text-foreground capitalize">
-                        {incident.incident_type.replace('_', ' ')}
+                      <p className="text-sm text-muted-foreground">
+                        {t('incidents.detail.created')}
+                      </p>
+                      <p className="font-medium text-foreground">
+                        {new Date(incident.created_at).toLocaleDateString()}
                       </p>
                     </div>
-                    <div>
-                      <span className="text-sm font-medium text-muted-foreground">
-                        {t('incidents.detail.severity')}
-                      </span>
-                      <p className="mt-1 text-foreground capitalize">{incident.severity}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-info/10 flex items-center justify-center">
+                      <MapPin className="w-5 h-5 text-info" />
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">
-                        {t('incidents.detail.incident_date')}
-                      </span>
-                      <p className="mt-1 text-foreground">
-                        {new Date(incident.incident_date).toLocaleString()}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-muted-foreground">
-                        {t('common.location')}
-                      </span>
-                      <p className="mt-1 text-foreground">
+                      <p className="text-sm text-muted-foreground">{t('common.location')}</p>
+                      <p className="font-medium text-foreground">
                         {incident.location || t('incidents.detail.not_specified')}
                       </p>
                     </div>
                   </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
+                      <User className="w-5 h-5 text-warning" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Contract / Department</p>
+                      <p className="font-medium text-foreground">{contractLabel}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
+                      <User className="w-5 h-5 text-success" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Reporter</p>
+                      <p className="font-medium text-foreground">
+                        {incident.reporter_name || t('incidents.detail.not_specified')}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {incident.reporter_email || 'No reporter email captured'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center">
+                      <AlertTriangle className="w-5 h-5 text-destructive" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Impact</p>
+                      <p className="font-medium text-foreground">
+                        {incidentSubmission?.has_injuries ? 'Injury reported' : 'No injury flagged'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{medicalAssistance}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-          {/* Actions Card */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <ClipboardList className="w-5 h-5 text-primary" />
-                {t('incidents.detail.actions_count', { count: actions.length })}
-              </CardTitle>
-              <Button variant="outline" size="sm" onClick={() => setShowActionModal(true)}>
-                <Plus className="w-4 h-4 mr-1" />
-                {t('incidents.detail.add')}
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {actions.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>{t('incidents.detail.no_actions')}</p>
-                  <p className="text-sm">{t('incidents.detail.no_actions_hint')}</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {actions.slice(0, 5).map((action) => (
-                    <div
-                      key={action.id}
-                      className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors"
-                      onClick={() => handleOpenAction(action)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          handleOpenAction(action)
-                        }
-                      }}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={cn(
-                            'w-8 h-8 rounded-lg flex items-center justify-center',
-                            action.status === 'completed'
-                              ? 'bg-success/10 text-success'
-                              : action.status === 'cancelled'
-                                ? 'bg-destructive/10 text-destructive'
-                                : 'bg-warning/10 text-warning',
-                          )}
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-foreground">{action.title}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {action.due_date
-                              ? t('incidents.detail.due_date_value', {
-                                  date: new Date(action.due_date).toLocaleDateString(),
-                                })
-                              : t('incidents.detail.no_due_date')}
-                          </p>
-                        </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">{t('incidents.detail.handoff_title')}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-3" data-testid="incident-workflow-proof">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      {t('incidents.detail.proof_eyebrow', 'Workflow proof')}
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-lg border border-border bg-muted/20 p-3">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                          {t('incidents.detail.linked_investigation')}
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-foreground font-mono">
+                          {investigationHref
+                            ? latestInvestigation?.reference_number ||
+                              `INV-${latestInvestigation?.id}`
+                            : '0'}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant={
-                            action.status === 'completed'
-                              ? 'resolved'
-                              : action.status === 'cancelled'
-                                ? 'destructive'
-                                : action.status === 'in_progress'
-                                  ? 'in-progress'
-                                  : 'secondary'
-                          }
+                      <div className="rounded-lg border border-border bg-muted/20 p-3">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                          {t('incidents.detail.proof_actions', 'CAPA actions')}
+                        </p>
+                        <p
+                          className="mt-1 text-lg font-semibold text-foreground"
+                          data-testid="incident-capa-count"
                         >
-                          {action.status.replace(/_/g, ' ')}
-                        </Badge>
-                        <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                          {capaCountLabel}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-muted/20 p-3">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                          {t('incidents.detail.open_actions')}
+                        </p>
+                        <p className="mt-1 text-lg font-semibold text-foreground">
+                          {openActionsLabel}
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column - Timeline & Quick Actions */}
-        <div className="space-y-6">
-          {/* Quick Info Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{t('incidents.detail.quick_info')}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Calendar className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">{t('incidents.detail.created')}</p>
-                  <p className="font-medium text-foreground">
-                    {new Date(incident.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-info/10 flex items-center justify-center">
-                  <MapPin className="w-5 h-5 text-info" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">{t('common.location')}</p>
-                  <p className="font-medium text-foreground">
-                    {incident.location || t('incidents.detail.not_specified')}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
-                  <User className="w-5 h-5 text-warning" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Contract / Department</p>
-                  <p className="font-medium text-foreground">
-                    {contractLabel}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
-                  <User className="w-5 h-5 text-success" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Reporter</p>
-                  <p className="font-medium text-foreground">
-                    {incident.reporter_name || t('incidents.detail.not_specified')}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {incident.reporter_email || 'No reporter email captured'}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center">
-                  <AlertTriangle className="w-5 h-5 text-destructive" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Impact</p>
-                  <p className="font-medium text-foreground">
-                    {incidentSubmission?.has_injuries ? 'Injury reported' : 'No injury flagged'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{medicalAssistance}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{t('incidents.detail.handoff_title')}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div
-                className="space-y-3"
-                data-testid="incident-workflow-proof"
-              >
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {t('incidents.detail.proof_eyebrow', 'Workflow proof')}
-                </p>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-lg border border-border bg-muted/20 p-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {t('incidents.detail.linked_investigation')}
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-foreground font-mono">
-                      {investigationHref
-                        ? latestInvestigation?.reference_number || `INV-${latestInvestigation?.id}`
-                        : '0'}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-border bg-muted/20 p-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {t('incidents.detail.proof_actions', 'CAPA actions')}
-                    </p>
-                    <p
-                      className="mt-1 text-lg font-semibold text-foreground"
-                      data-testid="incident-capa-count"
-                    >
-                      {capaCountLabel}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-border bg-muted/20 p-3">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {t('incidents.detail.open_actions')}
-                    </p>
-                    <p className="mt-1 text-lg font-semibold text-foreground">{openActionsLabel}</p>
-                  </div>
-                </div>
-                {actionsLoadFailed ? (
-                  <p className="text-sm text-amber-700 dark:text-amber-400" role="status">
-                    {t(
-                      'incidents.detail.actions_unavailable',
-                      'CAPA actions could not be loaded — counts may be incomplete.',
-                    )}
-                  </p>
-                ) : null}
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Evidence captured</p>
-                <p className="font-medium text-foreground">{surfacedEvidenceSummary}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Affected role</p>
-                <p className="font-medium text-foreground">
-                  {personRole}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Witnesses</p>
-                <p className="font-medium text-foreground">
-                  {incidentSubmission?.has_witnesses ? 'Witnesses captured' : 'No witnesses recorded'}
-                </p>
-              </div>
-              <div className="flex flex-col gap-2 pt-2 border-t border-border">
-                <Button
-                  onClick={() =>
-                    investigationHref
-                      ? navigate(investigationHref)
-                      : setShowInvestigationModal(true)
-                  }
-                >
-                  <FlaskConical className="w-4 h-4 mr-2" />
-                  {investigationHref
-                    ? t('incidents.detail.open_investigation')
-                    : t('incidents.detail.start_investigation')}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => navigate(capaHref)}
-                  disabled={actionsLoading}
-                  data-testid="incident-capa-handoff-cta"
-                >
-                  <ClipboardList className="w-4 h-4 mr-2" />
-                  {t(getCapaHandoffLabelKey('incident', actionsLoadFailed ? 0 : actions.length), {
-                    count: actions.length,
-                  })}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-primary" />
-                Evidence
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {evidenceLoading ? (
-                <p className="text-sm text-muted-foreground">Loading evidence…</p>
-              ) : evidenceLoadFailed ? (
-                <p className="text-sm text-muted-foreground">
-                  Evidence assets could not be loaded. Reporter-submission evidence is shown separately.
-                </p>
-              ) : evidenceAssets.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No evidence assets are linked to this incident.
-                </p>
-              ) : (
-                <ul className="space-y-2" data-testid="incident-evidence-assets">
-                  {evidenceAssets.map((asset) => (
-                    <li key={asset.id} className="rounded-lg border border-border p-3">
-                      <p className="font-medium text-foreground">
-                        {asset.title || asset.original_filename || `Evidence #${asset.id}`}
+                    {actionsLoadFailed ? (
+                      <p className="text-sm text-amber-700 dark:text-amber-400" role="status">
+                        {t(
+                          'incidents.detail.actions_unavailable',
+                          'CAPA actions could not be loaded — counts may be incomplete.',
+                        )}
                       </p>
-                      <p className="text-xs text-muted-foreground">{asset.content_type}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5 text-primary" />
-                Linked risks
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {parseLinkedRiskIds(incident.linked_risk_ids).length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {canRaiseRisk
-                    ? 'No linked risks yet. Use Raise risk to create a register entry.'
-                    : 'Raise risk is available for high and critical severity incidents.'}
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {parseLinkedRiskIds(incident.linked_risk_ids).map((riskId) => (
-                    <button
-                      key={riskId}
-                      type="button"
-                      className="w-full rounded-lg border border-border p-3 text-left hover:bg-muted/40"
+                    ) : null}
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Evidence captured</p>
+                    <p className="font-medium text-foreground">{surfacedEvidenceSummary}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Affected role</p>
+                    <p className="font-medium text-foreground">{personRole}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Witnesses</p>
+                    <p className="font-medium text-foreground">
+                      {incidentSubmission?.has_witnesses
+                        ? 'Witnesses captured'
+                        : 'No witnesses recorded'}
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 pt-2 border-t border-border">
+                    <Button
                       onClick={() =>
-                        navigate(
-                          riskRegisterHref(riskId, {
-                            incidentRef: incident.reference_number,
-                          }),
-                        )
+                        investigationHref
+                          ? navigate(investigationHref)
+                          : setShowInvestigationModal(true)
                       }
-                      data-testid={`incident-linked-risk-${riskId}`}
                     >
-                      <div className="font-medium text-foreground">Risk #{riskId}</div>
-                      <div className="text-sm text-muted-foreground">Open in risk register</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Activity Timeline</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex gap-3">
-                  <div className="w-2 h-2 rounded-full bg-primary mt-2" />
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {t('incidents.detail.incident_reported')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(incident.reported_date).toLocaleString()}
-                    </p>
+                      <FlaskConical className="w-4 h-4 mr-2" />
+                      {investigationHref
+                        ? t('incidents.detail.open_investigation')
+                        : t('incidents.detail.start_investigation')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => navigate(capaHref)}
+                      disabled={actionsLoading}
+                      data-testid="incident-capa-handoff-cta"
+                    >
+                      <ClipboardList className="w-4 h-4 mr-2" />
+                      {t(
+                        getCapaHandoffLabelKey('incident', actionsLoadFailed ? 0 : actions.length),
+                        {
+                          count: actions.length,
+                        },
+                      )}
+                    </Button>
                   </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="w-2 h-2 rounded-full bg-muted mt-2" />
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {t('incidents.detail.record_created')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(incident.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                </CardContent>
+              </Card>
 
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-primary" />
+                    Evidence
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {evidenceLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading evidence…</p>
+                  ) : evidenceLoadFailed ? (
+                    <p className="text-sm text-muted-foreground">
+                      Evidence assets could not be loaded. Reporter-submission evidence is shown
+                      separately.
+                    </p>
+                  ) : evidenceAssets.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No evidence assets are linked to this incident.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2" data-testid="incident-evidence-assets">
+                      {evidenceAssets.map((asset) => (
+                        <li key={asset.id} className="rounded-lg border border-border p-3">
+                          <p className="font-medium text-foreground">
+                            {asset.title || asset.original_filename || `Evidence #${asset.id}`}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{asset.content_type}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldAlert className="w-5 h-5 text-primary" />
+                    Linked risks
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {parseLinkedRiskIds(incident.linked_risk_ids).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      {canRaiseRisk
+                        ? 'No linked risks yet. Use Raise risk to create a register entry.'
+                        : 'Raise risk is available for high and critical severity incidents.'}
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {parseLinkedRiskIds(incident.linked_risk_ids).map((riskId) => (
+                        <button
+                          key={riskId}
+                          type="button"
+                          className="w-full rounded-lg border border-border p-3 text-left hover:bg-muted/40"
+                          onClick={() =>
+                            navigate(
+                              riskRegisterHref(riskId, {
+                                incidentRef: incident.reference_number,
+                              }),
+                            )
+                          }
+                          data-testid={`incident-linked-risk-${riskId}`}
+                        >
+                          <div className="font-medium text-foreground">Risk #{riskId}</div>
+                          <div className="text-sm text-muted-foreground">Open in risk register</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Activity Timeline</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex gap-3">
+                      <div className="w-2 h-2 rounded-full bg-primary mt-2" />
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {t('incidents.detail.incident_reported')}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(incident.reported_date).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="w-2 h-2 rounded-full bg-muted mt-2" />
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {t('incidents.detail.record_created')}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(incident.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="standards" className="mt-6">
@@ -1319,7 +1367,10 @@ export default function IncidentDetail() {
             newEntry={newEntry}
             addingEntry={addingEntry}
             title={t('common.running_sheet', 'Running Sheet')}
-            placeholder={t('common.running_sheet_placeholder', 'Add to the story... (auto-timestamped)')}
+            placeholder={t(
+              'common.running_sheet_placeholder',
+              'Add to the story... (auto-timestamped)',
+            )}
             emptyTitle={t('common.running_sheet_empty_title', 'No entries yet')}
             emptyDescription={t(
               'incidents.detail.running_sheet_empty_description',

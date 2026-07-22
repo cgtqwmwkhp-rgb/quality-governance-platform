@@ -163,7 +163,7 @@ export function buildHighlightChips(inputs: HighlightInputs): HighlightChip[] {
     } else if (md.clearState?.status === 'ok' && md.clearState.value === 'attention') {
       chips.push({
         id: 'my-clear-attention',
-        label: 'Tools/van need attention',
+        label: 'Assets/van need attention',
         tone: 'warning',
         href: '/portal/tools',
       })

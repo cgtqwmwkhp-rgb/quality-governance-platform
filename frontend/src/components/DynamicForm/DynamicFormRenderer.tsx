@@ -51,6 +51,7 @@ interface DynamicFormRendererProps {
   onCancel?: () => void
   contractOptions?: Array<{ value: string; label: string; sublabel?: string }>
   roleOptions?: Array<{ value: string; label: string }>
+  medicalAssistanceOptions?: Array<{ value: string; label: string }>
 }
 
 // ==================== Auto-save Hook ====================
@@ -107,6 +108,7 @@ interface FieldRendererProps {
   error?: string
   contractOptions?: Array<{ value: string; label: string; sublabel?: string }>
   roleOptions?: Array<{ value: string; label: string }>
+  medicalAssistanceOptions?: Array<{ value: string; label: string }>
 }
 
 function FieldRenderer({
@@ -116,6 +118,7 @@ function FieldRenderer({
   error,
   contractOptions,
   roleOptions,
+  medicalAssistanceOptions,
 }: FieldRendererProps) {
   const {
     isListening,
@@ -297,12 +300,18 @@ function FieldRenderer({
     case 'select':
       // Use customer options for compatibility fields named either customer or contract.
       const selectOptions =
-        field.name.toLowerCase().includes('customer') || field.name.toLowerCase().includes('contract')
-        ? contractOptions?.map((c) => ({ value: c.value, label: c.label, sublabel: c.sublabel })) ||
-          []
-        : field.name.toLowerCase().includes('role')
-          ? roleOptions?.map((r) => ({ value: r.value, label: r.label })) || []
-          : field.options || []
+        field.name.toLowerCase().includes('customer') ||
+        field.name.toLowerCase().includes('contract')
+          ? contractOptions?.map((c) => ({
+              value: c.value,
+              label: c.label,
+              sublabel: c.sublabel,
+            })) || []
+          : field.name.toLowerCase().includes('role')
+            ? roleOptions?.map((r) => ({ value: r.value, label: r.label })) || []
+            : field.name === 'medical_assistance'
+              ? medicalAssistanceOptions || field.options || []
+              : field.options || []
 
       return (
         <div className={widthClass}>
@@ -578,6 +587,7 @@ export default function DynamicFormRenderer({
   onCancel,
   contractOptions = [],
   roleOptions = [],
+  medicalAssistanceOptions = [],
 }: DynamicFormRendererProps) {
   const [currentStep, setCurrentStep] = useState(0)
   const [formData, setFormData] = useState<DynamicFormData>(initialData)
@@ -840,6 +850,7 @@ export default function DynamicFormRenderer({
                       error={errors[field.name]}
                       contractOptions={contractOptions}
                       roleOptions={roleOptions}
+                      medicalAssistanceOptions={medicalAssistanceOptions}
                     />
                   </div>
                 ))}

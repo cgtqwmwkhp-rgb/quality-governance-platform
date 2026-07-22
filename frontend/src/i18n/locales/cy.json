@@ -3257,7 +3257,7 @@
   "workforce.competency.due_60": "Due ≤60 days",
   "workforce.competency.due_90": "Due ≤90 days",
   "workforce.competency.empty_filter": "No engineers match this status filter.",
-  "workforce.competency.engineers": "Engineers",
+  "workforce.competency.engineers": "Cyflogeion",
   "workforce.competency.filter_all": "All statuses",
   "workforce.competency.filter_status": "Status filter",
   "workforce.competency.kpi_unavailable": "unavailable",

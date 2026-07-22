@@ -27,17 +27,8 @@ import {
 } from './dashboard/dashboardMetrics'
 
 export default function Dashboard() {
-  const {
-    loading,
-    error,
-    persona,
-    unreadCount,
-    myDay,
-    pulse,
-    org,
-    highlights,
-    refresh,
-  } = useDashboardData()
+  const { loading, error, persona, unreadCount, myDay, pulse, org, highlights, refresh } =
+    useDashboardData()
 
   if (loading) {
     return (
@@ -64,7 +55,10 @@ export default function Dashboard() {
       {error && (
         <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
           <p className="text-sm text-destructive">{error}</p>
-          <button onClick={refresh} className="text-sm font-medium text-destructive hover:underline">
+          <button
+            onClick={refresh}
+            className="text-sm font-medium text-destructive hover:underline"
+          >
             Try Again
           </button>
         </div>
@@ -149,7 +143,7 @@ export default function Dashboard() {
               <Card hoverable className="p-4 bg-warning/5 border-warning/20">
                 <div className="flex items-center gap-3">
                   <Shield className="w-5 h-5 text-warning" />
-                  <span className="text-foreground font-medium">My Tools</span>
+                  <span className="text-foreground font-medium">My Assets</span>
                 </div>
               </Card>
             </Link>
