@@ -61,12 +61,18 @@ import {
   filterEntityMetricRollups,
   filterPersonRollups,
   filterRowsByHorizon,
+  type BoardHorizon,
   type Horizon,
   HORIZON_FILTERS,
+  horizonFilterLabel,
   horizonForRow,
+  computeHorizonCounts,
+  isCoverageHorizon,
   isGapStatus,
   isOkStatus,
+  isPlanningHorizon,
   moduleViewForRole,
+  previewNotifyRecipients,
   myTrainingSummary,
   type PersonRollupColumnFilters,
   type PersonRollupSortKey,
@@ -283,7 +289,7 @@ export function TrainingMatrixGapBoard() {
   const [summary, setSummary] = useState<TrainingMatrixSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [horizon, setHorizon] = useState<Horizon | 'all'>('overdue')
+  const [horizon, setHorizon] = useState<BoardHorizon>('overdue')
   const [view, setView] = useState<ViewId>('individual')
   const [roleScope, setRoleScope] = useState<RoleScope>('Overall')
   const [briefingIndex, setBriefingIndex] = useState(0)
@@ -375,7 +381,24 @@ export function TrainingMatrixGapBoard() {
     [scopedRows, horizon],
   )
 
+  const coverageMode = isCoverageHorizon(horizon)
+
+  useEffect(() => {
+    if (coverageMode) {
+      setPersonSortKey('pct')
+      setPersonSortDir('asc')
+      setEntitySortKey('pct')
+      setEntitySortDir('asc')
+      return
+    }
+    setPersonSortKey('overdue')
+    setPersonSortDir('desc')
+    setEntitySortKey(view === 'module' ? 'pct' : 'overdue')
+    setEntitySortDir(view === 'module' ? 'asc' : 'desc')
+  }, [coverageMode, view])
+
   const topCourses = useMemo(() => {
+    if (coverageMode) return []
     if (horizon === 'all') {
       const counts = new Map<string, number>()
       for (const row of filteredRows) counts.set(row.course_display_name, (counts.get(row.course_display_name) || 0) + 1)
@@ -384,8 +407,8 @@ export function TrainingMatrixGapBoard() {
         .sort((a, b) => b.count - a.count)
         .slice(0, 5)
     }
-    return topCoursesInHorizon(scopedRows, horizon, 5)
-  }, [scopedRows, filteredRows, horizon])
+    return topCoursesInHorizon(scopedRows, horizon as Horizon, 5)
+  }, [scopedRows, filteredRows, horizon, coverageMode])
 
   const groupRollups = useMemo(
     () => buildDepartmentMetricRollups(scopedRows, filteredRows),
@@ -426,10 +449,21 @@ export function TrainingMatrixGapBoard() {
     [activeEntityRollups, entityFilters, entitySortKey, entitySortDir],
   )
 
+  const tableScopeChip = useMemo(() => {
+    if (view === 'individual') {
+      const count = displayedPersonRollups.length
+      return { count, unit: count === 1 ? 'person' : 'people' }
+    }
+    if (view === 'group' || view === 'course' || view === 'module') {
+      const count = displayedEntityRollups.length
+      return { count, unit: count === 1 ? 'row' : 'rows' }
+    }
+    const count = scopedRows.length
+    return { count, unit: count === 1 ? 'module' : 'modules' }
+  }, [view, displayedPersonRollups, displayedEntityRollups, scopedRows.length])
+
   useEffect(() => {
     setEntityFilters(EMPTY_ENTITY_METRIC_FILTERS)
-    setEntitySortKey(view === 'module' ? 'pct' : 'overdue')
-    setEntitySortDir(view === 'module' ? 'asc' : 'desc')
     setEntityDrilldown(null)
   }, [view])
 
@@ -602,6 +636,8 @@ export function TrainingMatrixGapBoard() {
     ]
   }, [scopedRows])
 
+  const scopedHorizonCounts = useMemo(() => computeHorizonCounts(scopedRows), [scopedRows])
+
   const toggleSelected = (atlasName: string) => {
     setSelected((prev) => {
       const next = new Set(prev)
@@ -613,10 +649,22 @@ export function TrainingMatrixGapBoard() {
 
   const runNotify = (atlasNames: string[]) => {
     if (atlasNames.length === 0) return
+    const { willEmail, willSkip } = previewNotifyRecipients(atlasNames, scopedRows)
+    if (willEmail.length === 0) {
+      toast.error(
+        `No emailable gaps in this selection (${willSkip.length} would be skipped — notify only sends for overdue/missing/pending/failed modules).`,
+      )
+      return
+    }
+    const confirmed = window.confirm(
+      `Will email ${willEmail.length} · skip ${willSkip.length} (no gap-status modules).\n\n` +
+        'Notify only emails people with overdue/missing/pending/failed training. Continue?',
+    )
+    if (!confirmed) return
     setNotifying(true)
     setError(null)
     void trainingMatrixApi
-      .notify(atlasNames)
+      .notify(willEmail)
       .then((res) => {
         toast.success(`Emailed ${res.sent} · skipped ${res.skipped} · failed ${res.failed}`)
         setSelected(new Set())
@@ -793,6 +841,14 @@ export function TrainingMatrixGapBoard() {
                 </button>
               ))}
             </div>
+            <p
+              className="w-full text-xs text-muted-foreground"
+              data-testid="training-matrix-scope-chip"
+            >
+              Showing {tableScopeChip.count} {tableScopeChip.unit} · filter:{' '}
+              {horizonFilterLabel(horizon)} · role: {roleScope}
+              {coverageMode ? ' · coverage roster (includes 100% OK)' : ''}
+            </p>
             <div className="flex items-center gap-2">
               <Button
                 type="button"
@@ -822,10 +878,11 @@ export function TrainingMatrixGapBoard() {
                     return
                   }
                   if (view === 'group' || view === 'course' || view === 'module') {
+                    // Coverage: membership rows may be full set; notify still gap-filters via preview.
                     runNotify([
                       ...new Set(
                         displayedEntityRollups.flatMap((r) =>
-                          r.filteredRows.map((row) => row.atlas_name),
+                          (coverageMode ? r.allRows : r.filteredRows).map((row) => row.atlas_name),
                         ),
                       ),
                     ])
@@ -836,7 +893,11 @@ export function TrainingMatrixGapBoard() {
                 data-testid="training-matrix-email-filter"
               >
                 <Mail className="w-3.5 h-3.5 mr-1.5" />
-                Email everyone in filter
+                {coverageMode
+                  ? 'Email gaps only'
+                  : isPlanningHorizon(horizon)
+                    ? 'Send reminders'
+                    : 'Email everyone in filter'}
               </Button>
               <Button type="button" variant="outline" size="sm" onClick={onExportCsv} data-testid="training-matrix-export-csv">
                 <Download className="w-3.5 h-3.5 mr-1.5" />
@@ -983,10 +1044,13 @@ export function TrainingMatrixGapBoard() {
                   <StatusPieChart slices={analyticsPie} />
                 </div>
                 <div>
-                  <p className="text-sm font-medium mb-2">What is due soon</p>
+                  <p className="text-sm font-medium mb-2">
+                    What is due soon
+                    {roleScope !== 'Overall' ? ` · ${roleScope}` : ''}
+                  </p>
                   <DueForwardBars
-                    d30={summary?.horizons?.d30 ?? 0}
-                    d90={summary?.horizons?.d90 ?? 0}
+                    d30={scopedHorizonCounts.d30}
+                    d90={scopedHorizonCounts.d90}
                   />
                 </div>
               </div>

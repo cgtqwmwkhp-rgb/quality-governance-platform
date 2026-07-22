@@ -13,6 +13,7 @@ import {
   computeModuleRoleStats,
   computePeopleFullyOkStats,
   computeRoleStats,
+  computeHorizonCounts,
   filterRowsByHorizon,
   groupRowsByCourse,
   groupRowsByDepartment,
@@ -20,6 +21,7 @@ import {
   horizonForRow,
   isOkStatus,
   moduleViewForRole,
+  previewNotifyRecipients,
   myTrainingSummary,
   resolveBoardRole,
   rowsToCsv,
@@ -194,6 +196,48 @@ describe('buildPersonRollups', () => {
     expect(rollups[0].need).toBe(1)
     expect(rollups[0].pct).toBe(50)
     expect(rollups[0].overdue).toBe(1)
+  })
+
+  it('coverage membership includes fully compliant people', () => {
+    const all = [
+      row({ atlas_name: 'Alice', course_key: 'a', status: 'compliant', qgp_due_on: iso(100) }),
+      row({ atlas_name: 'Alice', course_key: 'b', status: 'missing', qgp_due_on: null }),
+      row({ atlas_name: 'Bob', course_key: 'a', status: 'compliant', qgp_due_on: iso(100) }),
+    ]
+    const coverage = filterRowsByHorizon(all, 'coverage', TODAY)
+    const rollups = buildPersonRollups(all, coverage, TODAY)
+    expect(rollups.map((r) => r.atlas_name).sort()).toEqual(['Alice', 'Bob'])
+    expect(rollups.find((r) => r.atlas_name === 'Bob')?.overdue).toBe(0)
+    expect(rollups.find((r) => r.atlas_name === 'Bob')?.pct).toBe(100)
+  })
+})
+
+describe('previewNotifyRecipients', () => {
+  it('only marks people with gap-status modules as emailable', () => {
+    const rows = [
+      row({ atlas_name: 'Alice', status: 'missing', qgp_due_on: null }),
+      row({ atlas_name: 'Bob', status: 'compliant', qgp_due_on: iso(100) }),
+      row({ atlas_name: 'Carol', status: 'due_soon', qgp_due_on: iso(10) }),
+    ]
+    const preview = previewNotifyRecipients(['Alice', 'Bob', 'Carol'], rows)
+    expect(preview.willEmail).toEqual(['Alice'])
+    expect(preview.willSkip).toEqual(['Bob', 'Carol'])
+  })
+})
+
+describe('computeHorizonCounts', () => {
+  it('counts d90 as due within 90 days inclusive', () => {
+    const rows = [
+      row({ status: 'compliant', qgp_due_on: iso(10) }),
+      row({ status: 'compliant', qgp_due_on: iso(45) }),
+      row({ status: 'compliant', qgp_due_on: iso(100) }),
+      row({ status: 'missing', qgp_due_on: null }),
+    ]
+    const counts = computeHorizonCounts(rows, TODAY)
+    expect(counts.d30).toBe(1)
+    expect(counts.d60).toBe(1)
+    expect(counts.d90).toBe(2)
+    expect(counts.overdue).toBe(1)
   })
 })
 
