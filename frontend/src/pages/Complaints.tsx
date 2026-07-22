@@ -240,6 +240,7 @@ export default function Complaints() {
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showModal is the dialog open gate
   }, [showModal, t])
 
   const customersUnavailable = customersLoaded && customerOptions.length === 0
