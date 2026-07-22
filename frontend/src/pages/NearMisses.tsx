@@ -2,7 +2,14 @@ import { useDeferredValue, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, Loader2, Plus, Search } from 'lucide-react'
-import { nearMissesApi, NearMiss, NearMissCreate, getApiErrorMessage } from '../api/client'
+import {
+  contractsApi,
+  nearMissesApi,
+  NearMiss,
+  NearMissCreate,
+  getApiErrorMessage,
+  type Contract,
+} from '../api/client'
 import { trackError } from '../utils/errorTracker'
 import { toast } from '../contexts/ToastContext'
 import { Button } from '../components/ui/Button'
@@ -82,7 +89,34 @@ export default function NearMisses() {
     was_involved: true,
     witnesses_present: false,
   })
+  const [contracts, setContracts] = useState<Contract[]>([])
+  const [contractsError, setContractsError] = useState<string | null>(null)
   const eventDateInput = formData.event_date ? formData.event_date.slice(0, 16) : ''
+
+  useEffect(() => {
+    let cancelled = false
+    void contractsApi
+      .list(true)
+      .then((res) => {
+        if (!cancelled) {
+          setContracts(res.items || [])
+          setContractsError(
+            (res.items || []).length === 0
+              ? 'No active contracts configured. Ask an admin to add Contracts.'
+              : null,
+          )
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setContracts([])
+          setContractsError(getApiErrorMessage(err, 'Could not load contracts.'))
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Hydrate list filters from shareable URL (back/forward + deep links).
   useEffect(() => {
@@ -311,13 +345,28 @@ export default function NearMisses() {
                 <label htmlFor="near-miss-contract" className="text-sm font-medium text-muted-foreground">
                   {t('near_misses.form.contract', 'Contract')}
                 </label>
-                <Input
-                  id="near-miss-contract"
-                  value={formData.contract}
-                  onChange={(e) => setFormData({ ...formData, contract: e.target.value })}
-                  className="mt-1"
+                <Select
+                  value={formData.contract || undefined}
+                  onValueChange={(value) => setFormData({ ...formData, contract: value })}
                   required
-                />
+                >
+                  <SelectTrigger id="near-miss-contract" className="mt-1" data-testid="near-miss-contract">
+                    <SelectValue placeholder={t('near_misses.form.contract_placeholder', 'Select contract')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contracts.map((contract) => (
+                      <SelectItem key={contract.id} value={contract.code}>
+                        {contract.name}
+                        {contract.client_name ? ` · ${contract.client_name}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {contractsError ? (
+                  <p className="mt-1 text-xs text-destructive" role="alert">
+                    {contractsError}
+                  </p>
+                ) : null}
               </div>
             </div>
 

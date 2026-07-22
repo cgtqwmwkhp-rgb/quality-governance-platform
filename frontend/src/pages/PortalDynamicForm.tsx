@@ -18,7 +18,15 @@ import { Button } from '../components/ui/Button'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import { cn } from '../helpers/utils'
 import { API_BASE_URL } from '../config/apiBase'
-import type { FormTemplate, Contract, LookupOption } from '../services/api'
+import {
+  contractsApi,
+  formTemplatesApi,
+  getApiErrorMessage,
+  lookupsApi,
+  type Contract,
+} from '../api/client'
+import type { LookupOption } from '../api/lookupsClient'
+import type { FormTemplate } from '../services/api'
 import type { DynamicFormData } from '../components/DynamicForm'
 
 // Props for explicit form type (preferred over URL parsing)
@@ -671,141 +679,6 @@ const FALLBACK_TEMPLATES: Record<string, FormTemplate> = {
   },
 }
 
-const FALLBACK_CONTRACTS: Contract[] = [
-  {
-    id: 1,
-    name: 'UKPN',
-    code: 'ukpn',
-    client_name: 'UK Power Networks',
-    is_active: true,
-    display_order: 1,
-  },
-  {
-    id: 2,
-    name: 'Openreach',
-    code: 'openreach',
-    client_name: 'BT Group',
-    is_active: true,
-    display_order: 2,
-  },
-  {
-    id: 3,
-    name: 'Thames Water',
-    code: 'thames-water',
-    client_name: 'Thames Water Utilities',
-    is_active: true,
-    display_order: 3,
-  },
-  {
-    id: 4,
-    name: 'Plantexpand Ltd',
-    code: 'plantexpand',
-    client_name: 'Internal',
-    is_active: true,
-    display_order: 4,
-  },
-  {
-    id: 5,
-    name: 'Cadent',
-    code: 'cadent',
-    client_name: 'Cadent Gas',
-    is_active: true,
-    display_order: 5,
-  },
-  {
-    id: 6,
-    name: 'SGN',
-    code: 'sgn',
-    client_name: 'Southern Gas Networks',
-    is_active: true,
-    display_order: 6,
-  },
-  {
-    id: 7,
-    name: 'Southern Water',
-    code: 'southern-water',
-    client_name: 'Southern Water Services',
-    is_active: true,
-    display_order: 7,
-  },
-  {
-    id: 8,
-    name: 'Zenith',
-    code: 'zenith',
-    client_name: 'Zenith Vehicle Solutions',
-    is_active: true,
-    display_order: 8,
-  },
-  {
-    id: 9,
-    name: 'Novuna',
-    code: 'novuna',
-    client_name: 'Scottish Power',
-    is_active: true,
-    display_order: 9,
-  },
-  {
-    id: 10,
-    name: 'Enterprise',
-    code: 'enterprise',
-    client_name: 'Enterprise Fleet Management',
-    is_active: true,
-    display_order: 10,
-  },
-]
-
-const FALLBACK_ROLES: LookupOption[] = [
-  {
-    id: 1,
-    category: 'roles',
-    code: 'mobile-engineer',
-    label: 'Mobile Engineer',
-    is_active: true,
-    display_order: 1,
-  },
-  {
-    id: 2,
-    category: 'roles',
-    code: 'workshop-pehq',
-    label: 'Workshop (PE HQ)',
-    is_active: true,
-    display_order: 2,
-  },
-  {
-    id: 3,
-    category: 'roles',
-    code: 'workshop-fixed',
-    label: 'Vehicle Workshop (Fixed Customer Site)',
-    is_active: true,
-    display_order: 3,
-  },
-  {
-    id: 4,
-    category: 'roles',
-    code: 'office',
-    label: 'Office Based Employee',
-    is_active: true,
-    display_order: 4,
-  },
-  {
-    id: 5,
-    category: 'roles',
-    code: 'trainee',
-    label: 'Trainee/Apprentice',
-    is_active: true,
-    display_order: 5,
-  },
-  {
-    id: 6,
-    category: 'roles',
-    code: 'non-pe',
-    label: 'Non-Plantexpand Employee',
-    is_active: true,
-    display_order: 6,
-  },
-  { id: 7, category: 'roles', code: 'other', label: 'Other', is_active: true, display_order: 7 },
-]
-
 // Determine form type from URL
 function getFormTypeFromPath(pathname: string): string {
   if (pathname.includes('near-miss')) return 'near-miss'
@@ -877,40 +750,89 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
   const [roles, setRoles] = useState<LookupOption[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [catalogWarning, setCatalogWarning] = useState<string | null>(null)
 
-  // Load configuration
+  // Load template structure + live Admin Contracts / Lookups (never silent fake catalogs).
   useEffect(() => {
+    let cancelled = false
+
     async function loadConfig() {
       setIsLoading(true)
       setError(null)
+      setCatalogWarning(null)
 
       try {
-        // Try to load from API first
-        // In production, this would be:
-        // const [templateRes, contractsRes, rolesRes] = await Promise.all([
-        //   formTemplatesApi.getBySlug(formType),
-        //   contractsApi.list(true),
-        //   lookupsApi.list('roles', true),
-        // ]);
+        let loadedTemplate: FormTemplate | null = null
+        try {
+          loadedTemplate = await formTemplatesApi.getBySlug(formType)
+        } catch {
+          loadedTemplate = null
+        }
+        if (cancelled) return
+        setTemplate(loadedTemplate || FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident)
 
-        // For now, use fallbacks with simulated delay
-        await new Promise((resolve) => setTimeout(resolve, 300))
+        const contractsResult = await Promise.allSettled([contractsApi.list(true)])
+        if (cancelled) return
+        const contractsOutcome = contractsResult[0]
+        if (contractsOutcome.status === 'fulfilled') {
+          setContracts(contractsOutcome.value.items || [])
+        } else {
+          setContracts([])
+          setError(
+            getApiErrorMessage(
+              contractsOutcome.reason,
+              'Contracts unavailable — ask an admin to configure Admin → Contracts.',
+            ),
+          )
+          return
+        }
 
-        setTemplate(FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident)
-        setContracts(FALLBACK_CONTRACTS)
-        setRoles(FALLBACK_ROLES)
+        let roleItems: LookupOption[] = []
+        try {
+          const workforce = await lookupsApi.list('workforce_roles', true)
+          roleItems = workforce.items || []
+        } catch {
+          roleItems = []
+        }
+        if (roleItems.length === 0) {
+          try {
+            const legacyRoles = await lookupsApi.list('roles', true)
+            roleItems = legacyRoles.items || []
+          } catch {
+            roleItems = []
+          }
+        }
+        if (cancelled) return
+        setRoles(roleItems)
+
+        const warnings: string[] = []
+        if ((contractsOutcome.value.items || []).length === 0) {
+          warnings.push(
+            'No active contracts found. An admin must add Contracts under Admin → Contracts.',
+          )
+        }
+        if (roleItems.length === 0) {
+          warnings.push(
+            'No workforce roles found. An admin must configure Lookups → Workforce Roles (or Roles).',
+          )
+        }
+        setCatalogWarning(warnings.length ? warnings.join(' ') : null)
       } catch (err) {
+        if (cancelled) return
         console.error('Failed to load form configuration:', err)
-        // Fall back to local config
         setTemplate(FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident)
-        setContracts(FALLBACK_CONTRACTS)
-        setRoles(FALLBACK_ROLES)
+        setContracts([])
+        setRoles([])
+        setError(getApiErrorMessage(err, 'Could not load form catalogs from Admin.'))
       } finally {
-        setIsLoading(false)
+        if (!cancelled) setIsLoading(false)
       }
     }
 
-    loadConfig()
+    void loadConfig()
+    return () => {
+      cancelled = true
+    }
   }, [formType])
 
   // Pre-fill user data
@@ -1083,6 +1005,15 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
 
       {/* Form Content */}
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 pb-24">
+        {catalogWarning ? (
+          <div
+            className="mb-4 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground"
+            role="status"
+            data-testid="portal-catalog-warning"
+          >
+            {catalogWarning}
+          </div>
+        ) : null}
         <DynamicFormRenderer
           template={template}
           initialData={initialData}
