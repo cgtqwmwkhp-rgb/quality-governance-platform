@@ -48,18 +48,35 @@ function Wrapper({ children }: { children: ReactNode }) {
 describe('Near Misses page accessibility (real page /near-misses)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockCustomersList.mockResolvedValue({
-      items: [
-        {
-          id: 1,
-          code: 'ukpn',
-          label: 'UK Power Networks',
-          description: 'UKPN',
-          is_active: true,
-          display_order: 1,
-        },
-      ],
-      total: 1,
+    mockCustomersList.mockImplementation((category: string) => {
+      if (category === 'severity_levels') {
+        return Promise.resolve({
+          items: [
+            {
+              id: 2,
+              code: 'high',
+              label: 'High impact',
+              description: null,
+              is_active: true,
+              display_order: 1,
+            },
+          ],
+          total: 1,
+        })
+      }
+      return Promise.resolve({
+        items: [
+          {
+            id: 1,
+            code: 'ukpn',
+            label: 'UK Power Networks',
+            description: 'UKPN',
+            is_active: true,
+            display_order: 1,
+          },
+        ],
+        total: 1,
+      })
     })
     mockList.mockResolvedValue({
       data: {
@@ -109,5 +126,19 @@ describe('Near Misses page accessibility (real page /near-misses)', () => {
     })
 
     await expectNoA11yViolations(baseElement)
+  })
+
+  it('loads the severity lookup when the create dialog opens', async () => {
+    render(<NearMisses />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('NM-00017')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'near_misses.new' }))
+
+    await waitFor(() => {
+      expect(mockCustomersList).toHaveBeenCalledWith('severity_levels', true)
+    })
+    expect(document.getElementById('near-miss-potential-severity')).toBeInTheDocument()
   })
 })

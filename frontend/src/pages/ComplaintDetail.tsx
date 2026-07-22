@@ -41,6 +41,7 @@ import {
   notificationsApi,
   evidenceAssetsApi,
   type EvidenceAsset,
+  lookupsApi,
 } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
@@ -79,6 +80,19 @@ import {
 } from './complaintEvidenceHonesty'
 import { cn } from '../helpers/utils'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
+import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
+
+const COMPLAINT_TYPE_VALUES = [
+  'product',
+  'service',
+  'delivery',
+  'communication',
+  'billing',
+  'staff',
+  'environmental',
+  'safety',
+  'other',
+] as const
 
 export default function ComplaintDetail() {
   const { t } = useTranslation()
@@ -97,6 +111,19 @@ export default function ComplaintDetail() {
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editForm, setEditForm] = useState<ComplaintUpdate>({})
+  const defaultTypeOptions = COMPLAINT_TYPE_VALUES.map((code) => ({
+    value: code,
+    label: t(`complaints.type.${code}`),
+  }))
+  const defaultPriorityOptions = [
+    { value: 'critical', label: t('priority.critical') },
+    { value: 'high', label: t('priority.high') },
+    { value: 'medium', label: t('priority.medium') },
+    { value: 'low', label: t('priority.low') },
+  ]
+  const [typeOptions, setTypeOptions] =
+    useState<Array<{ value: string; label: string }>>(defaultTypeOptions)
+  const [priorityOptions, setPriorityOptions] = useState(defaultPriorityOptions)
 
   const [selectedAction, setSelectedAction] = useState<Action | null>(null)
   const [showActionDetailModal, setShowActionDetailModal] = useState(false)
@@ -150,6 +177,27 @@ export default function ComplaintDetail() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [navigate, isEditing])
+
+  useEffect(() => {
+    if (!isEditing) return
+    let cancelled = false
+    setTypeOptions(defaultTypeOptions)
+    setPriorityOptions(defaultPriorityOptions)
+    void Promise.all([
+      lookupsApi.list('complaint_types', true).catch(() => ({ items: [], total: 0 })),
+      lookupsApi.list('severity_levels', true).catch(() => ({ items: [], total: 0 })),
+    ]).then(([typesRes, severityRes]) => {
+      if (!cancelled) {
+        setTypeOptions(mergeLookupSelectOptions(defaultTypeOptions, typesRes.items))
+        setPriorityOptions(mergeLookupSelectOptions(defaultPriorityOptions, severityRes.items))
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+    // Intentional: lookup labels load when editing opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing])
 
   const loadComplaint = async (complaintId: number) => {
     setError(null)
@@ -531,7 +579,9 @@ export default function ComplaintDetail() {
   const complaintSubmissionSections = buildComplaintSubmissionSections(complaintSubmission)
   const contractLabel =
     complaint.department ||
-    (typeof complaintSubmission?.contract === 'string' ? complaintSubmission.contract : 'Not provided')
+    (typeof complaintSubmission?.contract === 'string'
+      ? complaintSubmission.contract
+      : 'Not provided')
   const complainantRole =
     (typeof complaintSubmission?.complainant_role === 'string' &&
       complaintSubmission.complainant_role) ||
@@ -551,7 +601,9 @@ export default function ComplaintDetail() {
   const investigationSummary = latestInvestigation
     ? `${latestInvestigation.reference_number || latestInvestigation.title || 'Linked investigation'}`
     : 'Not started'
-  const openActions = actions.filter((action) => action.status !== 'completed' && action.status !== 'cancelled')
+  const openActions = actions.filter(
+    (action) => action.status !== 'completed' && action.status !== 'cancelled',
+  )
   const investigationHonesty = complaintDownstreamInvestigationHonesty(Boolean(latestInvestigation))
   const actionsHonesty = complaintDownstreamActionsHonesty(openActions.length)
 
@@ -661,7 +713,11 @@ export default function ComplaintDetail() {
 
       <CaseSummaryRail
         items={[
-          { label: 'Complainant', value: complaint.complainant_name || 'Not provided', icon: <User className="w-4 h-4" /> },
+          {
+            label: 'Complainant',
+            value: complaint.complainant_name || 'Not provided',
+            icon: <User className="w-4 h-4" />,
+          },
           { label: 'Role', value: complainantRole, icon: <User className="w-4 h-4" /> },
           { label: 'Contract', value: contractLabel, icon: <MessageSquare className="w-4 h-4" /> },
           { label: 'Location', value: locationLabel, icon: <MessageSquare className="w-4 h-4" /> },
@@ -670,8 +726,16 @@ export default function ComplaintDetail() {
             value: new Date(complaint.received_date).toLocaleString(),
             icon: <Calendar className="w-4 h-4" />,
           },
-          { label: 'Investigation', value: investigationSummary, icon: <FlaskConical className="w-4 h-4" /> },
-          { label: 'Open actions', value: `${openActions.length} open`, icon: <ClipboardList className="w-4 h-4" /> },
+          {
+            label: 'Investigation',
+            value: investigationSummary,
+            icon: <FlaskConical className="w-4 h-4" />,
+          },
+          {
+            label: 'Open actions',
+            value: `${openActions.length} open`,
+            icon: <ClipboardList className="w-4 h-4" />,
+          },
           { label: 'Evidence', value: evidenceSummary, icon: <FileText className="w-4 h-4" /> },
         ]}
       />
@@ -685,588 +749,602 @@ export default function ComplaintDetail() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
-
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Details */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Description Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-primary" />
-                {t('complaints.detail.complaint_details')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {isEditing ? (
-                <>
-                  <div>
-                    <label
-                      htmlFor="complaintdetail-field-0"
-                      className="text-sm font-medium text-muted-foreground"
-                    >
-                      {t('complaints.detail.title_label')}
-                    </label>
-                    <Input
-                      id="complaintdetail-field-0"
-                      value={editForm.title || ''}
-                      onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="complaintdetail-field-1"
-                      className="text-sm font-medium text-muted-foreground"
-                    >
-                      {t('common.description')}
-                    </label>
-                    <Textarea
-                      id="complaintdetail-field-1"
-                      value={editForm.description || ''}
-                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                      rows={4}
-                      className="mt-1"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label
-                        htmlFor="complaintdetail-field-2"
-                        className="text-sm font-medium text-muted-foreground"
-                      >
-                        {t('common.type')}
-                      </label>
-                      <Select
-                        value={editForm.complaint_type}
-                        onValueChange={(value) =>
-                          setEditForm({ ...editForm, complaint_type: value })
-                        }
-                      >
-                        <SelectTrigger id="complaintdetail-field-2" className="mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="product">{t('complaints.type.product')}</SelectItem>
-                          <SelectItem value="service">{t('complaints.type.service')}</SelectItem>
-                          <SelectItem value="delivery">{t('complaints.type.delivery')}</SelectItem>
-                          <SelectItem value="communication">
-                            {t('complaints.type.communication')}
-                          </SelectItem>
-                          <SelectItem value="billing">{t('complaints.type.billing')}</SelectItem>
-                          <SelectItem value="staff">{t('complaints.type.staff')}</SelectItem>
-                          <SelectItem value="environmental">
-                            {t('complaints.type.environmental')}
-                          </SelectItem>
-                          <SelectItem value="safety">{t('complaints.type.safety')}</SelectItem>
-                          <SelectItem value="other">{t('complaints.type.other')}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="complaintdetail-field-3"
-                        className="text-sm font-medium text-muted-foreground"
-                      >
-                        {t('common.priority')}
-                      </label>
-                      <Select
-                        value={editForm.priority}
-                        onValueChange={(value) => setEditForm({ ...editForm, priority: value })}
-                      >
-                        <SelectTrigger id="complaintdetail-field-3" className="mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="critical">
-                            {t('complaints.priority.critical')}
-                          </SelectItem>
-                          <SelectItem value="high">{t('complaints.priority.high')}</SelectItem>
-                          <SelectItem value="medium">{t('complaints.priority.medium')}</SelectItem>
-                          <SelectItem value="low">{t('complaints.priority.low')}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-2">
-                      <label
-                        htmlFor="complaintdetail-field-4"
-                        className="text-sm font-medium text-muted-foreground"
-                      >
-                        {t('common.status')}
-                      </label>
-                      <Select
-                        value={editForm.status}
-                        onValueChange={(value) => setEditForm({ ...editForm, status: value })}
-                      >
-                        <SelectTrigger id="complaintdetail-field-4" className="mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="received">
-                            {t('complaints.status.received')}
-                          </SelectItem>
-                          <SelectItem value="acknowledged">
-                            {t('complaints.status.acknowledged')}
-                          </SelectItem>
-                          <SelectItem value="under_investigation">
-                            {t('complaints.status.under_investigation')}
-                          </SelectItem>
-                          <SelectItem value="pending_response">
-                            {t('complaints.status.pending_response')}
-                          </SelectItem>
-                          <SelectItem value="awaiting_customer">
-                            {t('complaints.status.awaiting_customer')}
-                          </SelectItem>
-                          <SelectItem value="escalated">
-                            {t('complaints.status.escalated')}
-                          </SelectItem>
-                          <SelectItem value="resolved">
-                            {t('complaints.status.resolved')}
-                          </SelectItem>
-                          <SelectItem value="closed">{t('complaints.status.closed')}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div>
-                    <span className="text-sm font-medium text-muted-foreground">
-                      {t('common.description')}
-                    </span>
-                    <p className="mt-1 text-foreground whitespace-pre-wrap">
-                      {complaint.description || t('complaints.detail.no_description')}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <span className="text-sm font-medium text-muted-foreground">
-                        {t('common.type')}
-                      </span>
-                      <p className="mt-1 text-foreground capitalize flex items-center gap-2">
-                        <span>{getTypeIcon(complaint.complaint_type)}</span>
-                        {complaint.complaint_type.replace('_', ' ')}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-muted-foreground">
-                        {t('common.priority')}
-                      </span>
-                      <p className="mt-1 text-foreground capitalize">{complaint.priority}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-muted-foreground">
-                        {t('common.status')}
-                      </span>
-                      <p className="mt-1 text-foreground capitalize">
-                        {complaint.status.replace('_', ' ')}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-sm font-medium text-muted-foreground">
-                        {t('complaints.detail.received_date')}
-                      </span>
-                      <p className="mt-1 text-foreground">
-                        {new Date(complaint.received_date).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Complainant Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="w-5 h-5 text-primary" />
-                {t('complaints.detail.complainant_info')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {isEditing ? (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label
-                      htmlFor="complaintdetail-field-5"
-                      className="text-sm font-medium text-muted-foreground"
-                    >
-                      {t('complaints.detail.name')}
-                    </label>
-                    <Input
-                      id="complaintdetail-field-5"
-                      value={editForm.complainant_name || ''}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, complainant_name: e.target.value })
-                      }
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="complaintdetail-field-6"
-                      className="text-sm font-medium text-muted-foreground"
-                    >
-                      {t('complaints.detail.email')}
-                    </label>
-                    <Input
-                      id="complaintdetail-field-6"
-                      type="email"
-                      value={editForm.complainant_email || ''}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, complainant_email: e.target.value })
-                      }
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="complaintdetail-field-7"
-                      className="text-sm font-medium text-muted-foreground"
-                    >
-                      {t('complaints.detail.phone')}
-                    </label>
-                    <Input
-                      id="complaintdetail-field-7"
-                      type="tel"
-                      value={editForm.complainant_phone || ''}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, complainant_phone: e.target.value })
-                      }
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <span className="text-sm font-medium text-muted-foreground">
-                      {t('complaints.detail.name')}
-                    </span>
-                    <p className="mt-1 text-foreground">
-                      {complaint.complainant_name || t('complaints.detail.not_specified')}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-muted-foreground">
-                      {t('complaints.detail.email')}
-                    </span>
-                    <p className="mt-1 text-foreground">
-                      {complaint.complainant_email || t('complaints.detail.not_specified')}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-muted-foreground">
-                      {t('complaints.detail.phone')}
-                    </span>
-                    <p className="mt-1 text-foreground">
-                      {complaint.complainant_phone || t('complaints.detail.not_specified')}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Resolution */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-success" />
-                {t('complaints.detail.resolution')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isEditing ? (
-                <Textarea
-                  value={editForm.resolution_summary || ''}
-                  onChange={(e) => setEditForm({ ...editForm, resolution_summary: e.target.value })}
-                  rows={4}
-                  placeholder={t('complaints.detail.resolution_placeholder')}
-                />
-              ) : (
-                <p className="text-foreground whitespace-pre-wrap">
-                  {complaint.resolution_summary || t('complaints.detail.no_resolution')}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Actions Card */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <ClipboardList className="w-5 h-5 text-primary" />
-                {t('complaints.detail.actions')} ({actions.length})
-              </CardTitle>
-              <Button variant="outline" size="sm" onClick={() => setShowActionModal(true)}>
-                <Plus className="w-4 h-4 mr-1" />
-                {t('complaints.detail.add')}
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {actions.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>{t('complaints.detail.no_actions')}</p>
-                  <p className="text-sm">{t('complaints.detail.no_actions_hint')}</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {actions.slice(0, 5).map((action) => (
-                    <div
-                      key={action.id}
-                      className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors"
-                      onClick={() => handleOpenAction(action)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          handleOpenAction(action)
-                        }
-                      }}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={cn(
-                            'w-8 h-8 rounded-lg flex items-center justify-center',
-                            action.status === 'completed'
-                              ? 'bg-success/10 text-success'
-                              : action.status === 'cancelled'
-                                ? 'bg-destructive/10 text-destructive'
-                                : 'bg-warning/10 text-warning',
-                          )}
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column - Details */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Description Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-primary" />
+                    {t('complaints.detail.complaint_details')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {isEditing ? (
+                    <>
+                      <div>
+                        <label
+                          htmlFor="complaintdetail-field-0"
+                          className="text-sm font-medium text-muted-foreground"
                         >
-                          <CheckCircle className="w-4 h-4" />
+                          {t('complaints.detail.title_label')}
+                        </label>
+                        <Input
+                          id="complaintdetail-field-0"
+                          value={editForm.title || ''}
+                          onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="complaintdetail-field-1"
+                          className="text-sm font-medium text-muted-foreground"
+                        >
+                          {t('common.description')}
+                        </label>
+                        <Textarea
+                          id="complaintdetail-field-1"
+                          value={editForm.description || ''}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, description: e.target.value })
+                          }
+                          rows={4}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label
+                            htmlFor="complaintdetail-field-2"
+                            className="text-sm font-medium text-muted-foreground"
+                          >
+                            {t('common.type')}
+                          </label>
+                          <Select
+                            value={editForm.complaint_type}
+                            onValueChange={(value) =>
+                              setEditForm({ ...editForm, complaint_type: value })
+                            }
+                          >
+                            <SelectTrigger id="complaintdetail-field-2" className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {typeOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div>
-                          <p className="font-medium text-foreground">{action.title}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {t('complaints.detail.due')}:{' '}
-                            {action.due_date
-                              ? new Date(action.due_date).toLocaleDateString()
-                              : t('complaints.detail.no_due_date')}
+                          <label
+                            htmlFor="complaintdetail-field-3"
+                            className="text-sm font-medium text-muted-foreground"
+                          >
+                            {t('common.priority')}
+                          </label>
+                          <Select
+                            value={editForm.priority}
+                            onValueChange={(value) => setEditForm({ ...editForm, priority: value })}
+                          >
+                            <SelectTrigger id="complaintdetail-field-3" className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {priorityOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="col-span-2">
+                          <label
+                            htmlFor="complaintdetail-field-4"
+                            className="text-sm font-medium text-muted-foreground"
+                          >
+                            {t('common.status')}
+                          </label>
+                          <Select
+                            value={editForm.status}
+                            onValueChange={(value) => setEditForm({ ...editForm, status: value })}
+                          >
+                            <SelectTrigger id="complaintdetail-field-4" className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="received">
+                                {t('complaints.status.received')}
+                              </SelectItem>
+                              <SelectItem value="acknowledged">
+                                {t('complaints.status.acknowledged')}
+                              </SelectItem>
+                              <SelectItem value="under_investigation">
+                                {t('complaints.status.under_investigation')}
+                              </SelectItem>
+                              <SelectItem value="pending_response">
+                                {t('complaints.status.pending_response')}
+                              </SelectItem>
+                              <SelectItem value="awaiting_customer">
+                                {t('complaints.status.awaiting_customer')}
+                              </SelectItem>
+                              <SelectItem value="escalated">
+                                {t('complaints.status.escalated')}
+                              </SelectItem>
+                              <SelectItem value="resolved">
+                                {t('complaints.status.resolved')}
+                              </SelectItem>
+                              <SelectItem value="closed">
+                                {t('complaints.status.closed')}
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <span className="text-sm font-medium text-muted-foreground">
+                          {t('common.description')}
+                        </span>
+                        <p className="mt-1 text-foreground whitespace-pre-wrap">
+                          {complaint.description || t('complaints.detail.no_description')}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {t('common.type')}
+                          </span>
+                          <p className="mt-1 text-foreground capitalize flex items-center gap-2">
+                            <span>{getTypeIcon(complaint.complaint_type)}</span>
+                            {complaint.complaint_type.replace('_', ' ')}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {t('common.priority')}
+                          </span>
+                          <p className="mt-1 text-foreground capitalize">{complaint.priority}</p>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {t('common.status')}
+                          </span>
+                          <p className="mt-1 text-foreground capitalize">
+                            {complaint.status.replace('_', ' ')}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {t('complaints.detail.received_date')}
+                          </span>
+                          <p className="mt-1 text-foreground">
+                            {new Date(complaint.received_date).toLocaleString()}
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant={
-                            action.status === 'completed'
-                              ? 'resolved'
-                              : action.status === 'cancelled'
-                                ? 'destructive'
-                                : action.status === 'in_progress'
-                                  ? 'in-progress'
-                                  : ('secondary' as any)
-                          }
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Complainant Info */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User className="w-5 h-5 text-primary" />
+                    {t('complaints.detail.complainant_info')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {isEditing ? (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label
+                          htmlFor="complaintdetail-field-5"
+                          className="text-sm font-medium text-muted-foreground"
                         >
-                          {action.status.replace(/_/g, ' ')}
-                        </Badge>
-                        <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                          {t('complaints.detail.name')}
+                        </label>
+                        <Input
+                          id="complaintdetail-field-5"
+                          value={editForm.complainant_name || ''}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, complainant_name: e.target.value })
+                          }
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="complaintdetail-field-6"
+                          className="text-sm font-medium text-muted-foreground"
+                        >
+                          {t('complaints.detail.email')}
+                        </label>
+                        <Input
+                          id="complaintdetail-field-6"
+                          type="email"
+                          value={editForm.complainant_email || ''}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, complainant_email: e.target.value })
+                          }
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="complaintdetail-field-7"
+                          className="text-sm font-medium text-muted-foreground"
+                        >
+                          {t('complaints.detail.phone')}
+                        </label>
+                        <Input
+                          id="complaintdetail-field-7"
+                          type="tel"
+                          value={editForm.complainant_phone || ''}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, complainant_phone: e.target.value })
+                          }
+                          className="mt-1"
+                        />
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column - Quick Info */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{t('complaints.detail.quick_info')}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Calendar className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">{t('complaints.detail.created')}</p>
-                  <p className="font-medium text-foreground">
-                    {new Date(complaint.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-info/10 flex items-center justify-center">
-                  <Mail className="w-5 h-5 text-info" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">{t('complaints.detail.email')}</p>
-                  <p className="font-medium text-foreground truncate">
-                    {complaint.complainant_email || t('complaints.detail.not_specified')}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
-                  <Phone className="w-5 h-5 text-warning" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">{t('complaints.detail.phone')}</p>
-                  <p className="font-medium text-foreground">
-                    {complaint.complainant_phone || t('complaints.detail.not_specified')}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
-                  <User className="w-5 h-5 text-success" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Contract / Department</p>
-                  <p className="font-medium text-foreground">{contractLabel}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-secondary/80 flex items-center justify-center">
-                  <MessageSquare className="w-5 h-5 text-foreground" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Location / Site</p>
-                  <p className="font-medium text-foreground">{locationLabel}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Investigation Status</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <p className="text-sm text-muted-foreground">Linked investigation</p>
-                <p className="font-medium text-foreground">{investigationSummary}</p>
-                <p className="text-xs text-muted-foreground mt-1" data-testid="complaint-downstream-inv-honesty">
-                  {investigationHonesty}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Open actions</p>
-                <p className="font-medium text-foreground">{openActions.length}</p>
-                <p className="text-xs text-muted-foreground mt-1" data-testid="complaint-downstream-actions-honesty">
-                  {actionsHonesty}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Resolution summary</p>
-                <p className="font-medium text-foreground">
-                  {complaint.resolution_summary || 'No resolution recorded yet'}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Evidence captured</p>
-                <p className="font-medium text-foreground" data-testid="complaint-evidence-summary">
-                  {evidenceSummary}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Reporter submission metadata: {reporterMetadataSummary}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card data-testid="complaint-evidence-assets-card">
-            <CardHeader>
-              <CardTitle className="text-base">
-                {t('complaints.detail.evidence_assets', 'Evidence assets')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {evidenceLoading ? (
-                <p className="text-sm text-muted-foreground">Loading evidence…</p>
-              ) : evidenceLoadFailed ? (
-                <p className="text-sm text-muted-foreground">
-                  Evidence assets could not be loaded. Reporter-submission filenames are shown separately.
-                </p>
-              ) : evidenceAssets.length === 0 ? (
-                <p className="text-sm text-muted-foreground" data-testid="complaint-evidence-assets-empty">
-                  {t(
-                    'complaints.detail.evidence_assets_empty',
-                    'No evidence assets are linked to this complaint. Portal uploads record filenames only until staff attach files here.',
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <span className="text-sm font-medium text-muted-foreground">
+                          {t('complaints.detail.name')}
+                        </span>
+                        <p className="mt-1 text-foreground">
+                          {complaint.complainant_name || t('complaints.detail.not_specified')}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-muted-foreground">
+                          {t('complaints.detail.email')}
+                        </span>
+                        <p className="mt-1 text-foreground">
+                          {complaint.complainant_email || t('complaints.detail.not_specified')}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-muted-foreground">
+                          {t('complaints.detail.phone')}
+                        </span>
+                        <p className="mt-1 text-foreground">
+                          {complaint.complainant_phone || t('complaints.detail.not_specified')}
+                        </p>
+                      </div>
+                    </div>
                   )}
-                </p>
-              ) : (
-                <ul className="space-y-2" data-testid="complaint-evidence-assets">
-                  {evidenceAssets.map((asset) => (
-                    <li key={asset.id} className="rounded-lg border border-border p-3">
-                      <p className="font-medium text-foreground">
-                        {asset.title || asset.original_filename || `Evidence #${asset.id}`}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{asset.content_type}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
 
-          {/* Key dates — honest subset; full narrative lives in Running Sheet tab */}
-          <Card data-testid="complaint-key-dates">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <History className="w-4 h-4" />
-                {t('complaints.detail.key_dates', 'Key dates')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground mb-4">
-                {t(
-                  'complaints.detail.key_dates_hint',
-                  'Status changes and notes are captured in the Running Sheet tab.',
-                )}
-              </p>
-              <div className="space-y-4">
-                <div className="flex gap-3">
-                  <div className="w-2 h-2 rounded-full bg-primary mt-2" />
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {t('complaints.detail.complaint_received')}
+              {/* Resolution */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-success" />
+                    {t('complaints.detail.resolution')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isEditing ? (
+                    <Textarea
+                      value={editForm.resolution_summary || ''}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, resolution_summary: e.target.value })
+                      }
+                      rows={4}
+                      placeholder={t('complaints.detail.resolution_placeholder')}
+                    />
+                  ) : (
+                    <p className="text-foreground whitespace-pre-wrap">
+                      {complaint.resolution_summary || t('complaints.detail.no_resolution')}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(complaint.received_date).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="w-2 h-2 rounded-full bg-muted mt-2" />
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {t('complaints.detail.record_created')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(complaint.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-                {latestInvestigation && (
-                  <div className="flex gap-3">
-                    <div className="w-2 h-2 rounded-full bg-info mt-2" />
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Actions Card */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <ClipboardList className="w-5 h-5 text-primary" />
+                    {t('complaints.detail.actions')} ({actions.length})
+                  </CardTitle>
+                  <Button variant="outline" size="sm" onClick={() => setShowActionModal(true)}>
+                    <Plus className="w-4 h-4 mr-1" />
+                    {t('complaints.detail.add')}
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {actions.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p>{t('complaints.detail.no_actions')}</p>
+                      <p className="text-sm">{t('complaints.detail.no_actions_hint')}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {actions.slice(0, 5).map((action) => (
+                        <div
+                          key={action.id}
+                          className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors"
+                          onClick={() => handleOpenAction(action)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              handleOpenAction(action)
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={cn(
+                                'w-8 h-8 rounded-lg flex items-center justify-center',
+                                action.status === 'completed'
+                                  ? 'bg-success/10 text-success'
+                                  : action.status === 'cancelled'
+                                    ? 'bg-destructive/10 text-destructive'
+                                    : 'bg-warning/10 text-warning',
+                              )}
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">{action.title}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {t('complaints.detail.due')}:{' '}
+                                {action.due_date
+                                  ? new Date(action.due_date).toLocaleDateString()
+                                  : t('complaints.detail.no_due_date')}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant={
+                                action.status === 'completed'
+                                  ? 'resolved'
+                                  : action.status === 'cancelled'
+                                    ? 'destructive'
+                                    : action.status === 'in_progress'
+                                      ? 'in-progress'
+                                      : ('secondary' as any)
+                              }
+                            >
+                              {action.status.replace(/_/g, ' ')}
+                            </Badge>
+                            <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Column - Quick Info */}
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">{t('complaints.detail.quick_info')}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Calendar className="w-5 h-5 text-primary" />
+                    </div>
                     <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {t('complaints.detail.investigation_linked', 'Investigation linked')}
+                      <p className="text-sm text-muted-foreground">
+                        {t('complaints.detail.created')}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {latestInvestigation.reference_number || latestInvestigation.title}
+                      <p className="font-medium text-foreground">
+                        {new Date(complaint.created_at).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-info/10 flex items-center justify-center">
+                      <Mail className="w-5 h-5 text-info" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">
+                        {t('complaints.detail.email')}
+                      </p>
+                      <p className="font-medium text-foreground truncate">
+                        {complaint.complainant_email || t('complaints.detail.not_specified')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
+                      <Phone className="w-5 h-5 text-warning" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">
+                        {t('complaints.detail.phone')}
+                      </p>
+                      <p className="font-medium text-foreground">
+                        {complaint.complainant_phone || t('complaints.detail.not_specified')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
+                      <User className="w-5 h-5 text-success" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Contract / Department</p>
+                      <p className="font-medium text-foreground">{contractLabel}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-secondary/80 flex items-center justify-center">
+                      <MessageSquare className="w-5 h-5 text-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Location / Site</p>
+                      <p className="font-medium text-foreground">{locationLabel}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Investigation Status</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Linked investigation</p>
+                    <p className="font-medium text-foreground">{investigationSummary}</p>
+                    <p
+                      className="text-xs text-muted-foreground mt-1"
+                      data-testid="complaint-downstream-inv-honesty"
+                    >
+                      {investigationHonesty}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Open actions</p>
+                    <p className="font-medium text-foreground">{openActions.length}</p>
+                    <p
+                      className="text-xs text-muted-foreground mt-1"
+                      data-testid="complaint-downstream-actions-honesty"
+                    >
+                      {actionsHonesty}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Resolution summary</p>
+                    <p className="font-medium text-foreground">
+                      {complaint.resolution_summary || 'No resolution recorded yet'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Evidence captured</p>
+                    <p
+                      className="font-medium text-foreground"
+                      data-testid="complaint-evidence-summary"
+                    >
+                      {evidenceSummary}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Reporter submission metadata: {reporterMetadataSummary}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="complaint-evidence-assets-card">
+                <CardHeader>
+                  <CardTitle className="text-base">
+                    {t('complaints.detail.evidence_assets', 'Evidence assets')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {evidenceLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading evidence…</p>
+                  ) : evidenceLoadFailed ? (
+                    <p className="text-sm text-muted-foreground">
+                      Evidence assets could not be loaded. Reporter-submission filenames are shown
+                      separately.
+                    </p>
+                  ) : evidenceAssets.length === 0 ? (
+                    <p
+                      className="text-sm text-muted-foreground"
+                      data-testid="complaint-evidence-assets-empty"
+                    >
+                      {t(
+                        'complaints.detail.evidence_assets_empty',
+                        'No evidence assets are linked to this complaint. Portal uploads record filenames only until staff attach files here.',
+                      )}
+                    </p>
+                  ) : (
+                    <ul className="space-y-2" data-testid="complaint-evidence-assets">
+                      {evidenceAssets.map((asset) => (
+                        <li key={asset.id} className="rounded-lg border border-border p-3">
+                          <p className="font-medium text-foreground">
+                            {asset.title || asset.original_filename || `Evidence #${asset.id}`}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{asset.content_type}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Key dates — honest subset; full narrative lives in Running Sheet tab */}
+              <Card data-testid="complaint-key-dates">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <History className="w-4 h-4" />
+                    {t('complaints.detail.key_dates', 'Key dates')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    {t(
+                      'complaints.detail.key_dates_hint',
+                      'Status changes and notes are captured in the Running Sheet tab.',
+                    )}
+                  </p>
+                  <div className="space-y-4">
+                    <div className="flex gap-3">
+                      <div className="w-2 h-2 rounded-full bg-primary mt-2" />
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {t('complaints.detail.complaint_received')}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(complaint.received_date).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="w-2 h-2 rounded-full bg-muted mt-2" />
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {t('complaints.detail.record_created')}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(complaint.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    {latestInvestigation && (
+                      <div className="flex gap-3">
+                        <div className="w-2 h-2 rounded-full bg-info mt-2" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {t('complaints.detail.investigation_linked', 'Investigation linked')}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {latestInvestigation.reference_number || latestInvestigation.title}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="standards" className="mt-6">
@@ -1289,7 +1367,10 @@ export default function ComplaintDetail() {
             newEntry={newEntry}
             addingEntry={addingEntry}
             title={t('common.running_sheet', 'Running Sheet')}
-            placeholder={t('common.running_sheet_placeholder', 'Add to the story... (auto-timestamped)')}
+            placeholder={t(
+              'common.running_sheet_placeholder',
+              'Add to the story... (auto-timestamped)',
+            )}
             emptyTitle={t('common.running_sheet_empty_title', 'No entries yet')}
             emptyDescription={t(
               'complaints.detail.running_sheet_empty_description',
@@ -1440,10 +1521,7 @@ export default function ComplaintDetail() {
                     assigned_to: selection?.user?.email || selection?.label || '',
                   })
                 }
-                placeholder={t(
-                  'complaints.detail.search_employees',
-                  'Search active employees…',
-                )}
+                placeholder={t('complaints.detail.search_employees', 'Search active employees…')}
                 testId="complaint-action-assignee-picker"
               />
             </div>

@@ -50,7 +50,7 @@ export default function PortalMyTools() {
             <ArrowLeft className="w-5 h-5 text-muted-foreground" />
           </button>
           <div>
-            <h1 className="text-foreground font-semibold">My tool compliance</h1>
+            <h1 className="text-foreground font-semibold">My asset compliance</h1>
             <p className="text-muted-foreground text-xs">Assigned to you and kit on your van</p>
           </div>
         </div>
@@ -64,7 +64,10 @@ export default function PortalMyTools() {
         )}
 
         {error && (
-          <Card className="p-4 border-destructive/30 bg-destructive/5" data-testid="portal-tools-error">
+          <Card
+            className="p-4 border-destructive/30 bg-destructive/5"
+            data-testid="portal-tools-error"
+          >
             <p className="text-sm text-destructive">{error}</p>
           </Card>
         )}
@@ -72,9 +75,9 @@ export default function PortalMyTools() {
         {!loading && !error && data && data.items.length === 0 && (
           <Card className="p-6 text-center" data-testid="portal-tools-empty">
             <Wrench className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-            <p className="text-foreground font-medium">No tools on your list</p>
+            <p className="text-foreground font-medium">No assets on your list</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Nothing is assigned to you and no kit is linked to your van.
+              No assets are assigned to you and no kit is linked to your van.
             </p>
           </Card>
         )}
@@ -92,10 +95,17 @@ export default function PortalMyTools() {
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">{item.why_shown}</p>
                   {item.type_pending && (
-                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">Type pending approval</p>
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                      Type pending approval
+                    </p>
                   )}
                 </div>
-                <span className={cn('shrink-0 text-xs font-semibold px-2 py-1 rounded-md', bandTone(item.band))}>
+                <span
+                  className={cn(
+                    'shrink-0 text-xs font-semibold px-2 py-1 rounded-md',
+                    bandTone(item.band),
+                  )}
+                >
                   {BAND_LABEL[item.band]}
                 </span>
               </div>

@@ -31,7 +31,10 @@ import { ThemeToggle } from '../components/ui/ThemeToggle'
 import { cn } from '../helpers/utils'
 import { isGapStatus } from './workforce/trainingMatrix/trainingMatrixBoardHelpers'
 
-function clearStateCopy(state: PortalMyCompliance['clear_state']): { title: string; detail: string } {
+function clearStateCopy(state: PortalMyCompliance['clear_state']): {
+  title: string
+  detail: string
+} {
   if (state === 'blocked') {
     return {
       title: 'Not clear to work',
@@ -85,7 +88,9 @@ export default function Portal() {
     void documentCampaignApi
       .listMyAssignments()
       .then((response) => {
-        const pending = (response.data.items ?? []).filter((item) => item.status !== 'completed').length
+        const pending = (response.data.items ?? []).filter(
+          (item) => item.status !== 'completed',
+        ).length
         setPendingCampaignCount(pending)
       })
       .catch(() => {
@@ -223,8 +228,8 @@ export default function Portal() {
             type="button"
             aria-label={
               compliance && compliance.tool_badge > 0
-                ? `My tool compliance — ${compliance.tool_badge} items need attention`
-                : 'My tool compliance'
+                ? `My asset compliance — ${compliance.tool_badge} items need attention`
+                : 'My asset compliance'
             }
             onClick={() => navigate('/portal/tools')}
             className={cn(
@@ -245,12 +250,12 @@ export default function Portal() {
             </div>
             <div className="flex-1 text-left">
               <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
-                My tool compliance
+                My asset compliance
               </h3>
               <p className="text-sm text-muted-foreground">
                 {compliance
-                  ? `${compliance.tool_summary.total} tools · ${compliance.tool_summary.overdue} overdue`
-                  : 'Assigned tools and van kit'}
+                  ? `${compliance.tool_summary.total} assets · ${compliance.tool_summary.overdue} overdue`
+                  : 'Assigned assets and van kit'}
               </p>
             </div>
             <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:translate-x-1 transition-transform" />
@@ -317,7 +322,6 @@ export default function Portal() {
             <ChevronRight className="w-6 h-6 text-primary group-hover:translate-x-1 transition-transform" />
           </button>
 
-
           {/* My Work inbox (CUJ-P10) */}
           <button
             data-testid="portal-work-btn"
@@ -360,9 +364,7 @@ export default function Portal() {
                   </span>
                 )}
               </div>
-              <p className="text-sm text-muted-foreground">
-                Assigned actions and pending reading
-              </p>
+              <p className="text-sm text-muted-foreground">Assigned actions and pending reading</p>
             </div>
             <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:translate-x-1 transition-transform" />
           </button>

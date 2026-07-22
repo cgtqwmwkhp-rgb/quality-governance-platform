@@ -196,20 +196,19 @@ export default function PortalNearMissForm() {
 
   useEffect(() => {
     let cancelled = false
-    void Promise.all([
-      lookupsApi.list('customers', true),
-      lookupsApi.list('workforce_roles', true),
-    ]).then(([customerResult, roleResult]) => {
-      if (!cancelled) {
-        setCustomers(customerResult.items || [])
-        setRoles(roleResult.items || [])
-      }
-    }).catch(() => {
-      if (!cancelled) {
-        setCustomers([])
-        setRoles([])
-      }
-    })
+    void Promise.all([lookupsApi.list('customers', true), lookupsApi.list('workforce_roles', true)])
+      .then(([customerResult, roleResult]) => {
+        if (!cancelled) {
+          setCustomers(customerResult.items || [])
+          setRoles(roleResult.items || [])
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCustomers([])
+          setRoles([])
+        }
+      })
     return () => {
       cancelled = true
     }
@@ -290,12 +289,7 @@ export default function PortalNearMissForm() {
         title: `Near Miss - ${customerCode} - ${formData.location}`,
         description: `${formData.description}${formData.potentialConsequences ? `\n\nPotential consequences: ${formData.potentialConsequences}` : ''}${formData.preventiveActionSuggested ? `\n\nPreventive action suggested: ${formData.preventiveActionSuggested}` : ''}`,
         location: formData.location,
-        severity:
-          formData.potentialSeverity === 'severe'
-            ? 'high'
-            : formData.potentialSeverity === 'moderate'
-              ? 'medium'
-              : 'low',
+        severity: formData.potentialSeverity || 'medium',
         reporter_name: formData.reporterName,
         // CRITICAL: reporter_email MUST match authenticated user's email for My Reports linkage
         reporter_email: user?.email || formData.reporterEmail || undefined,
@@ -366,14 +360,20 @@ export default function PortalNearMissForm() {
           <h1 className="text-2xl font-bold text-foreground mb-2">Near Miss Reported</h1>
           <p className="text-muted-foreground mb-6">Your reference number is:</p>
           <div className="bg-surface border border-border rounded-xl px-6 py-4 mb-4">
-            <span className="text-2xl font-mono font-bold text-primary" data-testid="portal-tracking-ref">
+            <span
+              className="text-2xl font-mono font-bold text-primary"
+              data-testid="portal-tracking-ref"
+            >
               {submittedRef}
             </span>
           </div>
           {!offerStaff && submittedTrackingCode ? (
-            <p className="text-xs text-muted-foreground mb-4" data-testid="portal-tracking-code-hint">
-              Keep this tracking reference to check status. Staff deep-link is not available for this
-              session.
+            <p
+              className="text-xs text-muted-foreground mb-4"
+              data-testid="portal-tracking-code-hint"
+            >
+              Keep this tracking reference to check status. Staff deep-link is not available for
+              this session.
             </p>
           ) : null}
           <p className="text-sm text-muted-foreground mb-6">{t('portal.thank_you_near_miss')}</p>
@@ -510,7 +510,6 @@ export default function PortalNearMissForm() {
               placeholder={t('portal.search_contract_nm')}
               required
             />
-
 
             <div>
               <span className="block text-sm font-medium text-foreground mb-2">

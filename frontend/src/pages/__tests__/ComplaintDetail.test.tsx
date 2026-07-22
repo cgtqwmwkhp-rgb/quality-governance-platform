@@ -99,6 +99,9 @@ vi.mock('../../api/client', () => ({
   workforceApi: {
     listEngineers: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
   },
+  lookupsApi: {
+    list: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  },
   getApiErrorMessage: (err: Error) => err.message,
 }))
 

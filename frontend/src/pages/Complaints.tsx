@@ -39,10 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
-import {
-  CUSTOMERS_LOOKUP_CATEGORY,
-  toCustomerSelectOptions,
-} from './admin/customersCatalog'
+import { CUSTOMERS_LOOKUP_CATEGORY, toCustomerSelectOptions } from './admin/customersCatalog'
 import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
 
 const COMPLAINT_TYPE_VALUES = [
@@ -154,7 +151,9 @@ export default function Complaints() {
   const [listUnavailable, setListUnavailable] = useState(false)
   const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '')
-  const [statusFilter, setStatusFilter] = useState(() => parseListFilter(searchParams.get('status')))
+  const [statusFilter, setStatusFilter] = useState(() =>
+    parseListFilter(searchParams.get('status')),
+  )
   const [severityFilter, setSeverityFilter] = useState(() =>
     parseListFilter(searchParams.get('severity')),
   )
@@ -171,6 +170,13 @@ export default function Complaints() {
   const [selectedCustomerCode, setSelectedCustomerCode] = useState('')
   const [customersLoaded, setCustomersLoaded] = useState(false)
   const [topicOptions, setTopicOptions] = useState<{ value: string; label: string }[]>([])
+  const defaultPriorityOptions = [
+    { value: 'critical', label: t('priority.critical') },
+    { value: 'high', label: t('priority.high') },
+    { value: 'medium', label: t('priority.medium') },
+    { value: 'low', label: t('priority.low') },
+  ]
+  const [priorityOptions, setPriorityOptions] = useState(defaultPriorityOptions)
   const [subjectEmail, setSubjectEmail] = useState('')
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
 
@@ -189,7 +195,7 @@ export default function Complaints() {
     }
   }, [])
 
-  // Load Customers lookup (SSOT) + topic labels when create opens.
+  // Load Customers lookup (SSOT) + enum-label overlays when create opens.
   useEffect(() => {
     if (!showModal) {
       setCustomersLoaded(false)
@@ -199,9 +205,10 @@ export default function Complaints() {
     setCustomersLoaded(false)
     ;(async () => {
       try {
-        const [customerRes, lookupRes] = await Promise.all([
+        const [customerRes, typeRes, severityRes] = await Promise.all([
           lookupsApi.list(CUSTOMERS_LOOKUP_CATEGORY, true).catch(() => ({ items: [], total: 0 })),
           lookupsApi.list('complaint_types', true).catch(() => ({ items: [], total: 0 })),
+          lookupsApi.list('severity_levels', true).catch(() => ({ items: [], total: 0 })),
         ])
         if (cancelled) return
         setCustomerOptions(toCustomerSelectOptions(customerRes.items || []))
@@ -212,9 +219,10 @@ export default function Complaints() {
               value: code,
               label: t(`complaints.type.${code}`, code),
             })),
-            lookupRes.items,
+            typeRes.items,
           ),
         )
+        setPriorityOptions(mergeLookupSelectOptions(defaultPriorityOptions, severityRes.items))
       } catch (err) {
         if (!cancelled) {
           setCustomersLoaded(true)
@@ -225,12 +233,14 @@ export default function Complaints() {
               label: t(`complaints.type.${code}`, code),
             })),
           )
+          setPriorityOptions(defaultPriorityOptions)
         }
       }
     })()
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showModal is the dialog open gate
   }, [showModal, t])
 
   const customersUnavailable = customersLoaded && customerOptions.length === 0
@@ -260,8 +270,7 @@ export default function Complaints() {
     const nextStatus = parseListFilter(searchParams.get('status'))
     const nextSeverity = parseListFilter(searchParams.get('severity'))
     const nextPage = parseListPage(searchParams.get('page'))
-    const nextOwner: OwnerFilter =
-      searchParams.get('owner') === 'unassigned' ? 'unassigned' : 'all'
+    const nextOwner: OwnerFilter = searchParams.get('owner') === 'unassigned' ? 'unassigned' : 'all'
     setSearchTerm((prev) => (prev === nextQ ? prev : nextQ))
     setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus))
     setSeverityFilter((prev) => (prev === nextSeverity ? prev : nextSeverity))
@@ -364,12 +373,7 @@ export default function Complaints() {
   const requestCloseCreateModal = (): boolean => {
     if (
       isComplaintCreateDirty(formData, { subjectEmail, pendingFiles, selectedCustomerCode }) &&
-      !window.confirm(
-        t(
-          'complaints.dialog.discard_confirm',
-          'Discard unsaved complaint details?',
-        ),
-      )
+      !window.confirm(t('complaints.dialog.discard_confirm', 'Discard unsaved complaint details?'))
     ) {
       return false
     }
@@ -380,12 +384,18 @@ export default function Complaints() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData.title.trim() || !formData.description.trim() || !formData.complainant_name.trim()) {
+    if (
+      !formData.title.trim() ||
+      !formData.description.trim() ||
+      !formData.complainant_name.trim()
+    ) {
       setFormError(t('complaints.form.required_error'))
       return
     }
     if (!selectedCustomerCode) {
-      setFormError(t('complaints.form.customer_required', 'Select which customer this complaint is from.'))
+      setFormError(
+        t('complaints.form.customer_required', 'Select which customer this complaint is from.'),
+      )
       return
     }
     if (customersUnavailable) {
@@ -443,14 +453,11 @@ export default function Complaints() {
           const failed = uploadResults.filter((r) => r.status === 'rejected').length
           if (failed > 0) {
             toast.error(
-              t(
-                'complaints.attachments_partial',
-                {
-                  count: failed,
-                  defaultValue:
-                    '{{count}} attachment(s) failed to upload — open the complaint to retry.',
-                },
-              ),
+              t('complaints.attachments_partial', {
+                count: failed,
+                defaultValue:
+                  '{{count}} attachment(s) failed to upload — open the complaint to retry.',
+              }),
             )
           }
         }
@@ -598,8 +605,8 @@ export default function Complaints() {
             <div>
               <p className="font-semibold">Email alerts unavailable</p>
               <p className="mt-1 text-sm">
-                Complaints and follow-up actions are saved, but outbound email is not configured — do
-                not expect complainant or assignee alerts to send.
+                Complaints and follow-up actions are saved, but outbound email is not configured —
+                do not expect complainant or assignee alerts to send.
               </p>
             </div>
           </div>
@@ -616,7 +623,11 @@ export default function Complaints() {
         </div>
       )}
 
-      <div className="flex gap-2" role="group" aria-label={t('complaints.triage.tabs', 'Triage filters')}>
+      <div
+        className="flex gap-2"
+        role="group"
+        aria-label={t('complaints.triage.tabs', 'Triage filters')}
+      >
         <Button
           type="button"
           variant={ownerFilter === 'all' ? 'default' : 'outline'}
@@ -890,10 +901,7 @@ export default function Complaints() {
                   data-testid="complaints-customer-unavailable"
                 >
                   <p className="font-medium">
-                    {t(
-                      'complaints.form.customer_empty_title',
-                      'No customers are configured',
-                    )}
+                    {t('complaints.form.customer_empty_title', 'No customers are configured')}
                   </p>
                   <p className="text-muted-foreground mt-1">
                     {t(
@@ -921,7 +929,8 @@ export default function Complaints() {
                   htmlFor="complaints-field-4"
                   className="block text-sm font-medium text-foreground mb-2"
                 >
-                  {t('complaints.form.complainant_name')} <span className="text-destructive">*</span>
+                  {t('complaints.form.complainant_name')}{' '}
+                  <span className="text-destructive">*</span>
                 </label>
                 <Input
                   id="complaints-field-4"
@@ -944,7 +953,9 @@ export default function Complaints() {
                     id="complaints-field-5"
                     type="email"
                     value={formData.complainant_email || ''}
-                    onChange={(e) => setFormData({ ...formData, complainant_email: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, complainant_email: e.target.value })
+                    }
                     placeholder={t('complaints.form.email_placeholder')}
                   />
                 </div>
@@ -959,7 +970,9 @@ export default function Complaints() {
                     id="complaints-field-6"
                     type="tel"
                     value={formData.complainant_phone || ''}
-                    onChange={(e) => setFormData({ ...formData, complainant_phone: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, complainant_phone: e.target.value })
+                    }
                     placeholder={t('complaints.form.phone_placeholder')}
                   />
                 </div>
@@ -1082,10 +1095,11 @@ export default function Complaints() {
                     <SelectValue placeholder={t('complaints.form.select_priority')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="critical">{t('priority.critical')}</SelectItem>
-                    <SelectItem value="high">{t('priority.high')}</SelectItem>
-                    <SelectItem value="medium">{t('priority.medium')}</SelectItem>
-                    <SelectItem value="low">{t('priority.low')}</SelectItem>
+                    {priorityOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1195,16 +1209,20 @@ export default function Complaints() {
                 />
               </label>
               {pendingFiles.length > 0 ? (
-                <ul className="text-xs text-muted-foreground space-y-1" data-testid="complaints-attach-list">
+                <ul
+                  className="text-xs text-muted-foreground space-y-1"
+                  data-testid="complaints-attach-list"
+                >
                   {pendingFiles.map((file, idx) => (
-                    <li key={`${file.name}-${idx}`} className="flex items-center justify-between gap-2">
+                    <li
+                      key={`${file.name}-${idx}`}
+                      className="flex items-center justify-between gap-2"
+                    >
                       <span className="truncate">{file.name}</span>
                       <button
                         type="button"
                         className="text-destructive hover:underline shrink-0"
-                        onClick={() =>
-                          setPendingFiles((prev) => prev.filter((_, i) => i !== idx))
-                        }
+                        onClick={() => setPendingFiles((prev) => prev.filter((_, i) => i !== idx))}
                       >
                         {t('common.remove', 'Remove')}
                       </button>

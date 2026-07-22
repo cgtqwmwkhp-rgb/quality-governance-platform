@@ -675,6 +675,29 @@ const FALLBACK_TEMPLATES: Record<string, FormTemplate> = {
   },
 }
 
+const FALLBACK_MEDICAL_OPTIONS = [
+  { value: 'none', label: 'No assistance needed' },
+  { value: 'self', label: 'Self application' },
+  { value: 'first-aider', label: 'First aider on site' },
+  { value: 'ambulance', label: 'Ambulance / A&E' },
+  { value: 'gp', label: 'GP / Hospital' },
+]
+
+function withMedicalAssistanceOptions(
+  template: FormTemplate,
+  medicalOptions: Array<{ value: string; label: string }>,
+): FormTemplate {
+  return {
+    ...template,
+    steps: template.steps.map((step) => ({
+      ...step,
+      fields: step.fields.map((field) =>
+        field.name === 'medical_assistance' ? { ...field, options: medicalOptions } : field,
+      ),
+    })),
+  }
+}
+
 // Determine form type from URL
 function getFormTypeFromPath(pathname: string): string {
   if (pathname.includes('near-miss')) return 'near-miss'
@@ -744,6 +767,7 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
   const [template, setTemplate] = useState<FormTemplate | null>(null)
   const [customers, setCustomers] = useState<LookupOption[]>([])
   const [roles, setRoles] = useState<LookupOption[]>([])
+  const [medicalAssistance, setMedicalAssistance] = useState<LookupOption[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [catalogWarning, setCatalogWarning] = useState<string | null>(null)
@@ -764,9 +788,6 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
         } catch {
           loadedTemplate = null
         }
-        if (cancelled) return
-        setTemplate(loadedTemplate || FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident)
-
         const customersResult = await Promise.allSettled([lookupsApi.list('customers', true)])
         if (cancelled) return
         const customersOutcome = customersResult[0]
@@ -793,6 +814,26 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
         if (cancelled) return
         setRoles(roleItems)
 
+        let medicalItems: LookupOption[] = []
+        try {
+          const medical = await lookupsApi.list('medical_assistance', true)
+          medicalItems = medical.items || []
+        } catch {
+          medicalItems = []
+        }
+        if (cancelled) return
+        setMedicalAssistance(medicalItems)
+        const medicalOptions =
+          medicalItems.length > 0
+            ? medicalItems.map((item) => ({ value: item.code, label: item.label }))
+            : FALLBACK_MEDICAL_OPTIONS
+        setTemplate(
+          withMedicalAssistanceOptions(
+            loadedTemplate || FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident,
+            medicalOptions,
+          ),
+        )
+
         const warnings: string[] = []
         if ((customersOutcome.value.items || []).length === 0) {
           warnings.push(
@@ -811,6 +852,7 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
         setTemplate(FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident)
         setCustomers([])
         setRoles([])
+        setMedicalAssistance([])
         setError(getApiErrorMessage(err, 'Could not load form catalogs from Admin.'))
       } finally {
         if (!cancelled) setIsLoading(false)
@@ -972,6 +1014,10 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
     value: r.code,
     label: r.label,
   }))
+  const medicalAssistanceOptions =
+    medicalAssistance.length > 0
+      ? medicalAssistance.map((item) => ({ value: item.code, label: item.label }))
+      : FALLBACK_MEDICAL_OPTIONS
 
   return (
     <div className="min-h-screen bg-surface">
@@ -1013,6 +1059,7 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
           onCancel={handleCancel}
           contractOptions={contractOptions}
           roleOptions={roleOptions}
+          medicalAssistanceOptions={medicalAssistanceOptions}
         />
       </main>
     </div>

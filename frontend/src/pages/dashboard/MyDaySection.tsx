@@ -14,7 +14,11 @@ import { cn } from '../../helpers/utils'
 import type { MyDayData } from './useDashboardData'
 import type { PortalClearState } from '../../api/portalComplianceClient'
 
-function clearStateCopy(state: PortalClearState): { title: string; icon: React.ElementType; tone: string } {
+function clearStateCopy(state: PortalClearState): {
+  title: string
+  icon: React.ElementType
+  tone: string
+} {
   if (state === 'blocked') {
     return { title: 'Not clear to work', icon: ShieldAlert, tone: 'text-destructive' }
   }
@@ -43,22 +47,25 @@ export function MyDaySection({ data }: { data: MyDayData }) {
         <CardTitle className="flex items-center gap-2">
           My Day
           <span className="text-xs font-normal text-muted-foreground">
-            Your tools, training, and actions
+            Your assets, training, and actions
           </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {/* Clear-to-work (tools + van) */}
+        {/* Clear-to-work (assets + van) */}
         <Link
           to="/portal/tools"
           data-testid="my-day-clear-to-work"
           className={cn(
             'rounded-xl border-2 p-4 transition-colors hover:border-primary/40',
-            compliance.status === 'ok' && compliance.value.clear_state === 'blocked' &&
+            compliance.status === 'ok' &&
+              compliance.value.clear_state === 'blocked' &&
               'border-destructive/40 bg-destructive/5',
-            compliance.status === 'ok' && compliance.value.clear_state === 'attention' &&
+            compliance.status === 'ok' &&
+              compliance.value.clear_state === 'attention' &&
               'border-warning/40 bg-warning/5',
-            compliance.status === 'ok' && compliance.value.clear_state === 'clear' &&
+            compliance.status === 'ok' &&
+              compliance.value.clear_state === 'clear' &&
               'border-success/30 bg-success/5',
             compliance.status !== 'ok' && 'border-border bg-surface',
           )}
@@ -66,7 +73,7 @@ export function MyDaySection({ data }: { data: MyDayData }) {
           <div className="flex items-start gap-3">
             <Wrench className="h-5 w-5 shrink-0 text-primary" aria-hidden />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-muted-foreground">Tools &amp; van</p>
+              <p className="text-sm font-medium text-muted-foreground">Assets &amp; van</p>
               {compliance.status === 'ok' ? (
                 <>
                   {(() => {
@@ -80,13 +87,13 @@ export function MyDaySection({ data }: { data: MyDayData }) {
                     )
                   })()}
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {compliance.value.tool_summary.overdue} tool overdue ·{' '}
+                    {compliance.value.tool_summary.overdue} asset overdue ·{' '}
                     {compliance.value.van_summary.defect_counts.total} open van fault
                     {compliance.value.van_summary.defect_counts.total === 1 ? '' : 's'}
                   </p>
                 </>
               ) : (
-                <Unavailable label="Tool &amp; van status" />
+                <Unavailable label="Asset &amp; van status" />
               )}
             </div>
           </div>
@@ -105,14 +112,18 @@ export function MyDaySection({ data }: { data: MyDayData }) {
               {trainingTotal.status === 'ok' && trainingGapCount.status === 'ok' ? (
                 <>
                   <p className="mt-1 font-semibold text-foreground">
-                    {trainingTotal.value - trainingGapCount.value} / {trainingTotal.value} modules OK
+                    {trainingTotal.value - trainingGapCount.value} / {trainingTotal.value} modules
+                    OK
                   </p>
                   {trainingGapCount.value > 0 ? (
                     <p className="mt-1 text-xs text-warning">
-                      {trainingGapCount.value} overdue module{trainingGapCount.value === 1 ? '' : 's'}
+                      {trainingGapCount.value} overdue module
+                      {trainingGapCount.value === 1 ? '' : 's'}
                     </p>
                   ) : (
-                    <p className="mt-1 text-xs text-muted-foreground">All required modules on track</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      All required modules on track
+                    </p>
                   )}
                 </>
               ) : (
@@ -134,7 +145,9 @@ export function MyDaySection({ data }: { data: MyDayData }) {
               <p className="text-sm font-medium text-muted-foreground">My actions</p>
               {actionCounts.status === 'ok' ? (
                 <>
-                  <p className="mt-1 font-semibold text-foreground">{actionCounts.value.my} assigned</p>
+                  <p className="mt-1 font-semibold text-foreground">
+                    {actionCounts.value.my} assigned
+                  </p>
                   {actionCounts.value.my_overdue > 0 ? (
                     <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
                       <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
