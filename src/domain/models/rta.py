@@ -72,6 +72,12 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
     company_vehicle_registration: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     company_vehicle_make_model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     company_vehicle_damage: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    collision_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    vehicle_drivable: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    is_lti: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    days_lost: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    is_riddor_reportable: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    riddor_rationale: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Golden-thread link to Asset registry (AM-THREAD)
     asset_id: Mapped[Optional[int]] = mapped_column(

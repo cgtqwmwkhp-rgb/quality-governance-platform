@@ -654,8 +654,12 @@ class ComplianceAutomationService:
             },
             "injury_details": {
                 "type": incident.riddor_classification or self._enum_str(incident.incident_type),
-                "body_part": "",
+                "body_part": ", ".join(incident.body_parts or []),
                 "severity": self._enum_str(incident.severity),
+                "days_lost": incident.days_lost,
+                "is_lti": bool(incident.is_lti),
+                "first_aid_given": bool(incident.first_aid_given),
+                "emergency_services_called": bool(incident.emergency_services_called),
             },
             "incident_description": incident.description or "",
             "immediate_actions": incident.immediate_actions or "",

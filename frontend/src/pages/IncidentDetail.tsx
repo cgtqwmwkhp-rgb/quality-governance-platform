@@ -39,6 +39,7 @@ import {
   getApiErrorMessage,
   CreateFromRecordError,
   lookupsApi,
+  complianceAutomationApi,
 } from '../api/client'
 import { trackError } from '../utils/errorTracker'
 import { Button } from '../components/ui/Button'
@@ -106,6 +107,41 @@ const ACTION_STATUS_OPTIONS = [
   },
 ]
 
+const BODY_PART_OPTIONS = [
+  'Head',
+  'Neck',
+  'Torso',
+  'Arms',
+  'Hands',
+  'Legs',
+  'Feet',
+  'Other',
+]
+
+function buildIncidentEditForm(data: Incident): IncidentUpdate {
+  return {
+    title: displayIncidentText(data.title),
+    description: displayIncidentText(data.description),
+    incident_type: data.incident_type,
+    severity: data.severity,
+    status: data.status,
+    location: data.location,
+    department: data.department,
+    asset_id: data.asset_id ?? null,
+    is_injury: data.is_injury ?? false,
+    body_parts: data.body_parts ?? [],
+    is_lti: data.is_lti ?? false,
+    days_lost: data.days_lost ?? null,
+    is_minor_injury: data.is_minor_injury ?? false,
+    first_aid_given: data.first_aid_given ?? false,
+    emergency_services_called: data.emergency_services_called ?? false,
+    people_involved: data.people_involved ?? '',
+    is_riddor_reportable: data.is_riddor_reportable ?? null,
+    riddor_classification: data.riddor_classification ?? '',
+    riddor_rationale: data.riddor_rationale ?? '',
+  }
+}
+
 export default function IncidentDetail() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
@@ -157,6 +193,7 @@ export default function IncidentDetail() {
   const [newEntry, setNewEntry] = useState('')
   const [addingEntry, setAddingEntry] = useState(false)
   const [raisingRisk, setRaisingRisk] = useState(false)
+  const [riddorWorking, setRiddorWorking] = useState(false)
 
   // Completion dialog state
   const [showCompletionDialog, setShowCompletionDialog] = useState(false)
@@ -220,16 +257,7 @@ export default function IncidentDetail() {
     try {
       const response = await incidentsApi.get(incidentId)
       setIncident(response.data)
-      setEditForm({
-        title: displayIncidentText(response.data.title),
-        description: displayIncidentText(response.data.description),
-        incident_type: response.data.incident_type,
-        severity: response.data.severity,
-        status: response.data.status,
-        location: response.data.location,
-        department: response.data.department,
-        asset_id: response.data.asset_id ?? null,
-      })
+      setEditForm(buildIncidentEditForm(response.data))
       loadActions()
       loadEvidence(incidentId)
       loadInvestigations(incidentId)
@@ -312,16 +340,7 @@ export default function IncidentDetail() {
       }
       const response = await incidentsApi.update(incident.id, payload)
       setIncident(response.data)
-      setEditForm({
-        title: displayIncidentText(response.data.title),
-        description: displayIncidentText(response.data.description),
-        incident_type: response.data.incident_type,
-        severity: response.data.severity,
-        status: response.data.status,
-        location: response.data.location,
-        department: response.data.department,
-        asset_id: response.data.asset_id ?? null,
-      })
+      setEditForm(buildIncidentEditForm(response.data))
       setIsEditing(false)
       toast.success(t('incidents.detail.save_success', 'Incident updated'))
     } catch (err) {
@@ -336,18 +355,66 @@ export default function IncidentDetail() {
 
   const handleCancelEdit = () => {
     if (incident) {
-      setEditForm({
-        title: displayIncidentText(incident.title),
-        description: displayIncidentText(incident.description),
-        incident_type: incident.incident_type,
-        severity: incident.severity,
-        status: incident.status,
-        location: incident.location,
-        department: incident.department,
-        asset_id: incident.asset_id ?? null,
-      })
+      setEditForm(buildIncidentEditForm(incident))
     }
     setIsEditing(false)
+  }
+
+  const toggleBodyPart = (part: string) => {
+    const current = editForm.body_parts || []
+    const next = current.includes(part) ? current.filter((p) => p !== part) : [...current, part]
+    setEditForm({ ...editForm, body_parts: next })
+  }
+
+  const handleCheckRiddor = async () => {
+    if (!incident) return
+    setRiddorWorking(true)
+    try {
+      // Prefer in-progress editForm so Check reflects unsaved RIDDOR/injury edits.
+      const source = isEditing ? { ...incident, ...editForm } : incident
+      const classification = (source.riddor_classification || '').toLowerCase()
+      const specifiedTypes = ['fracture', 'amputation', 'dislocation', 'loss_of_sight'] as const
+      const injuryType =
+        specifiedTypes.find((type) => classification.includes(type)) ||
+        ((source.body_parts || []).some((part) => part.toLowerCase().includes('fracture'))
+          ? 'fracture'
+          : undefined)
+      const response = await complianceAutomationApi.checkRiddor({
+        days_off_work: source.days_lost ?? (source.is_lti ? 8 : 0),
+        injury_type: injuryType,
+        fatality: classification.includes('fatal') || classification.includes('death'),
+        dangerous_occurrence: classification.includes('dangerous'),
+        occupational_disease: classification.includes('disease'),
+      })
+      toast.success(
+        response.data.is_riddor
+          ? `RIDDOR check: reportable (${response.data.riddor_types.join(', ') || 'classification required'})`
+          : 'RIDDOR check: not reportable from the supplied signals',
+      )
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not check RIDDOR eligibility'))
+    } finally {
+      setRiddorWorking(false)
+    }
+  }
+
+  const handlePrepareRiddor = async () => {
+    if (!incident) return
+    setRiddorWorking(true)
+    try {
+      const classification = isEditing
+        ? editForm.riddor_classification || incident.riddor_classification
+        : incident.riddor_classification
+      await complianceAutomationApi.prepareRiddor(
+        incident.id,
+        classification || 'other_reportable',
+      )
+      toast.success('Draft RIDDOR pack prepared. Complete statutory filing on the HSE portal.')
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not prepare the RIDDOR draft pack'))
+    } finally {
+      setRiddorWorking(false)
+    }
   }
 
   const handleAddEntry = async () => {
@@ -933,6 +1000,209 @@ export default function IncidentDetail() {
                           onChange={(assetId) => setEditForm({ ...editForm, asset_id: assetId })}
                         />
                       </div>
+                      <div className="mt-6 border-t border-border pt-4 space-y-4">
+                        <h3 className="text-sm font-semibold text-foreground">
+                          {t('incidents.detail.injury_classification', 'Injury & classification')}
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(editForm.is_injury)}
+                              onChange={(e) =>
+                                setEditForm({ ...editForm, is_injury: e.target.checked })
+                              }
+                            />
+                            {t('incidents.detail.is_injury', 'Injury occurred')}
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(editForm.is_minor_injury)}
+                              onChange={(e) =>
+                                setEditForm({ ...editForm, is_minor_injury: e.target.checked })
+                              }
+                            />
+                            {t('incidents.detail.is_minor_injury', 'Minor injury')}
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(editForm.is_lti)}
+                              onChange={(e) =>
+                                setEditForm({ ...editForm, is_lti: e.target.checked })
+                              }
+                            />
+                            {t('incidents.detail.is_lti', 'Lost time injury (LTI)')}
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(editForm.first_aid_given)}
+                              onChange={(e) =>
+                                setEditForm({ ...editForm, first_aid_given: e.target.checked })
+                              }
+                            />
+                            {t('incidents.detail.first_aid_given', 'First aid given')}
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(editForm.emergency_services_called)}
+                              onChange={(e) =>
+                                setEditForm({
+                                  ...editForm,
+                                  emergency_services_called: e.target.checked,
+                                })
+                              }
+                            />
+                            {t(
+                              'incidents.detail.emergency_services_called',
+                              'Emergency services called',
+                            )}
+                          </label>
+                          <div>
+                            <label
+                              htmlFor="incident-days-lost"
+                              className="text-sm font-medium text-muted-foreground"
+                            >
+                              {t('incidents.detail.days_lost', 'Days lost')}
+                            </label>
+                            <Input
+                              id="incident-days-lost"
+                              type="number"
+                              min={0}
+                              className="mt-1"
+                              value={editForm.days_lost ?? ''}
+                              onChange={(e) =>
+                                setEditForm({
+                                  ...editForm,
+                                  days_lost:
+                                    e.target.value === '' ? null : Number(e.target.value),
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground mb-2">
+                            {t('incidents.detail.body_parts', 'Body parts')}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {BODY_PART_OPTIONS.map((part) => {
+                              const selected = (editForm.body_parts || []).includes(part)
+                              return (
+                                <Button
+                                  key={part}
+                                  type="button"
+                                  size="sm"
+                                  variant={selected ? 'default' : 'outline'}
+                                  onClick={() => toggleBodyPart(part)}
+                                >
+                                  {part}
+                                </Button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="incident-people-involved"
+                            className="text-sm font-medium text-muted-foreground"
+                          >
+                            {t('incidents.detail.people_involved', 'Person involved')}
+                          </label>
+                          <Input
+                            id="incident-people-involved"
+                            className="mt-1"
+                            value={editForm.people_involved || ''}
+                            onChange={(e) =>
+                              setEditForm({ ...editForm, people_involved: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div className="border-t border-border pt-4 space-y-3">
+                          <h4 className="text-sm font-semibold text-foreground">RIDDOR assessment</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <label
+                                htmlFor="incident-riddor-reportable"
+                                className="text-sm font-medium text-muted-foreground"
+                              >
+                                Reportable
+                              </label>
+                              <Select
+                                value={
+                                  editForm.is_riddor_reportable == null
+                                    ? 'unset'
+                                    : editForm.is_riddor_reportable
+                                      ? 'yes'
+                                      : 'no'
+                                }
+                                onValueChange={(value) =>
+                                  setEditForm({
+                                    ...editForm,
+                                    is_riddor_reportable:
+                                      value === 'unset' ? null : value === 'yes',
+                                  })
+                                }
+                              >
+                                <SelectTrigger id="incident-riddor-reportable" className="mt-1">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="unset">Unset</SelectItem>
+                                  <SelectItem value="yes">Yes</SelectItem>
+                                  <SelectItem value="no">No</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <label
+                                htmlFor="incident-riddor-classification"
+                                className="text-sm font-medium text-muted-foreground"
+                              >
+                                Classification
+                              </label>
+                              <Input
+                                id="incident-riddor-classification"
+                                className="mt-1"
+                                value={editForm.riddor_classification || ''}
+                                onChange={(e) =>
+                                  setEditForm({ ...editForm, riddor_classification: e.target.value })
+                                }
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label
+                              htmlFor="incident-riddor-rationale"
+                              className="text-sm font-medium text-muted-foreground"
+                            >
+                              Rationale
+                            </label>
+                            <Textarea
+                              id="incident-riddor-rationale"
+                              className="mt-1"
+                              value={editForm.riddor_rationale || ''}
+                              onChange={(e) =>
+                                setEditForm({ ...editForm, riddor_rationale: e.target.value })
+                              }
+                            />
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" size="sm" variant="outline" disabled={riddorWorking} onClick={handleCheckRiddor}>
+                              Check
+                            </Button>
+                            <Button type="button" size="sm" disabled={riddorWorking} onClick={handlePrepareRiddor}>
+                              Prepare draft pack
+                            </Button>
+                            <Button type="button" size="sm" variant="ghost" onClick={() => navigate('/compliance-automation')}>
+                              <ExternalLink className="mr-1 h-4 w-4" /> Compliance Automation
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
                     </>
                   ) : (
                     <>
@@ -983,6 +1253,49 @@ export default function IncidentDetail() {
                           <p className="mt-1 text-foreground">
                             {incident.location || t('incidents.detail.not_specified')}
                           </p>
+                        </div>
+                      </div>
+                      <div className="mt-6 border-t border-border pt-4">
+                        <h3 className="text-sm font-semibold text-foreground mb-3">
+                          {t('incidents.detail.injury_classification', 'Injury & classification')}
+                        </h3>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <p>
+                            <span className="text-muted-foreground">Injury: </span>
+                            {incident.is_injury ? 'Yes' : 'No'}
+                          </p>
+                          <p>
+                            <span className="text-muted-foreground">Minor: </span>
+                            {incident.is_minor_injury ? 'Yes' : 'No'}
+                          </p>
+                          <p>
+                            <span className="text-muted-foreground">LTI: </span>
+                            {incident.is_lti ? 'Yes' : 'No'}
+                          </p>
+                          <p>
+                            <span className="text-muted-foreground">Days lost: </span>
+                            {incident.days_lost ?? '—'}
+                          </p>
+                          <p>
+                            <span className="text-muted-foreground">First aid: </span>
+                            {incident.first_aid_given ? 'Yes' : 'No'}
+                          </p>
+                          <p>
+                            <span className="text-muted-foreground">Emergency services: </span>
+                            {incident.emergency_services_called ? 'Yes' : 'No'}
+                          </p>
+                          <p className="col-span-2">
+                            <span className="text-muted-foreground">Body parts: </span>
+                            {(incident.body_parts || []).length
+                              ? (incident.body_parts || []).join(', ')
+                              : '—'}
+                          </p>
+                          {incident.people_involved ? (
+                            <p className="col-span-2">
+                              <span className="text-muted-foreground">Person involved: </span>
+                              {incident.people_involved}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                     </>

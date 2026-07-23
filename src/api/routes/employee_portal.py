@@ -344,6 +344,9 @@ def build_incident_portal_fields(
     witness_names = reporter_submission.get("witness_names")
     medical_assistance = str(reporter_submission.get("medical_assistance") or "").strip().lower()
     display_name = require_portal_display_name(report, reporter_submission)
+    from src.domain.services.incident_injury_promote import promote_injury_fields_from_submission
+
+    injury_fields = promote_injury_fields_from_submission(reporter_submission)
 
     return {
         "incident_type": IncidentType.OTHER,
@@ -359,6 +362,8 @@ def build_incident_portal_fields(
         "witnesses": witness_names if isinstance(witness_names, str) else None,
         "first_aid_given": medical_assistance not in {"", "none"},
         "emergency_services_called": medical_assistance == "ambulance",
+        "is_injury": injury_fields["is_injury"],
+        "body_parts": injury_fields["body_parts"],
         "source_form_id": "portal_incident_v1",
         "source_type": "portal",
         "reporter_submission": reporter_submission or None,
