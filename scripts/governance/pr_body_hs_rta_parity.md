@@ -6,3 +6,9 @@
 
 ## Test plan
 - `pytest tests/unit/test_hs_rta_normalization.py`
+
+## Change ledger
+- **Data:** adds nullable collision/drivability/RIDDOR data and non-null lost-time indicator to RTAs.
+- **UI:** RTADetail view and edit now expose the parity fields.
+- **KPI impact:** H&S KPI service includes RTA LTI/RIDDOR values after the RTA parity migration.
+- **Roll-back:** remove the UI fields and downgrade `20260810_hs_rta_parity`; no records are deleted.

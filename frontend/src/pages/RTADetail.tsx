@@ -182,6 +182,11 @@ export default function RTADetail() {
       company_vehicle_registration: data.company_vehicle_registration,
       company_vehicle_make_model: data.company_vehicle_make_model,
       company_vehicle_damage: data.company_vehicle_damage,
+      collision_type: data.collision_type,
+      vehicle_drivable: data.vehicle_drivable,
+      is_lti: data.is_lti,
+      days_lost: data.days_lost,
+      is_riddor_reportable: data.is_riddor_reportable,
       asset_id: data.asset_id ?? null,
       driver_name: data.driver_name,
       driver_statement: data.driver_statement,
@@ -941,11 +946,27 @@ export default function RTADetail() {
                       onChange={(assetId) => setEditForm({ ...editForm, asset_id: assetId })}
                     />
                   </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Collision type</label>
+                    <Input value={editForm.collision_type || ''} onChange={(e) => setEditForm({ ...editForm, collision_type: e.target.value })} className="mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Days lost</label>
+                    <Input type="number" min={0} value={editForm.days_lost ?? ''} onChange={(e) => setEditForm({ ...editForm, days_lost: e.target.value ? Number(e.target.value) : null })} className="mt-1" />
+                  </div>
+                  <label className="flex items-center gap-2 text-sm"><Switch checked={Boolean(editForm.vehicle_drivable)} onCheckedChange={(value) => setEditForm({ ...editForm, vehicle_drivable: value })} />Vehicle drivable</label>
+                  <label className="flex items-center gap-2 text-sm"><Switch checked={Boolean(editForm.is_lti)} onCheckedChange={(value) => setEditForm({ ...editForm, is_lti: value })} />Lost time injury</label>
+                  <label className="flex items-center gap-2 text-sm"><Switch checked={Boolean(editForm.is_riddor_reportable)} onCheckedChange={(value) => setEditForm({ ...editForm, is_riddor_reportable: value })} />RIDDOR reportable</label>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Registration" value={rta.company_vehicle_registration} />
                   <Field label="Make / Model" value={rta.company_vehicle_make_model} />
+                  <Field label="Collision type" value={rta.collision_type} />
+                  <Field label="Vehicle drivable" value={rta.vehicle_drivable == null ? undefined : rta.vehicle_drivable ? 'Yes' : 'No'} />
+                  <Field label="Lost time injury" value={rta.is_lti ? 'Yes' : 'No'} />
+                  <Field label="Days lost" value={rta.days_lost?.toString()} />
+                  <Field label="RIDDOR reportable" value={rta.is_riddor_reportable == null ? undefined : rta.is_riddor_reportable ? 'Yes' : 'No'} />
                   {rta.asset_id != null && (
                     <div className="col-span-2">
                       <Field label="Linked asset" value={`Asset #${rta.asset_id}`} />
