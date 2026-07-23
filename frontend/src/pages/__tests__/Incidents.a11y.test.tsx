@@ -32,6 +32,9 @@ vi.mock('../../api/client', () => ({
   lookupsApi: {
     list: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   },
+  contractsApi: {
+    list: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  },
   notificationsApi: {
     getDeliveryStatus: vi.fn().mockResolvedValue({ data: { email_configured: false } }),
   },
