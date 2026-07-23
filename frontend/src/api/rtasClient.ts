@@ -61,6 +61,12 @@ export interface RTA {
   company_vehicle_registration?: string
   company_vehicle_make_model?: string
   company_vehicle_damage?: string
+  collision_type?: string | null
+  vehicle_drivable?: boolean | null
+  is_lti?: boolean
+  days_lost?: number | null
+  is_riddor_reportable?: boolean | null
+  riddor_rationale?: string | null
   /** Linked Asset registry id (golden thread). */
   asset_id?: number | null
   driver_name?: string
@@ -114,6 +120,12 @@ export interface RTACreate {
   reporter_name?: string
   reporter_email?: string
   reporter_submission?: Record<string, unknown>
+  collision_type?: string
+  vehicle_drivable?: boolean
+  is_lti?: boolean
+  days_lost?: number
+  is_riddor_reportable?: boolean
+  riddor_rationale?: string
 }
 
 export interface RTAUpdate {
@@ -155,6 +167,12 @@ export interface RTAUpdate {
   witnesses?: string
   witnesses_structured?: { witnesses?: Witness[] }
   fault_determination?: string
+  collision_type?: string | null
+  vehicle_drivable?: boolean | null
+  is_lti?: boolean
+  days_lost?: number | null
+  is_riddor_reportable?: boolean | null
+  riddor_rationale?: string | null
 }
 
 export function createRtasApi(api: AxiosInstance) {

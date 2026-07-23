@@ -29,6 +29,12 @@ class RTABase(BaseModel):
     company_vehicle_registration: Optional[str] = Field(None, max_length=20)
     company_vehicle_make_model: Optional[str] = Field(None, max_length=100)
     company_vehicle_damage: Optional[str] = None
+    collision_type: Optional[str] = Field(None, max_length=100)
+    vehicle_drivable: Optional[bool] = None
+    is_lti: bool = False
+    days_lost: Optional[int] = Field(None, ge=0)
+    is_riddor_reportable: Optional[bool] = None
+    riddor_rationale: Optional[str] = None
     asset_id: Optional[int] = Field(None, description="Linked Asset registry id (golden thread)")
     driver_name: Optional[str] = Field(None, max_length=200)
     driver_statement: Optional[str] = None
@@ -95,6 +101,12 @@ class RTAUpdate(BaseModel):
     company_vehicle_registration: Optional[str] = Field(None, max_length=20)
     company_vehicle_make_model: Optional[str] = Field(None, max_length=100)
     company_vehicle_damage: Optional[str] = None
+    collision_type: Optional[str] = Field(None, max_length=100)
+    vehicle_drivable: Optional[bool] = None
+    is_lti: Optional[bool] = None
+    days_lost: Optional[int] = Field(None, ge=0)
+    is_riddor_reportable: Optional[bool] = None
+    riddor_rationale: Optional[str] = None
     asset_id: Optional[int] = Field(None, description="Linked Asset registry id (null clears link)")
     driver_id: Optional[int] = None
     driver_name: Optional[str] = Field(None, max_length=200)
@@ -163,6 +175,12 @@ class RTAResponse(BaseModel):
     company_vehicle_registration: Optional[str] = None
     company_vehicle_make_model: Optional[str] = None
     company_vehicle_damage: Optional[str] = None
+    collision_type: Optional[str] = None
+    vehicle_drivable: Optional[bool] = None
+    is_lti: bool = False
+    days_lost: Optional[int] = None
+    is_riddor_reportable: Optional[bool] = None
+    riddor_rationale: Optional[str] = None
     asset_id: Optional[int] = None
     driver_name: Optional[str] = None
     driver_statement: Optional[str] = None
