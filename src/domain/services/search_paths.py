@@ -15,7 +15,7 @@ def build_search_path(entity_type: str, entity_id: Optional[int]) -> Optional[st
         "complaint": f"/complaints/{entity_id}",
         "near_miss": f"/near-misses/{entity_id}",
         "risk": f"/risk-register/{entity_id}",
-        "audit": f"/audits",
+        "audit": "/audits",
         "action": f"/actions/{entity_id}",
         "document": f"/documents/{entity_id}",
     }
