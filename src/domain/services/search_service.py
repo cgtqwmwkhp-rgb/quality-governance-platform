@@ -120,9 +120,7 @@ class SearchService:
         if status_filter:
             statuses = {s.strip().lower().replace(" ", "_") for s in status_filter.split(",") if s.strip()}
             if statuses:
-                all_results = [
-                    r for r in all_results if str(r.status).lower().replace(" ", "_") in statuses
-                ]
+                all_results = [r for r in all_results if str(r.status).lower().replace(" ", "_") in statuses]
         if date_from or date_to:
             all_results = [r for r in all_results if self._within_date_range(r.date, date_from, date_to)]
 
