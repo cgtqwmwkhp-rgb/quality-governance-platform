@@ -39,6 +39,7 @@ import {
   getApiErrorMessage,
   CreateFromRecordError,
   lookupsApi,
+  complianceAutomationApi,
 } from '../api/client'
 import { trackError } from '../utils/errorTracker'
 import { Button } from '../components/ui/Button'
@@ -192,6 +193,7 @@ export default function IncidentDetail() {
   const [newEntry, setNewEntry] = useState('')
   const [addingEntry, setAddingEntry] = useState(false)
   const [raisingRisk, setRaisingRisk] = useState(false)
+  const [riddorWorking, setRiddorWorking] = useState(false)
 
   // Completion dialog state
   const [showCompletionDialog, setShowCompletionDialog] = useState(false)
@@ -362,6 +364,46 @@ export default function IncidentDetail() {
     const current = editForm.body_parts || []
     const next = current.includes(part) ? current.filter((p) => p !== part) : [...current, part]
     setEditForm({ ...editForm, body_parts: next })
+  }
+
+  const handleCheckRiddor = async () => {
+    if (!incident) return
+    setRiddorWorking(true)
+    try {
+      const response = await complianceAutomationApi.checkRiddor({
+        incident_date: incident.incident_date,
+        days_off_work: incident.days_lost ?? 0,
+        is_injury: Boolean(incident.is_injury),
+        is_lti: Boolean(incident.is_lti),
+        emergency_services_called: Boolean(incident.emergency_services_called),
+        riddor_classification: incident.riddor_classification,
+      })
+      toast.success(
+        response.data.is_riddor
+          ? `RIDDOR check: reportable (${response.data.riddor_types.join(', ') || 'classification required'})`
+          : 'RIDDOR check: not reportable from the supplied signals',
+      )
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not check RIDDOR eligibility'))
+    } finally {
+      setRiddorWorking(false)
+    }
+  }
+
+  const handlePrepareRiddor = async () => {
+    if (!incident) return
+    setRiddorWorking(true)
+    try {
+      await complianceAutomationApi.prepareRiddor(
+        incident.id,
+        incident.riddor_classification || 'other_reportable',
+      )
+      toast.success('Draft RIDDOR pack prepared. Complete statutory filing on the HSE portal.')
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Could not prepare the RIDDOR draft pack'))
+    } finally {
+      setRiddorWorking(false)
+    }
   }
 
   const handleAddEntry = async () => {
@@ -1067,6 +1109,76 @@ export default function IncidentDetail() {
                               setEditForm({ ...editForm, people_involved: e.target.value })
                             }
                           />
+                        </div>
+                        <div className="border-t border-border pt-4 space-y-3">
+                          <h4 className="text-sm font-semibold text-foreground">RIDDOR assessment</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-sm font-medium text-muted-foreground">
+                                Reportable
+                              </label>
+                              <Select
+                                value={
+                                  editForm.is_riddor_reportable == null
+                                    ? 'unset'
+                                    : editForm.is_riddor_reportable
+                                      ? 'yes'
+                                      : 'no'
+                                }
+                                onValueChange={(value) =>
+                                  setEditForm({
+                                    ...editForm,
+                                    is_riddor_reportable:
+                                      value === 'unset' ? null : value === 'yes',
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="mt-1">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="unset">Unset</SelectItem>
+                                  <SelectItem value="yes">Yes</SelectItem>
+                                  <SelectItem value="no">No</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium text-muted-foreground">
+                                Classification
+                              </label>
+                              <Input
+                                className="mt-1"
+                                value={editForm.riddor_classification || ''}
+                                onChange={(e) =>
+                                  setEditForm({ ...editForm, riddor_classification: e.target.value })
+                                }
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium text-muted-foreground">
+                              Rationale
+                            </label>
+                            <Textarea
+                              className="mt-1"
+                              value={editForm.riddor_rationale || ''}
+                              onChange={(e) =>
+                                setEditForm({ ...editForm, riddor_rationale: e.target.value })
+                              }
+                            />
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" size="sm" variant="outline" disabled={riddorWorking} onClick={handleCheckRiddor}>
+                              Check
+                            </Button>
+                            <Button type="button" size="sm" disabled={riddorWorking} onClick={handlePrepareRiddor}>
+                              Prepare draft pack
+                            </Button>
+                            <Button type="button" size="sm" variant="ghost" onClick={() => navigate('/compliance-automation')}>
+                              <ExternalLink className="mr-1 h-4 w-4" /> Compliance Automation
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </>

@@ -29,6 +29,9 @@ def _incident(incident_id: int = 42) -> Incident:
     incident.id = incident_id
     incident.reference_number = "INC-0042"
     incident.incident_date = datetime(2026, 7, 1, 9, 30, tzinfo=timezone.utc)
+    incident.body_parts = ["Hands", "Arms"]
+    incident.days_lost = 9
+    incident.is_lti = True
     return incident
 
 
@@ -77,6 +80,9 @@ async def test_prepare_riddor_persists_draft_pack_with_honest_status():
     assert "HSE portal" in result["status_label"]
     assert result["submission_data"]["location"] == "Yard A"
     assert result["submission_data"]["date_of_incident"] == "2026-07-01"
+    assert result["submission_data"]["injury_details"]["body_part"] == "Hands, Arms"
+    assert result["submission_data"]["injury_details"]["days_lost"] == 9
+    assert result["submission_data"]["injury_details"]["is_lti"] is True
     db.add.assert_called_once()
     added = db.add.call_args.args[0]
     assert isinstance(added, RIDDORSubmission)
