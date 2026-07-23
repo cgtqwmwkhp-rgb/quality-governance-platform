@@ -53,6 +53,11 @@ def test_validate_intent_rejects_external_navigate():
     assert out["navigate"] is None
 
 
+def test_validate_intent_rejects_protocol_relative_navigate():
+    out = validate_intent({"q": "x", "navigate": "//evil.example/phish"}, fallback_q="x")
+    assert out["navigate"] is None
+
+
 def test_apply_date_range_month():
     out = apply_date_range({"date_range": "month", "q": "a"}, today=date(2026, 7, 16))
     assert out["date_from"] == "2026-07-01"

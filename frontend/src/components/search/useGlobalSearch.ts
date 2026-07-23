@@ -70,6 +70,7 @@ export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
       )
 
       try {
+        // API accepts a single module; multi-select is applied client-side after FTS.
         const moduleParam =
           params.module || (filters.modules.length === 1 ? filters.modules[0] : undefined)
         const statusParam =
@@ -91,8 +92,12 @@ export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
           page: 1,
           page_size: 100,
         })
-        setResults(response.data.results)
-        setTotalResults(response.data.total)
+        let items = response.data.results
+        if (!params.module && filters.modules.length > 1) {
+          items = items.filter((item) => filters.modules.includes(item.module))
+        }
+        setResults(items)
+        setTotalResults(items.length)
       } catch (error) {
         setResults([])
         setTotalResults(0)
@@ -103,6 +108,15 @@ export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
     },
     [filters.dateRange, filters.modules, filters.status],
   )
+
+  // Re-run FTS when filter chips change while a query is active.
+  useEffect(() => {
+    const active = query.trim()
+    if (!active) return
+    void runSearch({ q: active })
+    // Intentionally depend on filter values + query, not runSearch identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- filter-driven refresh
+  }, [filters.modules, filters.status, filters.dateRange])
 
   const handleSearch = useCallback(
     async (overrideQuery?: string) => {

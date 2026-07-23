@@ -16,11 +16,17 @@ export interface SuggestedSearch {
   }
 }
 
+function formatLocalDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 function monthBounds(today = new Date()): { date_from: string; date_to: string } {
   const start = new Date(today.getFullYear(), today.getMonth(), 1)
   const end = new Date(today.getFullYear(), today.getMonth() + 1, 0)
-  const iso = (d: Date) => d.toISOString().slice(0, 10)
-  return { date_from: iso(start), date_to: iso(end) }
+  return { date_from: formatLocalDate(start), date_to: formatLocalDate(end) }
 }
 
 export function getSuggestedSearches(today = new Date()): SuggestedSearch[] {
@@ -76,15 +82,14 @@ export function dateRangeToBounds(
   today = new Date(),
 ): { date_from?: string; date_to?: string } {
   if (dateRange === 'all') return {}
-  const iso = (d: Date) => d.toISOString().slice(0, 10)
-  const end = iso(today)
+  const end = formatLocalDate(today)
   if (dateRange === 'today') {
     return { date_from: end, date_to: end }
   }
   if (dateRange === 'week') {
     const start = new Date(today)
     start.setDate(today.getDate() - 7)
-    return { date_from: iso(start), date_to: end }
+    return { date_from: formatLocalDate(start), date_to: end }
   }
   if (dateRange === 'month') {
     return monthBounds(today)

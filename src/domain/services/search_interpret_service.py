@@ -123,7 +123,8 @@ def validate_intent(raw: dict[str, Any], *, fallback_q: str) -> dict[str, Any]:
     navigate = raw.get("navigate")
     if navigate is not None:
         navigate = str(navigate)
-        if not navigate.startswith("/"):
+        # Absolute app paths only — reject scheme-relative "//evil" and off-app URLs.
+        if not navigate.startswith("/") or navigate.startswith("//"):
             navigate = None
     label = raw.get("label")
     source = str(raw.get("source") or "keyword")
