@@ -13,7 +13,7 @@ flake8>=7.0.0,<8.0.0
 mypy>=1.8.0,<2.0.0
 
 # Security Scanning
-bandit>=1.7.0,<2.0.0
+bandit>=1.9.4,<2.0.0
 safety>=2.3.0,<3.0.0
 
 # Performance Testing
