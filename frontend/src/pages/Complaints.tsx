@@ -274,6 +274,14 @@ export default function Complaints() {
     }))
   }
 
+  // Contracts load async with the modal — re-resolve FK if customer was chosen early.
+  useEffect(() => {
+    if (!selectedCustomerCode) return
+    const matched = contractsByCode[selectedCustomerCode.toLowerCase()]
+    const nextId = matched?.id ?? null
+    setFormData((prev) => (prev.contract_id === nextId ? prev : { ...prev, contract_id: nextId }))
+  }, [selectedCustomerCode, contractsByCode])
+
   // Hydrate list filters from shareable URL (back/forward + deep links).
   useEffect(() => {
     const nextQ = searchParams.get('q') || ''
@@ -425,9 +433,12 @@ export default function Complaints() {
       selectedCustomerCode
     const complainantCompany =
       formData.complainant_company?.trim() || selectedCustomerLabel || undefined
+    const resolvedContractId =
+      formData.contract_id ?? contractsByCode[selectedCustomerCode.toLowerCase()]?.id ?? null
 
     const payload: ComplaintCreate = {
       ...formData,
+      contract_id: resolvedContractId,
       received_date: new Date(formData.received_date).toISOString(),
       alleged_event_at: formData.alleged_event_at
         ? new Date(formData.alleged_event_at).toISOString()
