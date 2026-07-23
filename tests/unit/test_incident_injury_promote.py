@@ -14,6 +14,19 @@ def test_extract_body_parts_from_region_dicts() -> None:
     assert extract_body_parts_from_injuries(injuries) == ["head-front", "left-hand", "Legs"]
 
 
+def test_extract_body_parts_from_portal_injury_selection() -> None:
+    injuries = [
+        {
+            "regionId": "left-hand",
+            "regionLabel": "Left hand",
+            "injuryType": "cut",
+            "injuryLabel": "Cut / laceration",
+            "view": "front",
+        }
+    ]
+    assert extract_body_parts_from_injuries(injuries) == ["Left hand"]
+
+
 def test_promote_injury_from_has_injuries_flag() -> None:
     result = promote_injury_fields_from_submission({"has_injuries": True, "injuries": []})
     assert result["is_injury"] is True

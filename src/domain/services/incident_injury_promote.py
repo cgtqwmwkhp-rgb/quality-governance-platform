@@ -17,7 +17,17 @@ def extract_body_parts_from_injuries(injuries: Any) -> list[str]:
                 continue
             if not isinstance(item, dict):
                 continue
-            for key in ("body_part", "bodyPart", "region", "region_id", "id", "label"):
+            for key in (
+                "regionLabel",
+                "region_label",
+                "body_part",
+                "bodyPart",
+                "region",
+                "regionId",
+                "region_id",
+                "id",
+                "label",
+            ):
                 value = item.get(key)
                 if isinstance(value, str) and value.strip():
                     parts.append(value.strip())
@@ -28,7 +38,12 @@ def extract_body_parts_from_injuries(injuries: Any) -> list[str]:
                     if isinstance(region, str) and region.strip():
                         parts.append(region.strip())
                     elif isinstance(region, dict):
-                        rid = region.get("id") or region.get("label")
+                        rid = (
+                            region.get("regionLabel")
+                            or region.get("label")
+                            or region.get("regionId")
+                            or region.get("id")
+                        )
                         if isinstance(rid, str) and rid.strip():
                             parts.append(rid.strip())
     elif isinstance(injuries, dict):

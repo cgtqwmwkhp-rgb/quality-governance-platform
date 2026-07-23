@@ -370,15 +370,17 @@ export default function IncidentDetail() {
     if (!incident) return
     setRiddorWorking(true)
     try {
-      const classification = (incident.riddor_classification || '').toLowerCase()
+      // Prefer in-progress editForm so Check reflects unsaved RIDDOR/injury edits.
+      const source = isEditing ? { ...incident, ...editForm } : incident
+      const classification = (source.riddor_classification || '').toLowerCase()
       const specifiedTypes = ['fracture', 'amputation', 'dislocation', 'loss_of_sight'] as const
       const injuryType =
         specifiedTypes.find((type) => classification.includes(type)) ||
-        ((incident.body_parts || []).some((part) => part.toLowerCase().includes('fracture'))
+        ((source.body_parts || []).some((part) => part.toLowerCase().includes('fracture'))
           ? 'fracture'
           : undefined)
       const response = await complianceAutomationApi.checkRiddor({
-        days_off_work: incident.days_lost ?? (incident.is_lti ? 8 : 0),
+        days_off_work: source.days_lost ?? (source.is_lti ? 8 : 0),
         injury_type: injuryType,
         fatality: classification.includes('fatal') || classification.includes('death'),
         dangerous_occurrence: classification.includes('dangerous'),
@@ -400,9 +402,12 @@ export default function IncidentDetail() {
     if (!incident) return
     setRiddorWorking(true)
     try {
+      const classification = isEditing
+        ? editForm.riddor_classification || incident.riddor_classification
+        : incident.riddor_classification
       await complianceAutomationApi.prepareRiddor(
         incident.id,
-        incident.riddor_classification || 'other_reportable',
+        classification || 'other_reportable',
       )
       toast.success('Draft RIDDOR pack prepared. Complete statutory filing on the HSE portal.')
     } catch (err) {
