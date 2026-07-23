@@ -74,6 +74,7 @@ export interface RTA {
   driver_email?: string
   driver_statement?: string
   driver_injured: boolean
+  third_party_injured?: boolean | null
   driver_injury_details?: string
   police_attended: boolean
   police_reference?: string
@@ -115,6 +116,7 @@ export interface RTACreate {
   company_vehicle_registration?: string
   driver_name?: string
   driver_injured?: boolean
+  third_party_injured?: boolean | null
   police_attended?: boolean
   third_parties?: { parties?: ThirdParty[] }
   reporter_name?: string
@@ -150,6 +152,7 @@ export interface RTAUpdate {
   driver_statement?: string
   driver_injured?: boolean
   driver_injury_details?: string
+  third_party_injured?: boolean | null
   police_attended?: boolean
   police_reference?: string
   police_station?: string

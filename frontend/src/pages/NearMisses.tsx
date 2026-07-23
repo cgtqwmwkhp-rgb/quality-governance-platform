@@ -89,6 +89,7 @@ export default function NearMisses() {
     event_date: new Date().toISOString(),
     description: '',
     potential_severity: 'medium',
+    is_hipo: false,
     was_involved: true,
     witnesses_present: false,
   })
@@ -212,6 +213,7 @@ export default function NearMisses() {
         event_date: new Date().toISOString(),
         description: '',
         potential_severity: 'medium',
+        is_hipo: false,
         was_involved: true,
         witnesses_present: false,
       })
@@ -337,7 +339,14 @@ export default function NearMisses() {
                       {new Date(item.event_date).toLocaleDateString()}
                     </td>
                     <td className="p-4">
-                      <Badge variant="secondary">{item.potential_severity || 'medium'}</Badge>
+                      <div className="flex flex-wrap gap-1">
+                        <Badge variant="secondary">{item.potential_severity || 'medium'}</Badge>
+                        {item.is_hipo ? (
+                          <Badge variant="destructive">
+                            {t('near_misses.badge.hipo', 'HiPo')}
+                          </Badge>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="p-4">
                       <Badge variant="outline">{item.status}</Badge>
@@ -474,6 +483,18 @@ export default function NearMisses() {
                 </Select>
               </div>
             </div>
+
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={Boolean(formData.is_hipo)}
+                onChange={(e) => setFormData({ ...formData, is_hipo: e.target.checked })}
+              />
+              {t(
+                'near_misses.form.is_hipo',
+                'High potential (HiPo) — serious injury or fatality potential',
+              )}
+            </label>
 
             <div>
               <label

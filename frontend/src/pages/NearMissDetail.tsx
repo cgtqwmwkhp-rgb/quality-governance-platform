@@ -96,6 +96,7 @@ export default function NearMissDetail() {
         corrective_actions_taken: response.data.corrective_actions_taken,
         risk_category: response.data.risk_category,
         potential_severity: response.data.potential_severity,
+        is_hipo: response.data.is_hipo ?? false,
         asset_id: response.data.asset_id ?? null,
       })
       loadInvestigations(nearMissId)
@@ -177,6 +178,7 @@ export default function NearMissDetail() {
       corrective_actions_taken: nearMiss.corrective_actions_taken,
       risk_category: nearMiss.risk_category,
       potential_severity: nearMiss.potential_severity,
+      is_hipo: nearMiss.is_hipo ?? false,
       asset_id: nearMiss.asset_id ?? null,
     })
     setIsEditing(false)
@@ -477,6 +479,19 @@ export default function NearMissDetail() {
                           onChange={(assetId) => setEditForm({ ...editForm, asset_id: assetId })}
                         />
                       </div>
+                      <label className="flex items-center gap-2 text-sm text-foreground mt-3">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(editForm.is_hipo)}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, is_hipo: e.target.checked })
+                          }
+                        />
+                        {t(
+                          'near_misses.form.is_hipo',
+                          'High potential (HiPo) — serious injury or fatality potential',
+                        )}
+                      </label>
                     </>
                   ) : (
                     <>
@@ -661,6 +676,16 @@ export default function NearMissDetail() {
                     <span className="text-sm text-foreground">
                       {nearMiss.potential_severity || t('near_misses.detail.not_set', 'Not set')}
                     </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">
+                      {t('near_misses.form.is_hipo_short', 'HiPo')}
+                    </span>
+                    <Badge variant={nearMiss.is_hipo ? 'destructive' : 'outline'}>
+                      {nearMiss.is_hipo
+                        ? t('common.yes', 'Yes')
+                        : t('common.no', 'No')}
+                    </Badge>
                   </div>
                 </CardContent>
               </Card>

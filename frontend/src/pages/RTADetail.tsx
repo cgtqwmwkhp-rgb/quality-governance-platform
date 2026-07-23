@@ -192,6 +192,7 @@ export default function RTADetail() {
       driver_statement: data.driver_statement,
       driver_injured: data.driver_injured,
       driver_injury_details: data.driver_injury_details,
+      third_party_injured: data.third_party_injured ?? null,
       police_attended: data.police_attended,
       police_reference: data.police_reference,
       police_station: data.police_station,
@@ -257,6 +258,10 @@ export default function RTADetail() {
           editThirdParties.length > 0
             ? { parties: editThirdParties }
             : undefined,
+        third_party_injured:
+          editThirdParties.length > 0
+            ? editThirdParties.some((party) => Boolean(party.injured))
+            : editForm.third_party_injured ?? null,
         witnesses_structured:
           editWitnesses.length > 0
             ? { witnesses: editWitnesses }
@@ -1149,6 +1154,16 @@ export default function RTADetail() {
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Driver Name" value={rta.driver_name} />
                   <Field label="Driver Injured" value={rta.driver_injured ? 'Yes' : 'No'} />
+                  <Field
+                    label="Third-party injured"
+                    value={
+                      rta.third_party_injured == null
+                        ? 'Unknown'
+                        : rta.third_party_injured
+                          ? 'Yes'
+                          : 'No'
+                    }
+                  />
                   {rta.driver_injury_details && <div className="col-span-2"><Field label="Injury Details" value={rta.driver_injury_details} /></div>}
                   {rta.driver_statement && <div className="col-span-2"><Field label="Driver Statement" value={rta.driver_statement} /></div>}
                   <Field label="Police Attended" value={rta.police_attended ? 'Yes' : 'No'} />

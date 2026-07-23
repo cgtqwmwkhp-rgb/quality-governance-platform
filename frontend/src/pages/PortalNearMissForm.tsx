@@ -132,6 +132,7 @@ interface FormData {
   assetType: string
   riskCategory: string
   potentialSeverity: string
+  isHipo: boolean | null
   photos: File[]
 }
 
@@ -189,6 +190,7 @@ export default function PortalNearMissForm() {
     assetType: '',
     riskCategory: '',
     potentialSeverity: '',
+    isHipo: null,
     photos: [],
   })
 
@@ -304,6 +306,7 @@ export default function PortalNearMissForm() {
           potential_consequences: formData.potentialConsequences,
           preventive_action_suggested: formData.preventiveActionSuggested,
           reporter_role: formData.reporterRole,
+          is_hipo: formData.isHipo === true,
         },
       }
 
@@ -750,6 +753,32 @@ export default function PortalNearMissForm() {
                       <div className="font-medium text-foreground">{level.label}</div>
                       <div className="text-xs text-muted-foreground">{level.description}</div>
                     </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t(
+                  'portal.is_hipo',
+                  'High potential (HiPo) — could this have caused serious injury or fatality?',
+                )}
+              </span>
+              <div className="grid grid-cols-2 gap-3">
+                {[true, false].map((val) => (
+                  <button
+                    key={String(val)}
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, isHipo: val }))}
+                    className={cn(
+                      'px-4 py-3 rounded-xl border-2 font-medium transition-all',
+                      formData.isHipo === val
+                        ? 'bg-primary/10 border-primary text-foreground'
+                        : 'bg-card border-border text-muted-foreground hover:border-border-strong',
+                    )}
+                  >
+                    {val ? t('common.yes', 'Yes') : t('common.no', 'No')}
                   </button>
                 ))}
               </div>

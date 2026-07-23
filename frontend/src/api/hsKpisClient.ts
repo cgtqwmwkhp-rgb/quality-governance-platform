@@ -11,6 +11,7 @@ export interface HsKpiYear {
   hours_source?: 'manual' | 'calculated'
   injuries: number
   near_misses: number
+  hipo_near_misses: number
   rtas: number
   complaints: number
   ltis: number

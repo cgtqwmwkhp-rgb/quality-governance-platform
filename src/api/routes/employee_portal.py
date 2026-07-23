@@ -414,6 +414,19 @@ def build_rta_portal_fields(
         vehicle_registration = reporter_submission.get("pe_vehicle_other")
     witness_details = reporter_submission.get("witness_details")
     third_party_entries = reporter_submission.get("third_parties")
+    from src.domain.services.rta_injury_fields import derive_third_party_injured
+
+    third_parties_payload = (
+        {"parties": third_party_entries} if isinstance(third_party_entries, list) and third_party_entries else None
+    )
+    explicit_tp_injured = reporter_submission.get("third_party_injured")
+    if explicit_tp_injured is None and reporter_submission.get("injured") is not None:
+        # Legacy portal key used by some RTA clients
+        explicit_tp_injured = reporter_submission.get("injured")
+    third_party_injured = derive_third_party_injured(
+        third_parties_payload,
+        explicit=bool(explicit_tp_injured) if explicit_tp_injured is not None else None,
+    )
     witness_structured = None
     if isinstance(witness_details, str) and witness_details.strip():
         witness_structured = {
@@ -441,9 +454,9 @@ def build_rta_portal_fields(
         "reporter_email": report.reporter_email if not report.is_anonymous else None,
         "driver_name": display_name,
         "driver_email": report.reporter_email if not report.is_anonymous else None,
-        "third_parties": (
-            {"parties": third_party_entries} if isinstance(third_party_entries, list) and third_party_entries else None
-        ),
+        "driver_injured": bool(reporter_submission.get("driver_injured")),
+        "third_party_injured": third_party_injured,
+        "third_parties": third_parties_payload,
         "vehicles_involved_count": max(
             1,
             int(reporter_submission.get("vehicle_count") or 0) + 1,
@@ -681,6 +694,12 @@ async def submit_quick_report(
         # department is a legacy bridge from older portal clients.
         customer_code = str(reporter_submission.get("contract") or "").strip() or ((report.department or "").strip())
 
+        is_hipo = bool(
+            reporter_submission.get("is_hipo")
+            if reporter_submission.get("is_hipo") is not None
+            else reporter_submission.get("hipo")
+        )
+
         # Create Near Miss record
         near_miss = NearMiss(
             reference_number=ref_number,
@@ -691,6 +710,7 @@ async def submit_quick_report(
             event_date=datetime.now(timezone.utc),
             description=report.description,
             potential_severity=report.severity.lower(),
+            is_hipo=is_hipo,
             status="REPORTED",
             priority=priority,
             source_form_id="portal_near_miss_v1",

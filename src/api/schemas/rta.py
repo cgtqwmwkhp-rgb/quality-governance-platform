@@ -40,6 +40,7 @@ class RTABase(BaseModel):
     driver_statement: Optional[str] = None
     driver_injured: bool = False
     driver_injury_details: Optional[str] = None
+    third_party_injured: Optional[bool] = None
     third_parties: Optional[dict] = None
     witnesses: Optional[str] = None
     witnesses_structured: Optional[dict] = None
@@ -113,6 +114,7 @@ class RTAUpdate(BaseModel):
     driver_statement: Optional[str] = None
     driver_injured: Optional[bool] = None
     driver_injury_details: Optional[str] = None
+    third_party_injured: Optional[bool] = None
     third_parties: Optional[dict] = None
     witnesses: Optional[str] = None
     witnesses_structured: Optional[dict] = None
@@ -186,6 +188,7 @@ class RTAResponse(BaseModel):
     driver_statement: Optional[str] = None
     driver_injured: bool = False
     driver_injury_details: Optional[str] = None
+    third_party_injured: Optional[bool] = None
     third_parties: Optional[dict] = None
     witnesses: Optional[str] = None
     witnesses_structured: Optional[dict] = None
