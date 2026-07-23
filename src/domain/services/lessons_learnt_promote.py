@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +12,7 @@ from src.domain.models.incident import Incident
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.rta import RoadTrafficCollision
 
+CaseInstance = Union[Incident, NearMiss, RoadTrafficCollision, Complaint]
 CaseModel = Union[type[Incident], type[NearMiss], type[RoadTrafficCollision], type[Complaint]]
 
 
@@ -65,7 +66,10 @@ async def promote_lessons_to_case(
     model = model_map.get(str(entity_type).lower())
     if model is None:
         return False
-    row = (await db.execute(select(model).where(model.id == entity_id))).scalar_one_or_none()
+    row = cast(
+        Optional[CaseInstance],
+        (await db.execute(select(model).where(model.id == entity_id))).scalar_one_or_none(),
+    )
     if row is None:
         return False
     existing = row.lessons_learnt
