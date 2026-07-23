@@ -20,6 +20,7 @@ class IncidentBase(BaseModel):
     incident_date: datetime = Field(..., description="When the incident occurred")
     location: Optional[str] = Field(None, max_length=300, description="Where the incident occurred")
     department: Optional[str] = Field(None, max_length=100, description="Department involved")
+    contract_id: Optional[int] = Field(None, description="Customer/contract id (contracts.id)")
     asset_id: Optional[int] = Field(None, description="Linked Asset registry id (golden thread)")
     is_injury: bool = Field(default=False, description="Whether an injury occurred")
     body_parts: Optional[list[str]] = Field(None, description="Injured body part region ids/labels")
@@ -28,6 +29,12 @@ class IncidentBase(BaseModel):
     is_minor_injury: bool = Field(default=False, description="Minor injury flag for AFR counting")
     first_aid_given: bool = Field(default=False, description="First aid was administered")
     emergency_services_called: bool = Field(default=False, description="Emergency services attended")
+    medical_assistance: Optional[str] = Field(
+        None, max_length=50, description="Medical assistance lookup code (care pathway)"
+    )
+    emergency_services: Optional[list[str]] = Field(
+        None, description="Emergency service attendance codes (police/ambulance/fire/recovery)"
+    )
     people_involved: Optional[str] = Field(None, description="Names/details of people involved")
     is_riddor_reportable: Optional[bool] = Field(None, description="RIDDOR reportable flag")
     riddor_classification: Optional[str] = Field(None, max_length=100, description="RIDDOR classification")
@@ -82,6 +89,7 @@ class IncidentUpdate(BaseModel):
     incident_date: Optional[datetime] = None
     location: Optional[str] = Field(None, max_length=300)
     department: Optional[str] = Field(None, max_length=100)
+    contract_id: Optional[int] = Field(None, description="Customer/contract id (null clears)")
     owner_id: Optional[int] = Field(None, description="Case owner user id (null clears assignment)")
     asset_id: Optional[int] = Field(None, description="Linked Asset registry id (null clears link)")
     is_injury: Optional[bool] = None
@@ -91,6 +99,8 @@ class IncidentUpdate(BaseModel):
     is_minor_injury: Optional[bool] = None
     first_aid_given: Optional[bool] = None
     emergency_services_called: Optional[bool] = None
+    medical_assistance: Optional[str] = Field(None, max_length=50)
+    emergency_services: Optional[list[str]] = None
     people_involved: Optional[str] = None
     is_riddor_reportable: Optional[bool] = None
     riddor_classification: Optional[str] = Field(None, max_length=100)
@@ -102,6 +112,7 @@ class IncidentUpdate(BaseModel):
         "location",
         "department",
         "people_involved",
+        "medical_assistance",
         "riddor_classification",
         "riddor_rationale",
         mode="before",
@@ -144,6 +155,7 @@ class IncidentResponse(BaseModel):
     incident_date: datetime
     location: Optional[str] = None
     department: Optional[str] = None
+    contract_id: Optional[int] = None
     reported_date: datetime
     created_at: datetime
     updated_at: datetime
@@ -155,6 +167,8 @@ class IncidentResponse(BaseModel):
     immediate_actions: Optional[str] = None
     first_aid_given: bool = False
     emergency_services_called: bool = False
+    medical_assistance: Optional[str] = None
+    emergency_services: Optional[list[str]] = None
     is_injury: bool = False
     body_parts: Optional[list[str]] = None
     is_lti: bool = False

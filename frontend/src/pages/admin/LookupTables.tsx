@@ -37,6 +37,7 @@ const LOOKUP_CATEGORIES = [
   { key: CUSTOMERS_LOOKUP_CATEGORY, label: 'Customers' },
   { key: WORKFORCE_ROLES_LOOKUP_CATEGORY, label: 'Workforce Roles' },
   { key: 'medical_assistance', label: 'Medical Assistance' },
+  { key: 'emergency_services', label: 'Emergency Services' },
   { key: 'assets', label: 'Assets', kind: 'asset_types' },
 ] as const
 

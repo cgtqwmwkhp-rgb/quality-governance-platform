@@ -10,8 +10,10 @@ import {
   evidenceAssetsApi,
   getApiErrorMessage,
   lookupsApi,
+  contractsApi,
   notificationsApi,
   UserSearchResult,
+  type Contract,
 } from '../api/client'
 import { queueForSync } from '../lib/syncService'
 import { toast } from '../contexts/ToastContext'
@@ -167,6 +169,7 @@ export default function Complaints() {
   >({})
   const [formData, setFormData] = useState<ComplaintCreate>(freshComplaintForm)
   const [customerOptions, setCustomerOptions] = useState<{ value: string; label: string }[]>([])
+  const [contractsByCode, setContractsByCode] = useState<Record<string, Contract>>({})
   const [selectedCustomerCode, setSelectedCustomerCode] = useState('')
   const [customersLoaded, setCustomersLoaded] = useState(false)
   const [topicOptions, setTopicOptions] = useState<{ value: string; label: string }[]>([])
@@ -205,13 +208,19 @@ export default function Complaints() {
     setCustomersLoaded(false)
     ;(async () => {
       try {
-        const [customerRes, typeRes, severityRes] = await Promise.all([
+        const [customerRes, typeRes, severityRes, contractsRes] = await Promise.all([
           lookupsApi.list(CUSTOMERS_LOOKUP_CATEGORY, true).catch(() => ({ items: [], total: 0 })),
           lookupsApi.list('complaint_types', true).catch(() => ({ items: [], total: 0 })),
           lookupsApi.list('severity_levels', true).catch(() => ({ items: [], total: 0 })),
+          contractsApi.list(true).catch(() => ({ items: [] as Contract[], total: 0 })),
         ])
         if (cancelled) return
         setCustomerOptions(toCustomerSelectOptions(customerRes.items || []))
+        const byCode: Record<string, Contract> = {}
+        for (const contract of contractsRes.items || []) {
+          if (contract.code) byCode[contract.code.toLowerCase()] = contract
+        }
+        setContractsByCode(byCode)
         setCustomersLoaded(true)
         setTopicOptions(
           mergeLookupSelectOptions(
@@ -257,9 +266,10 @@ export default function Complaints() {
     }
     const option = customerOptions.find((o) => o.value === value)
     const label = option?.label || value
+    const matched = contractsByCode[value.toLowerCase()]
     setFormData((prev) => ({
       ...prev,
-      contract_id: null,
+      contract_id: matched?.id ?? null,
       complainant_company: label,
     }))
   }

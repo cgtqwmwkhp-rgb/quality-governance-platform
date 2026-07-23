@@ -30,6 +30,7 @@ export interface Incident {
   reported_date: string
   location?: string
   department?: string
+  contract_id?: number | null
   created_at: string
   updated_at?: string
   reporter_name?: string
@@ -39,6 +40,8 @@ export interface Incident {
   immediate_actions?: string
   first_aid_given?: boolean
   emergency_services_called?: boolean
+  medical_assistance?: string | null
+  emergency_services?: string[] | null
   is_injury?: boolean
   body_parts?: string[] | null
   is_lti?: boolean
@@ -68,6 +71,7 @@ export interface IncidentCreate {
   reported_date: string
   location?: string
   department?: string
+  contract_id?: number | null
   reporter_email?: string
   reporter_name?: string
   asset_id?: number | null
@@ -78,6 +82,8 @@ export interface IncidentCreate {
   is_minor_injury?: boolean
   first_aid_given?: boolean
   emergency_services_called?: boolean
+  medical_assistance?: string | null
+  emergency_services?: string[] | null
   people_involved?: string
   is_riddor_reportable?: boolean | null
   riddor_classification?: string | null
@@ -92,6 +98,7 @@ export interface IncidentUpdate {
   status?: string
   location?: string
   department?: string
+  contract_id?: number | null
   owner_id?: number | null
   asset_id?: number | null
   is_injury?: boolean
@@ -101,6 +108,8 @@ export interface IncidentUpdate {
   is_minor_injury?: boolean
   first_aid_given?: boolean
   emergency_services_called?: boolean
+  medical_assistance?: string | null
+  emergency_services?: string[] | null
   people_involved?: string
   is_riddor_reportable?: boolean | null
   riddor_classification?: string | null

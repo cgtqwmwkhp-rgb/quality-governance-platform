@@ -117,9 +117,12 @@ class HsExcelImportService:
             await self._create_rta_from_incident_log(row, tenant_id=tenant_id, user_id=user_id)
 
     async def _create_incident(self, row: dict[str, Any], *, tenant_id: int, user_id: Optional[int]) -> None:
+        from src.domain.services.contract_resolve import resolve_contract_id_by_code
+
         ref = await ReferenceNumberService.generate(self.db, "incident", Incident)
         body_parts = [row["body_part"]] if row.get("body_part") else None
         is_injury = bool(row.get("is_injury")) or bool(body_parts)
+        contract_id = await resolve_contract_id_by_code(self.db, tenant_id=tenant_id, code=row.get("customer"))
         incident = Incident(
             tenant_id=tenant_id,
             reference_number=ref,
@@ -131,9 +134,14 @@ class HsExcelImportService:
             reported_date=row["event_date"],
             location=row.get("role_location") or None,
             department=row.get("customer") or None,
+            contract_id=contract_id,
             reporter_name=row["reporter"],
             people_involved=row.get("person_involved") or None,
             first_aid_given=bool(row.get("medical_assistance")),
+            medical_assistance=("first-aider" if row.get("medical_assistance") else "none"),
+            # Excel Emergency Services? is on RTA Log; Incident Log has no typed list.
+            emergency_services=None,
+            emergency_services_called=False,
             is_injury=is_injury,
             body_parts=body_parts,
             is_lti=bool(row.get("is_lti")),
@@ -146,6 +154,8 @@ class HsExcelImportService:
                 "external_key": row["external_key"],
                 "notes": row.get("notes"),
                 "raw_type": row.get("raw_type"),
+                "customer": row.get("customer"),
+                "medical_assistance": ("first-aider" if row.get("medical_assistance") else "none"),
             },
             created_by_id=user_id,
             updated_by_id=user_id,

@@ -8,8 +8,10 @@ import {
   IncidentCreate,
   getApiErrorMessage,
   lookupsApi,
+  contractsApi,
   notificationsApi,
   UserSearchResult,
+  type Contract,
 } from '../api/client'
 import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
 import { trackError } from '../utils/errorTracker'
@@ -129,7 +131,9 @@ export default function Incidents() {
     severity: 'medium',
     incident_date: new Date().toISOString().slice(0, 16),
     reported_date: new Date().toISOString().slice(0, 16),
+    contract_id: null,
   })
+  const [contractOptions, setContractOptions] = useState<Contract[]>([])
   const [sessionReporterLabel, setSessionReporterLabel] = useState<string | null>(null)
   const defaultTypeOptions = [
     { value: 'injury', label: t('incidents.type.injury') },
@@ -160,6 +164,11 @@ export default function Incidents() {
     // Show translated defaults immediately; overlay Admin lookup labels when loaded.
     setTypeOptions(defaultTypeOptions)
     setSeverityOptions(defaultSeverityOptions)
+    void contractsApi.list(true).then((res) => {
+      if (!cancelled) setContractOptions(res.items || [])
+    }).catch(() => {
+      if (!cancelled) setContractOptions([])
+    })
     void resolvePlatformReporterIdentity().then((identity) => {
       if (cancelled) return
       const label =
@@ -331,6 +340,12 @@ export default function Incidents() {
     setCreating(true)
     setCreateError(null)
 
+    if (formData.contract_id == null) {
+      setCreateError(t('incidents.form.customer_required', 'Select a customer / contract'))
+      setCreating(false)
+      return
+    }
+
     if (!navigator.onLine) {
       const reporter = await resolvePlatformReporterIdentity()
       const payload = {
@@ -367,6 +382,7 @@ export default function Incidents() {
         severity: 'medium',
         incident_date: new Date().toISOString().slice(0, 16),
         reported_date: new Date().toISOString().slice(0, 16),
+        contract_id: null,
       })
     } catch (err) {
       trackError(err, { component: 'Incidents', action: 'create' })
@@ -866,6 +882,43 @@ export default function Incidents() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="incidents-field-customer"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('incidents.form.customer', 'Customer / contract')}{' '}
+                <span className="text-destructive">*</span>
+              </label>
+              <Select
+                value={formData.contract_id != null ? String(formData.contract_id) : ''}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, contract_id: value ? Number(value) : null })
+                }
+              >
+                <SelectTrigger id="incidents-field-customer">
+                  <SelectValue
+                    placeholder={t('incidents.form.select_customer', 'Select customer')}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {contractOptions.map((contract) => (
+                    <SelectItem key={contract.id} value={String(contract.id)}>
+                      {contract.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {contractOptions.length === 0 ? (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t(
+                    'incidents.form.customer_empty',
+                    'No customers configured — add them in Admin → Lookups / Contracts.',
+                  )}
+                </p>
+              ) : null}
             </div>
 
             {sessionReporterLabel ? (
