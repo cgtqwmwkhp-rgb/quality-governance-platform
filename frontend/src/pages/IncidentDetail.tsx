@@ -153,7 +153,9 @@ function buildIncidentEditForm(data: Incident): IncidentUpdate {
     is_minor_injury: data.is_minor_injury ?? false,
     first_aid_given: data.first_aid_given ?? false,
     emergency_services_called: data.emergency_services_called ?? false,
-    medical_assistance: data.medical_assistance ?? null,
+    // Hydrate from legacy first_aid_given so edit UI doesn't show "none" for old rows.
+    medical_assistance:
+      data.medical_assistance ?? (data.first_aid_given ? 'first-aider' : null),
     emergency_services: data.emergency_services ?? [],
     people_involved: data.people_involved ?? '',
     is_riddor_reportable: data.is_riddor_reportable ?? null,
