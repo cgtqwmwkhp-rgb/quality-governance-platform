@@ -981,6 +981,7 @@
   "complaints.form.company_placeholder": "Organisation (optional)",
   "complaints.form.complainant_name": "Complainant Name",
   "complaints.form.customer": "Which customer",
+  "complaints.form.contracts_unavailable": "Customer contracts could not be loaded — refresh and try again.",
   "complaints.form.customer_admin_cta": "Open Admin → Lookups → Customers",
   "complaints.form.customer_empty_body": "Complaint intake needs at least one customer in Admin → Lookups → Customers. This is a setup gap — not an empty search result.",
   "complaints.form.customer_empty_title": "No customers are configured",

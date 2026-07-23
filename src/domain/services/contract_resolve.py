@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Optional
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.form_config import Contract, LookupOption
@@ -65,8 +66,19 @@ async def resolve_contract_id_by_code(
         is_active=True,
         display_order=lookup.display_order or 0,
     )
-    db.add(contract)
-    await db.flush()
+    try:
+        async with db.begin_nested():
+            db.add(contract)
+            await db.flush()
+    except IntegrityError:
+        raced = (
+            await db.execute(
+                select(Contract).where(func.lower(Contract.code) == normalized.lower())
+            )
+        ).scalar_one_or_none()
+        if raced is not None and raced.tenant_id == tenant_id:
+            return int(raced.id)
+        return None
     return int(contract.id)
 
 

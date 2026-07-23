@@ -170,6 +170,7 @@ export default function Complaints() {
   const [formData, setFormData] = useState<ComplaintCreate>(freshComplaintForm)
   const [customerOptions, setCustomerOptions] = useState<{ value: string; label: string }[]>([])
   const [contractsByCode, setContractsByCode] = useState<Record<string, Contract>>({})
+  const [contractsLoadFailed, setContractsLoadFailed] = useState(false)
   const [selectedCustomerCode, setSelectedCustomerCode] = useState('')
   const [customersLoaded, setCustomersLoaded] = useState(false)
   const [topicOptions, setTopicOptions] = useState<{ value: string; label: string }[]>([])
@@ -206,21 +207,26 @@ export default function Complaints() {
     }
     let cancelled = false
     setCustomersLoaded(false)
+    setContractsLoadFailed(false)
     ;(async () => {
       try {
-        const [customerRes, typeRes, severityRes, contractsRes] = await Promise.all([
+        const [customerRes, typeRes, severityRes, contractsSettled] = await Promise.all([
           lookupsApi.list(CUSTOMERS_LOOKUP_CATEGORY, true).catch(() => ({ items: [], total: 0 })),
           lookupsApi.list('complaint_types', true).catch(() => ({ items: [], total: 0 })),
           lookupsApi.list('severity_levels', true).catch(() => ({ items: [], total: 0 })),
-          contractsApi.list(true).catch(() => ({ items: [] as Contract[], total: 0 })),
+          contractsApi.list(true).then(
+            (res) => ({ ok: true as const, res }),
+            () => ({ ok: false as const, res: { items: [] as Contract[], total: 0 } }),
+          ),
         ])
         if (cancelled) return
         setCustomerOptions(toCustomerSelectOptions(customerRes.items || []))
         const byCode: Record<string, Contract> = {}
-        for (const contract of contractsRes.items || []) {
+        for (const contract of contractsSettled.res.items || []) {
           if (contract.code) byCode[contract.code.toLowerCase()] = contract
         }
         setContractsByCode(byCode)
+        setContractsLoadFailed(!contractsSettled.ok)
         setCustomersLoaded(true)
         setTopicOptions(
           mergeLookupSelectOptions(
@@ -235,6 +241,7 @@ export default function Complaints() {
       } catch (err) {
         if (!cancelled) {
           setCustomersLoaded(true)
+          setContractsLoadFailed(true)
           trackError(err, { component: 'Complaints', action: 'loadCreateLookups' })
           setTopicOptions(
             COMPLAINT_TYPE_VALUES.map((code) => ({
@@ -421,6 +428,15 @@ export default function Complaints() {
         t(
           'complaints.form.customer_unavailable',
           'No customers are available — add customers in Admin → Lookups before creating a complaint.',
+        ),
+      )
+      return
+    }
+    if (contractsLoadFailed) {
+      setFormError(
+        t(
+          'complaints.form.contracts_unavailable',
+          'Customer contracts could not be loaded — refresh and try again.',
         ),
       )
       return
