@@ -277,45 +277,51 @@ Requirements:
 
     async def _theme_from_case(self, tenant_id: int, ref: dict[str, Any]) -> str:
         ctype = str(ref.get("type") or "").lower()
+        raw_id = ref.get("id")
+        if raw_id is None:
+            return ""
         try:
-            cid = int(ref.get("id"))
+            cid = int(raw_id)
         except (TypeError, ValueError):
             return ""
         try:
             if ctype == "incident":
                 from src.domain.models.incident import Incident
 
-                row = (
+                incident = (
                     await self.db.execute(select(Incident).where(Incident.tenant_id == tenant_id, Incident.id == cid))
                 ).scalar_one_or_none()
-                if row:
-                    return f"Incident {row.reference_number}: {(row.title or '')[:120]}"
+                if incident:
+                    return f"Incident {incident.reference_number}: {(incident.title or '')[:120]}"
             if ctype in {"near_miss", "near-miss", "nearmiss"}:
                 from src.domain.models.near_miss import NearMiss
 
-                row = (
+                near_miss = (
                     await self.db.execute(select(NearMiss).where(NearMiss.tenant_id == tenant_id, NearMiss.id == cid))
                 ).scalar_one_or_none()
-                if row:
-                    return f"Near miss {row.reference_number}: {(row.description or '')[:120]}"
+                if near_miss:
+                    return f"Near miss {near_miss.reference_number}: {(near_miss.description or '')[:120]}"
             if ctype == "rta":
                 from src.domain.models.rta import RTA
 
-                row = (
+                rta = (
                     await self.db.execute(select(RTA).where(RTA.tenant_id == tenant_id, RTA.id == cid))
                 ).scalar_one_or_none()
-                if row:
-                    return f"RTA {row.reference_number}: {(row.description or '')[:120]}"
+                if rta:
+                    return f"RTA {rta.reference_number}: {(rta.description or '')[:120]}"
             if ctype == "complaint":
                 from src.domain.models.complaint import Complaint
 
-                row = (
+                complaint = (
                     await self.db.execute(
                         select(Complaint).where(Complaint.tenant_id == tenant_id, Complaint.id == cid)
                     )
                 ).scalar_one_or_none()
-                if row:
-                    return f"Complaint {row.reference_number}: {(row.description or row.title or '')[:120]}"
+                if complaint:
+                    return (
+                        f"Complaint {complaint.reference_number}: "
+                        f"{(complaint.description or complaint.title or '')[:120]}"
+                    )
         except Exception as exc:  # noqa: BLE001
             logger.info("Case theme load failed: %s", type(exc).__name__)
         return ""
