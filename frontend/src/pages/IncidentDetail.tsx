@@ -183,6 +183,10 @@ export default function IncidentDetail() {
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editForm, setEditForm] = useState<IncidentUpdate>({})
+  const [careFieldsTouched, setCareFieldsTouched] = useState({
+    medical: false,
+    emergency: false,
+  })
   const defaultTypeOptions = [
     { value: 'injury', label: t('incidents.type.injury') },
     { value: 'near_miss', label: t('incidents.type.near_miss') },
@@ -385,19 +389,18 @@ export default function IncidentDetail() {
       if (payload.status === incident.status) {
         delete payload.status
       }
-      // Omit unchanged care fields to preserve legacy flags on old incidents.
-      if (payload.medical_assistance === incident.medical_assistance) {
+      // Only send care fields when the editor touched them so unrelated saves
+      // keep legacy booleans, while an intentional clear still re-derives.
+      if (!careFieldsTouched.medical) {
         delete payload.medical_assistance
       }
-      if (
-        JSON.stringify(payload.emergency_services || []) ===
-        JSON.stringify(incident.emergency_services || [])
-      ) {
+      if (!careFieldsTouched.emergency) {
         delete payload.emergency_services
       }
       const response = await incidentsApi.update(incident.id, payload)
       setIncident(response.data)
       setEditForm(buildIncidentEditForm(response.data))
+      setCareFieldsTouched({ medical: false, emergency: false })
       setIsEditing(false)
       toast.success(t('incidents.detail.save_success', 'Incident updated'))
     } catch (err) {
@@ -414,7 +417,13 @@ export default function IncidentDetail() {
     if (incident) {
       setEditForm(buildIncidentEditForm(incident))
     }
+    setCareFieldsTouched({ medical: false, emergency: false })
     setIsEditing(false)
+  }
+
+  const startEditing = () => {
+    setCareFieldsTouched({ medical: false, emergency: false })
+    setIsEditing(true)
   }
 
   const toggleBodyPart = (part: string) => {
@@ -836,7 +845,7 @@ export default function IncidentDetail() {
                   {raisingRisk ? 'Raising…' : 'Raise risk'}
                 </Button>
               )}
-              <Button variant="outline" onClick={() => setIsEditing(true)}>
+              <Button variant="outline" onClick={startEditing}>
                 <Pencil className="w-4 h-4 mr-2" />
                 {t('edit')}
               </Button>
@@ -1167,9 +1176,10 @@ export default function IncidentDetail() {
                             </label>
                             <Select
                               value={editForm.medical_assistance || 'none'}
-                              onValueChange={(value) =>
+                              onValueChange={(value) => {
+                                setCareFieldsTouched((prev) => ({ ...prev, medical: true }))
                                 setEditForm({ ...editForm, medical_assistance: value })
-                              }
+                              }}
                             >
                               <SelectTrigger id="incident-medical-assistance" className="mt-1">
                                 <SelectValue />
@@ -1205,6 +1215,10 @@ export default function IncidentDetail() {
                                         const next = e.target.checked
                                           ? [...current, opt.value]
                                           : current.filter((code) => code !== opt.value)
+                                        setCareFieldsTouched((prev) => ({
+                                          ...prev,
+                                          emergency: true,
+                                        }))
                                         setEditForm({ ...editForm, emergency_services: next })
                                       }}
                                     />
