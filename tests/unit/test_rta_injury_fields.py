@@ -1,9 +1,6 @@
 """Unit tests for RTA third_party_injured rollup helpers."""
 
-from src.domain.services.rta_injury_fields import (
-    derive_third_party_injured,
-    seed_third_parties_for_injury,
-)
+from src.domain.services.rta_injury_fields import derive_third_party_injured, seed_third_parties_for_injury
 
 
 def test_derive_from_parties_any_injured():

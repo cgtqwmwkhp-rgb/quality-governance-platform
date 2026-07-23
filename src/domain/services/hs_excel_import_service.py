@@ -238,10 +238,7 @@ class HsExcelImportService:
         )
 
     async def _create_rta(self, row: dict[str, Any], *, tenant_id: int, user_id: Optional[int]) -> None:
-        from src.domain.services.rta_injury_fields import (
-            derive_third_party_injured,
-            seed_third_parties_for_injury,
-        )
+        from src.domain.services.rta_injury_fields import derive_third_party_injured, seed_third_parties_for_injury
 
         ref = await ReferenceNumberService.generate(self.db, "rta", RoadTrafficCollision)
         closed = bool(row.get("closed"))
