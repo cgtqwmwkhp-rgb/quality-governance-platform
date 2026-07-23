@@ -3702,5 +3702,6 @@
   "auditBuilder.scope.complaints": "Complaints",
   "auditBuilder.scope.engineers": "Engineers / competency",
   "auditBuilder.scope.documents": "Documents",
-  "auditBuilder.auditThisRisk": "Audit this risk"
+  "auditBuilder.auditThisRisk": "Audit this risk",
+  "common.back": "Back"
 }

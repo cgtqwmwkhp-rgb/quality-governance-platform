@@ -124,6 +124,7 @@ class TestSearchServiceSearch:
     async def test_search_returns_dict_structure(self, mock_metric, service):
         for method in (
             "_search_incidents",
+            "_search_near_misses",
             "_search_rtas",
             "_search_complaints",
             "_search_risks",
@@ -169,6 +170,7 @@ class TestSearchServiceSearch:
         ]
         for method in (
             "_search_incidents",
+            "_search_near_misses",
             "_search_rtas",
             "_search_complaints",
             "_search_risks",
@@ -210,6 +212,7 @@ class TestSearchServiceSearch:
         ]
         for method in (
             "_search_incidents",
+            "_search_near_misses",
             "_search_rtas",
             "_search_complaints",
             "_search_risks",
@@ -241,6 +244,7 @@ class TestSearchServiceSearch:
         ]
         for method in (
             "_search_incidents",
+            "_search_near_misses",
             "_search_rtas",
             "_search_complaints",
             "_search_risks",
@@ -282,6 +286,7 @@ class TestSearchServiceSearch:
         ]
         for method in (
             "_search_incidents",
+            "_search_near_misses",
             "_search_rtas",
             "_search_complaints",
             "_search_risks",
@@ -332,6 +337,7 @@ class TestSearchServiceSearch:
         ]
         for method in (
             "_search_incidents",
+            "_search_near_misses",
             "_search_rtas",
             "_search_complaints",
             "_search_risks",
@@ -351,6 +357,7 @@ class TestSearchServiceSearch:
     async def test_search_tracks_metrics(self, mock_metric, service):
         for method in (
             "_search_incidents",
+            "_search_near_misses",
             "_search_rtas",
             "_search_complaints",
             "_search_risks",

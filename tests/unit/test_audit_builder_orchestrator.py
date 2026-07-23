@@ -6,10 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.domain.services.audit_builder_orchestrator import (
-    AuditBuilderOrchestrator,
-    _overlap_score,
-)
+from src.domain.services.audit_builder_orchestrator import AuditBuilderOrchestrator, _overlap_score
 from src.domain.services.library_horizon_adapter import (
     NoopLiveHorizonProvider,
     PerplexityLiveHorizonProvider,

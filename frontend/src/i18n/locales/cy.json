@@ -3547,5 +3547,6 @@
   "auditBuilder.scope.complaints": "Cwynion",
   "auditBuilder.scope.engineers": "Peirianwyr / cymhwysedd",
   "auditBuilder.scope.documents": "Dogfennau",
-  "auditBuilder.auditThisRisk": "Archwilio'r risg hwn"
+  "auditBuilder.auditThisRisk": "Archwilio'r risg hwn",
+  "common.back": "Yn ôl"
 }
