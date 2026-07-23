@@ -105,8 +105,10 @@ def test_rta_submission_helper_preserves_snapshot_and_operational_brief():
                     "vehicle_reg": "AB12 CDE",
                     "name": "Third Party Driver",
                     "phone": "07999999999",
+                    "injured": True,
                 }
             ],
+            "third_party_injured": True,
             "police_ref": "POL-42",
             "has_dashcam": True,
             "has_cctv": True,
@@ -128,3 +130,4 @@ def test_rta_submission_helper_preserves_snapshot_and_operational_brief():
     assert fields["dashcam_footage_available"] is True
     assert fields["collision_date"].date().isoformat() == "2026-03-16"
     assert fields["third_parties"]["parties"][0]["vehicle_reg"] == "AB12 CDE"
+    assert fields["third_party_injured"] is True

@@ -264,6 +264,9 @@ class PortalService:
         priority = priority_map.get(data.get("severity", "medium").lower(), "MEDIUM")
 
         display_name = _resolve_portal_display_name(data, is_anonymous=is_anonymous)
+        raw_submission = data.get("reporter_submission")
+        submission: dict[str, Any] = raw_submission if isinstance(raw_submission, dict) else {}
+        is_hipo = bool(data.get("is_hipo") if data.get("is_hipo") is not None else submission.get("is_hipo"))
         near_miss = NearMiss(
             reference_number=ref_number,
             reporter_name=display_name,
@@ -273,6 +276,7 @@ class PortalService:
             event_date=datetime.now(timezone.utc),
             description=data["description"],
             potential_severity=data.get("severity", "medium").lower(),
+            is_hipo=is_hipo,
             status="REPORTED",
             priority=priority,
             tenant_id=self.tenant_id,

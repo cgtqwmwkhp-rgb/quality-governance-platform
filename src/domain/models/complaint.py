@@ -168,6 +168,7 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     closure_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    lessons_learnt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
     actions: Mapped[List["ComplaintAction"]] = relationship(

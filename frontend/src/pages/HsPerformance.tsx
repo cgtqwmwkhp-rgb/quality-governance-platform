@@ -8,6 +8,7 @@ import type { HsExcelImportDryRun, HsKpiSummary } from '../api/hsKpisClient'
 const metrics = [
   ['injuries', 'Injuries'],
   ['near_misses', 'Near misses'],
+  ['hipo_near_misses', 'HiPo near misses'],
   ['rtas', 'RTAs'],
   ['ltis', 'LTIs'],
   ['riddor', 'RIDDOR'],
@@ -94,6 +95,24 @@ export default function HsPerformance() {
           </Card>
         ))}
       </div>
+      {latest?.lessons_learnt_extract && latest.lessons_learnt_extract.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>SLT lessons extract (latest year)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {latest.lessons_learnt_extract.map((row) => (
+              <div key={`${row.module}-${row.reference}`} className="border-b border-border pb-2">
+                <p className="text-sm font-medium text-foreground">
+                  {row.module} · {row.reference} · {row.date}
+                </p>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{row.lessons_learnt}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Reporting years</CardTitle>
@@ -107,6 +126,7 @@ export default function HsPerformance() {
                 <th>Source</th>
                 <th>Injuries</th>
                 <th>Near misses</th>
+                <th>HiPo</th>
                 <th>RTAs</th>
                 <th>LTIs</th>
                 <th>RIDDOR</th>
@@ -124,6 +144,7 @@ export default function HsPerformance() {
                   </td>
                   <td>{year.injuries}</td>
                   <td>{year.near_misses}</td>
+                  <td>{year.hipo_near_misses ?? 0}</td>
                   <td>{year.rtas}</td>
                   <td>{year.ltis}</td>
                   <td>{year.riddor}</td>

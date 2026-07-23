@@ -53,6 +53,63 @@ class HsKpiService:
         )
         return int((await self.db.execute(query)).scalar() or 0)
 
+    async def _lessons_extract(self, tenant_id: int, start: date, end: date) -> list[dict[str, Any]]:
+        """Closed-case lessons for SLT extract in the reporting period."""
+        start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
+        end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+        rows: list[dict[str, Any]] = []
+
+        async def _pull(model, date_field, module: str, status_closed) -> None:
+            result = await self.db.execute(
+                select(model.reference_number, date_field, model.lessons_learnt)
+                .where(
+                    model.tenant_id == tenant_id,
+                    date_field >= start_dt,
+                    date_field <= end_dt,
+                    model.lessons_learnt.is_not(None),
+                    model.lessons_learnt != "",
+                    status_closed,
+                )
+                .order_by(date_field.desc())
+                .limit(50)
+            )
+            for ref, event_dt, text in result.all():
+                rows.append(
+                    {
+                        "module": module,
+                        "reference": ref,
+                        "date": event_dt.date().isoformat() if hasattr(event_dt, "date") else str(event_dt),
+                        "lessons_learnt": text,
+                    }
+                )
+
+        await _pull(
+            Incident,
+            Incident.incident_date,
+            "incident",
+            Incident.status == "closed",
+        )
+        await _pull(
+            NearMiss,
+            NearMiss.event_date,
+            "near_miss",
+            NearMiss.status == "CLOSED",
+        )
+        await _pull(
+            RoadTrafficCollision,
+            RoadTrafficCollision.collision_date,
+            "rta",
+            RoadTrafficCollision.status == "closed",
+        )
+        await _pull(
+            Complaint,
+            Complaint.received_date,
+            "complaint",
+            Complaint.status == "closed",
+        )
+        rows.sort(key=lambda r: r["date"], reverse=True)
+        return rows[:50]
+
     async def period_summary(self, period: HsReportingPeriod) -> dict[str, Any]:
         start, end = period.period_start, period.period_end
         injuries = await self._count(
@@ -110,6 +167,14 @@ class HsKpiService:
             "hours_source": "manual" if period.manual_hours is not None and period.manual_hours > 0 else "calculated",
             "injuries": injuries,
             "near_misses": await self._count(NearMiss, NearMiss.event_date, period.tenant_id, start, end),
+            "hipo_near_misses": await self._count(
+                NearMiss,
+                NearMiss.event_date,
+                period.tenant_id,
+                start,
+                end,
+                NearMiss.is_hipo.is_(True),
+            ),
             "rtas": rtas,
             "complaints": await self._count(Complaint, Complaint.received_date, period.tenant_id, start, end),
             "ltis": incident_ltis + rta_ltis,
@@ -117,6 +182,7 @@ class HsKpiService:
             "ltifr": rate_per_100000(count=incident_ltis + rta_ltis, hours=hours),
             "afr": rate_per_100000(count=injuries, hours=hours),
             "rate_unit": RATE_UNIT,
+            "lessons_learnt_extract": await self._lessons_extract(period.tenant_id, start, end),
         }
 
     async def summary(self, tenant_id: int) -> dict[str, Any]:

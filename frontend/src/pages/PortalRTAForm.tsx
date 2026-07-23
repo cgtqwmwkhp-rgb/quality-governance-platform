@@ -164,6 +164,7 @@ interface FormData {
   speed: string
   hasDashcam: boolean | null
   hasCCTV: boolean | null
+  thirdPartyInjured: boolean | null
   fullDescription: string
   photos: File[]
 }
@@ -216,6 +217,7 @@ export default function PortalRTAForm() {
     speed: '',
     hasDashcam: null,
     hasCCTV: null,
+    thirdPartyInjured: null,
     fullDescription: '',
     photos: [],
   })
@@ -325,8 +327,11 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
           insurer: party.insuranceCompany,
           insurer_policy_number: party.policyNumber,
           damage: party.damage,
-          injured: party.hasInjuries ?? false,
+          injured: party.hasInjuries ?? formData.thirdPartyInjured === true,
         })),
+        third_party_injured:
+          formData.thirdPartyInjured === true ||
+          formData.thirdParties.some((party) => party.hasInjuries === true),
         impact_point: formData.impactPoint || null,
         damage_description: formData.damageDescription,
         is_drivable: formData.isDrivable,
@@ -718,6 +723,36 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
               </p>
             </div>
 
+            {formData.vehicleCount > 0 ? (
+              <div>
+                <span className="block text-sm font-medium text-foreground mb-2">
+                  {t(
+                    'portal.third_party_injured',
+                    'Anyone in other vehicle(s) injured?',
+                  )}
+                </span>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  {[true, false].map((val) => (
+                    <button
+                      key={String(val)}
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({ ...prev, thirdPartyInjured: val }))
+                      }
+                      className={cn(
+                        'px-4 py-3 rounded-xl border-2 font-medium transition-all',
+                        formData.thirdPartyInjured === val
+                          ? 'bg-primary/10 border-primary text-foreground'
+                          : 'bg-card border-border text-muted-foreground hover:border-border-strong',
+                      )}
+                    >
+                      {val ? t('common.yes', 'Yes') : t('common.no', 'No')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             {formData.thirdParties.map((party, index) => (
               <Card key={index} className="p-4 space-y-3">
                 <h3 className="font-semibold text-foreground flex items-center gap-2">
@@ -761,6 +796,30 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
                     className="text-sm"
                   />
                 </div>
+                {formData.thirdPartyInjured === true ? (
+                  <div>
+                    <span className="block text-xs font-medium text-muted-foreground mb-2">
+                      {t('portal.party_injured', 'This party injured?')}
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[true, false].map((val) => (
+                        <button
+                          key={String(val)}
+                          type="button"
+                          onClick={() => updateThirdParty(index, 'hasInjuries', val)}
+                          className={cn(
+                            'px-3 py-2 rounded-lg border text-sm font-medium transition-all',
+                            party.hasInjuries === val
+                              ? 'bg-primary/10 border-primary text-foreground'
+                              : 'bg-card border-border text-muted-foreground',
+                          )}
+                        >
+                          {val ? t('common.yes', 'Yes') : t('common.no', 'No')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </Card>
             ))}
 

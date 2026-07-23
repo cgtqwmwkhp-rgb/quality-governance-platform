@@ -101,6 +101,7 @@ class ComplaintUpdate(BaseModel):
     investigation_notes: Optional[str] = None
     root_cause: Optional[str] = None
     resolution_summary: Optional[str] = None
+    lessons_learnt: Optional[str] = None
     customer_satisfied: Optional[bool] = None
     owner_id: Optional[int] = Field(None, description="Case owner user id (null clears assignment)")
 
@@ -159,6 +160,7 @@ class ComplaintResponse(BaseModel):
     status: ComplaintStatus
     target_resolution_date: Optional[datetime] = None
     resolution_summary: Optional[str] = None
+    lessons_learnt: Optional[str] = None
     investigation_notes: Optional[str] = None
     root_cause: Optional[str] = None
     customer_satisfied: Optional[bool] = None

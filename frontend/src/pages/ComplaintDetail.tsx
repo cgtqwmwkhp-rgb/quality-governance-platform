@@ -215,6 +215,7 @@ export default function ComplaintDetail() {
         complainant_email: response.data.complainant_email,
         complainant_phone: response.data.complainant_phone,
         resolution_summary: response.data.resolution_summary,
+        lessons_learnt: response.data.lessons_learnt ?? '',
       })
       loadActions()
       loadInvestigations(complaintId)
@@ -279,6 +280,16 @@ export default function ComplaintDetail() {
 
   const handleSaveEdit = async () => {
     if (!complaint) return
+    const { confirmCloseWithoutLessons } = await import('../lib/lessonsCloseGate')
+    if (
+      !confirmCloseWithoutLessons({
+        nextStatus: editForm.status,
+        previousStatus: complaint.status,
+        lessons: editForm.lessons_learnt,
+      })
+    ) {
+      return
+    }
     setSaving(true)
     try {
       const response = await complaintsApi.update(complaint.id, editForm)
@@ -304,6 +315,7 @@ export default function ComplaintDetail() {
         complainant_email: complaint.complainant_email,
         complainant_phone: complaint.complainant_phone,
         resolution_summary: complaint.resolution_summary,
+        lessons_learnt: complaint.lessons_learnt ?? '',
       })
     }
     setIsEditing(false)
@@ -1040,18 +1052,49 @@ export default function ComplaintDetail() {
                 </CardHeader>
                 <CardContent>
                   {isEditing ? (
-                    <Textarea
-                      value={editForm.resolution_summary || ''}
-                      onChange={(e) =>
-                        setEditForm({ ...editForm, resolution_summary: e.target.value })
-                      }
-                      rows={4}
-                      placeholder={t('complaints.detail.resolution_placeholder')}
-                    />
+                    <div className="space-y-4">
+                      <Textarea
+                        value={editForm.resolution_summary || ''}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, resolution_summary: e.target.value })
+                        }
+                        rows={4}
+                        placeholder={t('complaints.detail.resolution_placeholder')}
+                      />
+                      <div>
+                        <label
+                          htmlFor="complaint-lessons-learnt"
+                          className="text-sm font-medium text-muted-foreground"
+                        >
+                          {t('complaints.detail.lessons_learnt', 'Lessons learnt')}
+                        </label>
+                        <Textarea
+                          id="complaint-lessons-learnt"
+                          className="mt-1"
+                          value={editForm.lessons_learnt || ''}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, lessons_learnt: e.target.value })
+                          }
+                          rows={3}
+                        />
+                      </div>
+                    </div>
                   ) : (
-                    <p className="text-foreground whitespace-pre-wrap">
-                      {complaint.resolution_summary || t('complaints.detail.no_resolution')}
-                    </p>
+                    <div className="space-y-4">
+                      <p className="text-foreground whitespace-pre-wrap">
+                        {complaint.resolution_summary || t('complaints.detail.no_resolution')}
+                      </p>
+                      {complaint.lessons_learnt ? (
+                        <div>
+                          <p className="text-sm font-medium text-muted-foreground mb-1">
+                            {t('complaints.detail.lessons_learnt', 'Lessons learnt')}
+                          </p>
+                          <p className="text-foreground whitespace-pre-wrap">
+                            {complaint.lessons_learnt}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
                   )}
                 </CardContent>
               </Card>

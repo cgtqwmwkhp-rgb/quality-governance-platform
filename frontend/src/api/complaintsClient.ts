@@ -51,6 +51,7 @@ export interface Complaint {
   investigation_notes?: string
   root_cause?: string
   resolution_summary?: string
+  lessons_learnt?: string | null
   customer_satisfied?: boolean
   compensation_offered?: string
   owner_id?: number
@@ -103,6 +104,7 @@ export interface ComplaintUpdate {
   customer_satisfied?: boolean
   compensation_offered?: string
   resolution_summary?: string
+  lessons_learnt?: string | null
   owner_id?: number | null
 }
 

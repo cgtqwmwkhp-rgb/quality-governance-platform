@@ -7,6 +7,7 @@ import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
 import { resolveIncidentDetailTab } from './incidentStandardsTab'
 import { displayIncidentText } from './incidentTextDisplay'
+import { confirmCloseWithoutLessons } from '../lib/lessonsCloseGate'
 import {
   ArrowLeft,
   AlertTriangle,
@@ -161,6 +162,7 @@ function buildIncidentEditForm(data: Incident): IncidentUpdate {
     is_riddor_reportable: data.is_riddor_reportable ?? null,
     riddor_classification: data.riddor_classification ?? '',
     riddor_rationale: data.riddor_rationale ?? '',
+    lessons_learnt: data.lessons_learnt ?? '',
   }
 }
 
@@ -384,6 +386,15 @@ export default function IncidentDetail() {
 
   const handleSaveEdit = async () => {
     if (!incident) return
+    if (
+      !confirmCloseWithoutLessons({
+        nextStatus: editForm.status,
+        previousStatus: incident.status,
+        lessons: editForm.lessons_learnt,
+      })
+    ) {
+      return
+    }
     setSaving(true)
     try {
       // Omit unchanged status so no-op edits never hit transition validation.
@@ -1074,6 +1085,27 @@ export default function IncidentDetail() {
                               </SelectItem>
                             </SelectContent>
                           </Select>
+                        </div>
+                        <div className="md:col-span-2">
+                          <label
+                            htmlFor="incident-lessons-learnt"
+                            className="text-sm font-medium text-muted-foreground"
+                          >
+                            {t('incidents.detail.lessons_learnt', 'Lessons learnt')}
+                          </label>
+                          <Textarea
+                            id="incident-lessons-learnt"
+                            value={editForm.lessons_learnt || ''}
+                            onChange={(e) =>
+                              setEditForm({ ...editForm, lessons_learnt: e.target.value })
+                            }
+                            className="mt-1"
+                            rows={3}
+                            placeholder={t(
+                              'incidents.detail.lessons_learnt_placeholder',
+                              'What should the organisation learn from this case?',
+                            )}
+                          />
                         </div>
                         <div>
                           <label

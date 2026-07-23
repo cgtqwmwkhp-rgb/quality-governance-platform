@@ -93,6 +93,8 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
     driver_statement: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     driver_injured: Mapped[bool] = mapped_column(Boolean, default=False)
     driver_injury_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Rollup from third_parties.parties[].injured (null = unknown / no parties)
+    third_party_injured: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
     # Reporter details (if different from driver)
     reporter_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
@@ -153,6 +155,7 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     closure_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    lessons_learnt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
     actions: Mapped[List["RTAAction"]] = relationship(

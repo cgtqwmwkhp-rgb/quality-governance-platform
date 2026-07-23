@@ -45,6 +45,8 @@ export interface NearMiss {
   asset_id?: number | null
   risk_category?: string
   potential_severity?: string
+  /** High Potential near miss (Excel HiPo); near-miss analogue of Incident pSIF. */
+  is_hipo?: boolean
   /** Comma-separated risk register IDs linked from this near miss. */
   linked_risk_ids?: string
   status: string
@@ -52,6 +54,7 @@ export interface NearMiss {
   assigned_to_id?: number
   assigned_at?: string
   resolution_notes?: string
+  lessons_learnt?: string | null
   corrective_actions_taken?: string
   closed_at?: string
   created_at: string
@@ -81,6 +84,7 @@ export interface NearMissCreate {
   asset_id?: number | null
   risk_category?: string
   potential_severity?: string
+  is_hipo?: boolean
 }
 
 export interface NearMissUpdate {
@@ -91,9 +95,11 @@ export interface NearMissUpdate {
   priority?: string
   assigned_to_id?: number
   resolution_notes?: string
+  lessons_learnt?: string | null
   corrective_actions_taken?: string
   risk_category?: string
   potential_severity?: string
+  is_hipo?: boolean
   asset_id?: number | null
   asset_number?: string
   asset_type?: string

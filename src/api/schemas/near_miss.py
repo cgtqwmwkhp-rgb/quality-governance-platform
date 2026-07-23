@@ -39,6 +39,7 @@ class NearMissBase(BaseModel):
 
     risk_category: Optional[str] = None
     potential_severity: Optional[str] = Field(None, pattern="^(low|medium|high|critical)$")
+    is_hipo: bool = False
 
 
 class NearMissCreate(NearMissBase):
@@ -70,10 +71,12 @@ class NearMissUpdate(BaseModel):
     assigned_to_id: Optional[int] = None
 
     resolution_notes: Optional[str] = None
+    lessons_learnt: Optional[str] = None
     corrective_actions_taken: Optional[str] = None
 
     risk_category: Optional[str] = None
     potential_severity: Optional[str] = Field(None, pattern="^(low|medium|high|critical)$")
+    is_hipo: Optional[bool] = None
     asset_id: Optional[int] = Field(None, description="Linked Asset registry id (null clears link)")
     asset_number: Optional[str] = None
     asset_type: Optional[str] = None
@@ -132,12 +135,14 @@ class NearMissResponse(BaseModel):
     asset_id: Optional[int] = None
     risk_category: Optional[str] = None
     potential_severity: Optional[str] = None
+    is_hipo: bool = False
     linked_risk_ids: Optional[str] = None
     status: str
     priority: str
     assigned_to_id: Optional[int] = None
     assigned_at: Optional[datetime] = None
     resolution_notes: Optional[str] = None
+    lessons_learnt: Optional[str] = None
     corrective_actions_taken: Optional[str] = None
     closed_at: Optional[datetime] = None
     attachments: Optional[str] = None

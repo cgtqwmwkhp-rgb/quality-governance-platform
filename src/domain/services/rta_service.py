@@ -40,9 +40,19 @@ class RTAService:
         request_id: str | None = None,
     ) -> RoadTrafficCollision:
         """Create a new RTA with auto-generated reference number."""
+        from src.domain.services.rta_injury_fields import derive_third_party_injured
+
         ref_number = await ReferenceNumberService.generate(self.db, "rta", RoadTrafficCollision)
+        payload = rta_data.model_dump()
+        if "third_party_injured" not in payload or payload.get("third_party_injured") is None:
+            payload["third_party_injured"] = derive_third_party_injured(payload.get("third_parties"))
+        elif payload.get("third_parties") is not None:
+            # Prefer structured parties when present; keep explicit only when no parties.
+            derived = derive_third_party_injured(payload.get("third_parties"))
+            if derived is not None:
+                payload["third_party_injured"] = derived
         rta = RoadTrafficCollision(
-            **rta_data.model_dump(),
+            **payload,
             reference_number=ref_number,
             tenant_id=tenant_id,
             created_by_id=user_id,
@@ -133,8 +143,19 @@ class RTAService:
         Raises:
             LookupError: If not found.
         """
+        from src.domain.services.rta_injury_fields import derive_third_party_injured
+
         rta = await self.get_rta(rta_id, tenant_id)
         update_data = apply_updates(rta, rta_data)
+        raw = rta_data.model_dump(exclude_unset=True)
+        if "third_parties" in raw or "third_party_injured" in raw:
+            explicit = raw.get("third_party_injured") if "third_party_injured" in raw else None
+            parties = rta.third_parties if "third_parties" not in raw else raw.get("third_parties")
+            if "third_parties" in raw:
+                rta.third_party_injured = derive_third_party_injured(parties, explicit=explicit)
+            elif explicit is not None:
+                rta.third_party_injured = bool(explicit)
+            update_data["third_party_injured"] = rta.third_party_injured
         rta.updated_by_id = user_id
 
         await record_audit_event(

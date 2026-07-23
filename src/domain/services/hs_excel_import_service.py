@@ -147,9 +147,12 @@ class HsExcelImportService:
             is_lti=bool(row.get("is_lti")),
             is_minor_injury=bool(row.get("is_minor_injury")),
             is_riddor_reportable=row.get("is_riddor"),
+            # Injury Log "HiPo Near Miss?" maps to pSIF on injury incidents only.
+            # Near-miss rows use NearMiss.is_hipo — see _create_near_miss.
             is_psif=bool(row.get("is_hipo")),
             source_type="api",
             source_form_id=SOURCE_FORM_ID,
+            lessons_learnt=row.get("notes") or None,
             reporter_submission={
                 "external_key": row["external_key"],
                 "notes": row.get("notes"),
@@ -177,6 +180,8 @@ class HsExcelImportService:
             status="CLOSED" if row["closed"] else "REPORTED",
             source_form_id=SOURCE_FORM_ID,
             potential_consequences=row.get("notes") or None,
+            lessons_learnt=row.get("notes") or None,
+            is_hipo=bool(row.get("is_hipo")),
             created_by_id=user_id,
             updated_by_id=user_id,
             closed_at=row["event_date"] if row["closed"] else None,
@@ -198,6 +203,7 @@ class HsExcelImportService:
             complainant_company=row.get("customer") or None,
             source_type="api",
             source_form_id=SOURCE_FORM_ID,
+            lessons_learnt=row.get("notes") or None,
             created_by_id=user_id,
             updated_by_id=user_id,
             closed_at=row["event_date"] if row["closed"] else None,
@@ -232,11 +238,18 @@ class HsExcelImportService:
         )
 
     async def _create_rta(self, row: dict[str, Any], *, tenant_id: int, user_id: Optional[int]) -> None:
+        from src.domain.services.rta_injury_fields import derive_third_party_injured, seed_third_parties_for_injury
+
         ref = await ReferenceNumberService.generate(self.db, "rta", RoadTrafficCollision)
         closed = bool(row.get("closed"))
         event_date = row["event_date"]
         if event_date.tzinfo is None:
             event_date = event_date.replace(tzinfo=timezone.utc)
+        # Excel column is third_party_injury (Y/N); platform field is third_party_injured.
+        tp_injured = bool(row.get("third_party_injury")) if row.get("third_party_injury") is not None else None
+        if tp_injured is None and row.get("third_party_injured") is not None:
+            tp_injured = bool(row.get("third_party_injured"))
+        third_parties = seed_third_parties_for_injury(None, injured=bool(tp_injured))
         rta = RoadTrafficCollision(
             tenant_id=tenant_id,
             reference_number=ref,
@@ -254,12 +267,15 @@ class HsExcelImportService:
             company_vehicle_damage=row.get("damage") or None,
             driver_name=row.get("employee") or None,
             driver_injured=bool(row.get("employee_injured")),
+            third_party_injured=derive_third_party_injured(third_parties, explicit=tp_injured),
+            third_parties=third_parties,
             police_attended=bool(row.get("emergency_services")),
             collision_type=row.get("collision_type"),
             vehicle_drivable=row.get("drivable"),
             is_lti=bool(row.get("is_lti")),
             is_riddor_reportable=row.get("is_riddor"),
             source_form_id=SOURCE_FORM_ID,
+            lessons_learnt=row.get("notes") or None,
             reporter_submission={"external_key": row["external_key"], "notes": row.get("notes")},
             created_by_id=user_id,
             updated_by_id=user_id,

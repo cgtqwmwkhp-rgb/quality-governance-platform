@@ -73,6 +73,8 @@ class NearMiss(Base):
         String(50), nullable=True
     )  # environmental, safety, equipment, etc.
     potential_severity: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # low, medium, high, critical
+    # High Potential near miss — Excel "HiPo Near Miss?"; near-miss analogue of Incident.is_psif
+    is_hipo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     linked_risk_ids: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True
     )  # Comma-separated risk IDs (see alembic)
@@ -98,6 +100,7 @@ class NearMiss(Base):
 
     # Resolution
     resolution_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    lessons_learnt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     corrective_actions_taken: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)

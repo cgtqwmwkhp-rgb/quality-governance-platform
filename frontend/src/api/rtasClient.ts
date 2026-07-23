@@ -74,6 +74,7 @@ export interface RTA {
   driver_email?: string
   driver_statement?: string
   driver_injured: boolean
+  third_party_injured?: boolean | null
   driver_injury_details?: string
   police_attended: boolean
   police_reference?: string
@@ -94,6 +95,7 @@ export interface RTA {
   fault_determination?: string
   investigation_notes?: string
   root_cause?: string
+  lessons_learnt?: string | null
   reporter_name?: string
   reporter_email?: string
   reporter_submission?: Record<string, unknown> | null
@@ -115,6 +117,7 @@ export interface RTACreate {
   company_vehicle_registration?: string
   driver_name?: string
   driver_injured?: boolean
+  third_party_injured?: boolean | null
   police_attended?: boolean
   third_parties?: { parties?: ThirdParty[] }
   reporter_name?: string
@@ -150,6 +153,7 @@ export interface RTAUpdate {
   driver_statement?: string
   driver_injured?: boolean
   driver_injury_details?: string
+  third_party_injured?: boolean | null
   police_attended?: boolean
   police_reference?: string
   police_station?: string
@@ -173,6 +177,7 @@ export interface RTAUpdate {
   days_lost?: number | null
   is_riddor_reportable?: boolean | null
   riddor_rationale?: string | null
+  lessons_learnt?: string | null
 }
 
 export function createRtasApi(api: AxiosInstance) {
