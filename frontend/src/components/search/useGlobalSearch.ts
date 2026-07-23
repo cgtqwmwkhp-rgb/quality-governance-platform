@@ -145,8 +145,9 @@ export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
         filters.status.length > 0
           ? filters.status.map((s) => s.toLowerCase().replace(/\s+/g, '_')).join(',')
           : prev?.status,
-      date_from: filters.dateRange !== 'all' ? chipDates.date_from : prev?.date_from,
-      date_to: filters.dateRange !== 'all' ? chipDates.date_to : prev?.date_to,
+      // All Time must clear prior interpret/suggestion date bounds.
+      date_from: filters.dateRange !== 'all' ? chipDates.date_from : undefined,
+      date_to: filters.dateRange !== 'all' ? chipDates.date_to : undefined,
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- filter-driven refresh only
   }, [filters.modules, filters.status, filters.dateRange])
