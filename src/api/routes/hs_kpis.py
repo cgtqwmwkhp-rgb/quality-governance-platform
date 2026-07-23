@@ -1,7 +1,6 @@
 """H&S KPI board endpoints."""
 
 from datetime import date
-
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException

@@ -140,6 +140,7 @@ from src.domain.models.governed_knowledge import (
     RegulatoryImpactStatus,
     RegulatoryWatchImpact,
 )
+from src.domain.models.hs_reporting_period import HsReportingPeriod
 
 # IMS Unification (Tier 1)
 from src.domain.models.ims_unification import (
@@ -154,7 +155,6 @@ from src.domain.models.ims_unification import (
     UnifiedAuditPlan,
 )
 from src.domain.models.incident import Incident, IncidentAction
-from src.domain.models.hs_reporting_period import HsReportingPeriod
 from src.domain.models.induction import (
     InductionResponse,
     InductionRun,

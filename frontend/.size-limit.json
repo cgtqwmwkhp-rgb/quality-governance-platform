@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "170 kB",
+    "limit": "171 kB",
     "gzip": true,
-    "name": "index: 167\u2192170 kB \u2014 training matrix manager UX board"
+    "name": "index: 170→171 kB — H&S performance nav + injury/RIDDOR detail wiring"
   },
   {
     "path": "dist/assets/vendor-*.js",

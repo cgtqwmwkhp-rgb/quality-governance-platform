@@ -5,11 +5,7 @@ from io import BytesIO
 
 from openpyxl import Workbook
 
-from src.domain.services.hs_excel_import_parser import (
-    parse_hs_workbook,
-    parse_yn,
-    route_incident_log_type,
-)
+from src.domain.services.hs_excel_import_parser import parse_hs_workbook, parse_yn, route_incident_log_type
 
 
 def test_parse_yn() -> None:
