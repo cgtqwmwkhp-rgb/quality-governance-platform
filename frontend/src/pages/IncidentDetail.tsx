@@ -385,6 +385,16 @@ export default function IncidentDetail() {
       if (payload.status === incident.status) {
         delete payload.status
       }
+      // Omit unchanged care fields to preserve legacy flags on old incidents.
+      if (payload.medical_assistance === incident.medical_assistance) {
+        delete payload.medical_assistance
+      }
+      if (
+        JSON.stringify(payload.emergency_services || []) ===
+        JSON.stringify(incident.emergency_services || [])
+      ) {
+        delete payload.emergency_services
+      }
       const response = await incidentsApi.update(incident.id, payload)
       setIncident(response.data)
       setEditForm(buildIncidentEditForm(response.data))

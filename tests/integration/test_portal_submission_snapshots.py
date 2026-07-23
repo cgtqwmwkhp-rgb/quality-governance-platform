@@ -28,6 +28,7 @@ def test_incident_submission_helper_preserves_snapshot_and_triage_fields():
             "incident_time": "09:45",
             "witness_names": "Jane Witness",
             "medical_assistance": "ambulance",
+            "emergency_services": ["police"],
         },
     )
 
@@ -41,6 +42,9 @@ def test_incident_submission_helper_preserves_snapshot_and_triage_fields():
     assert fields["people_involved"] == "Bob Worker"
     assert fields["witnesses"] == "Jane Witness"
     assert fields["first_aid_given"] is True
+    assert fields["medical_assistance"] == "ambulance"
+    # Medical ambulance must not imply emergency attendance; list drives the flag.
+    assert fields["emergency_services"] == ["police"]
     assert fields["emergency_services_called"] is True
     assert fields["incident_date"].date().isoformat() == "2026-03-15"
 
