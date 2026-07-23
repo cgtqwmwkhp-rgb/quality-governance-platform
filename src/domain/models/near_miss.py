@@ -100,6 +100,7 @@ class NearMiss(Base):
 
     # Resolution
     resolution_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    lessons_learnt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     corrective_actions_taken: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)

@@ -95,6 +95,24 @@ export default function HsPerformance() {
           </Card>
         ))}
       </div>
+      {latest?.lessons_learnt_extract && latest.lessons_learnt_extract.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>SLT lessons extract (latest year)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {latest.lessons_learnt_extract.map((row) => (
+              <div key={`${row.module}-${row.reference}`} className="border-b border-border pb-2">
+                <p className="text-sm font-medium text-foreground">
+                  {row.module} · {row.reference} · {row.date}
+                </p>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{row.lessons_learnt}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card>
         <CardHeader>
           <CardTitle>Reporting years</CardTitle>

@@ -95,6 +95,7 @@ export interface RTA {
   fault_determination?: string
   investigation_notes?: string
   root_cause?: string
+  lessons_learnt?: string | null
   reporter_name?: string
   reporter_email?: string
   reporter_submission?: Record<string, unknown> | null
@@ -176,6 +177,7 @@ export interface RTAUpdate {
   days_lost?: number | null
   is_riddor_reportable?: boolean | null
   riddor_rationale?: string | null
+  lessons_learnt?: string | null
 }
 
 export function createRtasApi(api: AxiosInstance) {

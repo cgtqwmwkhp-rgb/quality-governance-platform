@@ -55,6 +55,7 @@ export interface Incident {
   life_altering_potential?: boolean | null
   reporter_submission?: Record<string, unknown> | null
   closed_at?: string | null
+  lessons_learnt?: string | null
   owner_id?: number | null
   /** Linked Asset registry id (golden thread). */
   asset_id?: number | null
@@ -114,6 +115,7 @@ export interface IncidentUpdate {
   is_riddor_reportable?: boolean | null
   riddor_classification?: string | null
   riddor_rationale?: string | null
+  lessons_learnt?: string | null
 }
 
 export interface RaiseRiskFromIncidentRequest {

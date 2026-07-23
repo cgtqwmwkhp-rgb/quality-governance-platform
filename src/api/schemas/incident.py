@@ -105,6 +105,7 @@ class IncidentUpdate(BaseModel):
     is_riddor_reportable: Optional[bool] = None
     riddor_classification: Optional[str] = Field(None, max_length=100)
     riddor_rationale: Optional[str] = None
+    lessons_learnt: Optional[str] = None
 
     @field_validator(
         "title",
@@ -178,6 +179,7 @@ class IncidentResponse(BaseModel):
     is_riddor_reportable: Optional[bool] = None
     riddor_classification: Optional[str] = None
     riddor_rationale: Optional[str] = None
+    lessons_learnt: Optional[str] = None
     is_sif: Optional[bool] = None
     life_altering_potential: Optional[bool] = None
     reporter_submission: Optional[dict[str, Any]] = None

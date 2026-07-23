@@ -54,6 +54,7 @@ export interface NearMiss {
   assigned_to_id?: number
   assigned_at?: string
   resolution_notes?: string
+  lessons_learnt?: string | null
   corrective_actions_taken?: string
   closed_at?: string
   created_at: string
@@ -94,6 +95,7 @@ export interface NearMissUpdate {
   priority?: string
   assigned_to_id?: number
   resolution_notes?: string
+  lessons_learnt?: string | null
   corrective_actions_taken?: string
   risk_category?: string
   potential_severity?: string

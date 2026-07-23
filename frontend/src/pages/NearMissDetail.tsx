@@ -97,6 +97,7 @@ export default function NearMissDetail() {
         risk_category: response.data.risk_category,
         potential_severity: response.data.potential_severity,
         is_hipo: response.data.is_hipo ?? false,
+        lessons_learnt: response.data.lessons_learnt ?? '',
         asset_id: response.data.asset_id ?? null,
       })
       loadInvestigations(nearMissId)
@@ -152,6 +153,16 @@ export default function NearMissDetail() {
 
   const handleSaveEdit = async () => {
     if (!nearMiss) return
+    const { confirmCloseWithoutLessons } = await import('../lib/lessonsCloseGate')
+    if (
+      !confirmCloseWithoutLessons({
+        nextStatus: editForm.status,
+        previousStatus: nearMiss.status,
+        lessons: editForm.lessons_learnt,
+      })
+    ) {
+      return
+    }
     setSaving(true)
     try {
       const response = await nearMissesApi.update(nearMiss.id, editForm)
@@ -179,6 +190,7 @@ export default function NearMissDetail() {
       risk_category: nearMiss.risk_category,
       potential_severity: nearMiss.potential_severity,
       is_hipo: nearMiss.is_hipo ?? false,
+      lessons_learnt: nearMiss.lessons_learnt ?? '',
       asset_id: nearMiss.asset_id ?? null,
     })
     setIsEditing(false)
@@ -492,6 +504,23 @@ export default function NearMissDetail() {
                           'High potential (HiPo) — serious injury or fatality potential',
                         )}
                       </label>
+                      <div className="mt-3">
+                        <label
+                          htmlFor="near-miss-lessons-learnt"
+                          className="text-sm font-medium text-muted-foreground"
+                        >
+                          {t('near_misses.form.lessons_learnt', 'Lessons learnt')}
+                        </label>
+                        <textarea
+                          id="near-miss-lessons-learnt"
+                          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                          rows={3}
+                          value={editForm.lessons_learnt || ''}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, lessons_learnt: e.target.value })
+                          }
+                        />
+                      </div>
                     </>
                   ) : (
                     <>

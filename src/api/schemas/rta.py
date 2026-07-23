@@ -62,6 +62,7 @@ class RTABase(BaseModel):
     fault_determination: Optional[str] = Field(None, max_length=50)
     linked_risk_ids: Optional[str] = None
     closure_notes: Optional[str] = None
+    lessons_learnt: Optional[str] = None
 
     @field_validator("title", "description", "location")
     @classmethod
@@ -140,6 +141,7 @@ class RTAUpdate(BaseModel):
     closed_at: Optional[datetime] = None
     closed_by_id: Optional[int] = None
     closure_notes: Optional[str] = None
+    lessons_learnt: Optional[str] = None
 
     @field_validator("title", "description", "location")
     @classmethod
@@ -210,6 +212,7 @@ class RTAResponse(BaseModel):
     fault_determination: Optional[str] = None
     linked_risk_ids: Optional[str] = None
     closure_notes: Optional[str] = None
+    lessons_learnt: Optional[str] = None
     driver_id: Optional[int] = None
     driver_email: Optional[str] = None
     investigator_id: Optional[int] = None

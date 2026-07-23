@@ -861,6 +861,29 @@ async def update_investigation(
         elif investigation_data.status == "closed" and not investigation.closed_at:
             setattr(investigation, "closed_at", datetime.utcnow())
 
+    # Promote lessons narrative onto the linked case when present and case field empty.
+    lessons_src = update_data.get("data") if "data" in update_data else investigation.data
+    if isinstance(lessons_src, dict) or update_data.get("status") == "closed":
+        from src.domain.services.lessons_learnt_promote import (
+            extract_lessons_text,
+            promote_lessons_to_case,
+        )
+
+        lessons_text = extract_lessons_text(lessons_src if isinstance(lessons_src, dict) else investigation.data)
+        if lessons_text and investigation.assigned_entity_type is not None:
+            entity_type = (
+                investigation.assigned_entity_type.value
+                if hasattr(investigation.assigned_entity_type, "value")
+                else str(investigation.assigned_entity_type)
+            )
+            await promote_lessons_to_case(
+                db,
+                entity_type=entity_type,
+                entity_id=investigation.assigned_entity_id,
+                lessons_text=lessons_text,
+                overwrite=False,
+            )
+
     await db.commit()
     await db.refresh(investigation)
 

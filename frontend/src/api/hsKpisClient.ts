@@ -19,6 +19,12 @@ export interface HsKpiYear {
   ltifr: number
   afr: number
   rate_unit: string
+  lessons_learnt_extract?: Array<{
+    module: string
+    reference: string
+    date: string
+    lessons_learnt: string
+  }>
 }
 
 export interface HsKpiSummary {

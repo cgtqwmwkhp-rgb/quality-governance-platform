@@ -71,6 +71,7 @@ class NearMissUpdate(BaseModel):
     assigned_to_id: Optional[int] = None
 
     resolution_notes: Optional[str] = None
+    lessons_learnt: Optional[str] = None
     corrective_actions_taken: Optional[str] = None
 
     risk_category: Optional[str] = None
@@ -141,6 +142,7 @@ class NearMissResponse(BaseModel):
     assigned_to_id: Optional[int] = None
     assigned_at: Optional[datetime] = None
     resolution_notes: Optional[str] = None
+    lessons_learnt: Optional[str] = None
     corrective_actions_taken: Optional[str] = None
     closed_at: Optional[datetime] = None
     attachments: Optional[str] = None

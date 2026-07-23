@@ -193,6 +193,7 @@ export default function RTADetail() {
       driver_injured: data.driver_injured,
       driver_injury_details: data.driver_injury_details,
       third_party_injured: data.third_party_injured ?? null,
+      lessons_learnt: data.lessons_learnt ?? '',
       police_attended: data.police_attended,
       police_reference: data.police_reference,
       police_station: data.police_station,
@@ -250,6 +251,16 @@ export default function RTADetail() {
 
   const handleSaveEdit = async () => {
     if (!rta) return
+    const { confirmCloseWithoutLessons } = await import('../lib/lessonsCloseGate')
+    if (
+      !confirmCloseWithoutLessons({
+        nextStatus: editForm.status,
+        previousStatus: rta.status,
+        lessons: editForm.lessons_learnt,
+      })
+    ) {
+      return
+    }
     setSaving(true)
     try {
       const payload: RTAUpdate = {
@@ -740,6 +751,18 @@ export default function RTADetail() {
                         <div className="col-span-2">
                           <label htmlFor="rta-edit-location" className="text-sm font-medium text-muted-foreground">{t('common.location')}</label>
                           <Input id="rta-edit-location" value={editForm.location || ''} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} className="mt-1" />
+                        </div>
+                        <div className="col-span-2">
+                          <label htmlFor="rta-lessons-learnt" className="text-sm font-medium text-muted-foreground">
+                            Lessons learnt
+                          </label>
+                          <textarea
+                            id="rta-lessons-learnt"
+                            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                            rows={3}
+                            value={editForm.lessons_learnt || ''}
+                            onChange={(e) => setEditForm({ ...editForm, lessons_learnt: e.target.value })}
+                          />
                         </div>
                       </div>
                       <div className="grid grid-cols-3 gap-4">
