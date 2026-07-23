@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Loader2, Save } from 'lucide-react'
-import { toast } from 'sonner'
 import { getApiErrorMessage, hsKpisApi } from '../../api/client'
+import { toast } from '../../contexts/ToastContext'
 import type { HsReportingPeriodRow } from '../../api/hsKpisClient'
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card'

@@ -1,12 +1,7 @@
 from datetime import date
 from types import SimpleNamespace
 
-from src.domain.services.hs_kpi_service import (
-    RATE_UNIT,
-    effective_hours,
-    pro_rated_hours,
-    rate_per_100000,
-)
+from src.domain.services.hs_kpi_service import RATE_UNIT, effective_hours, pro_rated_hours, rate_per_100000
 
 
 def test_pro_rated_hours_uses_excel_style_inclusive_days():
