@@ -114,6 +114,10 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     reported_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     location: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    # Customer / contract (Admin Lookups customers → contracts.id)
+    contract_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("contracts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     # Who was involved
     reporter_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -128,6 +132,10 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     immediate_actions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     first_aid_given: Mapped[bool] = mapped_column(Boolean, default=False)
     emergency_services_called: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Care pathway (lookup: medical_assistance) — independent of emergency attendance
+    medical_assistance: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # Emergency attendance codes (lookup: emergency_services) e.g. ["police","ambulance"]
+    emergency_services: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Injury classification (H&S Excel / SLT KPI spine)
     is_injury: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)

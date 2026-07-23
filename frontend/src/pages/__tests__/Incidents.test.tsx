@@ -1,8 +1,29 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { BrowserRouter, MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import Incidents from '../Incidents'
+
+beforeAll(() => {
+  // Radix Select requires PointerEvent capture APIs missing from jsdom.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const proto = Element.prototype as any
+  if (!proto.hasPointerCapture) proto.hasPointerCapture = () => false
+  if (!proto.setPointerCapture) proto.setPointerCapture = () => undefined
+  if (!proto.releasePointerCapture) proto.releasePointerCapture = () => undefined
+})
+
+async function selectCustomerAcme() {
+  const user = userEvent.setup()
+  const trigger = await waitFor(() => {
+    const el = document.getElementById('incidents-field-customer')
+    expect(el).toBeTruthy()
+    return el as HTMLElement
+  })
+  await user.click(trigger)
+  await user.click(await screen.findByRole('option', { name: 'Acme Corp' }))
+}
 
 const mockNavigate = vi.fn()
 
@@ -29,6 +50,12 @@ vi.mock('../../api/client', () => ({
   },
   lookupsApi: {
     list: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  },
+  contractsApi: {
+    list: vi.fn().mockResolvedValue({
+      items: [{ id: 1, code: 'acme', name: 'Acme Corp', is_active: true }],
+      total: 1,
+    }),
   },
   notificationsApi: {
     getDeliveryStatus: vi.fn().mockResolvedValue({ data: { email_configured: false } }),
@@ -188,6 +215,7 @@ describe('Incidents', () => {
 
     fireEvent.change(titleInput, { target: { value: 'New incident' } })
     fireEvent.change(descInput, { target: { value: 'Detailed description' } })
+    await selectCustomerAcme()
 
     const submitButton = screen.getByText('incidents.create')
     fireEvent.click(submitButton)
@@ -199,6 +227,7 @@ describe('Incidents', () => {
     const callArgs = mockCreate.mock.calls[0][0]
     expect(callArgs.title).toBe('New incident')
     expect(callArgs.description).toBe('Detailed description')
+    expect(callArgs.contract_id).toBe(1)
     expect(callArgs.reporter_name).toBe('Alex Engineer')
     expect(callArgs.reporter_email).toBe('alex@example.com')
   })
@@ -261,6 +290,7 @@ describe('Incidents', () => {
     fireEvent.change(screen.getByPlaceholderText('incidents.form.description_placeholder'), {
       target: { value: 'Some description' },
     })
+    await selectCustomerAcme()
 
     fireEvent.click(screen.getByText('incidents.create'))
 

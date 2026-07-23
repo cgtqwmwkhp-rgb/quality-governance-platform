@@ -92,6 +92,13 @@ vi.mock('../../api/client', () => ({
   lookupsApi: {
     list: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   },
+  contractsApi: {
+    list: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  },
+  complianceAutomationApi: {
+    checkRiddor: vi.fn(),
+    prepareRiddor: vi.fn(),
+  },
   getApiErrorMessage: (err: Error, fallback?: string) => err.message || fallback || 'error',
 }))
 

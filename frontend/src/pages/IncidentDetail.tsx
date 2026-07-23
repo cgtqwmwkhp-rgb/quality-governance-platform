@@ -39,7 +39,9 @@ import {
   getApiErrorMessage,
   CreateFromRecordError,
   lookupsApi,
+  contractsApi,
   complianceAutomationApi,
+  type Contract,
 } from '../api/client'
 import { trackError } from '../utils/errorTracker'
 import { Button } from '../components/ui/Button'
@@ -118,6 +120,21 @@ const BODY_PART_OPTIONS = [
   'Other',
 ]
 
+const FALLBACK_MEDICAL_OPTIONS = [
+  { value: 'none', label: 'No assistance needed' },
+  { value: 'self', label: 'Self application' },
+  { value: 'first-aider', label: 'First aider on site' },
+  { value: 'gp', label: 'GP / Hospital' },
+  { value: 'ambulance', label: 'Ambulance / A&E' },
+]
+
+const FALLBACK_EMERGENCY_OPTIONS = [
+  { value: 'police', label: 'Police' },
+  { value: 'ambulance', label: 'Ambulance' },
+  { value: 'fire', label: 'Fire & rescue' },
+  { value: 'recovery', label: 'Recovery' },
+]
+
 function buildIncidentEditForm(data: Incident): IncidentUpdate {
   return {
     title: displayIncidentText(data.title),
@@ -127,6 +144,7 @@ function buildIncidentEditForm(data: Incident): IncidentUpdate {
     status: data.status,
     location: data.location,
     department: data.department,
+    contract_id: data.contract_id ?? null,
     asset_id: data.asset_id ?? null,
     is_injury: data.is_injury ?? false,
     body_parts: data.body_parts ?? [],
@@ -135,6 +153,10 @@ function buildIncidentEditForm(data: Incident): IncidentUpdate {
     is_minor_injury: data.is_minor_injury ?? false,
     first_aid_given: data.first_aid_given ?? false,
     emergency_services_called: data.emergency_services_called ?? false,
+    // Hydrate from legacy first_aid_given so edit UI doesn't show "none" for old rows.
+    medical_assistance:
+      data.medical_assistance ?? (data.first_aid_given ? 'first-aider' : null),
+    emergency_services: data.emergency_services ?? [],
     people_involved: data.people_involved ?? '',
     is_riddor_reportable: data.is_riddor_reportable ?? null,
     riddor_classification: data.riddor_classification ?? '',
@@ -163,6 +185,10 @@ export default function IncidentDetail() {
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editForm, setEditForm] = useState<IncidentUpdate>({})
+  const [careFieldsTouched, setCareFieldsTouched] = useState({
+    medical: false,
+    emergency: false,
+  })
   const defaultTypeOptions = [
     { value: 'injury', label: t('incidents.type.injury') },
     { value: 'near_miss', label: t('incidents.type.near_miss') },
@@ -182,6 +208,9 @@ export default function IncidentDetail() {
   ]
   const [typeOptions, setTypeOptions] = useState(defaultTypeOptions)
   const [severityOptions, setSeverityOptions] = useState(defaultSeverityOptions)
+  const [contractOptions, setContractOptions] = useState<Contract[]>([])
+  const [medicalOptions, setMedicalOptions] = useState(FALLBACK_MEDICAL_OPTIONS)
+  const [emergencyOptions, setEmergencyOptions] = useState(FALLBACK_EMERGENCY_OPTIONS)
 
   // Action detail modal state
   const [selectedAction, setSelectedAction] = useState<Action | null>(null)
@@ -224,6 +253,23 @@ export default function IncidentDetail() {
   }, [id])
 
   useEffect(() => {
+    let cancelled = false
+    void Promise.all([
+      contractsApi.list(true).catch(() => ({ items: [] as Contract[], total: 0 })),
+      lookupsApi.list('medical_assistance', true).catch(() => ({ items: [], total: 0 })),
+      lookupsApi.list('emergency_services', true).catch(() => ({ items: [], total: 0 })),
+    ]).then(([contractsRes, medicalRes, emergencyRes]) => {
+      if (cancelled) return
+      setContractOptions(contractsRes.items || [])
+      setMedicalOptions(mergeLookupSelectOptions(FALLBACK_MEDICAL_OPTIONS, medicalRes.items))
+      setEmergencyOptions(mergeLookupSelectOptions(FALLBACK_EMERGENCY_OPTIONS, emergencyRes.items))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !isEditing) navigate('/incidents')
     }
@@ -239,11 +285,18 @@ export default function IncidentDetail() {
     void Promise.all([
       lookupsApi.list('incident_types', true).catch(() => ({ items: [], total: 0 })),
       lookupsApi.list('severity_levels', true).catch(() => ({ items: [], total: 0 })),
-    ]).then(([typesRes, severityRes]) => {
-      if (!cancelled) {
-        setTypeOptions(mergeLookupSelectOptions(defaultTypeOptions, typesRes.items))
-        setSeverityOptions(mergeLookupSelectOptions(defaultSeverityOptions, severityRes.items))
-      }
+      lookupsApi.list('medical_assistance', true).catch(() => ({ items: [], total: 0 })),
+      lookupsApi.list('emergency_services', true).catch(() => ({ items: [], total: 0 })),
+      contractsApi.list(true).catch(() => ({ items: [] as Contract[], total: 0 })),
+    ]).then(([typesRes, severityRes, medicalRes, emergencyRes, contractsRes]) => {
+      if (cancelled) return
+      setTypeOptions(mergeLookupSelectOptions(defaultTypeOptions, typesRes.items))
+      setSeverityOptions(mergeLookupSelectOptions(defaultSeverityOptions, severityRes.items))
+      const medical = mergeLookupSelectOptions(FALLBACK_MEDICAL_OPTIONS, medicalRes.items)
+      const emergency = mergeLookupSelectOptions(FALLBACK_EMERGENCY_OPTIONS, emergencyRes.items)
+      setMedicalOptions(medical)
+      setEmergencyOptions(emergency)
+      setContractOptions(contractsRes.items || [])
     })
     return () => {
       cancelled = true
@@ -338,9 +391,18 @@ export default function IncidentDetail() {
       if (payload.status === incident.status) {
         delete payload.status
       }
+      // Only send care fields when the editor touched them so unrelated saves
+      // keep legacy booleans, while an intentional clear still re-derives.
+      if (!careFieldsTouched.medical) {
+        delete payload.medical_assistance
+      }
+      if (!careFieldsTouched.emergency) {
+        delete payload.emergency_services
+      }
       const response = await incidentsApi.update(incident.id, payload)
       setIncident(response.data)
       setEditForm(buildIncidentEditForm(response.data))
+      setCareFieldsTouched({ medical: false, emergency: false })
       setIsEditing(false)
       toast.success(t('incidents.detail.save_success', 'Incident updated'))
     } catch (err) {
@@ -357,7 +419,13 @@ export default function IncidentDetail() {
     if (incident) {
       setEditForm(buildIncidentEditForm(incident))
     }
+    setCareFieldsTouched({ medical: false, emergency: false })
     setIsEditing(false)
+  }
+
+  const startEditing = () => {
+    setCareFieldsTouched({ medical: false, emergency: false })
+    setIsEditing(true)
   }
 
   const toggleBodyPart = (part: string) => {
@@ -643,22 +711,40 @@ export default function IncidentDetail() {
     (typeof incidentSubmission?.person_name === 'string' && incidentSubmission.person_name) ||
     incident.people_involved ||
     'Not provided'
+  const contractFromList = contractOptions.find((c) => c.id === incident.contract_id)
   const contractLabel =
+    contractFromList?.name ||
     incident.department ||
     (typeof incidentSubmission?.contract === 'string'
       ? incidentSubmission.contract
-      : 'Not provided')
+      : incident.contract_id
+        ? `Contract #${incident.contract_id}`
+        : 'Not provided')
   const personRole =
     (typeof incidentSubmission?.person_role === 'string' && incidentSubmission.person_role) ||
     'Not provided'
+  const medicalCode =
+    incident.medical_assistance ||
+    (typeof incidentSubmission?.medical_assistance === 'string'
+      ? incidentSubmission.medical_assistance
+      : null)
   const medicalAssistance =
-    (typeof incidentSubmission?.medical_assistance === 'string' &&
-      incidentSubmission.medical_assistance) ||
-    (incident.emergency_services_called
-      ? 'Emergency services called'
-      : incident.first_aid_given
-        ? 'First aid provided'
-        : 'Not provided')
+    medicalOptions.find((o) => o.value === medicalCode)?.label ||
+    medicalCode ||
+    (incident.first_aid_given ? 'First aid provided' : 'Not provided')
+  const emergencyList = incident.emergency_services?.length
+    ? incident.emergency_services
+    : Array.isArray(incidentSubmission?.emergency_services)
+      ? (incidentSubmission.emergency_services as string[])
+      : []
+  const emergencyLabel =
+    emergencyList.length > 0
+      ? emergencyList
+          .map((code) => emergencyOptions.find((o) => o.value === code)?.label || code)
+          .join(', ')
+      : incident.emergency_services_called
+        ? 'Yes (type not specified)'
+        : 'None'
   const evidenceSummary = getSubmissionPhotoSummary(incidentSubmission)
   const surfacedEvidenceSummary = evidenceLoading
     ? 'Loading evidence…'
@@ -761,7 +847,7 @@ export default function IncidentDetail() {
                   {raisingRisk ? 'Raising…' : 'Raise risk'}
                 </Button>
               )}
-              <Button variant="outline" onClick={() => setIsEditing(true)}>
+              <Button variant="outline" onClick={startEditing}>
                 <Pencil className="w-4 h-4 mr-2" />
                 {t('edit')}
               </Button>
@@ -824,9 +910,19 @@ export default function IncidentDetail() {
             icon: <ClipboardList className="w-4 h-4" />,
           },
           {
+            label: 'Customer / contract',
+            value: contractLabel,
+            icon: <User className="w-4 h-4" />,
+          },
+          {
             label: 'Medical response',
             value: medicalAssistance,
             icon: <AlertTriangle className="w-4 h-4" />,
+          },
+          {
+            label: 'Emergency services',
+            value: emergencyLabel,
+            icon: <ShieldAlert className="w-4 h-4" />,
           },
           {
             label: 'Linked risks',
@@ -995,6 +1091,44 @@ export default function IncidentDetail() {
                         </div>
                       </div>
                       <div className="mt-4">
+                        <label
+                          htmlFor="incident-contract"
+                          className="text-sm font-medium text-muted-foreground"
+                        >
+                          {t('incidents.detail.customer_contract', 'Customer / contract')}
+                        </label>
+                        <Select
+                          value={
+                            editForm.contract_id != null ? String(editForm.contract_id) : '__none__'
+                          }
+                          onValueChange={(value) =>
+                            setEditForm({
+                              ...editForm,
+                              contract_id: value === '__none__' ? null : Number(value),
+                            })
+                          }
+                        >
+                          <SelectTrigger id="incident-contract" className="mt-1">
+                            <SelectValue
+                              placeholder={t(
+                                'incidents.detail.select_customer',
+                                'Select customer',
+                              )}
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">
+                              {t('common.none', 'None')}
+                            </SelectItem>
+                            {contractOptions.map((contract) => (
+                              <SelectItem key={contract.id} value={String(contract.id)}>
+                                {contract.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="mt-4">
                         <AssetPicker
                           value={editForm.asset_id}
                           onChange={(assetId) => setEditForm({ ...editForm, asset_id: assetId })}
@@ -1035,32 +1169,67 @@ export default function IncidentDetail() {
                             />
                             {t('incidents.detail.is_lti', 'Lost time injury (LTI)')}
                           </label>
-                          <label className="flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(editForm.first_aid_given)}
-                              onChange={(e) =>
-                                setEditForm({ ...editForm, first_aid_given: e.target.checked })
-                              }
-                            />
-                            {t('incidents.detail.first_aid_given', 'First aid given')}
-                          </label>
-                          <label className="flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(editForm.emergency_services_called)}
-                              onChange={(e) =>
-                                setEditForm({
-                                  ...editForm,
-                                  emergency_services_called: e.target.checked,
-                                })
-                              }
-                            />
-                            {t(
-                              'incidents.detail.emergency_services_called',
-                              'Emergency services called',
-                            )}
-                          </label>
+                          <div>
+                            <label
+                              htmlFor="incident-medical-assistance"
+                              className="text-sm font-medium text-muted-foreground"
+                            >
+                              {t('incidents.detail.medical_assistance', 'Medical assistance')}
+                            </label>
+                            <Select
+                              value={editForm.medical_assistance || 'none'}
+                              onValueChange={(value) => {
+                                setCareFieldsTouched((prev) => ({ ...prev, medical: true }))
+                                setEditForm({ ...editForm, medical_assistance: value })
+                              }}
+                            >
+                              <SelectTrigger id="incident-medical-assistance" className="mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {medicalOptions.map((opt) => (
+                                  <SelectItem key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="md:col-span-2">
+                            <p className="text-sm font-medium text-muted-foreground mb-2">
+                              {t('incidents.detail.emergency_services', 'Emergency services')}
+                            </p>
+                            <div className="flex flex-wrap gap-3">
+                              {emergencyOptions.map((opt) => {
+                                const selected = (editForm.emergency_services || []).includes(
+                                  opt.value,
+                                )
+                                return (
+                                  <label
+                                    key={opt.value}
+                                    className="flex items-center gap-2 text-sm"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={selected}
+                                      onChange={(e) => {
+                                        const current = editForm.emergency_services || []
+                                        const next = e.target.checked
+                                          ? [...current, opt.value]
+                                          : current.filter((code) => code !== opt.value)
+                                        setCareFieldsTouched((prev) => ({
+                                          ...prev,
+                                          emergency: true,
+                                        }))
+                                        setEditForm({ ...editForm, emergency_services: next })
+                                      }}
+                                    />
+                                    {opt.label}
+                                  </label>
+                                )
+                              })}
+                            </div>
+                          </div>
                           <div>
                             <label
                               htmlFor="incident-days-lost"
@@ -1277,12 +1446,12 @@ export default function IncidentDetail() {
                             {incident.days_lost ?? '—'}
                           </p>
                           <p>
-                            <span className="text-muted-foreground">First aid: </span>
-                            {incident.first_aid_given ? 'Yes' : 'No'}
+                            <span className="text-muted-foreground">Medical assistance: </span>
+                            {medicalAssistance}
                           </p>
                           <p>
                             <span className="text-muted-foreground">Emergency services: </span>
-                            {incident.emergency_services_called ? 'Yes' : 'No'}
+                            {emergencyLabel}
                           </p>
                           <p className="col-span-2">
                             <span className="text-muted-foreground">Body parts: </span>

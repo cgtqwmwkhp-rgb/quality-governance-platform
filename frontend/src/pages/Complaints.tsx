@@ -10,8 +10,10 @@ import {
   evidenceAssetsApi,
   getApiErrorMessage,
   lookupsApi,
+  contractsApi,
   notificationsApi,
   UserSearchResult,
+  type Contract,
 } from '../api/client'
 import { queueForSync } from '../lib/syncService'
 import { toast } from '../contexts/ToastContext'
@@ -167,6 +169,8 @@ export default function Complaints() {
   >({})
   const [formData, setFormData] = useState<ComplaintCreate>(freshComplaintForm)
   const [customerOptions, setCustomerOptions] = useState<{ value: string; label: string }[]>([])
+  const [contractsByCode, setContractsByCode] = useState<Record<string, Contract>>({})
+  const [contractsLoadFailed, setContractsLoadFailed] = useState(false)
   const [selectedCustomerCode, setSelectedCustomerCode] = useState('')
   const [customersLoaded, setCustomersLoaded] = useState(false)
   const [topicOptions, setTopicOptions] = useState<{ value: string; label: string }[]>([])
@@ -203,15 +207,26 @@ export default function Complaints() {
     }
     let cancelled = false
     setCustomersLoaded(false)
+    setContractsLoadFailed(false)
     ;(async () => {
       try {
-        const [customerRes, typeRes, severityRes] = await Promise.all([
+        const [customerRes, typeRes, severityRes, contractsSettled] = await Promise.all([
           lookupsApi.list(CUSTOMERS_LOOKUP_CATEGORY, true).catch(() => ({ items: [], total: 0 })),
           lookupsApi.list('complaint_types', true).catch(() => ({ items: [], total: 0 })),
           lookupsApi.list('severity_levels', true).catch(() => ({ items: [], total: 0 })),
+          contractsApi.list(true).then(
+            (res) => ({ ok: true as const, res }),
+            () => ({ ok: false as const, res: { items: [] as Contract[], total: 0 } }),
+          ),
         ])
         if (cancelled) return
         setCustomerOptions(toCustomerSelectOptions(customerRes.items || []))
+        const byCode: Record<string, Contract> = {}
+        for (const contract of contractsSettled.res.items || []) {
+          if (contract.code) byCode[contract.code.toLowerCase()] = contract
+        }
+        setContractsByCode(byCode)
+        setContractsLoadFailed(!contractsSettled.ok)
         setCustomersLoaded(true)
         setTopicOptions(
           mergeLookupSelectOptions(
@@ -226,6 +241,7 @@ export default function Complaints() {
       } catch (err) {
         if (!cancelled) {
           setCustomersLoaded(true)
+          setContractsLoadFailed(true)
           trackError(err, { component: 'Complaints', action: 'loadCreateLookups' })
           setTopicOptions(
             COMPLAINT_TYPE_VALUES.map((code) => ({
@@ -257,12 +273,21 @@ export default function Complaints() {
     }
     const option = customerOptions.find((o) => o.value === value)
     const label = option?.label || value
+    const matched = contractsByCode[value.toLowerCase()]
     setFormData((prev) => ({
       ...prev,
-      contract_id: null,
+      contract_id: matched?.id ?? null,
       complainant_company: label,
     }))
   }
+
+  // Contracts load async with the modal — re-resolve FK if customer was chosen early.
+  useEffect(() => {
+    if (!selectedCustomerCode) return
+    const matched = contractsByCode[selectedCustomerCode.toLowerCase()]
+    const nextId = matched?.id ?? null
+    setFormData((prev) => (prev.contract_id === nextId ? prev : { ...prev, contract_id: nextId }))
+  }, [selectedCustomerCode, contractsByCode])
 
   // Hydrate list filters from shareable URL (back/forward + deep links).
   useEffect(() => {
@@ -407,6 +432,15 @@ export default function Complaints() {
       )
       return
     }
+    if (contractsLoadFailed) {
+      setFormError(
+        t(
+          'complaints.form.contracts_unavailable',
+          'Customer contracts could not be loaded — refresh and try again.',
+        ),
+      )
+      return
+    }
     setFormError(null)
     setCreating(true)
 
@@ -415,9 +449,12 @@ export default function Complaints() {
       selectedCustomerCode
     const complainantCompany =
       formData.complainant_company?.trim() || selectedCustomerLabel || undefined
+    const resolvedContractId =
+      formData.contract_id ?? contractsByCode[selectedCustomerCode.toLowerCase()]?.id ?? null
 
     const payload: ComplaintCreate = {
       ...formData,
+      contract_id: resolvedContractId,
       received_date: new Date(formData.received_date).toISOString(),
       alleged_event_at: formData.alleged_event_at
         ? new Date(formData.alleged_event_at).toISOString()

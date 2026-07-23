@@ -340,7 +340,7 @@ describe('Complaints', () => {
     const callArgs = mockCreate.mock.calls[0][0]
     expect(callArgs.title).toBe('New complaint')
     expect(callArgs.description).toBe('Detailed description')
-    expect(callArgs.contract_id).toBeNull()
+    expect(callArgs.contract_id).toBe(10)
     expect(callArgs.complainant_company).toBe('Acme Corp')
     expect(callArgs.source_type).toBe('manual')
     expect(mockToastSuccess).toHaveBeenCalled()

@@ -171,6 +171,7 @@ interface FormData {
   hasInjuries: boolean | null
   injuries: InjurySelection[]
   medicalAssistance: string
+  emergencyServices: string[]
   complainantName: string
   complainantRole: string
   complainantContact: string
@@ -233,6 +234,7 @@ export default function PortalIncidentForm() {
     hasInjuries: null,
     injuries: [],
     medicalAssistance: '',
+    emergencyServices: [],
     complainantName: '',
     complainantRole: '',
     complainantContact: '',
@@ -243,6 +245,7 @@ export default function PortalIncidentForm() {
   const [customers, setCustomers] = useState<LookupOption[]>([])
   const [roles, setRoles] = useState<LookupOption[]>([])
   const [medicalAssistance, setMedicalAssistance] = useState<LookupOption[]>([])
+  const [emergencyServiceOptions, setEmergencyServiceOptions] = useState<LookupOption[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -250,12 +253,14 @@ export default function PortalIncidentForm() {
       lookupsApi.list('customers', true),
       lookupsApi.list('workforce_roles', true),
       lookupsApi.list('medical_assistance', true).catch(() => ({ items: [] })),
+      lookupsApi.list('emergency_services', true).catch(() => ({ items: [] })),
     ])
-      .then(([customerResult, roleResult, medicalResult]) => {
+      .then(([customerResult, roleResult, medicalResult, emergencyResult]) => {
         if (!cancelled) {
           setCustomers(customerResult.items || [])
           setRoles(roleResult.items || [])
           setMedicalAssistance(medicalResult.items || [])
+          setEmergencyServiceOptions(emergencyResult.items || [])
         }
       })
       .catch(() => {
@@ -263,6 +268,7 @@ export default function PortalIncidentForm() {
           setCustomers([])
           setRoles([])
           setMedicalAssistance([])
+          setEmergencyServiceOptions([])
         }
       })
     return () => {
@@ -274,6 +280,16 @@ export default function PortalIncidentForm() {
     medicalAssistance.length > 0
       ? medicalAssistance.map((item) => ({ value: item.code, label: item.label }))
       : FALLBACK_MEDICAL_OPTIONS
+
+  const emergencyOptions =
+    emergencyServiceOptions.length > 0
+      ? emergencyServiceOptions.map((item) => ({ value: item.code, label: item.label }))
+      : [
+          { value: 'police', label: 'Police' },
+          { value: 'ambulance', label: 'Ambulance' },
+          { value: 'fire', label: 'Fire & rescue' },
+          { value: 'recovery', label: 'Recovery' },
+        ]
 
   // Autosave hook (EXP-001: portal_form_autosave)
   // Excludes photos from autosave (can't serialize File objects)
@@ -431,6 +447,7 @@ export default function PortalIncidentForm() {
               has_injuries: formData.hasInjuries,
               injuries: formData.injuries,
               medical_assistance: formData.medicalAssistance || null,
+              emergency_services: formData.emergencyServices,
               photos: photoSummary,
             }
 
@@ -1077,6 +1094,41 @@ export default function PortalIncidentForm() {
                 />
               </>
             )}
+
+            <div>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t('portal.emergency_services', 'Emergency services attended?')}
+              </span>
+              <p className="text-xs text-muted-foreground mb-2">
+                {t(
+                  'portal.emergency_services_help',
+                  'Select all that apply. This is separate from medical assistance.',
+                )}
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {emergencyOptions.map((opt) => {
+                  const selected = formData.emergencyServices.includes(opt.value)
+                  return (
+                    <label key={opt.value} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={(e) => {
+                          setFormData((prev) => {
+                            const current = prev.emergencyServices
+                            const next = e.target.checked
+                              ? [...current, opt.value]
+                              : current.filter((code) => code !== opt.value)
+                            return { ...prev, emergencyServices: next }
+                          })
+                        }}
+                      />
+                      {opt.label}
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
 
             {/* Photos — EVD-02 metadata-only honesty toward evidence-assets spine */}
             <div>

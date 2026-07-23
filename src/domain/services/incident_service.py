@@ -97,6 +97,31 @@ class IncidentService:
         else:
             reference_number = await ReferenceNumberService.generate(self.db, "incident", Incident)
 
+        from src.domain.services.contract_resolve import assert_tenant_contract
+        from src.domain.services.incident_care_fields import (
+            derive_emergency_services_called,
+            derive_first_aid_given,
+            normalize_emergency_services,
+            normalize_medical_assistance,
+        )
+
+        contract_id = data.get("contract_id")
+        if tenant_id is not None and contract_id is not None:
+            await assert_tenant_contract(self.db, contract_id=int(contract_id), tenant_id=tenant_id)
+
+        medical = normalize_medical_assistance(data.get("medical_assistance"))
+        services = normalize_emergency_services(data.get("emergency_services"))
+        first_aid = (
+            derive_first_aid_given(medical)
+            if data.get("medical_assistance") is not None
+            else bool(data.get("first_aid_given", False))
+        )
+        emergency_called = (
+            derive_emergency_services_called(services)
+            if data.get("emergency_services") is not None
+            else bool(data.get("emergency_services_called", False))
+        )
+
         incident = Incident(
             title=data["title"],
             description=data["description"],
@@ -107,14 +132,17 @@ class IncidentService:
             reported_date=datetime.now(timezone.utc),
             location=data.get("location"),
             department=data.get("department"),
+            contract_id=contract_id,
             asset_id=data.get("asset_id"),
             reference_number=reference_number,
             reporter_id=user_id,
             reporter_email=data.get("reporter_email"),
             reporter_name=data.get("reporter_name"),
             people_involved=data.get("people_involved"),
-            first_aid_given=bool(data.get("first_aid_given", False)),
-            emergency_services_called=bool(data.get("emergency_services_called", False)),
+            first_aid_given=first_aid,
+            emergency_services_called=emergency_called,
+            medical_assistance=medical,
+            emergency_services=services or None,
             is_injury=bool(data.get("is_injury", False)),
             body_parts=data.get("body_parts"),
             is_lti=bool(data.get("is_lti", False)),
@@ -230,7 +258,37 @@ class IncidentService:
         if "status" in raw_update:
             validate_incident_transition(incident.status, raw_update["status"])
 
+        from src.domain.services.contract_resolve import assert_tenant_contract
+        from src.domain.services.incident_care_fields import (
+            derive_emergency_services_called,
+            derive_first_aid_given,
+            normalize_emergency_services,
+            normalize_medical_assistance,
+        )
+
+        # Guard against the incident's tenant (not the caller's) so cross-tenant
+        # editors with skip_tenant_check can still set a valid contract FK.
+        contract_tenant_id = incident.tenant_id if incident.tenant_id is not None else tenant_id
+        if contract_tenant_id is not None and "contract_id" in raw_update and raw_update["contract_id"] is not None:
+            await assert_tenant_contract(
+                self.db,
+                contract_id=int(raw_update["contract_id"]),
+                tenant_id=int(contract_tenant_id),
+            )
+
         update_dict = apply_updates(incident, incident_data, set_updated_at=False)
+
+        if "medical_assistance" in raw_update:
+            incident.medical_assistance = normalize_medical_assistance(raw_update.get("medical_assistance"))
+            incident.first_aid_given = derive_first_aid_given(incident.medical_assistance)
+            update_dict["medical_assistance"] = incident.medical_assistance
+            update_dict["first_aid_given"] = incident.first_aid_given
+        if "emergency_services" in raw_update:
+            services = normalize_emergency_services(raw_update.get("emergency_services"))
+            incident.emergency_services = services or None
+            incident.emergency_services_called = derive_emergency_services_called(services)
+            update_dict["emergency_services"] = incident.emergency_services
+            update_dict["emergency_services_called"] = incident.emergency_services_called
 
         incident.updated_by_id = user_id
         incident.updated_at = datetime.now(timezone.utc)

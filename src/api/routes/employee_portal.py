@@ -342,11 +342,12 @@ def build_incident_portal_fields(
         reporter_submission.get("incident_time"),
     ) or datetime.now(timezone.utc)
     witness_names = reporter_submission.get("witness_names")
-    medical_assistance = str(reporter_submission.get("medical_assistance") or "").strip().lower()
     display_name = require_portal_display_name(report, reporter_submission)
+    from src.domain.services.incident_care_fields import care_fields_from_submission
     from src.domain.services.incident_injury_promote import promote_injury_fields_from_submission
 
     injury_fields = promote_injury_fields_from_submission(reporter_submission)
+    care_fields = care_fields_from_submission(reporter_submission)
 
     return {
         "incident_type": IncidentType.OTHER,
@@ -360,8 +361,10 @@ def build_incident_portal_fields(
         "reporter_email": report.reporter_email if not report.is_anonymous else None,
         "people_involved": reporter_submission.get("person_name") or display_name,
         "witnesses": witness_names if isinstance(witness_names, str) else None,
-        "first_aid_given": medical_assistance not in {"", "none"},
-        "emergency_services_called": medical_assistance == "ambulance",
+        "first_aid_given": care_fields["first_aid_given"],
+        "emergency_services_called": care_fields["emergency_services_called"],
+        "medical_assistance": care_fields["medical_assistance"],
+        "emergency_services": care_fields["emergency_services"],
         "is_injury": injury_fields["is_injury"],
         "body_parts": injury_fields["body_parts"],
         "source_form_id": "portal_incident_v1",
@@ -543,11 +546,21 @@ async def submit_quick_report(
         ref_number = generate_portal_reference("INC")
         tracking_code = generate_tracking_code(ref_number)
 
+        from src.domain.services.contract_resolve import resolve_contract_id_by_code
+
+        portal_fields = build_incident_portal_fields(report, incident_severity, reporter_submission, portal_tenant_id)
+        customer_code = reporter_submission.get("contract") or report.department
+        contract_id = await resolve_contract_id_by_code(
+            db, tenant_id=portal_tenant_id, code=str(customer_code) if customer_code else None
+        )
+        if contract_id is not None:
+            portal_fields["contract_id"] = contract_id
+
         incident = Incident(
             reference_number=ref_number,
             title=report.title,
             description=report.description,
-            **build_incident_portal_fields(report, incident_severity, reporter_submission, portal_tenant_id),
+            **portal_fields,
         )
 
         db.add(incident)
