@@ -7,9 +7,7 @@ from src.domain.services.rta_injury_fields import (
 
 
 def test_derive_from_parties_any_injured():
-    assert (
-        derive_third_party_injured({"parties": [{"injured": False}, {"injured": True}]}) is True
-    )
+    assert derive_third_party_injured({"parties": [{"injured": False}, {"injured": True}]}) is True
 
 
 def test_derive_from_parties_none_injured():
