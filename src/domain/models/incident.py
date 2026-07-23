@@ -129,6 +129,15 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     first_aid_given: Mapped[bool] = mapped_column(Boolean, default=False)
     emergency_services_called: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Injury classification (H&S Excel / SLT KPI spine)
+    is_injury: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    body_parts: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # list[str] body region ids/labels
+    is_lti: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    days_lost: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    is_minor_injury: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+
     # Investigation
     investigator_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     investigation_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

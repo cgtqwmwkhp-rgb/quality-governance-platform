@@ -39,9 +39,15 @@ export interface Incident {
   immediate_actions?: string
   first_aid_given?: boolean
   emergency_services_called?: boolean
+  is_injury?: boolean
+  body_parts?: string[] | null
+  is_lti?: boolean
+  days_lost?: number | null
+  is_minor_injury?: boolean
   investigator_id?: number | null
   is_riddor_reportable?: boolean | null
   riddor_classification?: string | null
+  riddor_rationale?: string | null
   is_sif?: boolean | null
   life_altering_potential?: boolean | null
   reporter_submission?: Record<string, unknown> | null
@@ -65,6 +71,17 @@ export interface IncidentCreate {
   reporter_email?: string
   reporter_name?: string
   asset_id?: number | null
+  is_injury?: boolean
+  body_parts?: string[] | null
+  is_lti?: boolean
+  days_lost?: number | null
+  is_minor_injury?: boolean
+  first_aid_given?: boolean
+  emergency_services_called?: boolean
+  people_involved?: string
+  is_riddor_reportable?: boolean | null
+  riddor_classification?: string | null
+  riddor_rationale?: string | null
 }
 
 export interface IncidentUpdate {
@@ -77,6 +94,17 @@ export interface IncidentUpdate {
   department?: string
   owner_id?: number | null
   asset_id?: number | null
+  is_injury?: boolean
+  body_parts?: string[] | null
+  is_lti?: boolean
+  days_lost?: number | null
+  is_minor_injury?: boolean
+  first_aid_given?: boolean
+  emergency_services_called?: boolean
+  people_involved?: string
+  is_riddor_reportable?: boolean | null
+  riddor_classification?: string | null
+  riddor_rationale?: string | null
 }
 
 export interface RaiseRiskFromIncidentRequest {

@@ -21,6 +21,17 @@ class IncidentBase(BaseModel):
     location: Optional[str] = Field(None, max_length=300, description="Where the incident occurred")
     department: Optional[str] = Field(None, max_length=100, description="Department involved")
     asset_id: Optional[int] = Field(None, description="Linked Asset registry id (golden thread)")
+    is_injury: bool = Field(default=False, description="Whether an injury occurred")
+    body_parts: Optional[list[str]] = Field(None, description="Injured body part region ids/labels")
+    is_lti: bool = Field(default=False, description="Lost Time Injury (>1 day off work)")
+    days_lost: Optional[int] = Field(None, ge=0, description="Working days lost due to injury")
+    is_minor_injury: bool = Field(default=False, description="Minor injury flag for AFR counting")
+    first_aid_given: bool = Field(default=False, description="First aid was administered")
+    emergency_services_called: bool = Field(default=False, description="Emergency services attended")
+    people_involved: Optional[str] = Field(None, description="Names/details of people involved")
+    is_riddor_reportable: Optional[bool] = Field(None, description="RIDDOR reportable flag")
+    riddor_classification: Optional[str] = Field(None, max_length=100, description="RIDDOR classification")
+    riddor_rationale: Optional[str] = Field(None, description="RIDDOR rationale / notes")
 
 
 class IncidentCreate(IncidentBase):
@@ -73,8 +84,28 @@ class IncidentUpdate(BaseModel):
     department: Optional[str] = Field(None, max_length=100)
     owner_id: Optional[int] = Field(None, description="Case owner user id (null clears assignment)")
     asset_id: Optional[int] = Field(None, description="Linked Asset registry id (null clears link)")
+    is_injury: Optional[bool] = None
+    body_parts: Optional[list[str]] = None
+    is_lti: Optional[bool] = None
+    days_lost: Optional[int] = Field(None, ge=0)
+    is_minor_injury: Optional[bool] = None
+    first_aid_given: Optional[bool] = None
+    emergency_services_called: Optional[bool] = None
+    people_involved: Optional[str] = None
+    is_riddor_reportable: Optional[bool] = None
+    riddor_classification: Optional[str] = Field(None, max_length=100)
+    riddor_rationale: Optional[str] = None
 
-    @field_validator("title", "description", "location", "department", mode="before")
+    @field_validator(
+        "title",
+        "description",
+        "location",
+        "department",
+        "people_involved",
+        "riddor_classification",
+        "riddor_rationale",
+        mode="before",
+    )
     @classmethod
     def _sanitize(cls, v: Optional[str]) -> Optional[str]:
         return sanitize_field(v)
@@ -124,9 +155,15 @@ class IncidentResponse(BaseModel):
     immediate_actions: Optional[str] = None
     first_aid_given: bool = False
     emergency_services_called: bool = False
+    is_injury: bool = False
+    body_parts: Optional[list[str]] = None
+    is_lti: bool = False
+    days_lost: Optional[int] = None
+    is_minor_injury: bool = False
     investigator_id: Optional[int] = None
     is_riddor_reportable: Optional[bool] = None
     riddor_classification: Optional[str] = None
+    riddor_rationale: Optional[str] = None
     is_sif: Optional[bool] = None
     life_altering_potential: Optional[bool] = None
     reporter_submission: Optional[dict[str, Any]] = None
