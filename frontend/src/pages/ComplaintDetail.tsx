@@ -26,6 +26,7 @@ import {
   X,
   ExternalLink,
   MailWarning,
+  Sparkles,
 } from 'lucide-react'
 import {
   complaintsApi,
@@ -707,6 +708,16 @@ export default function ComplaintDetail() {
               <Button variant="outline" onClick={() => setIsEditing(true)}>
                 <Pencil className="w-4 h-4 mr-2" />
                 {t('edit')}
+              </Button>
+              <Button
+                variant="outline"
+                data-testid="complaint-audit-this-risk"
+                onClick={() =>
+                  navigate(`/audit-templates/new?ai=1&caseType=complaint&caseId=${complaint.id}`)
+                }
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                {t('auditBuilder.auditThisRisk', 'Audit this risk')}
               </Button>
               <Button variant="outline" onClick={() => setShowActionModal(true)}>
                 <Plus className="w-4 h-4 mr-2" />

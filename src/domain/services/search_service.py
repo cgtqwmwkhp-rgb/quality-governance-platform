@@ -30,6 +30,7 @@ class SearchResultItem:
         "date",
         "relevance",
         "highlights",
+        "entity_id",
     )
 
     def __init__(
@@ -44,6 +45,7 @@ class SearchResultItem:
         date: str,
         relevance: float,
         highlights: list[str] | None = None,
+        entity_id: int | None = None,
     ):
         self.id = id
         self.type = type
@@ -54,6 +56,7 @@ class SearchResultItem:
         self.date = date
         self.relevance = relevance
         self.highlights = highlights or []
+        self.entity_id = entity_id
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -66,6 +69,7 @@ class SearchResultItem:
             "date": self.date,
             "relevance": self.relevance,
             "highlights": self.highlights,
+            "entity_id": self.entity_id,
         }
 
 
@@ -96,6 +100,7 @@ class SearchService:
         all_results: list[SearchResultItem] = []
 
         all_results.extend(await self._search_incidents(query, tenant_id, request_id))
+        all_results.extend(await self._search_near_misses(query, tenant_id, request_id))
         all_results.extend(await self._search_rtas(query, tenant_id, request_id))
         all_results.extend(await self._search_complaints(query, tenant_id, request_id))
         all_results.extend(await self._search_risks(query, tenant_id, request_id))
@@ -215,11 +220,75 @@ class SearchService:
                         date=str(inc.incident_date or inc.created_at or ""),
                         relevance=relevance,
                         highlights=[w for w in words if w in title_lower or w in desc_lower],
+                        entity_id=inc.id,
                     )
                 )
         except (AttributeError, SQLAlchemyError, ValueError) as e:
             logger.warning(
                 "Search: incident query failed [request_id=%s]: %s",
+                request_id,
+                type(e).__name__,
+                exc_info=True,
+            )
+        return results
+
+    async def _search_near_misses(
+        self, query: str, tenant_id: int | None, request_id: str | None
+    ) -> list[SearchResultItem]:
+        results: list[SearchResultItem] = []
+        try:
+            from src.domain.models.near_miss import NearMiss
+
+            inline_vector = func.to_tsvector(
+                "english",
+                func.coalesce(cast(NearMiss.reference_number, String), "")
+                + " "
+                + func.coalesce(cast(NearMiss.description, String), "")
+                + " "
+                + func.coalesce(cast(NearMiss.location, String), ""),
+            )
+            tsquery = self._ts_query(query)
+            rank = func.ts_rank(inline_vector, tsquery)
+
+            if self._is_short_query(query):
+                filter_clause = or_(
+                    inline_vector.op("@@")(tsquery),
+                    self._trgm_filter(cast(NearMiss.description, String), query),
+                    NearMiss.reference_number.ilike(f"%{query}%"),
+                )
+                score = func.greatest(rank, self._trgm_score(cast(NearMiss.description, String), query))
+            else:
+                filter_clause = inline_vector.op("@@")(tsquery)
+                score = rank
+
+            stmt = (
+                select(NearMiss, score.label("score"))
+                .where(NearMiss.tenant_id == tenant_id)
+                .where(filter_clause)
+                .order_by(score.desc())
+                .limit(10)
+            )
+            db_result = await self.db.execute(stmt)
+            for nm, sc in db_result.all():
+                relevance = min(100.0, 60 + float(sc) * 40)
+                desc = (nm.description or "")[:200]
+                results.append(
+                    SearchResultItem(
+                        id=nm.reference_number or f"NM-{nm.id}",
+                        type="near_miss",
+                        title=f"Near miss — {(nm.location or 'Unknown location')[:80]}",
+                        description=desc,
+                        module="Near Misses",
+                        status=nm.status or "Open",
+                        date=str(nm.event_date or nm.created_at or ""),
+                        relevance=relevance,
+                        highlights=query.lower().split(),
+                        entity_id=nm.id,
+                    )
+                )
+        except (AttributeError, SQLAlchemyError, ValueError) as e:
+            logger.warning(
+                "Search: near miss query failed [request_id=%s]: %s",
                 request_id,
                 type(e).__name__,
                 exc_info=True,
@@ -269,6 +338,7 @@ class SearchService:
                         date=str(rta.collision_date or rta.created_at or ""),
                         relevance=relevance,
                         highlights=query.lower().split(),
+                        entity_id=rta.id,
                     )
                 )
         except (AttributeError, SQLAlchemyError, ValueError) as e:
@@ -318,6 +388,7 @@ class SearchService:
                         id=cmp.reference_number or f"CMP-{cmp.id}",
                         type="complaint",
                         title=cmp.title or "Untitled Complaint",
+                        entity_id=cmp.id,
                         description=(cmp.description or "")[:200],
                         module="Complaints",
                         status=cmp.status or "Open",

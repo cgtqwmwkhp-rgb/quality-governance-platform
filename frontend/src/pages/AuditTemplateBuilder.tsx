@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   Plus,
   Copy,
@@ -188,7 +188,15 @@ export default function AuditTemplateBuilder() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { templateId } = useParams()
+  const [searchParams] = useSearchParams()
   const { announce } = useLiveAnnouncer()
+  const caseTypeParam = searchParams.get('caseType') || searchParams.get('case_type')
+  const caseIdParam = Number(searchParams.get('caseId') || searchParams.get('case_id') || '')
+  const openAiParam = searchParams.get('ai') === '1' || searchParams.get('ai') === 'true'
+  const initialCaseRefs =
+    caseTypeParam && Number.isFinite(caseIdParam) && caseIdParam > 0
+      ? [{ type: caseTypeParam, id: caseIdParam }]
+      : undefined
 
   const [template, setTemplate] = useState<AuditTemplate>({
     id: templateId || generateId(),
@@ -212,7 +220,7 @@ export default function AuditTemplateBuilder() {
   const [activeTab, setActiveTab] = useState<'builder' | 'settings' | 'preview'>('builder')
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [showAIAssist, setShowAIAssist] = useState(false)
+  const [showAIAssist, setShowAIAssist] = useState(openAiParam)
   const [showPublishDialog, setShowPublishDialog] = useState(false)
   const [backendId, setBackendId] = useState<number | null>(
     templateId && !isNaN(Number(templateId)) ? Number(templateId) : null,
@@ -1089,9 +1097,21 @@ export default function AuditTemplateBuilder() {
 
       {showAIAssist && (
         <AITemplateGenerator
+          initialCaseRefs={initialCaseRefs}
           onClose={() => setShowAIAssist(false)}
-          onApply={(gs) => {
+          onUseExistingTemplate={(id) => navigate(`/audit-templates/${id}/edit`)}
+          onApply={(gs, meta) => {
             updateSections((ss) => [...ss, ...mapAISectionsToLocal(gs, ss.length)])
+            if (meta?.briefId || meta?.sourceCaseRefs?.length) {
+              setTemplate((prev) => {
+                const tags = new Set(prev.tags || [])
+                if (meta.briefId) tags.add(`builder_brief:${meta.briefId}`)
+                for (const ref of meta.sourceCaseRefs || []) {
+                  tags.add(`source_case:${ref.type}:${ref.id}`)
+                }
+                return { ...prev, tags: Array.from(tags) }
+              })
+            }
             setShowAIAssist(false)
           }}
         />

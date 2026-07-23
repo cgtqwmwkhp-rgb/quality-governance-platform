@@ -28,6 +28,7 @@ import {
   MessageSquare,
   Upload,
   User,
+  Sparkles,
 } from 'lucide-react'
 import {
   rtasApi,
@@ -630,6 +631,14 @@ export default function RTADetail() {
             <>
               <Button variant="outline" onClick={() => setIsEditing(true)}>
                 <Pencil className="w-4 h-4 mr-2" />{t('edit')}
+              </Button>
+              <Button
+                variant="outline"
+                data-testid="rta-audit-this-risk"
+                onClick={() => navigate(`/audit-templates/new?ai=1&caseType=rta&caseId=${rta.id}`)}
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                {t('auditBuilder.auditThisRisk', 'Audit this risk')}
               </Button>
               {actions.length > 0 ? (
                 <Button

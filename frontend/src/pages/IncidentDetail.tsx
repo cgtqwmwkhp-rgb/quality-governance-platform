@@ -25,6 +25,7 @@ import {
   X,
   ExternalLink,
   ShieldAlert,
+  Sparkles,
 } from 'lucide-react'
 import {
   incidentsApi,
@@ -858,6 +859,16 @@ export default function IncidentDetail() {
                   {raisingRisk ? 'Raising…' : 'Raise risk'}
                 </Button>
               )}
+              <Button
+                variant="outline"
+                data-testid="incident-audit-this-risk"
+                onClick={() =>
+                  navigate(`/audit-templates/new?ai=1&caseType=incident&caseId=${incident.id}`)
+                }
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                {t('auditBuilder.auditThisRisk', 'Audit this risk')}
+              </Button>
               <Button variant="outline" onClick={startEditing}>
                 <Pencil className="w-4 h-4 mr-2" />
                 {t('edit')}
