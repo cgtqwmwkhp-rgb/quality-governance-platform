@@ -68,12 +68,12 @@ class HsExcelImportService:
 
     async def _exists(self, tenant_id: int, key: str, module: str) -> bool:
         if module == "incident":
-            rows = (
+            incident_rows = (
                 await self.db.execute(
                     select(Incident).where(Incident.tenant_id == tenant_id, Incident.source_form_id == SOURCE_FORM_ID)
                 )
             ).scalars()
-            for incident in rows:
+            for incident in incident_rows:
                 submission = incident.reporter_submission or {}
                 if submission.get("external_key") == key:
                     return True
@@ -90,7 +90,7 @@ class HsExcelImportService:
             )
             return found.scalar_one_or_none() is not None
         if module == "rta":
-            rows = (
+            rta_rows = (
                 await self.db.execute(
                     select(RoadTrafficCollision).where(
                         RoadTrafficCollision.tenant_id == tenant_id,
@@ -98,7 +98,7 @@ class HsExcelImportService:
                     )
                 )
             ).scalars()
-            for rta in rows:
+            for rta in rta_rows:
                 submission = rta.reporter_submission or {}
                 if submission.get("external_key") == key:
                     return True

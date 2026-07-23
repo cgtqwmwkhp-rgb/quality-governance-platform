@@ -25,6 +25,7 @@ class HsReportingPeriodInput(BaseModel):
 
 @router.get("/summary")
 async def hs_kpi_summary(db: DbSession, current_user: CurrentUser):
+    assert current_user.tenant_id is not None
     service = HsKpiService(db)
     await service.ensure_default_periods(current_user.tenant_id)
     await db.commit()
@@ -33,6 +34,7 @@ async def hs_kpi_summary(db: DbSession, current_user: CurrentUser):
 
 @router.get("/periods")
 async def list_hs_reporting_periods(db: DbSession, current_user: CurrentUser):
+    assert current_user.tenant_id is not None
     rows = await HsKpiService(db).ensure_default_periods(current_user.tenant_id)
     await db.commit()
     return {"items": rows, "total": len(rows)}
@@ -45,6 +47,7 @@ async def put_hs_reporting_period(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("analytics:manage"))],
 ):
+    assert current_user.tenant_id is not None
     if payload.reporting_year != reporting_year or payload.period_end < payload.period_start:
         raise HTTPException(status_code=422, detail="Reporting year and period dates are invalid")
     row = (
