@@ -451,9 +451,7 @@ async def similar_templates(
 
     tenant_id = require_tenant_id(getattr(user, "tenant_id", None))
     orch = AuditBuilderOrchestrator(db)
-    matches = await orch.find_similar_templates(
-        tenant_id=tenant_id, brief=request.brief, limit=request.limit
-    )
+    matches = await orch.find_similar_templates(tenant_id=tenant_id, brief=request.brief, limit=request.limit)
     return {"matches": matches, "count": len(matches)}
 
 

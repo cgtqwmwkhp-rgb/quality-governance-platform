@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "171 kB",
+    "limit": "174 kB",
     "gzip": true,
-    "name": "index: 170→171 kB — H&S performance nav + injury/RIDDOR detail wiring"
+    "name": "index: 171→174 kB — AI Audit Builder wizard + case entry points"
   },
   {
     "path": "dist/assets/vendor-*.js",

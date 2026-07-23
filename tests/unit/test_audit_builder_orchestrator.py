@@ -89,21 +89,26 @@ def test_perplexity_provider_parses_json_array(monkeypatch):
     }
 
     class _Resp:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return payload
+
+    class _Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
         def __enter__(self):
             return self
 
         def __exit__(self, *args):
             return False
 
-        def read(self):
-            import json
+        def post(self, *args, **kwargs):
+            return _Resp()
 
-            return json.dumps(payload).encode("utf-8")
-
-    monkeypatch.setattr(
-        "src.domain.services.library_horizon_adapter.urllib.request.urlopen",
-        lambda *a, **k: _Resp(),
-    )
+    monkeypatch.setattr("src.domain.services.library_horizon_adapter.httpx.Client", _Client)
     findings = PerplexityLiveHorizonProvider("test-key").research("LOLER winch")
     assert len(findings) == 1
     assert findings[0].title == "HSE LOLER"

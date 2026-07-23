@@ -208,13 +208,13 @@ class AuditBuilderOrchestrator:
             url = f.get("source_url") or ""
             summary = f.get("summary") or ""
             research_lines.append(f"- {title}: {summary[:240]} ({url})")
-        research = "\n".join(research_lines) or "(no live research available — use model knowledge only and mark as such)"
+        research = (
+            "\n".join(research_lines) or "(no live research available — use model knowledge only and mark as such)"
+        )
         qa = brief.get("qa_answers") or {}
         qa_txt = "\n".join(f"- {k}: {v}" for k, v in qa.items()) or "(none)"
         sections = ", ".join(s.get("title", "") for s in (brief.get("proposed_sections") or []))
-        case_bits = ", ".join(
-            f"{c.get('type')}:{c.get('id')}" for c in (brief.get("case_refs") or []) if c.get("id")
-        )
+        case_bits = ", ".join(f"{c.get('type')}:{c.get('id')}" for c in (brief.get("case_refs") or []) if c.get("id"))
         convert_note = ""
         if purpose == "technical_assessment":
             convert_note = (
@@ -286,9 +286,7 @@ Requirements:
                 from src.domain.models.incident import Incident
 
                 row = (
-                    await self.db.execute(
-                        select(Incident).where(Incident.tenant_id == tenant_id, Incident.id == cid)
-                    )
+                    await self.db.execute(select(Incident).where(Incident.tenant_id == tenant_id, Incident.id == cid))
                 ).scalar_one_or_none()
                 if row:
                     return f"Incident {row.reference_number}: {(row.title or '')[:120]}"
@@ -296,9 +294,7 @@ Requirements:
                 from src.domain.models.near_miss import NearMiss
 
                 row = (
-                    await self.db.execute(
-                        select(NearMiss).where(NearMiss.tenant_id == tenant_id, NearMiss.id == cid)
-                    )
+                    await self.db.execute(select(NearMiss).where(NearMiss.tenant_id == tenant_id, NearMiss.id == cid))
                 ).scalar_one_or_none()
                 if row:
                     return f"Near miss {row.reference_number}: {(row.description or '')[:120]}"
@@ -327,12 +323,7 @@ Requirements:
     async def _recent_incident_titles(self, tenant_id: int, asset_hint: str) -> list[str]:
         from src.domain.models.incident import Incident
 
-        stmt = (
-            select(Incident)
-            .where(Incident.tenant_id == tenant_id)
-            .order_by(Incident.created_at.desc())
-            .limit(8)
-        )
+        stmt = select(Incident).where(Incident.tenant_id == tenant_id).order_by(Incident.created_at.desc()).limit(8)
         if asset_hint:
             pattern = f"%{asset_hint[:80]}%"
             stmt = stmt.where(or_(Incident.title.ilike(pattern), Incident.description.ilike(pattern)))
@@ -342,12 +333,7 @@ Requirements:
     async def _recent_near_miss_titles(self, tenant_id: int, asset_hint: str) -> list[str]:
         from src.domain.models.near_miss import NearMiss
 
-        stmt = (
-            select(NearMiss)
-            .where(NearMiss.tenant_id == tenant_id)
-            .order_by(NearMiss.created_at.desc())
-            .limit(8)
-        )
+        stmt = select(NearMiss).where(NearMiss.tenant_id == tenant_id).order_by(NearMiss.created_at.desc()).limit(8)
         if asset_hint:
             pattern = f"%{asset_hint[:80]}%"
             stmt = stmt.where(NearMiss.description.ilike(pattern))
@@ -358,23 +344,31 @@ Requirements:
         from src.domain.models.rta import RTA
 
         rows = (
-            await self.db.execute(
-                select(RTA).where(RTA.tenant_id == tenant_id).order_by(RTA.created_at.desc()).limit(5)
+            (
+                await self.db.execute(
+                    select(RTA).where(RTA.tenant_id == tenant_id).order_by(RTA.created_at.desc()).limit(5)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [f"Recent RTA: {(r.location or r.reference_number)[:100]}" for r in rows]
 
     async def _recent_complaint_titles(self, tenant_id: int) -> list[str]:
         from src.domain.models.complaint import Complaint
 
         rows = (
-            await self.db.execute(
-                select(Complaint)
-                .where(Complaint.tenant_id == tenant_id)
-                .order_by(Complaint.created_at.desc())
-                .limit(5)
+            (
+                await self.db.execute(
+                    select(Complaint)
+                    .where(Complaint.tenant_id == tenant_id)
+                    .order_by(Complaint.created_at.desc())
+                    .limit(5)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [f"Recent complaint: {(getattr(r, 'title', None) or r.reference_number)[:100]}" for r in rows]
 
     async def _semantic_doc_themes(self, tenant_id: int, asset_hint: str) -> list[str]:
@@ -409,7 +403,13 @@ Requirements:
         if purpose == "technical_assessment":
             base.insert(1, {"title": "Competency demonstration", "rationale": "Observe skills end-to-end"})
         if purpose == "vehicle_asset_check" or asset_hint:
-            base.insert(1, {"title": f"Asset-specific checks ({asset_hint or 'vehicle/plant'})", "rationale": "OEM / job sheet steps"})
+            base.insert(
+                1,
+                {
+                    "title": f"Asset-specific checks ({asset_hint or 'vehicle/plant'})",
+                    "rationale": "OEM / job sheet steps",
+                },
+            )
         if any("27001" in s or "ISO 27001" in s for s in standards):
             base.insert(1, {"title": "Information security controls", "rationale": "ISO 27001 alignment"})
         if themes:

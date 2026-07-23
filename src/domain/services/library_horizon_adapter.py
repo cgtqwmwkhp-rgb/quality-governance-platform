@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import json
 import logging
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol
+
+import httpx
 
 from src.core.config import settings
 
@@ -125,21 +125,19 @@ class PerplexityLiveHorizonProvider:
                 "temperature": 0.2,
                 "max_tokens": 1200,
             }
-            req = urllib.request.Request(
-                self._API_URL,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=25) as resp:  # noqa: S310 — allowlisted API host
-                body = json.loads(resp.read().decode("utf-8"))
-            text = (
-                (((body.get("choices") or [{}])[0].get("message") or {}).get("content")) or ""
-            ).strip()
+            with httpx.Client(timeout=25.0) as client:
+                resp = client.post(
+                    self._API_URL,
+                    json=payload,
+                    headers={
+                        "Authorization": f"Bearer {self._api_key}",
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                )
+                resp.raise_for_status()
+                body = resp.json()
+            text = ((((body.get("choices") or [{}])[0].get("message") or {}).get("content")) or "").strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[1].rsplit("```", 1)[0]
             data = json.loads(text)
@@ -167,7 +165,7 @@ class PerplexityLiveHorizonProvider:
                     )
                 )
             return findings
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+        except (httpx.HTTPError, TimeoutError, json.JSONDecodeError, OSError, ValueError) as exc:
             logger.info("Perplexity research unavailable: %s", type(exc).__name__)
             return []
         except Exception as exc:  # noqa: BLE001 — fail-closed
