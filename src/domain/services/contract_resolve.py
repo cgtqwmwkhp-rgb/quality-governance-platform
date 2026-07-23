@@ -72,9 +72,7 @@ async def resolve_contract_id_by_code(
             await db.flush()
     except IntegrityError:
         raced = (
-            await db.execute(
-                select(Contract).where(func.lower(Contract.code) == normalized.lower())
-            )
+            await db.execute(select(Contract).where(func.lower(Contract.code) == normalized.lower()))
         ).scalar_one_or_none()
         if raced is not None and raced.tenant_id == tenant_id:
             return int(raced.id)

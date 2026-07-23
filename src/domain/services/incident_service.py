@@ -266,8 +266,15 @@ class IncidentService:
             normalize_medical_assistance,
         )
 
-        if tenant_id is not None and "contract_id" in raw_update and raw_update["contract_id"] is not None:
-            await assert_tenant_contract(self.db, contract_id=int(raw_update["contract_id"]), tenant_id=tenant_id)
+        # Guard against the incident's tenant (not the caller's) so cross-tenant
+        # editors with skip_tenant_check can still set a valid contract FK.
+        contract_tenant_id = incident.tenant_id if incident.tenant_id is not None else tenant_id
+        if contract_tenant_id is not None and "contract_id" in raw_update and raw_update["contract_id"] is not None:
+            await assert_tenant_contract(
+                self.db,
+                contract_id=int(raw_update["contract_id"]),
+                tenant_id=int(contract_tenant_id),
+            )
 
         update_dict = apply_updates(incident, incident_data, set_updated_at=False)
 
