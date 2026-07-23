@@ -20,6 +20,7 @@ import {
   Loader2,
   Megaphone,
   MessageSquare,
+  BarChart3,
 } from 'lucide-react'
 import { auditTrailApi, libraryReviewApi, lookupsApi } from '../../api/client'
 import { formConfigApi } from '../../api/formConfigClient'
@@ -121,6 +122,13 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: <Webhook className="w-6 h-6" />,
     href: '/admin/partner-webhooks',
     color: 'bg-cyan-100 text-cyan-600',
+  },
+  {
+    title: 'H&S reporting hours',
+    description: 'Manual annual hours for the H&S Performance board (LTIFR/AFR)',
+    icon: <BarChart3 className="w-6 h-6" />,
+    href: '/admin/hs-reporting-hours',
+    color: 'bg-amber-100 text-amber-700',
   },
 ]
 

@@ -21,3 +21,6 @@ class HsReportingPeriod(Base, TimestampMixin):
     period_end: Mapped[date] = mapped_column(Date, nullable=False)
     average_fte: Mapped[float] = mapped_column(Float, nullable=False)
     hours_per_fte_year: Mapped[float] = mapped_column(Float, nullable=False, default=2124)
+    # When set by Admin, this is the authoritative hours figure for LTIFR/AFR.
+    # When null, hours are derived from FTE × hours_per_fte_year × period pro-rata.
+    manual_hours: Mapped[float | None] = mapped_column(Float, nullable=True)

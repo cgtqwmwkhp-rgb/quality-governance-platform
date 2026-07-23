@@ -114,6 +114,7 @@ const HsecQuestionInbox = lazy(() => import('./pages/admin/HsecQuestionInbox'))
 const PartnerWebhooks = lazy(() => import('./pages/admin/PartnerWebhooks'))
 const LibraryRoles = lazy(() => import('./pages/admin/LibraryRoles'))
 const EngineerGroups = lazy(() => import('./pages/admin/EngineerGroups'))
+const HsReportingHours = lazy(() => import('./pages/admin/HsReportingHours'))
 const RequireRole = lazy(() => import('./components/RequireRole'))
 
 function PageLoader() {
@@ -581,6 +582,14 @@ function App() {
                   element={
                     <RequireRole allowed={['admin']}>
                       <PartnerWebhooks />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/hs-reporting-hours"
+                  element={
+                    <RequireRole allowed={['admin', 'manager']}>
+                      <HsReportingHours />
                     </RequireRole>
                   }
                 />
