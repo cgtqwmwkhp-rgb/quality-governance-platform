@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, ArrowLeft, Calendar, ClipboardList, FileText, FlaskConical, Pencil, Save, ShieldAlert, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Calendar, ClipboardList, FileText, FlaskConical, Pencil, Save, ShieldAlert, Sparkles, X } from 'lucide-react'
 import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
@@ -337,6 +337,16 @@ export default function NearMissDetail() {
                 {raisingRisk
                   ? t('near_misses.raising_risk', 'Raising…')
                   : t('near_misses.actions.raise_risk', 'Raise risk')}
+              </Button>
+              <Button
+                variant="outline"
+                data-testid="near-miss-audit-this-risk"
+                onClick={() =>
+                  navigate(`/audit-templates/new?ai=1&caseType=near_miss&caseId=${nearMiss.id}`)
+                }
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                {t('auditBuilder.auditThisRisk', 'Audit this risk')}
               </Button>
               <Button variant="outline" onClick={() => setShowInvestigationModal(true)}>
                 <FlaskConical className="w-4 h-4 mr-2" />

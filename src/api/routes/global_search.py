@@ -28,6 +28,7 @@ class SearchResultItem(BaseModel):
     date: str
     relevance: float
     highlights: List[str] = []
+    entity_id: Optional[int] = None
 
 
 class SearchResponse(BaseModel):
