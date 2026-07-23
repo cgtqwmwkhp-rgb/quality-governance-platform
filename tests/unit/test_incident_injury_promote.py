@@ -21,9 +21,7 @@ def test_promote_injury_from_has_injuries_flag() -> None:
 
 
 def test_promote_injury_from_body_map() -> None:
-    result = promote_injury_fields_from_submission(
-        {"injuries": [{"id": "cut", "regions": [{"id": "right-hand"}]}]}
-    )
+    result = promote_injury_fields_from_submission({"injuries": [{"id": "cut", "regions": [{"id": "right-hand"}]}]})
     assert result["is_injury"] is True
     assert result["body_parts"] == ["cut", "right-hand"]
 

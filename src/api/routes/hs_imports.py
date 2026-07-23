@@ -46,6 +46,4 @@ async def commit_hs_excel_import(
 ):
     content = await _read_xlsx(file)
     assert current_user.tenant_id is not None
-    return await HsExcelImportService(db).commit(
-        content, tenant_id=current_user.tenant_id, user_id=current_user.id
-    )
+    return await HsExcelImportService(db).commit(content, tenant_id=current_user.tenant_id, user_id=current_user.id)

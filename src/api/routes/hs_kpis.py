@@ -48,7 +48,14 @@ async def put_hs_reporting_period(
 ):
     if payload.reporting_year != reporting_year or payload.period_end < payload.period_start:
         raise HTTPException(status_code=422, detail="Reporting year and period dates are invalid")
-    row = (await db.execute(select(HsReportingPeriod).where(HsReportingPeriod.tenant_id == current_user.tenant_id, HsReportingPeriod.reporting_year == reporting_year))).scalar_one_or_none()
+    row = (
+        await db.execute(
+            select(HsReportingPeriod).where(
+                HsReportingPeriod.tenant_id == current_user.tenant_id,
+                HsReportingPeriod.reporting_year == reporting_year,
+            )
+        )
+    ).scalar_one_or_none()
     if row is None:
         row = HsReportingPeriod(tenant_id=current_user.tenant_id, **payload.model_dump())
         db.add(row)

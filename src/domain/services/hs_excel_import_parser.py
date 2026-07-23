@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import io
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from typing import Any, Optional
 
 from openpyxl import load_workbook
@@ -33,6 +33,8 @@ def _as_aware(value: Any) -> Optional[datetime]:
         return None
     if isinstance(value, datetime):
         return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, date):
+        return datetime.combine(value, time.min, tzinfo=timezone.utc)
     return None
 
 
@@ -69,6 +71,9 @@ def parse_hs_workbook(content: bytes) -> dict[str, Any]:
         for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
             excel_id = _cell(row, 0)
             if excel_id is None and not any(row):
+                continue
+            if excel_id is None:
+                warnings.append(f"Incident Log row {idx}: skipped (missing ID)")
                 continue
             event_date = _as_aware(_cell(row, 1))
             raw_type = _text(_cell(row, 5))
@@ -111,6 +116,9 @@ def parse_hs_workbook(content: bytes) -> dict[str, Any]:
         for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
             excel_id = _cell(row, 0)
             if excel_id is None and not any(row):
+                continue
+            if excel_id is None:
+                warnings.append(f"RTA Log row {idx}: skipped (missing ID)")
                 continue
             event_date = _as_aware(_cell(row, 1))
             if not event_date:

@@ -370,13 +370,19 @@ export default function IncidentDetail() {
     if (!incident) return
     setRiddorWorking(true)
     try {
+      const classification = (incident.riddor_classification || '').toLowerCase()
+      const specifiedTypes = ['fracture', 'amputation', 'dislocation', 'loss_of_sight'] as const
+      const injuryType =
+        specifiedTypes.find((type) => classification.includes(type)) ||
+        ((incident.body_parts || []).some((part) => part.toLowerCase().includes('fracture'))
+          ? 'fracture'
+          : undefined)
       const response = await complianceAutomationApi.checkRiddor({
-        incident_date: incident.incident_date,
-        days_off_work: incident.days_lost ?? 0,
-        is_injury: Boolean(incident.is_injury),
-        is_lti: Boolean(incident.is_lti),
-        emergency_services_called: Boolean(incident.emergency_services_called),
-        riddor_classification: incident.riddor_classification,
+        days_off_work: incident.days_lost ?? (incident.is_lti ? 8 : 0),
+        injury_type: injuryType,
+        fatality: classification.includes('fatal') || classification.includes('death'),
+        dangerous_occurrence: classification.includes('dangerous'),
+        occupational_disease: classification.includes('disease'),
       })
       toast.success(
         response.data.is_riddor
@@ -1114,7 +1120,10 @@ export default function IncidentDetail() {
                           <h4 className="text-sm font-semibold text-foreground">RIDDOR assessment</h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
-                              <label className="text-sm font-medium text-muted-foreground">
+                              <label
+                                htmlFor="incident-riddor-reportable"
+                                className="text-sm font-medium text-muted-foreground"
+                              >
                                 Reportable
                               </label>
                               <Select
@@ -1133,7 +1142,7 @@ export default function IncidentDetail() {
                                   })
                                 }
                               >
-                                <SelectTrigger className="mt-1">
+                                <SelectTrigger id="incident-riddor-reportable" className="mt-1">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1144,10 +1153,14 @@ export default function IncidentDetail() {
                               </Select>
                             </div>
                             <div>
-                              <label className="text-sm font-medium text-muted-foreground">
+                              <label
+                                htmlFor="incident-riddor-classification"
+                                className="text-sm font-medium text-muted-foreground"
+                              >
                                 Classification
                               </label>
                               <Input
+                                id="incident-riddor-classification"
                                 className="mt-1"
                                 value={editForm.riddor_classification || ''}
                                 onChange={(e) =>
@@ -1157,10 +1170,14 @@ export default function IncidentDetail() {
                             </div>
                           </div>
                           <div>
-                            <label className="text-sm font-medium text-muted-foreground">
+                            <label
+                              htmlFor="incident-riddor-rationale"
+                              className="text-sm font-medium text-muted-foreground"
+                            >
                               Rationale
                             </label>
                             <Textarea
+                              id="incident-riddor-rationale"
                               className="mt-1"
                               value={editForm.riddor_rationale || ''}
                               onChange={(e) =>

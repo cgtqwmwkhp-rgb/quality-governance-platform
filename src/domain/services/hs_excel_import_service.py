@@ -70,9 +70,7 @@ class HsExcelImportService:
         if module == "incident":
             rows = (
                 await self.db.execute(
-                    select(Incident).where(
-                        Incident.tenant_id == tenant_id, Incident.source_form_id == SOURCE_FORM_ID
-                    )
+                    select(Incident).where(Incident.tenant_id == tenant_id, Incident.source_form_id == SOURCE_FORM_ID)
                 )
             ).scalars()
             for incident in rows:
@@ -82,10 +80,14 @@ class HsExcelImportService:
             return False
         if module == "near_miss":
             ref = f"HSXL-{key.replace('excel:', '').replace(':', '-').upper()}"
-            found = await self.db.execute(select(NearMiss.id).where(NearMiss.reference_number == ref))
+            found = await self.db.execute(
+                select(NearMiss.id).where(NearMiss.tenant_id == tenant_id, NearMiss.reference_number == ref)
+            )
             return found.scalar_one_or_none() is not None
         if module == "complaint":
-            found = await self.db.execute(select(Complaint.id).where(Complaint.external_ref == key))
+            found = await self.db.execute(
+                select(Complaint.id).where(Complaint.tenant_id == tenant_id, Complaint.external_ref == key)
+            )
             return found.scalar_one_or_none() is not None
         if module == "rta":
             rows = (

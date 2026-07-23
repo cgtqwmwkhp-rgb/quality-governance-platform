@@ -33,7 +33,9 @@ export default function HsPerformance() {
     reload()
   }, [])
 
-  const latest = summary?.by_year.at(-1)
+  const latest = summary?.by_year.length
+    ? summary.by_year[summary.by_year.length - 1]
+    : undefined
 
   const handleDryRun = async () => {
     if (!file) return

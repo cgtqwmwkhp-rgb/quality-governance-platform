@@ -134,9 +134,7 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     body_parts: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # list[str] body region ids/labels
     is_lti: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     days_lost: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    is_minor_injury: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default="false", nullable=False
-    )
+    is_minor_injury: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     # Investigation
     investigator_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)

@@ -947,16 +947,62 @@ export default function RTADetail() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Collision type</label>
-                    <Input value={editForm.collision_type || ''} onChange={(e) => setEditForm({ ...editForm, collision_type: e.target.value })} className="mt-1" />
+                    <label htmlFor="rta-collision-type" className="text-sm font-medium text-muted-foreground">
+                      Collision type
+                    </label>
+                    <Input
+                      id="rta-collision-type"
+                      value={editForm.collision_type || ''}
+                      onChange={(e) => setEditForm({ ...editForm, collision_type: e.target.value })}
+                      className="mt-1"
+                    />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Days lost</label>
-                    <Input type="number" min={0} value={editForm.days_lost ?? ''} onChange={(e) => setEditForm({ ...editForm, days_lost: e.target.value ? Number(e.target.value) : null })} className="mt-1" />
+                    <label htmlFor="rta-days-lost" className="text-sm font-medium text-muted-foreground">
+                      Days lost
+                    </label>
+                    <Input
+                      id="rta-days-lost"
+                      type="number"
+                      min={0}
+                      value={editForm.days_lost ?? ''}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          days_lost: e.target.value ? Number(e.target.value) : null,
+                        })
+                      }
+                      className="mt-1"
+                    />
                   </div>
-                  <label className="flex items-center gap-2 text-sm"><Switch checked={Boolean(editForm.vehicle_drivable)} onCheckedChange={(value) => setEditForm({ ...editForm, vehicle_drivable: value })} />Vehicle drivable</label>
-                  <label className="flex items-center gap-2 text-sm"><Switch checked={Boolean(editForm.is_lti)} onCheckedChange={(value) => setEditForm({ ...editForm, is_lti: value })} />Lost time injury</label>
-                  <label className="flex items-center gap-2 text-sm"><Switch checked={Boolean(editForm.is_riddor_reportable)} onCheckedChange={(value) => setEditForm({ ...editForm, is_riddor_reportable: value })} />RIDDOR reportable</label>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Switch
+                      id="rta-vehicle-drivable"
+                      checked={Boolean(editForm.vehicle_drivable)}
+                      onCheckedChange={(value) =>
+                        setEditForm({ ...editForm, vehicle_drivable: value })
+                      }
+                    />
+                    <label htmlFor="rta-vehicle-drivable">Vehicle drivable</label>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Switch
+                      id="rta-is-lti"
+                      checked={Boolean(editForm.is_lti)}
+                      onCheckedChange={(value) => setEditForm({ ...editForm, is_lti: value })}
+                    />
+                    <label htmlFor="rta-is-lti">Lost time injury</label>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Switch
+                      id="rta-is-riddor"
+                      checked={Boolean(editForm.is_riddor_reportable)}
+                      onCheckedChange={(value) =>
+                        setEditForm({ ...editForm, is_riddor_reportable: value })
+                      }
+                    />
+                    <label htmlFor="rta-is-riddor">RIDDOR reportable</label>
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
