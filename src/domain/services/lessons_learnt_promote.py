@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +12,8 @@ from src.domain.models.incident import Incident
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.rta import RoadTrafficCollision
 
+CaseModel = Union[type[Incident], type[NearMiss], type[RoadTrafficCollision], type[Complaint]]
+
 
 def extract_lessons_text(data: Optional[dict[str, Any]]) -> Optional[str]:
     """Pull lessons narrative from investigation.data (section_7 or summary)."""
@@ -19,7 +21,12 @@ def extract_lessons_text(data: Optional[dict[str, Any]]) -> Optional[str]:
         return None
     sections = data.get("sections")
     if isinstance(sections, dict):
-        for key in ("section_7_lessons", "section_7_management_system_review", "lessons_learned", "lessons_learnt"):
+        for key in (
+            "section_7_lessons",
+            "section_7_management_system_review",
+            "lessons_learned",
+            "lessons_learnt",
+        ):
             block = sections.get(key)
             if isinstance(block, dict):
                 for field in ("content", "notes", "text", "summary", "value"):
@@ -47,7 +54,7 @@ async def promote_lessons_to_case(
     if not entity_type or not entity_id or not lessons_text.strip():
         return False
     text = lessons_text.strip()
-    model_map = {
+    model_map: dict[str, CaseModel] = {
         "incident": Incident,
         "reporting_incident": Incident,
         "near_miss": NearMiss,
@@ -61,7 +68,7 @@ async def promote_lessons_to_case(
     row = (await db.execute(select(model).where(model.id == entity_id))).scalar_one_or_none()
     if row is None:
         return False
-    existing = getattr(row, "lessons_learnt", None)
+    existing = row.lessons_learnt
     if existing and str(existing).strip() and not overwrite:
         return False
     row.lessons_learnt = text

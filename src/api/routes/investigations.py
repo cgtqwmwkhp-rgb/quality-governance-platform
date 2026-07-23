@@ -862,11 +862,14 @@ async def update_investigation(
             setattr(investigation, "closed_at", datetime.utcnow())
 
     # Promote lessons narrative onto the linked case when present and case field empty.
-    lessons_src = update_data.get("data") if "data" in update_data else investigation.data
-    if isinstance(lessons_src, dict) or update_data.get("status") == "closed":
+    raw_data = update_data.get("data") if "data" in update_data else investigation.data
+    lessons_payload = raw_data if isinstance(raw_data, dict) else None
+    if lessons_payload is not None or update_data.get("status") == "closed":
         from src.domain.services.lessons_learnt_promote import extract_lessons_text, promote_lessons_to_case
 
-        lessons_text = extract_lessons_text(lessons_src if isinstance(lessons_src, dict) else investigation.data)
+        if lessons_payload is None and isinstance(investigation.data, dict):
+            lessons_payload = investigation.data
+        lessons_text = extract_lessons_text(lessons_payload)
         if lessons_text and investigation.assigned_entity_type is not None:
             entity_type = (
                 investigation.assigned_entity_type.value
