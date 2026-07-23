@@ -43,6 +43,7 @@ from src.api.routes import (
     governance,
     governed_knowledge,
     health,
+    hs_kpis,
     ims_dashboard,
     incidents,
     inductions,
@@ -135,6 +136,7 @@ router.include_router(
 router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 router.include_router(realtime.router, prefix="/realtime", tags=["Real-Time & WebSocket"])
 router.include_router(analytics.router, prefix="/analytics", tags=["Analytics & Reporting"])
+router.include_router(hs_kpis.router, prefix="/hs-kpis", tags=["H&S Performance"])
 router.include_router(calendar.router, prefix="/calendar", tags=["Governance Calendar"])
 router.include_router(workflows.router, prefix="/workflows", tags=["Workflow Automation"])
 router.include_router(
