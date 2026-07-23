@@ -23,6 +23,18 @@ def pro_rated_hours(*, average_fte: float, hours_per_fte_year: float, period_sta
     return average_fte * hours_per_fte_year * days / 365
 
 
+def effective_hours(period: HsReportingPeriod) -> float:
+    """Prefer admin-entered manual hours; otherwise FTE pro-rata."""
+    if period.manual_hours is not None and period.manual_hours > 0:
+        return float(period.manual_hours)
+    return pro_rated_hours(
+        average_fte=period.average_fte,
+        hours_per_fte_year=period.hours_per_fte_year,
+        period_start=period.period_start,
+        period_end=period.period_end,
+    )
+
+
 def rate_per_100000(*, count: int, hours: float) -> float:
     return round((count / hours) * 100000, 2) if hours else 0.0
 
@@ -86,18 +98,16 @@ class HsKpiService:
             if rta_riddor_column is not None
             else 0
         )
-        hours = pro_rated_hours(
-            average_fte=period.average_fte,
-            hours_per_fte_year=period.hours_per_fte_year,
-            period_start=start,
-            period_end=end,
-        )
+        hours = effective_hours(period)
         return {
             "reporting_year": period.reporting_year,
             "period_start": start.isoformat(),
             "period_end": end.isoformat(),
             "average_fte": period.average_fte,
+            "hours_per_fte_year": period.hours_per_fte_year,
+            "manual_hours": period.manual_hours,
             "hours": round(hours, 2),
+            "hours_source": "manual" if period.manual_hours is not None and period.manual_hours > 0 else "calculated",
             "injuries": injuries,
             "near_misses": await self._count(NearMiss, NearMiss.event_date, period.tenant_id, start, end),
             "rtas": rtas,

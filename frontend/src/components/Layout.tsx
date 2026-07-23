@@ -237,6 +237,11 @@ export default function Layout({ onLogout }: LayoutProps) {
                 icon: ClipboardCheck,
                 label: t('nav.lookups', { defaultValue: 'Lookups' }),
               },
+              {
+                path: '/admin/hs-reporting-hours',
+                icon: BarChart3,
+                label: t('nav.hs_reporting_hours', { defaultValue: 'H&S reporting hours' }),
+              },
             ],
           },
         ]

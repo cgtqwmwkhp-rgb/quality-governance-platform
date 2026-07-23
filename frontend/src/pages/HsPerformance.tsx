@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { hsKpisApi } from '../api/client'
@@ -74,7 +75,12 @@ export default function HsPerformance() {
       <div>
         <h1 className="text-2xl font-semibold">H&S Performance</h1>
         <p className="text-sm text-muted-foreground">
-          LTIFR and AFR are shown per 100,000 hours worked (Excel SLT convention).
+          LTIFR and AFR are shown per 100,000 hours worked (Excel SLT convention). Annual hours are
+          managed in{' '}
+          <Link to="/admin/hs-reporting-hours" className="underline underline-offset-2">
+            Admin → H&S reporting hours
+          </Link>
+          .
         </p>
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -98,6 +104,7 @@ export default function HsPerformance() {
               <tr className="border-b text-left text-muted-foreground">
                 <th>Year</th>
                 <th>Hours</th>
+                <th>Source</th>
                 <th>Injuries</th>
                 <th>Near misses</th>
                 <th>RTAs</th>
@@ -112,6 +119,9 @@ export default function HsPerformance() {
                 <tr key={year.reporting_year} className="border-b">
                   <td>{year.reporting_year}</td>
                   <td>{year.hours.toLocaleString()}</td>
+                  <td className="text-muted-foreground">
+                    {year.hours_source === 'manual' ? 'Manual' : 'Calculated'}
+                  </td>
                   <td>{year.injuries}</td>
                   <td>{year.near_misses}</td>
                   <td>{year.rtas}</td>
