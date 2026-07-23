@@ -144,7 +144,7 @@ async def interpret_with_gemini(query: str) -> Optional[dict[str, Any]]:
     try:
         import asyncio
 
-        from src.domain.services.gemini_ai_service import GEMINI_MODEL, GeminiAIService, _GEMINI_AI_UPSTREAM_BREAKER
+        from src.domain.services.gemini_ai_service import _GEMINI_AI_UPSTREAM_BREAKER, GEMINI_MODEL, GeminiAIService
         from src.domain.services.upstream_circuit_breaker import call_via_upstream_breaker
 
         service = GeminiAIService()

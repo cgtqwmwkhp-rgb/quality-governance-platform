@@ -9,7 +9,7 @@
 - **Feature flag / kill switch:** Gemini path fails closed to keyword FTS (no new flag)
 
 ## 2) Impact Map (what changed)
-- **Frontend (routes/screens/components):** `Layout.tsx` (palette open state); `GlobalSearchPalette` / `GlobalSearchPanel` / `useGlobalSearch` / `suggestedSearches`; `GlobalSearch.tsx` reused shared panel; `searchApi.interpret`
+- **Frontend (routes/screens/components):** `Layout.tsx` (palette open state); `GlobalSearchPalette` / `GlobalSearchPanel` / `useGlobalSearch` / `suggestedSearches`; `GlobalSearch.tsx` reused shared panel; `searchApi.interpret`; `frontend/.size-limit.json` (171→172 kB)
 - **Backend (handlers/services):** `search_paths.py`; `search_interpret_service.py`; `search_service.py` (`entity_id`/`path`, date/status filters); `global_search.py` schema + interpret route
 - **APIs (endpoints changed/added):** `GET /api/v1/search` response adds `entity_id`, `path`; passes `date_from`/`date_to`; new `POST /api/v1/search/interpret`
 - **Schemas/contracts:** Search result + interpret response models
