@@ -174,3 +174,12 @@ def test_parse_hs_workbook_routes_and_skips_undated() -> None:
     assert len(parsed["rta_log"]) == 1
     assert parsed["rta_log"][0]["collision_type"] == "rear_end"
     assert any("no date" in w.lower() for w in parsed["warnings"])
+
+
+def test_clip_str_for_rta_time() -> None:
+    from src.domain.services.hs_excel_import_service import _clip_str
+
+    assert _clip_str(None, 10) is None
+    assert _clip_str("  ", 10) is None
+    assert _clip_str("Approx 8 am", 10) == "Approx 8 a"
+    assert _clip_str("11:15", 10) == "11:15"
