@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from datetime import timezone
 from typing import Any, Optional
 
@@ -24,6 +25,24 @@ def _clip_str(value: Any, max_len: int) -> Optional[str]:
     if not text:
         return None
     return text[:max_len]
+
+
+def _tenant_import_token(tenant_id: int, key: str) -> str:
+    """Return a bounded, tenant-scoped token for globally unique model fields."""
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:20]
+    return f"{tenant_id}-{digest}"
+
+
+def _near_miss_import_reference(tenant_id: int, key: str) -> str:
+    return f"HSXL-{_tenant_import_token(tenant_id, key).upper()}"
+
+
+def _legacy_near_miss_import_reference(key: str) -> str:
+    return f"HSXL-{key.replace('excel:', '').replace(':', '-').upper()}"
+
+
+def _complaint_import_reference(tenant_id: int, key: str) -> str:
+    return f"hsxl:{_tenant_import_token(tenant_id, key)}"
 
 
 class HsExcelImportService:
@@ -89,14 +108,23 @@ class HsExcelImportService:
                     return True
             return False
         if module == "near_miss":
-            ref = f"HSXL-{key.replace('excel:', '').replace(':', '-').upper()}"
+            refs = (
+                _near_miss_import_reference(tenant_id, key),
+                _legacy_near_miss_import_reference(key),
+            )
             found = await self.db.execute(
-                select(NearMiss.id).where(NearMiss.tenant_id == tenant_id, NearMiss.reference_number == ref)
+                select(NearMiss.id).where(
+                    NearMiss.tenant_id == tenant_id,
+                    NearMiss.reference_number.in_(refs),
+                )
             )
             return found.scalar_one_or_none() is not None
         if module == "complaint":
             found = await self.db.execute(
-                select(Complaint.id).where(Complaint.tenant_id == tenant_id, Complaint.external_ref == key)
+                select(Complaint.id).where(
+                    Complaint.tenant_id == tenant_id,
+                    Complaint.external_ref.in_((_complaint_import_reference(tenant_id, key), key)),
+                )
             )
             return found.scalar_one_or_none() is not None
         if module == "rta":
@@ -177,7 +205,7 @@ class HsExcelImportService:
         self.db.add(incident)
 
     async def _create_near_miss(self, row: dict[str, Any], *, tenant_id: int, user_id: Optional[int]) -> None:
-        ref = f"HSXL-{row['external_key'].replace('excel:', '').replace(':', '-').upper()}"
+        ref = _near_miss_import_reference(tenant_id, row["external_key"])
         near_miss = NearMiss(
             tenant_id=tenant_id,
             reference_number=ref,
@@ -203,7 +231,7 @@ class HsExcelImportService:
         complaint = Complaint(
             tenant_id=tenant_id,
             reference_number=ref,
-            external_ref=row["external_key"],
+            external_ref=_complaint_import_reference(tenant_id, row["external_key"]),
             title=(row["description"][:280] if row["description"] else "Imported complaint"),
             description=row["description"] or row.get("notes") or "Imported from H&S Excel",
             complaint_type=ComplaintType.OTHER,
