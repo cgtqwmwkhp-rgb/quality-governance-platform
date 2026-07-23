@@ -16,6 +16,16 @@ from src.domain.services.hs_excel_import_parser import SOURCE_FORM_ID, parse_hs_
 from src.domain.services.reference_number import ReferenceNumberService
 
 
+def _clip_str(value: Any, max_len: int) -> Optional[str]:
+    """Trim Excel free-text to fit VARCHAR columns (historic times are rarely HH:MM)."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    return text[:max_len]
+
+
 class HsExcelImportService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
@@ -250,33 +260,42 @@ class HsExcelImportService:
         if tp_injured is None and row.get("third_party_injured") is not None:
             tp_injured = bool(row.get("third_party_injured"))
         third_parties = seed_third_parties_for_injury(None, injured=bool(tp_injured))
+        raw_time = row.get("time")
+        collision_time = _clip_str(raw_time, 10)  # DB column is VARCHAR(10); Excel often has "Approx 8 am"
+        employee = _clip_str(row.get("employee"), 200) or "Unknown"
+        vehicle_reg = _clip_str(row.get("vehicle_reg"), 20)
+        title = _clip_str(f"RTA — {employee} — {vehicle_reg or 'no reg'}", 300) or "Imported RTA"
         rta = RoadTrafficCollision(
             tenant_id=tenant_id,
             reference_number=ref,
-            title=f"RTA — {row.get('employee') or 'Unknown'} — {row.get('vehicle_reg') or 'no reg'}",
+            title=title,
             description=row.get("damage") or row.get("notes") or "Imported RTA",
             severity=RTASeverity.MINOR_INJURY if row.get("employee_injured") else RTASeverity.DAMAGE_ONLY,
             status=RTAStatus.CLOSED if closed else RTAStatus.REPORTED,
             collision_date=event_date,
-            collision_time=row.get("time") or None,
+            collision_time=collision_time,
             reported_date=event_date,
-            location=row.get("location") or "Unknown",
-            weather_conditions=row.get("weather") or None,
-            road_conditions=row.get("road_conditions") or None,
-            company_vehicle_registration=row.get("vehicle_reg") or None,
+            location=_clip_str(row.get("location"), 500) or "Unknown",
+            weather_conditions=_clip_str(row.get("weather"), 100),
+            road_conditions=_clip_str(row.get("road_conditions"), 100),
+            company_vehicle_registration=vehicle_reg,
             company_vehicle_damage=row.get("damage") or None,
-            driver_name=row.get("employee") or None,
+            driver_name=employee if employee != "Unknown" else None,
             driver_injured=bool(row.get("employee_injured")),
             third_party_injured=derive_third_party_injured(third_parties, explicit=tp_injured),
             third_parties=third_parties,
             police_attended=bool(row.get("emergency_services")),
-            collision_type=row.get("collision_type"),
+            collision_type=_clip_str(row.get("collision_type"), 100),
             vehicle_drivable=row.get("drivable"),
             is_lti=bool(row.get("is_lti")),
             is_riddor_reportable=row.get("is_riddor"),
             source_form_id=SOURCE_FORM_ID,
             lessons_learnt=row.get("notes") or None,
-            reporter_submission={"external_key": row["external_key"], "notes": row.get("notes")},
+            reporter_submission={
+                "external_key": row["external_key"],
+                "notes": row.get("notes"),
+                "time_raw": raw_time,
+            },
             created_by_id=user_id,
             updated_by_id=user_id,
             closed_at=event_date if closed else None,
