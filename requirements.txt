@@ -68,5 +68,5 @@ starlette-context>=0.3.0,<1.0.0
 
 # Security: pin minimum versions for transitive deps flagged by Trivy / pip-audit
 jaraco-context>=6.1.0
-wheel>=0.46.2
+wheel>=0.47.0
 setuptools>=83.0.0  # PYSEC-2026-3447 / CVE-2026-59890 (MANIFEST.in Unicode bypass)
