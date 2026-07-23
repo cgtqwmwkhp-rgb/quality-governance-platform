@@ -24,6 +24,14 @@ export interface UseGlobalSearchOptions {
   open?: boolean
 }
 
+type SearchParams = {
+  q: string
+  module?: string
+  status?: string
+  date_from?: string
+  date_to?: string
+}
+
 export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
   const { onNavigateAway, autofocus = true, open = true } = options
   const navigate = useNavigate()
@@ -41,23 +49,19 @@ export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
   const [totalResults, setTotalResults] = useState(0)
   const [interpreted, setInterpreted] = useState<SearchInterpretResponse | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  /** Last effective FTS params (from interpret/suggestion/typed search) for filter refresh merges. */
+  const lastParamsRef = useRef<SearchParams | null>(null)
+  const skipFilterEffectRef = useRef(true)
 
   useEffect(() => {
     if (autofocus && open) {
-      // Defer so Dialog focus trap has mounted
       const id = window.setTimeout(() => inputRef.current?.focus(), 50)
       return () => window.clearTimeout(id)
     }
   }, [autofocus, open])
 
   const runSearch = useCallback(
-    async (params: {
-      q: string
-      module?: string
-      status?: string
-      date_from?: string
-      date_to?: string
-    }) => {
+    async (params: SearchParams) => {
       const activeQuery = params.q.trim()
       if (!activeQuery) return
 
@@ -70,7 +74,6 @@ export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
       )
 
       try {
-        // API accepts a single module; multi-select is applied client-side after FTS.
         const moduleParam =
           params.module || (filters.modules.length === 1 ? filters.modules[0] : undefined)
         const statusParam =
@@ -78,26 +81,35 @@ export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
           (filters.status.length > 0
             ? filters.status.map((s) => s.toLowerCase().replace(/\s+/g, '_')).join(',')
             : undefined)
+        const chipDates = dateRangeToBounds(filters.dateRange)
         const dates = {
-          ...dateRangeToBounds(filters.dateRange),
-          ...(params.date_from ? { date_from: params.date_from } : {}),
-          ...(params.date_to ? { date_to: params.date_to } : {}),
+          ...(params.date_from || params.date_to
+            ? { date_from: params.date_from, date_to: params.date_to }
+            : chipDates),
         }
 
-        const response = await searchApi.search({
+        const effective: SearchParams = {
           q: activeQuery,
           module: moduleParam,
           status: statusParam,
           ...dates,
+        }
+        lastParamsRef.current = effective
+
+        const response = await searchApi.search({
+          ...effective,
           page: 1,
           page_size: 100,
         })
         let items = response.data.results
-        if (!params.module && filters.modules.length > 1) {
+        const multiModule = !params.module && filters.modules.length > 1
+        if (multiModule) {
           items = items.filter((item) => filters.modules.includes(item.module))
+          setTotalResults(items.length)
+        } else {
+          setTotalResults(response.data.total)
         }
         setResults(items)
-        setTotalResults(items.length)
       } catch (error) {
         setResults([])
         setTotalResults(0)
@@ -109,13 +121,34 @@ export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
     [filters.dateRange, filters.modules, filters.status],
   )
 
-  // Re-run FTS when filter chips change while a query is active.
+  // Re-run FTS when filter chips change; clear stale interpret label; keep prior intent params
+  // when chips do not override them.
   useEffect(() => {
+    if (skipFilterEffectRef.current) {
+      skipFilterEffectRef.current = false
+      return
+    }
     const active = query.trim()
     if (!active) return
-    void runSearch({ q: active })
-    // Intentionally depend on filter values + query, not runSearch identity.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- filter-driven refresh
+    setInterpreted(null)
+    const prev = lastParamsRef.current
+    const chipDates = dateRangeToBounds(filters.dateRange)
+    void runSearch({
+      q: active,
+      module:
+        filters.modules.length === 1
+          ? filters.modules[0]
+          : filters.modules.length === 0
+            ? prev?.module
+            : undefined,
+      status:
+        filters.status.length > 0
+          ? filters.status.map((s) => s.toLowerCase().replace(/\s+/g, '_')).join(',')
+          : prev?.status,
+      date_from: filters.dateRange !== 'all' ? chipDates.date_from : prev?.date_from,
+      date_to: filters.dateRange !== 'all' ? chipDates.date_to : prev?.date_to,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- filter-driven refresh only
   }, [filters.modules, filters.status, filters.dateRange])
 
   const handleSearch = useCallback(
@@ -190,6 +223,7 @@ export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
     setResults([])
     setTotalResults(0)
     setInterpreted(null)
+    lastParamsRef.current = null
     inputRef.current?.focus()
   }
 

@@ -512,6 +512,7 @@ class SearchService:
                         relevance=self._simple_relevance(query, finding.title, finding.description),
                         highlights=self._highlight_words(query, finding.title, finding.description),
                         entity_id=finding.id,
+                        path=build_search_path("audit", finding.id, audit_run_id=finding.run_id),
                     )
                 )
         except (AttributeError, SQLAlchemyError, ValueError) as e:
@@ -536,6 +537,7 @@ class SearchService:
             from src.domain.models.investigation import InvestigationAction
             from src.domain.models.rta import RTAAction
 
+            # storage_kind must match unified action_key kinds (capa, not capa_action).
             action_sources = [
                 (
                     IncidentAction,
@@ -563,13 +565,13 @@ class SearchService:
                 ),
                 (
                     CAPAAction,
-                    "capa_action",
+                    "capa",
                     lambda action: action.reference_number or f"CAPA-{action.id}",
                     lambda action: action.created_at,
                 ),
             ]
 
-            for model, action_type, id_builder, date_builder in action_sources:
+            for model, storage_kind, id_builder, date_builder in action_sources:
                 stmt = (
                     select(model)
                     .where(model.tenant_id == tenant_id)
@@ -591,8 +593,13 @@ class SearchService:
                             ),
                             date=str(date_builder(action) or ""),
                             relevance=self._simple_relevance(query, action.title, action.description),
-                            highlights=self._highlight_words(query, action.title, action.description) + [action_type],
+                            highlights=self._highlight_words(query, action.title, action.description) + [storage_kind],
                             entity_id=action.id,
+                            path=build_search_path(
+                                "action",
+                                action.id,
+                                action_key_kind=storage_kind,
+                            ),
                         )
                     )
         except (AttributeError, SQLAlchemyError, ValueError) as e:
