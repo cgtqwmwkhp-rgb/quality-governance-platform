@@ -12,3 +12,10 @@
 
 ## Test plan
 - `pytest tests/unit/test_hs_kpi_service.py`
+
+## Change ledger
+- **Data:** `hs_reporting_periods` is tenant-scoped and seeds the Excel baseline only on first H&S KPI access.
+- **API:** `GET /api/v1/hs-kpis/summary` and `/periods`; period writes remain permission-protected.
+- **Frontend:** `/analytics/hs-performance` displays the latest KPI tiles and reporting-year summary table.
+- **Honesty:** no benchmark claim is made; LTIFR/AFR explicitly use the locked 100,000-hours unit.
+- **Roll-back:** remove the route/UI and downgrade the reporting-period migration; incident and RTA records are unchanged.

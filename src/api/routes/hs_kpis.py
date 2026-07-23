@@ -28,12 +28,14 @@ class HsReportingPeriodInput(BaseModel):
 async def hs_kpi_summary(db: DbSession, current_user: CurrentUser):
     service = HsKpiService(db)
     await service.ensure_default_periods(current_user.tenant_id)
+    await db.commit()
     return await service.summary(current_user.tenant_id)
 
 
 @router.get("/periods")
 async def list_hs_reporting_periods(db: DbSession, current_user: CurrentUser):
     rows = await HsKpiService(db).ensure_default_periods(current_user.tenant_id)
+    await db.commit()
     return {"items": rows, "total": len(rows)}
 
 

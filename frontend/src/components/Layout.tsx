@@ -191,6 +191,7 @@ export default function Layout({ onLogout }: LayoutProps) {
       icon: BarChart3,
       items: [
         { path: '/analytics', icon: BarChart3, label: t('nav.analytics') },
+        { path: '/analytics/hs-performance', icon: BarChart3, label: 'H&S Performance' },
         { path: '/calendar', icon: Calendar, label: t('nav.calendar') },
         { path: '/exports', icon: Download, label: t('nav.export_center') },
         { path: '/ai-intelligence', icon: Bot, label: t('nav.ai_intelligence') },

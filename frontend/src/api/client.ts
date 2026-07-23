@@ -17,6 +17,7 @@ import { createActionsApi } from './actionsClient'
 import { createIncidentsApi } from './incidentsClient'
 import { createPoliciesApi } from './policiesClient'
 import { createRtasApi } from './rtasClient'
+import { createHsKpisApi } from './hsKpisClient'
 import { createComplaintsApi } from './complaintsClient'
 import { createNearMissesApi } from './nearMissesClient'
 import { createRisksApi } from './risksClient'
@@ -994,6 +995,7 @@ export const incidentsApi = createIncidentsApi(api)
 
 // ============ RTAs API (extracted: rtasClient.ts) ============
 export const rtasApi = createRtasApi(api)
+export const hsKpisApi = createHsKpisApi(api)
 
 // ============ Complaints API (extracted: complaintsClient.ts) ============
 export const complaintsApi = createComplaintsApi(api)

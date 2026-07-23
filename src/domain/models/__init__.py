@@ -154,6 +154,7 @@ from src.domain.models.ims_unification import (
     UnifiedAuditPlan,
 )
 from src.domain.models.incident import Incident, IncidentAction
+from src.domain.models.hs_reporting_period import HsReportingPeriod
 from src.domain.models.induction import (
     InductionResponse,
     InductionRun,
