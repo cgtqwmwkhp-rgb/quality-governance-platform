@@ -168,7 +168,7 @@ async def create_near_miss(
 @router.get("/", response_model=NearMissListResponse)
 async def list_near_misses(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("near_miss:read"))],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status_filter: Optional[str] = Query(None, alias="status"),
@@ -249,7 +249,7 @@ async def list_near_misses(
 async def get_near_miss(
     near_miss_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("near_miss:read"))],
 ) -> NearMiss:
     """Get a near miss by ID."""
     return await _get_near_miss_or_404(db, near_miss_id, current_user)
@@ -314,7 +314,7 @@ async def delete_near_miss(
 async def list_near_miss_investigations(
     near_miss_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("near_miss:read"))],
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
 ):
@@ -362,7 +362,7 @@ async def list_near_miss_investigations(
 async def list_near_miss_running_sheet_entries(
     near_miss_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("near_miss:read"))],
 ):
     """List near-miss runner-sheet entries, newest first."""
     near_miss = await _get_near_miss_or_404(db, near_miss_id, current_user)

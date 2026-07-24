@@ -139,7 +139,7 @@ async def create_complaint(
 async def get_complaint(
     complaint_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("complaint:read"))],
 ) -> Complaint:
     """
     Get a complaint by ID.
@@ -161,7 +161,7 @@ async def get_complaint(
 @router.get("/", response_model=ComplaintListResponse)
 async def list_complaints(
     db: DbSession,
-    current_user: CurrentUser,  # SECURITY FIX: Always require authentication
+    current_user: Annotated[User, Depends(require_permission("complaint:read"))],
     request_id: str = Depends(get_request_id),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -368,7 +368,7 @@ async def update_complaint(
 async def list_complaint_investigations(
     complaint_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("complaint:read"))],
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(25, ge=1, le=100, description="Items per page (1-100)"),
 ):
@@ -435,7 +435,7 @@ async def list_complaint_investigations(
 async def list_complaint_running_sheet_entries(
     complaint_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("complaint:read"))],
 ):
     """List complaint runner-sheet entries, newest first."""
     svc = ComplaintService(db)

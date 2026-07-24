@@ -80,10 +80,13 @@ async def validate_source_exists(
     source_module: str,
     source_id: int,
     db: AsyncSession,
+    tenant_id: Optional[int],
 ) -> bool:
-    """Validate that the source record exists.
+    """Validate that the source record exists and belongs to ``tenant_id``.
 
-    Returns True if exists, raises HTTPException if not.
+    Returns True if a same-tenant record exists. Raises NotFoundError (404, not
+    403) when the record is missing OR belongs to another tenant, so cross-tenant
+    IDOR probing can't distinguish "doesn't exist" from "not yours".
     """
     # Map source module to model
     source_models = {
@@ -107,8 +110,11 @@ async def validate_source_exists(
     module = __import__(module_path, fromlist=[class_name])
     model_class = getattr(module, class_name)
 
-    # Check if entity exists
-    query = select(model_class).where(model_class.id == source_id)
+    # Check if entity exists AND belongs to the caller's tenant (SEC-01)
+    query = select(model_class).where(
+        model_class.id == source_id,
+        model_class.tenant_id == tenant_id,
+    )
     result = await db.execute(query)
     entity = result.scalar_one_or_none()
 
@@ -158,7 +164,7 @@ async def _normalize_evidence_upload_source(
             code="SOURCE_ID_INVALID",
             details={},
         )
-    await validate_source_exists(source_module_enum.value, source_id, db)
+    await validate_source_exists(source_module_enum.value, source_id, db, current_user.tenant_id)
     sid = str(source_id)
     return sid, sid
 
@@ -602,10 +608,13 @@ async def link_asset_to_investigation(
     if not asset:
         raise NotFoundError(f"Evidence asset with ID {asset_id} not found", code="ASSET_NOT_FOUND")
 
-    # Validate investigation exists
+    # Validate investigation exists — scoped to tenant (SEC-01)
     from src.domain.models.investigation import InvestigationRun
 
-    inv_query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
+    inv_query = select(InvestigationRun).where(
+        InvestigationRun.id == investigation_id,
+        InvestigationRun.tenant_id == current_user.tenant_id,
+    )
     inv_result = await db.execute(inv_query)
     investigation = inv_result.scalar_one_or_none()
 
