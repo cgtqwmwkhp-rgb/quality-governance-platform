@@ -55,7 +55,7 @@
     "@size-limit/file": "^12.0.1",
     "@storybook/addon-essentials": "^8.6.14",
     "@storybook/react": "^8.6.18",
-    "@storybook/react-vite": "^8.6.18",
+    "@storybook/react-vite": "^10.5.4",
     "@storybook/test": "^8.6.18",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
