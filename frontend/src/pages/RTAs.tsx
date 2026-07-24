@@ -115,7 +115,7 @@ export default function RTAs() {
       const ids = idsFilter.trim()
       // Deep-links from Safety Insights may cite more than one page of cases.
       const idCount = ids ? ids.split(',').filter((part) => part.trim()).length : 0
-      const pageSize = ids ? Math.min(Math.max(idCount, 50), 500) : 50
+      const pageSize = ids ? Math.min(Math.max(idCount, 50), 100) : 50
       const params = new URLSearchParams({ page: '1', page_size: String(pageSize) })
       if (ids) params.set('ids', ids)
       const response = ids

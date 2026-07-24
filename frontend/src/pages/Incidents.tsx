@@ -269,7 +269,7 @@ export default function Incidents() {
       try {
         const ids = idsFilter.trim()
         const idCount = ids ? ids.split(',').filter((part) => part.trim()).length : 0
-        const pageSize = ids ? Math.min(Math.max(idCount, PAGE_SIZE), 500) : PAGE_SIZE
+        const pageSize = ids ? Math.min(Math.max(idCount, PAGE_SIZE), 100) : PAGE_SIZE
         let response
         if (ids) {
           const params = new URLSearchParams({

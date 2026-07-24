@@ -251,23 +251,23 @@ class SafetyInsightsAnalystService:
             if date_to is not None:
                 q_incident = q_incident.where(Incident.incident_date <= date_to)
             q_incident = q_incident.order_by(Incident.incident_date.desc()).limit(limit_per_module)
-            for row in (await self.db.execute(q_incident)).scalars().all():
+            for incident_row in (await self.db.execute(q_incident)).scalars().all():
                 item = {
                     "module": "incident",
-                    "id": row.id,
-                    "reference_number": row.reference_number,
-                    "event_date": row.incident_date,
-                    "title": getattr(row, "title", None) or "",
-                    "description": row.description or "",
-                    "location": row.location or "",
-                    "department": row.department or "",
+                    "id": incident_row.id,
+                    "reference_number": incident_row.reference_number,
+                    "event_date": incident_row.incident_date,
+                    "title": getattr(incident_row, "title", None) or "",
+                    "description": incident_row.description or "",
+                    "location": incident_row.location or "",
+                    "department": incident_row.department or "",
                     "contract": "",
-                    "person": row.reporter_name or row.reporter_email or "",
-                    "people": row.people_involved or "",
+                    "person": incident_row.reporter_name or incident_row.reporter_email or "",
+                    "people": incident_row.people_involved or "",
                     "vehicle": "",
-                    "asset_id": row.asset_id,
-                    "root_cause": row.root_cause or "",
-                    "severity": str(getattr(row, "severity", "") or ""),
+                    "asset_id": incident_row.asset_id,
+                    "root_cause": incident_row.root_cause or "",
+                    "severity": str(getattr(incident_row, "severity", "") or ""),
                     "is_hipo": False,
                 }
                 if topic and not self._matches_topic(item, topic):
@@ -281,24 +281,24 @@ class SafetyInsightsAnalystService:
             if date_to is not None:
                 q_near_miss = q_near_miss.where(NearMiss.event_date <= date_to)
             q_near_miss = q_near_miss.order_by(NearMiss.event_date.desc()).limit(limit_per_module)
-            for row in (await self.db.execute(q_near_miss)).scalars().all():
+            for near_miss_row in (await self.db.execute(q_near_miss)).scalars().all():
                 item = {
                     "module": "near_miss",
-                    "id": row.id,
-                    "reference_number": row.reference_number,
-                    "event_date": row.event_date,
+                    "id": near_miss_row.id,
+                    "reference_number": near_miss_row.reference_number,
+                    "event_date": near_miss_row.event_date,
                     "title": "",
-                    "description": row.description or "",
-                    "location": row.location or "",
+                    "description": near_miss_row.description or "",
+                    "location": near_miss_row.location or "",
                     "department": "",
-                    "contract": row.contract or "",
-                    "person": row.reporter_name or row.reporter_email or "",
-                    "people": row.persons_involved or "",
+                    "contract": near_miss_row.contract or "",
+                    "person": near_miss_row.reporter_name or near_miss_row.reporter_email or "",
+                    "people": near_miss_row.persons_involved or "",
                     "vehicle": "",
-                    "asset_id": row.asset_id,
+                    "asset_id": near_miss_row.asset_id,
                     "root_cause": "",
-                    "severity": row.potential_severity or "",
-                    "is_hipo": bool(row.is_hipo),
+                    "severity": near_miss_row.potential_severity or "",
+                    "is_hipo": bool(near_miss_row.is_hipo),
                 }
                 if topic and not self._matches_topic(item, topic):
                     continue
@@ -311,22 +311,22 @@ class SafetyInsightsAnalystService:
             if date_to is not None:
                 q_rta = q_rta.where(RoadTrafficCollision.collision_date <= date_to)
             q_rta = q_rta.order_by(RoadTrafficCollision.collision_date.desc()).limit(limit_per_module)
-            for row in (await self.db.execute(q_rta)).scalars().all():
+            for rta_row in (await self.db.execute(q_rta)).scalars().all():
                 item = {
                     "module": "rta",
-                    "id": row.id,
-                    "reference_number": row.reference_number,
-                    "event_date": row.collision_date,
-                    "title": row.collision_type or "",
-                    "description": row.description or "",
-                    "location": row.location or "",
+                    "id": rta_row.id,
+                    "reference_number": rta_row.reference_number,
+                    "event_date": rta_row.collision_date,
+                    "title": rta_row.collision_type or "",
+                    "description": rta_row.description or "",
+                    "location": rta_row.location or "",
                     "department": "",
                     "contract": "",
-                    "person": row.driver_name or row.driver_email or "",
+                    "person": rta_row.driver_name or rta_row.driver_email or "",
                     "people": "",
-                    "vehicle": (row.company_vehicle_registration or "").upper(),
-                    "asset_id": row.asset_id,
-                    "root_cause": row.root_cause or "",
+                    "vehicle": (rta_row.company_vehicle_registration or "").upper(),
+                    "asset_id": rta_row.asset_id,
+                    "root_cause": rta_row.root_cause or "",
                     "severity": "",
                     "is_hipo": False,
                 }
@@ -342,23 +342,25 @@ class SafetyInsightsAnalystService:
             if date_to is not None:
                 q_complaint = q_complaint.where(date_field <= date_to)
             q_complaint = q_complaint.order_by(date_field.desc()).limit(limit_per_module)
-            for row in (await self.db.execute(q_complaint)).scalars().all():
+            for complaint_row in (await self.db.execute(q_complaint)).scalars().all():
                 item = {
                     "module": "complaint",
-                    "id": row.id,
-                    "reference_number": row.reference_number,
-                    "event_date": getattr(row, "received_date", None) or row.created_at,
-                    "title": getattr(row, "title", None) or "",
-                    "description": row.description or "",
-                    "location": getattr(row, "location", None) or "",
-                    "department": getattr(row, "department", None) or "",
-                    "contract": str(getattr(row, "contract_id", "") or ""),
-                    "person": getattr(row, "complainant_name", None) or getattr(row, "subject_name", None) or "",
+                    "id": complaint_row.id,
+                    "reference_number": complaint_row.reference_number,
+                    "event_date": getattr(complaint_row, "received_date", None) or complaint_row.created_at,
+                    "title": getattr(complaint_row, "title", None) or "",
+                    "description": complaint_row.description or "",
+                    "location": getattr(complaint_row, "location", None) or "",
+                    "department": getattr(complaint_row, "department", None) or "",
+                    "contract": str(getattr(complaint_row, "contract_id", "") or ""),
+                    "person": getattr(complaint_row, "complainant_name", None)
+                    or getattr(complaint_row, "subject_name", None)
+                    or "",
                     "people": "",
                     "vehicle": "",
                     "asset_id": None,
-                    "root_cause": getattr(row, "root_cause", None) or "",
-                    "severity": str(getattr(row, "severity", "") or ""),
+                    "root_cause": getattr(complaint_row, "root_cause", None) or "",
+                    "severity": str(getattr(complaint_row, "severity", "") or ""),
                     "is_hipo": False,
                 }
                 if topic and not self._matches_topic(item, topic):
