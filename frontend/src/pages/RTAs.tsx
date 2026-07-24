@@ -112,12 +112,15 @@ export default function RTAs() {
     }, 15000) // 15 second timeout
 
     try {
-      const params = new URLSearchParams({ page: '1', page_size: '50' })
       const ids = idsFilter.trim()
+      // Deep-links from Safety Insights may cite more than one page of cases.
+      const idCount = ids ? ids.split(',').filter((part) => part.trim()).length : 0
+      const pageSize = ids ? Math.min(Math.max(idCount, 50), 500) : 50
+      const params = new URLSearchParams({ page: '1', page_size: String(pageSize) })
       if (ids) params.set('ids', ids)
       const response = ids
         ? await api.get<PaginatedResponse<RTA>>(`/api/v1/rtas/?${params.toString()}`)
-        : await rtasApi.list(1, 50)
+        : await rtasApi.list(1, pageSize)
       setRtas(response.data.items ?? [])
       setError(null)
     } catch (err: any) {

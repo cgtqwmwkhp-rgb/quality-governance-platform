@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -98,6 +99,9 @@ class SafetyInsightsAnalystService:
             raise ValueError("Run not found")
         if run.status == SafetyInsightRunStatus.SUCCEEDED:
             return run
+        if run.status == SafetyInsightRunStatus.RUNNING:
+            # Another worker already claimed this run; avoid interleaved theme writes.
+            return run
 
         run.status = SafetyInsightRunStatus.RUNNING
         run.started_at = datetime.now(timezone.utc)
@@ -178,7 +182,9 @@ class SafetyInsightsAnalystService:
                 run.progress_pct = 90
                 run.progress_message = "External HSE research"
                 await self.db.commit()
-                benchmarks, research_available = self.benchmark_external(validated, run.ratios_json or {})
+                benchmarks, research_available = await asyncio.to_thread(
+                    self.benchmark_external, validated, run.ratios_json or {}
+                )
                 models_used["research"] = "perplexity-sonar" if research_available else None
             run.benchmarks_json = benchmarks
             run.research_available = research_available
@@ -224,7 +230,7 @@ class SafetyInsightsAnalystService:
             raise
 
     # ------------------------------------------------------------------ corpus
-    async def build_corpus(
+    async def build_corpus(  # noqa: C901 - four module loaders with shared filters
         self,
         *,
         tenant_id: int,
@@ -747,6 +753,14 @@ Repeat dimensions:
             .limit(limit)
         )
         return list(result.scalars().all())
+
+    async def count_runs(self, tenant_id: int) -> int:
+        from sqlalchemy import func
+
+        result = await self.db.execute(
+            select(func.count()).select_from(SafetyInsightRun).where(SafetyInsightRun.tenant_id == tenant_id)
+        )
+        return int(result.scalar_one())
 
     async def latest_succeeded(self, tenant_id: int) -> Optional[SafetyInsightRun]:
         result = await self.db.execute(

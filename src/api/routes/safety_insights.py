@@ -121,9 +121,10 @@ async def list_runs(
     assert current_user.tenant_id is not None
     service = SafetyInsightsAnalystService(db)
     runs = await service.list_runs(current_user.tenant_id, limit=limit)
+    total = await service.count_runs(current_user.tenant_id)
     return {
         "items": [await service.serialize_run(r, include_children=False) for r in runs],
-        "total": len(runs),
+        "total": total,
     }
 
 
@@ -183,6 +184,11 @@ async def export_run(
     run = await service.get_run(run_id, current_user.tenant_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
+    if run.status != SafetyInsightRunStatus.SUCCEEDED:
+        raise HTTPException(
+            status_code=409,
+            detail="Board-pack export is only available for succeeded runs",
+        )
     payload = await service.serialize_run(run, include_children=True)
     exporter = SafetyInsightsExportService()
     if export_format == "json":

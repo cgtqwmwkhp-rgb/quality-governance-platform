@@ -48,7 +48,7 @@ class SafetyInsightsExportService:
     def pdf_filename(self, run_id: Any) -> str:
         return f"safety-insights-run-{run_id}.pdf"
 
-    def build_pdf_bytes(self, board_pack: dict[str, Any]) -> bytes:
+    def build_pdf_bytes(self, board_pack: dict[str, Any]) -> bytes:  # noqa: C901 - board pack sections
         """Render a board-pack PDF from a serialize_run-shaped dict.
 
         Raises RuntimeError / ModuleNotFoundError on failure (caller maps to HTTP 500).

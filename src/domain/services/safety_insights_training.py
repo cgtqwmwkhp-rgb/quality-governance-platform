@@ -95,7 +95,7 @@ def _match_theme(theme_labels: Iterable[str], haystack: str) -> Optional[tuple[s
     return best
 
 
-def build_signals_from_rows(
+def build_signals_from_rows(  # noqa: C901 - multi-source signal correlation
     *,
     theme_labels: list[str],
     modules: list[str],
