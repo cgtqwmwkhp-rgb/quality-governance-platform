@@ -221,16 +221,19 @@ class NearMissService:
                 )
 
         resolved_contract_display: Optional[str] = None
-        if "contract_id" in update_dict and update_dict["contract_id"] is not None:
-            _, resolved_contract_display = await resolve_near_miss_contract(
-                self.db,
-                tenant_id=tenant_id,
-                contract_id=update_dict["contract_id"],
-                contract=None,
-            )
+        if "contract_id" in update_dict:
+            if update_dict["contract_id"] is not None:
+                _, resolved_contract_display = await resolve_near_miss_contract(
+                    self.db,
+                    tenant_id=tenant_id,
+                    contract_id=update_dict["contract_id"],
+                    contract=None,
+                )
+            else:
+                resolved_contract_display = ""
 
         update_data = apply_updates(near_miss, data, set_updated_at=False)
-        if resolved_contract_display:
+        if resolved_contract_display is not None:
             near_miss.contract = resolved_contract_display
 
         if "status" in update_data:

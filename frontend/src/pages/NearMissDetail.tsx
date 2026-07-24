@@ -314,7 +314,12 @@ export default function NearMissDetail() {
     }
     setSaving(true)
     try {
-      const response = await nearMissesApi.update(nearMiss.id, editForm)
+      const resolvedContractId =
+        editForm.contract_id ?? contractsByCode[selectedCustomerCode.toLowerCase()]?.id ?? null
+      const response = await nearMissesApi.update(nearMiss.id, {
+        ...editForm,
+        contract_id: resolvedContractId,
+      })
       setNearMiss(response.data)
       setIsEditing(false)
       toast.success(t('near_misses.feedback.saved', 'Changes saved'))
