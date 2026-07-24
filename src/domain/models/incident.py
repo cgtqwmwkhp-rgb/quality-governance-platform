@@ -127,6 +127,10 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     reporter_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Portal user name
     people_involved: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Names/details of people involved
     witnesses: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Structured witnesses (mirrors RTA.witnesses_structured): [{ name, phone,
+    # email, statement, willing_to_provide_statement }]. `witnesses` (free
+    # text) is retained for read compatibility with older records.
+    witnesses_structured: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Immediate response
     immediate_actions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

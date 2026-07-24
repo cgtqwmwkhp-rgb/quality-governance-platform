@@ -1,7 +1,7 @@
 """Near Miss API schemas."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -93,6 +93,9 @@ class NearMissUpdate(BaseModel):
     asset_type: Optional[str] = None
     event_date: Optional[datetime] = None
     contract_id: Optional[int] = Field(None, ge=1, description="Customer/contract FK (contracts.id)")
+    witnesses_structured: Optional[dict[str, Any]] = Field(
+        None, description="Structured witnesses: {witnesses: [{name, phone, email, statement, willing_to_provide_statement}]}"
+    )
 
     @field_validator("description", mode="before")
     @classmethod
@@ -143,6 +146,7 @@ class NearMissResponse(BaseModel):
     persons_involved: Optional[str] = None
     witnesses_present: bool
     witness_names: Optional[str] = None
+    witnesses_structured: Optional[dict[str, Any]] = None
     asset_number: Optional[str] = None
     asset_type: Optional[str] = None
     asset_id: Optional[int] = None

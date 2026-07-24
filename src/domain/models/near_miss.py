@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import Base, DataClassification, TimestampMixin
@@ -69,6 +69,9 @@ class NearMiss(Base):
     persons_involved: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array or comma-separated
     witnesses_present: Mapped[bool] = mapped_column(Boolean, default=False)
     witness_names: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Structured witnesses (mirrors RTA/Incident.witnesses_structured):
+    # [{ name, phone, email, statement, willing_to_provide_statement }]
+    witnesses_structured: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Asset information (legacy free-text retained; FK is golden thread)
     asset_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
