@@ -3692,6 +3692,7 @@
   "auditBuilder.errors.brief": "Could not gather the builder brief. Please try again.",
   "auditBuilder.errors.qa": "Could not apply answers or find similar templates.",
   "auditBuilder.errors.generate": "Generation failed. Please try again.",
+  "auditBuilder.errors.generateTimeout": "Generation is still running on the server but the browser timed out. Wait a moment and try Generate again, or shorten the brief.",
   "auditBuilder.purpose.risk_audit": "Risk-driven audit",
   "auditBuilder.purpose.technical_assessment": "Technical / competency assessment",
   "auditBuilder.purpose.vehicle_asset_check": "Vehicle / asset check",

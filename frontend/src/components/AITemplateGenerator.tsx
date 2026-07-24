@@ -122,8 +122,11 @@ interface SimilarMatch {
 // Relative fetch('/api/...') hits Azure Static Web Apps with no backend and returns 405.
 // ============================================================================
 
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const { data } = await api.post<T>(url, body)
+/** AI template generation (Gemini) regularly exceeds the default 45s write timeout. */
+const AI_GENERATE_TIMEOUT_MS = 300000
+
+async function postJson<T>(url: string, body: unknown, timeoutMs?: number): Promise<T> {
+  const { data } = await api.post<T>(url, body, timeoutMs ? { timeout: timeoutMs } : undefined)
   return data
 }
 
@@ -335,12 +338,16 @@ export default function AITemplateGenerator({
         standard_suggestions?: unknown[]
         template_id?: number
         builder_meta?: { brief_id?: string; source_case_refs?: Array<{ type: string; id: number }> }
-      }>('/api/v1/ai-templates/generate-from-brief', {
-        brief,
-        similar_gate_action: gateAction,
-        similar_template_id: selectedSimilarId,
-        similar_gate_reason: gateReason,
-      })
+      }>(
+        '/api/v1/ai-templates/generate-from-brief',
+        {
+          brief,
+          similar_gate_action: gateAction,
+          similar_template_id: selectedSimilarId,
+          similar_gate_reason: gateReason,
+        },
+        AI_GENERATE_TIMEOUT_MS,
+      )
       if (data.action === 'use_existing' && data.template_id && onUseExistingTemplate) {
         onUseExistingTemplate(data.template_id)
         onClose()
@@ -352,7 +359,19 @@ export default function AITemplateGenerator({
       setStandardSuggestions(data.standard_suggestions || [])
       setStep('preview')
     } catch (err) {
-      setError(t('auditBuilder.errors.generate'))
+      const timedOut =
+        (err as { code?: string; message?: string })?.code === 'ECONNABORTED' ||
+        String((err as { message?: string })?.message || '')
+          .toLowerCase()
+          .includes('timeout')
+      setError(
+        timedOut
+          ? t('auditBuilder.errors.generateTimeout', {
+              defaultValue:
+                'Generation is still running on the server but the browser timed out. Wait a moment and try Generate again, or shorten the brief.',
+            })
+          : t('auditBuilder.errors.generate'),
+      )
       trackError(err, { component: 'AITemplateGenerator', action: 'generate' })
     } finally {
       setBusy(false)
