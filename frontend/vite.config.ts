@@ -26,8 +26,13 @@ export default defineConfig(({ mode }) => {
       __BUILD_VERSION__: JSON.stringify(getGitCommitSha()),
       __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
     },
+    // Modern deps (lucide-react, radix) use syntax esbuild cannot downlevel for es2020/chrome87.
+    esbuild: { target: 'es2022' },
+    optimizeDeps: {
+      esbuildOptions: { target: 'es2022' },
+    },
     build: {
-      target: 'es2020',
+      target: 'es2022',
       chunkSizeWarningLimit: 500,
       rollupOptions: {
         output: {
