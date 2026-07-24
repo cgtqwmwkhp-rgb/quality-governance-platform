@@ -2,7 +2,7 @@ import { useEffect, useState, useDeferredValue } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, AlertTriangle, Search, Loader2, MailWarning } from 'lucide-react'
-import {
+import api, {
   incidentsApi,
   Incident,
   IncidentCreate,
@@ -12,6 +12,7 @@ import {
   notificationsApi,
   UserSearchResult,
   type Contract,
+  type PaginatedResponse,
 } from '../api/client'
 import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
 import { trackError } from '../utils/errorTracker'
@@ -87,6 +88,7 @@ function buildIncidentsListSearch(params: {
   severity: string
   page: number
   owner: OwnerFilter
+  ids: string
 }): string {
   const next = new URLSearchParams()
   const q = params.q.trim()
@@ -95,6 +97,8 @@ function buildIncidentsListSearch(params: {
   if (params.severity !== ALL_FILTER) next.set('severity', params.severity)
   if (params.page > 1) next.set('page', String(params.page))
   if (params.owner === 'unassigned') next.set('owner', 'unassigned')
+  const ids = params.ids.trim()
+  if (ids) next.set('ids', ids)
   return next.toString()
 }
 
@@ -119,6 +123,7 @@ export default function Incidents() {
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>(
     searchParams.get('owner') === 'unassigned' ? 'unassigned' : 'all',
   )
+  const [idsFilter, setIdsFilter] = useState(() => searchParams.get('ids') || '')
   const [emailConfigured, setEmailConfigured] = useState<boolean | null>(null)
   const [assigningId, setAssigningId] = useState<number | null>(null)
   const [assigneeById, setAssigneeById] = useState<
@@ -221,14 +226,16 @@ export default function Incidents() {
     const nextPage = parseListPage(searchParams.get('page'))
     const nextOwner: OwnerFilter =
       searchParams.get('owner') === 'unassigned' ? 'unassigned' : 'all'
+    const nextIds = searchParams.get('ids') || ''
     setSearchTerm((prev) => (prev === nextQ ? prev : nextQ))
     setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus))
     setSeverityFilter((prev) => (prev === nextSeverity ? prev : nextSeverity))
     setPage((prev) => (prev === nextPage ? prev : nextPage))
     setOwnerFilter((prev) => (prev === nextOwner ? prev : nextOwner))
+    setIdsFilter((prev) => (prev === nextIds ? prev : nextIds))
   }, [searchParams])
 
-  // Keep q/status/severity/page/owner in the URL (omit defaults); replace history entry.
+  // Keep q/status/severity/page/owner/ids in the URL (omit defaults); replace history entry.
   useEffect(() => {
     const desired = buildIncidentsListSearch({
       q: searchTerm,
@@ -236,13 +243,23 @@ export default function Incidents() {
       severity: severityFilter,
       page,
       owner: ownerFilter,
+      ids: idsFilter,
     })
     if (desired !== searchParams.toString()) {
       setSearchParams(desired ? new URLSearchParams(desired) : new URLSearchParams(), {
         replace: true,
       })
     }
-  }, [searchTerm, statusFilter, severityFilter, page, ownerFilter, searchParams, setSearchParams])
+  }, [
+    searchTerm,
+    statusFilter,
+    severityFilter,
+    page,
+    ownerFilter,
+    idsFilter,
+    searchParams,
+    setSearchParams,
+  ])
 
   useEffect(() => {
     let cancelled = false
@@ -250,11 +267,25 @@ export default function Incidents() {
       setLoading(true)
       setLoadError(null)
       try {
-        const response = await incidentsApi.list(
-          page,
-          PAGE_SIZE,
-          ownerFilter === 'unassigned' ? { owner: 'unassigned' } : undefined,
-        )
+        const ids = idsFilter.trim()
+        let response
+        if (ids) {
+          const params = new URLSearchParams({
+            page: String(page),
+            page_size: String(PAGE_SIZE),
+            ids,
+          })
+          if (ownerFilter === 'unassigned') params.set('owner', 'unassigned')
+          response = await api.get<PaginatedResponse<Incident>>(
+            `/api/v1/incidents/?${params.toString()}`,
+          )
+        } else {
+          response = await incidentsApi.list(
+            page,
+            PAGE_SIZE,
+            ownerFilter === 'unassigned' ? { owner: 'unassigned' } : undefined,
+          )
+        }
         if (!cancelled) {
           const rows = normalizeIncidentItems(response.data)
           setIncidents(rows)
@@ -300,7 +331,7 @@ export default function Incidents() {
     return () => {
       cancelled = true
     }
-  }, [ownerFilter, page])
+  }, [ownerFilter, page, idsFilter])
 
   const setFilter = (next: OwnerFilter) => {
     setOwnerFilter(next)

@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import datetime, time, timezone
 from typing import Any, Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.complaint import Complaint
@@ -41,6 +41,21 @@ MODULE_ALIASES = {
     "complaints": "complaint",
     "complaint": "complaint",
 }
+
+
+async def _publish_run_progress(run_id: int, **values: Any) -> None:
+    """Commit progress/status on a separate session so pollers see updates mid-run.
+
+    The worker/request session only flushes theme/dimension writes until the final
+    commit; without this, GET /runs/{id} stays at queued/0% for the whole job.
+    """
+    from src.infrastructure.database import async_session_maker
+
+    if not values:
+        return
+    async with async_session_maker() as session:
+        await session.execute(update(SafetyInsightRun).where(SafetyInsightRun.id == run_id).values(**values))
+        await session.commit()
 
 
 class SafetyInsightsAnalystService:
@@ -105,7 +120,15 @@ class SafetyInsightsAnalystService:
         run.progress_message = "Building corpus"
         run.error_code = None
         run.error_detail = None
-        await self.db.flush()
+        await _publish_run_progress(
+            run_id,
+            status=SafetyInsightRunStatus.RUNNING,
+            started_at=run.started_at,
+            progress_pct=5,
+            progress_message="Building corpus",
+            error_code=None,
+            error_detail=None,
+        )
 
         models_used: dict[str, Any] = {"clustering": None, "synthesis": None, "research": None}
 
@@ -129,14 +152,14 @@ class SafetyInsightsAnalystService:
             run.quality_scorecard_json = self.compute_quality_scorecard(corpus)
             run.progress_pct = 25
             run.progress_message = "Rolling up dimensions"
-            await self.db.flush()
+            await _publish_run_progress(run_id, progress_pct=25, progress_message="Rolling up dimensions")
 
             dimensions = self.dimension_rollups(corpus)
             await self._replace_dimensions(run, dimensions)
 
             run.progress_pct = 40
             run.progress_message = "Clustering micro-themes"
-            await self.db.flush()
+            await _publish_run_progress(run_id, progress_pct=40, progress_message="Clustering micro-themes")
 
             raw_themes = await self.cluster_micro_themes(corpus, min_cluster_size=run.min_cluster_size)
             models_used["clustering"] = os.environ.get("GEMINI_MODEL", "gemini-3.1-pro-preview")
@@ -146,7 +169,7 @@ class SafetyInsightsAnalystService:
 
             run.progress_pct = 65
             run.progress_message = "Computing internal benchmarks"
-            await self.db.flush()
+            await _publish_run_progress(run_id, progress_pct=65, progress_message="Computing internal benchmarks")
             run.ratios_json = await self.compute_internal_benchmarks(
                 tenant_id=tenant_id,
                 date_from=run.date_from,
@@ -159,7 +182,7 @@ class SafetyInsightsAnalystService:
             if run.include_synthesis:
                 run.progress_pct = 80
                 run.progress_message = "Synthesising analyst note"
-                await self.db.flush()
+                await _publish_run_progress(run_id, progress_pct=80, progress_message="Synthesising analyst note")
                 synthesis_text, synthesis_available, synth_model = await self.synthesize_analyst_note(
                     corpus_summary=run.corpus_summary_json,
                     themes=validated,
@@ -176,7 +199,7 @@ class SafetyInsightsAnalystService:
             if run.include_benchmark:
                 run.progress_pct = 90
                 run.progress_message = "External HSE research"
-                await self.db.flush()
+                await _publish_run_progress(run_id, progress_pct=90, progress_message="External HSE research")
                 benchmarks, research_available = self.benchmark_external(validated, run.ratios_json or {})
                 models_used["research"] = "perplexity-sonar" if research_available else None
             run.benchmarks_json = benchmarks
@@ -219,6 +242,16 @@ class SafetyInsightsAnalystService:
             run.completed_at = datetime.now(timezone.utc)
             run.models_used_json = models_used
             await self.db.flush()
+            # Make FAILED visible even when the outer Celery/API session rolls back.
+            await _publish_run_progress(
+                run_id,
+                status=SafetyInsightRunStatus.FAILED,
+                error_code=run.error_code,
+                error_detail=run.error_detail,
+                progress_message="Failed",
+                completed_at=run.completed_at,
+                models_used_json=models_used,
+            )
             raise
 
     # ------------------------------------------------------------------ corpus

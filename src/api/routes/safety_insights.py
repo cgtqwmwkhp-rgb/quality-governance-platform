@@ -11,6 +11,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.domain.models.safety_insight import SafetyInsightRunStatus
 from src.domain.models.user import User
 from src.domain.services.safety_insights_analyst import SafetyInsightsAnalystService
 from src.domain.services.safety_insights_export import SafetyInsightsExportService
@@ -90,9 +91,17 @@ async def start_deep_run(
             tenant_id=current_user.tenant_id,
             user_id=current_user.id,
         )
-    except RuntimeError as exc:
-        if "GEMINI_UNAVAILABLE" in str(exc):
-            await db.commit()
+    except Exception as exc:
+        # Inline/fallback failures may flush FAILED on this session without commit;
+        # without this the request rollback leaves the run stuck in queued.
+        fresh = await service.get_run(run.id, current_user.tenant_id)
+        if fresh is not None and fresh.status == SafetyInsightRunStatus.QUEUED:
+            fresh.status = SafetyInsightRunStatus.FAILED
+            fresh.error_code = (type(exc).__name__)[:100]
+            fresh.error_detail = str(exc)[:2000]
+            fresh.progress_message = "Failed"
+        await db.commit()
+        if isinstance(exc, RuntimeError) and "GEMINI_UNAVAILABLE" in str(exc):
             raise HTTPException(
                 status_code=503,
                 detail="Gemini AI is unavailable — cannot cluster micro-themes",
