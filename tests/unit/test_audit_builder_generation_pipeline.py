@@ -142,6 +142,7 @@ async def test_quality_pass_truncation_preserves_unsliced_sections(monkeypatch):
         model = "claude-sonnet-4-5"
 
         async def complete(self, *args, **kwargs):
+            # Deliberately return more sections than were sent — merge must cap.
             return json.dumps(
                 {
                     "sections": [
@@ -161,7 +162,7 @@ async def test_quality_pass_truncation_preserves_unsliced_sections(monkeypatch):
                                 }
                             ],
                         }
-                        for i in range(1, 7)
+                        for i in range(1, 9)
                     ]
                 }
             )

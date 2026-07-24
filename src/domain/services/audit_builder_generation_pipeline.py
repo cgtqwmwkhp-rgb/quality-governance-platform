@@ -205,8 +205,8 @@ Rules:
             if not improved:
                 return None, False, None, "quality_pass_empty"
             if truncated:
-                # Preserve Gemini sections that were never sent to Claude.
-                improved = improved + sections[len(sections_in) :]
+                # Cap Claude's prefix (ignore extras) then preserve unsliced Gemini tail.
+                improved = improved[: len(sections_in)] + sections[len(sections_in) :]
             model = getattr(client, "model", None) or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
             return improved, True, model, None
         except Exception as exc:  # noqa: BLE001 — fail-soft
