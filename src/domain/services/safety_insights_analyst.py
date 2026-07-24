@@ -345,9 +345,7 @@ class SafetyInsightsAnalystService:
                     "location": getattr(row, "location", None) or "",
                     "department": getattr(row, "department", None) or "",
                     "contract": str(getattr(row, "contract_id", "") or ""),
-                    "person": getattr(row, "complainant_name", None)
-                    or getattr(row, "subject_name", None)
-                    or "",
+                    "person": getattr(row, "complainant_name", None) or getattr(row, "subject_name", None) or "",
                     "people": "",
                     "vehicle": "",
                     "asset_id": None,
@@ -424,7 +422,9 @@ class SafetyInsightsAnalystService:
         return {
             "total": len(corpus),
             "fields": {
-                "missing_root_cause_pct": _pct(lambda c: c["module"] != "near_miss" and not (c.get("root_cause") or "").strip()),
+                "missing_root_cause_pct": _pct(
+                    lambda c: c["module"] != "near_miss" and not (c.get("root_cause") or "").strip()
+                ),
                 "missing_location_pct": _pct(lambda c: not (c.get("location") or "").strip()),
                 "missing_person_pct": _pct(lambda c: not (c.get("person") or "").strip()),
                 "rta_missing_vehicle_pct": (
@@ -798,11 +798,7 @@ Repeat dimensions:
                 .all()
             )
             theme_cases = (
-                (
-                    await self.db.execute(
-                        select(SafetyInsightThemeCase).where(SafetyInsightThemeCase.run_id == run.id)
-                    )
-                )
+                (await self.db.execute(select(SafetyInsightThemeCase).where(SafetyInsightThemeCase.run_id == run.id)))
                 .scalars()
                 .all()
             )
@@ -881,16 +877,16 @@ Repeat dimensions:
     async def _get_run(self, run_id: int, tenant_id: int) -> Optional[SafetyInsightRun]:
         return (
             await self.db.execute(
-                select(SafetyInsightRun).where(
-                    SafetyInsightRun.id == run_id, SafetyInsightRun.tenant_id == tenant_id
-                )
+                select(SafetyInsightRun).where(SafetyInsightRun.id == run_id, SafetyInsightRun.tenant_id == tenant_id)
             )
         ).scalar_one_or_none()
 
     async def _replace_dimensions(self, run: SafetyInsightRun, dimensions: list[dict[str, Any]]) -> None:
         existing = (
-            await self.db.execute(select(SafetyInsightDimension).where(SafetyInsightDimension.run_id == run.id))
-        ).scalars().all()
+            (await self.db.execute(select(SafetyInsightDimension).where(SafetyInsightDimension.run_id == run.id)))
+            .scalars()
+            .all()
+        )
         for row in existing:
             await self.db.delete(row)
         for dim in dimensions:
@@ -909,11 +905,15 @@ Repeat dimensions:
 
     async def _replace_themes(self, run: SafetyInsightRun, themes: list[dict[str, Any]]) -> None:
         old_themes = (
-            await self.db.execute(select(SafetyInsightTheme).where(SafetyInsightTheme.run_id == run.id))
-        ).scalars().all()
+            (await self.db.execute(select(SafetyInsightTheme).where(SafetyInsightTheme.run_id == run.id)))
+            .scalars()
+            .all()
+        )
         old_cases = (
-            await self.db.execute(select(SafetyInsightThemeCase).where(SafetyInsightThemeCase.run_id == run.id))
-        ).scalars().all()
+            (await self.db.execute(select(SafetyInsightThemeCase).where(SafetyInsightThemeCase.run_id == run.id)))
+            .scalars()
+            .all()
+        )
         for row in old_cases:
             await self.db.delete(row)
         for row in old_themes:

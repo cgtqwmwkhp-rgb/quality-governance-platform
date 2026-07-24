@@ -105,10 +105,7 @@ class SafetyInsightsExportService:
                 share = theme.get("share")
                 velocity = theme.get("velocity")
                 severity = theme.get("severity_overlay")
-                header = (
-                    f"{idx}. {label} "
-                    f"(n={case_count}, share={share}, velocity={velocity}, severity={severity})"
-                )
+                header = f"{idx}. {label} " f"(n={case_count}, share={share}, velocity={velocity}, severity={severity})"
                 pdf.set_font("Helvetica", "B", 10)
                 _write_line(pdf, header)
                 rationale = theme.get("rationale")
@@ -120,9 +117,7 @@ class SafetyInsightsExportService:
                     ref_bits = []
                     for ref in refs[:12]:
                         if isinstance(ref, dict):
-                            ref_bits.append(
-                                str(ref.get("reference_number") or f"{ref.get('module')}:{ref.get('id')}")
-                            )
+                            ref_bits.append(str(ref.get("reference_number") or f"{ref.get('module')}:{ref.get('id')}"))
                         else:
                             ref_bits.append(str(ref))
                     pdf.set_font("Helvetica", "", 8)

@@ -127,11 +127,7 @@ async def _enqueue_monthly_digest_for_tenants() -> dict[str, Any]:
 
     async with async_session_maker() as session:
         tenant_ids = list(
-            (
-                await session.execute(
-                    select(Tenant.id).where(Tenant.is_active.is_(True)).order_by(Tenant.id.asc())
-                )
-            )
+            (await session.execute(select(Tenant.id).where(Tenant.is_active.is_(True)).order_by(Tenant.id.asc())))
             .scalars()
             .all()
         )

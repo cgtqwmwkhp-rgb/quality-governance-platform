@@ -297,9 +297,7 @@ Requirements:
                     if r.get("reference_number")
                 )
                 out.append(
-                    f"Safety Insight: {label} (n={theme.get('case_count')}"
-                    + (f"; {refs}" if refs else "")
-                    + ")"
+                    f"Safety Insight: {label} (n={theme.get('case_count')}" + (f"; {refs}" if refs else "") + ")"
                 )
             return out
         except Exception as exc:  # noqa: BLE001
