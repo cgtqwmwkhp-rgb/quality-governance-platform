@@ -56,6 +56,8 @@ export interface Complaint {
   compensation_offered?: string
   owner_id?: number
   reporter_submission?: Record<string, unknown> | null
+  /** Structured witnesses: {witnesses: [{name, phone, email, statement, willing_to_provide_statement}]}. */
+  witnesses_structured?: Record<string, unknown> | null
   due_date?: string
   created_at: string
   updated_at?: string
@@ -106,6 +108,7 @@ export interface ComplaintUpdate {
   resolution_summary?: string
   lessons_learnt?: string | null
   owner_id?: number | null
+  witnesses_structured?: Record<string, unknown> | null
 }
 
 export function createComplaintsApi(api: AxiosInstance) {

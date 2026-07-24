@@ -127,7 +127,7 @@ describe('NearMisses contract SSOT create form', () => {
     await openDialogAndWait()
 
     fireEvent.change(screen.getByLabelText('Reporter name'), { target: { value: 'Alex' } })
-    fireEvent.change(screen.getByTestId('near-miss-contract-search'), {
+    fireEvent.change(screen.getByTestId('fuzzy-Search customer…'), {
       target: { value: 'ukpn' },
     })
     fireEvent.change(screen.getByLabelText('common.location'), { target: { value: 'Yard' } })

@@ -42,6 +42,8 @@ export interface NearMiss {
   persons_involved?: string
   witnesses_present: boolean
   witness_names?: string
+  /** Structured witnesses: {witnesses: [{name, phone, email, statement, willing_to_provide_statement}]}. */
+  witnesses_structured?: Record<string, unknown> | null
   asset_number?: string
   asset_type?: string
   /** Linked Asset registry id (golden thread). Legacy asset_number/asset_type retained. */
@@ -111,6 +113,7 @@ export interface NearMissUpdate {
   asset_id?: number | null
   asset_number?: string
   asset_type?: string
+  witnesses_structured?: Record<string, unknown> | null
 }
 
 export interface RaiseRiskFromNearMissRequest {
