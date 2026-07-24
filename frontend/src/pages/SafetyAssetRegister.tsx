@@ -118,6 +118,17 @@ export default function SafetyAssetRegister() {
   const [view, setView] = useState<AssetBoardView>('assets')
   const [heroBand, setHeroBand] = useState<AssetHeroBand>('all')
   const [search, setSearch] = useState('')
+  /** Board-level type filter (`null` = all types). Drives KPIs, lists, and rollups. */
+  const [typeFilterId, setTypeFilterId] = useState<number | null>(() => {
+    try {
+      const raw = window.localStorage.getItem('qgp.safetyAssets.typeFilterId')
+      if (!raw) return null
+      const parsed = Number(raw)
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+    } catch {
+      return null
+    }
+  })
   const [hideRemoved, setHideRemoved] = useState(() => {
     try {
       return window.localStorage.getItem('qgp.safetyAssets.hideRemoved') !== 'false'
@@ -171,7 +182,12 @@ export default function SafetyAssetRegister() {
       }
       setBoardAssets(assetsRes.value)
       if (typesRes.status === 'fulfilled') {
-        setAssetTypes(typesRes.value.data.items ?? [])
+        const types = typesRes.value.data.items ?? []
+        setAssetTypes(types)
+        setTypeFilterId((current) => {
+          if (current == null) return null
+          return types.some((at) => at.id === current) ? current : null
+        })
       }
       if (locsRes.status === 'fulfilled') {
         setLocations(locsRes.value.data.items ?? [])
@@ -207,27 +223,53 @@ export default function SafetyAssetRegister() {
     }
   }, [hideRemoved])
 
-  const scopeAssets = useMemo(
-    () => applyHideRemoved(boardAssets, hideRemoved),
-    [boardAssets, hideRemoved],
+  useEffect(() => {
+    try {
+      if (typeFilterId == null) {
+        window.localStorage.removeItem('qgp.safetyAssets.typeFilterId')
+      } else {
+        window.localStorage.setItem('qgp.safetyAssets.typeFilterId', String(typeFilterId))
+      }
+    } catch {
+      // Storage may be unavailable in private browsing contexts.
+    }
+  }, [typeFilterId])
+
+  const typeOptions = useMemo(
+    () =>
+      [...assetTypes]
+        .filter((at) => at.name?.trim())
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [assetTypes],
   )
-  const heroCounts = useMemo(
-    () => ({
+
+  const scopeAssets = useMemo(() => {
+    const visible = applyHideRemoved(boardAssets, hideRemoved)
+    if (typeFilterId == null) return visible
+    return visible.filter((asset) => asset.asset_type_id === typeFilterId)
+  }, [boardAssets, hideRemoved, typeFilterId])
+  const heroCounts = useMemo(() => {
+    const removedPool =
+      typeFilterId == null
+        ? boardAssets
+        : boardAssets.filter((asset) => asset.asset_type_id === typeFilterId)
+    return {
       ...computeHeroCounts(scopeAssets),
-      decommissioned: boardAssets.filter(isRemovedAsset).length,
-    }),
-    [scopeAssets, boardAssets],
-  )
+      decommissioned: removedPool.filter(isRemovedAsset).length,
+    }
+  }, [scopeAssets, boardAssets, typeFilterId])
   const metricsReady = !loading && loadError == null
   const kpisUnavailable = !loading && loadError != null
 
-  const bandFiltered = useMemo(
-    () =>
-      (heroBand === 'decommissioned' ? boardAssets : scopeAssets).filter((asset) =>
-        assetMatchesHeroBand(asset, heroBand),
-      ),
-    [boardAssets, scopeAssets, heroBand],
-  )
+  const bandFiltered = useMemo(() => {
+    const pool =
+      heroBand === 'decommissioned'
+        ? typeFilterId == null
+          ? boardAssets
+          : boardAssets.filter((asset) => asset.asset_type_id === typeFilterId)
+        : scopeAssets
+    return pool.filter((asset) => assetMatchesHeroBand(asset, heroBand))
+  }, [boardAssets, scopeAssets, heroBand, typeFilterId])
 
   const searchFiltered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -509,6 +551,28 @@ export default function SafetyAssetRegister() {
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {view !== 'upload' ? (
+            <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="whitespace-nowrap">Asset type</span>
+              <select
+                className="h-9 min-w-[12rem] rounded-lg border border-input bg-background px-3 text-sm text-foreground"
+                value={typeFilterId ?? ''}
+                onChange={(event) => {
+                  const raw = event.target.value
+                  setTypeFilterId(raw ? Number(raw) : null)
+                }}
+                aria-label="Filter by asset type"
+                data-testid="safety-assets-type-filter"
+              >
+                <option value="">All types</option>
+                {typeOptions.map((at) => (
+                  <option key={at.id} value={at.id}>
+                    {at.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
             <input
               type="checkbox"
