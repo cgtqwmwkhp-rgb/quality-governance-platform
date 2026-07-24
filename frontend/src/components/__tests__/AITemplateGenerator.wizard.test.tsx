@@ -63,6 +63,7 @@ describe('AITemplateGenerator wizard', () => {
     expect(post).toHaveBeenCalledWith(
       '/api/v1/ai-templates/gather-brief',
       expect.objectContaining({ purpose: 'risk_audit' }),
+      undefined,
     )
     expect(screen.getByText(/Recent incident: cable/)).toBeInTheDocument()
   })

@@ -252,6 +252,7 @@ class AnthropicClient(AIClient):
         system_prompt: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 2000,
+        timeout: float = 60.0,
     ) -> str:
         """Generate completion using Claude."""
         async with httpx.AsyncClient() as client:
@@ -265,10 +266,11 @@ class AnthropicClient(AIClient):
                 json={
                     "model": self.model,
                     "max_tokens": max_tokens,
+                    "temperature": temperature,
                     "system": system_prompt or "You are a helpful assistant.",
                     "messages": [{"role": "user", "content": prompt}],
                 },
-                timeout=60.0,
+                timeout=timeout,
             )
             response.raise_for_status()
             data = response.json()

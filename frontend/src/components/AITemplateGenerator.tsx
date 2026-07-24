@@ -122,8 +122,11 @@ interface SimilarMatch {
 // Relative fetch('/api/...') hits Azure Static Web Apps with no backend and returns 405.
 // ============================================================================
 
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const { data } = await api.post<T>(url, body)
+/** Gemini generate + Claude quality-pass can exceed 300s end-to-end. */
+const AI_GENERATE_TIMEOUT_MS = 480000
+
+async function postJson<T>(url: string, body: unknown, timeoutMs?: number): Promise<T> {
+  const { data } = await api.post<T>(url, body, timeoutMs ? { timeout: timeoutMs } : undefined)
   return data
 }
 
@@ -216,6 +219,12 @@ export default function AITemplateGenerator({
   const [generatedSections, setGeneratedSections] = useState<GeneratedSection[] | null>(null)
   const [selectedSections, setSelectedSections] = useState<Set<string>>(new Set())
   const [standardSuggestions, setStandardSuggestions] = useState<unknown[]>([])
+  const [modelsUsed, setModelsUsed] = useState<{
+    research?: string | null
+    generate?: string | null
+    quality_pass?: string | null
+  } | null>(null)
+  const [qualityPassAvailable, setQualityPassAvailable] = useState<boolean | null>(null)
 
   useEffect(() => {
     if (initialCaseRefs?.length) {
@@ -334,13 +343,32 @@ export default function AITemplateGenerator({
         sections: GeneratedSection[]
         standard_suggestions?: unknown[]
         template_id?: number
-        builder_meta?: { brief_id?: string; source_case_refs?: Array<{ type: string; id: number }> }
-      }>('/api/v1/ai-templates/generate-from-brief', {
-        brief,
-        similar_gate_action: gateAction,
-        similar_template_id: selectedSimilarId,
-        similar_gate_reason: gateReason,
-      })
+        models_used?: {
+          research?: string | null
+          generate?: string | null
+          quality_pass?: string | null
+        }
+        quality_pass_available?: boolean
+        builder_meta?: {
+          brief_id?: string
+          source_case_refs?: Array<{ type: string; id: number }>
+          models_used?: {
+            research?: string | null
+            generate?: string | null
+            quality_pass?: string | null
+          }
+          quality_pass_available?: boolean
+        }
+      }>(
+        '/api/v1/ai-templates/generate-from-brief',
+        {
+          brief,
+          similar_gate_action: gateAction,
+          similar_template_id: selectedSimilarId,
+          similar_gate_reason: gateReason,
+        },
+        AI_GENERATE_TIMEOUT_MS,
+      )
       if (data.action === 'use_existing' && data.template_id && onUseExistingTemplate) {
         onUseExistingTemplate(data.template_id)
         onClose()
@@ -350,9 +378,29 @@ export default function AITemplateGenerator({
       setGeneratedSections(sections)
       setSelectedSections(new Set(sections.map((s) => s.id)))
       setStandardSuggestions(data.standard_suggestions || [])
+      setModelsUsed(data.models_used || data.builder_meta?.models_used || null)
+      setQualityPassAvailable(
+        typeof data.quality_pass_available === 'boolean'
+          ? data.quality_pass_available
+          : typeof data.builder_meta?.quality_pass_available === 'boolean'
+            ? data.builder_meta.quality_pass_available
+            : null,
+      )
       setStep('preview')
     } catch (err) {
-      setError(t('auditBuilder.errors.generate'))
+      const timedOut =
+        (err as { code?: string; message?: string })?.code === 'ECONNABORTED' ||
+        String((err as { message?: string })?.message || '')
+          .toLowerCase()
+          .includes('timeout')
+      setError(
+        timedOut
+          ? t('auditBuilder.errors.generateTimeout', {
+              defaultValue:
+                'Generation is still running on the server but the browser timed out. Wait a moment and try Generate again, or shorten the brief.',
+            })
+          : t('auditBuilder.errors.generate'),
+      )
       trackError(err, { component: 'AITemplateGenerator', action: 'generate' })
     } finally {
       setBusy(false)
@@ -758,6 +806,20 @@ export default function AITemplateGenerator({
               {standardSuggestions.length > 0 && (
                 <p className="text-xs text-muted-foreground">
                   {t('auditBuilder.standardsSuggested', { count: standardSuggestions.length })}
+                </p>
+              )}
+              {modelsUsed && (
+                <p className="text-xs text-muted-foreground">
+                  {t('auditBuilder.modelsUsed', {
+                    defaultValue:
+                      'Pipeline: research {{research}} · generate {{generate}} · quality {{quality}}',
+                    research: modelsUsed.research || 'offline',
+                    generate: modelsUsed.generate || 'gemini',
+                    quality:
+                      qualityPassAvailable && modelsUsed.quality_pass
+                        ? modelsUsed.quality_pass
+                        : 'skipped',
+                  })}
                 </p>
               )}
               <div className="space-y-3">

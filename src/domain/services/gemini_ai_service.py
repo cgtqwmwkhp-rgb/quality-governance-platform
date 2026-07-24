@@ -57,54 +57,123 @@ class GeminiAIService:
                 return None
         return self._client
 
+    # JSON Schema for structured assessment templates (Gemini response_schema).
+    _TEMPLATE_RESPONSE_SCHEMA: dict = {
+        "type": "object",
+        "properties": {
+            "sections": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "title": {"type": "string"},
+                        "description": {"type": "string"},
+                        "questions": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "string"},
+                                    "text": {"type": "string"},
+                                    "type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "yes_no",
+                                            "yes_no_na",
+                                            "pass_fail",
+                                            "text_short",
+                                            "text_long",
+                                            "numeric",
+                                            "date",
+                                            "scale_1_5",
+                                            "scale_1_10",
+                                            "signature",
+                                            "multi_choice",
+                                            "checklist",
+                                        ],
+                                    },
+                                    "required": {"type": "boolean"},
+                                    "weight": {"type": "number"},
+                                    "riskLevel": {
+                                        "type": "string",
+                                        "enum": ["critical", "high", "medium", "low", "observation"],
+                                    },
+                                    "evidenceRequired": {"type": "boolean"},
+                                    "isoClause": {"type": "string", "nullable": True},
+                                    "guidance": {"type": "string", "nullable": True},
+                                },
+                                "required": ["id", "text", "type", "required", "weight", "riskLevel"],
+                            },
+                        },
+                    },
+                    "required": ["id", "title", "questions"],
+                },
+            }
+        },
+        "required": ["sections"],
+    }
+
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     async def prompt_to_template(self, prompt_text: str) -> list[dict]:
-        """Generate template sections directly from a freeform prompt."""
+        """Generate template sections using Gemini structured JSON output."""
         client = self._get_client()
         if not client:
             raise RuntimeError("Gemini AI template generation is unavailable")
 
-        prompt = f"""Generate a structured audit template from this prompt:
+        prompt = f"""Generate a structured audit/assessment template from this brief.
 
-"{prompt_text}"
+BRIEF:
+{prompt_text}
 
-Return valid JSON as an array of sections using this exact shape:
-[
-  {{
-    "id": "section-1",
-    "title": "Section title",
-    "description": "Short section description",
-    "questions": [
-      {{
-        "id": "question-1",
-        "text": "Question text",
-        "type": "yes_no|yes_no_na|pass_fail|text_short|text_long|numeric|date|scale_1_5|scale_1_10|signature|multi_choice|checklist",
-        "required": true,
-        "weight": 1,
-        "riskLevel": "critical|high|medium|low|observation",
-        "evidenceRequired": false,
-        "isoClause": null,
-        "guidance": "Assessor guidance"
-      }}
-    ]
-  }}
-]
-
+Return JSON object {{"sections":[...]}} only.
 Rules:
-- Use 3 to 8 sections depending on the prompt complexity.
-- Prefer yes/no, yes/no/na, pass/fail, scale, and text questions that can be executed in the existing builder.
-- Keep IDs stable-looking strings.
-- Only return JSON, no markdown fences."""
+- Use 3 to 8 sections depending on complexity.
+- Prefer yes_no, yes_no_na, pass_fail, scale_1_5, text_short, text_long, checklist.
+- Every question needs practical assessor guidance.
+- Keep IDs stable string tokens (section-1, question-1-1, ...).
+- Align with cited research / standards in the brief when present.
+"""
 
         def _run():
-            response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
+            from google.genai import types
+
+            config_kwargs: dict = {
+                "temperature": 0.25,
+                "response_mime_type": "application/json",
+            }
+            # Prefer schema enforcement when SDK supports it; fall back to JSON mime only.
+            try:
+                config_kwargs["response_schema"] = self._TEMPLATE_RESPONSE_SCHEMA
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                config = types.GenerateContentConfig(**config_kwargs)
+            except TypeError:
+                config_kwargs.pop("response_schema", None)
+                config = types.GenerateContentConfig(**config_kwargs)
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=config,
+            )
             return response.text
 
         text = await call_via_upstream_breaker(_GEMINI_AI_UPSTREAM_BREAKER, asyncio.to_thread, _run)
-        text = text.strip()
+        text = (text or "").strip()
         if text.startswith("```"):
-            text = text.split("\n", 1)[1].rsplit("```", 1)[0]
-        return json.loads(text)
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            if text.lower().startswith("json"):
+                text = text[4:].strip()
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            return parsed
+        if isinstance(parsed, dict):
+            sections = parsed.get("sections")
+            if isinstance(sections, list):
+                return sections
+            return [parsed] if parsed.get("title") or parsed.get("questions") else []
+        raise RuntimeError("Unexpected Gemini template payload")
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     async def document_to_template(self, file_content: bytes, filename: str, asset_type: Optional[str] = None) -> dict:

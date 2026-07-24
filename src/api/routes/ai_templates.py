@@ -526,9 +526,14 @@ async def generate_from_brief(
 
     orch = AuditBuilderOrchestrator(db)
     prompt = orch.compose_generation_prompt(request.brief)
-    service = GeminiAIService()
+    from src.domain.services.audit_builder_generation_pipeline import AuditBuilderGenerationPipeline
+
     try:
-        sections = await service.prompt_to_template(prompt)
+        pipeline_result = await AuditBuilderGenerationPipeline().generate(
+            prompt=prompt,
+            brief=request.brief,
+        )
+        sections = pipeline_result["sections"]
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -563,6 +568,8 @@ async def generate_from_brief(
         "action": request.similar_gate_action,
         "sections": sections,
         "standard_suggestions": suggestions,
+        "models_used": pipeline_result.get("models_used"),
+        "quality_pass_available": pipeline_result.get("quality_pass_available"),
         "builder_meta": {
             "brief_id": (request.brief or {}).get("brief_id"),
             "source_case_refs": (request.brief or {}).get("case_refs") or [],
@@ -570,5 +577,8 @@ async def generate_from_brief(
             "similar_gate_reason": request.similar_gate_reason[:500],
             "similar_template_id": request.similar_template_id,
             "research_available": bool((request.brief or {}).get("research_findings")),
+            "models_used": pipeline_result.get("models_used"),
+            "quality_pass_available": pipeline_result.get("quality_pass_available"),
+            "quality_pass_notes": pipeline_result.get("quality_pass_notes"),
         },
     }
