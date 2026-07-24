@@ -80,6 +80,32 @@ async def resolve_contract_id_by_code(
     return int(contract.id)
 
 
+async def ensure_contracts_from_customer_lookups(
+    db: AsyncSession,
+    *,
+    tenant_id: int,
+) -> int:
+    """Materialise contracts.id rows for active Admin → Lookups → Customers options.
+
+    Staff incident/complaint dropdowns read ``/admin/config/contracts`` while admins
+    configure customers in the lookups catalog. Without this bridge, the contracts
+    table can stay empty even when customers are live.
+    """
+    created_or_linked = 0
+    result = await db.execute(
+        select(LookupOption).where(
+            LookupOption.tenant_id == tenant_id,
+            LookupOption.category == "customers",
+            LookupOption.is_active.is_(True),
+        )
+    )
+    for lookup in result.scalars().all():
+        resolved = await resolve_contract_id_by_code(db, tenant_id=tenant_id, code=lookup.code)
+        if resolved is not None:
+            created_or_linked += 1
+    return created_or_linked
+
+
 async def assert_tenant_contract(
     db: AsyncSession,
     *,

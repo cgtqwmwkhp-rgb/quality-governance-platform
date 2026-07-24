@@ -588,8 +588,18 @@ async def list_contracts(
     current_user: CurrentUser,
     is_active: Optional[bool] = Query(None),
 ) -> ContractListResponse:
-    """List all contracts."""
+    """List all contracts.
+
+    Also materialises missing rows from Admin → Lookups → Customers so staff
+    dropdowns (Incidents, etc.) see the same catalog admins configure.
+    """
     try:
+        from src.domain.services.contract_resolve import ensure_contracts_from_customer_lookups
+
+        if current_user.tenant_id is not None:
+            await ensure_contracts_from_customer_lookups(db, tenant_id=int(current_user.tenant_id))
+            await db.commit()
+
         query = select(Contract).where(Contract.tenant_id == current_user.tenant_id)
 
         if is_active is not None:

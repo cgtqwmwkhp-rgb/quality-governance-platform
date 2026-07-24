@@ -14,6 +14,7 @@ import api, {
   type Contract,
   type PaginatedResponse,
 } from '../api/client'
+import { CUSTOMERS_LOOKUP_CATEGORY, toCustomerSelectOptions } from './admin/customersCatalog'
 import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
 import { trackError } from '../utils/errorTracker'
 import { resolvePlatformReporterIdentity } from '../utils/platformSessionReporter'
@@ -138,7 +139,8 @@ export default function Incidents() {
     reported_date: new Date().toISOString().slice(0, 16),
     contract_id: null,
   })
-  const [contractOptions, setContractOptions] = useState<Contract[]>([])
+  const [contractOptions, setContractOptions] = useState<Array<{ id: number; name: string }>>([])
+  const [customersLoaded, setCustomersLoaded] = useState(false)
   const [sessionReporterLabel, setSessionReporterLabel] = useState<string | null>(null)
   const defaultTypeOptions = [
     { value: 'injury', label: t('incidents.type.injury') },
@@ -163,16 +165,41 @@ export default function Incidents() {
   useEffect(() => {
     if (!showModal) {
       setSessionReporterLabel(null)
+      setCustomersLoaded(false)
       return
     }
     let cancelled = false
     // Show translated defaults immediately; overlay Admin lookup labels when loaded.
     setTypeOptions(defaultTypeOptions)
     setSeverityOptions(defaultSeverityOptions)
-    void contractsApi.list(true).then((res) => {
-      if (!cancelled) setContractOptions(res.items || [])
-    }).catch(() => {
-      if (!cancelled) setContractOptions([])
+    setCustomersLoaded(false)
+    // Customers lookup is SSOT; contracts list materialises FKs from that catalog.
+    void Promise.all([
+      lookupsApi.list(CUSTOMERS_LOOKUP_CATEGORY, true).catch(() => ({ items: [], total: 0 })),
+      contractsApi.list(true).then(
+        (res) => res,
+        () => ({ items: [] as Contract[], total: 0 }),
+      ),
+    ]).then(([customerRes, contractsRes]) => {
+      if (cancelled) return
+      const byCode: Record<string, Contract> = {}
+      for (const contract of contractsRes.items || []) {
+        if (contract.code) byCode[contract.code.toLowerCase()] = contract
+      }
+      const fromCustomers = toCustomerSelectOptions(customerRes.items || [])
+        .map((option) => {
+          const matched = byCode[option.value.toLowerCase()]
+          if (!matched) return null
+          return { id: matched.id, name: option.label }
+        })
+        .filter((row): row is { id: number; name: string } => row != null)
+      // Prefer lookup labels; fall back to raw contracts if lookups empty/unavailable.
+      setContractOptions(
+        fromCustomers.length > 0
+          ? fromCustomers
+          : (contractsRes.items || []).map((c) => ({ id: c.id, name: c.name })),
+      )
+      setCustomersLoaded(true)
     })
     void resolvePlatformReporterIdentity().then((identity) => {
       if (cancelled) return
@@ -944,11 +971,11 @@ export default function Incidents() {
                   ))}
                 </SelectContent>
               </Select>
-              {contractOptions.length === 0 ? (
+              {customersLoaded && contractOptions.length === 0 ? (
                 <p className="text-xs text-muted-foreground mt-1">
                   {t(
                     'incidents.form.customer_empty',
-                    'No customers configured — add them in Admin → Lookups / Contracts.',
+                    'No customers available — add them in Admin → Lookups → Customers.',
                   )}
                 </p>
               ) : null}
