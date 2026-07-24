@@ -6,10 +6,7 @@ import json
 
 import pytest
 
-from src.domain.services.audit_builder_generation_pipeline import (
-    AuditBuilderGenerationPipeline,
-    normalize_sections,
-)
+from src.domain.services.audit_builder_generation_pipeline import AuditBuilderGenerationPipeline, normalize_sections
 
 
 def test_normalize_sections_from_object_wrapper():
