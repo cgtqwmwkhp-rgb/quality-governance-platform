@@ -122,8 +122,11 @@ interface SimilarMatch {
 // Relative fetch('/api/...') hits Azure Static Web Apps with no backend and returns 405.
 // ============================================================================
 
-/** Gemini generate + Claude quality-pass can exceed 300s end-to-end. */
-const AI_GENERATE_TIMEOUT_MS = 480000
+/**
+ * Azure App Service aborts HTTP at ~230s (503, no CORS headers → browser
+ * "Network Error"). Keep the client wait just under that ceiling.
+ */
+const AI_GENERATE_TIMEOUT_MS = 210000
 
 async function postJson<T>(url: string, body: unknown, timeoutMs?: number): Promise<T> {
   const { data } = await api.post<T>(url, body, timeoutMs ? { timeout: timeoutMs } : undefined)
@@ -388,16 +391,24 @@ export default function AITemplateGenerator({
       )
       setStep('preview')
     } catch (err) {
+      const axiosErr = err as {
+        code?: string
+        message?: string
+        response?: { status?: number }
+      }
+      const msg = String(axiosErr?.message || '').toLowerCase()
+      const status = axiosErr?.response?.status
+      // Gateway 503 often has no CORS headers → axios "Network Error" with no status.
       const timedOut =
-        (err as { code?: string; message?: string })?.code === 'ECONNABORTED' ||
-        String((err as { message?: string })?.message || '')
-          .toLowerCase()
-          .includes('timeout')
+        axiosErr?.code === 'ECONNABORTED' ||
+        status === 503 ||
+        msg.includes('timeout') ||
+        msg.includes('network error')
       setError(
         timedOut
           ? t('auditBuilder.errors.generateTimeout', {
               defaultValue:
-                'Generation is still running on the server but the browser timed out. Wait a moment and try Generate again, or shorten the brief.',
+                'Generation hit the platform time limit. Try Generate again with a shorter brief, or retry in a moment.',
             })
           : t('auditBuilder.errors.generate'),
       )
