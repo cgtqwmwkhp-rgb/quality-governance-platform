@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { trackError } from '../utils/errorTracker'
 import { Plus, Car, Search, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { EmptyState } from '../components/ui/EmptyState'
-import { rtasApi, RTA, RTACreate, ThirdParty, getApiErrorMessage } from '../api/client'
+import api, {
+  rtasApi,
+  RTA,
+  RTACreate,
+  ThirdParty,
+  getApiErrorMessage,
+  type PaginatedResponse,
+} from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
@@ -28,9 +35,17 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 
+function buildRtasListSearch(params: { ids: string }): string {
+  const next = new URLSearchParams()
+  const ids = params.ids.trim()
+  if (ids) next.set('ids', ids)
+  return next.toString()
+}
+
 export default function RTAs() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [rtas, setRtas] = useState<RTA[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<{ message: string; code?: string; requestId?: string } | null>(
@@ -40,6 +55,7 @@ export default function RTAs() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [idsFilter, setIdsFilter] = useState(() => searchParams.get('ids') || '')
   const emptyThirdParty: ThirdParty = {
     name: '',
     vehicle_reg: '',
@@ -64,10 +80,26 @@ export default function RTAs() {
   })
   const [thirdParties, setThirdParties] = useState<ThirdParty[]>([{ ...emptyThirdParty }])
 
+  // Hydrate ids deep-link from shareable URL (back/forward + Safety Insights).
+  useEffect(() => {
+    const nextIds = searchParams.get('ids') || ''
+    setIdsFilter((prev) => (prev === nextIds ? prev : nextIds))
+  }, [searchParams])
+
+  // Keep ids in the URL; replace history entry.
+  useEffect(() => {
+    const desired = buildRtasListSearch({ ids: idsFilter })
+    if (desired !== searchParams.toString()) {
+      setSearchParams(desired ? new URLSearchParams(desired) : new URLSearchParams(), {
+        replace: true,
+      })
+    }
+  }, [idsFilter, searchParams, setSearchParams])
+
   useEffect(() => {
     loadRtas()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [idsFilter])
 
   const loadRtas = async () => {
     setLoading(true)
@@ -80,7 +112,15 @@ export default function RTAs() {
     }, 15000) // 15 second timeout
 
     try {
-      const response = await rtasApi.list(1, 50)
+      const ids = idsFilter.trim()
+      // Deep-links from Safety Insights may cite more than one page of cases.
+      const idCount = ids ? ids.split(',').filter((part) => part.trim()).length : 0
+      const pageSize = ids ? Math.min(Math.max(idCount, 50), 100) : 50
+      const params = new URLSearchParams({ page: '1', page_size: String(pageSize) })
+      if (ids) params.set('ids', ids)
+      const response = ids
+        ? await api.get<PaginatedResponse<RTA>>(`/api/v1/rtas/?${params.toString()}`)
+        : await rtasApi.list(1, pageSize)
       setRtas(response.data.items ?? [])
       setError(null)
     } catch (err: any) {

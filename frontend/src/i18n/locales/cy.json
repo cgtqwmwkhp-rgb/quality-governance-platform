@@ -1414,6 +1414,7 @@
   "nav.admin_console": "Consol Gweinyddol",
   "nav.advanced_analytics": "Dadansoddeg Uwch",
   "nav.ai_intelligence": "Deallusrwydd AI",
+  "nav.safety_insights": "Mewnwelediadau Diogelwch",
   "nav.analytics": "Dadansoddeg",
   "nav.assessments": "Asesiadau",
   "nav.assurance": "Sicrwydd",
@@ -3579,5 +3580,11 @@
   "complaints.detail.no_capa_handoff": "Dim camau CAPA wedi'u cysylltu eto — defnyddiwch Ychwanegu Cam i greu un.",
   "complaints.detail.actions_count": "Camau ({{count}})",
   "complaints.detail.no_actions_description": "Ychwanegwch gam i olrhain gwaith dilynol",
-  "actions.view_complaint": "Gweld cwyn"
+  "actions.view_complaint": "Gweld cwyn",
+  "safetyInsights.title": "Dadansoddwr Mewnwelediadau Diogelwch",
+  "safetyInsights.subtitle": "Micro-themâu, dimensiynau ailadroddus, a chymarebau bron-a-methiant — pob canfyddiad wedi'i ddyfynnu i achosion go iawn.",
+  "safetyInsights.scope": "Cwmpas dadansoddi",
+  "safetyInsights.run": "Rhedeg dadansoddiad dwfn",
+  "safetyInsights.startFailed": "Methwyd â chychwyn dadansoddiad dwfn.",
+  "safetyInsights.microThemes": "Micro-themâu"
 }

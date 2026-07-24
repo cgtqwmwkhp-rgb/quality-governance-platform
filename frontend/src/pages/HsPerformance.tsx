@@ -9,6 +9,8 @@ const metrics = [
   ['injuries', 'Injuries'],
   ['near_misses', 'Near misses'],
   ['hipo_near_misses', 'HiPo near misses'],
+  ['near_miss_to_injury_ratio', 'NM : Injury'],
+  ['hipo_near_miss_to_injury_ratio', 'HiPo NM : Injury'],
   ['rtas', 'RTAs'],
   ['ltis', 'LTIs'],
   ['riddor', 'RIDDOR'],

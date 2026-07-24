@@ -23,7 +23,8 @@ import {
 import AITemplateGenerator from '../components/AITemplateGenerator'
 import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
 import { Badge } from '../components/ui/Badge'
-import { auditsApi, getApiErrorMessage } from '../api/client'
+import { auditsApi, getApiErrorMessage, safetyInsightsApi } from '../api/client'
+import type { AuditBuilderCasePrefill } from '../components/AITemplateGenerator'
 import type {
   AuditTemplate,
   Section,
@@ -192,11 +193,44 @@ export default function AuditTemplateBuilder() {
   const { announce } = useLiveAnnouncer()
   const caseTypeParam = searchParams.get('caseType') || searchParams.get('case_type')
   const caseIdParam = Number(searchParams.get('caseId') || searchParams.get('case_id') || '')
+  const themeIdParam = Number(searchParams.get('themeId') || searchParams.get('theme_id') || '')
   const openAiParam = searchParams.get('ai') === '1' || searchParams.get('ai') === 'true'
-  const initialCaseRefs =
+  const seedCaseRefs: AuditBuilderCasePrefill[] | undefined =
     caseTypeParam && Number.isFinite(caseIdParam) && caseIdParam > 0
       ? [{ type: caseTypeParam, id: caseIdParam }]
       : undefined
+  const needsThemePrefill = Number.isFinite(themeIdParam) && themeIdParam > 0
+  const [initialCaseRefs, setInitialCaseRefs] = useState<AuditBuilderCasePrefill[] | undefined>(
+    seedCaseRefs,
+  )
+  // Delay AI wizard until theme case prefill resolves so gather_brief sees cited cases.
+  const [showAIAssist, setShowAIAssist] = useState(openAiParam && !needsThemePrefill)
+
+  useEffect(() => {
+    if (!needsThemePrefill) return
+    let cancelled = false
+    void safetyInsightsApi
+      .themeCases(themeIdParam)
+      .then((res) => {
+        if (cancelled) return
+        const refs = (res.data?.case_refs || [])
+          .map((ref: { module?: string; id?: number; reference_number?: string }) => ({
+            type: String(ref.module || ''),
+            id: Number(ref.id),
+            label: ref.reference_number ? String(ref.reference_number) : undefined,
+          }))
+          .filter((ref: AuditBuilderCasePrefill) => ref.type && Number.isFinite(ref.id) && ref.id > 0)
+        if (refs.length) setInitialCaseRefs(refs)
+        if (openAiParam) setShowAIAssist(true)
+      })
+      .catch(() => {
+        // Open AI anyway with seedCaseRefs / empty prefill when theme lookup fails.
+        if (!cancelled && openAiParam) setShowAIAssist(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [needsThemePrefill, themeIdParam, openAiParam])
 
   const [template, setTemplate] = useState<AuditTemplate>({
     id: templateId || generateId(),
@@ -220,7 +254,6 @@ export default function AuditTemplateBuilder() {
   const [activeTab, setActiveTab] = useState<'builder' | 'settings' | 'preview'>('builder')
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [showAIAssist, setShowAIAssist] = useState(openAiParam)
   const [showPublishDialog, setShowPublishDialog] = useState(false)
   const [backendId, setBackendId] = useState<number | null>(
     templateId && !isNaN(Number(templateId)) ? Number(templateId) : null,

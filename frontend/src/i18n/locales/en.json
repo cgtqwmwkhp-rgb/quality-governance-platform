@@ -1920,6 +1920,7 @@
   "nav.admin_console": "Admin Console",
   "nav.advanced_analytics": "Advanced Analytics",
   "nav.ai_intelligence": "AI Intelligence",
+  "nav.safety_insights": "Safety Insights",
   "nav.analytics": "Analytics",
   "nav.assessments": "Assessments",
   "nav.assurance": "Assurance",
@@ -3734,5 +3735,11 @@
   "complaints.detail.no_capa_handoff": "No CAPA actions linked yet — use Add Action to create one.",
   "complaints.detail.actions_count": "Actions ({{count}})",
   "complaints.detail.no_actions_description": "Add an action to track follow-up work",
-  "actions.view_complaint": "View complaint"
+  "actions.view_complaint": "View complaint",
+  "safetyInsights.title": "Safety Insights Analyst",
+  "safetyInsights.subtitle": "Research-grade micro-themes, repeat dimensions, and near-miss ratios — every finding cited to real cases.",
+  "safetyInsights.scope": "Analysis scope",
+  "safetyInsights.run": "Run deep analysis",
+  "safetyInsights.startFailed": "Could not start deep analysis.",
+  "safetyInsights.microThemes": "Micro-themes"
 }

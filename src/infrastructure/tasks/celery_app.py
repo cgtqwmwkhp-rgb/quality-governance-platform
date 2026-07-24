@@ -89,6 +89,7 @@ CELERY_TASK_MODULES = (
     "src.infrastructure.tasks.pams_sync_tasks",
     "src.infrastructure.tasks.report_tasks",
     "src.infrastructure.tasks.safety_asset_expiry_tasks",
+    "src.infrastructure.tasks.safety_insights_tasks",
     "src.infrastructure.tasks.sms_tasks",
     "src.infrastructure.tasks.webhook_tasks",
     "src.infrastructure.tasks.regulatory_watch_tasks",
@@ -196,6 +197,10 @@ celery_app.conf.beat_schedule = {
     "remind-training-matrix-upload": {
         "task": ("src.infrastructure.tasks.training_matrix_upload_reminder_tasks." "remind_training_matrix_upload"),
         "schedule": crontab(hour=8, minute=0, day_of_week="fri"),  # Friday 08:00 UTC
+    },
+    "monthly-safety-insights-digest": {
+        "task": "src.infrastructure.tasks.safety_insights_tasks.run_monthly_safety_insights_digest",
+        "schedule": crontab(hour=6, minute=15, day_of_month="1"),  # 1st of month 06:15 UTC
     },
 }
 

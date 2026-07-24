@@ -18,6 +18,7 @@ import { createIncidentsApi } from './incidentsClient'
 import { createPoliciesApi } from './policiesClient'
 import { createRtasApi } from './rtasClient'
 import { createHsKpisApi } from './hsKpisClient'
+import { createSafetyInsightsApi } from './safetyInsightsClient'
 import { createComplaintsApi } from './complaintsClient'
 import { createNearMissesApi } from './nearMissesClient'
 import { createRisksApi } from './risksClient'
@@ -996,6 +997,14 @@ export const incidentsApi = createIncidentsApi(api)
 // ============ RTAs API (extracted: rtasClient.ts) ============
 export const rtasApi = createRtasApi(api)
 export const hsKpisApi = createHsKpisApi(api)
+export const safetyInsightsApi = createSafetyInsightsApi(api)
+export type {
+  DeepRunCreatePayload,
+  SafetyInsightCaseRef,
+  SafetyInsightDimension,
+  SafetyInsightRun,
+  SafetyInsightTheme,
+} from './safetyInsightsClient'
 
 // ============ Complaints API (extracted: complaintsClient.ts) ============
 export const complaintsApi = createComplaintsApi(api)

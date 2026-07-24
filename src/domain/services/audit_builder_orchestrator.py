@@ -271,9 +271,38 @@ Requirements:
                 themes.extend(await self._recent_complaint_titles(tenant_id))
             if "documents" in scopes and asset_hint:
                 themes.extend(await self._semantic_doc_themes(tenant_id, asset_hint))
+            themes.extend(await self._latest_safety_insight_themes(tenant_id))
         except Exception as exc:  # noqa: BLE001 — fail-closed
             logger.info("Audit builder platform theme gather degraded: %s", type(exc).__name__)
         return [t for t in themes if t][:40]
+
+    async def _latest_safety_insight_themes(self, tenant_id: int) -> list[str]:
+        """Merge persisted Safety Insights micro-themes into Audit Builder briefs."""
+        try:
+            from src.domain.services.safety_insights_analyst import SafetyInsightsAnalystService
+
+            service = SafetyInsightsAnalystService(self.db)
+            run = await service.latest_succeeded(tenant_id)
+            if run is None:
+                return []
+            payload = await service.serialize_run(run, include_children=True)
+            out: list[str] = []
+            for theme in (payload.get("micro_themes") or [])[:12]:
+                label = str(theme.get("label") or "").strip()
+                if not label:
+                    continue
+                refs = ", ".join(
+                    str(r.get("reference_number") or "")
+                    for r in (theme.get("case_refs") or [])[:6]
+                    if r.get("reference_number")
+                )
+                out.append(
+                    f"Safety Insight: {label} (n={theme.get('case_count')}" + (f"; {refs}" if refs else "") + ")"
+                )
+            return out
+        except Exception as exc:  # noqa: BLE001
+            logger.info("Safety insight theme merge skipped: %s", type(exc).__name__)
+            return []
 
     async def _theme_from_case(self, tenant_id: int, ref: dict[str, Any]) -> str:
         ctype = str(ref.get("type") or "").lower()

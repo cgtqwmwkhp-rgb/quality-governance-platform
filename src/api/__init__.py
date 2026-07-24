@@ -72,6 +72,7 @@ from src.api.routes import (
     risk_register_import,
     risks,
     rtas,
+    safety_insights,
     signatures,
     slo,
     standards,
@@ -138,6 +139,7 @@ router.include_router(notifications.router, prefix="/notifications", tags=["Noti
 router.include_router(realtime.router, prefix="/realtime", tags=["Real-Time & WebSocket"])
 router.include_router(analytics.router, prefix="/analytics", tags=["Analytics & Reporting"])
 router.include_router(hs_kpis.router, prefix="/hs-kpis", tags=["H&S Performance"])
+router.include_router(safety_insights.router, prefix="/safety-insights", tags=["Safety Insights Analyst"])
 router.include_router(hs_imports.router, prefix="/hs-imports", tags=["H&S Imports"])
 router.include_router(calendar.router, prefix="/calendar", tags=["Governance Calendar"])
 router.include_router(workflows.router, prefix="/workflows", tags=["Workflow Automation"])

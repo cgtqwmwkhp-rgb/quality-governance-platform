@@ -1,0 +1,208 @@
+"""Safety Insights Analyst API — async deep-run over H&S case corpora."""
+
+from __future__ import annotations
+
+import logging
+import os
+from typing import Annotated, Any, Optional
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
+
+from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.domain.models.safety_insight import SafetyInsightRunStatus
+from src.domain.models.user import User
+from src.domain.services.safety_insights_analyst import SafetyInsightsAnalystService
+from src.domain.services.safety_insights_export import SafetyInsightsExportService
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+class DeepRunCreate(BaseModel):
+    modules: list[str] = Field(default_factory=lambda: ["incident", "near_miss", "rta", "complaint"])
+    scope: str = Field(default="org", pattern="^(org|topic)$")
+    topic_query: Optional[str] = None
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    min_cluster_size: int = Field(default=2, ge=2, le=20)
+    include_synthesis: bool = True
+    include_benchmark: bool = False
+
+
+class ExportRequest(BaseModel):
+    """Optional body for export format (query `format` also accepted)."""
+
+    format: Optional[str] = Field(default=None, pattern="^(json|pdf)$")
+
+
+def _dispatch_run(
+    *,
+    background_tasks: BackgroundTasks,
+    run_id: int,
+    tenant_id: int,
+    user_id: Optional[int],
+) -> None:
+    """Enqueue Celery, or schedule inline processing off the request path."""
+    from src.infrastructure.tasks.safety_insights_tasks import (
+        process_safety_insight_run,
+        process_safety_insight_run_inline,
+    )
+
+    inline = os.environ.get("SAFETY_INSIGHTS_INLINE", "").strip().lower() in {"1", "true", "yes"}
+    if not inline:
+        try:
+            process_safety_insight_run.delay(run_id, tenant_id, user_id)
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Safety insights Celery enqueue failed (%s); falling back to background inline",
+                type(exc).__name__,
+            )
+    # Never block the HTTP request on a multi-minute deep-run (proxy timeouts leave runs stuck).
+    background_tasks.add_task(process_safety_insight_run_inline, run_id, tenant_id, user_id)
+
+
+@router.post("/runs")
+async def start_deep_run(
+    payload: DeepRunCreate,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
+    current_user: Annotated[User, Depends(require_permission("analytics:create"))],
+):
+    assert current_user.tenant_id is not None
+    service = SafetyInsightsAnalystService(db)
+    try:
+        run = await service.create_run(
+            tenant_id=current_user.tenant_id,
+            user_id=current_user.id,
+            modules=payload.modules,
+            scope=payload.scope,
+            topic_query=payload.topic_query,
+            date_from=service.parse_date_bound(payload.date_from, end=False),
+            date_to=service.parse_date_bound(payload.date_to, end=True),
+            min_cluster_size=payload.min_cluster_size,
+            include_synthesis=payload.include_synthesis,
+            include_benchmark=payload.include_benchmark,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # Persist the queued row before Celery workers / background tasks can claim it.
+    await db.commit()
+    await db.refresh(run)
+    try:
+        _dispatch_run(
+            background_tasks=background_tasks,
+            run_id=run.id,
+            tenant_id=current_user.tenant_id,
+            user_id=current_user.id,
+        )
+    except Exception as exc:
+        fresh = await service.get_run(run.id, current_user.tenant_id)
+        if fresh is not None and fresh.status == SafetyInsightRunStatus.QUEUED:
+            fresh.status = SafetyInsightRunStatus.FAILED
+            fresh.error_code = (type(exc).__name__)[:100]
+            fresh.error_detail = str(exc)[:2000]
+            fresh.progress_message = "Failed"
+        await db.commit()
+        raise
+    fresh = await service.get_run(run.id, current_user.tenant_id)
+    return await service.serialize_run(fresh or run, include_children=True)
+
+
+@router.get("/runs")
+async def list_runs(
+    db: DbSession,
+    current_user: CurrentUser,
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    assert current_user.tenant_id is not None
+    service = SafetyInsightsAnalystService(db)
+    runs = await service.list_runs(current_user.tenant_id, limit=limit)
+    total = await service.count_runs(current_user.tenant_id)
+    return {
+        "items": [await service.serialize_run(r, include_children=False) for r in runs],
+        "total": total,
+    }
+
+
+@router.get("/runs/{run_id}")
+async def get_run(run_id: int, db: DbSession, current_user: CurrentUser):
+    assert current_user.tenant_id is not None
+    service = SafetyInsightsAnalystService(db)
+    run = await service.get_run(run_id, current_user.tenant_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return await service.serialize_run(run, include_children=True)
+
+
+@router.get("/latest")
+async def latest_run(db: DbSession, current_user: CurrentUser):
+    assert current_user.tenant_id is not None
+    service = SafetyInsightsAnalystService(db)
+    run = await service.latest_succeeded(current_user.tenant_id)
+    if run is None:
+        return {"run": None, "top_themes": [], "ratios": None}
+    payload = await service.serialize_run(run, include_children=True)
+    return {
+        "run": {
+            "id": payload["id"],
+            "completed_at": payload["completed_at"],
+            "corpus_summary": payload["corpus_summary"],
+        },
+        "top_themes": (payload.get("micro_themes") or [])[:5],
+        "ratios": payload.get("ratios"),
+        "synthesis_available": payload.get("synthesis_available"),
+        "research_available": payload.get("research_available"),
+    }
+
+
+@router.get("/themes/{theme_id}/cases")
+async def theme_cases(theme_id: int, db: DbSession, current_user: CurrentUser):
+    assert current_user.tenant_id is not None
+    service = SafetyInsightsAnalystService(db)
+    data = await service.theme_case_ids(theme_id, current_user.tenant_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Theme not found")
+    return data
+
+
+@router.post("/runs/{run_id}/export")
+async def export_run(
+    run_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    format: str = Query(default="json", pattern="^(json|pdf)$"),
+    body: Optional[ExportRequest] = None,
+):
+    """Board-pack export as JSON (default) or PDF attachment."""
+    assert current_user.tenant_id is not None
+    export_format = (body.format if body and body.format else format).lower()
+    service = SafetyInsightsAnalystService(db)
+    run = await service.get_run(run_id, current_user.tenant_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status != SafetyInsightRunStatus.SUCCEEDED:
+        raise HTTPException(
+            status_code=409,
+            detail="Board-pack export is only available for succeeded runs",
+        )
+    payload = await service.serialize_run(run, include_children=True)
+    exporter = SafetyInsightsExportService()
+    if export_format == "json":
+        return exporter.build_json_board_pack(payload)
+    try:
+        pdf_bytes, filename = exporter.build_pdf_board_pack(payload)
+    except Exception as exc:  # noqa: BLE001 — fail closed, no fake PDF
+        logger.exception("Safety insights PDF export failed for run %s", run_id)
+        raise HTTPException(
+            status_code=500,
+            detail=f"PDF board-pack build failed: {exc}",
+        ) from exc
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

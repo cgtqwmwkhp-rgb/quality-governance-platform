@@ -155,6 +155,7 @@ class ExecutiveDashboardService:
 
         trends = await self._safe_call(self._get_trends(period_days), dict(_EMPTY_TRENDS))
         alerts = await self._safe_call(self._get_active_alerts(), [])
+        safety_insights = await self._safe_call(self._get_safety_insights_summary(), {})
 
         # Ensure all sparkline series keys exist even if a partial trends dict is returned.
         trends = {**dict(_EMPTY_TRENDS), **trends}
@@ -174,6 +175,35 @@ class ExecutiveDashboardService:
             "audits": audit_summary,
             "trends": trends,
             "alerts": alerts,
+            "safety_insights": safety_insights,
+        }
+
+    async def _get_safety_insights_summary(self) -> Dict[str, Any]:
+        """Latest Safety Insights Analyst themes + NM:I for executive surface."""
+        if self.tenant_id is None:
+            return {"available": False, "top_themes": [], "ratios": None}
+        from src.domain.services.safety_insights_analyst import SafetyInsightsAnalystService
+
+        service = SafetyInsightsAnalystService(self.db)
+        run = await service.latest_succeeded(self.tenant_id)
+        if run is None:
+            return {"available": False, "top_themes": [], "ratios": None, "href": "/analytics/safety-insights"}
+        payload = await service.serialize_run(run, include_children=True)
+        return {
+            "available": True,
+            "run_id": run.id,
+            "completed_at": payload.get("completed_at"),
+            "top_themes": [
+                {
+                    "id": t.get("id"),
+                    "label": t.get("label"),
+                    "case_count": t.get("case_count"),
+                    "velocity": t.get("velocity"),
+                }
+                for t in (payload.get("micro_themes") or [])[:3]
+            ],
+            "ratios": (payload.get("ratios") or {}).get("corpus"),
+            "href": "/analytics/safety-insights",
         }
 
     async def _get_incident_summary(self, cutoff: datetime) -> Dict[str, Any]:

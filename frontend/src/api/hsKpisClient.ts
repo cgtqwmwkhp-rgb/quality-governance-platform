@@ -12,6 +12,8 @@ export interface HsKpiYear {
   injuries: number
   near_misses: number
   hipo_near_misses: number
+  near_miss_to_injury_ratio?: number | null
+  hipo_near_miss_to_injury_ratio?: number | null
   rtas: number
   complaints: number
   ltis: number
