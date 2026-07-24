@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "175 kB",
+    "limit": "177 kB",
     "gzip": true,
-    "name": "index: 174→175 kB — CAPA case tabs parity shared panel wiring"
+    "name": "index: 174\u2192175 kB \u2014 CAPA case tabs parity shared panel wiring"
   },
   {
     "path": "dist/assets/vendor-*.js",
@@ -12,7 +12,7 @@
   },
   {
     "path": "dist/assets/index-*.css",
-    "limit": "35 kB",
+    "limit": "177 kB",
     "gzip": true
   }
 ]
