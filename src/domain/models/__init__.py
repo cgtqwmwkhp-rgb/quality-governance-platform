@@ -141,13 +141,6 @@ from src.domain.models.governed_knowledge import (
     RegulatoryWatchImpact,
 )
 from src.domain.models.hs_reporting_period import HsReportingPeriod
-from src.domain.models.safety_insight import (
-    SafetyInsightDimension,
-    SafetyInsightRun,
-    SafetyInsightRunStatus,
-    SafetyInsightTheme,
-    SafetyInsightThemeCase,
-)
 
 # IMS Unification (Tier 1)
 from src.domain.models.ims_unification import (
@@ -244,6 +237,13 @@ from src.domain.models.risk_register import (
     RiskNote,
 )
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
+from src.domain.models.safety_insight import (
+    SafetyInsightDimension,
+    SafetyInsightRun,
+    SafetyInsightRunStatus,
+    SafetyInsightTheme,
+    SafetyInsightThemeCase,
+)
 from src.domain.models.standard import Clause, Control, Standard
 from src.domain.models.tenant import Tenant, TenantInvitation, TenantUser
 from src.domain.models.token_blacklist import TokenBlacklist

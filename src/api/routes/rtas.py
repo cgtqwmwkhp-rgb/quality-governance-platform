@@ -24,9 +24,9 @@ from src.api.schemas.rta import (
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
 from src.api.utils.errors import api_error
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
+from src.domain.exceptions import BadRequestError
 from src.domain.models.rta import RoadTrafficCollision, RTAAction, RunningSheetEntry
 from src.domain.models.user import User
-from src.domain.exceptions import BadRequestError
 from src.domain.services.api_idempotency_service import (
     SCOPE_RTA_CREATE,
     begin_idempotent_create,
