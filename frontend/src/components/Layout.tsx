@@ -1,4 +1,4 @@
-import { Outlet, NavLink, Link, useNavigate, useLocation } from 'react-router-dom'
+import { Outlet, NavLink, Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   AlertTriangle,
@@ -54,6 +54,7 @@ import { CUSTOMER_AUDITS_PROGRAMME_PATH, navItemIsActive } from './assuranceHubH
 
 /** Deferred until the shell opens Copilot — keeps authenticated first paint lean (S14). */
 const AICopilot = lazy(() => import('./copilot/AICopilot'))
+const GlobalSearchPalette = lazy(() => import('./search/GlobalSearchPalette'))
 
 interface LayoutProps {
   onLogout: () => void
@@ -61,6 +62,7 @@ interface LayoutProps {
 
 export default function Layout({ onLogout }: LayoutProps) {
   const { t } = useTranslation()
+  const [searchOpen, setSearchOpen] = useState(false)
   const canAccessWorkforce = hasRole('admin', 'supervisor')
   const canAccessAdvancedNav = canAccessWorkforce || isSuperuser()
   const canManageUsers = isSuperuser()
@@ -278,7 +280,6 @@ export default function Layout({ onLogout }: LayoutProps) {
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [pendingSafetyLookups, setPendingSafetyLookups] = useState(0)
   const [copilotOpen, setCopilotOpen] = useState(false)
-  const navigate = useNavigate()
 
   const fetchUnreadCount = useCallback(() => {
     notificationsApi
@@ -321,17 +322,17 @@ export default function Layout({ onLogout }: LayoutProps) {
     }
   }, [location.pathname, location.search, fetchPendingSafetyLookups])
 
-  // Keyboard shortcut for global search (Cmd+K or Ctrl+K)
+  // Keyboard shortcut for global search palette (Cmd+K or Ctrl+K)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
-        navigate('/search')
+        setSearchOpen(true)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [navigate])
+  }, [])
 
   return (
     <div className="min-h-screen bg-background safe-area-top">
@@ -341,11 +342,16 @@ export default function Layout({ onLogout }: LayoutProps) {
       >
         {t('a11y.skip_to_content', 'Skip to main content')}
       </a>
+      <Suspense fallback={null}>
+        <GlobalSearchPalette open={searchOpen} onOpenChange={setSearchOpen} />
+      </Suspense>
       {/* Top Bar */}
       <header className="fixed top-0 right-0 left-0 lg:left-72 h-16 bg-card/95 backdrop-blur-lg border-b border-border z-30 flex items-center justify-between px-4 sm:px-6">
-        {/* Search Bar */}
+        {/* Search Bar — opens overlay palette; does not navigate away */}
         <button
-          onClick={() => navigate('/search')}
+          type="button"
+          onClick={() => setSearchOpen(true)}
+          aria-label={t('search.open_palette', 'Open search')}
           className={cn(
             'flex items-center gap-3 px-4 py-2 rounded-lg text-muted-foreground',
             'bg-surface border border-border',

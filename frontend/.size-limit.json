@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "175 kB",
+    "limit": "177 kB",
     "gzip": true,
-    "name": "index: 174→175 kB — CAPA case tabs parity shared panel wiring"
+    "name": "index: 175\u2192177 kB \u2014 SharePoint search palette overlay"
   },
   {
     "path": "dist/assets/vendor-*.js",

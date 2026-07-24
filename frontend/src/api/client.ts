@@ -2022,6 +2022,17 @@ export const iso27001Api = {
 
 // ============ Global Search API ============
 
+export interface SearchInterpretResponse {
+  q: string
+  module?: string | null
+  status?: string | null
+  date_from?: string | null
+  date_to?: string | null
+  navigate?: string | null
+  label?: string | null
+  source: string
+}
+
 export const searchApi = {
   search: (
     queryOrParams:
@@ -2057,6 +2068,8 @@ export const searchApi = {
     if (params.page_size) sp.set('page_size', String(params.page_size))
     return api.get<GlobalSearchResponse>(`/api/v1/search?${sp}`)
   },
+  interpret: (q: string) =>
+    api.post<SearchInterpretResponse>('/api/v1/search/interpret', { q }),
 }
 
 // ============ Evidence Assets API ============
@@ -2224,7 +2237,7 @@ export const evidenceAssetsApi = {
 
 export interface GlobalSearchResultRecord {
   id: string
-  type: 'incident' | 'rta' | 'complaint' | 'risk' | 'audit' | 'action' | 'document'
+  type: 'incident' | 'rta' | 'complaint' | 'near_miss' | 'risk' | 'audit' | 'action' | 'document'
   title: string
   description: string
   module: string
@@ -2232,6 +2245,8 @@ export interface GlobalSearchResultRecord {
   date: string
   relevance: number
   highlights: string[]
+  entity_id?: number | null
+  path?: string | null
 }
 
 export interface GlobalSearchResponse {

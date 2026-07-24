@@ -23,6 +23,7 @@ class TestSearchResultItem:
             date="2026-01-01",
             relevance=85.0,
             highlights=["fire"],
+            entity_id=42,
         )
         d = item.to_dict()
         assert d["id"] == "INC-1"
@@ -31,6 +32,8 @@ class TestSearchResultItem:
         assert d["module"] == "Incidents"
         assert d["relevance"] == 85.0
         assert d["highlights"] == ["fire"]
+        assert d["entity_id"] == 42
+        assert d["path"] == "/incidents/42"
 
     def test_to_dict_defaults_highlights_to_empty_list(self):
         item = SearchResultItem(

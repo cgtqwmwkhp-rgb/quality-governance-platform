@@ -19,6 +19,13 @@ vi.mock('../../api/client', () => ({
   notificationsApi: {
     getUnreadCount: vi.fn().mockResolvedValue({ data: { unread_count: 0 } }),
   },
+  searchApi: {
+    search: vi.fn().mockResolvedValue({ data: { results: [], total: 0, query: '', facets: {} } }),
+    interpret: vi.fn().mockResolvedValue({
+      data: { q: '', source: 'keyword' },
+    }),
+  },
+  getApiErrorMessage: (error: unknown) => (error instanceof Error ? error.message : 'error'),
 }))
 
 vi.mock('../../api/safetyAssetsClient', () => ({
@@ -392,5 +399,25 @@ describe('Layout', () => {
     await user.click(screen.getByRole('button', { name: /nav\.copilot/i }))
 
     expect(await screen.findByTestId('ai-copilot')).toBeInTheDocument()
+  })
+
+  it('opens the search palette overlay from the header without routing to /search', async () => {
+    const user = userEvent.setup()
+    window.history.pushState({}, '', '/rtas/99')
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    expect(window.location.pathname).toBe('/rtas/99')
+    await user.click(screen.getByRole('button', { name: 'search.open_palette' }))
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText('search.palette_title')).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/rtas/99')
+    expect(window.location.pathname).not.toBe('/search')
   })
 })
