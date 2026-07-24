@@ -189,15 +189,17 @@ export default function NearMisses() {
     let cancelled = false
     const load = async () => {
       try {
+        const ids = idsFilter.trim()
+        const idCount = ids ? ids.split(',').filter((part) => part.trim()).length : 0
+        const pageSize = ids ? Math.min(Math.max(idCount, PAGE_SIZE), 500) : PAGE_SIZE
         const params = new URLSearchParams({
           page: String(page),
-          page_size: String(PAGE_SIZE),
+          page_size: String(pageSize),
         })
-        const ids = idsFilter.trim()
         if (ids) params.set('ids', ids)
         const response = ids
           ? await api.get<PaginatedResponse<NearMiss>>(`/api/v1/near-misses/?${params.toString()}`)
-          : await nearMissesApi.list(page, PAGE_SIZE)
+          : await nearMissesApi.list(page, pageSize)
         if (!cancelled) setNearMisses(response.data.items ?? [])
       } catch (err) {
         if (!cancelled) {

@@ -268,11 +268,13 @@ export default function Incidents() {
       setLoadError(null)
       try {
         const ids = idsFilter.trim()
+        const idCount = ids ? ids.split(',').filter((part) => part.trim()).length : 0
+        const pageSize = ids ? Math.min(Math.max(idCount, PAGE_SIZE), 500) : PAGE_SIZE
         let response
         if (ids) {
           const params = new URLSearchParams({
             page: String(page),
-            page_size: String(PAGE_SIZE),
+            page_size: String(pageSize),
             ids,
           })
           if (ownerFilter === 'unassigned') params.set('owner', 'unassigned')

@@ -245,13 +245,13 @@ class SafetyInsightsAnalystService:
         rows: list[dict[str, Any]] = []
 
         if "incident" in modules:
-            q = select(Incident).where(Incident.tenant_id == tenant_id)
+            q_incident = select(Incident).where(Incident.tenant_id == tenant_id)
             if date_from is not None:
-                q = q.where(Incident.incident_date >= date_from)
+                q_incident = q_incident.where(Incident.incident_date >= date_from)
             if date_to is not None:
-                q = q.where(Incident.incident_date <= date_to)
-            q = q.order_by(Incident.incident_date.desc()).limit(limit_per_module)
-            for row in (await self.db.execute(q)).scalars().all():
+                q_incident = q_incident.where(Incident.incident_date <= date_to)
+            q_incident = q_incident.order_by(Incident.incident_date.desc()).limit(limit_per_module)
+            for row in (await self.db.execute(q_incident)).scalars().all():
                 item = {
                     "module": "incident",
                     "id": row.id,
@@ -275,13 +275,13 @@ class SafetyInsightsAnalystService:
                 rows.append(item)
 
         if "near_miss" in modules:
-            q = select(NearMiss).where(NearMiss.tenant_id == tenant_id)
+            q_near_miss = select(NearMiss).where(NearMiss.tenant_id == tenant_id)
             if date_from is not None:
-                q = q.where(NearMiss.event_date >= date_from)
+                q_near_miss = q_near_miss.where(NearMiss.event_date >= date_from)
             if date_to is not None:
-                q = q.where(NearMiss.event_date <= date_to)
-            q = q.order_by(NearMiss.event_date.desc()).limit(limit_per_module)
-            for row in (await self.db.execute(q)).scalars().all():
+                q_near_miss = q_near_miss.where(NearMiss.event_date <= date_to)
+            q_near_miss = q_near_miss.order_by(NearMiss.event_date.desc()).limit(limit_per_module)
+            for row in (await self.db.execute(q_near_miss)).scalars().all():
                 item = {
                     "module": "near_miss",
                     "id": row.id,
@@ -305,13 +305,13 @@ class SafetyInsightsAnalystService:
                 rows.append(item)
 
         if "rta" in modules:
-            q = select(RoadTrafficCollision).where(RoadTrafficCollision.tenant_id == tenant_id)
+            q_rta = select(RoadTrafficCollision).where(RoadTrafficCollision.tenant_id == tenant_id)
             if date_from is not None:
-                q = q.where(RoadTrafficCollision.collision_date >= date_from)
+                q_rta = q_rta.where(RoadTrafficCollision.collision_date >= date_from)
             if date_to is not None:
-                q = q.where(RoadTrafficCollision.collision_date <= date_to)
-            q = q.order_by(RoadTrafficCollision.collision_date.desc()).limit(limit_per_module)
-            for row in (await self.db.execute(q)).scalars().all():
+                q_rta = q_rta.where(RoadTrafficCollision.collision_date <= date_to)
+            q_rta = q_rta.order_by(RoadTrafficCollision.collision_date.desc()).limit(limit_per_module)
+            for row in (await self.db.execute(q_rta)).scalars().all():
                 item = {
                     "module": "rta",
                     "id": row.id,
@@ -335,14 +335,14 @@ class SafetyInsightsAnalystService:
                 rows.append(item)
 
         if "complaint" in modules:
-            q = select(Complaint).where(Complaint.tenant_id == tenant_id)
+            q_complaint = select(Complaint).where(Complaint.tenant_id == tenant_id)
             date_field = getattr(Complaint, "received_date", None) or Complaint.created_at
             if date_from is not None:
-                q = q.where(date_field >= date_from)
+                q_complaint = q_complaint.where(date_field >= date_from)
             if date_to is not None:
-                q = q.where(date_field <= date_to)
-            q = q.order_by(date_field.desc()).limit(limit_per_module)
-            for row in (await self.db.execute(q)).scalars().all():
+                q_complaint = q_complaint.where(date_field <= date_to)
+            q_complaint = q_complaint.order_by(date_field.desc()).limit(limit_per_module)
+            for row in (await self.db.execute(q_complaint)).scalars().all():
                 item = {
                     "module": "complaint",
                     "id": row.id,
@@ -930,13 +930,13 @@ Repeat dimensions:
             .scalars()
             .all()
         )
-        for row in old_cases:
-            await self.db.delete(row)
-        for row in old_themes:
-            await self.db.delete(row)
+        for case_row in old_cases:
+            await self.db.delete(case_row)
+        for theme_row in old_themes:
+            await self.db.delete(theme_row)
         await self.db.flush()
         for theme in themes:
-            row = SafetyInsightTheme(
+            theme_row = SafetyInsightTheme(
                 run_id=run.id,
                 tenant_id=run.tenant_id,
                 label=theme["label"],
@@ -948,12 +948,12 @@ Repeat dimensions:
                 severity_overlay=theme.get("severity_overlay"),
                 sort_order=theme.get("sort_order", 0),
             )
-            self.db.add(row)
+            self.db.add(theme_row)
             await self.db.flush()
             for ref in theme.get("case_refs") or []:
                 self.db.add(
                     SafetyInsightThemeCase(
-                        theme_id=row.id,
+                        theme_id=theme_row.id,
                         run_id=run.id,
                         tenant_id=run.tenant_id,
                         module=ref["module"],

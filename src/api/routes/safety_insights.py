@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -38,30 +38,38 @@ class ExportRequest(BaseModel):
     format: Optional[str] = Field(default=None, pattern="^(json|pdf)$")
 
 
-async def _dispatch_run(
+def _dispatch_run(
     *,
-    service: SafetyInsightsAnalystService,
+    background_tasks: BackgroundTasks,
     run_id: int,
     tenant_id: int,
     user_id: Optional[int],
 ) -> None:
-    """Enqueue Celery, or process inline when SAFETY_INSIGHTS_INLINE=1 / broker missing."""
+    """Enqueue Celery, or schedule inline processing off the request path."""
+    from src.infrastructure.tasks.safety_insights_tasks import (
+        process_safety_insight_run,
+        process_safety_insight_run_inline,
+    )
+
     inline = os.environ.get("SAFETY_INSIGHTS_INLINE", "").strip().lower() in {"1", "true", "yes"}
     if not inline:
         try:
-            from src.infrastructure.tasks.safety_insights_tasks import process_safety_insight_run
-
             process_safety_insight_run.delay(run_id, tenant_id, user_id)
             return
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Safety insights Celery enqueue failed (%s); falling back inline", type(exc).__name__)
-    await service.process_run(run_id=run_id, tenant_id=tenant_id)
+            logger.warning(
+                "Safety insights Celery enqueue failed (%s); falling back to background inline",
+                type(exc).__name__,
+            )
+    # Never block the HTTP request on a multi-minute deep-run (proxy timeouts leave runs stuck).
+    background_tasks.add_task(process_safety_insight_run_inline, run_id, tenant_id, user_id)
 
 
 @router.post("/runs")
 async def start_deep_run(
     payload: DeepRunCreate,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     current_user: Annotated[User, Depends(require_permission("analytics:create"))],
 ):
     assert current_user.tenant_id is not None
@@ -81,19 +89,17 @@ async def start_deep_run(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    # Persist the queued row before Celery workers can claim it.
+    # Persist the queued row before Celery workers / background tasks can claim it.
     await db.commit()
     await db.refresh(run)
     try:
-        await _dispatch_run(
-            service=service,
+        _dispatch_run(
+            background_tasks=background_tasks,
             run_id=run.id,
             tenant_id=current_user.tenant_id,
             user_id=current_user.id,
         )
     except Exception as exc:
-        # Inline/fallback failures may flush FAILED on this session without commit;
-        # without this the request rollback leaves the run stuck in queued.
         fresh = await service.get_run(run.id, current_user.tenant_id)
         if fresh is not None and fresh.status == SafetyInsightRunStatus.QUEUED:
             fresh.status = SafetyInsightRunStatus.FAILED
@@ -101,13 +107,7 @@ async def start_deep_run(
             fresh.error_detail = str(exc)[:2000]
             fresh.progress_message = "Failed"
         await db.commit()
-        if isinstance(exc, RuntimeError) and "GEMINI_UNAVAILABLE" in str(exc):
-            raise HTTPException(
-                status_code=503,
-                detail="Gemini AI is unavailable — cannot cluster micro-themes",
-            ) from exc
         raise
-    await db.commit()
     fresh = await service.get_run(run.id, current_user.tenant_id)
     return await service.serialize_run(fresh or run, include_children=True)
 
