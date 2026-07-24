@@ -89,7 +89,8 @@ describe('FormsList API wiring', () => {
     expect(menuButton).toBeTruthy()
     await user.click(menuButton!)
 
-    await user.click(screen.getByRole('button', { name: 'Publish' }))
+    // Portaled DropdownMenu items use role="menuitem", not button.
+    await user.click(await screen.findByRole('menuitem', { name: 'Publish' }))
 
     await waitFor(() => {
       expect(mockPublishTemplate).toHaveBeenCalledWith(1)
