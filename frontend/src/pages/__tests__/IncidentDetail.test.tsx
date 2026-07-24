@@ -254,8 +254,12 @@ describe('IncidentDetail', () => {
     expect(toast.error).toHaveBeenCalled()
     expect(screen.queryByTestId('incident-capa-handoff-cta')).not.toBeInTheDocument()
     expect(
-      screen.getByText('No CAPA actions linked yet — use Add Action to create one.'),
-    ).toBeInTheDocument()
+      screen.queryByText('No CAPA actions linked yet — use Add Action to create one.'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getAllByText('CAPA actions could not be loaded — counts may be incomplete.').length,
+    ).toBeGreaterThan(0)
+    expect(screen.getByTestId('incident-actions-tab')).toHaveTextContent('—')
   })
 
   it('hosts StandardsAssessmentPanel like Near Miss (incident entity)', async () => {
