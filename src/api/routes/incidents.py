@@ -447,6 +447,10 @@ async def list_incidents(
         description="Filter by case owner: 'unassigned' for intakes with no owner_id",
     ),
     asset_id: Optional[int] = Query(None, description="Filter by linked Asset registry id"),
+    ids: Optional[str] = Query(
+        None,
+        description="Comma-separated incident ids (Safety Insights theme deep-link)",
+    ),
 ) -> IncidentListResponse:
     """
     List all incidents with deterministic ordering.
@@ -457,6 +461,15 @@ async def list_incidents(
     """
     if owner is not None and owner != "unassigned":
         raise BadRequestError("Invalid owner filter. Supported value: unassigned")
+
+    id_list: list[int] | None = None
+    if ids:
+        try:
+            id_list = [int(part.strip()) for part in ids.split(",") if part.strip()]
+        except ValueError as exc:
+            raise BadRequestError("ids must be comma-separated integers") from exc
+        if not id_list:
+            id_list = None
 
     svc = IncidentService(db)
 
@@ -494,6 +507,7 @@ async def list_incidents(
             reporter_email=reporter_email,
             owner=owner,
             asset_id=asset_id,
+            ids=id_list,
             skip_tenant_check=current_user.is_superuser,
         )
         items: list[IncidentResponse] = []

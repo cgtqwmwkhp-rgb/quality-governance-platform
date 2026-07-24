@@ -411,6 +411,33 @@ Only return valid JSON."""
             logger.error("Gemini gap_analysis failed: %s", e)
             return {"gaps": [], "recommendations": []}
 
+    async def generate_json(self, prompt: str, *, temperature: float = 0.2) -> dict | list:
+        """Generate structured JSON from a freeform prompt (Safety Insights, etc.)."""
+        client = self._get_client()
+        if not client:
+            raise RuntimeError("Gemini AI is unavailable")
+
+        def _run():
+            from google.genai import types
+
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(temperature=temperature),
+            )
+            return response.text
+
+        text = await call_via_upstream_breaker(_GEMINI_AI_UPSTREAM_BREAKER, asyncio.to_thread, _run)
+        text = (text or "").strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            if text.lower().startswith("json"):
+                text = text[4:].strip()
+        return json.loads(text)
+
+    def is_configured(self) -> bool:
+        return bool(self._get_client())
+
     @staticmethod
     def _fallback_template(filename: str) -> dict:
         """Return a minimal template structure when AI is unavailable."""

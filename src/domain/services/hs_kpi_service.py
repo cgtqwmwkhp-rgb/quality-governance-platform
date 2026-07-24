@@ -156,6 +156,18 @@ class HsKpiService:
             else 0
         )
         hours = effective_hours(period)
+        near_misses = await self._count(NearMiss, NearMiss.event_date, period.tenant_id, start, end)
+        hipo_near_misses = await self._count(
+            NearMiss,
+            NearMiss.event_date,
+            period.tenant_id,
+            start,
+            end,
+            NearMiss.is_hipo.is_(True),
+        )
+        # Injuries as the board denominator for NM:I (Excel SLT convention).
+        near_miss_to_injury_ratio = round(near_misses / injuries, 2) if injuries else None
+        hipo_near_miss_to_injury_ratio = round(hipo_near_misses / injuries, 2) if injuries else None
         return {
             "reporting_year": period.reporting_year,
             "period_start": start.isoformat(),
@@ -166,15 +178,10 @@ class HsKpiService:
             "hours": round(hours, 2),
             "hours_source": "manual" if period.manual_hours is not None and period.manual_hours > 0 else "calculated",
             "injuries": injuries,
-            "near_misses": await self._count(NearMiss, NearMiss.event_date, period.tenant_id, start, end),
-            "hipo_near_misses": await self._count(
-                NearMiss,
-                NearMiss.event_date,
-                period.tenant_id,
-                start,
-                end,
-                NearMiss.is_hipo.is_(True),
-            ),
+            "near_misses": near_misses,
+            "hipo_near_misses": hipo_near_misses,
+            "near_miss_to_injury_ratio": near_miss_to_injury_ratio,
+            "hipo_near_miss_to_injury_ratio": hipo_near_miss_to_injury_ratio,
             "rtas": rtas,
             "complaints": await self._count(Complaint, Complaint.received_date, period.tenant_id, start, end),
             "ltis": incident_ltis + rta_ltis,

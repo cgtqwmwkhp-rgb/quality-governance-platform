@@ -141,6 +141,17 @@ class ActiveAlert(BaseModel):
     triggered_at: str
 
 
+class SafetyInsightsSummary(BaseModel):
+    """Latest Safety Insights Analyst snapshot for the executive surface."""
+
+    available: bool = False
+    run_id: Optional[int] = None
+    completed_at: Optional[str] = None
+    top_themes: List[dict] = Field(default_factory=list)
+    ratios: Optional[dict] = None
+    href: str = "/analytics/safety-insights"
+
+
 class ExecutiveDashboardResponse(BaseModel):
     """Complete executive dashboard response."""
 
@@ -158,6 +169,7 @@ class ExecutiveDashboardResponse(BaseModel):
     audits: AuditSummary = Field(default_factory=AuditSummary)
     trends: TrendData
     alerts: List[ActiveAlert]
+    safety_insights: SafetyInsightsSummary = Field(default_factory=SafetyInsightsSummary)
 
 
 class VehicleGovernanceSummary(BaseModel):

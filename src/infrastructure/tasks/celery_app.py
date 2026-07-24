@@ -89,6 +89,7 @@ CELERY_TASK_MODULES = (
     "src.infrastructure.tasks.pams_sync_tasks",
     "src.infrastructure.tasks.report_tasks",
     "src.infrastructure.tasks.safety_asset_expiry_tasks",
+    "src.infrastructure.tasks.safety_insights_tasks",
     "src.infrastructure.tasks.sms_tasks",
     "src.infrastructure.tasks.webhook_tasks",
     "src.infrastructure.tasks.regulatory_watch_tasks",

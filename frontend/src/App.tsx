@@ -66,6 +66,7 @@ const PortalNearMissForm = lazy(() => import('./pages/PortalNearMissForm'))
 const PortalDynamicForm = lazy(() => import('./pages/PortalDynamicForm'))
 const Analytics = lazy(() => import('./pages/Analytics'))
 const HsPerformance = lazy(() => import('./pages/HsPerformance'))
+const SafetyInsightsAnalyst = lazy(() => import('./pages/SafetyInsightsAnalyst'))
 const GlobalSearch = lazy(() => import('./pages/GlobalSearch'))
 const AuditTrail = lazy(() => import('./pages/AuditTrail'))
 const CalendarView = lazy(() => import('./pages/CalendarView'))
@@ -350,6 +351,7 @@ function App() {
               <Route element={<RouteErrorBoundary />}>
                 <Route path="analytics" element={<Analytics />} />
                 <Route path="analytics/hs-performance" element={<HsPerformance />} />
+                <Route path="analytics/safety-insights" element={<SafetyInsightsAnalyst />} />
                 <Route path="analytics/advanced" element={<AdvancedAnalytics />} />
                 <Route path="analytics/dashboards" element={<DashboardBuilder />} />
                 <Route path="analytics/reports" element={<ReportGenerator />} />

@@ -214,6 +214,7 @@ class IncidentService:
         reporter_email: Optional[str] = None,
         owner: Optional[str] = None,
         asset_id: Optional[int] = None,
+        ids: Optional[list[int]] = None,
         skip_tenant_check: bool = False,
     ):
         """List incidents with pagination and optional filters."""
@@ -232,6 +233,9 @@ class IncidentService:
 
         if asset_id is not None:
             query = query.where(Incident.asset_id == asset_id)
+
+        if ids:
+            query = query.where(Incident.id.in_(ids))
 
         query = query.order_by(Incident.reported_date.desc(), Incident.id.asc())
         return await paginate(self.db, query, params)
