@@ -33,8 +33,15 @@ export type CapaLinkOptions = {
   returnTo?: string
 }
 
+export type CapaSourceType =
+  | 'incident'
+  | 'investigation'
+  | 'near_miss'
+  | 'rta'
+  | 'complaint'
+
 export function getCapaLink(
-  sourceType: 'incident' | 'investigation' | 'near_miss' | 'rta',
+  sourceType: CapaSourceType,
   sourceId: number,
   options?: CapaLinkOptions,
 ) {
@@ -61,13 +68,14 @@ export function resolveCapaHandoffMode(actionsCount: number): CapaHandoffMode {
 
 /** Shared i18n keys for incident/investigation CAPA hand-off buttons. */
 export function getCapaHandoffLabelKey(
-  sourceType: 'incident' | 'investigation' | 'near_miss' | 'rta',
+  sourceType: CapaSourceType,
   actionsCount: number,
 ): string {
   if (resolveCapaHandoffMode(actionsCount) === 'open') {
     if (sourceType === 'incident') return 'incidents.detail.open_capa'
     if (sourceType === 'near_miss') return 'near_misses.detail.open_capa'
     if (sourceType === 'rta') return 'rtas.detail.open_capa'
+    if (sourceType === 'complaint') return 'complaints.detail.open_capa'
     return 'investigations.handoff.open_capa'
   }
   return 'investigations.handoff.create_action'
@@ -124,6 +132,13 @@ export function getActionSourceLink(
       href: `/rtas/${sourceId}`,
       labelKey: 'actions.view_rta',
       labelFallback: 'View RTA',
+    }
+  }
+  if (kind === 'complaint' || kind === 'capa_complaint') {
+    return {
+      href: `/complaints/${sourceId}`,
+      labelKey: 'actions.view_complaint',
+      labelFallback: 'View complaint',
     }
   }
   return null

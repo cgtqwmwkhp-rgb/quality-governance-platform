@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, ArrowLeft, Calendar, ClipboardList, FileText, FlaskConical, Pencil, Save, ShieldAlert, Sparkles, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Calendar, ClipboardList, FileText, FlaskConical, Loader2, Pencil, Save, ShieldAlert, Sparkles, X } from 'lucide-react'
 import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
@@ -21,10 +21,22 @@ import {
 } from '../api/client'
 import {
   formatCapaActionsCount,
-  getCapaHandoffLabelKey,
   getCapaLink,
   getInvestigationDetailHref,
 } from '../components/investigations/handoffLinks'
+import {
+  CaseCapaActionsPanel,
+  CaseCapaHeaderButton,
+} from '../components/case/CaseCapaActionsPanel'
+import { UserEmailSearch } from '../components/UserEmailSearch'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/Select'
+import { cn } from '../helpers/utils'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -61,6 +73,21 @@ export default function NearMissDetail() {
   const [investigationTitle, setInvestigationTitle] = useState('')
   const [investigationError, setInvestigationError] = useState('')
   const [raisingRisk, setRaisingRisk] = useState(false)
+  const [showActionModal, setShowActionModal] = useState(false)
+  const [showActionDetailModal, setShowActionDetailModal] = useState(false)
+  const [showCompletionDialog, setShowCompletionDialog] = useState(false)
+  const [creatingAction, setCreatingAction] = useState(false)
+  const [updatingAction, setUpdatingAction] = useState(false)
+  const [selectedAction, setSelectedAction] = useState<Action | null>(null)
+  const [actionUpdateError, setActionUpdateError] = useState('')
+  const [completionNotes, setCompletionNotes] = useState('')
+  const [actionForm, setActionForm] = useState({
+    title: '',
+    description: '',
+    priority: 'medium',
+    due_date: '',
+    assigned_to: '',
+  })
   const nearMissId = Number(id)
   const hasValidNearMissId = Number.isInteger(nearMissId) && nearMissId > 0
 
@@ -140,6 +167,77 @@ export default function NearMissDetail() {
     } finally {
       setCapaLoading(false)
     }
+  }
+
+
+  const ACTION_STATUS_OPTIONS = [
+    { value: 'open', label: 'Open', className: 'bg-blue-100 text-blue-800 hover:bg-blue-200' },
+    { value: 'in_progress', label: 'In Progress', className: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' },
+    { value: 'pending_verification', label: 'Pending Verification', className: 'bg-purple-100 text-purple-800 hover:bg-purple-200' },
+    { value: 'completed', label: 'Completed', className: 'bg-green-100 text-green-800 hover:bg-green-200' },
+    { value: 'cancelled', label: 'Cancelled', className: 'bg-gray-100 text-gray-800 hover:bg-gray-200' },
+  ]
+
+  const handleCreateAction = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!nearMiss) return
+    setCreatingAction(true)
+    try {
+      await actionsApi.create({
+        title: actionForm.title,
+        description: actionForm.description || `Action for ${nearMiss.reference_number}`,
+        priority: actionForm.priority,
+        due_date: actionForm.due_date || undefined,
+        action_type: 'corrective',
+        source_type: 'near_miss',
+        source_id: nearMiss.id,
+        assigned_to_email: actionForm.assigned_to || undefined,
+      })
+      setShowActionModal(false)
+      setActionForm({ title: '', description: '', priority: 'medium', due_date: '', assigned_to: '' })
+      await loadCapaActions(nearMiss.id)
+      toast.success(t('near_misses.detail.action_created', 'Action created'))
+    } catch (err: unknown) {
+      trackError(err, { component: 'NearMissDetail', action: 'createAction' })
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setCreatingAction(false)
+    }
+  }
+
+  const handleOpenAction = (action: Action) => {
+    setSelectedAction(action)
+    setActionUpdateError('')
+    setShowActionDetailModal(true)
+  }
+
+  const handleUpdateActionStatus = async (newStatus: string, notes?: string) => {
+    if (!selectedAction) return
+    setUpdatingAction(true)
+    setActionUpdateError('')
+    try {
+      const updatePayload: { status: string; completion_notes?: string } = { status: newStatus }
+      if (notes) updatePayload.completion_notes = notes
+      const response = await actionsApi.update(selectedAction.id, 'near_miss', updatePayload)
+      setSelectedAction(response.data)
+      setCapaActions((prev) => prev.map((a) => (a.id === selectedAction.id ? response.data : a)))
+    } catch (err) {
+      trackError(err, { component: 'NearMissDetail', action: 'updateActionStatus' })
+      setActionUpdateError(getApiErrorMessage(err))
+    } finally {
+      setUpdatingAction(false)
+    }
+  }
+
+  const handleCompleteAction = () => {
+    setCompletionNotes('')
+    setShowCompletionDialog(true)
+  }
+
+  const handleConfirmCompletion = () => {
+    void handleUpdateActionStatus('completed', completionNotes || undefined)
+    setShowCompletionDialog(false)
+    setCompletionNotes('')
   }
 
   const loadRunningSheet = async (nearMissId: number) => {
@@ -348,6 +446,15 @@ export default function NearMissDetail() {
                 <Sparkles className="w-4 h-4 mr-2" />
                 {t('auditBuilder.auditThisRisk', 'Audit this risk')}
               </Button>
+              <CaseCapaHeaderButton
+                sourceType="near_miss"
+                actionsCount={capaUnavailable ? 0 : capaActions.length}
+                capaHref={getCapaLink('near_miss', nearMiss.id)}
+                onAdd={() => setShowActionModal(true)}
+                onOpenCapa={() => navigate(getCapaLink('near_miss', nearMiss.id))}
+                disabled={capaLoading}
+                testIdPrefix="near-miss"
+              />
               <Button variant="outline" onClick={() => setShowInvestigationModal(true)}>
                 <FlaskConical className="w-4 h-4 mr-2" />
                 {t('near_misses.actions.create_investigation', 'Create Investigation')}
@@ -403,6 +510,10 @@ export default function NearMissDetail() {
           <TabsTrigger value="overview">{t('common.overview', 'Overview')}</TabsTrigger>
           <TabsTrigger value="standards">Standards</TabsTrigger>
           <TabsTrigger value="running-sheet">{t('common.running_sheet', 'Running Sheet')}</TabsTrigger>
+          <TabsTrigger value="actions" data-testid="near-miss-actions-tab">
+            <ClipboardList className="w-4 h-4 mr-1.5" />
+            {t('near_misses.tabs.actions', 'Actions')} ({capaActions.length})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
@@ -635,23 +746,28 @@ export default function NearMissDetail() {
                       })}
                     </span>
                   </div>
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    disabled={capaLoading || !nearMiss}
-                    onClick={() => nearMiss && navigate(getCapaLink('near_miss', nearMiss.id))}
-                    data-testid="near-miss-capa-handoff-cta"
-                  >
-                    <ClipboardList className="w-4 h-4 mr-2" />
-                    {t(
-                      capaUnavailable
-                        ? 'investigations.handoff.open_capa'
-                        : getCapaHandoffLabelKey('near_miss', capaActions.length),
-                      {
+                  {capaActions.length > 0 && !capaUnavailable ? (
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      disabled={capaLoading}
+                      onClick={() => navigate(getCapaLink('near_miss', nearMiss.id))}
+                      data-testid="near-miss-capa-handoff-cta"
+                    >
+                      <ClipboardList className="w-4 h-4 mr-2" />
+                      {t('near_misses.detail.open_capa', {
                         count: capaActions.length,
-                      },
-                    )}
-                  </Button>
+                        defaultValue: `Open CAPA (${capaActions.length})`,
+                      })}
+                    </Button>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center">
+                      {t(
+                        'near_misses.detail.no_capa_handoff',
+                        'No CAPA actions linked yet — use Add Action to create one.',
+                      )}
+                    </p>
+                  )}
                 </CardContent>
               </Card>
 
@@ -759,7 +875,185 @@ export default function NearMissDetail() {
             })}
           />
         </TabsContent>
+
+        <TabsContent value="actions" className="mt-6">
+          <CaseCapaActionsPanel
+            sourceType="near_miss"
+            actions={capaActions}
+            onAdd={() => setShowActionModal(true)}
+            onOpen={handleOpenAction}
+            testIdPrefix="near-miss"
+            loading={capaLoading}
+            unavailable={capaUnavailable}
+          />
+        </TabsContent>
       </Tabs>
+
+      <Dialog open={showActionModal} onOpenChange={setShowActionModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-primary" />
+              {t('near_misses.detail.add_action', 'Add Action')}
+            </DialogTitle>
+            <DialogDescription>
+              {t(
+                'near_misses.detail.add_action_description',
+                'Add an action to track follow-up work for this near miss',
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateAction} className="space-y-4">
+            <div>
+              <label htmlFor="near-miss-action-title" className="block text-sm font-medium text-foreground mb-1">
+                {t('near_misses.detail.action_title_required', 'Title *')}
+              </label>
+              <Input
+                id="near-miss-action-title"
+                value={actionForm.title}
+                onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
+                required
+              />
+            </div>
+            <UserEmailSearch
+              label={t('near_misses.detail.assign_to', 'Assign to')}
+              value={actionForm.assigned_to}
+              onChange={(email) => setActionForm({ ...actionForm, assigned_to: email })}
+              placeholder={t('near_misses.detail.search_by_email', 'Search by email')}
+              required
+            />
+            <div>
+              <label htmlFor="near-miss-action-priority" className="block text-sm font-medium text-foreground mb-1">
+                {t('common.priority', 'Priority')}
+              </label>
+              <Select
+                value={actionForm.priority}
+                onValueChange={(v) => setActionForm({ ...actionForm, priority: v })}
+              >
+                <SelectTrigger id="near-miss-action-priority">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="critical">Critical</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label htmlFor="near-miss-action-due" className="block text-sm font-medium text-foreground mb-1">
+                {t('near_misses.detail.due_date', 'Due date')}
+              </label>
+              <Input
+                id="near-miss-action-due"
+                type="date"
+                value={actionForm.due_date}
+                onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value })}
+              />
+            </div>
+            <div>
+              <label htmlFor="near-miss-action-description" className="block text-sm font-medium text-foreground mb-1">
+                {t('common.description', 'Description')}
+              </label>
+              <Textarea
+                id="near-miss-action-description"
+                value={actionForm.description}
+                onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
+                rows={3}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowActionModal(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button type="submit" disabled={creatingAction || !actionForm.title}>
+                {creatingAction ? <Loader2 className="w-4 h-4 animate-spin" /> : t('near_misses.detail.create_action', 'Create Action')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('near_misses.detail.completion_notes_title', 'Complete Action')}</DialogTitle>
+            <DialogDescription>
+              {t(
+                'near_misses.detail.completion_notes_desc',
+                'Add optional completion notes before marking this action as completed.',
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={completionNotes}
+            onChange={(e) => setCompletionNotes(e.target.value)}
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCompletionDialog(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={handleConfirmCompletion}>
+              {t('near_misses.detail.mark_complete', 'Mark Complete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={showActionDetailModal}
+        onOpenChange={(open) => {
+          setShowActionDetailModal(open)
+          if (!open) {
+            setSelectedAction(null)
+            setActionUpdateError('')
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-primary" />
+              {t('near_misses.detail.action_details', 'Action Details')}
+            </DialogTitle>
+            <DialogDescription>{t('near_misses.detail.view_update_status', 'View / Update Status')}</DialogDescription>
+          </DialogHeader>
+          {selectedAction && (
+            <div className="space-y-4">
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Title</span>
+                <p className="font-medium text-foreground">{selectedAction.title}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {ACTION_STATUS_OPTIONS.map((option) => (
+                  <Button
+                    key={option.value}
+                    size="sm"
+                    variant="outline"
+                    className={cn(option.className, selectedAction.status === option.value && 'ring-2 ring-primary')}
+                    disabled={updatingAction || selectedAction.status === option.value}
+                    onClick={() => {
+                      option.value === 'completed'
+                        ? handleCompleteAction()
+                        : void handleUpdateActionStatus(option.value)
+                    }}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+              {actionUpdateError && <p className="text-sm text-destructive">{actionUpdateError}</p>}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowActionDetailModal(false)}>
+                  {t('common.close', 'Close')}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showInvestigationModal} onOpenChange={setShowInvestigationModal}>
         <DialogContent>
