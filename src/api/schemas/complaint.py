@@ -104,6 +104,9 @@ class ComplaintUpdate(BaseModel):
     lessons_learnt: Optional[str] = None
     customer_satisfied: Optional[bool] = None
     owner_id: Optional[int] = Field(None, description="Case owner user id (null clears assignment)")
+    witnesses_structured: Optional[dict[str, Any]] = Field(
+        None, description="Structured witnesses: {witnesses: [{name, phone, email, statement, willing_to_provide_statement}]}"
+    )
 
     @field_validator(
         "title",
@@ -167,6 +170,7 @@ class ComplaintResponse(BaseModel):
     compensation_offered: Optional[str] = None
     owner_id: Optional[int] = None
     reporter_submission: Optional[dict[str, Any]] = None
+    witnesses_structured: Optional[dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
     closed_at: Optional[datetime] = None

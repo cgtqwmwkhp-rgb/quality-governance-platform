@@ -27,6 +27,9 @@ export interface NearMiss {
   reporter_phone?: string
   reporter_role?: string
   was_involved: boolean
+  /** Customer/contract SSOT FK (contracts.id) — preferred going forward. */
+  contract_id?: number | null
+  /** Legacy free-text customer code, kept for read compatibility. */
   contract: string
   contract_other?: string
   location: string
@@ -39,6 +42,8 @@ export interface NearMiss {
   persons_involved?: string
   witnesses_present: boolean
   witness_names?: string
+  /** Structured witnesses: {witnesses: [{name, phone, email, statement, willing_to_provide_statement}]}. */
+  witnesses_structured?: Record<string, unknown> | null
   asset_number?: string
   asset_type?: string
   /** Linked Asset registry id (golden thread). Legacy asset_number/asset_type retained. */
@@ -67,7 +72,10 @@ export interface NearMissCreate {
   reporter_phone?: string
   reporter_role?: string
   was_involved?: boolean
-  contract: string
+  /** Customer/contract SSOT FK (contracts.id) — provide this or `contract`. */
+  contract_id?: number | null
+  /** Legacy free-text customer code — provide this or `contract_id`. */
+  contract?: string
   contract_other?: string
   location: string
   location_coordinates?: string
@@ -88,6 +96,8 @@ export interface NearMissCreate {
 }
 
 export interface NearMissUpdate {
+  /** Customer/contract SSOT FK (contracts.id). */
+  contract_id?: number | null
   description?: string
   potential_consequences?: string
   preventive_action_suggested?: string
@@ -103,6 +113,7 @@ export interface NearMissUpdate {
   asset_id?: number | null
   asset_number?: string
   asset_type?: string
+  witnesses_structured?: Record<string, unknown> | null
 }
 
 export interface RaiseRiskFromNearMissRequest {

@@ -16,13 +16,55 @@ from sqlalchemy.orm import selectinload
 from src.core.pagination import PaginationInput, paginate
 from src.core.update import apply_updates
 from src.domain.exceptions import StateTransitionError
+from src.domain.models.form_config import Contract
 from src.domain.models.near_miss import NearMiss
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.contract_resolve import assert_tenant_contract, resolve_contract_id_by_code
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
+
+
+async def resolve_near_miss_contract(
+    db: AsyncSession,
+    *,
+    tenant_id: int | None,
+    contract_id: Optional[int],
+    contract: Optional[str],
+) -> tuple[Optional[int], Optional[str]]:
+    """Validate/resolve the contract_id <-> legacy `contract` code pair.
+
+    Customer/contract SSOT for near misses, mirroring Incident.contract_id /
+    Complaint.contract_id:
+
+    - ``contract_id`` supplied: validate it belongs to the tenant (raises
+      ``ValueError`` otherwise), and backfill a blank ``contract`` display
+      string from the resolved Contract.code for legacy read compatibility.
+    - ``contract_id`` absent but a legacy ``contract`` code string is
+      supplied: best-effort resolve it to ``contracts.id`` via the
+      customers-lookup bridge. Silently leaves ``contract_id`` unset (None)
+      when no match exists — never blocks the write.
+
+    Raises:
+        ValueError: If ``contract_id`` is supplied but not owned by the tenant.
+    """
+    resolved_contract_id = contract_id
+    resolved_contract = contract
+
+    if contract_id is not None:
+        if tenant_id is not None:
+            await assert_tenant_contract(db, contract_id=contract_id, tenant_id=tenant_id)
+        if not (resolved_contract or "").strip():
+            result = await db.execute(select(Contract).where(Contract.id == contract_id))
+            contract_row = result.scalar_one_or_none()
+            if contract_row is not None:
+                resolved_contract = contract_row.code or contract_row.name
+    elif tenant_id is not None and (contract or "").strip():
+        resolved_contract_id = await resolve_contract_id_by_code(db, tenant_id=tenant_id, code=contract)
+
+    return resolved_contract_id, resolved_contract
 
 
 class NearMissService:
@@ -50,12 +92,23 @@ class NearMissService:
         """Create a new near-miss report.
 
         Raises:
-            ValueError: If data validation fails.
+            ValueError: If data validation fails, or contract_id is not owned
+                by the tenant.
         """
         reference_number = await ReferenceNumberService.generate(self.db, "near_miss", NearMiss)
 
+        payload = data.model_dump()
+        resolved_contract_id, resolved_contract = await resolve_near_miss_contract(
+            self.db,
+            tenant_id=tenant_id,
+            contract_id=payload.get("contract_id"),
+            contract=payload.get("contract"),
+        )
+        payload["contract_id"] = resolved_contract_id
+        payload["contract"] = resolved_contract or "Not specified"
+
         near_miss = NearMiss(
-            **data.model_dump(),
+            **payload,
             reference_number=reference_number,
             status="REPORTED",
             priority="MEDIUM",
@@ -153,6 +206,7 @@ class NearMissService:
 
         Raises:
             LookupError: If the near miss is not found.
+            ValueError: If contract_id is supplied but not owned by the tenant.
         """
         near_miss = await self.get_near_miss(near_miss_id, tenant_id)
         old_status = near_miss.status
@@ -165,7 +219,19 @@ class NearMissService:
                     f"Cannot transition from '{old_status}' to '{new_status}'",
                     details={"allowed": sorted(allowed)},
                 )
+
+        resolved_contract_display: Optional[str] = None
+        if "contract_id" in update_dict and update_dict["contract_id"] is not None:
+            _, resolved_contract_display = await resolve_near_miss_contract(
+                self.db,
+                tenant_id=tenant_id,
+                contract_id=update_dict["contract_id"],
+                contract=None,
+            )
+
         update_data = apply_updates(near_miss, data, set_updated_at=False)
+        if resolved_contract_display:
+            near_miss.contract = resolved_contract_display
 
         if "status" in update_data:
             if update_data["status"] == "CLOSED" and near_miss.closed_at is None:

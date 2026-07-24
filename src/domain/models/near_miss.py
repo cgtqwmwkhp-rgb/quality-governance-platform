@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import Base, DataClassification, TimestampMixin
@@ -42,8 +42,17 @@ class NearMiss(Base):
     was_involved: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Contract/Location
+    # `contract` is the legacy free-text customer code, kept for read
+    # compatibility during the transition to the FK below. Services should
+    # prefer `contract_id` (SSOT) and treat `contract` as a denormalized
+    # display string — see src.domain.services.near_miss_service.
     contract: Mapped[str] = mapped_column(String(100), nullable=False)
     contract_other: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    # Customer / contract (Admin Lookups customers → contracts.id) — golden
+    # thread FK, same pattern as Incident.contract_id / Complaint.contract_id.
+    contract_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("contracts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     location: Mapped[str] = mapped_column(Text, nullable=False)
     location_coordinates: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
@@ -60,6 +69,9 @@ class NearMiss(Base):
     persons_involved: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON array or comma-separated
     witnesses_present: Mapped[bool] = mapped_column(Boolean, default=False)
     witness_names: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Structured witnesses (mirrors RTA/Incident.witnesses_structured):
+    # [{ name, phone, email, statement, willing_to_provide_statement }]
+    witnesses_structured: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Asset information (legacy free-text retained; FK is golden thread)
     asset_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

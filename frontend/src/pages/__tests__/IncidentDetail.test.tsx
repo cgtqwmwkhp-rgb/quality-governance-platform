@@ -305,4 +305,41 @@ describe('IncidentDetail', () => {
     const payload = client.incidentsApi.update.mock.calls[0][1]
     expect(payload.status).toBeUndefined()
   })
+
+  it('adds and saves structured witnesses on the shared Witnesses tab', async () => {
+    client.incidentsApi.update.mockResolvedValue({
+      data: { ...incidentRecord, witnesses_structured: { witnesses: [{ name: 'Jane Witness' }] } },
+    })
+
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Loader slip' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('incident-witnesses-add'))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Jane Witness' } })
+    fireEvent.click(screen.getByTestId('incident-witnesses-save'))
+
+    await waitFor(() => {
+      expect(client.incidentsApi.update).toHaveBeenCalledWith(
+        11,
+        expect.objectContaining({
+          witnesses_structured: { witnesses: [expect.objectContaining({ name: 'Jane Witness' })] },
+        }),
+      )
+    })
+  })
+
+  it('renders the shared Photos tab wired to evidence-assets upload', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('incident-evidence-panel')).toBeInTheDocument()
+    })
+    expect(client.evidenceAssetsApi.list).toHaveBeenCalledWith({
+      source_module: 'incident',
+      source_id: 11,
+      page_size: 50,
+    })
+  })
 })

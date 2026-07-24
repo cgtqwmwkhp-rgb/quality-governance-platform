@@ -1,7 +1,7 @@
 """Near Miss API schemas."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -17,7 +17,12 @@ class NearMissBase(BaseModel):
     reporter_role: Optional[str] = None
     was_involved: bool = True
 
-    contract: str = Field(..., min_length=1, max_length=100)
+    # Customer/contract SSOT FK (contracts.id) — preferred going forward.
+    # `contract` is the legacy free-text customer code, retained for read
+    # compatibility; when contract_id is supplied and `contract` is blank,
+    # the service backfills `contract` with the resolved contract code.
+    contract_id: Optional[int] = Field(None, ge=1, description="Customer/contract FK (contracts.id)")
+    contract: Optional[str] = Field(None, max_length=100, description="Legacy customer code (compatibility display)")
     contract_other: Optional[str] = None
     location: str = Field(..., min_length=1)
     location_coordinates: Optional[str] = None
@@ -49,13 +54,19 @@ class NearMissCreate(NearMissBase):
 
     @field_validator("description", "location", "contract", "reporter_name", mode="before")
     @classmethod
-    def _sanitize(cls, v: str) -> str:
+    def _sanitize(cls, v: Optional[str]) -> Optional[str]:
         return sanitize_field(v)
 
     @field_validator("event_date")
     @classmethod
     def event_date_not_future(cls, v: datetime) -> datetime:
         return reject_future_statutory_datetime(v)
+
+    @model_validator(mode="after")
+    def require_contract_identity(self) -> "NearMissCreate":
+        if self.contract_id is None and not (self.contract or "").strip():
+            raise ValueError("Provide contract_id (preferred) or a legacy contract code")
+        return self
 
 
 class NearMissUpdate(BaseModel):
@@ -81,6 +92,10 @@ class NearMissUpdate(BaseModel):
     asset_number: Optional[str] = None
     asset_type: Optional[str] = None
     event_date: Optional[datetime] = None
+    contract_id: Optional[int] = Field(None, ge=1, description="Customer/contract FK (contracts.id)")
+    witnesses_structured: Optional[dict[str, Any]] = Field(
+        None, description="Structured witnesses: {witnesses: [{name, phone, email, statement, willing_to_provide_statement}]}"
+    )
 
     @field_validator("description", mode="before")
     @classmethod
@@ -118,6 +133,7 @@ class NearMissResponse(BaseModel):
     reporter_phone: Optional[str] = None
     reporter_role: Optional[str] = None
     was_involved: bool
+    contract_id: Optional[int] = None
     contract: str
     contract_other: Optional[str] = None
     location: str
@@ -130,6 +146,7 @@ class NearMissResponse(BaseModel):
     persons_involved: Optional[str] = None
     witnesses_present: bool
     witness_names: Optional[str] = None
+    witnesses_structured: Optional[dict[str, Any]] = None
     asset_number: Optional[str] = None
     asset_type: Optional[str] = None
     asset_id: Optional[int] = None

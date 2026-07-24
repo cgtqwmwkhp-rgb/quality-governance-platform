@@ -3,6 +3,8 @@ export const INCIDENT_DETAIL_TABS = [
   'overview',
   'standards',
   'submission',
+  'witnesses',
+  'photos',
   'running-sheet',
 ] as const
 

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, ArrowLeft, Calendar, ClipboardList, FileText, FlaskConical, Loader2, Pencil, Save, ShieldAlert, Sparkles, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Calendar, Camera, ClipboardList, FileText, FlaskConical, Loader2, Pencil, Save, ShieldAlert, Sparkles, Users, X } from 'lucide-react'
 import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
@@ -10,15 +10,20 @@ import { trackError } from '../utils/errorTracker'
 import {
   Action,
   actionsApi,
+  contractsApi,
   CreateFromRecordError,
   getApiErrorMessage,
   Investigation,
   investigationsApi,
+  lookupsApi,
   NearMiss,
   nearMissesApi,
   NearMissUpdate,
   RunningSheetEntry,
+  type Contract,
 } from '../api/client'
+import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
+import { CUSTOMERS_LOOKUP_CATEGORY, toCustomerSelectOptions } from './admin/customersCatalog'
 import {
   formatCapaActionsCount,
   getCapaLink,
@@ -48,6 +53,8 @@ import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
 import { RunningSheetPanel, buildRunningSheetCreateActionHref } from '../components/case/RunningSheetPanel'
 import { AssetPicker } from '../components/AssetPicker'
 import { parseLinkedRiskIds, riskRegisterHref } from './nearMissRiskLinks'
+import { CaseEvidencePanel } from '../components/case/CaseEvidencePanel'
+import { CaseWitnessesPanel, type CaseWitnessesValue } from '../components/case/CaseWitnessesPanel'
 
 export default function NearMissDetail() {
   const { id } = useParams<{ id: string }>()
@@ -70,6 +77,11 @@ export default function NearMissDetail() {
   const [newEntry, setNewEntry] = useState('')
   const [addingEntry, setAddingEntry] = useState(false)
   const [editForm, setEditForm] = useState<NearMissUpdate>({})
+  const [witnessesDraft, setWitnessesDraft] = useState<CaseWitnessesValue | null>(null)
+  const [savingWitnesses, setSavingWitnesses] = useState(false)
+  const [customerOptions, setCustomerOptions] = useState<{ value: string; label: string }[]>([])
+  const [contractsByCode, setContractsByCode] = useState<Record<string, Contract>>({})
+  const [selectedCustomerCode, setSelectedCustomerCode] = useState('')
   const [investigationTitle, setInvestigationTitle] = useState('')
   const [investigationError, setInvestigationError] = useState('')
   const [raisingRisk, setRaisingRisk] = useState(false)
@@ -108,6 +120,43 @@ export default function NearMissDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  // Load Customers lookup (SSOT) + contracts bridge when edit mode opens —
+  // same pattern as the create form (Complaints/NearMisses customer intake).
+  useEffect(() => {
+    if (!isEditing) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [customerRes, contractsRes] = await Promise.all([
+          lookupsApi.list(CUSTOMERS_LOOKUP_CATEGORY, true).catch(() => ({ items: [], total: 0 })),
+          contractsApi.list(true).catch(() => ({ items: [] as Contract[], total: 0 })),
+        ])
+        if (cancelled) return
+        setCustomerOptions(toCustomerSelectOptions(customerRes.items || []))
+        const byCode: Record<string, Contract> = {}
+        for (const contract of contractsRes.items || []) {
+          if (contract.code) byCode[contract.code.toLowerCase()] = contract
+        }
+        setContractsByCode(byCode)
+      } catch (err) {
+        trackError(err, { component: 'NearMissDetail', action: 'loadContractLookups' })
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [isEditing])
+
+  const applyCustomerSelection = (value: string) => {
+    setSelectedCustomerCode(value)
+    if (!value) {
+      setEditForm((prev) => ({ ...prev, contract_id: null }))
+      return
+    }
+    const matched = contractsByCode[value.toLowerCase()]
+    setEditForm((prev) => ({ ...prev, contract_id: matched?.id ?? null }))
+  }
+
   const loadNearMiss = async (nearMissId: number) => {
     setError(null)
     try {
@@ -126,7 +175,9 @@ export default function NearMissDetail() {
         is_hipo: response.data.is_hipo ?? false,
         lessons_learnt: response.data.lessons_learnt ?? '',
         asset_id: response.data.asset_id ?? null,
+        contract_id: response.data.contract_id ?? null,
       })
+      setSelectedCustomerCode(response.data.contract || '')
       loadInvestigations(nearMissId)
       loadRunningSheet(nearMissId)
     } catch (err) {
@@ -290,8 +341,35 @@ export default function NearMissDetail() {
       is_hipo: nearMiss.is_hipo ?? false,
       lessons_learnt: nearMiss.lessons_learnt ?? '',
       asset_id: nearMiss.asset_id ?? null,
+      contract_id: nearMiss.contract_id ?? null,
     })
+    setSelectedCustomerCode(nearMiss.contract || '')
     setIsEditing(false)
+  }
+
+  const witnessesValue: CaseWitnessesValue =
+    witnessesDraft ?? {
+      witnesses: (nearMiss?.witnesses_structured as CaseWitnessesValue | undefined)?.witnesses ?? [],
+    }
+
+  const handleSaveWitnesses = async () => {
+    if (!nearMiss) return
+    setSavingWitnesses(true)
+    try {
+      const response = await nearMissesApi.update(nearMiss.id, {
+        witnesses_structured: witnessesValue as unknown as Record<string, unknown>,
+      })
+      setNearMiss(response.data)
+      setWitnessesDraft(null)
+      toast.success(t('case.witnesses.save_success', 'Witnesses updated'))
+    } catch (err) {
+      trackError(err, { component: 'NearMissDetail', action: 'saveWitnesses' })
+      toast.error(
+        getApiErrorMessage(err, t('case.witnesses.save_failed', 'Could not save witnesses')),
+      )
+    } finally {
+      setSavingWitnesses(false)
+    }
   }
 
   const handleAddEntry = async () => {
@@ -509,6 +587,14 @@ export default function NearMissDetail() {
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="overview">{t('common.overview', 'Overview')}</TabsTrigger>
           <TabsTrigger value="standards">Standards</TabsTrigger>
+          <TabsTrigger value="witnesses">
+            <Users className="w-4 h-4 mr-1.5" />
+            {t('near_misses.tabs.witnesses', 'Witnesses')}
+          </TabsTrigger>
+          <TabsTrigger value="photos" data-testid="near-miss-photos-tab">
+            <Camera className="w-4 h-4 mr-1.5" />
+            {t('near_misses.tabs.photos', 'Photos')}
+          </TabsTrigger>
           <TabsTrigger value="running-sheet">{t('common.running_sheet', 'Running Sheet')}</TabsTrigger>
           <TabsTrigger value="actions" data-testid="near-miss-actions-tab">
             <ClipboardList className="w-4 h-4 mr-1.5" />
@@ -535,6 +621,15 @@ export default function NearMissDetail() {
                 <CardContent className="space-y-4">
                   {isEditing ? (
                     <>
+                      <div data-testid="near-miss-detail-contract">
+                        <FuzzySearchDropdown
+                          label={t('near_misses.form.contract', 'Customer')}
+                          options={customerOptions}
+                          value={selectedCustomerCode}
+                          onChange={applyCustomerSelection}
+                          placeholder={t('near_misses.form.contract_search', 'Search customer…')}
+                        />
+                      </div>
                       <div>
                         <label
                           htmlFor="near-miss-detail-description"
@@ -862,6 +957,34 @@ export default function NearMissDetail() {
 
         <TabsContent value="standards" className="mt-6">
           <StandardsAssessmentPanel entityType="near_miss" entityId={nearMiss.id} />
+        </TabsContent>
+
+        <TabsContent value="witnesses" className="mt-6 space-y-4">
+          <CaseWitnessesPanel
+            value={witnessesValue}
+            onChange={setWitnessesDraft}
+            testIdPrefix="near-miss"
+          />
+          {witnessesDraft ? (
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setWitnessesDraft(null)} disabled={savingWitnesses}>
+                {t('common.cancel', 'Cancel')}
+              </Button>
+              <Button onClick={handleSaveWitnesses} disabled={savingWitnesses} data-testid="near-miss-witnesses-save">
+                {savingWitnesses ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                {t('common.save', 'Save')}
+              </Button>
+            </div>
+          ) : null}
+        </TabsContent>
+
+        <TabsContent value="photos" className="mt-6">
+          <CaseEvidencePanel
+            sourceType="near_miss"
+            sourceId={nearMiss.id}
+            enableUpload
+            testIdPrefix="near-miss"
+          />
         </TabsContent>
 
         <TabsContent value="running-sheet" className="mt-6">
