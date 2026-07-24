@@ -31,7 +31,7 @@ azure-storage-blob==12.19.0
 azure-identity==1.25.3
 
 # AI - Google Gemini (Workforce Development Platform)
-google-genai>=1.0.0
+google-genai>=2.14.0
 
 # XML Security
 defusedxml>=0.7.1,<1.0.0
