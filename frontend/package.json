@@ -33,7 +33,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "date-fns": "^2.30.0",
-    "express": "^4.22.2",
+    "express": "^5.2.1",
     "framer-motion": "^12.38.0",
     "i18next": "^26.0.3",
     "i18next-browser-languagedetector": "^8.0.0",
