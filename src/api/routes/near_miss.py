@@ -18,7 +18,7 @@ from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, Near
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
 from src.api.utils.errors import api_error
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
-from src.domain.exceptions import StateTransitionError
+from src.domain.exceptions import BadRequestError, StateTransitionError
 from src.domain.models.near_miss import NearMiss, NearMissRunningSheetEntry
 from src.domain.models.user import User
 from src.domain.services.api_idempotency_service import (
@@ -176,6 +176,10 @@ async def list_near_misses(
     contract: Optional[str] = Query(None),
     reporter_email: Optional[str] = Query(None, description="Filter by reporter email"),
     asset_id: Optional[int] = Query(None, description="Filter by linked Asset registry id"),
+    ids: Optional[str] = Query(
+        None,
+        description="Comma-separated near miss ids (Safety Insights theme deep-link)",
+    ),
 ) -> NearMissListResponse:
     """
     List near misses with pagination and filtering.
@@ -183,6 +187,15 @@ async def list_near_misses(
     Ordered by event_date DESC, id ASC for deterministic results.
     """
     import math
+
+    id_list: list[int] | None = None
+    if ids:
+        try:
+            id_list = [int(part.strip()) for part in ids.split(",") if part.strip()]
+        except ValueError as exc:
+            raise BadRequestError("ids must be comma-separated integers") from exc
+        if not id_list:
+            id_list = None
 
     query = select(NearMiss)
 
@@ -206,6 +219,8 @@ async def list_near_misses(
         query = query.where(NearMiss.contract == contract)
     if asset_id is not None:
         query = query.where(NearMiss.asset_id == asset_id)
+    if id_list:
+        query = query.where(NearMiss.id.in_(id_list))
 
     # Count total
     count_query = select(sa_func.count()).select_from(query.subquery())

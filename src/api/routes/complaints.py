@@ -171,6 +171,10 @@ async def list_complaints(
         None,
         description="Filter by case owner: 'unassigned' for intakes with no owner_id",
     ),
+    ids: Optional[str] = Query(
+        None,
+        description="Comma-separated complaint ids (Safety Insights theme deep-link)",
+    ),
 ) -> ComplaintListResponse:
     """
     List all complaints with deterministic ordering.
@@ -187,6 +191,15 @@ async def list_complaints(
 
     if owner is not None and owner != "unassigned":
         raise BadRequestError("Invalid owner filter. Supported value: unassigned")
+
+    id_list: list[int] | None = None
+    if ids:
+        try:
+            id_list = [int(part.strip()) for part in ids.split(",") if part.strip()]
+        except ValueError as exc:
+            raise BadRequestError("ids must be comma-separated integers") from exc
+        if not id_list:
+            id_list = None
 
     # SECURITY FIX: If filtering by email, enforce that users can only access their own data
     # unless they have admin/view-all permissions
@@ -234,6 +247,8 @@ async def list_complaints(
             query = query.where(Complaint.status == status_filter)
         if owner == "unassigned":
             query = query.where(Complaint.owner_id.is_(None))
+        if id_list:
+            query = query.where(Complaint.id.in_(id_list))
 
         # Total count
         count_query = select(func.count()).select_from(query.subquery())

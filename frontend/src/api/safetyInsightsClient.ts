@@ -77,6 +77,10 @@ export function createSafetyInsightsApi(api: AxiosInstance) {
       }),
     latest: () => api.get('/api/v1/safety-insights/latest'),
     themeCases: (themeId: number) => api.get(`/api/v1/safety-insights/themes/${themeId}/cases`),
-    exportRun: (runId: number) => api.post(`/api/v1/safety-insights/runs/${runId}/export`),
+    exportRun: (runId: number, format: 'json' | 'pdf' = 'json') =>
+      api.post(`/api/v1/safety-insights/runs/${runId}/export`, null, {
+        params: { format },
+        responseType: format === 'pdf' ? 'blob' : 'json',
+      }),
   }
 }

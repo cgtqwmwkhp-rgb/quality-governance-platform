@@ -13,6 +13,8 @@
 | SI-04 | HS KPI NM:Injury ratios + exec `safety_insights` block | Low | Additive JSON fields |
 | SI-05 | Audit Builder `gather_brief` merges latest themes | Low | Fail-closed append |
 | SI-06 | Incident list `ids=` filter for theme deep-links | Low | Optional query |
+| SI-W3-C1 | Training/competence correlation → `ratios.training_signals` | Low | Honest-empty when sparse; no schema migration |
+| SI-W3-C2 | Celery beat `monthly-safety-insights-digest` org-wide deep-run | Medium | Fail-closed per tenant; env disable flag |
 
 ## Acceptance criteria
 - [x] Deep-run persists themes with validated case citations only

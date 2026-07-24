@@ -26,6 +26,7 @@ from src.api.utils.errors import api_error
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.models.rta import RoadTrafficCollision, RTAAction, RunningSheetEntry
 from src.domain.models.user import User
+from src.domain.exceptions import BadRequestError
 from src.domain.services.api_idempotency_service import (
     SCOPE_RTA_CREATE,
     begin_idempotent_create,
@@ -148,12 +149,25 @@ async def list_rtas(
     status_filter: Optional[str] = Query(None, alias="status"),
     reporter_email: Optional[str] = Query(None, description="Filter by reporter email"),
     asset_id: Optional[int] = Query(None, description="Filter by linked Asset registry id"),
+    ids: Optional[str] = Query(
+        None,
+        description="Comma-separated RTA ids (Safety Insights theme deep-link)",
+    ),
 ):
     """List RTAs with deterministic ordering and pagination.
 
     Requires authentication. Users can only filter by their own email
     unless they have admin permissions.
     """
+    id_list: list[int] | None = None
+    if ids:
+        try:
+            id_list = [int(part.strip()) for part in ids.split(",") if part.strip()]
+        except ValueError as exc:
+            raise BadRequestError("ids must be comma-separated integers") from exc
+        if not id_list:
+            id_list = None
+
     # SECURITY FIX: If filtering by email, enforce that users can only access their own data
     # unless they have admin/view-all permissions
     if reporter_email:
@@ -203,6 +217,8 @@ async def list_rtas(
             query = query.where(RoadTrafficCollision.reporter_email == reporter_email)
         if asset_id is not None:
             query = query.where(RoadTrafficCollision.asset_id == asset_id)
+        if id_list:
+            query = query.where(RoadTrafficCollision.id.in_(id_list))
 
         # Deterministic ordering: created_at DESC, id ASC
         query = query.order_by(RoadTrafficCollision.created_at.desc(), RoadTrafficCollision.id.asc())

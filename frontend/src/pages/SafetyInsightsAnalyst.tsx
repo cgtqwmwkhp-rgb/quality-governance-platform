@@ -68,6 +68,7 @@ export default function SafetyInsightsAnalyst() {
   const [history, setHistory] = useState<SafetyInsightRun[]>([])
   const [error, setError] = useState('')
   const [starting, setStarting] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const loadHistory = useCallback(() => {
     void safetyInsightsApi
@@ -95,6 +96,30 @@ export default function SafetyInsightsAnalyst() {
     const corpus = (run?.ratios as { corpus?: Record<string, unknown> } | null)?.corpus
     return corpus || null
   }, [run])
+
+  const trainingSignals = useMemo(() => {
+    const block = (run?.ratios as { training_signals?: Record<string, unknown> } | null)?.training_signals
+    return block || null
+  }, [run])
+
+  const downloadPdf = async () => {
+    if (!run) return
+    setExporting(true)
+    try {
+      const res = await safetyInsightsApi.exportRun(run.id, 'pdf')
+      const blob = res.data as unknown as Blob
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `safety-insights-run-${run.id}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setError('Could not export board-pack PDF.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const startRun = async () => {
     setError('')
@@ -261,6 +286,12 @@ export default function SafetyInsightsAnalyst() {
 
       {run?.status === 'succeeded' && (
         <>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" disabled={exporting} onClick={() => void downloadPdf()}>
+              {exporting ? 'Exporting…' : 'Download board-pack PDF'}
+            </Button>
+          </div>
+
           <section className="space-y-4">
             <h2 className="text-lg font-medium">
               {t('safetyInsights.microThemes', { defaultValue: 'Micro-themes' })}
@@ -403,6 +434,28 @@ export default function SafetyInsightsAnalyst() {
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">Ratios unavailable for this run.</p>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-medium">Training / competence signals</h2>
+            {trainingSignals?.available && Array.isArray(trainingSignals.signals) && trainingSignals.signals.length > 0 ? (
+              <ul className="space-y-2 text-sm">
+                {(trainingSignals.signals as Array<Record<string, unknown>>).map((sig, idx) => (
+                  <li key={idx} className="border-b border-border/60 pb-2">
+                    <div className="font-medium">{String(sig.summary || sig.kind || 'Signal')}</div>
+                    {sig.theme_label != null && (
+                      <p className="text-muted-foreground">Theme: {String(sig.theme_label)}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {trainingSignals?.reason
+                  ? `No training correlation available (${String(trainingSignals.reason)}).`
+                  : 'No training correlation signals for this run.'}
+              </p>
             )}
           </section>
 

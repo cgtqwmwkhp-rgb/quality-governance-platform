@@ -198,6 +198,10 @@ celery_app.conf.beat_schedule = {
         "task": ("src.infrastructure.tasks.training_matrix_upload_reminder_tasks." "remind_training_matrix_upload"),
         "schedule": crontab(hour=8, minute=0, day_of_week="fri"),  # Friday 08:00 UTC
     },
+    "monthly-safety-insights-digest": {
+        "task": "src.infrastructure.tasks.safety_insights_tasks.run_monthly_safety_insights_digest",
+        "schedule": crontab(hour=6, minute=15, day_of_month="1"),  # 1st of month 06:15 UTC
+    },
 }
 
 # DLQ signal handlers (not a @task module — keep explicit).

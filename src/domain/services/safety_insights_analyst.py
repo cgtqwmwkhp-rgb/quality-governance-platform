@@ -181,6 +181,26 @@ class SafetyInsightsAnalystService:
                 models_used["research"] = "perplexity-sonar" if research_available else None
             run.benchmarks_json = benchmarks
             run.research_available = research_available
+
+            # Additive training/competence correlation (fail-soft; never invent).
+            try:
+                from src.domain.services.safety_insights_training import correlate_training_signals
+
+                training_signals = await correlate_training_signals(
+                    self.db,
+                    tenant_id=tenant_id,
+                    theme_labels=[t.get("label") or "" for t in validated],
+                    modules=list(run.modules_json or []),
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.info("Training correlation unavailable: %s", type(exc).__name__)
+                from src.domain.services.safety_insights_training import empty_training_signals
+
+                training_signals = empty_training_signals(reason=f"correlation_failed:{type(exc).__name__}")
+            ratios = dict(run.ratios_json or {})
+            ratios["training_signals"] = training_signals
+            run.ratios_json = ratios
+            models_used["training"] = "competence_gap+training_tickets"
             run.models_used_json = models_used
 
             run.status = SafetyInsightRunStatus.SUCCEEDED

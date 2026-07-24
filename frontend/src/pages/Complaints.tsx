@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
 import { Plus, MessageSquare, Search, Loader2, MailWarning, Paperclip } from 'lucide-react'
-import {
+import api, {
   complaintsApi,
   Complaint,
   ComplaintCreate,
@@ -14,6 +14,7 @@ import {
   notificationsApi,
   UserSearchResult,
   type Contract,
+  type PaginatedResponse,
 } from '../api/client'
 import { queueForSync } from '../lib/syncService'
 import { toast } from '../contexts/ToastContext'
@@ -129,6 +130,7 @@ function buildComplaintsListSearch(params: {
   severity: string
   page: number
   owner: OwnerFilter
+  ids: string
 }): string {
   const next = new URLSearchParams()
   const q = params.q.trim()
@@ -137,6 +139,8 @@ function buildComplaintsListSearch(params: {
   if (params.severity !== ALL_FILTER) next.set('severity', params.severity)
   if (params.page > 1) next.set('page', String(params.page))
   if (params.owner === 'unassigned') next.set('owner', 'unassigned')
+  const ids = params.ids.trim()
+  if (ids) next.set('ids', ids)
   return next.toString()
 }
 
@@ -163,6 +167,7 @@ export default function Complaints() {
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>(
     searchParams.get('owner') === 'unassigned' ? 'unassigned' : 'all',
   )
+  const [idsFilter, setIdsFilter] = useState(() => searchParams.get('ids') || '')
   const [assigningId, setAssigningId] = useState<number | null>(null)
   const [assigneeById, setAssigneeById] = useState<
     Record<number, { email: string; user?: UserSearchResult }>
@@ -296,14 +301,16 @@ export default function Complaints() {
     const nextSeverity = parseListFilter(searchParams.get('severity'))
     const nextPage = parseListPage(searchParams.get('page'))
     const nextOwner: OwnerFilter = searchParams.get('owner') === 'unassigned' ? 'unassigned' : 'all'
+    const nextIds = searchParams.get('ids') || ''
     setSearchTerm((prev) => (prev === nextQ ? prev : nextQ))
     setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus))
     setSeverityFilter((prev) => (prev === nextSeverity ? prev : nextSeverity))
     setPage((prev) => (prev === nextPage ? prev : nextPage))
     setOwnerFilter((prev) => (prev === nextOwner ? prev : nextOwner))
+    setIdsFilter((prev) => (prev === nextIds ? prev : nextIds))
   }, [searchParams])
 
-  // Keep q/status/severity/page/owner in the URL (omit defaults); replace history entry.
+  // Keep q/status/severity/page/owner/ids in the URL (omit defaults); replace history entry.
   useEffect(() => {
     const desired = buildComplaintsListSearch({
       q: searchTerm,
@@ -311,13 +318,23 @@ export default function Complaints() {
       severity: severityFilter,
       page,
       owner: ownerFilter,
+      ids: idsFilter,
     })
     if (desired !== searchParams.toString()) {
       setSearchParams(desired ? new URLSearchParams(desired) : new URLSearchParams(), {
         replace: true,
       })
     }
-  }, [searchTerm, statusFilter, severityFilter, page, ownerFilter, searchParams, setSearchParams])
+  }, [
+    searchTerm,
+    statusFilter,
+    severityFilter,
+    page,
+    ownerFilter,
+    idsFilter,
+    searchParams,
+    setSearchParams,
+  ])
 
   useEffect(() => {
     let cancelled = false
@@ -325,11 +342,25 @@ export default function Complaints() {
       setLoading(true)
       setLoadError(null)
       try {
-        const response = await complaintsApi.list(
-          page,
-          PAGE_SIZE,
-          ownerFilter === 'unassigned' ? { owner: 'unassigned' } : undefined,
-        )
+        const ids = idsFilter.trim()
+        let response
+        if (ids) {
+          const params = new URLSearchParams({
+            page: String(page),
+            page_size: String(PAGE_SIZE),
+            ids,
+          })
+          if (ownerFilter === 'unassigned') params.set('owner', 'unassigned')
+          response = await api.get<PaginatedResponse<Complaint>>(
+            `/api/v1/complaints/?${params.toString()}`,
+          )
+        } else {
+          response = await complaintsApi.list(
+            page,
+            PAGE_SIZE,
+            ownerFilter === 'unassigned' ? { owner: 'unassigned' } : undefined,
+          )
+        }
         if (!cancelled) {
           setComplaints(response.data.items ?? [])
           setListUnavailable(false)
@@ -352,7 +383,7 @@ export default function Complaints() {
     return () => {
       cancelled = true
     }
-  }, [ownerFilter, page])
+  }, [ownerFilter, page, idsFilter])
 
   const setFilter = (next: OwnerFilter) => {
     setOwnerFilter(next)

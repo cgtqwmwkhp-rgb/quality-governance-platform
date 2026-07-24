@@ -7,11 +7,13 @@ import os
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.domain.models.user import User
 from src.domain.services.safety_insights_analyst import SafetyInsightsAnalystService
+from src.domain.services.safety_insights_export import SafetyInsightsExportService
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,12 @@ class DeepRunCreate(BaseModel):
     min_cluster_size: int = Field(default=2, ge=2, le=20)
     include_synthesis: bool = True
     include_benchmark: bool = False
+
+
+class ExportRequest(BaseModel):
+    """Optional body for export format (query `format` also accepted)."""
+
+    format: Optional[str] = Field(default=None, pattern="^(json|pdf)$")
 
 
 async def _dispatch_run(
@@ -152,12 +160,34 @@ async def theme_cases(theme_id: int, db: DbSession, current_user: CurrentUser):
 
 
 @router.post("/runs/{run_id}/export")
-async def export_run(run_id: int, db: DbSession, current_user: CurrentUser):
-    """Board-pack JSON export (PDF follow-on in Wave 2)."""
+async def export_run(
+    run_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    format: str = Query(default="json", pattern="^(json|pdf)$"),
+    body: Optional[ExportRequest] = None,
+):
+    """Board-pack export as JSON (default) or PDF attachment."""
     assert current_user.tenant_id is not None
+    export_format = (body.format if body and body.format else format).lower()
     service = SafetyInsightsAnalystService(db)
     run = await service.get_run(run_id, current_user.tenant_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
     payload = await service.serialize_run(run, include_children=True)
-    return {"format": "json", "board_pack": payload}
+    exporter = SafetyInsightsExportService()
+    if export_format == "json":
+        return exporter.build_json_board_pack(payload)
+    try:
+        pdf_bytes, filename = exporter.build_pdf_board_pack(payload)
+    except Exception as exc:  # noqa: BLE001 — fail closed, no fake PDF
+        logger.exception("Safety insights PDF export failed for run %s", run_id)
+        raise HTTPException(
+            status_code=500,
+            detail=f"PDF board-pack build failed: {exc}",
+        ) from exc
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

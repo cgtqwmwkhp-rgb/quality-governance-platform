@@ -3,14 +3,13 @@
  *
  * Features:
  * - Interactive drill-down charts
- * - Trend forecasting with confidence intervals
- * - Benchmark comparisons
- * - Cost analysis
- * - ROI tracking
+ * - Live audit KPIs (from /analytics/kpis)
+ * - Deep-link to Safety Insights Analyst for live AI analysis
+ * - Cost analysis / ROI tracking (placeholder until live packs land)
  */
 
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   BarChart3,
@@ -26,15 +25,12 @@ import {
   AlertTriangle,
   CheckCircle,
   Shield,
-  Zap,
-  Building,
-  Globe,
   Percent,
   Coins,
   PiggyBank,
-  Activity,
   Eye,
   X,
+  Sparkles,
 } from 'lucide-react'
 import { cn } from '../helpers/utils'
 import { Button } from '../components/ui/Button'
@@ -65,17 +61,6 @@ interface KPIData {
   risks: { total: number; high: number; medium: number; low: number; mitigated: number }
   compliance: { overall_score: number; iso_9001: number; iso_14001: number; iso_45001: number }
   training: { completion_rate: number; expiring_soon: number; overdue: number }
-}
-
-interface BenchmarkData {
-  your_value: number
-  industry_average: number
-  industry_median: number
-  percentile_25: number
-  percentile_75: number
-  percentile_90: number
-  your_percentile: number
-  trend: string
 }
 
 interface CostData {
@@ -125,7 +110,6 @@ export default function AdvancedAnalytics() {
     'overview' | 'trends' | 'benchmarks' | 'costs' | 'roi'
   >('overview')
   const [kpis, setKpis] = useState<KPIData | null>(null)
-  const [benchmarks, setBenchmarks] = useState<Record<string, BenchmarkData>>({})
   const [costs, setCosts] = useState<CostData | null>(null)
   const [roi, setRoi] = useState<ROIData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -174,39 +158,6 @@ export default function AdvancedAnalytics() {
       risks: { total: 89, high: 12, medium: 34, low: 43, mitigated: 67 },
       compliance: { overall_score: 94.2, iso_9001: 96.1, iso_14001: 92.8, iso_45001: 93.7 },
       training: { completion_rate: 91.2, expiring_soon: 14, overdue: 3 },
-    })
-
-    setBenchmarks({
-      incident_rate: {
-        your_value: 2.3,
-        industry_average: 3.8,
-        industry_median: 3.5,
-        percentile_25: 4.2,
-        percentile_75: 2.8,
-        percentile_90: 1.9,
-        your_percentile: 72,
-        trend: 'improving',
-      },
-      audit_score: {
-        your_value: liveAudits.avg_score,
-        industry_average: 82.1,
-        industry_median: 83.5,
-        percentile_25: 78.0,
-        percentile_75: 88.0,
-        percentile_90: 92.5,
-        your_percentile: 78,
-        trend: 'stable',
-      },
-      action_completion_rate: {
-        your_value: 87.5,
-        industry_average: 79.2,
-        industry_median: 81.0,
-        percentile_25: 72.0,
-        percentile_75: 86.0,
-        percentile_90: 93.0,
-        your_percentile: 76,
-        trend: 'improving',
-      },
     })
 
     setCosts({
@@ -392,63 +343,32 @@ export default function AdvancedAnalytics() {
     )
   }
 
-  const BenchmarkGauge = ({ metric, data }: { metric: string; data: BenchmarkData }) => {
-    const position = (data.your_percentile / 100) * 100
-
-    return (
-      <div className="bg-card/50 border border-border rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-foreground capitalize">
-            {metric.replace(/_/g, ' ')}
-          </h3>
-          <span
-            className={`px-2 py-1 rounded text-xs font-medium ${
-              data.trend === 'improving'
-                ? 'bg-success/10 text-success'
-                : data.trend === 'stable'
-                  ? 'bg-info/10 text-info'
-                  : 'bg-destructive/10 text-destructive'
-            }`}
-          >
-            {data.trend}
-          </span>
+  const SafetyInsightsCallout = ({
+    title,
+    description,
+  }: {
+    title: string
+    description: string
+  }) => (
+    <div className="bg-card/50 border border-border rounded-xl p-6">
+      <div className="flex items-start gap-3">
+        <div className="p-2.5 rounded-lg bg-primary/20">
+          <Sparkles className="w-5 h-5 text-primary" />
         </div>
-
-        {/* Gauge */}
-        <div className="relative h-8 bg-surface rounded-full overflow-hidden mb-4">
-          <div className="absolute inset-0 flex">
-            <div className="w-1/4 bg-destructive/30" />
-            <div className="w-1/4 bg-warning/30" />
-            <div className="w-1/4 bg-info/30" />
-            <div className="w-1/4 bg-success/30" />
-          </div>
-          <div
-            className="absolute top-0 bottom-0 w-1 bg-foreground shadow-lg transition-all"
-            style={{ left: `${position}%` }}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="flex-1 space-y-3">
           <div>
-            <span className="text-muted-foreground">Your Value:</span>
-            <span className="text-foreground font-semibold ml-2">{data.your_value}</span>
+            <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+            <p className="text-sm text-muted-foreground mt-1">{description}</p>
           </div>
-          <div>
-            <span className="text-muted-foreground">Industry Avg:</span>
-            <span className="text-foreground font-semibold ml-2">{data.industry_average}</span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Percentile:</span>
-            <span className="text-success font-semibold ml-2">{data.your_percentile}th</span>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Top 10%:</span>
-            <span className="text-foreground font-semibold ml-2">{data.percentile_90}</span>
-          </div>
+          <Button asChild>
+            <Link to="/analytics/safety-insights">
+              {t('safetyInsights.title', { defaultValue: 'Safety Insights Analyst' })}
+            </Link>
+          </Button>
         </div>
       </div>
-    )
-  }
+    </div>
+  )
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
@@ -473,7 +393,7 @@ export default function AdvancedAnalytics() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Advanced Analytics</h1>
           <p className="text-muted-foreground mt-1">
-            Interactive insights with forecasting and benchmarks
+            Live audit KPIs and analytics — AI analysis lives on Safety Insights Analyst
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -729,130 +649,36 @@ export default function AdvancedAnalytics() {
               </div>
             </div>
 
-            <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
-              <h3 className="text-lg font-semibold text-white mb-4">AI Insights</h3>
-              <div className="space-y-3">
-                <div className="flex gap-3 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                  <Zap className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-                  <p className="text-sm text-gray-300">
-                    <strong className="text-emerald-400">Positive Trend:</strong> Incident rate
-                    shows consistent improvement over the last 90 days, with a projected 25%
-                    reduction by Q2.
-                  </p>
-                </div>
-                <div className="flex gap-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                  <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0" />
-                  <p className="text-sm text-gray-300">
-                    <strong className="text-yellow-400">Seasonal Pattern:</strong> Historical data
-                    suggests increased incidents during winter months. Consider enhanced training.
-                  </p>
-                </div>
-                <div className="flex gap-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                  <Activity className="w-5 h-5 text-blue-400 flex-shrink-0" />
-                  <p className="text-sm text-gray-300">
-                    <strong className="text-blue-400">Correlation Found:</strong> Strong correlation
-                    between training completion rates and incident reduction (r=0.82).
-                  </p>
-                </div>
-              </div>
-            </div>
+            <SafetyInsightsCallout
+              title="AI Insights"
+              description="Live AI analysis of incidents, near misses, and repeat patterns runs on Safety Insights Analyst — cited to real cases, not demo copy."
+            />
           </div>
         </div>
       )}
 
-      {/* Benchmarks Tab */}
+      {/* Benchmarks Tab — industry theatre retired; live analysis is on Safety Insights */}
       {activeTab === 'benchmarks' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Building className="w-5 h-5 text-gray-400" />
-                <select className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
-                  <option value="utilities">Utilities Industry</option>
-                  <option value="construction">Construction</option>
-                  <option value="manufacturing">Manufacturing</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-2">
-                <Globe className="w-5 h-5 text-gray-400" />
-                <select className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
-                  <option value="uk">United Kingdom</option>
-                  <option value="eu">Europe</option>
-                  <option value="global">Global</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Overall Performance */}
-          <div className="bg-gradient-to-r from-emerald-600/20 to-blue-600/20 border border-emerald-500/30 rounded-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold text-white">Overall Performance Rating</h3>
-                <p className="text-gray-400 mt-1">Compared to industry peers</p>
-              </div>
-              <div className="text-right">
-                <div className="text-4xl font-bold text-emerald-400">75th</div>
-                <div className="text-gray-400">Percentile</div>
+          <SafetyInsightsCallout
+            title="Benchmarks"
+            description="Industry percentile and peer-comparison numbers shown here previously were demo data, not live feeds. For research-grade themes, repeat dimensions, and near-miss ratios cited to real cases, use Safety Insights Analyst."
+          />
+          {kpis && (
+            <div className="bg-card/50 border border-border rounded-xl p-5">
+              <h3 className="text-lg font-semibold text-foreground mb-2">Your live audit score</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Audit KPIs on this page come from live analytics. Peer industry averages are not
+                available as a live data source.
+              </p>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold text-foreground">{kpis.audits.avg_score}%</span>
+                <span className="text-sm text-muted-foreground">
+                  avg score · {kpis.audits.completed} completed
+                </span>
               </div>
             </div>
-            <div className="mt-4 flex items-center gap-4">
-              <Award className="w-8 h-8 text-yellow-400" />
-              <span className="text-lg font-semibold text-white">Good Performance</span>
-              <span className="text-gray-400">|</span>
-              <span className="text-gray-300">3 of 4 metrics above industry average</span>
-            </div>
-          </div>
-
-          {/* Benchmark Gauges */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {Object.entries(benchmarks).map(([metric, data]) => (
-              <BenchmarkGauge key={metric} metric={metric} data={data} />
-            ))}
-          </div>
-
-          {/* Comparison Table */}
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
-            <div className="p-5 border-b border-slate-700">
-              <h3 className="text-lg font-semibold text-white">Detailed Comparison</h3>
-            </div>
-            <table className="w-full">
-              <thead className="bg-slate-700/50">
-                <tr>
-                  <th className="text-left p-4 text-sm font-medium text-gray-400">Metric</th>
-                  <th className="text-center p-4 text-sm font-medium text-gray-400">Your Value</th>
-                  <th className="text-center p-4 text-sm font-medium text-gray-400">
-                    Industry Avg
-                  </th>
-                  <th className="text-center p-4 text-sm font-medium text-gray-400">Top 10%</th>
-                  <th className="text-center p-4 text-sm font-medium text-gray-400">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(benchmarks).map(([metric, data]) => (
-                  <tr key={metric} className="border-t border-slate-700">
-                    <td className="p-4 text-white capitalize">{metric.replace(/_/g, ' ')}</td>
-                    <td className="p-4 text-center text-emerald-400 font-semibold">
-                      {data.your_value}
-                    </td>
-                    <td className="p-4 text-center text-gray-300">{data.industry_average}</td>
-                    <td className="p-4 text-center text-gray-300">{data.percentile_90}</td>
-                    <td className="p-4 text-center">
-                      {data.your_value > data.industry_average ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs">
-                          <ArrowUpRight className="w-3 h-3" /> Above Avg
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs">
-                          <ArrowDownRight className="w-3 h-3" /> Below Avg
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          )}
         </div>
       )}
 
