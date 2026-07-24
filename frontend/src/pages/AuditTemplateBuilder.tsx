@@ -1166,8 +1166,8 @@ export default function AuditTemplateBuilder() {
           templateId={templateId ? Number(templateId) : undefined}
           onClose={() => setShowChallengeCoach(false)}
           onApplySections={(mergedSections) => {
-            updateSections(() =>
-              template.sections.map((s) => {
+            updateSections((prevSections) =>
+              prevSections.map((s) => {
                 const patched = mergedSections.find((m) => String(m.id) === s.id)
                 const patchedQuestions = Array.isArray(patched?.questions)
                   ? (patched.questions as Array<Record<string, unknown>>)

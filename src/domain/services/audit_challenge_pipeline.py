@@ -14,13 +14,41 @@ from src.domain.services.audit_builder_generation_pipeline import normalize_sect
 logger = logging.getLogger(__name__)
 
 CHALLENGE_CHIPS: list[dict[str, str]] = [
-    {"id": "iso_closer", "label": "Closer ISO match", "prompt": "Tighten questions and guidance to selected ISO clauses with citeable refs."},
-    {"id": "oem_manufacturer", "label": "Manufacturer / OEM standards", "prompt": "Challenge against manufacturer/OEM inspection standards from research when available."},
-    {"id": "rebalance_scoring", "label": "Rebalance scoring", "prompt": "Rebalance weights, criticality, and pass-threshold focus for field scoring honesty."},
-    {"id": "field_assessor", "label": "Field assessor lens", "prompt": "Red-team as a site assessor: what fails on a wet Tuesday with time pressure?"},
-    {"id": "tighten_focus", "label": "Tighten focus", "prompt": "Remove duplication and keep only high-signal questions."},
-    {"id": "evidence_clarity", "label": "Evidence clarity", "prompt": "Make evidence requirements photo/document clear and executable."},
-    {"id": "format_consistency", "label": "Format consistency", "prompt": "Normalize question types, yes/no vs scale, and section structure."},
+    {
+        "id": "iso_closer",
+        "label": "Closer ISO match",
+        "prompt": "Tighten questions and guidance to selected ISO clauses with citeable refs.",
+    },
+    {
+        "id": "oem_manufacturer",
+        "label": "Manufacturer / OEM standards",
+        "prompt": "Challenge against manufacturer/OEM inspection standards from research when available.",
+    },
+    {
+        "id": "rebalance_scoring",
+        "label": "Rebalance scoring",
+        "prompt": "Rebalance weights, criticality, and pass-threshold focus for field scoring honesty.",
+    },
+    {
+        "id": "field_assessor",
+        "label": "Field assessor lens",
+        "prompt": "Red-team as a site assessor: what fails on a wet Tuesday with time pressure?",
+    },
+    {
+        "id": "tighten_focus",
+        "label": "Tighten focus",
+        "prompt": "Remove duplication and keep only high-signal questions.",
+    },
+    {
+        "id": "evidence_clarity",
+        "label": "Evidence clarity",
+        "prompt": "Make evidence requirements photo/document clear and executable.",
+    },
+    {
+        "id": "format_consistency",
+        "label": "Format consistency",
+        "prompt": "Normalize question types, yes/no vs scale, and section structure.",
+    },
 ]
 
 DIMENSIONS = (
@@ -110,11 +138,7 @@ def heuristic_findings(
         )
 
     weak = next(
-        (
-            (sec, q, path)
-            for sec, q, path in questions
-            if len(str(q.get("text") or "")) < 40 or not q.get("guidance")
-        ),
+        ((sec, q, path) for sec, q, path in questions if len(str(q.get("text") or "")) < 40 or not q.get("guidance")),
         questions[0],
     )
     _, wq, wpath = weak
@@ -199,10 +223,6 @@ def validate_citations(
             out.append({"scheme": scheme, "refId": ref, "label": label, "url": url or None})
         elif url and url in allowed_urls:
             out.append({"scheme": scheme or "research", "refId": ref or url, "label": label, "url": url})
-        elif url.startswith("http") and (not allowed_urls or url in allowed_urls):
-            # Allow research URLs explicitly provided in grounding even if set empty-check passed
-            if not allowed_urls or url in allowed_urls:
-                out.append({"scheme": "research", "refId": ref or url, "label": label, "url": url})
     return out
 
 
@@ -231,7 +251,9 @@ def findings_to_proposals(
             after["guidance"] = (str(after.get("guidance") or "") + " " + fix).strip()[:2000] or fix[:2000]
         elif dim == "scoring":
             after["weight"] = max(float(after.get("weight") or 1) * 1.5, 2.0)
-            after["riskLevel"] = "high" if after.get("riskLevel") in {None, "low", "observation", "medium"} else after.get("riskLevel")
+            after["riskLevel"] = (
+                "high" if after.get("riskLevel") in {None, "low", "observation", "medium"} else after.get("riskLevel")
+            )
             after["guidance"] = (str(after.get("guidance") or "") + " " + fix).strip()[:2000]
         elif dim == "evidence":
             after["evidenceRequired"] = True
@@ -239,7 +261,9 @@ def findings_to_proposals(
         elif dim == "iso":
             cites = finding.get("citations") or []
             if cites and isinstance(cites[0], dict):
-                after["isoClause"] = str(cites[0].get("refId") or cites[0].get("label") or "")[:120] or after.get("isoClause")
+                after["isoClause"] = str(cites[0].get("refId") or cites[0].get("label") or "")[:120] or after.get(
+                    "isoClause"
+                )
             after["guidance"] = (str(after.get("guidance") or "") + " " + fix).strip()[:2000]
         elif dim == "oem":
             after["guidance"] = (str(after.get("guidance") or "") + " OEM: " + fix).strip()[:2000]
@@ -384,9 +408,7 @@ class AuditChallengePipeline:
     def _summarize_findings(findings: list[dict[str, Any]]) -> str:
         lines = ["Assessor critique:"]
         for f in findings:
-            lines.append(
-                f"- [{f.get('dimension')}/{f.get('severity')}] {f.get('assessor_failure_mode')}"
-            )
+            lines.append(f"- [{f.get('dimension')}/{f.get('severity')}] {f.get('assessor_failure_mode')}")
         return "\n".join(lines)
 
     async def _claude_critic(
@@ -409,8 +431,8 @@ class AuditChallengePipeline:
             ground = json.dumps(grounding, ensure_ascii=False)[:8000]
             system = (
                 "You are a world-class field health & safety assessor red-teaming an audit template. "
-                "Return ONLY JSON: {\"findings\":[{\"id\",\"severity\",\"dimension\",\"assessor_failure_mode\","
-                "\"target_path\",\"suggested_fix\",\"citations\":[{\"scheme\",\"refId\",\"label\",\"url\"}]}]}. "
+                'Return ONLY JSON: {"findings":[{"id","severity","dimension","assessor_failure_mode",'
+                '"target_path","suggested_fix","citations":[{"scheme","refId","label","url"}]}]}. '
                 f"Dimensions must be one of: {', '.join(DIMENSIONS)}. "
                 "Always include at least one scoring and one field_usability finding. "
                 "Only cite refs/urls present in grounding."
@@ -422,9 +444,7 @@ Standards: {', '.join(brief.get('standards') or []) or 'n/a'}
 Grounding JSON: {ground}
 Template JSON: {payload}
 """
-            text = await client.complete(
-                user, system_prompt=system, temperature=0.2, max_tokens=4000, timeout=90.0
-            )
+            text = await client.complete(user, system_prompt=system, temperature=0.2, max_tokens=4000, timeout=90.0)
             parsed = json.loads(_strip_json_fence(text))
             raw = parsed.get("findings") if isinstance(parsed, dict) else None
             if not isinstance(raw, list) or not raw:

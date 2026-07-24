@@ -162,12 +162,17 @@ class AuditChallengeService:
         session = await self.get_session(session_id, tenant_id)
         if session is None:
             raise ValueError("SESSION_NOT_FOUND")
+        if session.status == AuditChallengeSessionStatus.RUNNING:
+            return session
+        if session.status == AuditChallengeSessionStatus.SUCCEEDED:
+            return session
 
         session.status = AuditChallengeSessionStatus.RUNNING
         session.started_at = datetime.now(timezone.utc)
         session.progress_pct = 10
         session.progress_message = "Grounding standards & research"
         await self.db.flush()
+        await self.db.commit()
 
         snapshot = session.template_snapshot_json or {}
         sections = normalize_sections(snapshot if isinstance(snapshot, dict) else {"sections": snapshot})
@@ -197,7 +202,7 @@ class AuditChallengeService:
         await self.db.flush()
 
         turns = await self.list_turns(session_id, tenant_id)
-        next_order = (max((t.sort_order for t in turns), default=-1) + 1)
+        next_order = max((t.sort_order for t in turns), default=-1) + 1
 
         critic_turn = AuditChallengeTurn(
             session_id=session.id,
@@ -205,11 +210,7 @@ class AuditChallengeService:
             role=AuditChallengeTurnRole.CRITIC,
             content=result.get("critic_text") or "Critique complete.",
             chip_id=session.chip_id,
-            citations_json=[
-                c
-                for f in result.get("findings") or []
-                for c in (f.get("citations") or [])
-            ][:20],
+            citations_json=[c for f in result.get("findings") or [] for c in (f.get("citations") or [])][:20],
             sort_order=next_order,
         )
         self.db.add(critic_turn)
@@ -264,6 +265,8 @@ class AuditChallengeService:
         session = await self.get_session(session_id, tenant_id)
         if session is None:
             raise ValueError("SESSION_NOT_FOUND")
+        if session.status == AuditChallengeSessionStatus.RUNNING:
+            raise ValueError("SESSION_ALREADY_RUNNING")
         turns = await self.list_turns(session_id, tenant_id)
         next_order = max((t.sort_order for t in turns), default=-1) + 1
         self.db.add(
