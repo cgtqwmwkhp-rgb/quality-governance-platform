@@ -122,8 +122,8 @@ interface SimilarMatch {
 // Relative fetch('/api/...') hits Azure Static Web Apps with no backend and returns 405.
 // ============================================================================
 
-/** AI template generation (Gemini) regularly exceeds the default 45s write timeout. */
-const AI_GENERATE_TIMEOUT_MS = 300000
+/** Gemini generate + Claude quality-pass can exceed 300s end-to-end. */
+const AI_GENERATE_TIMEOUT_MS = 480000
 
 async function postJson<T>(url: string, body: unknown, timeoutMs?: number): Promise<T> {
   const { data } = await api.post<T>(url, body, timeoutMs ? { timeout: timeoutMs } : undefined)

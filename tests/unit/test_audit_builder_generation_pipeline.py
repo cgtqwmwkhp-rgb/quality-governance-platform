@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from src.domain.services.audit_builder_generation_pipeline import (
@@ -113,6 +115,85 @@ async def test_pipeline_uses_gemini_then_claude(monkeypatch):
     assert result["sections"][0]["title"] == "Improved"
     assert result["models_used"]["quality_pass"] == "claude-sonnet-4-5"
     assert result["models_used"]["generate"]
+
+
+@pytest.mark.asyncio
+async def test_quality_pass_truncation_preserves_unsliced_sections(monkeypatch):
+    """When payload is capped to first 6 sections, success must not drop the rest."""
+
+    def _sec(n: int) -> dict:
+        return {
+            "id": f"section-{n}",
+            "title": f"Section {n}",
+            "description": "",
+            "questions": [
+                {
+                    "id": f"q{n}",
+                    "text": f"Question {n} " + ("x" * 8000),
+                    "type": "yes_no",
+                    "required": True,
+                    "weight": 1,
+                    "riskLevel": "medium",
+                }
+            ],
+        }
+
+    large_sections = [_sec(i) for i in range(1, 10)]
+    assert len(json.dumps({"sections": large_sections})) > 60000
+
+    class FakeClient:
+        model = "claude-sonnet-4-5"
+
+        async def complete(self, *args, **kwargs):
+            return json.dumps(
+                {
+                    "sections": [
+                        {
+                            "id": f"section-{i}",
+                            "title": f"Improved {i}",
+                            "description": "",
+                            "questions": [
+                                {
+                                    "id": f"q{i}",
+                                    "text": f"Improved question {i}",
+                                    "type": "yes_no",
+                                    "required": True,
+                                    "weight": 1,
+                                    "riskLevel": "high",
+                                    "guidance": "looks good",
+                                }
+                            ],
+                        }
+                        for i in range(1, 7)
+                    ]
+                }
+            )
+
+    class FakeAIConfig:
+        @staticmethod
+        def from_env():
+            return object()
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    import src.domain.services.ai_models as ai_models
+
+    monkeypatch.setattr(ai_models, "AIConfig", FakeAIConfig)
+    monkeypatch.setattr(ai_models, "AnthropicClient", lambda cfg: FakeClient())
+
+    pipe = AuditBuilderGenerationPipeline.__new__(AuditBuilderGenerationPipeline)
+    improved, ok, model, notes = await pipe._claude_quality_pass(
+        sections=large_sections,
+        brief={"purpose": "risk_audit", "standards": ["ISO 45001"]},
+        prompt_excerpt="brief",
+    )
+    assert ok is True
+    assert notes is None
+    assert model == "claude-sonnet-4-5"
+    assert len(improved) == 9
+    assert improved[0]["title"] == "Improved 1"
+    assert improved[5]["title"] == "Improved 6"
+    assert improved[6]["title"] == "Section 7"
+    assert improved[8]["id"] == "section-9"
 
 
 @pytest.mark.asyncio

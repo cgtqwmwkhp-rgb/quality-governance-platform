@@ -148,20 +148,31 @@ class AuditBuilderGenerationPipeline:
             client = AnthropicClient(AIConfig.from_env())
             purpose = brief.get("purpose") or "freeform"
             standards = ", ".join(brief.get("standards") or []) or "good practice"
-            payload = json.dumps({"sections": sections}, ensure_ascii=False)
-            # Keep token budget bounded for large templates
+            # Keep token budget bounded for large templates — only send a prefix,
+            # then merge so unsliced sections are never dropped on success.
+            sections_in = sections
+            truncated = False
+            payload = json.dumps({"sections": sections_in}, ensure_ascii=False)
             if len(payload) > 60000:
-                payload = json.dumps({"sections": sections[:6]}, ensure_ascii=False)
+                sections_in = sections[:6]
+                truncated = True
+                payload = json.dumps({"sections": sections_in}, ensure_ascii=False)
 
             system = (
                 "You are a world-class health, safety and compliance audit designer. "
                 "Improve assessment questions for field assessors: clearer wording, "
                 "stronger risk focus, practical evidence guidance, accurate ISO/scheme "
                 "clause hints when known. Do not invent case references. "
-                "Return ONLY valid JSON with shape {\"sections\":[...]} matching the input schema."
+                'Return ONLY valid JSON with shape {"sections":[...]} matching the input schema.'
+            )
+            prefix_note = (
+                "\nNote: This is a PREFIX of a larger template. Improve only these sections; "
+                "do not invent replacements for omitted later sections.\n"
+                if truncated
+                else ""
             )
             user = f"""Improve this generated audit/assessment template.
-
+{prefix_note}
 Purpose: {purpose}
 Standards: {standards}
 Brief excerpt:
@@ -182,7 +193,7 @@ Rules:
                 system_prompt=system,
                 temperature=0.2,
                 max_tokens=8000,
-                timeout=180.0,
+                timeout=120.0,
             )
             text = (text or "").strip()
             if text.startswith("```"):
@@ -193,6 +204,9 @@ Rules:
             improved = normalize_sections(parsed)
             if not improved:
                 return None, False, None, "quality_pass_empty"
+            if truncated:
+                # Preserve Gemini sections that were never sent to Claude.
+                improved = improved + sections[len(sections_in) :]
             model = getattr(client, "model", None) or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5")
             return improved, True, model, None
         except Exception as exc:  # noqa: BLE001 — fail-soft
