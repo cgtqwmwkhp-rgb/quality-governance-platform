@@ -963,7 +963,7 @@ export default function IncidentDetail() {
           <TabsTrigger value="running-sheet">Running Sheet</TabsTrigger>
           <TabsTrigger value="actions" data-testid="incident-actions-tab">
             <ClipboardList className="w-4 h-4 mr-1.5" />
-            {t('incidents.tabs.actions', 'Actions')} ({actions.length})
+            {t('incidents.tabs.actions', 'Actions')} ({capaCountLabel})
           </TabsTrigger>
         </TabsList>
 
@@ -1672,11 +1672,10 @@ export default function IncidentDetail() {
                         ? t('incidents.detail.open_investigation')
                         : t('incidents.detail.start_investigation')}
                     </Button>
-                    {actions.length > 0 && !actionsLoadFailed ? (
+                    {actionsLoadFailed || actionsLoading ? null : actions.length > 0 ? (
                       <Button
                         variant="outline"
                         onClick={() => navigate(capaHref)}
-                        disabled={actionsLoading}
                         data-testid="incident-capa-handoff-cta"
                       >
                         <ClipboardList className="w-4 h-4 mr-2" />

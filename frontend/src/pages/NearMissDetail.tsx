@@ -512,7 +512,13 @@ export default function NearMissDetail() {
           <TabsTrigger value="running-sheet">{t('common.running_sheet', 'Running Sheet')}</TabsTrigger>
           <TabsTrigger value="actions" data-testid="near-miss-actions-tab">
             <ClipboardList className="w-4 h-4 mr-1.5" />
-            {t('near_misses.tabs.actions', 'Actions')} ({capaActions.length})
+            {t('near_misses.tabs.actions', 'Actions')} (
+            {formatCapaActionsCount({
+              loading: capaLoading,
+              unavailable: capaUnavailable,
+              count: capaActions.length,
+            })}
+            )
           </TabsTrigger>
         </TabsList>
 
@@ -746,11 +752,17 @@ export default function NearMissDetail() {
                       })}
                     </span>
                   </div>
-                  {capaActions.length > 0 && !capaUnavailable ? (
+                  {capaUnavailable ? (
+                    <p className="text-sm text-amber-700 dark:text-amber-400" role="status">
+                      {t(
+                        'near_misses.detail.actions_unavailable',
+                        'CAPA actions could not be loaded — counts may be incomplete.',
+                      )}
+                    </p>
+                  ) : capaLoading ? null : capaActions.length > 0 ? (
                     <Button
                       variant="outline"
                       className="w-full"
-                      disabled={capaLoading}
                       onClick={() => navigate(getCapaLink('near_miss', nearMiss.id))}
                       data-testid="near-miss-capa-handoff-cta"
                     >
