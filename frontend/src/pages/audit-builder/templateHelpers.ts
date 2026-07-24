@@ -17,6 +17,8 @@ import type {
 } from '../../api/client'
 import { generateId, createNewSection, SECTION_COLORS } from './types'
 import { fromApiQuestionType, toApiQuestionType } from './questionTypeRegistry'
+import { mergeSuggestedLinks } from '../builderMapAssistHonesty'
+import type { MapW3StandardLink } from '../mapW3StaleRescoreHonesty'
 
 const VALID_CRITICALITIES: QuestionCriticality[] = ['essential', 'required', 'good_to_have']
 
@@ -296,10 +298,41 @@ export function mapApiToTemplate(
   }
 }
 
+/** Group raw Assist Map suggestions (builder or Check & Challenge coach) by question id. */
+function groupStandardSuggestionsByQuestion(
+  standardSuggestions: unknown[] | undefined,
+): Map<string, MapW3StandardLink[]> {
+  const byQuestion = new Map<string, MapW3StandardLink[]>()
+  for (const raw of standardSuggestions || []) {
+    if (!raw || typeof raw !== 'object') continue
+    const row = raw as Record<string, unknown>
+    const questionId = String(row.questionId ?? row.question_id ?? '')
+    const refId = String(row.refId ?? row.ref_id ?? '')
+    if (!questionId || !refId) continue
+    const link: MapW3StandardLink = {
+      id: String(row.id ?? `sug_${questionId}_${refId}`),
+      questionId,
+      scheme: String(row.scheme ?? 'ISO'),
+      refId,
+      label: String(row.label ?? refId),
+      confidence: Number(row.confidence ?? 0),
+      status: 'suggested',
+      sourceFingerprint: String(row.sourceFingerprint ?? ''),
+      libraryVersion: String(row.libraryVersion ?? 'builder-map-v1'),
+    }
+    const list = byQuestion.get(questionId) || []
+    list.push(link)
+    byQuestion.set(questionId, list)
+  }
+  return byQuestion
+}
+
 export function mapAISectionsToLocal(
   generatedSections: any[],
   existingSectionCount: number,
+  standardSuggestions?: unknown[],
 ): Section[] {
+  const suggestionsByQuestion = groupStandardSuggestionsByQuestion(standardSuggestions)
   return generatedSections.map((gs, idx) => ({
     id: gs.id,
     title: gs.title,
@@ -315,6 +348,7 @@ export function mapAISectionsToLocal(
       isoClause: q.isoClause,
       guidance: q.guidance,
       failureTriggersAction: false,
+      standardLinks: mergeSuggestedLinks([], suggestionsByQuestion.get(String(q.id)) || []),
     })),
     isExpanded: true,
     weight: 1,

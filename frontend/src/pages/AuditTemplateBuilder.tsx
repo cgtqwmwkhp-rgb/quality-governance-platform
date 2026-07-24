@@ -19,8 +19,10 @@ import {
   Unlock,
   Sparkles,
   Loader2,
+  ShieldAlert,
 } from 'lucide-react'
 import AITemplateGenerator from '../components/AITemplateGenerator'
+import CheckChallengeCoach from '../components/auditChallenge/CheckChallengeCoach'
 import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
 import { Badge } from '../components/ui/Badge'
 import { auditsApi, getApiErrorMessage, safetyInsightsApi } from '../api/client'
@@ -205,6 +207,8 @@ export default function AuditTemplateBuilder() {
   )
   // Delay AI wizard until theme case prefill resolves so gather_brief sees cited cases.
   const [showAIAssist, setShowAIAssist] = useState(openAiParam && !needsThemePrefill)
+  const [showChallengeCoach, setShowChallengeCoach] = useState(false)
+  const [challengeBrief, setChallengeBrief] = useState<Record<string, unknown> | undefined>(undefined)
 
   useEffect(() => {
     if (!needsThemePrefill) return
@@ -1134,7 +1138,10 @@ export default function AuditTemplateBuilder() {
           onClose={() => setShowAIAssist(false)}
           onUseExistingTemplate={(id) => navigate(`/audit-templates/${id}/edit`)}
           onApply={(gs, meta) => {
-            updateSections((ss) => [...ss, ...mapAISectionsToLocal(gs, ss.length)])
+            updateSections((ss) => [
+              ...ss,
+              ...mapAISectionsToLocal(gs, ss.length, meta?.standardSuggestions),
+            ])
             if (meta?.briefId || meta?.sourceCaseRefs?.length) {
               setTemplate((prev) => {
                 const tags = new Set(prev.tags || [])
@@ -1146,8 +1153,62 @@ export default function AuditTemplateBuilder() {
               })
             }
             setShowAIAssist(false)
+            setChallengeBrief(meta?.brief)
+            setShowChallengeCoach(true)
           }}
         />
+      )}
+
+      {showChallengeCoach && (
+        <CheckChallengeCoach
+          sections={template.sections}
+          brief={challengeBrief}
+          templateId={templateId ? Number(templateId) : undefined}
+          onClose={() => setShowChallengeCoach(false)}
+          onApplySections={(mergedSections) => {
+            updateSections(() =>
+              template.sections.map((s) => {
+                const patched = mergedSections.find((m) => String(m.id) === s.id)
+                const patchedQuestions = Array.isArray(patched?.questions)
+                  ? (patched.questions as Array<Record<string, unknown>>)
+                  : []
+                if (!patched) return s
+                return {
+                  ...s,
+                  questions: s.questions.map((q) => {
+                    const pq = patchedQuestions.find((x) => String(x.id) === q.id)
+                    if (!pq) return q
+                    return {
+                      ...q,
+                      text: typeof pq.text === 'string' ? pq.text : q.text,
+                      guidance: typeof pq.guidance === 'string' ? pq.guidance : q.guidance,
+                      weight: typeof pq.weight === 'number' ? pq.weight : q.weight,
+                      riskLevel: (pq.riskLevel as Question['riskLevel']) ?? q.riskLevel,
+                      evidenceRequired:
+                        typeof pq.evidenceRequired === 'boolean' ? pq.evidenceRequired : q.evidenceRequired,
+                      isoClause: typeof pq.isoClause === 'string' ? pq.isoClause : q.isoClause,
+                    }
+                  }),
+                }
+              }),
+            )
+          }}
+        />
+      )}
+
+      {!showAIAssist && !showChallengeCoach && template.sections.some((s) => s.questions.length > 0) && (
+        <button
+          type="button"
+          onClick={() => {
+            setChallengeBrief(undefined)
+            setShowChallengeCoach(true)
+          }}
+          className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 px-4 py-3 rounded-full bg-primary text-primary-foreground shadow-lg hover:opacity-90"
+          data-testid="open-check-challenge-coach"
+        >
+          <ShieldAlert className="w-4 h-4" />
+          {t('auditChallenge.openCoach', { defaultValue: 'Check & Challenge' })}
+        </button>
       )}
     </div>
   )
