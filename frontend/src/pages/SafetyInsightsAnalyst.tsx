@@ -83,14 +83,16 @@ export default function SafetyInsightsAnalyst() {
 
   useEffect(() => {
     if (!run || !['queued', 'running'].includes(run.status)) return
+    const runId = run.id
     const timer = window.setInterval(() => {
       void safetyInsightsApi
-        .getRun(run.id)
+        .getRun(runId)
         .then((res) => setRun(res.data))
         .catch(() => undefined)
     }, 2000)
     return () => window.clearInterval(timer)
-  }, [run])
+    // Depend on id/status only — progress payload updates must not reset the timer.
+  }, [run?.id, run?.status])
 
   const corpusRatios = useMemo(() => {
     const corpus = (run?.ratios as { corpus?: Record<string, unknown> } | null)?.corpus

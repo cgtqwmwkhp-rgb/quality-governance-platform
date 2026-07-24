@@ -189,7 +189,8 @@ async def list_near_misses(
     import math
 
     id_list: list[int] | None = None
-    if ids:
+    # Guard: unit tests may invoke the handler with FastAPI Query defaults unbound.
+    if isinstance(ids, str) and ids.strip():
         try:
             id_list = [int(part.strip()) for part in ids.split(",") if part.strip()]
         except ValueError as exc:
