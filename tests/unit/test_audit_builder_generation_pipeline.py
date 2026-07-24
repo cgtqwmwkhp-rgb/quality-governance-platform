@@ -56,6 +56,8 @@ def test_normalize_sections_coerces_bad_types_and_drops_empty():
 
 @pytest.mark.asyncio
 async def test_pipeline_uses_gemini_then_claude(monkeypatch):
+    monkeypatch.setenv("AUDIT_BUILDER_SYNC_QUALITY_PASS", "1")
+
     class FakeGemini:
         def is_configured(self):
             return True
@@ -112,6 +114,43 @@ async def test_pipeline_uses_gemini_then_claude(monkeypatch):
     assert result["sections"][0]["title"] == "Improved"
     assert result["models_used"]["quality_pass"] == "claude-sonnet-4-5"
     assert result["models_used"]["generate"]
+
+
+@pytest.mark.asyncio
+async def test_pipeline_skips_claude_by_default_for_sync_budget(monkeypatch):
+    monkeypatch.delenv("AUDIT_BUILDER_SYNC_QUALITY_PASS", raising=False)
+
+    class FakeGemini:
+        def is_configured(self):
+            return True
+
+        async def prompt_to_template(self, prompt: str):
+            return [
+                {
+                    "id": "section-1",
+                    "title": "Draft",
+                    "questions": [
+                        {
+                            "id": "q1",
+                            "text": "Question",
+                            "type": "yes_no",
+                            "required": True,
+                            "weight": 1,
+                            "riskLevel": "low",
+                        }
+                    ],
+                }
+            ]
+
+    async def fake_quality(self, *, sections, brief, prompt_excerpt):
+        raise AssertionError("quality pass must not run when sync budget skip is default")
+
+    monkeypatch.setattr(AuditBuilderGenerationPipeline, "_claude_quality_pass", fake_quality)
+    pipe = AuditBuilderGenerationPipeline(gemini=FakeGemini())
+    result = await pipe.generate(prompt="x", brief={})
+    assert result["quality_pass_available"] is False
+    assert result["quality_pass_notes"] == "quality_pass_skipped_sync_budget"
+    assert result["sections"][0]["title"] == "Draft"
 
 
 @pytest.mark.asyncio
@@ -196,6 +235,8 @@ async def test_quality_pass_truncation_preserves_unsliced_sections(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_pipeline_fail_soft_without_claude(monkeypatch):
+    monkeypatch.setenv("AUDIT_BUILDER_SYNC_QUALITY_PASS", "1")
+
     class FakeGemini:
         def is_configured(self):
             return True

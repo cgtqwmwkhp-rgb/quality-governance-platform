@@ -540,9 +540,13 @@ async def generate_from_brief(
             detail=AI_TEMPLATE_UNAVAILABLE_DETAIL,
         ) from exc
 
-    # Optional post-generate Assist Map suggestions (Wave 3) — fail-closed
+    # Optional post-generate Assist Map suggestions (Wave 3) — fail-closed.
+    # Cap work + wall time so this never pushes the response past Azure's ~230s
+    # HTTP gateway timeout (which surfaces in the browser as a CORS/Network Error).
     suggestions: list[dict[str, Any]] = []
     try:
+        import asyncio
+
         questions = []
         for sec in sections or []:
             for q in sec.get("questions") or []:
@@ -555,13 +559,16 @@ async def generate_from_brief(
             for s in request.brief.get("standards") or []:
                 if "Planet" in s and "Planet Mark" not in schemes:
                     schemes.append("Planet Mark")
-            suggestions = await builder_standard_link_service.suggest_for_questions(
-                db,
-                questions=questions[:80],
-                schemes=schemes,
-                tenant_id=tenant_id,
+            suggestions = await asyncio.wait_for(
+                builder_standard_link_service.suggest_for_questions(
+                    db,
+                    questions=questions[:20],
+                    schemes=schemes,
+                    tenant_id=tenant_id,
+                ),
+                timeout=20.0,
             )
-    except Exception:  # noqa: BLE001 — fail-closed
+    except Exception:  # noqa: BLE001 — fail-closed (incl. TimeoutError)
         suggestions = []
 
     return {

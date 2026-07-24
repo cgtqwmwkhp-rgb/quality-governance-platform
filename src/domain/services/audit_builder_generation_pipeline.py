@@ -8,6 +8,7 @@ Perplexity research is already attached on the brief. This pipeline:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -16,6 +17,12 @@ from typing import Any, Optional
 from src.domain.services.gemini_ai_service import GeminiAIService
 
 logger = logging.getLogger(__name__)
+
+# Azure App Service front-end hard-caps HTTP ~230s. Claude quality-pass is
+# fail-soft and optional on the sync path so Gemini can return before the
+# gateway aborts (browser then reports a misleading CORS/Network Error).
+_DEFAULT_SYNC_QUALITY_PASS = "0"
+_DEFAULT_QUALITY_PASS_TIMEOUT_S = "45"
 
 QUESTION_TYPES = (
     "yes_no",
@@ -116,14 +123,30 @@ class AuditBuilderGenerationPipeline:
 
         quality_available = False
         quality_notes: Optional[str] = None
-        improved, quality_available, quality_model, quality_notes = await self._claude_quality_pass(
-            sections=sections,
-            brief=brief or {},
-            prompt_excerpt=prompt[:2500],
-        )
-        if quality_available and improved:
-            sections = improved
-            models_used["quality_pass"] = quality_model
+        if self._sync_quality_pass_enabled():
+            timeout_s = self._quality_pass_timeout_s()
+            try:
+                improved, quality_available, quality_model, quality_notes = await asyncio.wait_for(
+                    self._claude_quality_pass(
+                        sections=sections,
+                        brief=brief or {},
+                        prompt_excerpt=prompt[:2500],
+                    ),
+                    timeout=timeout_s,
+                )
+            except asyncio.TimeoutError:
+                logger.info("Claude quality pass skipped: timed out after %.0fs", timeout_s)
+                improved, quality_available, quality_model, quality_notes = (
+                    None,
+                    False,
+                    None,
+                    "quality_pass_timeout",
+                )
+            if quality_available and improved:
+                sections = improved
+                models_used["quality_pass"] = quality_model
+        else:
+            quality_notes = "quality_pass_skipped_sync_budget"
 
         return {
             "sections": sections,
@@ -131,6 +154,18 @@ class AuditBuilderGenerationPipeline:
             "quality_pass_available": quality_available,
             "quality_pass_notes": quality_notes,
         }
+
+    @staticmethod
+    def _sync_quality_pass_enabled() -> bool:
+        raw = (os.getenv("AUDIT_BUILDER_SYNC_QUALITY_PASS") or _DEFAULT_SYNC_QUALITY_PASS).strip().lower()
+        return raw in ("1", "true", "yes", "on")
+
+    @staticmethod
+    def _quality_pass_timeout_s() -> float:
+        try:
+            return max(5.0, float(os.getenv("AUDIT_BUILDER_QUALITY_PASS_TIMEOUT_S") or _DEFAULT_QUALITY_PASS_TIMEOUT_S))
+        except ValueError:
+            return float(_DEFAULT_QUALITY_PASS_TIMEOUT_S)
 
     async def _claude_quality_pass(
         self,
@@ -188,12 +223,13 @@ Rules:
 - Strengthen guidance with assessor 'what good looks like' notes.
 - Return JSON only: {{"sections":[...]}}
 """
+            # Keep well under Azure's ~230s HTTP ceiling when quality-pass is enabled.
             text = await client.complete(
                 user,
                 system_prompt=system,
                 temperature=0.2,
                 max_tokens=8000,
-                timeout=120.0,
+                timeout=float(os.getenv("AUDIT_BUILDER_QUALITY_PASS_TIMEOUT_S") or _DEFAULT_QUALITY_PASS_TIMEOUT_S),
             )
             text = (text or "").strip()
             if text.startswith("```"):
