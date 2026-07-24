@@ -417,7 +417,6 @@ class SearchService:
                         date=str(cmp.created_at or ""),
                         relevance=relevance,
                         highlights=[w for w in words if w in title_lower or w in desc_lower],
-                        entity_id=cmp.id,
                     )
                 )
         except (AttributeError, SQLAlchemyError, ValueError) as e:
