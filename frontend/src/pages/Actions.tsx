@@ -175,6 +175,7 @@ type SourceTypeFilter =
   | 'complaint'
   | 'investigation'
   | 'rta'
+  | 'near_miss'
   | 'ncr'
   | 'capa_incident'
   | 'capa_complaint'
@@ -1015,6 +1016,7 @@ export default function Actions() {
             <SelectItem value="complaint">Complaints</SelectItem>
             <SelectItem value="investigation">Investigations</SelectItem>
             <SelectItem value="rta">RTAs</SelectItem>
+            <SelectItem value="near_miss">Near Misses</SelectItem>
             <SelectItem value="ncr">NCR / defects (CAPA)</SelectItem>
             <SelectItem value="capa_incident">CAPA (incident-linked)</SelectItem>
             <SelectItem value="capa_complaint">CAPA (complaint-linked)</SelectItem>
@@ -1644,6 +1646,7 @@ export default function Actions() {
                         <SelectItem value="investigation">Investigation</SelectItem>
                         <SelectItem value="audit_finding">Audit Finding</SelectItem>
                         <SelectItem value="rta">RTA</SelectItem>
+                        <SelectItem value="near_miss">Near Miss</SelectItem>
                         <SelectItem value="complaint">Complaint</SelectItem>
                       </SelectContent>
                     </Select>

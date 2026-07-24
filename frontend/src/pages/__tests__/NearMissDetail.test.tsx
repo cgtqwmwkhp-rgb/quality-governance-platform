@@ -67,7 +67,17 @@ vi.mock('../../components/case/RunningSheetPanel', () => ({
 vi.mock('../../components/ui/Tabs', () => ({
   Tabs: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   TabsList: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  TabsTrigger: ({ children }: { children: ReactNode }) => <button type="button">{children}</button>,
+  TabsTrigger: ({
+    children,
+    ...rest
+  }: {
+    children: ReactNode
+    'data-testid'?: string
+  }) => (
+    <button type="button" data-testid={rest['data-testid']}>
+      {children}
+    </button>
+  ),
   TabsContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }))
 
@@ -116,7 +126,13 @@ describe('NearMissDetail investigation → CAPA honesty', () => {
       },
     })
     ;(client.actionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { items: [{ id: 1 }, { id: 2 }], total: 2 },
+      data: {
+        items: [
+          { id: 1, title: 'CAPA 1', status: 'open' },
+          { id: 2, title: 'CAPA 2', status: 'in_progress' },
+        ],
+        total: 2,
+      },
     })
 
     render(
@@ -131,11 +147,15 @@ describe('NearMissDetail investigation → CAPA honesty', () => {
       expect(screen.getByTestId('near-miss-investigation-21')).toBeInTheDocument()
     })
     expect(screen.getByTestId('near-miss-capa-count')).toHaveTextContent('2')
+    expect(screen.getByTestId('near-miss-actions-tab')).toBeInTheDocument()
 
     fireEvent.click(screen.getByTestId('near-miss-investigation-21'))
     expect(mockNavigate).toHaveBeenCalledWith('/investigations/21')
 
     fireEvent.click(screen.getByTestId('near-miss-capa-handoff-cta'))
+    expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=near_miss&sourceId=5')
+
+    fireEvent.click(screen.getByTestId('near-miss-open-capa'))
     expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=near_miss&sourceId=5')
   })
 

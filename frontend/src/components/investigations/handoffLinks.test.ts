@@ -35,6 +35,8 @@ describe('investigation hand-off links', () => {
     )
     expect(getCapaLink('incident', 11)).toBe('/actions?sourceType=incident&sourceId=11')
     expect(getCapaLink('near_miss', 3)).toBe('/actions?sourceType=near_miss&sourceId=3')
+    expect(getCapaLink('rta', 42)).toBe('/actions?sourceType=rta&sourceId=42')
+    expect(getCapaLink('complaint', 9)).toBe('/actions?sourceType=complaint&sourceId=9')
   })
 
   it('builds create deep-link with locked investigation parent + returnTo', () => {
@@ -55,6 +57,8 @@ describe('investigation hand-off links', () => {
     expect(getCapaHandoffLabelKey('incident', 1)).toBe('incidents.detail.open_capa')
     expect(getCapaHandoffLabelKey('investigation', 3)).toBe('investigations.handoff.open_capa')
     expect(getCapaHandoffLabelKey('near_miss', 2)).toBe('near_misses.detail.open_capa')
+    expect(getCapaHandoffLabelKey('complaint', 1)).toBe('complaints.detail.open_capa')
+    expect(getCapaHandoffLabelKey('rta', 4)).toBe('rtas.detail.open_capa')
   })
 })
 
@@ -65,12 +69,15 @@ describe('action source reverse deep-links', () => {
     ['investigation', 21, '/investigations/21', 'actions.view_investigation'],
     ['audit_finding', 42, '/audits?view=findings&findingId=42', 'actions.view_finding'],
     ['near_miss', 3, '/near-misses/3', 'actions.view_near_miss'],
+    ['rta', 42, '/rtas/42', 'actions.view_rta'],
+    ['complaint', 9, '/complaints/9', 'actions.view_complaint'],
+    ['capa_complaint', 9, '/complaints/9', 'actions.view_complaint'],
   ] as const)('maps %s/%s to %s', (sourceType, sourceId, href, labelKey) => {
     expect(getActionSourceLink(sourceType, sourceId)).toMatchObject({ href, labelKey })
   })
 
   it('returns null for unknown types or non-positive ids', () => {
-    expect(getActionSourceLink('complaint', 9)).toBeNull()
+    expect(getActionSourceLink('unknown_source', 9)).toBeNull()
     expect(getActionSourceLink('incident', 0)).toBeNull()
     expect(getActionSourceLink('incident', null)).toBeNull()
     expect(getActionSourceLink(undefined, 5)).toBeNull()

@@ -47,7 +47,18 @@ vi.mock('../../components/ui/Tabs', () => ({
     <div data-testid="incident-tabs" data-default-tab={defaultValue}>{children}</div>
   ),
   TabsList: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  TabsTrigger: ({ children }: { children: ReactNode }) => <button type="button">{children}</button>,
+  TabsTrigger: ({
+    children,
+    ...rest
+  }: {
+    children: ReactNode
+    value?: string
+    'data-testid'?: string
+  }) => (
+    <button type="button" data-testid={rest['data-testid']}>
+      {children}
+    </button>
+  ),
   TabsContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }))
 
@@ -183,11 +194,11 @@ describe('IncidentDetail', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'incidents.detail.open_investigation' })[0])
     expect(mockNavigate).toHaveBeenCalledWith('/investigations/21')
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'incidents.detail.open_capa' })[0])
+    fireEvent.click(screen.getByTestId('incident-open-capa'))
     expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=incident&sourceId=11')
   })
 
-  it('offers Create CAPA in the handoff card when no actions are linked', async () => {
+  it('offers Add Action (RTA parity) when no actions are linked', async () => {
     client.actionsApi.list.mockResolvedValue({ data: { items: [] } })
 
     renderPage()
@@ -196,12 +207,12 @@ describe('IncidentDetail', () => {
       expect(screen.getByRole('heading', { name: 'Loader slip' })).toBeInTheDocument()
     })
 
-    const createCapa = screen.getByTestId('incident-capa-handoff-cta')
-    expect(createCapa).toHaveTextContent('investigations.handoff.create_action')
-    expect(screen.queryByText('incidents.detail.no_capa_handoff')).not.toBeInTheDocument()
-
-    fireEvent.click(createCapa)
-    expect(mockNavigate).toHaveBeenCalledWith('/actions?sourceType=incident&sourceId=11')
+    expect(screen.queryByTestId('incident-capa-handoff-cta')).not.toBeInTheDocument()
+    expect(
+      screen.getByText('No CAPA actions linked yet — use Add Action to create one.'),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('incident-add-action')).toBeInTheDocument()
+    expect(screen.getByTestId('incident-actions-tab')).toBeInTheDocument()
   })
 
   it('surfaces incident evidence assets instead of relying only on reporter metadata', async () => {
@@ -241,9 +252,14 @@ describe('IncidentDetail', () => {
 
     expect(screen.getByTestId('incident-capa-count')).toHaveTextContent('—')
     expect(toast.error).toHaveBeenCalled()
-    expect(screen.getByTestId('incident-capa-handoff-cta')).toHaveTextContent(
-      'investigations.handoff.create_action',
-    )
+    expect(screen.queryByTestId('incident-capa-handoff-cta')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('No CAPA actions linked yet — use Add Action to create one.'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getAllByText('CAPA actions could not be loaded — counts may be incomplete.').length,
+    ).toBeGreaterThan(0)
+    expect(screen.getByTestId('incident-actions-tab')).toHaveTextContent('—')
   })
 
   it('hosts StandardsAssessmentPanel like Near Miss (incident entity)', async () => {

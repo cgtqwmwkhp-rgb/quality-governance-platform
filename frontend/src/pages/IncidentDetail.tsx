@@ -15,9 +15,7 @@ import {
   MapPin,
   Calendar,
   FileText,
-  Plus,
   FlaskConical,
-  CheckCircle,
   Loader2,
   ClipboardList,
   Pencil,
@@ -82,7 +80,11 @@ import {
 import { cn } from '../helpers/utils'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import { AssetPicker } from '../components/AssetPicker'
-import { getCapaHandoffLabelKey, getCapaLink } from '../components/investigations/handoffLinks'
+import { getCapaLink } from '../components/investigations/handoffLinks'
+import {
+  CaseCapaActionsPanel,
+  CaseCapaHeaderButton,
+} from '../components/case/CaseCapaActionsPanel'
 import { parseLinkedRiskIds, riskRegisterHref, severityAllowsRaiseRisk } from './incidentRiskLinks'
 import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
 
@@ -873,16 +875,15 @@ export default function IncidentDetail() {
                 <Pencil className="w-4 h-4 mr-2" />
                 {t('edit')}
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => navigate(capaHref)}
+              <CaseCapaHeaderButton
+                sourceType="incident"
+                actionsCount={actionsLoadFailed ? 0 : actions.length}
+                capaHref={capaHref}
+                onAdd={() => setShowActionModal(true)}
+                onOpenCapa={() => navigate(capaHref)}
                 disabled={actionsLoading}
-              >
-                <ClipboardList className="w-4 h-4 mr-2" />
-                {t(getCapaHandoffLabelKey('incident', actionsLoadFailed ? 0 : actions.length), {
-                  count: actions.length,
-                })}
-              </Button>
+                testIdPrefix="incident"
+              />
               <Button
                 onClick={() =>
                   investigationHref ? navigate(investigationHref) : setShowInvestigationModal(true)
@@ -960,6 +961,10 @@ export default function IncidentDetail() {
           <TabsTrigger value="standards">Standards</TabsTrigger>
           <TabsTrigger value="submission">Reporter Submission</TabsTrigger>
           <TabsTrigger value="running-sheet">Running Sheet</TabsTrigger>
+          <TabsTrigger value="actions" data-testid="incident-actions-tab">
+            <ClipboardList className="w-4 h-4 mr-1.5" />
+            {t('incidents.tabs.actions', 'Actions')} ({capaCountLabel})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
@@ -1515,87 +1520,7 @@ export default function IncidentDetail() {
                 </CardContent>
               </Card>
 
-              {/* Actions Card */}
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <ClipboardList className="w-5 h-5 text-primary" />
-                    {t('incidents.detail.actions_count', { count: actions.length })}
-                  </CardTitle>
-                  <Button variant="outline" size="sm" onClick={() => setShowActionModal(true)}>
-                    <Plus className="w-4 h-4 mr-1" />
-                    {t('incidents.detail.add')}
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  {actions.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p>{t('incidents.detail.no_actions')}</p>
-                      <p className="text-sm">{t('incidents.detail.no_actions_hint')}</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {actions.slice(0, 5).map((action) => (
-                        <div
-                          key={action.id}
-                          className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors"
-                          onClick={() => handleOpenAction(action)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              handleOpenAction(action)
-                            }
-                          }}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={cn(
-                                'w-8 h-8 rounded-lg flex items-center justify-center',
-                                action.status === 'completed'
-                                  ? 'bg-success/10 text-success'
-                                  : action.status === 'cancelled'
-                                    ? 'bg-destructive/10 text-destructive'
-                                    : 'bg-warning/10 text-warning',
-                              )}
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <p className="font-medium text-foreground">{action.title}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {action.due_date
-                                  ? t('incidents.detail.due_date_value', {
-                                      date: new Date(action.due_date).toLocaleDateString(),
-                                    })
-                                  : t('incidents.detail.no_due_date')}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge
-                              variant={
-                                action.status === 'completed'
-                                  ? 'resolved'
-                                  : action.status === 'cancelled'
-                                    ? 'destructive'
-                                    : action.status === 'in_progress'
-                                      ? 'in-progress'
-                                      : 'secondary'
-                              }
-                            >
-                              {action.status.replace(/_/g, ' ')}
-                            </Badge>
-                            <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              {/* CAPA list lives on the Actions tab (RTA parity). */}
             </div>
 
             {/* Right Column - Timeline & Quick Actions */}
@@ -1747,20 +1672,26 @@ export default function IncidentDetail() {
                         ? t('incidents.detail.open_investigation')
                         : t('incidents.detail.start_investigation')}
                     </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => navigate(capaHref)}
-                      disabled={actionsLoading}
-                      data-testid="incident-capa-handoff-cta"
-                    >
-                      <ClipboardList className="w-4 h-4 mr-2" />
-                      {t(
-                        getCapaHandoffLabelKey('incident', actionsLoadFailed ? 0 : actions.length),
-                        {
+                    {actionsLoadFailed || actionsLoading ? null : actions.length > 0 ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => navigate(capaHref)}
+                        data-testid="incident-capa-handoff-cta"
+                      >
+                        <ClipboardList className="w-4 h-4 mr-2" />
+                        {t('incidents.detail.open_capa', {
                           count: actions.length,
-                        },
-                      )}
-                    </Button>
+                          defaultValue: `Open CAPA (${actions.length})`,
+                        })}
+                      </Button>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center">
+                        {t(
+                          'incidents.detail.no_capa_handoff',
+                          'No CAPA actions linked yet — use Add Action to create one.',
+                        )}
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -1897,6 +1828,18 @@ export default function IncidentDetail() {
               referenceNumber: incident.reference_number,
               entrySnippet: runningSheet[0]?.content,
             })}
+          />
+        </TabsContent>
+
+        <TabsContent value="actions" className="mt-6">
+          <CaseCapaActionsPanel
+            sourceType="incident"
+            actions={actions}
+            onAdd={() => setShowActionModal(true)}
+            onOpen={handleOpenAction}
+            testIdPrefix="incident"
+            loading={actionsLoading}
+            unavailable={actionsLoadFailed}
           />
         </TabsContent>
       </Tabs>

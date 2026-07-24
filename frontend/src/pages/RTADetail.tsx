@@ -14,7 +14,6 @@ import {
   FileText,
   Plus,
   FlaskConical,
-  CheckCircle,
   Loader2,
   ClipboardList,
   History,
@@ -81,6 +80,8 @@ import {
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
+import { getCapaLink } from '../components/investigations/handoffLinks'
+import { CaseCapaActionsPanel } from '../components/case/CaseCapaActionsPanel'
 
 const MAX_EVIDENCE_FILE_SIZE_BYTES = 50 * 1024 * 1024
 const SUPPORTED_EVIDENCE_MIME_PREFIXES = ['image/', 'video/']
@@ -576,7 +577,7 @@ export default function RTADetail() {
   const investigationHref = latestInvestigation
     ? `/investigations/${latestInvestigation.id}`
     : null
-  const capaHref = `/actions?sourceType=rta&sourceId=${rta.id}`
+  const capaHref = getCapaLink('rta', rta.id)
 
   // ──────────────────────── RENDER ────────────────────────
 
@@ -1381,60 +1382,13 @@ export default function RTADetail() {
 
         {/* ────── ACTIONS TAB ────── */}
         <TabsContent value="actions">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <ClipboardList className="w-5 h-5 text-primary" />
-                {t('rtas.detail.actions_count', { count: actions.length })}
-              </CardTitle>
-              <Button variant="outline" size="sm" onClick={() => setShowActionModal(true)}>
-                <Plus className="w-4 h-4 mr-1" />{t('common.add')}
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {actions.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>{t('rtas.detail.no_actions')}</p>
-                  <p className="text-sm">{t('rtas.detail.no_actions_description')}</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {actions.map((action) => (
-                    <div
-                      key={action.id}
-                      className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors"
-                      onClick={() => handleOpenAction(action)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpenAction(action) } }}
-                      role="button"
-                      tabIndex={0}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          'w-8 h-8 rounded-lg flex items-center justify-center',
-                          action.status === 'completed' ? 'bg-success/10 text-success' : action.status === 'cancelled' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning',
-                        )}>
-                          <CheckCircle className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-foreground">{action.title}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {action.due_date ? t('rtas.detail.due', { date: new Date(action.due_date).toLocaleDateString() }) : t('rtas.detail.no_due_date')}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={action.status === 'completed' ? 'resolved' : action.status === 'cancelled' ? 'destructive' : action.status === 'in_progress' ? 'in-progress' : ('secondary' as any)}>
-                          {action.status.replace(/_/g, ' ')}
-                        </Badge>
-                        <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <CaseCapaActionsPanel
+            sourceType="rta"
+            actions={actions}
+            onAdd={() => setShowActionModal(true)}
+            onOpen={handleOpenAction}
+            testIdPrefix="rta"
+          />
         </TabsContent>
       </Tabs>
 

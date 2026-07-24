@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "174 kB",
+    "limit": "175 kB",
     "gzip": true,
-    "name": "index: 171→174 kB — AI Audit Builder wizard + case entry points"
+    "name": "index: 174→175 kB — CAPA case tabs parity shared panel wiring"
   },
   {
     "path": "dist/assets/vendor-*.js",
