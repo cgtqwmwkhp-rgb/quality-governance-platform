@@ -21,6 +21,13 @@ import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../../components/ui/DropdownMenu'
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -69,7 +76,6 @@ export default function FormsList() {
   const [forms, setForms] = useState<FormTemplateListItem[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState<string | null>(null)
-  const [activeMenu, setActiveMenu] = useState<number | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -109,7 +115,6 @@ export default function FormsList() {
 
   const handleDelete = (id: number) => {
     setDeleteTarget(id)
-    setActiveMenu(null)
   }
 
   const confirmDelete = async () => {
@@ -127,7 +132,6 @@ export default function FormsList() {
 
   const handleDuplicate = async (form: FormTemplateListItem) => {
     setActionError(null)
-    setActiveMenu(null)
     try {
       const source = await formConfigApi.getTemplate(form.id)
       const copySlug = `${source.slug}-copy-${Date.now()}`
@@ -186,7 +190,6 @@ export default function FormsList() {
 
   const togglePublish = async (form: FormTemplateListItem) => {
     setActionError(null)
-    setActiveMenu(null)
     try {
       const updated = form.is_published
         ? await formConfigApi.updateTemplate(form.id, { is_published: false })
@@ -357,52 +360,44 @@ export default function FormsList() {
                     <span>v{form.version}</span>
                   </div>
 
-                  {/* Actions Menu */}
+                  {/* Actions Menu — portaled so it is not clipped by card overflow */}
                   <div className="absolute top-4 right-4">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setActiveMenu(activeMenu === form.id ? null : form.id)
-                      }}
-                      className="p-2 hover:bg-muted rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                    </button>
-
-                    {activeMenu === form.id && (
-                      <div
-                        className="absolute right-0 top-full mt-1 w-48 bg-card border border-border rounded-xl shadow-lg z-10 overflow-hidden"
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
-                        }}
-                      >
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
                         <button
-                          onClick={() => navigate(`/admin/forms/${form.id}`)}
-                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-2 hover:bg-muted rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                          aria-label="Form actions"
+                        >
+                          <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-48"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <DropdownMenuItem
+                          className="gap-2 pl-2"
+                          onSelect={() => navigate(`/admin/forms/${form.id}`)}
                         >
                           <Edit className="w-4 h-4" />
                           Edit Form
-                        </button>
-                        <button
-                          onClick={() => {}}
-                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
-                        >
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="gap-2 pl-2" onSelect={() => {}}>
                           <Eye className="w-4 h-4" />
                           Preview
-                        </button>
-                        <button
-                          onClick={() => void handleDuplicate(form)}
-                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="gap-2 pl-2"
+                          onSelect={() => void handleDuplicate(form)}
                         >
                           <Copy className="w-4 h-4" />
                           Duplicate
-                        </button>
-                        <button
-                          onClick={() => void togglePublish(form)}
-                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="gap-2 pl-2"
+                          onSelect={() => void togglePublish(form)}
                         >
                           {form.is_published ? (
                             <>
@@ -415,17 +410,17 @@ export default function FormsList() {
                               Publish
                             </>
                           )}
-                        </button>
-                        <hr className="border-border" />
-                        <button
-                          onClick={() => handleDelete(form.id)}
-                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="gap-2 pl-2 text-destructive focus:text-destructive"
+                          onSelect={() => handleDelete(form.id)}
                         >
                           <Trash2 className="w-4 h-4" />
                           Delete
-                        </button>
-                      </div>
-                    )}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </Card>
               )

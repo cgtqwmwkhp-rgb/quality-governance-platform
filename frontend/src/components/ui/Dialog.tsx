@@ -38,6 +38,7 @@ const DialogContent = React.forwardRef<
       ref={ref}
       className={cn(
         'fixed left-[50%] top-[50%] z-50 translate-x-[-50%] translate-y-[-50%]',
+        // Selects/menus portal above this (z-[200]); keep shell scroll for long forms.
         'grid w-full max-w-lg max-h-[85vh] gap-4 overflow-y-auto',
         'border border-border bg-card p-5 shadow-lg rounded-xl',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
