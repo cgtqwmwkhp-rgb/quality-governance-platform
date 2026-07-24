@@ -199,12 +199,15 @@ export default function AuditTemplateBuilder() {
     caseTypeParam && Number.isFinite(caseIdParam) && caseIdParam > 0
       ? [{ type: caseTypeParam, id: caseIdParam }]
       : undefined
+  const needsThemePrefill = Number.isFinite(themeIdParam) && themeIdParam > 0
   const [initialCaseRefs, setInitialCaseRefs] = useState<AuditBuilderCasePrefill[] | undefined>(
     seedCaseRefs,
   )
+  // Delay AI wizard until theme case prefill resolves so gather_brief sees cited cases.
+  const [showAIAssist, setShowAIAssist] = useState(openAiParam && !needsThemePrefill)
 
   useEffect(() => {
-    if (!Number.isFinite(themeIdParam) || themeIdParam <= 0) return
+    if (!needsThemePrefill) return
     let cancelled = false
     void safetyInsightsApi
       .themeCases(themeIdParam)
@@ -218,14 +221,16 @@ export default function AuditTemplateBuilder() {
           }))
           .filter((ref: AuditBuilderCasePrefill) => ref.type && Number.isFinite(ref.id) && ref.id > 0)
         if (refs.length) setInitialCaseRefs(refs)
+        if (openAiParam) setShowAIAssist(true)
       })
       .catch(() => {
-        // Keep seedCaseRefs / empty prefill when theme lookup fails.
+        // Open AI anyway with seedCaseRefs / empty prefill when theme lookup fails.
+        if (!cancelled && openAiParam) setShowAIAssist(true)
       })
     return () => {
       cancelled = true
     }
-  }, [themeIdParam])
+  }, [needsThemePrefill, themeIdParam, openAiParam])
 
   const [template, setTemplate] = useState<AuditTemplate>({
     id: templateId || generateId(),
@@ -249,7 +254,6 @@ export default function AuditTemplateBuilder() {
   const [activeTab, setActiveTab] = useState<'builder' | 'settings' | 'preview'>('builder')
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [showAIAssist, setShowAIAssist] = useState(openAiParam)
   const [showPublishDialog, setShowPublishDialog] = useState(false)
   const [backendId, setBackendId] = useState<number | null>(
     templateId && !isNaN(Number(templateId)) ? Number(templateId) : null,

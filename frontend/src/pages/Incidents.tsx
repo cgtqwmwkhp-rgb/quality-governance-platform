@@ -300,7 +300,7 @@ export default function Incidents() {
             const pages =
               typeof pagesRaw === 'number' && pagesRaw >= 1
                 ? pagesRaw
-                : Math.max(1, Math.ceil(total / PAGE_SIZE))
+                : Math.max(1, Math.ceil(total / pageSize))
             setListTotal(total)
             setListPages(pages)
           } else {
