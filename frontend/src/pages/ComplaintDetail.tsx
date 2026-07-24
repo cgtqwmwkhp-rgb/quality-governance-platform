@@ -15,9 +15,7 @@ import {
   Phone,
   Calendar,
   FileText,
-  Plus,
   FlaskConical,
-  CheckCircle,
   Loader2,
   ClipboardList,
   History,
@@ -83,6 +81,11 @@ import {
 import { cn } from '../helpers/utils'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
+import { getCapaLink } from '../components/investigations/handoffLinks'
+import {
+  CaseCapaActionsPanel,
+  CaseCapaHeaderButton,
+} from '../components/case/CaseCapaActionsPanel'
 
 const COMPLAINT_TYPE_VALUES = [
   'product',
@@ -719,10 +722,14 @@ export default function ComplaintDetail() {
                 <Sparkles className="w-4 h-4 mr-2" />
                 {t('auditBuilder.auditThisRisk', 'Audit this risk')}
               </Button>
-              <Button variant="outline" onClick={() => setShowActionModal(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                {t('complaints.detail.add_action')}
-              </Button>
+              <CaseCapaHeaderButton
+                sourceType="complaint"
+                actionsCount={actions.length}
+                capaHref={getCapaLink('complaint', complaint.id)}
+                onAdd={() => setShowActionModal(true)}
+                onOpenCapa={() => navigate(getCapaLink('complaint', complaint.id))}
+                testIdPrefix="complaint"
+              />
               <Button
                 data-testid="complaint-start-investigation"
                 onClick={() => setShowInvestigationModal(true)}
@@ -770,6 +777,10 @@ export default function ComplaintDetail() {
           <TabsTrigger value="standards">Standards</TabsTrigger>
           <TabsTrigger value="submission">Reporter Submission</TabsTrigger>
           <TabsTrigger value="running-sheet">Running Sheet</TabsTrigger>
+          <TabsTrigger value="actions" data-testid="complaint-actions-tab">
+            <ClipboardList className="w-4 h-4 mr-1.5" />
+            {t('complaints.tabs.actions', 'Actions')} ({actions.length})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
@@ -1110,86 +1121,7 @@ export default function ComplaintDetail() {
                 </CardContent>
               </Card>
 
-              {/* Actions Card */}
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <ClipboardList className="w-5 h-5 text-primary" />
-                    {t('complaints.detail.actions')} ({actions.length})
-                  </CardTitle>
-                  <Button variant="outline" size="sm" onClick={() => setShowActionModal(true)}>
-                    <Plus className="w-4 h-4 mr-1" />
-                    {t('complaints.detail.add')}
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  {actions.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p>{t('complaints.detail.no_actions')}</p>
-                      <p className="text-sm">{t('complaints.detail.no_actions_hint')}</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {actions.slice(0, 5).map((action) => (
-                        <div
-                          key={action.id}
-                          className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors"
-                          onClick={() => handleOpenAction(action)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              handleOpenAction(action)
-                            }
-                          }}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={cn(
-                                'w-8 h-8 rounded-lg flex items-center justify-center',
-                                action.status === 'completed'
-                                  ? 'bg-success/10 text-success'
-                                  : action.status === 'cancelled'
-                                    ? 'bg-destructive/10 text-destructive'
-                                    : 'bg-warning/10 text-warning',
-                              )}
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <p className="font-medium text-foreground">{action.title}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {t('complaints.detail.due')}:{' '}
-                                {action.due_date
-                                  ? new Date(action.due_date).toLocaleDateString()
-                                  : t('complaints.detail.no_due_date')}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge
-                              variant={
-                                action.status === 'completed'
-                                  ? 'resolved'
-                                  : action.status === 'cancelled'
-                                    ? 'destructive'
-                                    : action.status === 'in_progress'
-                                      ? 'in-progress'
-                                      : ('secondary' as any)
-                              }
-                            >
-                              {action.status.replace(/_/g, ' ')}
-                            </Badge>
-                            <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              {/* CAPA list lives on the Actions tab (RTA parity). */}
             </div>
 
             {/* Right Column - Quick Info */}
@@ -1283,6 +1215,28 @@ export default function ComplaintDetail() {
                     >
                       {actionsHonesty}
                     </p>
+                  </div>
+                  <div className="flex flex-col gap-2 pt-2 border-t border-border">
+                    {actions.length > 0 ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => navigate(getCapaLink('complaint', complaint.id))}
+                        data-testid="complaint-capa-handoff-cta"
+                      >
+                        <ClipboardList className="w-4 h-4 mr-2" />
+                        {t('complaints.detail.open_capa', {
+                          count: actions.length,
+                          defaultValue: `Open CAPA (${actions.length})`,
+                        })}
+                      </Button>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center">
+                        {t(
+                          'complaints.detail.no_capa_handoff',
+                          'No CAPA actions linked yet — use Add Action to create one.',
+                        )}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Resolution summary</p>
@@ -1417,6 +1371,16 @@ export default function ComplaintDetail() {
             onNewEntryChange={setNewEntry}
             onAddEntry={handleAddEntry}
             onDeleteEntry={handleDeleteEntry}
+          />
+        </TabsContent>
+
+        <TabsContent value="actions" className="mt-6">
+          <CaseCapaActionsPanel
+            sourceType="complaint"
+            actions={actions}
+            onAdd={() => setShowActionModal(true)}
+            onOpen={handleOpenAction}
+            testIdPrefix="complaint"
           />
         </TabsContent>
       </Tabs>

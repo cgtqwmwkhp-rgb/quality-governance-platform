@@ -100,8 +100,15 @@ class SafetyInsightsAnalystService:
         if run.status == SafetyInsightRunStatus.SUCCEEDED:
             return run
         if run.status == SafetyInsightRunStatus.RUNNING:
-            # Another worker already claimed this run; avoid interleaved theme writes.
-            return run
+            # Another live worker owns this run — skip to avoid interleaved theme writes.
+            # Reclaim if the prior worker likely died past Celery soft_time_limit (~540s).
+            started = run.started_at
+            if started is not None:
+                if started.tzinfo is None:
+                    started = started.replace(tzinfo=timezone.utc)
+                age_s = (datetime.now(timezone.utc) - started).total_seconds()
+                if age_s < 560:
+                    return run
 
         run.status = SafetyInsightRunStatus.RUNNING
         run.started_at = datetime.now(timezone.utc)

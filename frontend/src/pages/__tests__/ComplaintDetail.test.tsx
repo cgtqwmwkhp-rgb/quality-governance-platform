@@ -270,6 +270,7 @@ describe('ComplaintDetail', () => {
     client.notificationsApi.getDeliveryStatus.mockResolvedValue({
       data: { email_configured: false },
     })
+    client.actionsApi.list.mockResolvedValue({ data: { items: [] } })
     client.actionsApi.create.mockResolvedValue({
       data: { id: 99, title: 'Call complainant', status: 'open' },
     })
@@ -280,7 +281,7 @@ describe('ComplaintDetail', () => {
       expect(screen.getByRole('heading', { name: 'Late repairs response' })).toBeInTheDocument()
     })
 
-    await userEvent.click(screen.getByRole('button', { name: 'complaints.detail.add_action' }))
+    await userEvent.click(screen.getByTestId('complaint-add-action'))
     expect(await screen.findByTestId('complaint-action-email-unavailable')).toBeInTheDocument()
 
     await userEvent.type(
