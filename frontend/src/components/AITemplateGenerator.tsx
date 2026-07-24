@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import api from '../api/client'
 import { trackError } from '../utils/errorTracker'
 import {
   Sparkles,
@@ -117,19 +118,13 @@ interface SimilarMatch {
 }
 
 // ============================================================================
-// API HELPERS
+// API HELPERS — must use shared axios client (API_BASE_URL + auth).
+// Relative fetch('/api/...') hits Azure Static Web Apps with no backend and returns 405.
 // ============================================================================
 
 async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!response.ok) {
-    throw new Error(`${url} failed: ${response.status}`)
-  }
-  return response.json() as Promise<T>
+  const { data } = await api.post<T>(url, body)
+  return data
 }
 
 async function summariseUpload(file: File, assetHint: string): Promise<string> {
@@ -137,18 +132,11 @@ async function summariseUpload(file: File, assetHint: string): Promise<string> {
     const form = new FormData()
     form.append('file', file)
     if (assetHint) form.append('asset_type', assetHint)
-    const response = await fetch('/api/v1/ai-templates/from-document', {
-      method: 'POST',
-      body: form,
-    })
-    if (!response.ok) {
-      return `Uploaded ${file.name} (summary unavailable)`
-    }
-    const data = (await response.json()) as {
+    const { data } = await api.post<{
       name?: string
       sections?: Array<{ title?: string }>
       summary?: string
-    }
+    }>('/api/v1/ai-templates/from-document', form)
     const sectionTitles = (data.sections || [])
       .map((s) => s.title)
       .filter(Boolean)
@@ -163,10 +151,7 @@ async function summariseUpload(file: File, assetHint: string): Promise<string> {
 async function searchCases(query: string): Promise<Array<{ type: string; id: number; title: string }>> {
   if (query.trim().length < 2) return []
   try {
-    const params = new URLSearchParams({ q: query, page_size: '8' })
-    const response = await fetch(`/api/v1/search?${params.toString()}`)
-    if (!response.ok) return []
-    const data = (await response.json()) as {
+    const { data } = await api.get<{
       results?: Array<{
         id: string
         type: string
@@ -174,7 +159,7 @@ async function searchCases(query: string): Promise<Array<{ type: string; id: num
         module?: string
         entity_id?: number | null
       }>
-    }
+    }>('/api/v1/search', { params: { q: query, page_size: 8 } })
     const allowed = new Set(['incident', 'near_miss', 'rta', 'complaint'])
     return (data.results || [])
       .filter((r) => allowed.has((r.type || '').toLowerCase()))
@@ -401,7 +386,10 @@ export default function AITemplateGenerator({
         }}
       />
 
-      <div className="relative w-full max-w-3xl max-h-[92vh] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div
+        className="relative w-full max-w-3xl max-h-[92vh] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        data-testid="ai-audit-builder-wizard"
+      >
         <div className="flex items-center justify-between p-5 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 bg-primary rounded-xl flex items-center justify-center">
