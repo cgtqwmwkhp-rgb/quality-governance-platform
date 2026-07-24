@@ -1593,7 +1593,7 @@
   "incidents.empty.subtitle": "Create your first incident to get started",
   "incidents.empty.title": "No incidents found",
   "incidents.form.customer": "Customer / contract",
-  "incidents.form.customer_empty": "No customers configured — add them in Admin → Lookups / Contracts.",
+  "incidents.form.customer_empty": "No customers available — add them in Admin → Lookups → Customers.",
   "incidents.form.customer_required": "Select a customer / contract",
   "incidents.form.description": "Description",
   "incidents.form.description_placeholder": "Provide details about what happened…",

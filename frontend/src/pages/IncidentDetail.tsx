@@ -43,6 +43,7 @@ import {
   complianceAutomationApi,
   type Contract,
 } from '../api/client'
+import { CUSTOMERS_LOOKUP_CATEGORY, toCustomerSelectOptions } from './admin/customersCatalog'
 import { trackError } from '../utils/errorTracker'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
@@ -213,9 +214,29 @@ export default function IncidentDetail() {
   ]
   const [typeOptions, setTypeOptions] = useState(defaultTypeOptions)
   const [severityOptions, setSeverityOptions] = useState(defaultSeverityOptions)
-  const [contractOptions, setContractOptions] = useState<Contract[]>([])
+  const [contractOptions, setContractOptions] = useState<Array<{ id: number; name: string }>>([])
   const [medicalOptions, setMedicalOptions] = useState(FALLBACK_MEDICAL_OPTIONS)
   const [emergencyOptions, setEmergencyOptions] = useState(FALLBACK_EMERGENCY_OPTIONS)
+
+  const mergeCustomerContractOptions = (
+    customerItems: Array<{ code: string; label: string; is_active?: boolean }>,
+    contracts: Contract[],
+  ): Array<{ id: number; name: string }> => {
+    const byCode: Record<string, Contract> = {}
+    for (const contract of contracts) {
+      if (contract.code) byCode[contract.code.toLowerCase()] = contract
+    }
+    const fromCustomers = toCustomerSelectOptions(customerItems)
+      .map((option) => {
+        const matched = byCode[option.value.toLowerCase()]
+        if (!matched) return null
+        return { id: matched.id, name: option.label }
+      })
+      .filter((row): row is { id: number; name: string } => row != null)
+    return fromCustomers.length > 0
+      ? fromCustomers
+      : contracts.map((c) => ({ id: c.id, name: c.name }))
+  }
 
   // Action detail modal state
   const [selectedAction, setSelectedAction] = useState<Action | null>(null)
@@ -260,18 +281,22 @@ export default function IncidentDetail() {
   useEffect(() => {
     let cancelled = false
     void Promise.all([
+      lookupsApi.list(CUSTOMERS_LOOKUP_CATEGORY, true).catch(() => ({ items: [], total: 0 })),
       contractsApi.list(true).catch(() => ({ items: [] as Contract[], total: 0 })),
       lookupsApi.list('medical_assistance', true).catch(() => ({ items: [], total: 0 })),
       lookupsApi.list('emergency_services', true).catch(() => ({ items: [], total: 0 })),
-    ]).then(([contractsRes, medicalRes, emergencyRes]) => {
+    ]).then(([customerRes, contractsRes, medicalRes, emergencyRes]) => {
       if (cancelled) return
-      setContractOptions(contractsRes.items || [])
+      setContractOptions(
+        mergeCustomerContractOptions(customerRes.items || [], contractsRes.items || []),
+      )
       setMedicalOptions(mergeLookupSelectOptions(FALLBACK_MEDICAL_OPTIONS, medicalRes.items))
       setEmergencyOptions(mergeLookupSelectOptions(FALLBACK_EMERGENCY_OPTIONS, emergencyRes.items))
     })
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only catalog load
   }, [])
 
   useEffect(() => {
@@ -292,8 +317,9 @@ export default function IncidentDetail() {
       lookupsApi.list('severity_levels', true).catch(() => ({ items: [], total: 0 })),
       lookupsApi.list('medical_assistance', true).catch(() => ({ items: [], total: 0 })),
       lookupsApi.list('emergency_services', true).catch(() => ({ items: [], total: 0 })),
+      lookupsApi.list(CUSTOMERS_LOOKUP_CATEGORY, true).catch(() => ({ items: [], total: 0 })),
       contractsApi.list(true).catch(() => ({ items: [] as Contract[], total: 0 })),
-    ]).then(([typesRes, severityRes, medicalRes, emergencyRes, contractsRes]) => {
+    ]).then(([typesRes, severityRes, medicalRes, emergencyRes, customerRes, contractsRes]) => {
       if (cancelled) return
       setTypeOptions(mergeLookupSelectOptions(defaultTypeOptions, typesRes.items))
       setSeverityOptions(mergeLookupSelectOptions(defaultSeverityOptions, severityRes.items))
@@ -301,7 +327,9 @@ export default function IncidentDetail() {
       const emergency = mergeLookupSelectOptions(FALLBACK_EMERGENCY_OPTIONS, emergencyRes.items)
       setMedicalOptions(medical)
       setEmergencyOptions(emergency)
-      setContractOptions(contractsRes.items || [])
+      setContractOptions(
+        mergeCustomerContractOptions(customerRes.items || [], contractsRes.items || []),
+      )
     })
     return () => {
       cancelled = true

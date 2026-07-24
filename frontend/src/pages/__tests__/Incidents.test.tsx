@@ -49,7 +49,17 @@ vi.mock('../../api/client', () => ({
     create: (...args: unknown[]) => mockCreate(...args),
   },
   lookupsApi: {
-    list: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+    list: vi.fn().mockImplementation(async (category: string) => {
+      if (category === 'customers') {
+        return {
+          items: [
+            { id: 10, category: 'customers', code: 'acme', label: 'Acme Corp', is_active: true },
+          ],
+          total: 1,
+        }
+      }
+      return { items: [], total: 0 }
+    }),
   },
   contractsApi: {
     list: vi.fn().mockResolvedValue({
