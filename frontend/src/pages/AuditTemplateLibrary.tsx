@@ -38,6 +38,13 @@ import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../components/ui/DropdownMenu'
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -115,9 +122,7 @@ export default function AuditTemplateLibrary() {
   type PublishFilter = 'all' | 'published' | 'draft'
   const [publishFilter, setPublishFilter] = useState<PublishFilter>('all')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
-  const [showFilters, setShowFilters] = useState(false)
   const [sortBy, setSortBy] = useState<'name' | 'updated'>('updated')
-  const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const [showArchive, setShowArchive] = useState(false)
 
   // Two-stage delete state
@@ -149,14 +154,6 @@ export default function AuditTemplateLibrary() {
 
   const { toasts, show: showToast, dismiss: dismissToast } = useToast()
   const requestIdRef = useRef(0)
-
-  // Dismiss active menu on outside click
-  useEffect(() => {
-    if (!activeMenu) return
-    const dismiss = () => setActiveMenu(null)
-    document.addEventListener('click', dismiss)
-    return () => document.removeEventListener('click', dismiss)
-  }, [activeMenu])
 
   // Debounce search input
   useEffect(() => {
@@ -217,7 +214,6 @@ export default function AuditTemplateLibrary() {
   const handleArchiveStep1 = useCallback((template: AuditTemplate) => {
     setArchiveTarget(template)
     setArchiveConfirmStep(1)
-    setActiveMenu(null)
   }, [])
 
   const handleArchiveConfirm = useCallback(async () => {
@@ -272,7 +268,6 @@ export default function AuditTemplateLibrary() {
   const handleClone = useCallback(
     async (template: AuditTemplate) => {
       setCloning(template.id)
-      setActiveMenu(null)
       try {
         await auditsApi.cloneTemplate(template.id)
         showToast(`Cloned "${template.name}"`, 'success')
@@ -419,61 +414,45 @@ export default function AuditTemplateLibrary() {
                   {template.is_published ? 'published' : 'draft'}
                 </Badge>
               </div>
-              <div className="relative">
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setActiveMenu(activeMenu === String(template.id) ? null : String(template.id))
-                  }}
-                  aria-label="Template actions"
-                  aria-expanded={activeMenu === String(template.id)}
-                >
-                  <MoreVertical className="w-4 h-4" />
-                </Button>
-                {activeMenu === String(template.id) && (
-                  <Card className="absolute right-0 mt-1 w-44 z-10">
-                    <CardContent className="p-1">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          navigate(`/audit-templates/${template.id}/edit`)
-                          setActiveMenu(null)
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface rounded-lg"
-                      >
-                        <Edit className="w-4 h-4" /> Edit
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleClone(template)
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface rounded-lg"
-                        disabled={cloning === template.id}
-                      >
-                        {cloning === template.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                        Duplicate
-                      </button>
-                      <div className="border-t border-border my-1" />
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleArchiveStep1(template)
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg"
-                      >
-                        <Archive className="w-4 h-4" /> Archive
-                      </button>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Template actions"
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenuItem
+                    className="gap-2 pl-2"
+                    onSelect={() => navigate(`/audit-templates/${template.id}/edit`)}
+                  >
+                    <Edit className="w-4 h-4" /> Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="gap-2 pl-2"
+                    disabled={cloning === template.id}
+                    onSelect={() => handleClone(template)}
+                  >
+                    {cloning === template.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
+                    Duplicate
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="gap-2 pl-2 text-destructive focus:text-destructive"
+                    onSelect={() => handleArchiveStep1(template)}
+                  >
+                    <Archive className="w-4 h-4" /> Archive
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             <h3 className="text-lg font-semibold text-foreground mb-1 line-clamp-2 group-hover:text-primary transition-colors">
@@ -524,7 +503,7 @@ export default function AuditTemplateLibrary() {
         </Card>
       )
     },
-    [activeMenu, cloning, debouncedSearch, handleArchiveStep1, handleClone, navigate],
+    [cloning, debouncedSearch, handleArchiveStep1, handleClone, navigate],
   )
 
   // ============================================================================
@@ -862,43 +841,30 @@ export default function AuditTemplateLibrary() {
             </button>
           </div>
 
-          <div className="relative">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setShowFilters(!showFilters)}
-              aria-expanded={showFilters}
-              aria-label="Sort options"
-            >
-              <Filter className="w-4 h-4" />
-            </Button>
-            {showFilters && (
-              <Card className="absolute right-0 mt-2 w-48 z-10">
-                <CardContent className="p-2">
-                  <p className="text-xs text-muted-foreground px-2 mb-2">Sort by</p>
-                  {[
-                    { id: 'updated' as const, label: 'Last Updated' },
-                    { id: 'name' as const, label: 'Name' },
-                  ].map((option) => (
-                    <button
-                      key={option.id}
-                      onClick={() => {
-                        setSortBy(option.id)
-                        setShowFilters(false)
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                        sortBy === option.id
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-foreground hover:bg-surface'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" aria-label="Sort options">
+                <Filter className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <p className="text-xs text-muted-foreground px-2 py-1.5">Sort by</p>
+              {(
+                [
+                  { id: 'updated' as const, label: 'Last Updated' },
+                  { id: 'name' as const, label: 'Name' },
+                ] as const
+              ).map((option) => (
+                <DropdownMenuItem
+                  key={option.id}
+                  className={cn('pl-2', sortBy === option.id && 'bg-primary/10 text-primary')}
+                  onSelect={() => setSortBy(option.id)}
+                >
+                  {option.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -1067,62 +1033,50 @@ export default function AuditTemplateLibrary() {
                       <td className="px-6 py-4 text-sm text-muted-foreground">
                         {new Date(template.updated_at ?? template.created_at).toLocaleDateString()}
                       </td>
-                      <td className="px-6 py-4 relative">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setActiveMenu(
-                              activeMenu === String(template.id) ? null : String(template.id),
-                            )
-                          }}
-                          aria-label="Actions"
-                          aria-expanded={activeMenu === String(template.id)}
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                        {activeMenu === String(template.id) && (
-                          <Card className="absolute right-0 mt-1 w-44 z-10">
-                            <CardContent className="p-1">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  navigate(`/audit-templates/${template.id}/edit`)
-                                  setActiveMenu(null)
-                                }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface rounded-lg"
-                              >
-                                <Edit className="w-4 h-4" /> Edit
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleClone(template)
-                                }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface rounded-lg"
-                                disabled={cloning === template.id}
-                              >
-                                {cloning === template.id ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <Copy className="w-4 h-4" />
-                                )}
-                                Duplicate
-                              </button>
-                              <div className="border-t border-border my-1" />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleArchiveStep1(template)
-                                }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg"
-                              >
-                                <Archive className="w-4 h-4" /> Archive
-                              </button>
-                            </CardContent>
-                          </Card>
-                        )}
+                      <td className="px-6 py-4">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label="Actions"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            className="w-44"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <DropdownMenuItem
+                              className="gap-2 pl-2"
+                              onSelect={() => navigate(`/audit-templates/${template.id}/edit`)}
+                            >
+                              <Edit className="w-4 h-4" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="gap-2 pl-2"
+                              disabled={cloning === template.id}
+                              onSelect={() => handleClone(template)}
+                            >
+                              {cloning === template.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Copy className="w-4 h-4" />
+                              )}
+                              Duplicate
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="gap-2 pl-2 text-destructive focus:text-destructive"
+                              onSelect={() => handleArchiveStep1(template)}
+                            >
+                              <Archive className="w-4 h-4" /> Archive
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   )
