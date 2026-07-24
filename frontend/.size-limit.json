@@ -3,7 +3,7 @@
     "path": "dist/assets/index-*.js",
     "limit": "177 kB",
     "gzip": true,
-    "name": "index: 174\u2192175 kB \u2014 CAPA case tabs parity shared panel wiring"
+    "name": "index: 175\u2192177 kB \u2014 SharePoint search palette overlay"
   },
   {
     "path": "dist/assets/vendor-*.js",
@@ -12,7 +12,7 @@
   },
   {
     "path": "dist/assets/index-*.css",
-    "limit": "177 kB",
+    "limit": "35 kB",
     "gzip": true
   }
 ]
