@@ -219,6 +219,12 @@ export default function AITemplateGenerator({
   const [generatedSections, setGeneratedSections] = useState<GeneratedSection[] | null>(null)
   const [selectedSections, setSelectedSections] = useState<Set<string>>(new Set())
   const [standardSuggestions, setStandardSuggestions] = useState<unknown[]>([])
+  const [modelsUsed, setModelsUsed] = useState<{
+    research?: string | null
+    generate?: string | null
+    quality_pass?: string | null
+  } | null>(null)
+  const [qualityPassAvailable, setQualityPassAvailable] = useState<boolean | null>(null)
 
   useEffect(() => {
     if (initialCaseRefs?.length) {
@@ -337,7 +343,22 @@ export default function AITemplateGenerator({
         sections: GeneratedSection[]
         standard_suggestions?: unknown[]
         template_id?: number
-        builder_meta?: { brief_id?: string; source_case_refs?: Array<{ type: string; id: number }> }
+        models_used?: {
+          research?: string | null
+          generate?: string | null
+          quality_pass?: string | null
+        }
+        quality_pass_available?: boolean
+        builder_meta?: {
+          brief_id?: string
+          source_case_refs?: Array<{ type: string; id: number }>
+          models_used?: {
+            research?: string | null
+            generate?: string | null
+            quality_pass?: string | null
+          }
+          quality_pass_available?: boolean
+        }
       }>(
         '/api/v1/ai-templates/generate-from-brief',
         {
@@ -357,6 +378,14 @@ export default function AITemplateGenerator({
       setGeneratedSections(sections)
       setSelectedSections(new Set(sections.map((s) => s.id)))
       setStandardSuggestions(data.standard_suggestions || [])
+      setModelsUsed(data.models_used || data.builder_meta?.models_used || null)
+      setQualityPassAvailable(
+        typeof data.quality_pass_available === 'boolean'
+          ? data.quality_pass_available
+          : typeof data.builder_meta?.quality_pass_available === 'boolean'
+            ? data.builder_meta.quality_pass_available
+            : null,
+      )
       setStep('preview')
     } catch (err) {
       const timedOut =
@@ -777,6 +806,20 @@ export default function AITemplateGenerator({
               {standardSuggestions.length > 0 && (
                 <p className="text-xs text-muted-foreground">
                   {t('auditBuilder.standardsSuggested', { count: standardSuggestions.length })}
+                </p>
+              )}
+              {modelsUsed && (
+                <p className="text-xs text-muted-foreground">
+                  {t('auditBuilder.modelsUsed', {
+                    defaultValue:
+                      'Pipeline: research {{research}} · generate {{generate}} · quality {{quality}}',
+                    research: modelsUsed.research || 'offline',
+                    generate: modelsUsed.generate || 'gemini',
+                    quality:
+                      qualityPassAvailable && modelsUsed.quality_pass
+                        ? modelsUsed.quality_pass
+                        : 'skipped',
+                  })}
                 </p>
               )}
               <div className="space-y-3">

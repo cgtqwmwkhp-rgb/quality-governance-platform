@@ -3538,6 +3538,7 @@
   "auditBuilder.errors.qa": "Methu cymhwyso atebion neu ddod o hyd i dempledi tebyg.",
   "auditBuilder.errors.generate": "Methodd y genhedlaeth. Rhowch gynnig arall.",
   "auditBuilder.errors.generateTimeout": "Mae'r genhedlaeth yn dal i redeg ar y gweinydd ond daeth terfyn amser y porwr i ben. Arhoswch funud a cheisiwch Generate eto, neu byrhau'r brîff.",
+  "auditBuilder.modelsUsed": "Pibell: ymchwil {{research}} · creu {{generate}} · ansawdd {{quality}}",
   "auditBuilder.purpose.risk_audit": "Archwiliad wedi'i yrru gan risg",
   "auditBuilder.purpose.technical_assessment": "Asesiad technegol / cymhwysedd",
   "auditBuilder.purpose.vehicle_asset_check": "Gwiriad cerbyd / ased",
