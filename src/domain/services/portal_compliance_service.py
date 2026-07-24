@@ -125,6 +125,10 @@ class PortalComplianceService:
             )
         ).scalar_one_or_none()
         if vehicle is None:
+            if len(claimed) == 1:
+                return profile, claimed[0], None, True, claimed_regs
+            if len(claimed) > 1:
+                return profile, None, "multiple_assigned", True, claimed_regs
             return profile, None, "no_van", False, claimed_regs
 
         conflict = vehicle.assigned_driver_id not in (None, user_id) or (
@@ -132,7 +136,14 @@ class PortalComplianceService:
         )
         # Hard conflict: registry says another driver owns this van — do not trust kit/status.
         if conflict and vehicle.assigned_driver_id not in (None, user_id):
+            if len(claimed) == 1:
+                return profile, claimed[0], None, True, claimed_regs
+            if len(claimed) > 1:
+                return profile, None, "multiple_assigned", True, claimed_regs
             return profile, None, "assignment_conflict", True, claimed_regs
+        # A single registry assignment is authoritative when the profile allocation is stale.
+        if len(claimed) == 1 and allocated not in claimed_regs:
+            return profile, claimed[0], None, True, claimed_regs
         # Soft conflict: multiple claims, but DriverProfile allocation still resolves — keep van,
         # surface conflict so admin can clean up assigned_driver_id duplicates.
         if len(claimed) > 1:
