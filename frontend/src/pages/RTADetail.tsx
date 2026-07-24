@@ -14,7 +14,6 @@ import {
   FileText,
   Plus,
   FlaskConical,
-  CheckCircle,
   Loader2,
   ClipboardList,
   History,
