@@ -10,6 +10,7 @@ from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.services.search_paths import build_search_path
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class SearchResultItem:
         "relevance",
         "highlights",
         "entity_id",
+        "path",
     )
 
     def __init__(
@@ -46,6 +48,7 @@ class SearchResultItem:
         relevance: float,
         highlights: list[str] | None = None,
         entity_id: int | None = None,
+        path: str | None = None,
     ):
         self.id = id
         self.type = type
@@ -57,6 +60,7 @@ class SearchResultItem:
         self.relevance = relevance
         self.highlights = highlights or []
         self.entity_id = entity_id
+        self.path = path or build_search_path(type, entity_id)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -70,6 +74,7 @@ class SearchResultItem:
             "relevance": self.relevance,
             "highlights": self.highlights,
             "entity_id": self.entity_id,
+            "path": self.path,
         }
 
 
@@ -86,6 +91,8 @@ class SearchService:
         tenant_id: int | None,
         module: Optional[str] = None,
         status_filter: Optional[str] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
         page: int = 1,
         page_size: int = 20,
         request_id: str | None = None,
@@ -111,7 +118,11 @@ class SearchService:
         if module:
             all_results = [r for r in all_results if r.module.lower() == module.lower()]
         if status_filter:
-            all_results = [r for r in all_results if r.status.lower() == status_filter.lower()]
+            statuses = {s.strip().lower().replace(" ", "_") for s in status_filter.split(",") if s.strip()}
+            if statuses:
+                all_results = [r for r in all_results if str(r.status).lower().replace(" ", "_") in statuses]
+        if date_from or date_to:
+            all_results = [r for r in all_results if self._within_date_range(r.date, date_from, date_to)]
 
         all_results.sort(key=lambda r: r.relevance, reverse=True)
         total = len(all_results)
@@ -136,6 +147,17 @@ class SearchService:
     @staticmethod
     def _is_short_query(query: str) -> bool:
         return len(query.strip()) <= _SHORT_QUERY_THRESHOLD
+
+    @staticmethod
+    def _within_date_range(value: str, date_from: Optional[str], date_to: Optional[str]) -> bool:
+        if not value:
+            return False
+        day = value[:10]
+        if date_from and day < date_from[:10]:
+            return False
+        if date_to and day > date_to[:10]:
+            return False
+        return True
 
     @staticmethod
     def _ts_query(query: str):
@@ -448,6 +470,7 @@ class SearchService:
                         date=str(risk.created_at or ""),
                         relevance=relevance,
                         highlights=[w for w in words if w in title_lower or w in desc_lower],
+                        entity_id=risk.id,
                     )
                 )
         except (AttributeError, SQLAlchemyError, ValueError) as e:
@@ -487,6 +510,8 @@ class SearchService:
                         date=str(finding.created_at or ""),
                         relevance=self._simple_relevance(query, finding.title, finding.description),
                         highlights=self._highlight_words(query, finding.title, finding.description),
+                        entity_id=finding.id,
+                        path=build_search_path("audit", finding.id, audit_run_id=finding.run_id),
                     )
                 )
         except (AttributeError, SQLAlchemyError, ValueError) as e:
@@ -511,6 +536,7 @@ class SearchService:
             from src.domain.models.investigation import InvestigationAction
             from src.domain.models.rta import RTAAction
 
+            # storage_kind must match unified action_key kinds (capa, not capa_action).
             action_sources = [
                 (
                     IncidentAction,
@@ -538,13 +564,13 @@ class SearchService:
                 ),
                 (
                     CAPAAction,
-                    "capa_action",
+                    "capa",
                     lambda action: action.reference_number or f"CAPA-{action.id}",
                     lambda action: action.created_at,
                 ),
             ]
 
-            for model, action_type, id_builder, date_builder in action_sources:
+            for model, storage_kind, id_builder, date_builder in action_sources:
                 stmt = (
                     select(model)
                     .where(model.tenant_id == tenant_id)
@@ -566,7 +592,13 @@ class SearchService:
                             ),
                             date=str(date_builder(action) or ""),
                             relevance=self._simple_relevance(query, action.title, action.description),
-                            highlights=self._highlight_words(query, action.title, action.description) + [action_type],
+                            highlights=self._highlight_words(query, action.title, action.description) + [storage_kind],
+                            entity_id=action.id,
+                            path=build_search_path(
+                                "action",
+                                action.id,
+                                action_key_kind=storage_kind,
+                            ),
                         )
                     )
         except (AttributeError, SQLAlchemyError, ValueError) as e:
@@ -626,6 +658,7 @@ class SearchService:
                             document.description,
                             document.ai_summary,
                         ),
+                        entity_id=document.id,
                     )
                 )
         except (AttributeError, SQLAlchemyError, ValueError) as e:

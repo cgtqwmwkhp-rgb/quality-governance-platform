@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 const mockSearch = vi.fn()
 const mockInterpret = vi.fn()
 
-vi.mock('../../api/client', () => ({
+vi.mock('../../../api/client', () => ({
   searchApi: {
     search: (...args: unknown[]) => mockSearch(...args),
     interpret: (...args: unknown[]) => mockInterpret(...args),
@@ -13,11 +14,8 @@ vi.mock('../../api/client', () => ({
   getApiErrorMessage: (error: unknown) => (error instanceof Error ? error.message : 'Search failed'),
 }))
 
-vi.mock('../../contexts/ToastContext', () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-  },
+vi.mock('../../../contexts/ToastContext', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
 }))
 
 vi.mock('react-i18next', () => ({
@@ -28,7 +26,7 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
 
-describe('GlobalSearch', () => {
+describe('GlobalSearchPalette', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockInterpret.mockResolvedValue({
@@ -45,9 +43,9 @@ describe('GlobalSearch', () => {
     })
     mockSearch.mockResolvedValue({
       data: {
-        total: 2,
+        total: 1,
         query: 'policy',
-        facets: { modules: { Documents: 1, Incidents: 1 } },
+        facets: { modules: { Documents: 1 } },
         results: [
           {
             id: 'DOC-1',
@@ -62,68 +60,64 @@ describe('GlobalSearch', () => {
             entity_id: 1,
             path: '/documents/1',
           },
-          {
-            id: 'INC-1',
-            type: 'incident',
-            title: 'Policy breach incident',
-            description: 'An incident linked to an outdated policy',
-            module: 'Incidents',
-            status: 'open',
-            date: '2026-03-18T10:00:00Z',
-            relevance: 80,
-            highlights: ['policy'],
-            entity_id: 2,
-            path: '/incidents/2',
-          },
         ],
       },
     })
   })
 
-  it('searches via interpret then FTS and shows suggested searches', async () => {
-    const GlobalSearch = (await import('../GlobalSearch')).default
+  it('closes on Escape and navigates when a result is selected', async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+    const GlobalSearchPalette = (await import('../GlobalSearchPalette')).default
 
     render(
-      <MemoryRouter>
-        <GlobalSearch />
+      <MemoryRouter initialEntries={['/rtas/5']}>
+        <Routes>
+          <Route
+            path="*"
+            element={<GlobalSearchPalette open onOpenChange={onOpenChange} />}
+          />
+        </Routes>
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('Suggested searches')).toBeInTheDocument()
-    expect(screen.getByText('Overdue actions')).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
 
+    await user.keyboard('{Escape}')
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+
+    onOpenChange.mockClear()
     fireEvent.change(screen.getByPlaceholderText(/Search incidents/i), {
       target: { value: 'policy' },
     })
     fireEvent.click(screen.getByRole('button', { name: /^Search$/ }))
 
     expect(await screen.findByText('Controlled Policy')).toBeInTheDocument()
-    expect(mockInterpret).toHaveBeenCalledWith('policy')
-    expect(mockSearch).toHaveBeenCalledWith(
-      expect.objectContaining({ q: 'policy', page: 1, page_size: 100 }),
-    )
+    await user.click(screen.getByText('Controlled Policy'))
+
+    await waitFor(() => {
+      expect(onOpenChange).toHaveBeenCalledWith(false)
+    })
   })
 
-  it('passes module filter to the API when selected', async () => {
-    const GlobalSearch = (await import('../GlobalSearch')).default
+  it('runs a structured suggestion search for high-priority incidents', async () => {
+    const user = userEvent.setup()
+    const GlobalSearchPalette = (await import('../GlobalSearchPalette')).default
 
     render(
       <MemoryRouter>
-        <GlobalSearch />
+        <GlobalSearchPalette open onOpenChange={vi.fn()} />
       </MemoryRouter>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle filters' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Documents' }))
-
-    fireEvent.change(screen.getByPlaceholderText(/Search incidents/i), {
-      target: { value: 'policy' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: /^Search$/ }))
+    await user.click(screen.getByText('High-priority incidents'))
 
     await waitFor(() => {
       expect(mockSearch).toHaveBeenCalledWith(
-        expect.objectContaining({ q: 'policy', module: 'Documents' }),
+        expect.objectContaining({
+          q: 'critical high',
+          module: 'Incidents',
+        }),
       )
     })
   })
