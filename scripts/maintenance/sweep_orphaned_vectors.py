@@ -95,19 +95,25 @@ def classify(
     return plan
 
 
-async def list_vector_ids(service: VectorSearchService, namespace: str = "") -> list[str]:
-    """Enumerate every vector ID in the index.
+async def list_vector_ids(service: VectorSearchService) -> list[str]:
+    """Enumerate every vector ID in the index's default namespace.
 
     ``/vectors/list`` is serverless-only, which is also why cleanup deletes by ID
     rather than by metadata filter — see delete_vectors_by_id.
+
+    There is deliberately no namespace option. ``upsert_chunks`` never sets one, so
+    every vector this app writes lives in the default namespace (production: 305
+    vectors, one namespace). Worse, adding the flag here alone would be actively
+    destructive: ``delete_vectors_by_id`` sends no namespace, so listing namespace
+    "x" and deleting its IDs would remove the identically-named *live* vectors from
+    the default namespace and leave the real orphans untouched. Thread the namespace
+    through the delete path first, or not at all.
     """
     ids: list[str] = []
     token: str | None = None
     async with httpx.AsyncClient(timeout=30.0) as client:
         while True:
             params: dict[str, str | int] = {"limit": _LIST_PAGE_SIZE}
-            if namespace:
-                params["namespace"] = namespace
             if token:
                 params["paginationToken"] = token
             response = await client.get(
@@ -161,7 +167,7 @@ async def _run(args: argparse.Namespace) -> int:
         print("PINECONE_API_KEY is not set — refusing to report 'no orphans' from an unconfigured index")
         return 2
 
-    vector_ids = await list_vector_ids(service, namespace=args.namespace)
+    vector_ids = await list_vector_ids(service)
     live_chunks, live_documents, skip_documents = await load_sql_state()
     plan = classify(
         vector_ids,
@@ -184,7 +190,6 @@ async def _run(args: argparse.Namespace) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--apply", action="store_true", help="delete the orphans instead of reporting them")
-    parser.add_argument("--namespace", default="", help="Pinecone namespace (default: the unnamed one)")
     args = parser.parse_args()
     try:
         return asyncio.run(_run(args))

@@ -8,7 +8,9 @@ decision for each class of ID the index can contain.
 
 from __future__ import annotations
 
-from scripts.maintenance.sweep_orphaned_vectors import classify
+import inspect
+
+from scripts.maintenance.sweep_orphaned_vectors import classify, list_vector_ids
 
 
 def _classify(vector_ids, *, live_chunks=frozenset(), live_documents=frozenset(), skip_documents=frozenset()):
@@ -89,3 +91,16 @@ def test_chunk_index_is_matched_exactly_not_by_document_alone() -> None:
     plan = _classify(["doc_2_chunk_10"], live_chunks={(2, 0)}, live_documents={2})
 
     assert plan.orphans == {"doc_2_chunk_10": "missing-chunk"}
+
+
+def test_listing_takes_no_namespace() -> None:
+    """Listing one namespace while deleting from another would destroy live vectors.
+
+    ``delete_vectors_by_id`` sends no namespace, so it always deletes from the default
+    one. Because vector IDs are deterministic, the same ID exists in every namespace
+    holding that document — so enumerating namespace "x" and deleting its orphan IDs
+    would remove the *live* copies from the default namespace and leave the real
+    orphans in place. The app never sets a namespace, so there is nothing to support:
+    if this parameter comes back, thread it through the delete path in the same change.
+    """
+    assert "namespace" not in inspect.signature(list_vector_ids).parameters
