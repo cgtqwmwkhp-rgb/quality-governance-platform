@@ -172,6 +172,7 @@ class ComplaintResponse(BaseModel):
     owner_id: Optional[int] = None
     reporter_submission: Optional[dict[str, Any]] = None
     witnesses_structured: Optional[dict[str, Any]] = None
+    linked_risk_ids: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     closed_at: Optional[datetime] = None
