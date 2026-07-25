@@ -398,21 +398,32 @@ async def test_find_documents_for_query_drops_orphaned_vector_hits(monkeypatch: 
 
 
 @pytest.mark.asyncio
-async def test_find_documents_for_query_returns_empty_when_all_hits_are_orphans(
+async def test_all_orphan_hits_fall_through_to_the_keyword_search(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """An index that returns only orphans has told us nothing, not "no matches".
+
+    Returning empty here would silently drop the ILIKE fallback that exists for
+    precisely the case where the vector index yields nothing usable.
+    """
     service = GovernedKnowledgeService()
     monkeypatch.setattr(
         service,
         "_vector_service",
         SimpleNamespace(search=AsyncMock(return_value=[{"metadata": {"document_id": 404}, "score": 0.95}])),
     )
+    no_live_ids = MagicMock()
+    no_live_ids.scalars.return_value.all.return_value = []
+    keyword_hit = MagicMock()
+    keyword_hit.scalars.return_value.all.return_value = [77]
     db = AsyncMock()
-    live_result = MagicMock()
-    live_result.scalars.return_value.all.return_value = []
-    db.execute = AsyncMock(return_value=live_result)
+    db.execute = AsyncMock(side_effect=[no_live_ids, keyword_hit])
 
-    assert await service._find_documents_for_query(db, "clause text", 3) == []
+    matches = await service._find_documents_for_query(db, "clause text", 3)
+
+    # The orphan is gone and it did not mask the live keyword match.
+    assert matches == [(77, 60.0)]
+    assert db.execute.await_count == 2
 
 
 @pytest.mark.asyncio

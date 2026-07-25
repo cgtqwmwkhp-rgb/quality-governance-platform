@@ -698,7 +698,12 @@ class GovernedKnowledgeService:
                 if doc_id is not None:
                     score = float(hit.get("score", 0)) * 100
                     matches.append((int(doc_id), score))
-            return await self._drop_orphaned_matches(db, matches, tenant_id)
+            live_matches = await self._drop_orphaned_matches(db, matches, tenant_id)
+            if live_matches:
+                return live_matches
+            # Every hit was an orphan, so the vector index told us nothing usable —
+            # the ILIKE search below exists for exactly that case.
+            matches = []
 
         pattern = f"%{query_text[:80]}%"
         result = await db.execute(
