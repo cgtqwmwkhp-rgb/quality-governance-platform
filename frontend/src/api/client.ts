@@ -19,6 +19,7 @@ import { createPoliciesApi } from './policiesClient'
 import { createRtasApi } from './rtasClient'
 import { createHsKpisApi } from './hsKpisClient'
 import { createSafetyInsightsApi } from './safetyInsightsClient'
+import { createAuditChallengeApi } from './auditChallengeClient'
 import { createComplaintsApi } from './complaintsClient'
 import { createNearMissesApi } from './nearMissesClient'
 import { createRisksApi } from './risksClient'
@@ -998,6 +999,7 @@ export const incidentsApi = createIncidentsApi(api)
 export const rtasApi = createRtasApi(api)
 export const hsKpisApi = createHsKpisApi(api)
 export const safetyInsightsApi = createSafetyInsightsApi(api)
+export const auditChallengeApi = createAuditChallengeApi(api)
 export type {
   DeepRunCreatePayload,
   SafetyInsightCaseRef,

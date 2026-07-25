@@ -9,18 +9,23 @@ Provides Gemini-powered endpoints for:
 - Builder multi-scheme standard-link suggest + confirm persist (MAP-01..04)
 """
 
+import logging
+import os
 from typing import Annotated, Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from pydantic import AliasChoices, BaseModel, Field
 
-from src.api.dependencies import DbSession, require_permission
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import require_tenant_id
 from src.domain.models.user import User
 from src.domain.services.builder_standard_link_service import DEFAULT_LIBRARY_VERSION, builder_standard_link_service
 from src.domain.services.gemini_ai_service import GeminiAIService
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+challenge_router = APIRouter()
 
 # Allowed content types for document upload (PDF, images for OCR)
 ALLOWED_DOCUMENT_CONTENT_TYPES = {
@@ -172,6 +177,28 @@ class GenerateFromBriefRequest(BaseModel):
 class ResearchRequest(BaseModel):
     query: Optional[str] = Field(None, max_length=2000)
     brief: Optional[dict[str, Any]] = None
+
+
+class ChallengeSessionCreateRequest(BaseModel):
+    """Start a Check & Challenge coach session over a template snapshot."""
+
+    sections: list[dict[str, Any]] = Field(..., min_length=1, max_length=200)
+    brief: Optional[dict[str, Any]] = None
+    chip_id: Optional[str] = Field(None, max_length=80)
+    message: Optional[str] = Field(None, max_length=4000)
+    template_id: Optional[int] = Field(None, ge=1)
+
+
+class ChallengeMessageRequest(BaseModel):
+    """Follow-up chat turn on an existing session."""
+
+    message: str = Field(..., min_length=1, max_length=4000)
+    chip_id: Optional[str] = Field(None, max_length=80)
+
+
+class ChallengeDecideRequest(BaseModel):
+    decision: Literal["accept", "reject", "edit", "pending"]
+    edited_after: Optional[dict[str, Any]] = None
 
 
 # ============ Endpoints ============
@@ -589,3 +616,182 @@ async def generate_from_brief(
             "quality_pass_notes": pipeline_result.get("quality_pass_notes"),
         },
     }
+
+
+# ============ Check & Challenge coach (async, Azure-safe) ============
+
+
+def _dispatch_challenge_run(
+    *,
+    background_tasks: BackgroundTasks,
+    session_id: int,
+    tenant_id: int,
+    user_id: Optional[int],
+) -> None:
+    """Enqueue Celery, or schedule inline processing off the request path."""
+    from src.infrastructure.tasks.audit_challenge_tasks import (
+        process_audit_challenge_session,
+        process_audit_challenge_session_inline,
+    )
+
+    inline = os.environ.get("AUDIT_CHALLENGE_INLINE", "").strip().lower() in {"1", "true", "yes"}
+    if not inline:
+        try:
+            process_audit_challenge_session.delay(session_id, tenant_id, user_id)
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Audit challenge Celery enqueue failed (%s); falling back to background inline",
+                type(exc).__name__,
+            )
+    # Never block the HTTP request — the pipeline can call out to Claude/Gemini/Perplexity.
+    background_tasks.add_task(process_audit_challenge_session_inline, session_id, tenant_id, user_id)
+
+
+@challenge_router.post("/sessions")
+async def create_challenge_session(
+    request: ChallengeSessionCreateRequest,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
+) -> dict[str, Any]:
+    """Start an async Check & Challenge coach session over a template snapshot."""
+    from src.domain.services.audit_challenge_service import AuditChallengeService
+
+    tenant_id = require_tenant_id(getattr(user, "tenant_id", None))
+    service = AuditChallengeService(db)
+    session = await service.create_session(
+        tenant_id=tenant_id,
+        user_id=user.id,
+        sections=request.sections,
+        brief=request.brief,
+        chip_id=request.chip_id,
+        user_message=request.message,
+        template_id=request.template_id,
+    )
+    # Persist the queued row before Celery workers / background tasks can claim it.
+    await db.commit()
+    await db.refresh(session)
+    try:
+        _dispatch_challenge_run(
+            background_tasks=background_tasks,
+            session_id=session.id,
+            tenant_id=tenant_id,
+            user_id=user.id,
+        )
+    except Exception as exc:
+        from src.domain.models.audit_challenge import AuditChallengeSessionStatus
+
+        fresh = await service.get_session(session.id, tenant_id)
+        if fresh is not None and fresh.status == AuditChallengeSessionStatus.QUEUED:
+            fresh.status = AuditChallengeSessionStatus.FAILED
+            fresh.error_code = (type(exc).__name__)[:100]
+            fresh.error_detail = str(exc)[:2000]
+            fresh.progress_message = "Failed"
+        await db.commit()
+        raise
+    fresh = await service.get_session(session.id, tenant_id)
+    return await service.serialize_session(fresh or session)
+
+
+@challenge_router.get("/sessions/{session_id}")
+async def get_challenge_session(
+    session_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict[str, Any]:
+    """Poll status, turns, and proposals for a Check & Challenge coach session."""
+    from src.domain.services.audit_challenge_service import AuditChallengeService
+
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    service = AuditChallengeService(db)
+    session = await service.get_session(session_id, tenant_id)
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    return await service.serialize_session(session)
+
+
+@challenge_router.post("/sessions/{session_id}/messages")
+async def send_challenge_message(
+    session_id: int,
+    request: ChallengeMessageRequest,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
+) -> dict[str, Any]:
+    """Follow-up chat turn — enqueues the next critic/author cycle."""
+    from src.domain.services.audit_challenge_service import AuditChallengeService
+
+    tenant_id = require_tenant_id(getattr(user, "tenant_id", None))
+    service = AuditChallengeService(db)
+    try:
+        session = await service.enqueue_follow_up(
+            session_id=session_id,
+            tenant_id=tenant_id,
+            user_id=user.id,
+            message=request.message,
+            chip_id=request.chip_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    await db.commit()
+    await db.refresh(session)
+    _dispatch_challenge_run(
+        background_tasks=background_tasks,
+        session_id=session.id,
+        tenant_id=tenant_id,
+        user_id=user.id,
+    )
+    fresh = await service.get_session(session.id, tenant_id)
+    return await service.serialize_session(fresh or session)
+
+
+@challenge_router.post("/sessions/{session_id}/proposals/{proposal_id}/decide")
+async def decide_challenge_proposal(
+    session_id: int,
+    proposal_id: int,
+    request: ChallengeDecideRequest,
+    db: DbSession,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
+) -> dict[str, Any]:
+    """Accept / reject / edit a single proposal."""
+    from src.domain.services.audit_challenge_service import AuditChallengeService
+
+    tenant_id = require_tenant_id(getattr(user, "tenant_id", None))
+    service = AuditChallengeService(db)
+    try:
+        proposal = await service.decide_proposal(
+            session_id=session_id,
+            proposal_id=proposal_id,
+            tenant_id=tenant_id,
+            decision=request.decision,
+            edited_after=request.edited_after,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        code = status.HTTP_404_NOT_FOUND if "NOT_FOUND" in detail else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=code, detail=detail) from exc
+    await db.commit()
+    return service.serialize_proposal(proposal)
+
+
+@challenge_router.post("/sessions/{session_id}/apply")
+async def apply_challenge_session(
+    session_id: int,
+    db: DbSession,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
+) -> dict[str, Any]:
+    """Merge accepted/edited proposals into the template snapshot's sections."""
+    from src.domain.services.audit_challenge_service import AuditChallengeService
+
+    tenant_id = require_tenant_id(getattr(user, "tenant_id", None))
+    service = AuditChallengeService(db)
+    try:
+        result = await service.apply_accepted(session_id=session_id, tenant_id=tenant_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    await db.commit()
+    return result
+
+
+router.include_router(challenge_router, prefix="/challenge")

@@ -579,9 +579,9 @@ et-xmlfile==2.0.0 \
     --hash=sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa \
     --hash=sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54
     # via openpyxl
-fastapi==0.139.2 \
-    --hash=sha256:333145a6891e9b5b3cfceb69baf817e8240cde4d4588ae5a10bf56ffacb6255e \
-    --hash=sha256:b9ad015a835173d59865e2f5d8296fbc2b317bf56a2ba1a5bfbdd03de2fd4b1c
+fastapi==0.140.0 \
+    --hash=sha256:e951c0a0d9540bf5d9a2a9e078fd415da2ab7e312d435139e7d9e2e7fe9f0b23 \
+    --hash=sha256:f338951b82fd74ca8f843163aec43ea1a1ce84d515415a50fa98fa25572a5544
     # via -r requirements.txt
 fonttools==4.63.0 \
     --hash=sha256:032038247a96c1690f9f31e377c389383c902531b085aa4e4dabd6f57f870e69 \
