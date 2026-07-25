@@ -803,7 +803,11 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install 'celery[redis]' redis
           # Staging worker App Service is provisioned and returns pong — fail closed (no --allow-missing).
-          python3 scripts/celery/smoke_inspect_ping.py --retries 4 --sleep 5
+          # The deploy above restarts the worker and does not wait for it, so this must outlast a
+          # cold container start: an observed redeploy left the worker unreachable for 5m10s
+          # (warm shutdown 16:41:21 → "celery@... ready." 16:46:31), while a 4x5s budget gave up
+          # after ~60s. Exits on the first pong, so a healthy worker costs nothing extra.
+          python3 scripts/celery/smoke_inspect_ping.py --retries 30 --sleep 10
           echo "Celery ping step complete (fail-closed)"
 
       - name: Email config honesty smoke (Lane 1)
