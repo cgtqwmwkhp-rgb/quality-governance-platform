@@ -113,6 +113,18 @@ deploy_one() {
 
   az webapp restart --name "$name" --resource-group "$RESOURCE_GROUP" --output none
   echo "✅ Celery $role updated"
+
+  # The restart above is exactly when stdout capture to /home/LogFiles has been observed to
+  # die and stay dead, so warn if this app has no diagnostic setting to fall back on. Only
+  # a warning: an unobservable worker is still a working worker, and provisioning owns the
+  # fix (provision-celery-workers.sh). Read-only, so it cannot fail the deploy.
+  if ! az monitor diagnostic-settings list \
+      --resource "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Web/sites/$name" \
+      --query "[?contains(to_string(logs[?enabled].category), 'AppServiceConsoleLogs')] | [0].name" \
+      -o tsv 2>/dev/null | grep -q .; then
+    echo "⚠️  $name has no AppServiceConsoleLogs diagnostic setting — its Celery output may"
+    echo "   be unreadable after this restart. Re-run scripts/infra/provision-celery-workers.sh."
+  fi
 }
 
 deploy_one "$WORKER_WEBAPP_NAME" worker "bash scripts/celery/start_worker.sh"

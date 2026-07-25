@@ -53,6 +53,30 @@ Local:
 docker compose --profile celery up --build celery-worker celery-beat
 ```
 
+## Reading worker logs
+
+Do not rely on `az webapp log download` for worker or beat. Stdout capture to
+`/home/LogFiles/*_containerStream.log` has been seen to stop at a restart and never resume —
+prod's stopped mid-day and stayed dead across ~44 restarts, so the app appeared silent while
+it was in fact running tasks normally. Query Log Analytics instead (`celery-logs` diagnostic
+setting, created by `provision-celery-workers.sh`):
+
+```bash
+WSID=$(az monitor log-analytics workspace show -g rg-qgp-prod \
+  -n workspace-rgqgpprodFJuX --query customerId -o tsv)
+az monitor log-analytics query --workspace "$WSID" --analytics-query "
+AppServiceConsoleLogs
+| where TimeGenerated > ago(1h)
+| where _ResourceId has 'app-qgp-prod-worker'
+| project TimeGenerated, ResultDescription
+| order by TimeGenerated desc"
+```
+
+Useful filters: `has 'succeeded in'` for completions, `has 'different loop'` for the
+cross-event-loop failure fixed in #1285, `has 'engine pool'` for the NullPool line logged at
+worker startup. When logs are unavailable entirely, `inspect stats` reports per-task
+completion counts straight from the running worker, which needs no log sink at all.
+
 ## Cutover checklist
 
 1. [ ] Provision worker + beat sites (script or `az deployment group` with `infra/main.bicep`)
