@@ -77,6 +77,7 @@ if _strict_celery:
 # Django-style ``tasks.tasks`` module and silently skips these siblings, leaving
 # the worker registry empty (inspect ping still works; send_email → NotRegistered).
 CELERY_TASK_MODULES = (
+    "src.infrastructure.tasks.audit_challenge_tasks",
     "src.infrastructure.tasks.cleanup_tasks",
     "src.infrastructure.tasks.competency_tasks",
     "src.infrastructure.tasks.dlq_replay",

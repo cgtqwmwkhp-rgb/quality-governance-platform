@@ -16,7 +16,9 @@ import {
   ChevronLeft,
   Link2,
   FileText,
+  ShieldAlert,
 } from 'lucide-react'
+import CheckChallengeCoach from './auditChallenge/CheckChallengeCoach'
 
 // ============================================================================
 // TYPES
@@ -54,6 +56,7 @@ interface AITemplateGeneratorProps {
       briefId?: string
       sourceCaseRefs?: Array<{ type: string; id: number }>
       standardSuggestions?: unknown[]
+      brief?: Record<string, unknown>
     },
   ) => void
   onClose: () => void
@@ -228,6 +231,7 @@ export default function AITemplateGenerator({
     quality_pass?: string | null
   } | null>(null)
   const [qualityPassAvailable, setQualityPassAvailable] = useState<boolean | null>(null)
+  const [showChallengeCoach, setShowChallengeCoach] = useState(false)
 
   useEffect(() => {
     if (initialCaseRefs?.length) {
@@ -425,6 +429,7 @@ export default function AITemplateGenerator({
       briefId: brief?.brief_id,
       sourceCaseRefs: brief?.case_refs,
       standardSuggestions,
+      brief: brief ? (brief as unknown as Record<string, unknown>) : undefined,
     })
   }, [brief, generatedSections, onApply, selectedSections, standardSuggestions])
 
@@ -808,11 +813,22 @@ export default function AITemplateGenerator({
 
           {step === 'preview' && generatedSections && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-success" />
-                <span className="font-medium">
-                  {t('auditBuilder.generatedCount', { count: generatedSections.length })}
-                </span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-success" />
+                  <span className="font-medium">
+                    {t('auditBuilder.generatedCount', { count: generatedSections.length })}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowChallengeCoach(true)}
+                  className="px-3 py-1.5 rounded-lg text-xs border border-border bg-secondary hover:border-primary/40 inline-flex items-center gap-1.5"
+                  data-testid="open-check-challenge-coach-preview"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  {t('auditChallenge.openCoach', { defaultValue: 'Check & Challenge' })}
+                </button>
               </div>
               {standardSuggestions.length > 0 && (
                 <p className="text-xs text-muted-foreground">
@@ -971,6 +987,42 @@ export default function AITemplateGenerator({
           </div>
         </div>
       </div>
+
+      {showChallengeCoach && generatedSections && (
+        <CheckChallengeCoach
+          sections={generatedSections.filter((s) => selectedSections.has(s.id))}
+          brief={brief ? (brief as unknown as Record<string, unknown>) : undefined}
+          onClose={() => setShowChallengeCoach(false)}
+          onApplySections={(mergedSections) => {
+            setGeneratedSections((prev) =>
+              (prev || []).map((s) => {
+                const patched = mergedSections.find((m) => String(m.id) === s.id)
+                const patchedQuestions = Array.isArray(patched?.questions)
+                  ? (patched.questions as Array<Record<string, unknown>>)
+                  : []
+                if (!patched) return s
+                return {
+                  ...s,
+                  questions: s.questions.map((q) => {
+                    const pq = patchedQuestions.find((x) => String(x.id) === q.id)
+                    if (!pq) return q
+                    return {
+                      ...q,
+                      text: typeof pq.text === 'string' ? pq.text : q.text,
+                      guidance: typeof pq.guidance === 'string' ? pq.guidance : q.guidance,
+                      weight: typeof pq.weight === 'number' ? pq.weight : q.weight,
+                      riskLevel: typeof pq.riskLevel === 'string' ? pq.riskLevel : q.riskLevel,
+                      evidenceRequired:
+                        typeof pq.evidenceRequired === 'boolean' ? pq.evidenceRequired : q.evidenceRequired,
+                      isoClause: typeof pq.isoClause === 'string' ? pq.isoClause : q.isoClause,
+                    }
+                  }),
+                }
+              }),
+            )
+          }}
+        />
+      )}
     </div>
   )
 }

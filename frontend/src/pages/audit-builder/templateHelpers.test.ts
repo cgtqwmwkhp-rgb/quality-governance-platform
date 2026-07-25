@@ -7,6 +7,7 @@ import {
   buildApplicabilityRulesPayload,
   getUnpublishableQuestionIssues,
   isPublishableQuestionType,
+  mapAISectionsToLocal,
   remapConditionalLogicSourceIds,
 } from './templateHelpers'
 
@@ -280,6 +281,55 @@ describe('templateHelpers', () => {
     expect(remapConditionalLogicSourceIds(null, {})).toBeNull()
     expect(remapConditionalLogicSourceIds(undefined, {})).toBeUndefined()
     expect(remapConditionalLogicSourceIds([], { a: 1 })).toEqual([])
+  })
+
+  it('mapAISectionsToLocal merges Assist Map standard suggestions into matching questions', () => {
+    const sections = mapAISectionsToLocal(
+      [
+        {
+          id: 'section-1',
+          title: 'Forklift checks',
+          description: '',
+          questions: [
+            { id: 'question-1-1', text: 'Are forks free of cracks?', type: 'yes_no', required: true, weight: 1 },
+            { id: 'question-1-2', text: 'Is the mast lubricated?', type: 'yes_no', required: true, weight: 1 },
+          ],
+        },
+      ],
+      0,
+      [
+        {
+          id: 'sug_1',
+          questionId: 'question-1-1',
+          scheme: 'ISO',
+          refId: 'ISO-45001-8.1.1',
+          label: 'Operational planning and control',
+          confidence: 0.82,
+        },
+        // Unrelated question id should not attach a link anywhere.
+        { id: 'sug_2', questionId: 'question-9-9', scheme: 'ISO', refId: 'ISO-9001-4.1', label: 'Context' },
+      ],
+    )
+
+    const [withLink, withoutLink] = sections[0].questions
+    expect(withLink.standardLinks).toEqual([
+      expect.objectContaining({
+        questionId: 'question-1-1',
+        scheme: 'ISO',
+        refId: 'ISO-45001-8.1.1',
+        status: 'suggested',
+      }),
+    ])
+    expect(withoutLink.standardLinks).toEqual([])
+  })
+
+  it('mapAISectionsToLocal tolerates missing/empty standardSuggestions', () => {
+    const sections = mapAISectionsToLocal(
+      [{ id: 's1', title: 'S1', description: '', questions: [{ id: 'q1', text: 'Q1', type: 'yes_no', required: true, weight: 1 }] }],
+      2,
+    )
+    expect(sections[0].order).toBe(2)
+    expect(sections[0].questions[0].standardLinks).toEqual([])
   })
 
   it('buildSectionPayload carries applicability_rules through to the API payload', () => {

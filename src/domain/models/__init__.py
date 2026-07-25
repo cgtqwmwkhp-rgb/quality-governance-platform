@@ -47,6 +47,14 @@ from src.domain.models.audit import (
     TemplateLifecycleStatus,
     TemplateVersion,
 )
+from src.domain.models.audit_challenge import (
+    AuditChallengeProposal,
+    AuditChallengeProposalDecision,
+    AuditChallengeSession,
+    AuditChallengeSessionStatus,
+    AuditChallengeTurn,
+    AuditChallengeTurnRole,
+)
 from src.domain.models.base import AuditTrailMixin, Base, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 from src.domain.models.capa import CAPAAction
 from src.domain.models.competence_gap import (
@@ -325,6 +333,13 @@ __all__ = [
     "TemplateVersion",
     "TemplateLifecycleStatus",
     "QuestionCriticality",
+    # Audit Builder Check & Challenge coach
+    "AuditChallengeSession",
+    "AuditChallengeSessionStatus",
+    "AuditChallengeTurn",
+    "AuditChallengeTurnRole",
+    "AuditChallengeProposal",
+    "AuditChallengeProposalDecision",
     # Risk models
     "Risk",
     "OperationalRiskControl",
