@@ -8,8 +8,8 @@ Near Miss has historically stored the customer/contract as a free-text
 ``contract`` string (a customers-lookup code, e.g. "ukpn"). This adds a
 ``contract_id`` FK to ``contracts.id`` — the same golden-thread pattern used
 by Incident and Complaint — and backfills it by matching the legacy
-``contract`` string against ``contracts.code``/``contracts.name`` (tenant or
-global rows). The legacy ``contract`` column is kept as-is for read
+``contract`` string against ``contracts.code``/``contracts.name`` for the
+same tenant. The legacy ``contract`` column is kept as-is for read
 compatibility during the transition; it is not dropped or made nullable.
 """
 
@@ -24,6 +24,31 @@ revision: str = "20260816_nm_contract_fk"
 down_revision: Union[str, Sequence[str], None] = "20260815_safety_insights"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
+
+TENANT_BACKFILL_SQL = """
+UPDATE near_misses
+SET contract_id = (
+    SELECT c.id
+    FROM contracts c
+    WHERE c.tenant_id = near_misses.tenant_id
+      AND (
+            lower(c.code) = lower(near_misses.contract)
+            OR lower(c.name) = lower(near_misses.contract)
+          )
+    ORDER BY c.id ASC
+    LIMIT 1
+)
+WHERE near_misses.contract_id IS NULL
+  AND near_misses.contract IS NOT NULL
+  AND EXISTS (
+        SELECT 1 FROM contracts c
+        WHERE c.tenant_id = near_misses.tenant_id
+          AND (
+                lower(c.code) = lower(near_misses.contract)
+                OR lower(c.name) = lower(near_misses.contract)
+              )
+  )
+"""
 
 
 def upgrade() -> None:
@@ -41,35 +66,10 @@ def upgrade() -> None:
     )
     op.create_index("ix_near_misses_contract_id", "near_misses", ["contract_id"])
 
-    # Backfill: match legacy `contract` code/name string to a contracts row
-    # scoped to the near-miss's tenant (or a global/null-tenant contract).
+    # Backfill: match the legacy `contract` code/name only within the
+    # near miss's tenant, matching runtime contract ownership validation.
     # Written as a portable correlated subquery (works on SQLite + Postgres).
-    op.execute(
-        """
-        UPDATE near_misses
-        SET contract_id = (
-            SELECT c.id
-            FROM contracts c
-            WHERE (c.tenant_id = near_misses.tenant_id OR c.tenant_id IS NULL)
-              AND (
-                    lower(c.code) = lower(near_misses.contract)
-                    OR lower(c.name) = lower(near_misses.contract)
-                  )
-            ORDER BY (c.tenant_id IS NOT NULL) DESC, c.id ASC
-            LIMIT 1
-        )
-        WHERE near_misses.contract_id IS NULL
-          AND near_misses.contract IS NOT NULL
-          AND EXISTS (
-                SELECT 1 FROM contracts c
-                WHERE (c.tenant_id = near_misses.tenant_id OR c.tenant_id IS NULL)
-                  AND (
-                        lower(c.code) = lower(near_misses.contract)
-                        OR lower(c.name) = lower(near_misses.contract)
-                      )
-          )
-        """
-    )
+    op.execute(TENANT_BACKFILL_SQL)
 
 
 def downgrade() -> None:
