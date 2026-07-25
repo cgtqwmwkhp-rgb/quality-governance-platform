@@ -122,6 +122,29 @@ export function formatCampaignHealthBadge(row: CampaignComplianceRow): string {
   return `Campaign ${Math.round(row.completion_rate)}% · ${row.overdue} overdue`
 }
 
+export type CampaignRingTone = 'success' | 'warning' | 'destructive'
+
+/** Clamp completion_rate into a displayable 0-100 integer (tolerates bad upstream data). */
+export function campaignRingPercent(row: CampaignComplianceRow): number {
+  const raw = Number.isFinite(row.completion_rate) ? row.completion_rate : 0
+  return Math.max(0, Math.min(100, Math.round(raw)))
+}
+
+/** Overdue always wins the visual signal; a completed campaign reads success. */
+export function campaignRingTone(row: CampaignComplianceRow): CampaignRingTone {
+  if (row.overdue > 0) return 'destructive'
+  if (campaignRingPercent(row) >= 100) return 'success'
+  return 'warning'
+}
+
+/** Accessible label / tooltip text for the campaign ring — always states overdue explicitly. */
+export function campaignRingLabel(row: CampaignComplianceRow): string {
+  const percent = campaignRingPercent(row)
+  return row.overdue > 0
+    ? `Campaign ${percent}% complete · ${row.overdue} overdue`
+    : `Campaign ${percent}% complete`
+}
+
 /** One compliance row per document — prefer the campaign with the most assignees. */
 export function complianceRowByDocumentId(
   rows: CampaignComplianceRow[],

@@ -30,6 +30,7 @@ from src.domain.models.document import (
     DocumentSearchLog,
     DocumentStatus,
     DocumentType,
+    DocumentVersion,
     FileType,
     IndexJob,
     LibraryDocumentAccessLog,
@@ -111,6 +112,18 @@ class DocumentResponse(BaseModel):
     chunk_count: Optional[int] = None
     indexing_error: Optional[str] = None
 
+    # Governance dates (List 360, P1)
+    expiry_date: Optional[datetime] = None
+    review_date: Optional[datetime] = None
+    effective_date: Optional[datetime] = None
+
+    # Computed: latest published tip DocumentVersion.published_at for this document.
+    live_at: Optional[datetime] = None
+
+    # Batched User join on list — no N+1 (see list_documents).
+    created_by_id: Optional[int] = None
+    created_by_name: Optional[str] = None
+
     class Config:
         from_attributes = True
 
@@ -153,7 +166,12 @@ def _document_reference_number(document: Document) -> str:
     return "DOC-UNKNOWN"
 
 
-def _document_to_response(document: Document) -> DocumentResponse:
+def _document_to_response(
+    document: Document,
+    *,
+    created_by_name: Optional[str] = None,
+    live_at: Optional[datetime] = None,
+) -> DocumentResponse:
     """Serialize a document row without failing the whole list on legacy JSON shapes."""
     return DocumentResponse(
         id=document.id,
@@ -189,6 +207,12 @@ def _document_to_response(document: Document) -> DocumentResponse:
         indexed_at=document.indexed_at,
         chunk_count=getattr(document, "chunk_count", None),
         indexing_error=getattr(document, "indexing_error", None),
+        expiry_date=getattr(document, "expiry_date", None),
+        review_date=getattr(document, "review_date", None),
+        effective_date=getattr(document, "effective_date", None),
+        live_at=live_at,
+        created_by_id=getattr(document, "created_by_id", None),
+        created_by_name=created_by_name,
     )
 
 
@@ -369,6 +393,9 @@ class LibraryDocumentPatch(BaseModel):
 
     title: Optional[str] = None
     description: Optional[str] = None
+    expiry_date: Optional[datetime] = None
+    review_date: Optional[datetime] = None
+    effective_date: Optional[datetime] = None
 
 
 class LibraryRejectRequest(BaseModel):
@@ -1211,8 +1238,35 @@ async def list_documents(
 
     adjusted_total = max(0, total - hidden)
 
+    # Batch-load created_by names + latest published tip per document — no N+1 (List 360, P1).
+    created_by_ids = {d.created_by_id for d in visible if d.created_by_id is not None}
+    created_by_names: dict[int, str] = {}
+    if created_by_ids:
+        user_rows = await db.execute(
+            select(User.id, User.first_name, User.last_name).where(User.id.in_(created_by_ids))
+        )
+        created_by_names = {row[0]: f"{row[1]} {row[2]}".strip() for row in user_rows.all()}
+
+    doc_ids = [d.id for d in visible]
+    live_at_by_doc: dict[int, datetime] = {}
+    if doc_ids:
+        version_rows = await db.execute(
+            select(DocumentVersion.document_id, func.max(DocumentVersion.published_at))
+            .where(DocumentVersion.document_id.in_(doc_ids))
+            .where(DocumentVersion.published_at.isnot(None))
+            .group_by(DocumentVersion.document_id)
+        )
+        live_at_by_doc = {row[0]: row[1] for row in version_rows.all() if row[1] is not None}
+
     return DocumentListResponse(
-        items=[_document_to_response(d) for d in visible],
+        items=[
+            _document_to_response(
+                d,
+                created_by_name=created_by_names.get(d.created_by_id) if d.created_by_id is not None else None,
+                live_at=live_at_by_doc.get(d.id),
+            )
+            for d in visible
+        ],
         total=adjusted_total,
         page=page,
         page_size=page_size,
@@ -1257,6 +1311,12 @@ async def patch_document_metadata(
         document.title = title
     if payload.description is not None:
         document.description = payload.description
+    if payload.expiry_date is not None:
+        document.expiry_date = payload.expiry_date
+    if payload.review_date is not None:
+        document.review_date = payload.review_date
+    if payload.effective_date is not None:
+        document.effective_date = payload.effective_date
 
     await db.commit()
     await db.refresh(document)

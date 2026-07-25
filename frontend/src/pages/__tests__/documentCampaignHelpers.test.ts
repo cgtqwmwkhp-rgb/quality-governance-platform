@@ -1,9 +1,31 @@
 import { describe, expect, it } from 'vitest'
+import type { CampaignComplianceRow } from '../../api/documentCampaignClient'
 import {
   buildCampaignPayload,
+  campaignRingLabel,
+  campaignRingPercent,
+  campaignRingTone,
   canLaunchCampaign,
   parseSpecificUserIds,
 } from '../documentCampaignHelpers'
+
+function complianceRow(overrides: Partial<CampaignComplianceRow> = {}): CampaignComplianceRow {
+  return {
+    campaign_id: 1,
+    document_id: 1,
+    document_title: 'Doc',
+    status: 'active',
+    assigned: 10,
+    completed: 7,
+    pending: 2,
+    overdue: 1,
+    completion_rate: 70,
+    reminder_offsets_hours: [24],
+    launched_at: '2026-07-01T00:00:00Z',
+    due_within_days: 14,
+    ...overrides,
+  }
+}
 
 describe('documentCampaignHelpers', () => {
   it('parses comma-separated user ids', () => {
@@ -54,5 +76,35 @@ describe('documentCampaignHelpers', () => {
     })
 
     expect(payload.audience_engineer_ids).toEqual([3, 8])
+  })
+})
+
+describe('campaign ring helpers', () => {
+  it('clamps completion_rate into a 0-100 integer', () => {
+    expect(campaignRingPercent(complianceRow({ completion_rate: 70.6 }))).toBe(71)
+    expect(campaignRingPercent(complianceRow({ completion_rate: -5 }))).toBe(0)
+    expect(campaignRingPercent(complianceRow({ completion_rate: 140 }))).toBe(100)
+    expect(campaignRingPercent(complianceRow({ completion_rate: Number.NaN }))).toBe(0)
+  })
+
+  it('flags destructive tone whenever anything is overdue, regardless of completion', () => {
+    expect(campaignRingTone(complianceRow({ completion_rate: 100, overdue: 1 }))).toBe('destructive')
+  })
+
+  it('flags success tone at 100% complete with nothing overdue', () => {
+    expect(campaignRingTone(complianceRow({ completion_rate: 100, overdue: 0 }))).toBe('success')
+  })
+
+  it('flags warning tone while in progress and not overdue', () => {
+    expect(campaignRingTone(complianceRow({ completion_rate: 40, overdue: 0 }))).toBe('warning')
+  })
+
+  it('labels overdue campaigns explicitly for tooltip/aria text', () => {
+    expect(campaignRingLabel(complianceRow({ completion_rate: 70, overdue: 2 }))).toBe(
+      'Campaign 70% complete · 2 overdue',
+    )
+    expect(campaignRingLabel(complianceRow({ completion_rate: 100, overdue: 0 }))).toBe(
+      'Campaign 100% complete',
+    )
   })
 })

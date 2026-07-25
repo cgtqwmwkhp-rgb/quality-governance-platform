@@ -67,6 +67,40 @@ def test_document_to_response_tolerates_null_reference_number():
     assert response.reference_number == "DOC-7"
 
 
+def test_document_to_response_governance_fields_default_to_none():
+    """New optional List 360 P1 fields must not break legacy rows lacking them."""
+    response = _document_to_response(_sample_doc())
+    assert response.expiry_date is None
+    assert response.review_date is None
+    assert response.effective_date is None
+    assert response.live_at is None
+    assert response.created_by_id is None
+    assert response.created_by_name is None
+
+
+def test_document_to_response_serializes_governance_dates_and_batched_fields():
+    """Governance dates pass through, and created_by_name/live_at come from the list-level batch args."""
+    expiry = datetime(2027, 1, 1, tzinfo=timezone.utc)
+    review = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    effective = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    live_at = datetime(2026, 6, 1, tzinfo=timezone.utc)
+
+    doc = _sample_doc(
+        created_by_id=42,
+        expiry_date=expiry,
+        review_date=review,
+        effective_date=effective,
+    )
+    response = _document_to_response(doc, created_by_name="Jane Doe", live_at=live_at)
+
+    assert response.expiry_date == expiry
+    assert response.review_date == review
+    assert response.effective_date == effective
+    assert response.created_by_id == 42
+    assert response.created_by_name == "Jane Doe"
+    assert response.live_at == live_at
+
+
 def test_document_upload_response_rejects_none_reference_number():
     """Guardrail: API contract requires a string reference (prod 500 root cause)."""
     try:
