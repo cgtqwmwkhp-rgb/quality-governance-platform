@@ -8,6 +8,7 @@ import json
 import sys
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.core.security import get_password_hash
 from src.domain.models.tenant import Tenant, TenantUser
@@ -110,7 +111,7 @@ async def _ensure() -> None:
             return user
 
         await upsert("admin@plantexpand.com", "adminpassword123", superuser=True)
-        test_user = await upsert("testuser@plantexpand.com", "testpassword123", superuser=False)
+        await upsert("testuser@plantexpand.com", "testpassword123", superuser=False)
 
         role_res = await db.execute(select(Role).where(Role.name == "ci_operator"))
         role = role_res.scalar_one_or_none()
@@ -126,7 +127,12 @@ async def _ensure() -> None:
         else:
             role.permissions = json.dumps(_CI_OPERATOR_PERMS)
 
-        if role not in test_user.roles:
+        # Eager-load roles — lazy access under asyncio raises MissingGreenlet.
+        user_res = await db.execute(
+            select(User).options(selectinload(User.roles)).where(User.email == "testuser@plantexpand.com")
+        )
+        test_user = user_res.scalar_one()
+        if role.id not in {existing.id for existing in test_user.roles}:
             test_user.roles.append(role)
 
         await db.commit()

@@ -193,21 +193,29 @@ class TestPortalNearMissAttachmentFidelity:
     async def test_wrong_tenant_attachment_id_fails_closed(self, client, test_session):
         asset = await self._make_asset(test_session, tenant_id=999)
 
-        payload = _near_miss_payload(attachment_ids=[str(asset.id)])
+        unique_description = f"Wrong-tenant attachment fail-closed {uuid.uuid4().hex}"
+        payload = _near_miss_payload(
+            attachment_ids=[str(asset.id)],
+            description=unique_description,
+        )
         response = await client.post("/api/v1/portal/reports/", json=payload)
 
         assert response.status_code == 422, response.text
 
         # The case must NOT have been created — fail-closed means no orphaned case.
-        nm_result = await test_session.execute(select(NearMiss).where(NearMiss.description == payload["description"]))
+        nm_result = await test_session.execute(select(NearMiss).where(NearMiss.description == unique_description))
         assert nm_result.scalars().first() is None
 
     async def test_missing_attachment_id_fails_closed(self, client, test_session):
-        payload = _near_miss_payload(attachment_ids=["999999999"])
+        unique_description = f"Missing attachment fail-closed {uuid.uuid4().hex}"
+        payload = _near_miss_payload(
+            attachment_ids=["999999999"],
+            description=unique_description,
+        )
         response = await client.post("/api/v1/portal/reports/", json=payload)
 
         assert response.status_code == 422, response.text
-        nm_result = await test_session.execute(select(NearMiss).where(NearMiss.description == payload["description"]))
+        nm_result = await test_session.execute(select(NearMiss).where(NearMiss.description == unique_description))
         assert nm_result.scalars().first() is None
 
 
