@@ -51,6 +51,8 @@ def process_document_index_job(
             current_user = await session.get(User, user_id) if user_id else None
             job = await service.process_job(job_id, tenant_id=tenant_id, current_user=current_user)
             await session.commit()
+            # Only now are the new chunk rows durable, so superseded vectors can go.
+            await service.delete_pending_stale_vectors()
             return {
                 "job_id": job.id,
                 "status": job.status.value if hasattr(job.status, "value") else str(job.status),

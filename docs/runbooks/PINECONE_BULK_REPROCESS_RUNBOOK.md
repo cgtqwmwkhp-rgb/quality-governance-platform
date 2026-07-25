@@ -91,8 +91,9 @@ celery -A src.infrastructure.tasks.celery_app inspect registered | grep process_
 | `Document N not found` | Stale ID in job | Remove ID and re-trigger subset |
 | Job `failed` with partial `documents_succeeded` | Some docs failed | Status may still be `completed` when partial — inspect `error_log` |
 | Worker upsert errors in logs | Pinecone host/index mismatch | Verify `PINECONE_HOST` or legacy index/env construction |
+| `Stale vector cleanup incomplete for documents [...]` in worker logs | Pinecone delete-by-ID failed after the job committed | Indexing succeeded; the listed vectors are orphans. Re-run reprocess for those documents to retry cleanup — deletes are idempotent |
 
-Reindex semantics: each document deletes existing `document_chunks` rows and re-upserts vectors per document (`doc_{id}_chunk_{index}`). This is per-document reindex, not a full Pinecone namespace wipe.
+Reindex semantics: each document deletes existing `document_chunks` rows and re-upserts vectors per document (`doc_{id}_chunk_{index}`). Chunk rows record the upserted `vector_id`, and vectors from the previous generation that the new upsert did not overwrite (a shrinking chunk count) are deleted by ID. This is per-document reindex, not a full Pinecone namespace wipe.
 
 ## Resume
 
