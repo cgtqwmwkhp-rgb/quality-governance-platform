@@ -881,7 +881,11 @@ jobs:
             echo "| Post-deploy SLO assertion | ${{ steps.slo-check.outcome }} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Final notification
+  # Final notification, and the gate that keeps this run's conclusion honest.
+  # This job runs on `always()`, so it is the only thing deciding the run conclusion
+  # when build-and-deploy is skipped. Without the release gate step below it reported
+  # a skipped deploy and still concluded success, which promoted the commit to
+  # production via the workflow_run trigger in deploy-production.yml.
   notify:
     name: Deployment Notification
     runs-on: ubuntu-latest
@@ -917,3 +921,26 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             echo "❌ Staging deployment failed - check logs above"
           fi
+
+      # Release gate: the run conclusion must reflect whether staging really deployed.
+      # Applies to workflow_run and workflow_dispatch alike — in both cases a genuine
+      # deploy leaves both jobs at 'success', and anything else (failure, skipped,
+      # cancelled) must fail this run so production is not promoted.
+      - name: Release gate — refuse to conclude success without a real deploy
+        env:
+          BUILD_RESULT: ${{ needs.build-and-deploy.result }}
+          SMOKE_RESULT: ${{ needs.smoke-tests.result }}
+        run: |
+          if [[ "$BUILD_RESULT" == "success" && "$SMOKE_RESULT" == "success" ]]; then
+            echo "✅ Release gate: staging deployed and smoke tests passed"
+            exit 0
+          fi
+          {
+            echo "### 🚧 Release gate: production promotion blocked"
+            echo ""
+            echo "This run is marked **failed** because staging did not deploy and pass"
+            echo "smoke tests, so \`Deploy to Azure Production\` must not promote this commit."
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Staging did not deploy (build-and-deploy=$BUILD_RESULT, smoke-tests=$SMOKE_RESULT) - failing this run so production is not promoted"
+          exit 1

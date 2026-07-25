@@ -1774,6 +1774,9 @@ jobs:
   dast-zap-baseline:
     name: DAST ZAP Baseline (Advisory)
     runs-on: ubuntu-latest
+    # Advisory: no step in this job may turn CI red. A red CI run skips the whole
+    # staging deploy, which used to promote unstaged commits to production.
+    continue-on-error: true
 
     services:
       postgres:
@@ -1808,8 +1811,16 @@ jobs:
           pip install -r requirements.txt
           alembic upgrade head
           PYTHONPATH="${{ github.workspace }}" uvicorn src.main:app --host 0.0.0.0 --port 8000 &
-          sleep 10
-          curl -f http://localhost:8000/healthz || exit 1
+          # Startup pre-warms the OpenAPI schema (~5s), so a fixed sleep raced readiness
+          # and lost: the one-shot curl failed the step and the scan below never ran.
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/healthz > /dev/null 2>&1; then
+              echo "[OK] App is healthy after $((i * 2))s"
+              break
+            fi
+            sleep 2
+          done
+          curl -sf http://localhost:8000/healthz || { echo "[FAIL] App did not become healthy"; exit 1; }
 
       - name: ZAP Baseline Scan
         # Advisory: do not fail the job on action/tooling errors (issue write, artifact API).
