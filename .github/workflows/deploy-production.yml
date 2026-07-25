@@ -58,6 +58,10 @@ jobs:
         github.event_name == 'workflow_dispatch' ||
         github.event_name == 'release'
       ) && !(github.event_name == 'workflow_dispatch' && inputs.rollback == true)
+    permissions:
+      contents: read
+      # Required to read the triggering staging run's job outcomes below.
+      actions: read
     outputs:
       approved: ${{ steps.validate.outputs.approved || steps.freeze_blocked.outputs.approved }}
       release_sha: ${{ steps.validate.outputs.release_sha }}
@@ -81,6 +85,59 @@ jobs:
         id: freeze_blocked
         if: steps.freeze.outputs.allowed != 'true'
         run: echo "approved=false" >> "$GITHUB_OUTPUT"
+
+      # Defence in depth. The job-level `if` above only proves the staging *run* went
+      # green, which is not proof of a staging *deploy*: when CI is red the staging
+      # build/smoke jobs are skipped while its always() notification job still passes.
+      # Assert the deploy jobs themselves succeeded, and fail closed on anything else
+      # (skipped, failed, cancelled, renamed, or unreadable).
+      - name: Verify staging actually deployed
+        if: github.event_name == 'workflow_run' && steps.freeze.outputs.allowed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING_RUN_ID: ${{ github.event.workflow_run.id }}
+          STAGING_RUN_URL: ${{ github.event.workflow_run.html_url }}
+          STAGING_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euo pipefail
+          STAGING_JOBS="$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$STAGING_RUN_ID/jobs?per_page=100" \
+            --jq '.jobs[] | "\(.name)|\(.conclusion)"')"
+
+          echo "Staging run $STAGING_RUN_ID job outcomes:"
+          printf '%s\n' "$STAGING_JOBS" | sed 's/^/  /'
+
+          GATE_FAILED=0
+          for REQUIRED_JOB in "Build and Deploy to Staging" "Staging Smoke Tests"; do
+            MATCHES=0
+            CONCLUSION="missing"
+            while IFS='|' read -r JOB_NAME JOB_CONCLUSION; do
+              if [ "$JOB_NAME" = "$REQUIRED_JOB" ]; then
+                MATCHES=$((MATCHES + 1))
+                CONCLUSION="$JOB_CONCLUSION"
+              fi
+            done <<< "$STAGING_JOBS"
+            if [ "$MATCHES" -eq 1 ] && [ "$CONCLUSION" = "success" ]; then
+              echo "✅ Staging job '$REQUIRED_JOB' concluded success"
+            else
+              echo "❌ Staging job '$REQUIRED_JOB' concluded '$CONCLUSION' ($MATCHES match(es), expected exactly one success)"
+              GATE_FAILED=1
+            fi
+          done
+
+          if [ "$GATE_FAILED" -ne 0 ]; then
+            {
+              echo "## 🚧 Production promotion blocked"
+              echo ""
+              echo "Staging run [$STAGING_RUN_ID]($STAGING_RUN_URL) concluded"
+              echo "\`$STAGING_RUN_CONCLUSION\` but did not actually deploy and smoke-test staging."
+              echo "Refusing to promote a commit that was never verified on staging."
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Staging run $STAGING_RUN_ID concluded '$STAGING_RUN_CONCLUSION' without deploying - refusing to promote to production"
+            exit 1
+          fi
+          echo "✅ Staging genuinely deployed and passed smoke tests"
 
       - name: Checkout code
         if: steps.freeze.outputs.allowed == 'true'
@@ -641,7 +698,7 @@ jobs:
           API_WEBAPP_NAME="${{ env.AZURE_WEBAPP_NAME }}" \
           IMAGE_DIGEST_REF="$IMAGE_DIGEST_REF" \
           APP_ENV=production \
-          BUILD_SHA="${{ github.sha }}" \
+          BUILD_SHA="${{ env.RELEASE_SHA }}" \
           REDIS_URL="$REDIS_URL_VAL" \
           DATABASE_URL="$DB_URL" \
           SECRET_KEY="$SECRET_KEY_VAL" \
