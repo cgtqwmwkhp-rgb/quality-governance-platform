@@ -342,4 +342,35 @@ describe('ComplaintDetail', () => {
     })
   })
 
+  it('adds and saves structured witnesses on the shared Witnesses tab', async () => {
+    client.complaintsApi.update.mockResolvedValue({
+      data: { ...complaintRecord, witnesses_structured: { witnesses: [{ name: 'Dana Neighbour' }] } },
+    })
+
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Late repairs response' })).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByTestId('complaint-witnesses-add'))
+    await userEvent.type(screen.getByLabelText('Name'), 'Dana Neighbour')
+    await userEvent.click(screen.getByTestId('complaint-witnesses-save'))
+
+    await waitFor(() => {
+      expect(client.complaintsApi.update).toHaveBeenCalledWith(
+        15,
+        expect.objectContaining({
+          witnesses_structured: { witnesses: [expect.objectContaining({ name: 'Dana Neighbour' })] },
+        }),
+      )
+    })
+  })
+
+  it('renders the shared Photos tab wired to evidence-assets upload', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('complaint-evidence-panel')).toBeInTheDocument()
+    })
+  })
 })

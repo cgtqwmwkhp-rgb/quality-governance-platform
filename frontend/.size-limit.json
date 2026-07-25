@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "177 kB",
+    "limit": "179 kB",
     "gzip": true,
-    "name": "index: 175\u2192177 kB \u2014 SharePoint search palette overlay"
+    "name": "index: 177→179 kB — H&S rich reporting + Check & Challenge coach"
   },
   {
     "path": "dist/assets/vendor-*.js",

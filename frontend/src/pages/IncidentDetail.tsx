@@ -24,6 +24,8 @@ import {
   ExternalLink,
   ShieldAlert,
   Sparkles,
+  Camera,
+  Users,
 } from 'lucide-react'
 import {
   incidentsApi,
@@ -68,6 +70,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
 import { EvidenceGallery } from '../components/EvidenceGallery'
+import { CaseEvidencePanel } from '../components/case/CaseEvidencePanel'
+import { CaseWitnessesPanel, type CaseWitnessesValue } from '../components/case/CaseWitnessesPanel'
 import { SubmissionSections } from '../components/case/SubmissionSections'
 import {
   RunningSheetPanel,
@@ -191,6 +195,8 @@ export default function IncidentDetail() {
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editForm, setEditForm] = useState<IncidentUpdate>({})
+  const [witnessesDraft, setWitnessesDraft] = useState<CaseWitnessesValue | null>(null)
+  const [savingWitnesses, setSavingWitnesses] = useState(false)
   const [careFieldsTouched, setCareFieldsTouched] = useState({
     medical: false,
     emergency: false,
@@ -468,6 +474,31 @@ export default function IncidentDetail() {
   const startEditing = () => {
     setCareFieldsTouched({ medical: false, emergency: false })
     setIsEditing(true)
+  }
+
+  const witnessesValue: CaseWitnessesValue =
+    witnessesDraft ?? {
+      witnesses: (incident?.witnesses_structured as CaseWitnessesValue | undefined)?.witnesses ?? [],
+    }
+
+  const handleSaveWitnesses = async () => {
+    if (!incident) return
+    setSavingWitnesses(true)
+    try {
+      const response = await incidentsApi.update(incident.id, {
+        witnesses_structured: witnessesValue as unknown as Record<string, unknown>,
+      })
+      setIncident(response.data)
+      setWitnessesDraft(null)
+      toast.success(t('case.witnesses.save_success', 'Witnesses updated'))
+    } catch (err) {
+      trackError(err, { component: 'IncidentDetail', action: 'saveWitnesses' })
+      toast.error(
+        getApiErrorMessage(err, t('case.witnesses.save_failed', 'Could not save witnesses')),
+      )
+    } finally {
+      setSavingWitnesses(false)
+    }
   }
 
   const toggleBodyPart = (part: string) => {
@@ -988,6 +1019,14 @@ export default function IncidentDetail() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="standards">Standards</TabsTrigger>
           <TabsTrigger value="submission">Reporter Submission</TabsTrigger>
+          <TabsTrigger value="witnesses">
+            <Users className="w-4 h-4 mr-1.5" />
+            {t('incidents.tabs.witnesses', 'Witnesses')}
+          </TabsTrigger>
+          <TabsTrigger value="photos" data-testid="incident-photos-tab">
+            <Camera className="w-4 h-4 mr-1.5" />
+            {t('incidents.tabs.photos', 'Photos')}
+          </TabsTrigger>
           <TabsTrigger value="running-sheet">Running Sheet</TabsTrigger>
           <TabsTrigger value="actions" data-testid="incident-actions-tab">
             <ClipboardList className="w-4 h-4 mr-1.5" />
@@ -1829,6 +1868,34 @@ export default function IncidentDetail() {
           <SubmissionSections
             sections={incidentSubmissionSections}
             emptyMessage="No preserved reporter submission is available for this incident yet."
+          />
+        </TabsContent>
+
+        <TabsContent value="witnesses" className="mt-6 space-y-4">
+          <CaseWitnessesPanel
+            value={witnessesValue}
+            onChange={setWitnessesDraft}
+            testIdPrefix="incident"
+          />
+          {witnessesDraft ? (
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setWitnessesDraft(null)} disabled={savingWitnesses}>
+                {t('common.cancel', 'Cancel')}
+              </Button>
+              <Button onClick={handleSaveWitnesses} disabled={savingWitnesses} data-testid="incident-witnesses-save">
+                {savingWitnesses ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                {t('common.save', 'Save')}
+              </Button>
+            </div>
+          ) : null}
+        </TabsContent>
+
+        <TabsContent value="photos" className="mt-6">
+          <CaseEvidencePanel
+            sourceType="incident"
+            sourceId={incident.id}
+            enableUpload
+            testIdPrefix="incident"
           />
         </TabsContent>
 

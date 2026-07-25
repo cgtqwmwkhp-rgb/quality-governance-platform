@@ -8,7 +8,8 @@ import api, {
   NearMissCreate,
   getApiErrorMessage,
   lookupsApi,
-  type LookupOption,
+  contractsApi,
+  type Contract,
   type PaginatedResponse,
 } from '../api/client'
 import { trackError } from '../utils/errorTracker'
@@ -35,6 +36,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
+import { CUSTOMERS_LOOKUP_CATEGORY, toCustomerSelectOptions } from './admin/customersCatalog'
 import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
 
 const ALL_FILTER = 'all'
@@ -89,7 +92,7 @@ export default function NearMisses() {
   const [idsFilter, setIdsFilter] = useState(() => searchParams.get('ids') || '')
   const [formData, setFormData] = useState<NearMissCreate>({
     reporter_name: '',
-    contract: '',
+    contract_id: null,
     location: '',
     event_date: new Date().toISOString(),
     description: '',
@@ -98,7 +101,11 @@ export default function NearMisses() {
     was_involved: true,
     witnesses_present: false,
   })
-  const [customers, setCustomers] = useState<LookupOption[]>([])
+  const [customerOptions, setCustomerOptions] = useState<{ value: string; label: string }[]>([])
+  const [contractsByCode, setContractsByCode] = useState<Record<string, Contract>>({})
+  const [contractsLoadFailed, setContractsLoadFailed] = useState(false)
+  const [selectedCustomerCode, setSelectedCustomerCode] = useState('')
+  const [customersLoaded, setCustomersLoaded] = useState(false)
   const [customersError, setCustomersError] = useState<string | null>(null)
   const defaultSeverityOptions = [
     { value: 'low', label: t('severity.low') },
@@ -109,51 +116,78 @@ export default function NearMisses() {
   const [severityOptions, setSeverityOptions] = useState(defaultSeverityOptions)
   const eventDateInput = formData.event_date ? formData.event_date.slice(0, 16) : ''
 
+  // Load Customers lookup (SSOT) + contracts bridge when create opens — same
+  // pattern as Complaints/Incidents customer intake.
   useEffect(() => {
-    let cancelled = false
-    void lookupsApi
-      .list('customers', true)
-      .then((res) => {
-        if (!cancelled) {
-          setCustomers(res.items || [])
-          setCustomersError(
-            (res.items || []).length === 0
-              ? 'No active customers configured. Ask an admin to add Customers in Admin → Lookups → Customers.'
-              : null,
-          )
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setCustomers([])
-          setCustomersError(getApiErrorMessage(err, 'Could not load customers.'))
-        }
-      })
-    return () => {
-      cancelled = true
+    if (!showModal) {
+      setCustomersLoaded(false)
+      return
     }
-  }, [])
-
-  useEffect(() => {
-    if (!showModal) return
     let cancelled = false
+    setCustomersLoaded(false)
+    setContractsLoadFailed(false)
     setSeverityOptions(defaultSeverityOptions)
-    void lookupsApi
-      .list('severity_levels', true)
-      .then((res) => {
-        if (!cancelled) {
-          setSeverityOptions(mergeLookupSelectOptions(defaultSeverityOptions, res.items))
+    ;(async () => {
+      try {
+        const [customerRes, severityRes, contractsSettled] = await Promise.all([
+          lookupsApi.list(CUSTOMERS_LOOKUP_CATEGORY, true).catch(() => ({ items: [], total: 0 })),
+          lookupsApi.list('severity_levels', true).catch(() => ({ items: [], total: 0 })),
+          contractsApi.list(true).then(
+            (res) => ({ ok: true as const, res }),
+            () => ({ ok: false as const, res: { items: [] as Contract[], total: 0 } }),
+          ),
+        ])
+        if (cancelled) return
+        const options = toCustomerSelectOptions(customerRes.items || [])
+        setCustomerOptions(options)
+        setCustomersError(
+          options.length === 0
+            ? 'No active customers configured. Ask an admin to add Customers in Admin → Lookups → Customers.'
+            : null,
+        )
+        const byCode: Record<string, Contract> = {}
+        for (const contract of contractsSettled.res.items || []) {
+          if (contract.code) byCode[contract.code.toLowerCase()] = contract
         }
-      })
-      .catch(() => {
-        // Keep fixed API-enum defaults when Lookups are unavailable.
-      })
+        setContractsByCode(byCode)
+        setContractsLoadFailed(!contractsSettled.ok)
+        setCustomersLoaded(true)
+        setSeverityOptions(mergeLookupSelectOptions(defaultSeverityOptions, severityRes.items))
+      } catch (err) {
+        if (!cancelled) {
+          setCustomersLoaded(true)
+          setContractsLoadFailed(true)
+          trackError(err, { component: 'NearMisses', action: 'loadCreateLookups' })
+          setCustomersError(getApiErrorMessage(err, 'Could not load customers.'))
+          setSeverityOptions(defaultSeverityOptions)
+        }
+      }
+    })()
     return () => {
       cancelled = true
     }
-    // Intentional: lookup labels load only when the create dialog opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showModal is the dialog open gate
   }, [showModal])
+
+  const customersUnavailable = customersLoaded && customerOptions.length === 0
+
+  const applyCustomerSelection = (value: string) => {
+    setSelectedCustomerCode(value)
+    if (!value) {
+      setFormData((prev) => ({ ...prev, contract_id: null, contract: undefined }))
+      return
+    }
+    const matched = contractsByCode[value.toLowerCase()]
+    setFormData((prev) => ({ ...prev, contract_id: matched?.id ?? null, contract: value }))
+  }
+
+  // Contracts load async with the modal — re-resolve FK if customer was chosen early.
+  useEffect(() => {
+    if (!selectedCustomerCode) return
+    const matched = contractsByCode[selectedCustomerCode.toLowerCase()]
+    const nextId = matched?.id ?? null
+    setFormData((prev) => (prev.contract_id === nextId ? prev : { ...prev, contract_id: nextId }))
+  }, [selectedCustomerCode, contractsByCode])
 
   // Hydrate list filters from shareable URL (back/forward + deep links).
   useEffect(() => {
@@ -216,25 +250,63 @@ export default function NearMisses() {
     }
   }, [page, idsFilter])
 
+  const freshNearMissForm = (): NearMissCreate => ({
+    reporter_name: '',
+    contract_id: null,
+    location: '',
+    event_date: new Date().toISOString(),
+    description: '',
+    potential_severity: 'medium',
+    is_hipo: false,
+    was_involved: true,
+    witnesses_present: false,
+  })
+
+  const resetCreateForm = () => {
+    setSelectedCustomerCode('')
+    setFormData(freshNearMissForm())
+  }
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!selectedCustomerCode) {
+      setCreateError(
+        t('near_misses.form.customer_required', 'Select which customer this near miss is from.'),
+      )
+      return
+    }
+    if (customersUnavailable) {
+      setCreateError(
+        t(
+          'near_misses.form.customer_unavailable',
+          'No customers are available — add customers in Admin → Lookups before creating a near miss.',
+        ),
+      )
+      return
+    }
+    if (contractsLoadFailed) {
+      setCreateError(
+        t(
+          'near_misses.form.contracts_unavailable',
+          'Customer contracts could not be loaded — refresh and try again.',
+        ),
+      )
+      return
+    }
     setCreating(true)
     setCreateError(null)
+    const resolvedContractId =
+      formData.contract_id ?? contractsByCode[selectedCustomerCode.toLowerCase()]?.id ?? null
+    const payload: NearMissCreate = {
+      ...formData,
+      contract_id: resolvedContractId,
+      contract: selectedCustomerCode,
+    }
     try {
-      const response = await nearMissesApi.create(formData)
+      const response = await nearMissesApi.create(payload)
       setNearMisses((prev) => [response.data, ...prev])
       setShowModal(false)
-      setFormData({
-        reporter_name: '',
-        contract: '',
-        location: '',
-        event_date: new Date().toISOString(),
-        description: '',
-        potential_severity: 'medium',
-        is_hipo: false,
-        was_involved: true,
-        witnesses_present: false,
-      })
+      resetCreateForm()
       toast.success(t('near_misses.feedback.created', 'Near miss created'))
     } catch (err) {
       trackError(err, { component: 'NearMisses', action: 'create' })
@@ -377,7 +449,13 @@ export default function NearMisses() {
         </Card>
       )}
 
-      <Dialog open={showModal} onOpenChange={setShowModal}>
+      <Dialog
+        open={showModal}
+        onOpenChange={(open) => {
+          setShowModal(open)
+          if (!open) resetCreateForm()
+        }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{t('near_misses.dialog.title')}</DialogTitle>
@@ -400,35 +478,15 @@ export default function NearMisses() {
                   required
                 />
               </div>
-              <div>
-                <label
-                  htmlFor="near-miss-contract"
-                  className="text-sm font-medium text-muted-foreground"
-                >
-                  {t('near_misses.form.contract', 'Customer')}
-                </label>
-                <Select
-                  value={formData.contract || undefined}
-                  onValueChange={(value) => setFormData({ ...formData, contract: value })}
-                >
-                  <SelectTrigger
-                    id="near-miss-contract"
-                    className="mt-1"
-                    data-testid="near-miss-contract"
-                  >
-                    <SelectValue
-                      placeholder={t('near_misses.form.contract_placeholder', 'Select customer')}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {customers.map((customer) => (
-                      <SelectItem key={customer.id} value={customer.code}>
-                        {customer.label}
-                        {customer.description ? ` · ${customer.description}` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div data-testid="near-miss-contract">
+                <FuzzySearchDropdown
+                  label={`${t('near_misses.form.contract', 'Customer')} *`}
+                  required
+                  options={customerOptions}
+                  value={selectedCustomerCode}
+                  onChange={applyCustomerSelection}
+                  placeholder={t('near_misses.form.contract_search', 'Search customer…')}
+                />
                 {customersError ? (
                   <p className="mt-1 text-xs text-destructive" role="alert">
                     {customersError}
@@ -436,6 +494,22 @@ export default function NearMisses() {
                 ) : null}
               </div>
             </div>
+            {customersUnavailable ? (
+              <div
+                className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-3 text-sm text-foreground"
+                data-testid="near-miss-customer-unavailable"
+              >
+                <p className="font-medium">
+                  {t('near_misses.form.customer_empty_title', 'No customers are configured')}
+                </p>
+                <p className="text-muted-foreground mt-1">
+                  {t(
+                    'near_misses.form.customer_empty_body',
+                    'Near miss intake needs at least one customer in Admin → Lookups → Customers.',
+                  )}
+                </p>
+              </div>
+            ) : null}
 
             <div>
               <label
@@ -552,10 +626,17 @@ export default function NearMisses() {
             {createError && <div className="text-sm text-destructive">{createError}</div>}
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowModal(false)
+                  resetCreateForm()
+                }}
+              >
                 {t('common.cancel')}
               </Button>
-              <Button type="submit" disabled={creating}>
+              <Button type="submit" disabled={creating || customersUnavailable}>
                 {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : t('near_misses.create')}
               </Button>
             </DialogFooter>

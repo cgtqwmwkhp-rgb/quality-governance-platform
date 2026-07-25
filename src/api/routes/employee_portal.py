@@ -8,11 +8,12 @@ Provides simplified, mobile-first endpoints for:
 
 import hashlib
 import hmac
+import logging
 import secrets
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Header, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import String, cast, func, literal, select, union_all
 from sqlalchemy.exc import OperationalError, ProgrammingError
@@ -23,12 +24,59 @@ from src.api.utils.errors import api_error
 from src.core.config import settings
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType
+from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.rta import RoadTrafficCollision, RTASeverity, RTAStatus
+from src.domain.services.api_idempotency_service import begin_idempotent_create, complete_idempotent_create
+from src.domain.services.audit_log_service import AuditLogService
 from src.domain.services.portal_triage_service import assign_and_notify_portal_intake
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["Employee Portal"])
+
+# Idempotency scopes for public portal submits (PX-001 pattern, reused from staff creates).
+_PORTAL_IDEMPOTENCY_SCOPES = {
+    "incident": "portal.incident.create",
+    "complaint": "portal.complaint.create",
+    "rta": "portal.rta.create",
+    "near_miss": "portal.near_miss.create",
+}
+
+# Owner/assignee field name differs by entity (mirrors portal_triage_service.apply_portal_owner).
+_PORTAL_OWNER_FIELD_BY_TYPE = {
+    "incident": "owner_id",
+    "complaint": "owner_id",
+    "rta": "owner_id",
+    "near_miss": "assigned_to_id",
+}
+
+_PORTAL_MODEL_BY_TYPE: dict[str, Any] = {
+    "incident": Incident,
+    "complaint": Complaint,
+    "rta": RoadTrafficCollision,
+    "near_miss": NearMiss,
+}
+
+_PORTAL_SUCCESS_COPY = {
+    "incident": (
+        "Your incident report has been submitted successfully.",
+        "You will receive an update within 24-48 hours.",
+    ),
+    "complaint": (
+        "Your complaint has been submitted successfully.",
+        "A case manager will review your complaint within 24 hours.",
+    ),
+    "rta": (
+        "Your RTA report has been submitted successfully.",
+        "A fleet manager will review your report within 24 hours.",
+    ),
+    "near_miss": (
+        "Your near miss report has been submitted successfully.",
+        "A safety manager will review your report within 24 hours.",
+    ),
+}
 
 
 # ============================================================================
@@ -65,6 +113,15 @@ class QuickReportCreate(BaseModel):
     reporter_submission: Optional[dict[str, Any]] = Field(
         None,
         description="Immutable snapshot of reporter-entered intake data for investigator views",
+    )
+
+    # Optional client-supplied idempotency key (PX-001). Prefer the ``Idempotency-Key``
+    # header; this body field is a fallback for clients that cannot set custom headers.
+    idempotency_key: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Optional idempotency key; retried submissions with the same key "
+        "return the original result instead of creating a duplicate case.",
     )
 
 
@@ -478,12 +535,215 @@ def build_rta_portal_fields(
     }
 
 
-async def commit_portal_record(db: DbSession, record_label: str) -> None:
-    """Persist a portal record with an explicit configuration failure on schema drift."""
+def build_near_miss_portal_fields(
+    report: QuickReportCreate,
+    priority: str,
+    reporter_submission: dict[str, Any],
+    tenant_id: Optional[int] = None,
+) -> dict[str, Any]:
+    """Map portal Near Miss submission onto every NearMiss column it already has.
+
+    NearMiss has no ``reporter_submission`` JSON column (unlike Incident/Complaint/
+    RTA), so the raw snapshot is persisted separately via
+    :func:`persist_near_miss_reporter_snapshot`; this function's job is to promote
+    every field the reporter actually submitted onto the typed columns so staff
+    views never need the raw JSON to see what was reported.
+    """
+    resolved_tenant_id = tenant_id if tenant_id is not None else get_default_portal_tenant_id()
+    display_name = require_portal_display_name(report, reporter_submission)
+
+    # Customer code lives on NearMiss.contract. Prefer reporter_submission.contract;
+    # department is a legacy bridge from older portal clients.
+    customer_code = str(reporter_submission.get("contract") or "").strip() or ((report.department or "").strip())
+
+    is_hipo = bool(
+        reporter_submission.get("is_hipo")
+        if reporter_submission.get("is_hipo") is not None
+        else reporter_submission.get("hipo")
+    )
+
+    # CRITICAL: use the reporter-submitted event date/time — never silently overwrite
+    # with server utcnow when the client provided one (data integrity requirement).
+    event_occurred_at = parse_portal_datetime(
+        reporter_submission.get("event_date"),
+        reporter_submission.get("event_time"),
+    ) or datetime.now(timezone.utc)
+
+    witnesses_present_raw = reporter_submission.get("witnesses_present")
+    witnesses_present = bool(witnesses_present_raw) if witnesses_present_raw is not None else False
+    witness_names = reporter_submission.get("witness_names")
+
+    was_involved_raw = reporter_submission.get("was_involved")
+    was_involved = bool(was_involved_raw) if was_involved_raw is not None else True
+
+    return {
+        "reporter_name": display_name,
+        "reporter_email": report.reporter_email if not report.is_anonymous else None,
+        "reporter_phone": report.reporter_phone if not report.is_anonymous else None,
+        "reporter_role": reporter_submission.get("reporter_role"),
+        "was_involved": was_involved,
+        "contract": customer_code or "Not specified",
+        "contract_other": reporter_submission.get("contract_other"),
+        "location": report.location or "Not specified",
+        "location_coordinates": reporter_submission.get("location_coordinates"),
+        "event_date": event_occurred_at,
+        "event_time": reporter_submission.get("event_time"),
+        "potential_consequences": reporter_submission.get("potential_consequences"),
+        "preventive_action_suggested": reporter_submission.get("preventive_action_suggested"),
+        "persons_involved": reporter_submission.get("persons_involved"),
+        "witnesses_present": witnesses_present,
+        "witness_names": witness_names if witnesses_present and isinstance(witness_names, str) else None,
+        "asset_number": reporter_submission.get("asset_number"),
+        "asset_type": reporter_submission.get("asset_type"),
+        "risk_category": reporter_submission.get("risk_category"),
+        "potential_severity": report.severity.lower(),
+        "is_hipo": is_hipo,
+        "status": "REPORTED",
+        "priority": priority,
+        "source_form_id": "portal_near_miss_v1",
+        "tenant_id": resolved_tenant_id,
+    }
+
+
+# ============================================================================
+# Attachment fidelity — link pre-uploaded EvidenceAsset rows to portal cases
+# ============================================================================
+
+_PORTAL_EVIDENCE_SOURCE_MODULE = {
+    "incident": EvidenceSourceModule.INCIDENT,
+    "complaint": EvidenceSourceModule.COMPLAINT,
+    "rta": EvidenceSourceModule.ROAD_TRAFFIC_COLLISION,
+    "near_miss": EvidenceSourceModule.NEAR_MISS,
+}
+
+
+async def resolve_portal_attachment_assets(
+    db: DbSession,
+    *,
+    tenant_id: int,
+    attachment_ids: Optional[list[str]],
+) -> list[EvidenceAsset]:
+    """Resolve and validate pre-uploaded EvidenceAsset rows for portal linking.
+
+    Fails closed (422) when any id is malformed, not found, soft-deleted, or
+    belongs to a different tenant — evidence must never cross a tenant boundary
+    and invalid ids must never be silently dropped (world-class data integrity).
+    """
+    if not attachment_ids:
+        return []
+
+    seen: set[str] = set()
+    numeric_ids: list[int] = []
+    malformed: list[str] = []
+    for raw_id in attachment_ids:
+        raw = str(raw_id).strip()
+        if not raw or raw in seen:
+            continue
+        seen.add(raw)
+        try:
+            numeric_ids.append(int(raw))
+        except (TypeError, ValueError):
+            malformed.append(raw)
+
+    if malformed:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "attachment_ids must be numeric evidence asset ids.",
+                details={"invalid_ids": malformed},
+            ),
+        )
+
+    if not numeric_ids:
+        return []
+
+    result = await db.execute(select(EvidenceAsset).where(EvidenceAsset.id.in_(numeric_ids)))
+    found = {asset.id: asset for asset in result.scalars().all()}
+
+    invalid_ids = [
+        str(asset_id)
+        for asset_id in numeric_ids
+        if asset_id not in found or found[asset_id].tenant_id != tenant_id or found[asset_id].deleted_at is not None
+    ]
+    if invalid_ids:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "One or more attachment_ids could not be linked: not found, deleted, "
+                "or belong to a different tenant.",
+                details={"invalid_ids": invalid_ids},
+            ),
+        )
+
+    return [found[asset_id] for asset_id in numeric_ids]
+
+
+def apply_portal_attachment_links(
+    assets: list[EvidenceAsset],
+    *,
+    source_module: EvidenceSourceModule,
+    source_id: int,
+) -> None:
+    """Re-point pre-uploaded evidence assets onto the newly created portal case."""
+    for asset in assets:
+        asset.source_module = source_module
+        asset.source_id = str(source_id)
+
+
+async def persist_near_miss_reporter_snapshot(
+    db: DbSession,
+    *,
+    tenant_id: int,
+    near_miss: NearMiss,
+    reporter_submission: dict[str, Any],
+) -> None:
+    """Immutable audit-log snapshot of raw reporter intake for Near Miss.
+
+    NearMiss has no ``reporter_submission`` column (unlike Incident/Complaint/RTA),
+    so the raw submission is preserved in the tamper-evident audit log instead,
+    tied to the case via entity_type/entity_id, so no reporter-entered data is
+    ever silently dropped. Best-effort: audit infra issues must never block a
+    public portal submission that has already promoted every typed field.
+    """
+    if not reporter_submission:
+        return
+    try:
+        await AuditLogService(db).log(
+            tenant_id=tenant_id,
+            entity_type="near_miss",
+            entity_id=str(near_miss.id),
+            action="portal_submit",
+            new_values=reporter_submission,
+            entity_name=near_miss.reference_number,
+            action_category="data",
+            is_sensitive=True,
+            commit=False,
+        )
+    except Exception:
+        logger.warning(
+            "Failed to persist near miss reporter_submission snapshot for %s",
+            near_miss.reference_number,
+            exc_info=True,
+        )
+
+
+async def commit_portal_record(db: DbSession, record_label: str, *, flush_only: bool = False) -> None:
+    """Persist a portal record with an explicit configuration failure on schema drift.
+
+    ``flush_only=True`` assigns the record's primary key within the open
+    transaction (e.g. so dependent attachment links / audit entries can
+    reference it) without committing yet; the same error handling applies to
+    both the flush and the final commit.
+    """
     from sqlalchemy.exc import IntegrityError
 
     try:
-        await db.commit()
+        if flush_only:
+            await db.flush()
+        else:
+            await db.commit()
     except IntegrityError as exc:
         await db.rollback()
         # NOT NULL / FK violations must never surface as INTERNAL_ERROR 500.
@@ -504,6 +764,46 @@ async def commit_portal_record(db: DbSession, record_label: str) -> None:
                 f"Portal {record_label} intake is not available until the latest database schema is applied.",
             ),
         ) from exc
+
+
+def _portal_owner_id(entity: Any, entity_type: str) -> Optional[int]:
+    """Read the owner/assignee id, whatever the column is named for this entity type."""
+    field_name = _PORTAL_OWNER_FIELD_BY_TYPE.get(entity_type, "owner_id")
+    return getattr(entity, field_name, None)
+
+
+async def build_portal_idempotency_replay_response(
+    db: DbSession,
+    *,
+    entity_type: str,
+    entity_id: int,
+    tenant_id: int,
+    current_user: Optional[Any],
+) -> QuickReportResponse:
+    """Rebuild the original 201 response body for an Idempotency-Key replay."""
+    model = _PORTAL_MODEL_BY_TYPE[entity_type]
+    result = await db.execute(select(model).where(model.id == entity_id, model.tenant_id == tenant_id))
+    entity = result.scalar_one_or_none()
+    if entity is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Idempotency-Key was already used but the original record could not be found.",
+            ),
+        )
+    message, estimated_response = _PORTAL_SUCCESS_COPY[entity_type]
+    ref_number = entity.reference_number
+    return QuickReportResponse(
+        success=True,
+        reference_number=ref_number,
+        tracking_code=generate_tracking_code(ref_number),
+        message=message,
+        estimated_response=estimated_response,
+        qr_code_url=f"/api/v1/portal/qr/{ref_number}",
+        triage_assigned=_portal_owner_id(entity, entity_type) is not None,
+        **staff_golden_thread_fields(current_user, entity_type=entity_type, entity_id=entity.id),
+    )
 
 
 async def complete_portal_intake_triage(
@@ -543,6 +843,7 @@ async def submit_quick_report(
     report: QuickReportCreate,
     db: DbSession,
     current_user: OptionalCurrentUser = None,
+    idempotency_key_header: Annotated[Optional[str], Header(alias="Idempotency-Key")] = None,
 ):
     """
     Submit a quick report (incident or complaint).
@@ -550,12 +851,41 @@ async def submit_quick_report(
     This endpoint is public and doesn't require authentication.
     Anonymous reports can be tracked using the returned tracking_code.
     Authenticated staff receive a golden-thread staff_href when role allows.
+
+    Optional ``Idempotency-Key`` header (or ``idempotency_key`` body field, for
+    clients that cannot set custom headers): retries with the same key return
+    the original 201 response instead of creating a duplicate case (PX-001).
     """
     incident_severity, complaint_priority = map_severity(report.severity)
     reporter_submission = report.reporter_submission or {}
     portal_tenant_id = get_default_portal_tenant_id()
+    report_type = report.report_type.lower()
+    effective_idempotency_key = (idempotency_key_header or report.idempotency_key or "").strip() or None
 
-    if report.report_type.lower() == "incident":
+    idem_scope = _PORTAL_IDEMPOTENCY_SCOPES.get(report_type)
+    idem_claim = None
+    if idem_scope is not None:
+        idem_claim = await begin_idempotent_create(
+            db,
+            tenant_id=portal_tenant_id,
+            scope=idem_scope,
+            idempotency_key=effective_idempotency_key,
+            payload=report,
+        )
+        if idem_claim is not None and idem_claim.is_replay and idem_claim.entity_id is not None:
+            return await build_portal_idempotency_replay_response(
+                db,
+                entity_type=report_type,
+                entity_id=idem_claim.entity_id,
+                tenant_id=portal_tenant_id,
+                current_user=current_user,
+            )
+
+    attachment_assets = await resolve_portal_attachment_assets(
+        db, tenant_id=portal_tenant_id, attachment_ids=report.attachment_ids
+    )
+
+    if report_type == "incident":
         ref_number = generate_portal_reference("INC")
         tracking_code = generate_tracking_code(ref_number)
 
@@ -577,6 +907,16 @@ async def submit_quick_report(
         )
 
         db.add(incident)
+        await commit_portal_record(db, "incident", flush_only=True)
+        apply_portal_attachment_links(
+            attachment_assets, source_module=_PORTAL_EVIDENCE_SOURCE_MODULE["incident"], source_id=incident.id
+        )
+        await complete_idempotent_create(
+            db,
+            record_id=idem_claim.record_id if idem_claim else None,
+            entity_type="incident",
+            entity_id=incident.id,
+        )
         await commit_portal_record(db, "incident")
         await db.refresh(incident)
         triage_assigned = await complete_portal_intake_triage(
@@ -599,7 +939,7 @@ async def submit_quick_report(
             **staff_golden_thread_fields(current_user, entity_type="incident", entity_id=incident.id),
         )
 
-    elif report.report_type.lower() == "complaint":
+    elif report_type == "complaint":
         ref_number = generate_portal_reference("COMP")
         tracking_code = generate_tracking_code(ref_number)
 
@@ -611,6 +951,16 @@ async def submit_quick_report(
         )
 
         db.add(complaint)
+        await commit_portal_record(db, "complaint", flush_only=True)
+        apply_portal_attachment_links(
+            attachment_assets, source_module=_PORTAL_EVIDENCE_SOURCE_MODULE["complaint"], source_id=complaint.id
+        )
+        await complete_idempotent_create(
+            db,
+            record_id=idem_claim.record_id if idem_claim else None,
+            entity_type="complaint",
+            entity_id=complaint.id,
+        )
         await commit_portal_record(db, "complaint")
         await db.refresh(complaint)
         triage_assigned = await complete_portal_intake_triage(
@@ -633,7 +983,7 @@ async def submit_quick_report(
             **staff_golden_thread_fields(current_user, entity_type="complaint", entity_id=complaint.id),
         )
 
-    elif report.report_type.lower() == "rta":
+    elif report_type == "rta":
         ref_number = generate_portal_reference("RTA")
         tracking_code = generate_tracking_code(ref_number)
 
@@ -654,6 +1004,16 @@ async def submit_quick_report(
         )
 
         db.add(rta)
+        await commit_portal_record(db, "RTA", flush_only=True)
+        apply_portal_attachment_links(
+            attachment_assets, source_module=_PORTAL_EVIDENCE_SOURCE_MODULE["rta"], source_id=rta.id
+        )
+        await complete_idempotent_create(
+            db,
+            record_id=idem_claim.record_id if idem_claim else None,
+            entity_type="rta",
+            entity_id=rta.id,
+        )
         await commit_portal_record(db, "RTA")
         await db.refresh(rta)
         triage_assigned = await complete_portal_intake_triage(
@@ -676,7 +1036,7 @@ async def submit_quick_report(
             **staff_golden_thread_fields(current_user, entity_type="rta", entity_id=rta.id),
         )
 
-    elif report.report_type.lower() == "near_miss":
+    elif report_type == "near_miss":
         ref_number = generate_portal_reference("NM")
         tracking_code = generate_tracking_code(ref_number)
 
@@ -688,36 +1048,30 @@ async def submit_quick_report(
             "critical": "CRITICAL",
         }
         priority = priority_map.get(report.severity.lower(), "MEDIUM")
-        display_name = require_portal_display_name(report, reporter_submission)
 
-        # Customer code lives on NearMiss.contract. Prefer reporter_submission.contract;
-        # department is a legacy bridge from older portal clients.
-        customer_code = str(reporter_submission.get("contract") or "").strip() or ((report.department or "").strip())
-
-        is_hipo = bool(
-            reporter_submission.get("is_hipo")
-            if reporter_submission.get("is_hipo") is not None
-            else reporter_submission.get("hipo")
-        )
-
-        # Create Near Miss record
         near_miss = NearMiss(
             reference_number=ref_number,
-            reporter_name=display_name,
-            reporter_email=report.reporter_email if not report.is_anonymous else None,
-            contract=customer_code or "Not specified",
-            location=report.location or "Not specified",
-            event_date=datetime.now(timezone.utc),
             description=report.description,
-            potential_severity=report.severity.lower(),
-            is_hipo=is_hipo,
-            status="REPORTED",
-            priority=priority,
-            source_form_id="portal_near_miss_v1",
-            tenant_id=portal_tenant_id,
+            **build_near_miss_portal_fields(report, priority, reporter_submission, portal_tenant_id),
         )
 
         db.add(near_miss)
+        await commit_portal_record(db, "near miss", flush_only=True)
+        apply_portal_attachment_links(
+            attachment_assets, source_module=_PORTAL_EVIDENCE_SOURCE_MODULE["near_miss"], source_id=near_miss.id
+        )
+        await persist_near_miss_reporter_snapshot(
+            db,
+            tenant_id=portal_tenant_id,
+            near_miss=near_miss,
+            reporter_submission=reporter_submission,
+        )
+        await complete_idempotent_create(
+            db,
+            record_id=idem_claim.record_id if idem_claim else None,
+            entity_type="near_miss",
+            entity_id=near_miss.id,
+        )
         await commit_portal_record(db, "near miss")
         await db.refresh(near_miss)
         triage_assigned = await complete_portal_intake_triage(

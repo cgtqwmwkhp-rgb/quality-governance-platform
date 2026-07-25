@@ -4,14 +4,40 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.core.security import get_password_hash
 from src.domain.models.tenant import Tenant, TenantUser
-from src.domain.models.user import User
+from src.domain.models.user import Role, User
 from src.infrastructure.database import async_session_maker, engine
+
+# Wave 0 case-view gates require explicit :read for non-superusers (smoke/locust testuser).
+_CI_OPERATOR_PERMS = [
+    "incident:create",
+    "incident:read",
+    "incident:update",
+    "near_miss:create",
+    "near_miss:read",
+    "near_miss:update",
+    "complaint:create",
+    "complaint:read",
+    "complaint:update",
+    "rta:create",
+    "rta:read",
+    "rta:update",
+    "audit:create",
+    "audit:read",
+    "risk:create",
+    "risk:read",
+    "document:read",
+    "policy:read",
+    "standard:read",
+    "audit_template:read",
+]
 
 
 async def _ensure() -> None:
@@ -44,7 +70,7 @@ async def _ensure() -> None:
             db.add(tenant)
             await db.flush()
 
-        async def upsert(email: str, password: str, *, superuser: bool) -> None:
+        async def upsert(email: str, password: str, *, superuser: bool) -> User:
             r = await db.execute(select(User).where(User.email == email))
             user = r.scalar_one_or_none()
             hp = get_password_hash(password)
@@ -82,9 +108,33 @@ async def _ensure() -> None:
                         role="owner" if superuser else "user",
                     )
                 )
+            return user
 
         await upsert("admin@plantexpand.com", "adminpassword123", superuser=True)
         await upsert("testuser@plantexpand.com", "testpassword123", superuser=False)
+
+        role_res = await db.execute(select(Role).where(Role.name == "ci_operator"))
+        role = role_res.scalar_one_or_none()
+        if role is None:
+            role = Role(
+                name="ci_operator",
+                description="CI/smoke/locust operator with case read+write",
+                permissions=json.dumps(_CI_OPERATOR_PERMS),
+                is_system_role=True,
+            )
+            db.add(role)
+            await db.flush()
+        else:
+            role.permissions = json.dumps(_CI_OPERATOR_PERMS)
+
+        # Eager-load roles — lazy access under asyncio raises MissingGreenlet.
+        user_res = await db.execute(
+            select(User).options(selectinload(User.roles)).where(User.email == "testuser@plantexpand.com")
+        )
+        test_user = user_res.scalar_one()
+        if role.id not in {existing.id for existing in test_user.roles}:
+            test_user.roles.append(role)
+
         await db.commit()
 
     if "postgresql" in str(engine.url):

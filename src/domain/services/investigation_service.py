@@ -495,8 +495,14 @@ class InvestigationService:
         db: AsyncSession,
         source_type: AssignedEntityType,
         source_id: int,
+        tenant_id: Optional[int] = None,
     ) -> List[EvidenceAsset]:
-        """Get evidence assets linked to the source record."""
+        """Get evidence assets linked to the source record.
+
+        ``tenant_id`` is optional for backward compatibility with legacy callers,
+        but every call site owned by this service passes it explicitly (SEC-01)
+        so investigation evidence handoff can never pull in another tenant's assets.
+        """
         source_module_map = {
             AssignedEntityType.NEAR_MISS: EvidenceSourceModule.NEAR_MISS,
             AssignedEntityType.ROAD_TRAFFIC_COLLISION: EvidenceSourceModule.ROAD_TRAFFIC_COLLISION,
@@ -513,6 +519,8 @@ class InvestigationService:
             EvidenceAsset.source_id == str(source_id),
             EvidenceAsset.deleted_at.is_(None),
         )
+        if tenant_id is not None:
+            query = query.where(EvidenceAsset.tenant_id == tenant_id)
         result = await db.execute(query)
         return list(result.scalars().all())
 
@@ -1558,7 +1566,7 @@ class InvestigationService:
             },
         )
 
-        evidence_assets = await cls.get_source_evidence_assets(db, source_type_enum, source_id)
+        evidence_assets = await cls.get_source_evidence_assets(db, source_type_enum, source_id, tenant_id=tenant_id)
         for asset in evidence_assets:
             asset.linked_investigation_id = investigation.id
 
@@ -1612,6 +1620,7 @@ class InvestigationService:
 
         assets_query = select(EvidenceAsset).where(
             EvidenceAsset.linked_investigation_id == investigation_id,
+            EvidenceAsset.tenant_id == tenant_id,
             EvidenceAsset.deleted_at.is_(None),
         )
         assets_result = await db.execute(assets_query)

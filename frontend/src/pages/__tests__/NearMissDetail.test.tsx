@@ -32,6 +32,7 @@ vi.mock('../../api/client', () => ({
   getApiErrorMessage: () => 'error',
   nearMissesApi: {
     get: vi.fn(),
+    update: vi.fn(),
     listInvestigations: vi.fn(),
     listRunningSheet: vi.fn(),
   },
@@ -40,6 +41,15 @@ vi.mock('../../api/client', () => ({
   },
   actionsApi: {
     list: vi.fn(),
+  },
+  evidenceAssetsApi: {
+    list: vi.fn().mockResolvedValue({ data: { items: [] } }),
+  },
+  contractsApi: {
+    list: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+  },
+  lookupsApi: {
+    list: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   },
 }))
 
@@ -178,6 +188,69 @@ describe('NearMissDetail investigation → CAPA honesty', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('near-miss-capa-count')).toHaveTextContent('—')
+    })
+  })
+
+  it('adds and saves structured witnesses on the shared Witnesses tab', async () => {
+    ;(client.nearMissesApi.listInvestigations as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { items: [], total: 0 },
+    })
+    ;(client.actionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { items: [], total: 0 },
+    })
+    ;(client.nearMissesApi.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { ...nearMiss, witnesses_structured: { witnesses: [{ name: 'Sam Bystander' }] } },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/near-misses/5']}>
+        <Routes>
+          <Route path="/near-misses/:id" element={<NearMissDetail />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('near-miss-actions-tab')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('near-miss-witnesses-add'))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Sam Bystander' } })
+    fireEvent.click(screen.getByTestId('near-miss-witnesses-save'))
+
+    await waitFor(() => {
+      expect(client.nearMissesApi.update).toHaveBeenCalledWith(
+        5,
+        expect.objectContaining({
+          witnesses_structured: { witnesses: [expect.objectContaining({ name: 'Sam Bystander' })] },
+        }),
+      )
+    })
+  })
+
+  it('renders the shared Photos tab wired to evidence-assets upload', async () => {
+    ;(client.nearMissesApi.listInvestigations as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { items: [], total: 0 },
+    })
+    ;(client.actionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { items: [], total: 0 },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/near-misses/5']}>
+        <Routes>
+          <Route path="/near-misses/:id" element={<NearMissDetail />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('near-miss-evidence-panel')).toBeInTheDocument()
+    })
+    expect(client.evidenceAssetsApi.list).toHaveBeenCalledWith({
+      source_module: 'near_miss',
+      source_id: 5,
+      page_size: 50,
     })
   })
 })

@@ -130,6 +130,10 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     # Alleged event datetime (distinct from when the complaint was received)
     alleged_event_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Structured witnesses (mirrors RTA/Incident.witnesses_structured):
+    # [{ name, phone, email, statement, willing_to_provide_statement }]
+    witnesses_structured: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
     # Assignment
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

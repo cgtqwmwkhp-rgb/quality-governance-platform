@@ -24,6 +24,7 @@ vi.mock('react-i18next', () => ({
 
 const mockList = vi.fn()
 const mockCustomersList = vi.fn()
+const mockContractsList = vi.fn()
 
 vi.mock('../../api/client', () => ({
   nearMissesApi: {
@@ -32,6 +33,9 @@ vi.mock('../../api/client', () => ({
   },
   lookupsApi: {
     list: (...args: unknown[]) => mockCustomersList(...args),
+  },
+  contractsApi: {
+    list: (...args: unknown[]) => mockContractsList(...args),
   },
   getApiErrorMessage: (error: unknown) =>
     error instanceof Error ? error.message : 'Something went wrong',
@@ -48,6 +52,10 @@ function Wrapper({ children }: { children: ReactNode }) {
 describe('Near Misses page accessibility (real page /near-misses)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockContractsList.mockResolvedValue({
+      items: [{ id: 1, name: 'UK Power Networks', code: 'ukpn', is_active: true, display_order: 1 }],
+      total: 1,
+    })
     mockCustomersList.mockImplementation((category: string) => {
       if (category === 'severity_levels') {
         return Promise.resolve({

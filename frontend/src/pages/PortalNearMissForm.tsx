@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
@@ -19,6 +19,7 @@ interface PortalReportPayload {
   department?: string
   is_anonymous: boolean
   reporter_submission?: Record<string, unknown>
+  idempotency_key?: string
 }
 
 interface PortalReportResponse {
@@ -86,6 +87,10 @@ import { cn } from '../helpers/utils'
 import { useGeolocation } from '../hooks/useGeolocation'
 import { useVoiceToText } from '../hooks/useVoiceToText'
 import { lookupsApi, type LookupOption } from '../api/client'
+import {
+  buildPortalPhotoMetadataSummary,
+  portalPhotoEvidenceHonestyCopy,
+} from './portalPhotoEvidenceHonesty'
 
 // Risk categories
 const RISK_CATEGORIES = [
@@ -152,6 +157,13 @@ export default function PortalNearMissForm() {
   const [error, setError] = useState<string | null>(null)
   const [customers, setCustomers] = useState<LookupOption[]>([])
   const [roles, setRoles] = useState<LookupOption[]>([])
+  // Stable per-attempt key so a retried/duplicate submit (e.g. network retry,
+  // double-tap) is idempotent server-side instead of creating a duplicate case.
+  const idempotencyKeyRef = useRef<string>(
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `nm-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  )
 
   const {
     latitude,
@@ -286,6 +298,7 @@ export default function PortalNearMissForm() {
       // Build portal report payload - Near miss goes to Near Miss/Incidents dashboard
       const customerCode =
         formData.contract === 'other' ? formData.contractOther : formData.contract
+      const photoSummary = buildPortalPhotoMetadataSummary(formData.photos)
       const payload: PortalReportPayload = {
         report_type: 'near_miss', // Routes to Near Miss records, not general Incidents
         title: `Near Miss - ${customerCode} - ${formData.location}`,
@@ -299,14 +312,27 @@ export default function PortalNearMissForm() {
         // Legacy bridge for NearMiss.contract; primary path is reporter_submission.contract
         department: customerCode,
         is_anonymous: false,
+        idempotency_key: idempotencyKeyRef.current,
         reporter_submission: {
           contract: customerCode,
+          contract_other: formData.contract === 'other' ? formData.contractOther : null,
           location: formData.location,
+          location_coordinates: formData.locationCoordinates || null,
+          event_date: formData.eventDate,
+          event_time: formData.eventTime,
+          was_involved: formData.wasInvolved === true,
+          reporter_role: formData.reporterRole,
           potential_severity: formData.potentialSeverity,
           potential_consequences: formData.potentialConsequences,
           preventive_action_suggested: formData.preventiveActionSuggested,
-          reporter_role: formData.reporterRole,
+          persons_involved: formData.personsInvolved || null,
+          witnesses_present: formData.witnessesPresent === true,
+          witness_names: formData.witnessesPresent === true ? formData.witnessNames || null : null,
+          asset_number: formData.assetNumber || null,
+          asset_type: formData.assetType || null,
+          risk_category: formData.riskCategory || null,
           is_hipo: formData.isHipo === true,
+          photos: photoSummary,
         },
       }
 
@@ -895,11 +921,20 @@ export default function PortalNearMissForm() {
               />
             </div>
 
-            {/* Photos */}
+            {/* Photos — EVD-02 metadata-only honesty toward evidence-assets spine */}
             <div>
               <span className="block text-sm font-medium text-foreground mb-2">
                 {t('portal.photos_optional')}
               </span>
+              <p
+                className="text-xs text-muted-foreground mb-3"
+                data-testid="portal-photo-evidence-honesty"
+              >
+                {t(
+                  'portal.photos.evidence.honesty',
+                  portalPhotoEvidenceHonestyCopy(formData.photos.length),
+                )}
+              </p>
               <div className="grid grid-cols-4 gap-2">
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">

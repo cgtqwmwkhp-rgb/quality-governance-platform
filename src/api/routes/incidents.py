@@ -199,7 +199,7 @@ async def create_incident(
 async def get_incident(
     incident_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("incident:read"))],
 ) -> Incident:
     """
     Get an incident by ID.
@@ -437,7 +437,7 @@ async def raise_risk_from_incident(
 @router.get("/", response_model=IncidentListResponse)
 async def list_incidents(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("incident:read"))],
     request_id: str = Depends(get_request_id),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
@@ -576,7 +576,7 @@ async def list_incidents(
 async def list_incident_investigations(
     incident_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("incident:read"))],
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(25, ge=1, le=100, description="Items per page (1-100)"),
 ):
@@ -645,7 +645,7 @@ async def list_incident_investigations(
 async def list_incident_running_sheet_entries(
     incident_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("incident:read"))],
 ):
     """List incident runner-sheet entries, newest first."""
     svc = IncidentService(db)

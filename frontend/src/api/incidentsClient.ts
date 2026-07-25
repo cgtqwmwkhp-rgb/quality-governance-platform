@@ -37,6 +37,8 @@ export interface Incident {
   reporter_email?: string
   people_involved?: string
   witnesses?: string
+  /** Structured witnesses: {witnesses: [{name, phone, email, statement, willing_to_provide_statement}]}. */
+  witnesses_structured?: Record<string, unknown> | null
   immediate_actions?: string
   first_aid_given?: boolean
   emergency_services_called?: boolean
@@ -116,6 +118,7 @@ export interface IncidentUpdate {
   riddor_classification?: string | null
   riddor_rationale?: string | null
   lessons_learnt?: string | null
+  witnesses_structured?: Record<string, unknown> | null
 }
 
 export interface RaiseRiskFromIncidentRequest {

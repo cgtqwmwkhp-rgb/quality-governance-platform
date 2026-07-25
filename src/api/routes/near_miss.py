@@ -35,7 +35,7 @@ from src.domain.services.near_miss_risk_links import (
     resolve_enterprise_category,
     risk_register_href,
 )
-from src.domain.services.near_miss_service import NearMissService
+from src.domain.services.near_miss_service import NearMissService, resolve_near_miss_contract
 from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter(tags=["Near Misses"])
@@ -126,8 +126,21 @@ async def create_near_miss(
 
     reference_number = await ReferenceNumberService.generate(db, "near_miss", NearMiss)
 
+    payload = data.model_dump()
+    try:
+        resolved_contract_id, resolved_contract = await resolve_near_miss_contract(
+            db,
+            tenant_id=current_user.tenant_id,
+            contract_id=payload.get("contract_id"),
+            contract=payload.get("contract"),
+        )
+    except ValueError as exc:
+        raise BadRequestError(str(exc)) from exc
+    payload["contract_id"] = resolved_contract_id
+    payload["contract"] = resolved_contract or "Not specified"
+
     near_miss = NearMiss(
-        **data.model_dump(),
+        **payload,
         reference_number=reference_number,
         status="REPORTED",
         priority="MEDIUM",
@@ -168,7 +181,7 @@ async def create_near_miss(
 @router.get("/", response_model=NearMissListResponse)
 async def list_near_misses(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("near_miss:read"))],
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status_filter: Optional[str] = Query(None, alias="status"),
@@ -249,7 +262,7 @@ async def list_near_misses(
 async def get_near_miss(
     near_miss_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("near_miss:read"))],
 ) -> NearMiss:
     """Get a near miss by ID."""
     return await _get_near_miss_or_404(db, near_miss_id, current_user)
@@ -277,6 +290,8 @@ async def update_near_miss(
         raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Near miss not found"))
     except StateTransitionError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise BadRequestError(str(e))
 
     await db.commit()
     await db.refresh(near_miss)
@@ -314,7 +329,7 @@ async def delete_near_miss(
 async def list_near_miss_investigations(
     near_miss_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("near_miss:read"))],
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
 ):
@@ -362,7 +377,7 @@ async def list_near_miss_investigations(
 async def list_near_miss_running_sheet_entries(
     near_miss_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("near_miss:read"))],
 ):
     """List near-miss runner-sheet entries, newest first."""
     near_miss = await _get_near_miss_or_404(db, near_miss_id, current_user)
