@@ -207,3 +207,7 @@ celery_app.conf.beat_schedule = {
 
 # DLQ signal handlers (not a @task module — keep explicit).
 import src.infrastructure.tasks.dlq  # noqa: F401, E402
+
+# Worker startup DB signal handlers: rebind the async engine to NullPool so the
+# per-task ``asyncio.run`` loop never inherits connections from a closed loop.
+import src.infrastructure.tasks.worker_db  # noqa: F401, E402

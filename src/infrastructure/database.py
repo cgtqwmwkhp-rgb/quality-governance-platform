@@ -73,30 +73,64 @@ _is_testing = (
 )
 
 
+# Pool sizing for the pooled (FastAPI) async engine. Azure Postgres caps
+# max_connections at 50 across web app + worker + beat, so these are also the
+# denominators for the pool usage metric below.
+_PG_POOL_SIZE: int = 10
+_PG_MAX_OVERFLOW: int = 20
+
+
+def _build_async_engine_kwargs(database_url: str, *, pooled: bool) -> dict[str, Any]:
+    """Build ``create_async_engine`` kwargs for one execution context.
+
+    ``pooled=False`` selects :class:`~sqlalchemy.pool.NullPool` and is mandatory
+    for any process that runs each unit of work on a *fresh* event loop. Celery
+    task bodies do exactly that via ``asyncio.run``, which closes its loop on
+    exit. A pooled asyncpg connection survives that close but stays bound to the
+    dead loop, so the next task's checkout raises ``RuntimeError: ... got Future
+    ... attached to a different loop`` and the unusable connection is never
+    released — exhausting ``max_connections``. NullPool opens and closes the
+    connection inside the task's own loop, so nothing loop-bound survives.
+
+    SQLite (and anything non-PostgreSQL) does not accept the queue-pool sizing
+    arguments, so those are PostgreSQL-only.
+    """
+    kwargs: dict[str, Any] = {
+        "echo": settings.database_echo,
+        "future": True,
+    }
+
+    if _is_testing:
+        kwargs["poolclass"] = NullPool
+        return kwargs
+
+    if "postgresql" not in database_url:
+        if not pooled:
+            kwargs["poolclass"] = NullPool
+        return kwargs
+
+    kwargs["connect_args"] = {"server_settings": {"statement_timeout": "30000"}}
+    if pooled:
+        kwargs.update(
+            {
+                "pool_pre_ping": True,
+                "pool_size": _PG_POOL_SIZE,
+                "max_overflow": _PG_MAX_OVERFLOW,
+                "pool_recycle": 1800,
+                "pool_timeout": 30,
+            }
+        )
+    else:
+        kwargs["poolclass"] = NullPool
+    return kwargs
+
+
 # Create async engine with conditional pooling (SQLite doesn't support pool_size)
 
-engine_kwargs: dict[str, Any] = {
-    "echo": settings.database_echo,
-    "future": True,
-}
-
-if _is_testing:
-    engine_kwargs["poolclass"] = NullPool
-elif "postgresql" in settings.database_url:
-    engine_kwargs.update(
-        {
-            "pool_pre_ping": True,
-            "pool_size": 10,
-            "max_overflow": 20,
-            "pool_recycle": 1800,
-            "pool_timeout": 30,
-            "connect_args": {
-                "server_settings": {"statement_timeout": "30000"},
-            },
-        }
-    )
-
-engine = create_async_engine(settings.database_url, **engine_kwargs)
+engine = create_async_engine(
+    settings.database_url,
+    **_build_async_engine_kwargs(settings.database_url, pooled=True),
+)
 
 # Sync engine for Celery tasks + sync-from-pams (must be psycopg2-safe)
 _sync_url = to_sync_database_url(settings.database_url)
@@ -114,8 +148,6 @@ async_session_maker = async_sessionmaker(
 
 # Pool usage tracking (async engine checkout/checkin; matches pool_size + max_overflow for PostgreSQL)
 _POOL_CHECKED_OUT: int = 0
-_PG_POOL_SIZE: int = 10
-_PG_MAX_OVERFLOW: int = 20
 
 
 def get_pool_usage_percent() -> float:
@@ -146,6 +178,55 @@ def _register_async_pool_usage_listeners() -> None:
 
 
 _register_async_pool_usage_listeners()
+
+
+_worker_database_configured = False
+
+
+def configure_celery_worker_database() -> None:
+    """Re-bind the shared async engine for a Celery worker process (no pooling).
+
+    Called from Celery's worker startup signals only — the FastAPI process keeps
+    the pooled engine, so web request performance is unaffected. Two things are
+    done here, both of which only make sense in a worker:
+
+    * The async engine is rebuilt with :class:`~sqlalchemy.pool.NullPool` because
+      task bodies run under ``asyncio.run``; see
+      :func:`_build_async_engine_kwargs` for why a pooled connection cannot
+      survive that. ``async_session_maker`` is re-bound in place so the task
+      modules that already did ``from ... import async_session_maker`` pick up
+      the new engine without an import-order dance.
+    * Both engines drop any pool inherited across ``fork`` (prefork worker
+      children must never share a socket with the parent).
+
+    Idempotent: the rebuild happens once per process, the fork-safe pool reset on
+    every call.
+    """
+    global engine, _worker_database_configured
+
+    # close=False: a connection inherited across fork — or created on an event
+    # loop that has since closed — cannot be shut down from here, and closing it
+    # would also tear down the owning process's socket. Abandon the pool instead.
+    sync_engine.dispose(close=False)
+
+    if _worker_database_configured:
+        return
+
+    previous_engine = engine
+    engine = create_async_engine(
+        settings.database_url,
+        **_build_async_engine_kwargs(settings.database_url, pooled=False),
+    )
+    async_session_maker.configure(bind=engine)
+    _register_async_pool_usage_listeners()
+    previous_engine.sync_engine.dispose(close=False)
+    _worker_database_configured = True
+
+    logger.info(
+        "Celery worker async engine rebound with %s — connections are opened and closed "
+        "inside each task's own event loop",
+        type(engine.pool).__name__,
+    )
 
 
 async def emit_db_pool_usage_metric() -> None:
