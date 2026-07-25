@@ -46,6 +46,49 @@ create_site() {
 create_site "$WORKER_NAME" worker
 create_site "$BEAT_NAME" beat
 
+# Worker and beat pull the API's image with acrUseManagedIdentityCreds, so they need a
+# system-assigned identity holding AcrPull. A site missing either keeps running on its
+# cached container and only fails the next time it restarts, which makes this very easy
+# to miss: prod beat was in exactly that state.
+ACR_HOST=$(az webapp config appsettings list --name "$API_WEBAPP" --resource-group "$RG" \
+  --query "[?name=='DOCKER_REGISTRY_SERVER_URL'].value | [0]" -o tsv 2>/dev/null || true)
+ACR_HOST="${ACR_HOST#https://}"
+ACR_REGISTRY="${ACR_NAME:-${ACR_HOST%%.azurecr.io}}"
+
+grant_acr_pull() {
+  local name="$1"
+  local principal
+  principal=$(az webapp identity assign --name "$name" --resource-group "$RG" --query principalId -o tsv)
+  echo "  $name identity: $principal"
+
+  if [ -z "$ACR_REGISTRY" ]; then
+    echo "  ⚠️  Could not resolve the registry from $API_WEBAPP and ACR_NAME is unset —"
+    echo "     grant AcrPull manually or $name will fail to pull on its next restart."
+    return 0
+  fi
+
+  local acr_id
+  acr_id=$(az acr show --name "$ACR_REGISTRY" --query id -o tsv)
+  if az role assignment create \
+      --assignee-object-id "$principal" \
+      --assignee-principal-type ServicePrincipal \
+      --role AcrPull \
+      --scope "$acr_id" \
+      --output none 2>/dev/null; then
+    echo "  ✓ AcrPull granted on $ACR_REGISTRY"
+  else
+    echo "  ✓ AcrPull already present on $ACR_REGISTRY"
+  fi
+
+  az webapp config set --name "$name" --resource-group "$RG" \
+    --generic-configurations '{"acrUseManagedIdentityCreds": true}' --output none
+}
+
+echo ""
+echo "=== Managed identity + AcrPull ==="
+grant_acr_pull "$WORKER_NAME"
+grant_acr_pull "$BEAT_NAME"
+
 echo ""
 echo "Next: merge feat/wcs-celery-worker-beat-deploy and let deploy-staging/production"
 echo "update container image + startup-file for worker/beat, then run:"

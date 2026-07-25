@@ -25,6 +25,27 @@ if [ -z "$REDIS_URL_VAL" ]; then
   exit 1
 fi
 
+# A non-production environment sharing production's broker is not a cosmetic problem: its
+# worker competes for prod tasks, looks the job id up in its own database, finds nothing,
+# and the prod row stays pending forever. Prod library documents were stuck in "processing"
+# for exactly this reason while kv-qgp-staging's REDIS-URL pointed at redis-qgp-prod.
+if [ "$APP_ENV" != "production" ] && printf '%s' "$REDIS_URL_VAL" | grep -q 'redis-qgp-prod'; then
+  echo "❌ $APP_ENV Celery apps are pointed at the production Redis broker (redis-qgp-prod)."
+  echo "   Point REDIS-URL in this environment's Key Vault at its own cache instead."
+  exit 1
+fi
+
+# The worker downloads uploaded documents from Blob Storage to index them. Without these
+# it accepts index jobs and then fails every one with StorageNotConfiguredError, leaving
+# documents stuck in "processing" with no signal at deploy time. Fail the deploy instead.
+STORAGE_CONN_VAL="${AZURE_STORAGE_CONNECTION_STRING:-}"
+STORAGE_CONTAINER_VAL="${AZURE_STORAGE_CONTAINER_NAME:-evidence-assets}"
+if [ -z "$STORAGE_CONN_VAL" ] && { [ "$APP_ENV" = "production" ] || [ "$APP_ENV" = "staging" ]; }; then
+  echo "❌ AZURE_STORAGE_CONNECTION_STRING required for Celery apps in $APP_ENV"
+  echo "   Library indexing cannot read uploaded files without it."
+  exit 1
+fi
+
 deploy_one() {
   local name="$1"
   local role="$2"
@@ -62,6 +83,12 @@ deploy_one() {
   fi
   if [ -n "${JWT_SECRET_KEY:-}" ]; then
     settings+=(JWT_SECRET_KEY="$JWT_SECRET_KEY")
+  fi
+  if [ -n "$STORAGE_CONN_VAL" ]; then
+    settings+=(
+      AZURE_STORAGE_CONNECTION_STRING="$STORAGE_CONN_VAL"
+      AZURE_STORAGE_CONTAINER_NAME="$STORAGE_CONTAINER_VAL"
+    )
   fi
   # Optional SMTP — only wire when present (Key Vault / pipeline env). Never invent credentials.
   for key in EMAIL_ENABLED SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD FROM_EMAIL FROM_NAME; do
