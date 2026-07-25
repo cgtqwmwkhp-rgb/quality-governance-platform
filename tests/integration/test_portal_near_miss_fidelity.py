@@ -20,6 +20,7 @@ from sqlalchemy import select
 from src.domain.models.audit_log import AuditLogEntry
 from src.domain.models.evidence_asset import EvidenceAsset, EvidenceAssetType, EvidenceSourceModule, EvidenceVisibility
 from src.domain.models.near_miss import NearMiss
+from src.domain.models.tenant import Tenant
 
 
 def _near_miss_payload(**overrides) -> dict:
@@ -142,7 +143,23 @@ class TestPortalNearMissReporterSubmissionSnapshot:
 class TestPortalNearMissAttachmentFidelity:
     """attachment_ids must be linked to the created case, failing closed on invalid ids."""
 
+    async def _ensure_tenant(self, test_session, *, tenant_id: int) -> None:
+        existing = await test_session.get(Tenant, tenant_id)
+        if existing is not None:
+            return
+        test_session.add(
+            Tenant(
+                id=tenant_id,
+                name=f"CI Tenant {tenant_id}",
+                slug=f"ci-tenant-{tenant_id}",
+                admin_email=f"admin-{tenant_id}@example.com",
+                is_active=True,
+            )
+        )
+        await test_session.flush()
+
     async def _make_asset(self, test_session, *, tenant_id: int) -> EvidenceAsset:
+        await self._ensure_tenant(test_session, tenant_id=tenant_id)
         asset = EvidenceAsset(
             storage_key=f"evidence/pending/{uuid.uuid4().hex}.jpg",
             original_filename="near_miss.jpg",
@@ -183,7 +200,7 @@ class TestPortalNearMissAttachmentFidelity:
 
         # The case must NOT have been created — fail-closed means no orphaned case.
         nm_result = await test_session.execute(select(NearMiss).where(NearMiss.description == payload["description"]))
-        assert nm_result.scalar_one_or_none() is None
+        assert nm_result.scalars().first() is None
 
     async def test_missing_attachment_id_fails_closed(self, client, test_session):
         payload = _near_miss_payload(attachment_ids=["999999999"])
@@ -191,7 +208,7 @@ class TestPortalNearMissAttachmentFidelity:
 
         assert response.status_code == 422, response.text
         nm_result = await test_session.execute(select(NearMiss).where(NearMiss.description == payload["description"]))
-        assert nm_result.scalar_one_or_none() is None
+        assert nm_result.scalars().first() is None
 
 
 @pytest.mark.asyncio
