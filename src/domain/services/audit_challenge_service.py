@@ -197,7 +197,7 @@ class AuditChallengeService:
         await self.db.flush()
 
         turns = await self.list_turns(session_id, tenant_id)
-        next_order = (max((t.sort_order for t in turns), default=-1) + 1)
+        next_order = max((t.sort_order for t in turns), default=-1) + 1
 
         critic_turn = AuditChallengeTurn(
             session_id=session.id,
@@ -205,11 +205,7 @@ class AuditChallengeService:
             role=AuditChallengeTurnRole.CRITIC,
             content=result.get("critic_text") or "Critique complete.",
             chip_id=session.chip_id,
-            citations_json=[
-                c
-                for f in result.get("findings") or []
-                for c in (f.get("citations") or [])
-            ][:20],
+            citations_json=[c for f in result.get("findings") or [] for c in (f.get("citations") or [])][:20],
             sort_order=next_order,
         )
         self.db.add(critic_turn)

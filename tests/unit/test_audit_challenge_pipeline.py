@@ -59,7 +59,9 @@ class TestHeuristicFindings:
 
     def test_always_includes_scoring_and_field_usability(self):
         sections = [
-            _section("q1", text="Is the guard fitted correctly and inspected today?", weight=1, guidance="Check visually"),
+            _section(
+                "q1", text="Is the guard fitted correctly and inspected today?", weight=1, guidance="Check visually"
+            ),
             _section("q2", text="Is oil level ok?", weight=1),
             _section("q3", text="Brakes?", weight=1),
         ]
@@ -196,7 +198,9 @@ class TestAuditChallengePipelineHeuristicFallback:
     async def test_run_returns_findings_and_proposals_without_ai_keys(self, monkeypatch):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         sections = [
-            _section("q1", text="Is the guard fitted correctly and inspected today?", weight=1, guidance="Check visually"),
+            _section(
+                "q1", text="Is the guard fitted correctly and inspected today?", weight=1, guidance="Check visually"
+            ),
             _section("q2", text="OK?", weight=1),
         ]
         pipeline = AuditChallengePipeline()

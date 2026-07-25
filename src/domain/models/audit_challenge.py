@@ -79,9 +79,7 @@ class AuditChallengeTurn(Base, TimestampMixin):
         Integer, ForeignKey("audit_challenge_sessions.id", ondelete="CASCADE"), nullable=False, index=True
     )
     tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
-    role: Mapped[AuditChallengeTurnRole] = mapped_column(
-        CaseInsensitiveEnum(AuditChallengeTurnRole), nullable=False
-    )
+    role: Mapped[AuditChallengeTurnRole] = mapped_column(CaseInsensitiveEnum(AuditChallengeTurnRole), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False, default="")
     chip_id: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
     citations_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
