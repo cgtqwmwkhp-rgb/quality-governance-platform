@@ -27,6 +27,7 @@ import {
   Sparkles,
   Camera,
   Users,
+  ShieldAlert,
 } from 'lucide-react'
 import {
   complaintsApi,
@@ -119,6 +120,7 @@ export default function ComplaintDetail() {
   const [creating, setCreating] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [raisingRisk, setRaisingRisk] = useState(false)
   const [editForm, setEditForm] = useState<ComplaintUpdate>({})
   const [witnessesDraft, setWitnessesDraft] = useState<CaseWitnessesValue | null>(null)
   const [savingWitnesses, setSavingWitnesses] = useState(false)
@@ -329,6 +331,29 @@ export default function ComplaintDetail() {
       })
     }
     setIsEditing(false)
+  }
+
+  const handleRaiseRisk = async () => {
+    if (!complaint) return
+    setRaisingRisk(true)
+    try {
+      const response = await complaintsApi.raiseRisk(complaint.id)
+      setComplaint({
+        ...complaint,
+        linked_risk_ids: response.data.linked_risk_ids,
+      })
+      toast.success(
+        t('complaints.feedback.risk_raised', 'Risk {{ref}} raised and linked', {
+          ref: response.data.risk.reference_number,
+        }),
+      )
+      navigate(response.data.risk_register_href)
+    } catch (err) {
+      trackError(err, { component: 'ComplaintDetail', action: 'raiseRisk' })
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setRaisingRisk(false)
+    }
   }
 
   const witnessesValue: CaseWitnessesValue =
@@ -739,6 +764,17 @@ export default function ComplaintDetail() {
             </>
           ) : (
             <>
+              <Button
+                variant="outline"
+                onClick={() => void handleRaiseRisk()}
+                disabled={raisingRisk}
+                data-testid="complaint-raise-risk"
+              >
+                <ShieldAlert className="w-4 h-4 mr-2" />
+                {raisingRisk
+                  ? t('complaints.raising_risk', 'Raising…')
+                  : t('complaints.actions.raise_risk', 'Raise risk')}
+              </Button>
               <Button variant="outline" onClick={() => setIsEditing(true)}>
                 <Pencil className="w-4 h-4 mr-2" />
                 {t('edit')}

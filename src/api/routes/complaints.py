@@ -1,10 +1,12 @@
 """API routes for complaint management."""
 
 import logging
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
@@ -18,6 +20,14 @@ from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictE
 from src.domain.models.complaint import Complaint, ComplaintRunningSheetEntry
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.case_risk_links import sync_case_risk_links_from_csv
+from src.domain.services.complaint_risk_links import (
+    append_linked_risk_id,
+    complaint_detail_href,
+    create_enterprise_risk_from_complaint,
+    risk_register_href,
+)
+from src.domain.services.near_miss_risk_links import resolve_enterprise_category
 from src.domain.services.notification_service import NotificationService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.services.complaint_service import ComplaintService
@@ -557,3 +567,161 @@ async def delete_complaint_running_sheet_entry(
 
     await db.delete(entry)
     await db.commit()
+
+
+class RaiseRiskFromComplaintRequest(BaseModel):
+    """Optional overrides when raising a risk from a complaint."""
+
+    title: Optional[str] = Field(None, min_length=1, max_length=300)
+    description: Optional[str] = Field(None, min_length=1)
+    likelihood: int = Field(3, ge=1, le=5)
+    impact: int = Field(3, ge=1, le=5)
+    category: Literal[
+        "strategic",
+        "operational",
+        "financial",
+        "compliance",
+        "reputational",
+        "safety",
+        "environmental",
+        "information_security",
+    ] = "compliance"
+    treatment_strategy: Literal[
+        "accept",
+        "mitigate",
+        "transfer",
+        "avoid",
+        "exploit",
+        "treat",
+        "tolerate",
+        "terminate",
+    ] = "mitigate"
+
+
+class RaisedEnterpriseRiskSummary(BaseModel):
+    """Slim risk payload for FE toast/navigation (enterprise register)."""
+
+    id: int
+    reference_number: str
+    title: str
+    risk_source: Optional[str] = None
+
+
+class RaiseRiskFromComplaintResponse(BaseModel):
+    risk: RaisedEnterpriseRiskSummary
+    complaint_id: int
+    linked_risk_ids: str
+    complaint_href: str
+    risk_register_href: str
+
+
+@router.post(
+    "/{complaint_id}/raise-risk",
+    response_model=RaiseRiskFromComplaintResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def raise_risk_from_complaint(
+    complaint_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("risk:create"))],
+    request_id: str = Depends(get_request_id),
+    body: Optional[RaiseRiskFromComplaintRequest] = None,
+):
+    """Create an Enterprise Risk Register entry linked to this complaint."""
+    if body is None:
+        body = RaiseRiskFromComplaintRequest.model_validate({})
+
+    svc = ComplaintService(db)
+    try:
+        complaint = await svc.get_complaint(
+            complaint_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise NotFoundError(f"Complaint {complaint_id} not found")
+
+    priority_impact = {
+        "low": 2,
+        "medium": 3,
+        "high": 4,
+        "critical": 5,
+    }
+    impact = body.impact
+    if body.impact == 3 and complaint.priority is not None:
+        priority_key = complaint.priority.value if hasattr(complaint.priority, "value") else str(complaint.priority)
+        impact = priority_impact.get(priority_key.lower(), 3)
+
+    category = resolve_enterprise_category(body.category, "compliance")
+    title = body.title or f"Risk from complaint {complaint.reference_number}"
+    description = body.description or (
+        f"Raised from complaint {complaint.reference_number}.\n\n" f"{complaint.description}"
+    )
+
+    try:
+        risk = await create_enterprise_risk_from_complaint(
+            db,
+            complaint=complaint,
+            actor_user_id=current_user.id,
+            title=title,
+            description=description,
+            likelihood=body.likelihood,
+            impact=impact,
+            category=category,
+            treatment_strategy=body.treatment_strategy,
+        )
+        complaint.linked_risk_ids = append_linked_risk_id(complaint.linked_risk_ids, risk.id)
+        if complaint.tenant_id is not None:
+            await sync_case_risk_links_from_csv(
+                db,
+                tenant_id=complaint.tenant_id,
+                case_type="complaint",
+                case_id=complaint.id,
+                linked_risk_ids_raw=complaint.linked_risk_ids,
+            )
+
+        await record_audit_event(
+            db=db,
+            event_type="complaint.risk_raised",
+            entity_type="complaint",
+            entity_id=str(complaint.id),
+            action="create",
+            description=f"Risk {risk.reference} raised from complaint {complaint.reference_number}",
+            payload={"risk_id": risk.id, "risk_reference": risk.reference},
+            user_id=current_user.id,
+            request_id=request_id,
+            tenant_id=complaint.tenant_id,
+        )
+
+        await db.commit()
+        await db.refresh(risk)
+    except IntegrityError as exc:
+        await db.rollback()
+        logger.exception("raise-risk IntegrityError for complaint_id=%s", complaint_id)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=api_error(
+                ErrorCode.DATABASE_ERROR,
+                "Could not raise risk due to a data conflict. Check assignee and try again.",
+            ),
+        ) from exc
+    except Exception as exc:
+        await db.rollback()
+        logger.exception("raise-risk failed for complaint_id=%s", complaint_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=api_error(ErrorCode.INTERNAL_ERROR, "Could not raise risk from complaint."),
+        ) from exc
+
+    return RaiseRiskFromComplaintResponse(
+        risk=RaisedEnterpriseRiskSummary(
+            id=risk.id,
+            reference_number=risk.reference,
+            title=risk.title,
+            risk_source=risk.context,
+        ),
+        complaint_id=complaint.id,
+        linked_risk_ids=complaint.linked_risk_ids or str(risk.id),
+        complaint_href=complaint_detail_href(complaint.id),
+        risk_register_href=risk_register_href(risk.id, complaint_ref=complaint.reference_number),
+    )

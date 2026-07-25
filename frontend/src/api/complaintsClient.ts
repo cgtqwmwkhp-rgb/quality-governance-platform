@@ -58,10 +58,33 @@ export interface Complaint {
   reporter_submission?: Record<string, unknown> | null
   /** Structured witnesses: {witnesses: [{name, phone, email, statement, willing_to_provide_statement}]}. */
   witnesses_structured?: Record<string, unknown> | null
+  linked_risk_ids?: string | null
   due_date?: string
   created_at: string
   updated_at?: string
   closed_at?: string | null
+}
+
+export interface RaiseRiskFromComplaintRequest {
+  title?: string
+  description?: string
+  likelihood?: number
+  impact?: number
+  category?: string
+  treatment_strategy?: string
+}
+
+export interface RaiseRiskFromComplaintResponse {
+  risk: {
+    id: number
+    reference_number: string
+    title: string
+    risk_source?: string | null
+  }
+  complaint_id: number
+  linked_risk_ids: string
+  complaint_href: string
+  risk_register_href: string
 }
 
 export interface ComplaintCreate {
@@ -135,5 +158,7 @@ export function createComplaintsApi(api: AxiosInstance) {
       api.post<RunningSheetEntry>(`/api/v1/complaints/${complaintId}/running-sheet`, data),
     deleteRunningSheetEntry: (complaintId: number, entryId: number) =>
       api.delete(`/api/v1/complaints/${complaintId}/running-sheet/${entryId}`),
+    raiseRisk: (id: number, data?: RaiseRiskFromComplaintRequest) =>
+      api.post<RaiseRiskFromComplaintResponse>(`/api/v1/complaints/${id}/raise-risk`, data || {}),
   }
 }
