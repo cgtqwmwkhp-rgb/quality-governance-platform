@@ -353,10 +353,12 @@ class IndexJobService:
                     document.indexing_error = None
                     chunks_succeeded += len(chunks)
                 else:
-                    # Chunks + AI metadata are usable for quiz/map/Q&A even when Voyage/Pinecone
-                    # are not configured. Mark content-ready via indexed_at; keep APPROVED so
-                    # publish can still set PUBLISHED without losing readiness signals.
-                    document.indexed_at = datetime.now(timezone.utc)
+                    # P0 fix: indexed_at must stay honest. Chunks + AI metadata are still
+                    # usable for quiz/map/Q&A even when Voyage/Pinecone are unavailable or
+                    # the upsert failed, but the document is NOT semantically searchable —
+                    # do not set indexed_at or pretend otherwise. Keep APPROVED so publish
+                    # can still proceed without losing readiness signals.
+                    document.indexed_at = None
                     _apply_post_index_status(document, DocumentStatus.APPROVED)
                     document.indexing_error = (
                         document.indexing_error
