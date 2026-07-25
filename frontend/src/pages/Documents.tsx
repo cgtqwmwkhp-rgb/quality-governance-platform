@@ -49,11 +49,8 @@ import {
   buildDocumentsExceptionsHref,
   DOCUMENT_CONTROL_GOLDEN_THREAD_PATH,
 } from './documentsDownstreamHelpers'
-import {
-  buildCampaignResultsHref,
-  complianceRowByDocumentId,
-  formatCampaignHealthBadge,
-} from './documentCampaignHelpers'
+import { CampaignRing } from './CampaignRing'
+import { complianceRowByDocumentId } from './documentCampaignHelpers'
 
 /** Surface operator-visible failures (banner + toast). Never silent. */
 const reportFailure = (
@@ -90,6 +87,12 @@ interface Document {
   is_public: boolean
   created_at: string
   indexed_at?: string
+  expiry_date?: string
+  review_date?: string
+  effective_date?: string
+  live_at?: string
+  created_by_id?: number
+  created_by_name?: string
 }
 
 interface DocumentCategoryOption {
@@ -560,6 +563,19 @@ export default function Documents() {
 
   const getFileIcon = (type: string) => FILE_ICONS[type] || File
 
+  const formatGovernanceDate = (value?: string): string | null => {
+    if (!value) return null
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return null
+    return parsed.toLocaleDateString()
+  }
+
+  const isPastDue = (value?: string): boolean => {
+    if (!value) return false
+    const parsed = new Date(value)
+    return !Number.isNaN(parsed.getTime()) && parsed.getTime() < Date.now()
+  }
+
   const matchesLibrarySearch = (doc: { title?: string | null; reference_number?: string | null }) => {
     const q = searchTerm.trim().toLowerCase()
     if (!q) return true
@@ -1016,20 +1032,7 @@ export default function Documents() {
                     <Badge variant={getStatusVariant(doc.status) as any} className="text-[10px]">
                       {doc.status}
                     </Badge>
-                    {campaignRow ? (
-                      <Link
-                        to={buildCampaignResultsHref(doc.id, campaignRow.campaign_id)}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <Badge
-                          variant="outline"
-                          className="text-[10px]"
-                          data-testid={`document-campaign-badge-${doc.id}`}
-                        >
-                          {formatCampaignHealthBadge(campaignRow)}
-                        </Badge>
-                      </Link>
-                    ) : null}
+                    {campaignRow ? <CampaignRing documentId={doc.id} row={campaignRow} size={22} /> : null}
                   </div>
                   <h2 className="font-semibold text-foreground truncate mb-1 text-base">{doc.title}</h2>
 
@@ -1086,114 +1089,142 @@ export default function Documents() {
         </div>
       ) : (
         <Card className="overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
-                  {t('documents.table.document')}
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
-                  {t('common.type')}
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
-                  {t('common.status')}
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
-                  {t('documents.table.size')}
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
-                  {t('documents.table.views')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filteredDocuments.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8" data-testid="documents-empty">
-                    <EmptyState
-                      icon={<Search className="w-8 h-8 text-muted-foreground" />}
-                      title={
-                        searchTerm.trim()
-                          ? 'No matching documents'
-                          : t('documents.empty.title')
-                      }
-                      description={
-                        searchTerm.trim()
-                          ? `No list matches for “${searchTerm}”.${
-                              searchUnavailable
-                                ? ' Semantic search is unavailable — this is not a confirmed global zero.'
-                                : ''
-                            }`
-                          : 'Press / or use Search library to find policies, procedures, and SOPs.'
-                      }
-                    />
-                    <div className="flex justify-center mt-4">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        data-testid="documents-search-empty-cta"
-                        onClick={focusLibrarySearch}
-                      >
-                        <Search className="w-4 h-4" />
-                        {searchTerm.trim() ? 'Refine search' : 'Search library'}
-                      </Button>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px]">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="sticky left-0 z-10 bg-card px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                    {t('documents.table.document')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                    {t('common.status')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                    {t('documents.table.review_expiry')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                    {t('documents.table.campaign')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                    {t('documents.table.uploaded_by')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                    {t('documents.table.views')}
+                  </th>
                 </tr>
-              ) : (
-                filteredDocuments.map((doc) => {
-                const FileIcon = getFileIcon(doc.file_type)
-                const campaignRow = campaignComplianceByDoc.get(doc.id)
-                return (
-                  <tr
-                    key={doc.id}
-                    onClick={() => navigate(`/documents/${doc.id}`)}
-                    className="hover:bg-surface cursor-pointer"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                          <FileIcon className="w-5 h-5 text-primary" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-foreground">{doc.title}</p>
-                          <p className="text-xs text-muted-foreground font-mono">
-                            {doc.reference_number}
-                          </p>
-                          {campaignRow ? (
-                            <Link
-                              to={buildCampaignResultsHref(doc.id, campaignRow.campaign_id)}
-                              onClick={(event) => event.stopPropagation()}
-                              className="mt-1 inline-block"
-                            >
-                              <Badge
-                                variant="outline"
-                                className="text-[10px]"
-                                data-testid={`document-campaign-badge-${doc.id}`}
-                              >
-                                {formatCampaignHealthBadge(campaignRow)}
-                              </Badge>
-                            </Link>
-                          ) : null}
-                        </div>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredDocuments.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-8" data-testid="documents-empty">
+                      <EmptyState
+                        icon={<Search className="w-8 h-8 text-muted-foreground" />}
+                        title={
+                          searchTerm.trim()
+                            ? 'No matching documents'
+                            : t('documents.empty.title')
+                        }
+                        description={
+                          searchTerm.trim()
+                            ? `No list matches for “${searchTerm}”.${
+                                searchUnavailable
+                                  ? ' Semantic search is unavailable — this is not a confirmed global zero.'
+                                  : ''
+                              }`
+                            : 'Press / or use Search library to find policies, procedures, and SOPs.'
+                        }
+                      />
+                      <div className="flex justify-center mt-4">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          data-testid="documents-search-empty-cta"
+                          onClick={focusLibrarySearch}
+                        >
+                          <Search className="w-4 h-4" />
+                          {searchTerm.trim() ? 'Refine search' : 'Search library'}
+                        </Button>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-foreground capitalize">
-                      {doc.document_type}
-                    </td>
-                    <td className="px-6 py-4">
-                      <Badge variant={getStatusVariant(doc.status) as any}>{doc.status}</Badge>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground">
-                      {formatFileSize(doc.file_size)}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground">{doc.view_count}</td>
                   </tr>
-                )
-              })
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  filteredDocuments.map((doc) => {
+                  const FileIcon = getFileIcon(doc.file_type)
+                  const campaignRow = campaignComplianceByDoc.get(doc.id)
+                  const reviewLabel = formatGovernanceDate(doc.review_date)
+                  const expiryLabel = formatGovernanceDate(doc.expiry_date)
+                  return (
+                    <tr
+                      key={doc.id}
+                      onClick={() => navigate(`/documents/${doc.id}`)}
+                      className="cursor-pointer hover:bg-surface"
+                    >
+                      <td className="sticky left-0 z-10 bg-card px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                            <FileIcon className="w-5 h-5 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-medium text-foreground truncate">{doc.title}</p>
+                              <span className="text-xs text-muted-foreground font-mono shrink-0">
+                                v{doc.version}
+                              </span>
+                              {doc.indexed_at && (
+                                <span title="AI Indexed" className="shrink-0">
+                                  <Sparkles className="w-3 h-3 text-primary" />
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground font-mono">
+                              {doc.reference_number}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge variant={getStatusVariant(doc.status) as any}>{doc.status}</Badge>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-muted-foreground">
+                        {reviewLabel || expiryLabel ? (
+                          <div className="space-y-0.5">
+                            {reviewLabel && (
+                              <div
+                                className={cn(isPastDue(doc.review_date) && 'font-medium text-warning')}
+                              >
+                                {t('documents.table.review_short')}: {reviewLabel}
+                              </div>
+                            )}
+                            {expiryLabel && (
+                              <div
+                                className={cn(isPastDue(doc.expiry_date) && 'font-medium text-destructive')}
+                              >
+                                {t('documents.table.expiry_short')}: {expiryLabel}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span>—</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {campaignRow ? (
+                          <CampaignRing documentId={doc.id} row={campaignRow} size={28} />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">
+                        {doc.created_by_name || '—'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">{doc.view_count}</td>
+                    </tr>
+                  )
+                })
+                )}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
 

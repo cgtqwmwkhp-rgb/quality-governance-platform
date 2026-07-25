@@ -413,4 +413,70 @@ describe('Documents', () => {
     })
     expect(await screen.findByText('Safety Policy')).toBeInTheDocument()
   })
+
+  it('renders the campaign ring (not a text badge) in the grid view', async () => {
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('document-campaign-ring-11')).toBeInTheDocument()
+    expect(screen.queryByTestId('document-campaign-badge-11')).not.toBeInTheDocument()
+  })
+
+  it('shows governance dates, campaign ring, uploaded-by, and views in the list view; drops size/type', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/documents/?')) {
+        return Promise.resolve({
+          data: {
+            items: [
+              {
+                ...sampleDoc,
+                view_count: 5,
+                review_date: '2026-01-01T00:00:00Z',
+                expiry_date: '2099-01-01T00:00:00Z',
+                created_by_name: 'Jane Doe',
+              },
+            ],
+          },
+        })
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.resolve({
+          data: {
+            total_documents: 1,
+            indexed_documents: 0,
+            total_chunks: 0,
+            by_status: { approved: 1 },
+            by_type: { policy: 1 },
+          },
+        })
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
+
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    await screen.findByText('Safety Policy')
+    fireEvent.click(screen.getByRole('button', { name: /list view/i }))
+
+    expect(screen.getByText('documents.table.review_expiry')).toBeInTheDocument()
+    expect(screen.getByText('documents.table.campaign')).toBeInTheDocument()
+    expect(screen.getByText('documents.table.uploaded_by')).toBeInTheDocument()
+    expect(screen.queryByText('documents.table.size')).not.toBeInTheDocument()
+    expect(screen.queryByText('common.type')).not.toBeInTheDocument()
+
+    expect(screen.getByText('Jane Doe')).toBeInTheDocument()
+    expect(screen.getByText('5')).toBeInTheDocument()
+    expect(await screen.findByTestId('document-campaign-ring-11')).toBeInTheDocument()
+    expect(screen.getByText(/documents\.table\.review_short/)).toBeInTheDocument()
+    expect(screen.getByText(/documents\.table\.expiry_short/)).toBeInTheDocument()
+  })
 })

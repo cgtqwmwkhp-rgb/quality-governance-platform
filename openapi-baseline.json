@@ -17904,6 +17904,28 @@
             "title": "Created At",
             "type": "string"
           },
+          "created_by_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Id"
+          },
+          "created_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Name"
+          },
           "department": {
             "anyOf": [
               {
@@ -17950,6 +17972,30 @@
               }
             ],
             "title": "Duplicate Warning Detail"
+          },
+          "effective_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Date"
+          },
+          "expiry_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Date"
           },
           "file_name": {
             "title": "File Name",
@@ -17999,6 +18045,18 @@
             "title": "Is Statutory",
             "type": "boolean"
           },
+          "live_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live At"
+          },
           "page_count": {
             "anyOf": [
               {
@@ -18036,6 +18094,18 @@
               }
             ],
             "title": "Retention Until"
+          },
+          "review_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Date"
           },
           "sensitivity": {
             "title": "Sensitivity",
@@ -28671,6 +28741,42 @@
               }
             ],
             "title": "Description"
+          },
+          "effective_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Date"
+          },
+          "expiry_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Date"
+          },
+          "review_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Date"
           },
           "title": {
             "anyOf": [
