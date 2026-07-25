@@ -1940,3 +1940,28 @@ jobs:
           echo "Actor: ${{ github.actor }}"
           echo "Commit: $DISPLAY_SHA"
           # Notify via Azure Monitor / Teams if configured
+
+      # Without this, a run that deployed nothing looks identical in the Actions list to
+      # one that shipped: the two steps above are both skipped, this job still passes, and
+      # the run goes green. The conclusion is deliberately left alone — a blocked promotion
+      # and a withheld sign-off are both legitimate outcomes, and the staging run is already
+      # red when it is the former — so say so in the summary instead.
+      - name: Report that nothing was deployed
+        if: needs.build-and-deploy.result != 'success' && needs.build-and-deploy.result != 'failure'
+        run: |
+          {
+            echo "## ⏸️ No production deployment performed"
+            echo ""
+            echo "\`Build and Deploy to Production\` concluded \`${{ needs.build-and-deploy.result }}\`."
+            echo "**Production is unchanged** — this green run did not ship anything."
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Trigger | ${{ github.event_name }} |"
+            echo "| Candidate commit | ${{ github.event.workflow_run.head_sha || github.sha }} |"
+            echo ""
+            echo "Usual causes: the release gate refused to promote a commit staging did not"
+            echo "verify, or a deploy freeze / sign-off withheld approval."
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=No production deployment::Production unchanged - build-and-deploy was ${{ needs.build-and-deploy.result }}"
