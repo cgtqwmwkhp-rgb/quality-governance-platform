@@ -52,6 +52,7 @@ def _build_item(
     source: str,
     expiry_date: Optional[datetime],
     due_soon_days: int,
+    now: Optional[datetime] = None,
     issuing_body: Optional[str] = None,
     reference_number: Optional[str] = None,
     detail_path: Optional[str] = None,
@@ -61,7 +62,7 @@ def _build_item(
     is_critical: bool = False,
     metadata: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    readiness = compute_readiness_status(expiry_date, due_soon_days=due_soon_days)
+    readiness = compute_readiness_status(expiry_date, due_soon_days=due_soon_days, now=now)
     return {
         "shelf_key": shelf_key,
         "name": name,
@@ -93,12 +94,18 @@ class AssuranceCertShelfService:
         scheme: Optional[str] = None,
         readiness_status: Optional[str] = None,
         due_soon_days: int = DEFAULT_DUE_SOON_DAYS,
+        now: Optional[datetime] = None,
     ) -> dict[str, Any]:
+        # One reference instant for the whole shelf, so items cannot be graded against
+        # different clock reads within a single response.
+        reference = now or datetime.now(timezone.utc)
         items: list[dict[str, Any]] = []
-        items.extend(await self._from_register(tenant_id=tenant_id, due_soon_days=due_soon_days))
-        items.extend(await self._from_planet_mark(tenant_id=tenant_id, due_soon_days=due_soon_days))
-        items.extend(await self._from_uvdb(tenant_id=tenant_id, due_soon_days=due_soon_days))
-        items.extend(await self._from_library_documents(tenant_id=tenant_id, due_soon_days=due_soon_days))
+        items.extend(await self._from_register(tenant_id=tenant_id, due_soon_days=due_soon_days, now=reference))
+        items.extend(await self._from_planet_mark(tenant_id=tenant_id, due_soon_days=due_soon_days, now=reference))
+        items.extend(await self._from_uvdb(tenant_id=tenant_id, due_soon_days=due_soon_days, now=reference))
+        items.extend(
+            await self._from_library_documents(tenant_id=tenant_id, due_soon_days=due_soon_days, now=reference)
+        )
 
         if scheme:
             items = [item for item in items if item["scheme"] == scheme]
@@ -114,7 +121,7 @@ class AssuranceCertShelfService:
             "due_soon_days": due_soon_days,
         }
 
-    async def _from_register(self, *, tenant_id: int, due_soon_days: int) -> list[dict[str, Any]]:
+    async def _from_register(self, *, tenant_id: int, due_soon_days: int, now: datetime) -> list[dict[str, Any]]:
         result = await self.db.execute(
             select(Certificate).where(or_(Certificate.tenant_id == tenant_id, Certificate.tenant_id.is_(None)))
         )
@@ -133,6 +140,7 @@ class AssuranceCertShelfService:
                     source="compliance_register",
                     expiry_date=certificate.expiry_date,
                     due_soon_days=due_soon_days,
+                    now=now,
                     issuing_body=certificate.issuing_body,
                     reference_number=certificate.reference_number,
                     detail_path="/compliance-automation",
@@ -150,7 +158,7 @@ class AssuranceCertShelfService:
             )
         return items
 
-    async def _from_planet_mark(self, *, tenant_id: int, due_soon_days: int) -> list[dict[str, Any]]:
+    async def _from_planet_mark(self, *, tenant_id: int, due_soon_days: int, now: datetime) -> list[dict[str, Any]]:
         result = await self.db.execute(
             select(CarbonReportingYear).where(
                 or_(CarbonReportingYear.tenant_id == tenant_id, CarbonReportingYear.tenant_id.is_(None)),
@@ -167,6 +175,7 @@ class AssuranceCertShelfService:
                     source="planet_mark",
                     expiry_date=year.expiry_date,
                     due_soon_days=due_soon_days,
+                    now=now,
                     issuing_body=year.certifying_body,
                     reference_number=year.certificate_number,
                     detail_path="/planet-mark",
@@ -180,7 +189,7 @@ class AssuranceCertShelfService:
             )
         return items
 
-    async def _from_uvdb(self, *, tenant_id: int, due_soon_days: int) -> list[dict[str, Any]]:
+    async def _from_uvdb(self, *, tenant_id: int, due_soon_days: int, now: datetime) -> list[dict[str, Any]]:
         result = await self.db.execute(
             select(UVDBAudit).where(or_(UVDBAudit.tenant_id == tenant_id, UVDBAudit.tenant_id.is_(None)))
         )
@@ -197,6 +206,7 @@ class AssuranceCertShelfService:
                     source="uvdb_achilles",
                     expiry_date=expiry_date,
                     due_soon_days=due_soon_days,
+                    now=now,
                     issuing_body=audit.auditor_organization or "Achilles UVDB",
                     reference_number=audit.audit_reference,
                     detail_path="/uvdb",
@@ -213,7 +223,9 @@ class AssuranceCertShelfService:
             )
         return items
 
-    async def _from_library_documents(self, *, tenant_id: int, due_soon_days: int) -> list[dict[str, Any]]:
+    async def _from_library_documents(
+        self, *, tenant_id: int, due_soon_days: int, now: datetime
+    ) -> list[dict[str, Any]]:
         result = await self.db.execute(
             select(Document).where(
                 Document.tenant_id == tenant_id,
@@ -231,6 +243,7 @@ class AssuranceCertShelfService:
                     source="governance_library",
                     expiry_date=document.expiry_date,
                     due_soon_days=due_soon_days,
+                    now=now,
                     reference_number=document.pel_doc_ref or document.reference_number,
                     detail_path=f"/documents/{document.id}",
                     library_path=f"/documents/{document.id}",
