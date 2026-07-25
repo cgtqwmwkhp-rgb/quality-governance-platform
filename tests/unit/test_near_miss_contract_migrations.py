@@ -63,7 +63,10 @@ def test_backfill_only_links_contracts_owned_by_near_miss_tenant():
             """)
 
         connection.exec_driver_sql(sql)
-        rows = dict(connection.exec_driver_sql("SELECT id, contract_id FROM near_misses"))
+        rows = {
+            row.id: row.contract_id
+            for row in connection.exec_driver_sql("SELECT id, contract_id FROM near_misses")
+        }
 
     assert rows == {1: None, 2: None, 3: 3, 4: 4}
 
@@ -86,7 +89,10 @@ def test_repair_clears_existing_global_and_cross_tenant_links():
             """)
 
         connection.exec_driver_sql(sql)
-        rows = dict(connection.exec_driver_sql("SELECT id, contract_id FROM near_misses"))
+        rows = {
+            row.id: row.contract_id
+            for row in connection.exec_driver_sql("SELECT id, contract_id FROM near_misses")
+        }
 
     assert rows == {1: None, 2: None, 3: 3}
 
