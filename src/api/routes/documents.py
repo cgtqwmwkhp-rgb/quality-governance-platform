@@ -882,8 +882,9 @@ async def upload_document(
                 detail=f"Failed to store document content: {exc}",
             ) from exc
 
+        index_job: IndexJob | None = None
         try:
-            index_job = await _create_document_index_job(
+            created_job = await _create_document_index_job(
                 db,
                 doc,
                 job_type="single",
@@ -897,9 +898,10 @@ async def upload_document(
             index_job = None
             dispatched = False
         else:
+            index_job = created_job
             dispatched = await _dispatch_single_index_job(
                 db,
-                index_job,
+                created_job,
                 doc,
                 content,
                 current_user=current_user,
@@ -1428,7 +1430,7 @@ async def create_document_version(
 
     await db.commit()
 
-    if index_job is not None:
+    if index_job is not None and content is not None:
         await _dispatch_single_index_job(
             db,
             index_job,
