@@ -599,50 +599,89 @@ async def _process_uploaded_document(
     return job
 
 
-async def _enqueue_document_index_job(
+async def _create_document_index_job(
     db: DbSession,
     doc: Document,
-    content: bytes,
     *,
     job_type: str,
     current_user: User,
-) -> tuple[IndexJob, bool]:
-    """Create an index job and dispatch Celery when available."""
+) -> IndexJob:
+    """Create (and flush) a single-document index job row.
+
+    P0 fix: this deliberately does NOT dispatch to Celery. Callers MUST
+    ``await db.commit()`` the created job before calling
+    ``_dispatch_single_index_job`` — otherwise the Celery worker can start
+    polling for the job row before it is visible outside this transaction
+    (commit-then-dispatch).
+    """
     index_service = IndexJobService(db)
-    job = await index_service.create_job(
+    return await index_service.create_job(
         document_ids=[doc.id],
         job_type=job_type,
         tenant_id=doc.tenant_id,
         created_by_id=current_user.id,
     )
+
+
+async def _dispatch_single_index_job(
+    db: DbSession,
+    job: IndexJob,
+    doc: Document,
+    content: bytes,
+    *,
+    current_user: User,
+) -> bool:
+    """Dispatch an already-committed single-document index job.
+
+    Call ONLY after the job row has been committed. On Celery dispatch
+    failure, falls back to synchronous processing (and commits the result)
+    so the caller isn't left with a permanently-pending job.
+    """
     dispatched = dispatch_index_job(job.id, doc.tenant_id, current_user.id)
     if not dispatched:
-        await index_service.process_job(
+        logger.warning(
+            "Celery dispatch unavailable for index job %s; falling back to synchronous processing",
             job.id,
-            tenant_id=doc.tenant_id,
-            content_cache={doc.id: content},
-            current_user=current_user,
         )
-    return job, dispatched
+        try:
+            index_service = IndexJobService(db)
+            await index_service.process_job(
+                job.id,
+                tenant_id=doc.tenant_id,
+                content_cache={doc.id: content},
+                current_user=current_user,
+            )
+            await db.commit()
+        except Exception:
+            logger.warning(
+                "Synchronous fallback processing failed for index job %s; leaving job pending",
+                job.id,
+                exc_info=True,
+            )
+    return dispatched
 
 
-async def _enqueue_bulk_index_job(
+async def _dispatch_bulk_index_job(
     db: DbSession,
     *,
     job: IndexJob,
     tenant_id: int,
     current_user: User,
-) -> tuple[IndexJob, bool]:
-    """Dispatch a multi-document index job via Celery or synchronous fallback."""
-    index_service = IndexJobService(db)
+) -> bool:
+    """Dispatch an already-committed bulk index job.
+
+    Call ONLY after the job row has been committed. Unlike the single-document
+    path, bulk dispatch failures are left pending (no synchronous fallback —
+    a bulk job may span hundreds of documents and should not block the
+    request/response cycle).
+    """
     dispatched = dispatch_index_job(job.id, tenant_id, current_user.id)
     if not dispatched:
-        await index_service.process_job(
+        logger.warning(
+            "Celery dispatch unavailable for bulk index job %s; leaving job pending",
             job.id,
-            tenant_id=tenant_id,
-            current_user=current_user,
         )
-    return job, dispatched
+    return dispatched
 
 
 def _index_job_response(job: IndexJob) -> IndexJobResponse:
@@ -844,10 +883,9 @@ async def upload_document(
             ) from exc
 
         try:
-            index_job, dispatched = await _enqueue_document_index_job(
+            index_job = await _create_document_index_job(
                 db,
                 doc,
-                content,
                 job_type="single",
                 current_user=current_user,
             )
@@ -858,6 +896,14 @@ async def upload_document(
             await db.commit()
             index_job = None
             dispatched = False
+        else:
+            dispatched = await _dispatch_single_index_job(
+                db,
+                index_job,
+                doc,
+                content,
+                current_user=current_user,
+            )
 
         await db.refresh(doc)
 
@@ -908,14 +954,20 @@ async def reprocess_document(
     doc.indexing_error = None
 
     content = await storage_service().download(doc.file_path)
-    index_job, dispatched = await _enqueue_document_index_job(
+    index_job = await _create_document_index_job(
         db,
         doc,
-        content,
         job_type="reindex",
         current_user=current_user,
     )
     await db.commit()
+    dispatched = await _dispatch_single_index_job(
+        db,
+        index_job,
+        doc,
+        content,
+        current_user=current_user,
+    )
     await db.refresh(doc)
 
     return DocumentReprocessResponse(
@@ -966,13 +1018,13 @@ async def bulk_reprocess_documents(
     except ValueError as exc:
         raise BadRequestError(str(exc)) from exc
 
-    job, dispatched = await _enqueue_bulk_index_job(
+    await db.commit()
+    dispatched = await _dispatch_bulk_index_job(
         db,
         job=job,
         tenant_id=tenant_id,
         current_user=current_user,
     )
-    await db.commit()
     await db.refresh(job)
 
     configured, warning = vector_index_configured()
@@ -1362,19 +1414,29 @@ async def create_document_version(
         created_by_id=current_user.id,
     )
 
+    index_job: IndexJob | None = None
     if content is not None:
         document.status = DocumentStatus.PROCESSING
         document.indexing_error = None
-        index_job, _dispatched = await _enqueue_document_index_job(
+        index_job = await _create_document_index_job(
             db,
             document,
-            content,
             job_type="reindex",
             current_user=current_user,
         )
         index_job_id = index_job.id
 
     await db.commit()
+
+    if index_job is not None:
+        await _dispatch_single_index_job(
+            db,
+            index_job,
+            document,
+            content,
+            current_user=current_user,
+        )
+
     await db.refresh(version)
     payload = document_version_service.serialize_library_version(version)
     payload["index_job_id"] = index_job_id
@@ -1582,9 +1644,9 @@ async def semantic_search(
     # Build filter
     filter_dict: Optional[dict[str, Any]] = None
     if document_type:
-        filter_dict = {"document_type": document_type}
+        filter_dict = {"document_type": {"$eq": document_type}}
     if not current_user.is_superuser:
-        filter_dict = {**(filter_dict or {}), "tenant_id": current_user.tenant_id}
+        filter_dict = {**(filter_dict or {}), "tenant_id": {"$eq": current_user.tenant_id}}
 
     # Search vectors
     matches = await vector_service.search(q, top_k=top_k, filter_dict=filter_dict)
@@ -1593,14 +1655,22 @@ async def semantic_search(
     doc_ids = set()
 
     for match in matches:
-        doc_id = match.get("metadata", {}).get("document_id")
+        raw_doc_id = match.get("metadata", {}).get("document_id")
+        try:
+            doc_id = int(raw_doc_id) if raw_doc_id is not None else None
+        except (TypeError, ValueError):
+            logger.warning("Semantic search hit had a non-numeric document_id metadata value: %r", raw_doc_id)
+            continue
+
         if doc_id and doc_id not in doc_ids:
             doc_ids.add(doc_id)
 
-            # Get document info
+            # Get document info. Vectors can outlive their SQL row (hard delete,
+            # tenant reassignment, ACL change) — orphaned hits must be skipped,
+            # never allowed to 404/500 the whole search response.
             try:
                 doc = await _get_document_or_404(db, doc_id, current_user)
-            except HTTPException:
+            except (NotFoundError, HTTPException):
                 doc = None
 
             if doc:

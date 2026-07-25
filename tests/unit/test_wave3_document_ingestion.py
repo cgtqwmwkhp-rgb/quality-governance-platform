@@ -134,12 +134,16 @@ async def test_upload_document_persists_blob_and_returns_status(monkeypatch: pyt
         AsyncMock(return_value="DOC-2026-0001"),
     )
 
-    async def fake_enqueue(db, doc, content, *, job_type, current_user):
+    async def fake_create_job(db, doc, *, job_type, current_user):
+        return SimpleNamespace(id=99)
+
+    async def fake_dispatch(db, job, doc, content, *, current_user):
         doc.status = DocumentStatus.APPROVED
         doc.ai_summary = "Processed"
-        return SimpleNamespace(id=99), False
+        return False
 
-    monkeypatch.setattr(documents, "_enqueue_document_index_job", fake_enqueue)
+    monkeypatch.setattr(documents, "_create_document_index_job", fake_create_job)
+    monkeypatch.setattr(documents, "_dispatch_single_index_job", fake_dispatch)
 
     response = await documents.upload_document(
         db=db,

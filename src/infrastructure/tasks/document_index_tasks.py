@@ -65,6 +65,22 @@ def process_document_index_job(
         logger.error("Document index job %s exhausted all retries", job_id)
         asyncio.run(_mark_job_failed(job_id, "Processing failed after all retry attempts."))
         return {"job_id": job_id, "status": "failed", "error_code": "MAX_RETRIES_EXCEEDED"}
+    except ValueError as exc:
+        # Commit-then-dispatch (P0) narrows this to genuine eventual-consistency
+        # races (e.g. a read replica lagging the commit) rather than the job
+        # simply never having existed. Retry with backoff instead of failing fast.
+        logger.warning(
+            "Document index job %s not found on attempt %s/%s; retrying: %s",
+            job_id,
+            self.request.retries + 1,
+            self.max_retries,
+            exc,
+        )
+        try:
+            raise self.retry(exc=exc, countdown=10)
+        except MaxRetriesExceededError:
+            asyncio.run(_mark_job_failed(job_id, "Index job not found after all retry attempts."))
+            return {"job_id": job_id, "status": "failed", "error_code": "MAX_RETRIES_EXCEEDED"}
     except Exception as exc:
         logger.exception("Document index job %s failed", job_id)
         try:
