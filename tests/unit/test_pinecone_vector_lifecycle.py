@@ -182,8 +182,38 @@ async def test_reindex_with_fewer_chunks_deletes_orphaned_high_index_vectors(
 
     await service.process_job(5, tenant_id=1)
 
+    # process_job only flushes, so nothing may be deleted until the caller commits.
+    vector_service.delete_vectors_by_id.assert_not_awaited()
+
+    await service.delete_pending_stale_vectors()
+
     vector_service.delete_vectors_by_id.assert_awaited_once_with(["doc_1_chunk_1", "doc_1_chunk_2"])
     assert job.previous_vector_ids == ["doc_1_chunk_0", "doc_1_chunk_1", "doc_1_chunk_2"]
+
+
+@pytest.mark.asyncio
+async def test_stale_vectors_survive_a_rollback_after_processing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deleting before the commit would strip vectors the DB still points at.
+
+    ``process_job`` only flushes. If the caller's transaction is rolled back the new
+    chunk rows vanish and the previous generation is restored — so an early delete
+    leaves those restored rows referencing vectors that no longer exist, and in a bulk
+    job one document's failure would strip every document already processed.
+    """
+    service, _db, _job, vector_service = _make_index_job_fixture(
+        monkeypatch,
+        upsert_result=True,
+        chunk_count=1,
+        previous_chunk_rows=[(0, "doc_1_chunk_0"), (1, "doc_1_chunk_1")],
+    )
+
+    await service.process_job(5, tenant_id=1)
+
+    # The caller rolls back instead of committing, and never runs the cleanup.
+    vector_service.delete_vectors_by_id.assert_not_awaited()
+    assert service.pending_stale_vector_ids == ["doc_1_chunk_1"]
 
 
 @pytest.mark.asyncio
@@ -199,6 +229,7 @@ async def test_reindex_derives_previous_ids_for_legacy_rows_without_vector_id(
     )
 
     await service.process_job(5, tenant_id=1)
+    await service.delete_pending_stale_vectors()
 
     vector_service.delete_vectors_by_id.assert_awaited_once_with(["doc_1_chunk_1"])
 
@@ -213,14 +244,22 @@ async def test_reindex_with_more_chunks_deletes_nothing(monkeypatch: pytest.Monk
     )
 
     await service.process_job(5, tenant_id=1)
+    await service.delete_pending_stale_vectors()
 
     vector_service.delete_vectors_by_id.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_reindex_failing_stale_delete_records_error_without_marking_document_for_resume(
+async def test_failing_stale_delete_leaves_the_job_successful_and_resumable_only_by_choice(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    """Cleanup runs post-commit, so a Pinecone failure must not rewrite the job's verdict.
+
+    Indexing genuinely succeeded; the only casualty is a few orphaned vectors. Marking
+    the document failed would also make ``resolve_resume_document_ids`` re-run the whole
+    OCR and embedding pipeline for it.
+    """
     service, _db, job, vector_service = _make_index_job_fixture(
         monkeypatch,
         upsert_result=True,
@@ -230,15 +269,36 @@ async def test_reindex_failing_stale_delete_records_error_without_marking_docume
     vector_service.delete_vectors_by_id = AsyncMock(return_value=False)
 
     result = await service.process_job(5, tenant_id=1)
+    with caplog.at_level("ERROR"):
+        await service.delete_pending_stale_vectors()
 
     assert result.status == IndexJobStatus.COMPLETED
     assert result.documents_failed == 0
-    messages = [entry["message"] for entry in job.error_log or []]
-    assert messages and "Stale vector cleanup incomplete for document 1" in messages[0]
-    # "Document N:" is the resume marker; indexing itself succeeded, so it must not match.
+    assert "Stale vector cleanup incomplete for documents [1]" in caplog.text
+    assert not (job.error_log or [])
     service.get_job = AsyncMock(return_value=job)
     with pytest.raises(ValueError, match="no remaining documents to resume"):
         await service.resolve_resume_document_ids(5, tenant_id=1)
+
+
+@pytest.mark.asyncio
+async def test_stale_cleanup_does_not_raise_when_pinecone_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A post-commit cleanup exception must not fail an already-successful job."""
+    service, _db, _job, vector_service = _make_index_job_fixture(
+        monkeypatch,
+        upsert_result=True,
+        chunk_count=1,
+        previous_chunk_rows=[(0, "doc_1_chunk_0"), (1, "doc_1_chunk_1")],
+    )
+    vector_service.delete_vectors_by_id = AsyncMock(side_effect=RuntimeError("pinecone unavailable"))
+
+    await service.process_job(5, tenant_id=1)
+    await service.delete_pending_stale_vectors()
+
+    # Drained regardless, so a retry cannot double-delete a later generation's vectors.
+    assert service.pending_stale_vector_ids == []
 
 
 # =============================================================================

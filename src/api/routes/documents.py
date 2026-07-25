@@ -679,6 +679,7 @@ async def _dispatch_single_index_job(
                 current_user=current_user,
             )
             await db.commit()
+            await index_service.delete_pending_stale_vectors()
         except Exception:
             logger.warning(
                 "Synchronous fallback processing failed for index job %s; leaving job pending",

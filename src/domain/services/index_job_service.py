@@ -86,6 +86,10 @@ class IndexJobService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
         self.intelligence_service = DocumentIntelligenceService()
+        # Stale Pinecone IDs are collected here and deleted only once the caller has
+        # committed — see delete_pending_stale_vectors.
+        self.pending_stale_vector_ids: list[str] = []
+        self._pending_stale_document_ids: list[int] = []
 
     async def create_job(
         self,
@@ -239,28 +243,37 @@ class IndexJobService:
         ).all()
         return [vector_id or document_chunk_vector_id(document_id, chunk_index) for chunk_index, vector_id in rows]
 
-    async def _delete_stale_vectors(
-        self,
-        vector_service: VectorSearchService,
-        job: IndexJob,
-        document_id: int,
-        stale_vector_ids: list[str],
-    ) -> None:
-        """Drop prior-generation vectors the new upsert did not overwrite."""
-        if await vector_service.delete_vectors_by_id(stale_vector_ids):
+    async def delete_pending_stale_vectors(self) -> None:
+        """Drop prior-generation vectors the new upsert did not overwrite.
+
+        Callers must invoke this *after* committing, never before: ``process_job``
+        only flushes, so until the caller commits a later failure can still roll the
+        new chunk rows back and restore the previous generation. Deleting first would
+        leave those restored rows pointing at vectors that no longer exist, and in a
+        bulk job one document's failure would strip the vectors of every document
+        already processed.
+
+        Skipping this call is safe in the other direction — the vectors merely stay
+        orphaned, which is what happened before any of this existed.
+        """
+        stale_vector_ids = self.pending_stale_vector_ids
+        if not stale_vector_ids:
             return
-        logger.error(
-            "Stale vector cleanup incomplete for document %s: %s vector(s) may remain in Pinecone",
-            document_id,
-            len(stale_vector_ids),
-        )
-        # Deliberately not prefixed "Document N:" — that form marks a document for
-        # resume in resolve_resume_document_ids, and indexing itself succeeded.
-        await self._append_error(
-            job,
-            f"Stale vector cleanup incomplete for document {document_id} "
-            f"({len(stale_vector_ids)} vector(s) may remain in Pinecone)",
-        )
+        self.pending_stale_vector_ids = []
+
+        vector_service = VectorSearchService()
+        try:
+            deleted = await vector_service.delete_vectors_by_id(stale_vector_ids)
+        except Exception:
+            deleted = False
+            logger.exception("Stale vector cleanup raised for documents %s", self._pending_stale_document_ids)
+        if not deleted:
+            logger.error(
+                "Stale vector cleanup incomplete for documents %s: %s vector(s) may remain in Pinecone",
+                self._pending_stale_document_ids,
+                len(stale_vector_ids),
+            )
+        self._pending_stale_document_ids = []
 
     async def process_job(
         self,
@@ -421,7 +434,8 @@ class IndexJobService:
                 await self.db.flush()
 
                 if stale_vector_ids:
-                    await self._delete_stale_vectors(vector_service, job, document.id, stale_vector_ids)
+                    self.pending_stale_vector_ids.extend(stale_vector_ids)
+                    self._pending_stale_document_ids.append(document.id)
 
                 if current_user is not None:
                     await self._trigger_governed_kb_mapping(document, text_content, current_user)
