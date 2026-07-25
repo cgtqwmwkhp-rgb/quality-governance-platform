@@ -40,6 +40,7 @@ def test_build_item_summary_counts():
             source="compliance_register",
             expiry_date=NOW + timedelta(days=120),
             due_soon_days=30,
+            now=NOW,
         ),
         _build_item(
             shelf_key="b",
@@ -48,6 +49,7 @@ def test_build_item_summary_counts():
             source="planet_mark",
             expiry_date=NOW + timedelta(days=5),
             due_soon_days=30,
+            now=NOW,
         ),
         _build_item(
             shelf_key="c",
@@ -56,6 +58,7 @@ def test_build_item_summary_counts():
             source="uvdb_achilles",
             expiry_date=NOW - timedelta(days=1),
             due_soon_days=30,
+            now=NOW,
         ),
     ]
     summary = AssuranceCertShelfService._build_summary(items)
@@ -64,3 +67,23 @@ def test_build_item_summary_counts():
     assert summary["expired"] == 1
     assert summary["by_scheme"]["register"] == 1
     assert summary["by_scheme"]["planet_mark"] == 1
+
+
+def test_build_item_grades_against_injected_now_not_wall_clock():
+    """Readiness must depend only on the supplied reference instant.
+
+    Without this, a fixture expiry silently changes meaning as real time passes and the
+    suite starts failing on a date rather than on a code change.
+    """
+    expiry = NOW + timedelta(days=5)
+    common = {
+        "shelf_key": "a",
+        "name": "Cert",
+        "scheme": "register",
+        "source": "compliance_register",
+        "due_soon_days": 30,
+    }
+
+    assert _build_item(expiry_date=expiry, now=NOW, **common)["readiness_status"] == "due_soon"
+    assert _build_item(expiry_date=expiry, now=NOW - timedelta(days=90), **common)["readiness_status"] == "valid"
+    assert _build_item(expiry_date=expiry, now=NOW + timedelta(days=400), **common)["readiness_status"] == "expired"
