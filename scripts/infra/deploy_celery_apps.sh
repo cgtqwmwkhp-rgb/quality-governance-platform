@@ -25,6 +25,16 @@ if [ -z "$REDIS_URL_VAL" ]; then
   exit 1
 fi
 
+# A non-production environment sharing production's broker is not a cosmetic problem: its
+# worker competes for prod tasks, looks the job id up in its own database, finds nothing,
+# and the prod row stays pending forever. Prod library documents were stuck in "processing"
+# for exactly this reason while kv-qgp-staging's REDIS-URL pointed at redis-qgp-prod.
+if [ "$APP_ENV" != "production" ] && printf '%s' "$REDIS_URL_VAL" | grep -q 'redis-qgp-prod'; then
+  echo "❌ $APP_ENV Celery apps are pointed at the production Redis broker (redis-qgp-prod)."
+  echo "   Point REDIS-URL in this environment's Key Vault at its own cache instead."
+  exit 1
+fi
+
 # The worker downloads uploaded documents from Blob Storage to index them. Without these
 # it accepts index jobs and then fails every one with StorageNotConfiguredError, leaving
 # documents stuck in "processing" with no signal at deploy time. Fail the deploy instead.
