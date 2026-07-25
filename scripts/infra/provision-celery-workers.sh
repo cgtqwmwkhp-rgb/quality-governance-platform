@@ -89,6 +89,48 @@ echo "=== Managed identity + AcrPull ==="
 grant_acr_pull "$WORKER_NAME"
 grant_acr_pull "$BEAT_NAME"
 
+# Worker and beat have no HTTP surface, so their container stdout is the only account of
+# what they did. /home/LogFiles capture cannot be relied on for that: the prod worker's
+# containerStream.log stopped mid-day and never resumed across ~44 restarts, leaving the
+# app with no record at all while it was in fact running tasks normally. A diagnostic
+# setting streams the same stdout to Log Analytics instead, which survives restarts and
+# redeploys and is queryable (AppServiceConsoleLogs). Platform logs come along because
+# container pull/start failures are invisible in stdout by definition.
+ensure_log_sink() {
+  local name="$1"
+  local site_id="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RG/providers/Microsoft.Web/sites/$name"
+
+  if [ -z "$WORKSPACE_ID" ]; then
+    echo "  ⚠️  No Log Analytics workspace found in $LOG_WORKSPACE_RG and LOG_WORKSPACE_ID is unset —"
+    echo "     $name will have no durable log sink. Set LOG_WORKSPACE_ID and re-run."
+    return 0
+  fi
+
+  if az monitor diagnostic-settings create \
+      --name celery-logs \
+      --resource "$site_id" \
+      --workspace "$WORKSPACE_ID" \
+      --logs '[{"category":"AppServiceConsoleLogs","enabled":true},{"category":"AppServicePlatformLogs","enabled":true}]' \
+      --output none 2>/dev/null; then
+    echo "  ✓ $name streams console + platform logs to ${WORKSPACE_ID##*/}"
+  else
+    echo "  ⚠️  Could not set the diagnostic setting on $name — grant Monitoring Contributor"
+    echo "     on the site and read on the workspace, then re-run."
+  fi
+}
+
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+# Production's App Service resources live in rg-qgp-staging, so the workspace is not
+# necessarily in the same group as the sites: prefer the environment's own workspace.
+LOG_WORKSPACE_RG="${LOG_WORKSPACE_RG:-$([ "$ENV_NAME" = "production" ] && echo rg-qgp-prod || echo "$RG")}"
+WORKSPACE_ID="${LOG_WORKSPACE_ID:-$(az monitor log-analytics workspace list \
+  --resource-group "$LOG_WORKSPACE_RG" --query "[0].id" -o tsv 2>/dev/null || true)}"
+
+echo ""
+echo "=== Log Analytics sink ==="
+ensure_log_sink "$WORKER_NAME"
+ensure_log_sink "$BEAT_NAME"
+
 echo ""
 echo "Next: merge feat/wcs-celery-worker-beat-deploy and let deploy-staging/production"
 echo "update container image + startup-file for worker/beat, then run:"
