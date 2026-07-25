@@ -21,7 +21,7 @@ from types import SimpleNamespace
 from typing import Any, Callable, Iterator
 
 import pytest
-from celery.signals import worker_init, worker_process_init
+from celery.signals import worker_init, worker_process_init, worker_ready
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
@@ -93,6 +93,52 @@ def test_worker_startup_signals_configure_the_database() -> None:
     """Without this wiring the fix never runs in production."""
     assert worker_db._configure_worker_main_process in _connected_receivers(worker_init)
     assert worker_db._configure_worker_child_process in _connected_receivers(worker_process_init)
+
+
+def test_pool_is_reported_on_worker_ready_not_on_init() -> None:
+    """``worker_init`` fires before Celery configures logging, so its records vanish.
+
+    Celery sends ``worker_init`` (celery/worker/worker.py) before ``on_init_blueprint``
+    calls ``setup_logging``, and prefork children return early from the idempotent
+    rebind — so the rebind's own log line reached the container log from neither
+    process. Reporting on ``worker_ready`` is what makes the fix verifiable in prod.
+    """
+    assert worker_db._log_engine_pool in _connected_receivers(worker_ready)
+
+
+def test_worker_ready_reports_the_null_pool(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    engine = create_async_engine(_POSTGRES_URL, poolclass=NullPool)
+    monkeypatch.setattr(database, "engine", engine)
+
+    try:
+        with caplog.at_level("INFO", logger=worker_db.__name__):
+            worker_db._log_engine_pool()
+    finally:
+        engine.sync_engine.dispose(close=False)
+
+    record = next(r for r in caplog.records if r.name == worker_db.__name__)
+    assert record.levelname == "INFO"
+    assert "NullPool" in record.getMessage()
+
+
+def test_worker_ready_warns_when_the_engine_is_still_pooled(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A pooled worker engine is the precondition for the cross-loop failure — warn loudly."""
+    engine = create_async_engine(_POSTGRES_URL)
+    assert isinstance(engine.pool, AsyncAdaptedQueuePool)
+    monkeypatch.setattr(database, "engine", engine)
+
+    try:
+        with caplog.at_level("INFO", logger=worker_db.__name__):
+            worker_db._log_engine_pool()
+    finally:
+        engine.sync_engine.dispose(close=False)
+
+    record = next(r for r in caplog.records if r.name == worker_db.__name__)
+    assert record.levelname == "WARNING"
+    assert "AsyncAdaptedQueuePool" in record.getMessage()
+    assert "expected NullPool" in record.getMessage()
 
 
 def test_configure_celery_worker_database_rebinds_the_shared_session_factory(
