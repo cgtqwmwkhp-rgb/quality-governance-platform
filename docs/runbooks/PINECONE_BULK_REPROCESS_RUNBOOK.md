@@ -95,6 +95,17 @@ celery -A src.infrastructure.tasks.celery_app inspect registered | grep process_
 
 Reindex semantics: each document deletes existing `document_chunks` rows and re-upserts vectors per document (`doc_{id}_chunk_{index}`). Chunk rows record the upserted `vector_id`, and vectors from the previous generation that the new upsert did not overwrite (a shrinking chunk count) are deleted by ID. This is per-document reindex, not a full Pinecone namespace wipe.
 
+## Sweeping orphaned vectors
+
+Cleanup on reindex and disposal only applies from #1289 onward. For vectors abandoned before it — documents disposed of earlier, or reindexes that shrank — sweep the index:
+
+```bash
+python -m scripts.maintenance.sweep_orphaned_vectors           # report only
+python -m scripts.maintenance.sweep_orphaned_vectors --apply   # delete
+```
+
+Run it where the app already has database and Pinecone credentials (the worker container), not from a laptop needing a temporary firewall rule. It reports two classes separately: `missing-document` means the row is gone entirely, `missing-chunk` means the document lives but nothing claims that chunk index. Documents with a `pending` or `processing` index job are skipped, because mid-rewrite an absent chunk row means "being rebuilt" rather than "abandoned". IDs that do not match `doc_{id}_chunk_{index}` are reported and never deleted — the production index contains `smoke_qgp_1`, written by a smoke test with `document_id: 0`, which a sweep keyed on document existence alone would have destroyed. Deletes are idempotent by ID, so re-running after a partial failure is safe.
+
 ## Resume
 
 1. Note the failed job ID from the trigger response or DB (`index_jobs`).
