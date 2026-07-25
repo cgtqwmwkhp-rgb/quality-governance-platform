@@ -94,7 +94,8 @@ class NearMissUpdate(BaseModel):
     event_date: Optional[datetime] = None
     contract_id: Optional[int] = Field(None, ge=1, description="Customer/contract FK (contracts.id)")
     witnesses_structured: Optional[dict[str, Any]] = Field(
-        None, description="Structured witnesses: {witnesses: [{name, phone, email, statement, willing_to_provide_statement}]}"
+        None,
+        description="Structured witnesses: {witnesses: [{name, phone, email, statement, willing_to_provide_statement}]}",
     )
 
     @field_validator("description", mode="before")

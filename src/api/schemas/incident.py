@@ -107,7 +107,8 @@ class IncidentUpdate(BaseModel):
     riddor_rationale: Optional[str] = None
     lessons_learnt: Optional[str] = None
     witnesses_structured: Optional[dict[str, Any]] = Field(
-        None, description="Structured witnesses: {witnesses: [{name, phone, email, statement, willing_to_provide_statement}]}"
+        None,
+        description="Structured witnesses: {witnesses: [{name, phone, email, statement, willing_to_provide_statement}]}",
     )
 
     @field_validator(

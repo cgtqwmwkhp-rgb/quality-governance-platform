@@ -105,7 +105,8 @@ class ComplaintUpdate(BaseModel):
     customer_satisfied: Optional[bool] = None
     owner_id: Optional[int] = Field(None, description="Case owner user id (null clears assignment)")
     witnesses_structured: Optional[dict[str, Any]] = Field(
-        None, description="Structured witnesses: {witnesses: [{name, phone, email, statement, willing_to_provide_statement}]}"
+        None,
+        description="Structured witnesses: {witnesses: [{name, phone, email, statement, willing_to_provide_statement}]}",
     )
 
     @field_validator(

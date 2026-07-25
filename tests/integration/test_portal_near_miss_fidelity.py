@@ -182,9 +182,7 @@ class TestPortalNearMissAttachmentFidelity:
         assert response.status_code == 422, response.text
 
         # The case must NOT have been created — fail-closed means no orphaned case.
-        nm_result = await test_session.execute(
-            select(NearMiss).where(NearMiss.description == payload["description"])
-        )
+        nm_result = await test_session.execute(select(NearMiss).where(NearMiss.description == payload["description"]))
         assert nm_result.scalar_one_or_none() is None
 
     async def test_missing_attachment_id_fails_closed(self, client, test_session):
@@ -192,9 +190,7 @@ class TestPortalNearMissAttachmentFidelity:
         response = await client.post("/api/v1/portal/reports/", json=payload)
 
         assert response.status_code == 422, response.text
-        nm_result = await test_session.execute(
-            select(NearMiss).where(NearMiss.description == payload["description"])
-        )
+        nm_result = await test_session.execute(select(NearMiss).where(NearMiss.description == payload["description"]))
         assert nm_result.scalar_one_or_none() is None
 
 
@@ -222,13 +218,9 @@ class TestPortalNearMissIdempotency:
         key = f"idem-header-{uuid.uuid4().hex}"
         payload = _near_miss_payload()
 
-        first = await client.post(
-            "/api/v1/portal/reports/", json=payload, headers={"Idempotency-Key": key}
-        )
+        first = await client.post("/api/v1/portal/reports/", json=payload, headers={"Idempotency-Key": key})
         assert first.status_code == 201, first.text
-        second = await client.post(
-            "/api/v1/portal/reports/", json=payload, headers={"Idempotency-Key": key}
-        )
+        second = await client.post("/api/v1/portal/reports/", json=payload, headers={"Idempotency-Key": key})
         assert second.status_code == 201, second.text
         assert first.json()["reference_number"] == second.json()["reference_number"]
 
