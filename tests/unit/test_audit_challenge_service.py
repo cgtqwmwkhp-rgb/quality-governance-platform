@@ -10,11 +10,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from src.domain.models.audit_challenge import (
-    AuditChallengeProposal,
-    AuditChallengeSession,
-    AuditChallengeTurn,
-)
+from src.domain.models.audit_challenge import AuditChallengeProposal, AuditChallengeSession, AuditChallengeTurn
 from src.domain.services.audit_challenge_service import AuditChallengeService
 
 TENANT_ID = 1
