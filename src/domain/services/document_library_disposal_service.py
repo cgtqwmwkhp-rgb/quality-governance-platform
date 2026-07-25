@@ -8,20 +8,24 @@ automated deletion date.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Iterable
+from typing import Iterable, Sequence
 
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.document import Document
+from src.domain.models.document import Document, DocumentChunk
 from src.domain.models.document_campaign import DocumentCampaign
 from src.domain.models.document_control import ControlledDocument
 from src.domain.models.document_library import DocumentCategory
 from src.domain.models.enums import DocumentStatus
 from src.domain.models.governed_knowledge import DocumentDiscussionThread, DocumentQuizDraft
+from src.domain.services.document_ai_service import VectorSearchService, document_chunk_vector_id
 from src.infrastructure.storage import storage_service
+
+logger = logging.getLogger(__name__)
 
 DISPOSAL_ELIGIBLE_STATUSES = (
     DocumentStatus.ARCHIVED,
@@ -112,6 +116,45 @@ async def list_disposal_candidates(
     return [_candidate_from_row(document, retention_rule) for document, retention_rule in result.all()]
 
 
+async def _collect_vector_ids(db: AsyncSession, document_ids: Sequence[int]) -> list[str]:
+    """Read Pinecone vector IDs while the chunk rows still exist."""
+    if not document_ids:
+        return []
+    result = await db.execute(
+        select(DocumentChunk.document_id, DocumentChunk.chunk_index, DocumentChunk.vector_id).where(
+            DocumentChunk.document_id.in_(document_ids)
+        )
+    )
+    return [
+        vector_id or document_chunk_vector_id(document_id, chunk_index)
+        for document_id, chunk_index, vector_id in result.all()
+    ]
+
+
+async def _delete_disposed_vectors(vector_ids: list[str], document_ids: list[int]) -> None:
+    """Best-effort Pinecone cleanup, run only after the SQL delete is committed.
+
+    Post-commit the chunk rows are gone, so a Pinecone outage can only leave
+    orphaned vectors — never a row claiming a vector that no longer exists.
+    Deletes are idempotent by ID, so a later sweep can repeat them safely.
+    """
+    vector_service = VectorSearchService()
+    if not vector_service.api_key:
+        logger.info("Vector index not configured; skipped vector cleanup for disposed documents %s", document_ids)
+        return
+    try:
+        deleted = await vector_service.delete_vectors_by_id(vector_ids)
+    except Exception:
+        deleted = False
+        logger.exception("Vector cleanup raised while disposing documents %s", document_ids)
+    if not deleted:
+        logger.error(
+            "Vector cleanup incomplete for disposed documents %s: %s vector(s) may remain in Pinecone",
+            document_ids,
+            len(vector_ids),
+        )
+
+
 async def execute_disposal(
     db: AsyncSession,
     *,
@@ -138,8 +181,14 @@ async def execute_disposal(
         document = documents.get(document_id)
         if document is None or disposal_eligibility_reason(document, as_of) is not None:
             continue
-        await db.delete(document)
         disposed_documents.append(document)
+
+    disposed_ids = [document.id for document in disposed_documents]
+    # Chunk rows cascade away with the document, so capture vector IDs first.
+    vector_ids = await _collect_vector_ids(db, disposed_ids)
+
+    for document in disposed_documents:
+        await db.delete(document)
 
     # Flush before deleting blobs so foreign-key restrictions keep both the
     # document row and object intact when provenance still references it.
@@ -151,4 +200,6 @@ async def execute_disposal(
         await db.rollback()
         raise
     await db.commit()
-    return [document.id for document in disposed_documents]
+    if vector_ids:
+        await _delete_disposed_vectors(vector_ids, disposed_ids)
+    return disposed_ids

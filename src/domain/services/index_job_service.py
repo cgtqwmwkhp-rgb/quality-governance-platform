@@ -14,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.config import settings
 from src.domain.models.document import Document, DocumentChunk, DocumentStatus, IndexJob, IndexJobStatus
 from src.domain.models.user import User
-from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
+from src.domain.services.document_ai_service import (
+    DocumentAIService,
+    EmbeddingService,
+    VectorSearchService,
+    document_chunk_vector_id,
+)
 from src.domain.services.document_intelligence_service import DocumentIntelligenceService
 from src.infrastructure.storage import storage_service
 
@@ -219,6 +224,44 @@ class IndexJobService:
         errors.append({"at": datetime.now(timezone.utc).isoformat(), "message": message})
         job.error_log = errors
 
+    async def _previous_vector_ids(self, document_id: int) -> list[str]:
+        """Resolve the vector IDs the prior indexing generation left in Pinecone.
+
+        Rows indexed before ``vector_id`` was recorded have it NULL, so fall back
+        to the deterministic scheme — deleting an absent ID is a no-op.
+        """
+        rows = (
+            await self.db.execute(
+                select(DocumentChunk.chunk_index, DocumentChunk.vector_id).where(
+                    DocumentChunk.document_id == document_id
+                )
+            )
+        ).all()
+        return [vector_id or document_chunk_vector_id(document_id, chunk_index) for chunk_index, vector_id in rows]
+
+    async def _delete_stale_vectors(
+        self,
+        vector_service: VectorSearchService,
+        job: IndexJob,
+        document_id: int,
+        stale_vector_ids: list[str],
+    ) -> None:
+        """Drop prior-generation vectors the new upsert did not overwrite."""
+        if await vector_service.delete_vectors_by_id(stale_vector_ids):
+            return
+        logger.error(
+            "Stale vector cleanup incomplete for document %s: %s vector(s) may remain in Pinecone",
+            document_id,
+            len(stale_vector_ids),
+        )
+        # Deliberately not prefixed "Document N:" — that form marks a document for
+        # resume in resolve_resume_document_ids, and indexing itself succeeded.
+        await self._append_error(
+            job,
+            f"Stale vector cleanup incomplete for document {document_id} "
+            f"({len(stale_vector_ids)} vector(s) may remain in Pinecone)",
+        )
+
     async def process_job(
         self,
         job_id: int,
@@ -300,17 +343,7 @@ class IndexJobService:
                 document.has_images = analysis.has_images
                 document.word_count = len(text_content.split())
 
-                previous_vector_ids = [
-                    row
-                    for row in (
-                        await self.db.execute(
-                            select(DocumentChunk.vector_id).where(
-                                DocumentChunk.document_id == document.id,
-                                DocumentChunk.vector_id.is_not(None),
-                            )
-                        )
-                    ).scalars()
-                ]
+                previous_vector_ids = await self._previous_vector_ids(document.id)
                 if previous_vector_ids and not job.previous_vector_ids:
                     job.previous_vector_ids = previous_vector_ids
 
@@ -320,20 +353,23 @@ class IndexJobService:
                 document.chunk_count = len(chunks)
                 chunks_total += len(chunks)
 
-                for chunk in chunks:
-                    self.db.add(
-                        DocumentChunk(
-                            document_id=document.id,
-                            tenant_id=document.tenant_id,
-                            content=chunk.content,
-                            chunk_index=chunk.index,
-                            token_count=chunk.token_count,
-                            heading=chunk.heading,
-                            char_start=chunk.char_start,
-                            char_end=chunk.char_end,
-                        )
+                chunk_rows = [
+                    DocumentChunk(
+                        document_id=document.id,
+                        tenant_id=document.tenant_id,
+                        content=chunk.content,
+                        chunk_index=chunk.index,
+                        token_count=chunk.token_count,
+                        heading=chunk.heading,
+                        char_start=chunk.char_start,
+                        char_end=chunk.char_end,
                     )
+                    for chunk in chunks
+                ]
+                for chunk_row in chunk_rows:
+                    self.db.add(chunk_row)
 
+                stale_vector_ids: list[str] = []
                 embeddings = await embedding_service.generate_embeddings([chunk.content for chunk in chunks])
                 if embeddings and await vector_service.upsert_chunks(
                     document.id,
@@ -348,6 +384,12 @@ class IndexJobService:
                         ),
                     },
                 ):
+                    # Only chunks with an embedding reached Pinecone: upsert_chunks
+                    # zips chunks against embeddings and Voyage may return fewer.
+                    for chunk_row, _embedding in zip(chunk_rows, embeddings):
+                        chunk_row.vector_id = document_chunk_vector_id(document.id, chunk_row.chunk_index)
+                    upserted_vector_ids = {row.vector_id for row in chunk_rows if row.vector_id}
+                    stale_vector_ids = sorted(set(previous_vector_ids) - upserted_vector_ids)
                     document.indexed_at = datetime.now(timezone.utc)
                     _apply_post_index_status(document, DocumentStatus.INDEXED)
                     document.indexing_error = None
@@ -377,6 +419,9 @@ class IndexJobService:
                 job.chunks_failed = chunks_failed
                 job.chunk_count = chunks_total
                 await self.db.flush()
+
+                if stale_vector_ids:
+                    await self._delete_stale_vectors(vector_service, job, document.id, stale_vector_ids)
 
                 if current_user is not None:
                     await self._trigger_governed_kb_mapping(document, text_content, current_user)

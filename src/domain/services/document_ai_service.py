@@ -12,7 +12,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import Iterable, Optional
 
 import httpx
 
@@ -23,6 +23,14 @@ logger = logging.getLogger(__name__)
 
 # Preferred S10 catalog name for Anthropic document-analysis dials.
 _DOCUMENT_AI_UPSTREAM_BREAKER = "document_ai"
+
+# Pinecone caps ids per delete request; batch conservatively below the limit.
+VECTOR_DELETE_BATCH_SIZE = 1000
+
+
+def document_chunk_vector_id(document_id: int, chunk_index: int) -> str:
+    """Deterministic Pinecone vector ID for a document chunk."""
+    return f"doc_{document_id}_chunk_{chunk_index}"
 
 
 @dataclass
@@ -613,7 +621,7 @@ class VectorSearchService:
                     metadata.update(extra_metadata)
                 vectors.append(
                     {
-                        "id": f"doc_{document_id}_chunk_{chunk.index}",
+                        "id": document_chunk_vector_id(document_id, chunk.index),
                         "values": embedding,
                         "metadata": metadata,
                     }
@@ -670,21 +678,30 @@ class VectorSearchService:
             logger.error(f"Vector search failed: {e}")
             return []
 
-    async def delete_document_vectors(self, document_id: int) -> bool:
-        """Delete all vectors for a document."""
+    async def delete_vectors_by_id(self, vector_ids: Iterable[str]) -> bool:
+        """Delete vectors by explicit ID.
 
+        Serverless indexes reject delete-by-metadata-filter, so the deterministic
+        ID scheme is the only mechanism that works on both pod and serverless.
+        Deleting an ID that is already absent is a no-op, so callers may retry.
+        """
+
+        unique_ids = sorted({vector_id for vector_id in vector_ids if vector_id})
+        if not unique_ids:
+            return True
         if not self.api_key:
             return False
 
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self.base_url}/vectors/delete",
-                    headers=self._headers(),
-                    json={"filter": {"document_id": {"$eq": document_id}}},
-                    timeout=30.0,
-                )
-                response.raise_for_status()
+                for start in range(0, len(unique_ids), VECTOR_DELETE_BATCH_SIZE):
+                    response = await client.post(
+                        f"{self.base_url}/vectors/delete",
+                        headers=self._headers(),
+                        json={"ids": unique_ids[start : start + VECTOR_DELETE_BATCH_SIZE]},
+                        timeout=30.0,
+                    )
+                    response.raise_for_status()
                 return True
 
         except Exception as e:

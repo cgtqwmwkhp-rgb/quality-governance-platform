@@ -698,7 +698,7 @@ class GovernedKnowledgeService:
                 if doc_id is not None:
                     score = float(hit.get("score", 0)) * 100
                     matches.append((int(doc_id), score))
-            return matches
+            return await self._drop_orphaned_matches(db, matches, tenant_id)
 
         pattern = f"%{query_text[:80]}%"
         result = await db.execute(
@@ -716,6 +716,28 @@ class GovernedKnowledgeService:
         for doc_id in result.scalars().all():
             matches.append((doc_id, 60.0))
         return matches
+
+    async def _drop_orphaned_matches(
+        self,
+        db: AsyncSession,
+        matches: list[tuple[int, float]],
+        tenant_id: int,
+    ) -> list[tuple[int, float]]:
+        """Discard vector hits whose document row no longer exists for the tenant.
+
+        Vectors outlive their SQL row (disposal, failed cleanup), so hits must be
+        confirmed before they become related-document results or evidence links.
+        """
+        if not matches:
+            return matches
+        result = await db.execute(
+            select(Document.id).where(
+                Document.id.in_({doc_id for doc_id, _ in matches}),
+                Document.tenant_id == tenant_id,
+            )
+        )
+        live_ids = set(result.scalars().all())
+        return [(doc_id, score) for doc_id, score in matches if doc_id in live_ids]
 
     async def rematch_evidence_on_version(
         self,

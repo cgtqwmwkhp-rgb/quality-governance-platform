@@ -164,9 +164,9 @@ async def test_process_job_updates_document_progress_counters(monkeypatch: pytes
     db = AsyncMock()
     db.get = AsyncMock(return_value=document)
     db.flush = AsyncMock()
-    vector_ids_result = MagicMock()
-    vector_ids_result.scalars.return_value = []
-    db.execute = AsyncMock(return_value=vector_ids_result)
+    previous_chunks_result = MagicMock()
+    previous_chunks_result.all.return_value = []
+    db.execute = AsyncMock(return_value=previous_chunks_result)
 
     service = IndexJobService(db)
     service.get_job = AsyncMock(return_value=job)
