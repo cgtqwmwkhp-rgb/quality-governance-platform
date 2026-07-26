@@ -110,6 +110,7 @@ export default function FuzzySearchDropdown({
           disabled={disabled}
           aria-expanded={isOpen}
           aria-haspopup="listbox"
+          aria-label={label ?? placeholder}
           aria-required={required ? 'true' : undefined}
           className={cn(
             'w-full flex items-center justify-between gap-2 px-4 py-3',
