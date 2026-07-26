@@ -356,6 +356,21 @@ async def test_get_dimensions_group_by_asset_type(db: AsyncSession):
 
 
 @pytest.mark.asyncio
+async def test_get_dimensions_labels_missing_asset_type_as_general_external(db: AsyncSession):
+    """PX-217: NULL asset_type_id runs are external/general, not a silent 'Unassigned' error."""
+    template = await _seed_template_with_essential_question(db)
+    await _make_run(db, template, status=AuditStatus.COMPLETED, asset_type_id=None)
+    await db.commit()
+
+    service = AuditAnalyticsService(db)
+    dims = await service.get_dimensions(TENANT_ID, group_by="asset_type", days=365)
+
+    assert len(dims) == 1
+    assert dims[0]["key"] == "unassigned"
+    assert dims[0]["label"] == "No asset type (general/external)"
+
+
+@pytest.mark.asyncio
 async def test_get_critical_queue_lists_unanswered_essential_item(db: AsyncSession):
     template = await _seed_template_with_essential_question(db)
     await _make_run(db, template, status=AuditStatus.IN_PROGRESS)

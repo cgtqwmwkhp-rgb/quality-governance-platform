@@ -2344,6 +2344,16 @@ export interface ExecutiveDashboardData {
     breached: number
     compliance_rate: number | null
   }
+  /** Period-scoped audit reporting pack (AuditAnalyticsService SSOT). */
+  audits: {
+    totals: number
+    completed: number
+    in_progress: number
+    avg_score: number | null
+    pass_rate: number | null
+    essential_compliance_pct: number | null
+    incomplete_critical_count: number
+  }
   trends: {
     incidents_weekly: { week_start: string; count: number; value?: number | null }[]
     complaints_weekly?: { week_start: string; count: number; value?: number | null }[]
