@@ -18,8 +18,6 @@ import {
   BookOpen,
   Users,
   Lightbulb,
-  ThumbsUp,
-  ThumbsDown,
 } from 'lucide-react'
 import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
@@ -59,19 +57,21 @@ const FAQItem = ({
   </Card>
 )
 
-// Category card
+// Category card — count is derived from FAQ list (PX-313), not hard-coded articles
 const CategoryCard = ({
   icon: Icon,
   title,
   description,
   count,
+  countLabel,
   colorClass,
   onClick,
 }: {
-  icon: any
+  icon: React.ComponentType<{ className?: string }>
   title: string
   description: string
   count: number
+  countLabel: string
   colorClass: string
   onClick: () => void
 }) => (
@@ -87,12 +87,12 @@ const CategoryCard = ({
       {title}
     </h3>
     <p className="text-xs text-muted-foreground mt-1">{description}</p>
-    <p className="text-xs text-primary mt-2 font-medium">{count} articles</p>
+    <p className="text-xs text-primary mt-2 font-medium">{countLabel}</p>
   </button>
 )
 
 // Quick link
-const QuickLink = ({ icon: Icon, title, href }: { icon: any; title: string; href: string }) => (
+const QuickLink = ({ icon: Icon, title, href }: { icon: React.ComponentType<{ className?: string }>; title: string; href: string }) => (
   <a
     href={href}
     className="flex items-center gap-3 p-3 bg-surface border border-border rounded-xl hover:border-primary/30 transition-colors"
@@ -109,9 +109,9 @@ export default function PortalHelp() {
   const [searchQuery, setSearchQuery] = useState('')
   const [openFAQ, setOpenFAQ] = useState<number | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
-  const [feedbackGiven, setFeedbackGiven] = useState<{ [key: number]: 'up' | 'down' | null }>({})
   const contacts = getPortalHelpContacts()
 
+  // PX-312: do not promise anonymous reporting the portal does not provide.
   const faqs = [
     {
       category: 'reporting',
@@ -214,12 +214,8 @@ export default function PortalHelp() {
         faq.answer.toLowerCase().includes(searchQuery.toLowerCase())),
   )
 
-  const giveFeedback = (index: number, type: 'up' | 'down') => {
-    setFeedbackGiven((prev) => ({ ...prev, [index]: type }))
-  }
-
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen bg-surface" data-testid="portal-help-page">
       {/* Header */}
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
@@ -269,7 +265,12 @@ export default function PortalHelp() {
             </h2>
             <div className="grid grid-cols-2 gap-3">
               {categories.map((cat) => (
-                <CategoryCard key={cat.id} {...cat} onClick={() => setSelectedCategory(cat.id)} />
+                <CategoryCard
+                  key={cat.id}
+                  {...cat}
+                  countLabel={t('portal.faq_count', { count: cat.count })}
+                  onClick={() => setSelectedCategory(cat.id)}
+                />
               ))}
             </div>
           </div>
@@ -279,6 +280,7 @@ export default function PortalHelp() {
         {selectedCategory && (
           <div className="flex items-center gap-3 mb-6">
             <button
+              type="button"
               onClick={() => setSelectedCategory(null)}
               className="text-primary hover:underline transition-colors text-sm"
             >
@@ -291,7 +293,7 @@ export default function PortalHelp() {
           </div>
         )}
 
-        {/* FAQs */}
+        {/* FAQs — feedback control removed (PX-314): nothing was ever sent */}
         <div className="mb-8">
           <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
             <Lightbulb className="w-5 h-5 text-warning" />
@@ -300,43 +302,13 @@ export default function PortalHelp() {
           <div className="space-y-3">
             {filteredFAQs.length > 0 ? (
               filteredFAQs.map((faq, index) => (
-                <div key={index}>
-                  <FAQItem
-                    question={faq.question}
-                    answer={faq.answer}
-                    isOpen={openFAQ === index}
-                    onClick={() => setOpenFAQ(openFAQ === index ? null : index)}
-                  />
-                  {openFAQ === index && (
-                    <div className="flex items-center justify-end gap-2 mt-2 px-4">
-                      <span className="text-xs text-muted-foreground">
-                        {t('portal.was_helpful')}
-                      </span>
-                      <button
-                        onClick={() => giveFeedback(index, 'up')}
-                        className={cn(
-                          'p-1.5 rounded-lg transition-colors',
-                          feedbackGiven[index] === 'up'
-                            ? 'bg-success/20 text-success'
-                            : 'bg-muted text-muted-foreground hover:bg-surface',
-                        )}
-                      >
-                        <ThumbsUp className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => giveFeedback(index, 'down')}
-                        className={cn(
-                          'p-1.5 rounded-lg transition-colors',
-                          feedbackGiven[index] === 'down'
-                            ? 'bg-destructive/20 text-destructive'
-                            : 'bg-muted text-muted-foreground hover:bg-surface',
-                        )}
-                      >
-                        <ThumbsDown className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                </div>
+                <FAQItem
+                  key={`${faq.category}-${faq.question}`}
+                  question={faq.question}
+                  answer={faq.answer}
+                  isOpen={openFAQ === index}
+                  onClick={() => setOpenFAQ(openFAQ === index ? null : index)}
+                />
               ))
             ) : (
               <div className="text-center py-8">
