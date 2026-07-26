@@ -122,7 +122,7 @@ const sampleIncidents = [
   },
 ]
 
-const paginatedResponse = {
+const _paginatedResponse = {
   data: {
     items: sampleIncidents,
     total: 2,

@@ -661,6 +661,8 @@ export default function Audits() {
     const next = new URLSearchParams(searchParams)
     next.delete('modal')
     setSearchParams(next, { replace: true })
+    // PX-260: one-shot deep-link open; exclude handleOpenModal to avoid re-open loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, urlModal, searchParams, setSearchParams])
 
   const selectedExternalAuditType = useMemo(
