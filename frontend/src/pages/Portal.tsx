@@ -110,7 +110,6 @@ export default function Portal() {
       .list(1, 50, undefined, undefined, undefined, { assigned_to: 'me' })
       .then((response) => {
         const items = response.data.items ?? []
-        const total = response.data.total ?? items.length
         setOpenActionsCount(countOpenAssignedActions(items))
       })
       .catch(() => {
