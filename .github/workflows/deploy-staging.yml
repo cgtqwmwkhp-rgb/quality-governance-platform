@@ -264,7 +264,7 @@ jobs:
               JWT_ACCESS_TOKEN_EXPIRE_MINUTES="30" \
               JWT_REFRESH_TOKEN_EXPIRE_DAYS="7" \
               LOG_LEVEL="INFO" \
-              CORS_ORIGINS='["https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"]' \
+              CORS_ORIGINS='["https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net","https://purple-water-03205fa03-staging.westeurope.6.azurestaticapps.net","https://purple-water-03205fa03-staging.6.azurestaticapps.net"]' \
               DATABASE_ECHO="false" \
               WEBSITES_PORT="8000" \
               AZURE_STORAGE_CONNECTION_STRING="$STORAGE_CONN" \
