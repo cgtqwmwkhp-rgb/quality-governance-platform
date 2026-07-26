@@ -248,6 +248,21 @@ describe('client pure helpers', () => {
     expect(getApiErrorMessage('x')).toBe('An unexpected error occurred')
     expect(getApiErrorMessage('x', 'fallback')).toBe('fallback')
   })
+
+  it('PX-207: humanises Python enum reprs in server error messages', () => {
+    vi.spyOn(axios, 'isAxiosError').mockReturnValue(true)
+    const enumLeak = axiosErr({
+      status: 409,
+      data: {
+        detail:
+          "Cannot transition from 'ComplaintStatus.ACKNOWLEDGED' to 'ComplaintStatus.RESOLVED'",
+      },
+    })
+    expect(getApiErrorMessage(enumLeak)).toBe(
+      "Cannot transition from 'Acknowledged' to 'Resolved'",
+    )
+    vi.mocked(axios.isAxiosError).mockRestore()
+  })
 })
 
 describe('client inline API surfaces', () => {

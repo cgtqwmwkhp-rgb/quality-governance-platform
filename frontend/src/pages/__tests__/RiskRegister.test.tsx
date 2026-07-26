@@ -550,3 +550,107 @@ describe('RiskRegister honesty — load and metric failures', () => {
     )
   })
 })
+
+describe('RiskRegister export honesty (PX-293)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    delete window.__FEATURE_FLAGS__
+    mockRiskList.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 12,
+            reference: 'RSK-00012',
+            title: 'Supply chain disruption',
+            status: 'open',
+            category: 'operational',
+            inherent_score: 16,
+            residual_score: 9,
+            risk_level: 'high',
+            treatment_strategy: 'mitigate',
+            risk_owner_name: 'Alex Owner',
+          },
+        ],
+        total: 1,
+      },
+    })
+    mockGetSummary.mockResolvedValue({
+      data: {
+        total_risks: 1,
+        by_level: { critical: 0, high: 1, medium: 0, low: 0 },
+        outside_appetite: 0,
+        overdue_review: 0,
+        escalated: 0,
+      },
+    })
+    mockGetHeatmap.mockResolvedValue({
+      data: {
+        matrix: Array.from({ length: 5 }, (_, row) =>
+          Array.from({ length: 5 }, (__, col) => ({
+            likelihood: 5 - row,
+            impact: col + 1,
+            score: (5 - row) * (col + 1),
+            level: 'low',
+            color: '#22c55e',
+            risk_count: 0,
+            risk_ids: [],
+            risk_titles: [],
+          })),
+        ),
+        summary: {
+          total_risks: 1,
+          critical_risks: 0,
+          high_risks: 1,
+          outside_appetite: 0,
+          average_inherent_score: 16,
+          average_residual_score: 9,
+        },
+        likelihood_labels: {
+          1: 'Rare',
+          2: 'Unlikely',
+          3: 'Possible',
+          4: 'Likely',
+          5: 'Almost Certain',
+        },
+        impact_labels: {
+          1: 'Insignificant',
+          2: 'Minor',
+          3: 'Moderate',
+          4: 'Major',
+          5: 'Catastrophic',
+        },
+      },
+    })
+    mockGetTrends.mockResolvedValue({ data: { series: [], top_movers: [] } })
+    mockAuditRuns.mockResolvedValue({ data: { items: [] } })
+    mockAuditFindings.mockResolvedValue({ data: { items: [] } })
+  })
+
+  it('PX-293: Export button downloads a CSV of visible risks', async () => {
+    const createObjectURL = vi.fn(() => 'blob:risk-register')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL,
+      revokeObjectURL,
+    })
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+
+    renderRegister()
+
+    const exportButton = await screen.findByTestId('risk-export-csv')
+    expect(exportButton).toBeEnabled()
+    fireEvent.click(exportButton)
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith('Exported 1 risk')
+    })
+    expect(createObjectURL).toHaveBeenCalled()
+    const blobArg = createObjectURL.mock.calls[0]?.[0] as Blob
+    expect(blobArg.type).toBe('text/csv;charset=utf-8')
+
+    clickSpy.mockRestore()
+    vi.unstubAllGlobals()
+  })
+})

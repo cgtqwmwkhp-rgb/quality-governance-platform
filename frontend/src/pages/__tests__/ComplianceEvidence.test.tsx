@@ -381,7 +381,7 @@ describe('ComplianceEvidence', () => {
     expect(await screen.findByText('Annex A Evidence SoA — ISO 27001:2022')).toBeInTheDocument()
   })
 
-  it('downloads audit pack via server export endpoint', async () => {
+  it('PX-252: downloads audit pack via server export endpoint', async () => {
     const createObjectURL = vi.fn(() => 'blob:audit-pack')
     const revokeObjectURL = vi.fn()
     vi.stubGlobal('URL', {
