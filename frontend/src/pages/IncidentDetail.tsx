@@ -46,6 +46,8 @@ import {
   EvidenceAsset,
   evidenceAssetsApi,
   getApiErrorMessage,
+  classifyError,
+  ErrorClass,
   CreateFromRecordError,
   lookupsApi,
   contractsApi,
@@ -365,7 +367,14 @@ export default function IncidentDetail() {
       loadRunningSheet(incidentId)
     } catch (err) {
       trackError(err, { component: 'IncidentDetail', action: 'loadIncident' })
-      setError(getApiErrorMessage(err, t('incidents.detail.failed_to_load')))
+      // A 404 genuinely means the case is not there. Everything else — 503,
+      // timeout, network — means we could not find out, which is a different
+      // thing to tell the user (PX-170).
+      setError(
+        classifyError(err) === ErrorClass.NOT_FOUND
+          ? null
+          : getApiErrorMessage(err, t('incidents.detail.failed_to_load')),
+      )
     } finally {
       setLoading(false)
     }
