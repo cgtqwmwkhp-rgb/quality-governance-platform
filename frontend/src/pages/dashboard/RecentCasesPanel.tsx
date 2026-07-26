@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Ca
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { cn } from '../../helpers/utils'
+import { formatDisplayDate, formatReference } from '../../helpers/formatters'
 import type { Metric } from './dashboardMetrics'
 
 export type RecentCaseKind = 'incidents' | 'near_misses' | 'complaints' | 'rtas'
@@ -18,11 +19,52 @@ export interface RecentCaseRow {
   date: string
 }
 
-const TABS: { id: RecentCaseKind; label: string; href: string; empty: string }[] = [
-  { id: 'incidents', label: 'Incidents', href: '/incidents', empty: 'No incidents found' },
-  { id: 'near_misses', label: 'Near misses', href: '/near-misses', empty: 'No near misses found' },
-  { id: 'complaints', label: 'Complaints', href: '/complaints', empty: 'No complaints found' },
-  { id: 'rtas', label: 'RTAs', href: '/rtas', empty: 'No road traffic accidents found' },
+/**
+ * Each tab binds a different date column (see `useDashboardData`): incidents show when
+ * they were reported, near misses when the event happened, and so on. A single "Date"
+ * header made those read as the same thing — an incident reported today but backdated
+ * to 2024 looked like the dashboard and /incidents disagreed (PX-122). Name the field.
+ *
+ * The other half of PX-122 is still open: /incidents shows `incident_date` under a
+ * column also headed "Date", so the two surfaces still need reading together. That
+ * header lives in `pages/Incidents.tsx`, which another lane owns; it wants the label
+ * "Occurred" and `formatDisplayDate` from `helpers/formatters`.
+ */
+const TABS: {
+  id: RecentCaseKind
+  label: string
+  href: string
+  empty: string
+  dateLabel: string
+}[] = [
+  {
+    id: 'incidents',
+    label: 'Incidents',
+    href: '/incidents',
+    empty: 'No incidents found',
+    dateLabel: 'Reported',
+  },
+  {
+    id: 'near_misses',
+    label: 'Near misses',
+    href: '/near-misses',
+    empty: 'No near misses found',
+    dateLabel: 'Occurred',
+  },
+  {
+    id: 'complaints',
+    label: 'Complaints',
+    href: '/complaints',
+    empty: 'No complaints found',
+    dateLabel: 'Received',
+  },
+  {
+    id: 'rtas',
+    label: 'RTAs',
+    href: '/rtas',
+    empty: 'No road traffic accidents found',
+    dateLabel: 'Logged',
+  },
 ]
 
 function severityVariant(severity: string): 'critical' | 'high' | 'medium' | 'low' {
@@ -137,8 +179,11 @@ export function RecentCasesPanel({ data }: { data: RecentCasesData }) {
                   <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">
-                    Date
+                  <th
+                    className="px-4 py-3 text-left text-sm font-medium text-muted-foreground"
+                    data-testid="recent-cases-date-header"
+                  >
+                    {active.dateLabel}
                   </th>
                 </tr>
               </thead>
@@ -155,7 +200,9 @@ export function RecentCasesPanel({ data }: { data: RecentCasesData }) {
                       key={`${tab}-${row.id}`}
                       className="border-b border-border/50 transition-colors hover:bg-surface"
                     >
-                      <td className="px-4 py-3 font-mono text-sm text-primary">{row.reference}</td>
+                      <td className="px-4 py-3 font-mono text-sm text-primary">
+                        {formatReference(row.reference)}
+                      </td>
                       <td className="px-4 py-3 text-sm text-foreground">{row.title}</td>
                       <td className="px-4 py-3">
                         <Badge variant={severityVariant(row.severity)}>{row.severity}</Badge>
@@ -166,7 +213,7 @@ export function RecentCasesPanel({ data }: { data: RecentCasesData }) {
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {new Date(row.date).toLocaleDateString()}
+                        {formatDisplayDate(row.date)}
                       </td>
                     </tr>
                   ))
