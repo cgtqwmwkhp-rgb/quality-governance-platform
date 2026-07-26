@@ -528,7 +528,7 @@ export default function PortalNearMissForm() {
             </div>
 
             <FuzzySearchDropdown
-              label={`${t('portal.contract_site')} *`}
+              label={t('portal.contract_site')}
               options={customers.map((customer) => ({
                 value: customer.code,
                 label: customer.label,

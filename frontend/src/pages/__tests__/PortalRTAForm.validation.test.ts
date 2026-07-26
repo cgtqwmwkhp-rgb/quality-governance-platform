@@ -32,6 +32,11 @@ const step5Base = {
 }
 
 describe('portalRtaCanProceed — PX-277', () => {
+  it('requires a witness answer before leaving step 3 (PX-280)', () => {
+    expect(portalRtaCanProceed(3, { ...step5Base, hasWitnesses: null })).toBe(false)
+    expect(portalRtaCanProceed(3, { ...step5Base, hasWitnesses: false })).toBe(true)
+  })
+
   it('blocks step 5 when the mandatory full description is empty or whitespace', () => {
     expect(portalRtaCanProceed(5, { ...step5Base, fullDescription: '' })).toBe(false)
     expect(portalRtaCanProceed(5, { ...step5Base, fullDescription: '   ' })).toBe(false)

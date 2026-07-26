@@ -1085,14 +1085,16 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
   const formType = propFormType || derivedFormType
   const config = FORM_TYPE_CONFIG[formType] || FORM_TYPE_CONFIG.incident
 
-  // Debug logging for form type resolution
-  console.log('[PortalDynamicForm] Route debug:', {
-    propFormType,
-    derivedFormType,
-    finalFormType: formType,
-    pathname: location.pathname,
-    configTitle: config.title,
-  })
+  // Debug logging for form type resolution — dev only (PX-166 / PX-331).
+  if (import.meta.env.DEV) {
+    console.log('[PortalDynamicForm] Route debug:', {
+      propFormType,
+      derivedFormType,
+      finalFormType: formType,
+      pathname: location.pathname,
+      configTitle: config.title,
+    })
+  }
 
   // Warn if RTA is detected (should use PortalRTAForm instead)
   if (formType === 'rta') {
@@ -1286,11 +1288,13 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
     )
   }
 
-  const contractOptions = customers.map((customer) => ({
-    value: customer.code,
-    label: customer.label,
-    sublabel: customer.description,
-  }))
+  const contractOptions = [...customers]
+    .sort((a, b) => a.label.localeCompare(b.label, 'en', { sensitivity: 'base' }))
+    .map((customer) => ({
+      value: customer.code,
+      label: customer.label,
+      sublabel: customer.description,
+    }))
 
   const roleOptions = roles.map((r) => ({
     value: r.code,
@@ -1307,6 +1311,8 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
           <button
+            type="button"
+            aria-label="Back to report types"
             onClick={handleCancel}
             className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface hover:bg-muted transition-colors"
           >

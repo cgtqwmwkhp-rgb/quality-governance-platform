@@ -22,6 +22,7 @@ import { BrandMarkTile } from '../components/BrandMark'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
 import {
+  actionsApi,
   documentCampaignApi,
   portalComplianceApi,
   trainingMatrixApi,
@@ -30,6 +31,7 @@ import {
 import { Card } from '../components/ui/Card'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
 import { cn } from '../helpers/utils'
+import { countOpenAssignedActions } from '../utils/portalHonestyHelpers'
 import { isGapStatus } from './workforce/trainingMatrix/trainingMatrixBoardHelpers'
 
 function clearStateCopy(state: PortalMyCompliance['clear_state']): {
@@ -83,6 +85,7 @@ export default function Portal() {
   const { user, logout } = usePortalAuth()
   const { announce } = useLiveAnnouncer()
   const [pendingCampaignCount, setPendingCampaignCount] = useState(0)
+  const [openActionsCount, setOpenActionsCount] = useState(0)
   const [trainingGapCount, setTrainingGapCount] = useState(0)
   const [compliance, setCompliance] = useState<PortalMyCompliance | null>(null)
   const [complianceFailed, setComplianceFailed] = useState(false)
@@ -102,6 +105,15 @@ export default function Portal() {
       })
       .catch(() => {
         setPendingCampaignCount(0)
+      })
+    void actionsApi
+      .list(1, 50, undefined, undefined, undefined, { assigned_to: 'me' })
+      .then((response) => {
+        const items = response.data.items ?? []
+        setOpenActionsCount(countOpenAssignedActions(items))
+      })
+      .catch(() => {
+        setOpenActionsCount(0)
       })
     void trainingMatrixApi
       .myTraining()
@@ -123,8 +135,8 @@ export default function Portal() {
       })
   }, [])
 
-  // Training has its own home tile — keep My Work badge for actions/reading only.
-  const myWorkBadgeCount = pendingCampaignCount
+  // My Work badge = open assigned actions + pending reading (PX-305).
+  const myWorkBadgeCount = pendingCampaignCount + openActionsCount
 
   const handleLogout = () => {
     logout()
@@ -352,7 +364,7 @@ export default function Portal() {
               {myWorkBadgeCount > 0 && (
                 <span
                   data-testid="portal-work-pending-badge"
-                  className="absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-xs font-semibold motion-safe:animate-pulse"
+                  className="absolute -top-1 -right-1 flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-xs font-semibold"
                   aria-hidden="true"
                 >
                   <Bell className="w-3 h-3" />
@@ -428,45 +440,48 @@ export default function Portal() {
           </button>
 
           {/* Secondary Action: Track Status */}
-          <Card
+          <button
             data-testid="portal-track-btn"
-            hoverable
-            className="p-4 cursor-pointer group"
+            type="button"
             onClick={() => navigate('/portal/track')}
+            className={cn(
+              'w-full flex items-center gap-4 p-4 rounded-2xl transition-all group text-left',
+              'bg-card hover:bg-muted/40 border border-border hover:border-info/30 cursor-pointer',
+            )}
           >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-info/10 rounded-xl flex items-center justify-center">
-                <Search className="w-6 h-6 text-info" />
-              </div>
-              <div className="flex-1 text-left">
-                <h3 className="font-semibold text-foreground group-hover:text-info transition-colors">
-                  Track My Report
-                </h3>
-                <p className="text-sm text-muted-foreground">Check status with reference number</p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+            <div className="w-12 h-12 bg-info/10 rounded-xl flex items-center justify-center">
+              <Search className="w-6 h-6 text-info" />
             </div>
-          </Card>
+            <div className="flex-1">
+              <h3 className="font-semibold text-foreground group-hover:text-info transition-colors">
+                Track My Report
+              </h3>
+              <p className="text-sm text-muted-foreground">View your submitted reports and status</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+          </button>
 
           {/* Help & Support */}
-          <Card
-            hoverable
-            className="p-4 cursor-pointer group"
+          <button
+            data-testid="portal-help-btn"
+            type="button"
             onClick={() => navigate('/portal/help')}
+            className={cn(
+              'w-full flex items-center gap-4 p-4 rounded-2xl transition-all group text-left',
+              'bg-card hover:bg-muted/40 border border-border hover:border-primary/30 cursor-pointer',
+            )}
           >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-muted rounded-xl flex items-center justify-center">
-                <HelpCircle className="w-6 h-6 text-muted-foreground" />
-              </div>
-              <div className="flex-1 text-left">
-                <h3 className="font-semibold text-foreground group-hover:text-foreground/80 transition-colors">
-                  Help & Support
-                </h3>
-                <p className="text-sm text-muted-foreground">FAQs and contact information</p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+            <div className="w-12 h-12 bg-muted rounded-xl flex items-center justify-center">
+              <HelpCircle className="w-6 h-6 text-muted-foreground" />
             </div>
-          </Card>
+            <div className="flex-1">
+              <h3 className="font-semibold text-foreground group-hover:text-foreground/80 transition-colors">
+                Help & Support
+              </h3>
+              <p className="text-sm text-muted-foreground">FAQs and contact information</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+          </button>
         </div>
 
         {/* Mobile Optimized Badge */}
@@ -475,16 +490,6 @@ export default function Portal() {
           <span>Optimized for mobile devices</span>
         </div>
       </main>
-
-      {/* Admin Login Link */}
-      <footer className="fixed bottom-0 left-0 right-0 p-4 text-center bg-card/80 backdrop-blur-sm border-t border-border">
-        <button
-          onClick={() => navigate('/login')}
-          className="text-muted-foreground hover:text-primary text-sm transition-colors"
-        >
-          Admin Login →
-        </button>
-      </footer>
     </div>
   )
 }

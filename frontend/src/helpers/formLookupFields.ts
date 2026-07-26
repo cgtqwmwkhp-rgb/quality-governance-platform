@@ -32,6 +32,8 @@ export function resolveLookupCategory(field: FormFieldShape): string | null {
 
   if (name in EXACT_FIELD_LOOKUPS) return EXACT_FIELD_LOOKUPS[name]
   if (name.includes('customer') || name.includes('contract')) return 'customers'
+  // Complaint "Role / Title" is free text in production — never tie it to workforce_roles (PX-284).
+  if (name === 'complainant_role') return null
   if (name.endsWith('_role') || name === 'role' || name.includes('role')) return 'workforce_roles'
 
   const inline = field.options || []

@@ -22,6 +22,7 @@ import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { cn, decodeHtmlEntities } from '../helpers/utils'
+import { formatPortalDate, formatPortalReportTitle } from '../utils/portalHonestyHelpers'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import ReportChat from '../components/ReportChat'
 import { API_BASE_URL } from '../config/apiBase'
@@ -95,7 +96,7 @@ const toReportSummary = (item: Record<string, unknown>): ReportSummary => {
   return {
     reference_number: String(item.reference_number ?? ''),
     report_type: normalizeReportType(item.report_type),
-    title: displayPortalText(item.title),
+    title: formatPortalReportTitle(displayPortalText(item.title)),
     status,
     status_label: displayPortalText(item.status_label) || getStatusLabel(status),
     submitted_at: String(item.submitted_at ?? ''),
@@ -202,10 +203,8 @@ const TimelineEvent = ({
     <div className="pb-6">
       <p className="text-foreground font-medium">{event.event}</p>
       <p className="text-sm text-muted-foreground">
-        {new Date(event.date).toLocaleDateString('en-GB', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
+        {formatPortalDate(event.date)}{' '}
+        {new Date(event.date).toLocaleTimeString('en-GB', {
           hour: '2-digit',
           minute: '2-digit',
         })}
@@ -297,11 +296,7 @@ const ReportListItem = ({ report, onClick }: { report: ReportSummary; onClick: (
           </h3>
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">
-              {new Date(report.submitted_at).toLocaleDateString('en-GB', {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric',
-              })}
+              {formatPortalDate(report.submitted_at)}
             </span>
             <StatusBadge status={report.status} label={report.status_label} />
           </div>

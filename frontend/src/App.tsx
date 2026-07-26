@@ -103,6 +103,7 @@ const WorkforceEngineerProfile = lazy(() => import('./pages/workforce/EngineerPr
 const WorkforceCalendar = lazy(() => import('./pages/workforce/Calendar'))
 const WorkforceCompetencyDashboard = lazy(() => import('./pages/workforce/CompetencyDashboard'))
 const CompetenceGaps = lazy(() => import('./pages/CompetenceGaps'))
+const PortalNotFound = lazy(() => import('./pages/PortalNotFound'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const FormsList = lazy(() => import('./pages/admin/FormsList'))
@@ -271,6 +272,7 @@ function App() {
               <Route path="tools" element={<PortalMyTools />} />
               <Route path="van" element={<PortalMyVan />} />
               <Route path="help" element={<PortalHelp />} />
+              <Route path="*" element={<PortalNotFound />} />
             </Route>
 
             {/* Auth Routes */}
