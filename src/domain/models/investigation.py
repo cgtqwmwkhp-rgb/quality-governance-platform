@@ -15,7 +15,7 @@ import enum
 from datetime import datetime
 from typing import Any, List, Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, Base, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
@@ -222,6 +222,17 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
     """
 
     __tablename__ = "investigation_runs"
+    # One investigation per source record, per tenant. Source ids are per-tenant
+    # sequences, so a global index here would let one tenant block another.
+    __table_args__ = (
+        Index(
+            "uq_investigation_runs_tenant_source",
+            "tenant_id",
+            "assigned_entity_type",
+            "assigned_entity_id",
+            unique=True,
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 
