@@ -97,16 +97,23 @@ import {
 import {
   buildGeneratedPackDownload,
   buildPackManifestStubDownload,
+  packPdfFilename,
   triggerPackDownload,
+  triggerPackPdfDownload,
 } from './investigation/investigationReportHelpers'
 import { getReportSectionsForLevel } from './investigation/hsg245ReportSections'
 import {
   addManualTimelineEntry,
   approveCustomerPackOmit,
+  fetchCustomerPackPdf,
   readCustomerPackVisibility,
   requestCustomerPackOmit,
   updateEvidenceVisibility,
 } from './investigation/investigationDetailApi'
+import { formatPermissionCode } from '../helpers/displayLabels'
+
+/** Permission a section omit needs; always rendered through formatPermissionCode (PX-144). */
+const OMIT_APPROVAL_PERMISSION = 'investigation:approve_customer_omit'
 
 const TABS = [
   { id: 'summary', label: 'Summary', icon: FileText },
@@ -149,6 +156,7 @@ export default function InvestigationDetail() {
   const [packsLoading, setPacksLoading] = useState(false)
   const [generatingPack, setGeneratingPack] = useState(false)
   const [downloadingPackId, setDownloadingPackId] = useState<number | null>(null)
+  const [downloadingPdfPackId, setDownloadingPdfPackId] = useState<number | null>(null)
   const [packCapability, setPackCapability] = useState<PackCapability>({ canGenerate: true })
   const [packError, setPackError] = useState<string | null>(null)
 
@@ -473,12 +481,31 @@ export default function InvestigationDetail() {
     try {
       const payload = buildPackManifestStubDownload(pack, investigation.reference_number)
       triggerPackDownload(payload)
-      toast.success(t('investigations.report.download_stub_success'))
+      toast.success('Manifest stub downloaded — use PDF for the issuable document.')
     } catch (err) {
       trackError(err, { component: 'InvestigationDetail', action: 'downloadPack' })
       setPackError(getApiErrorMessage(err))
     } finally {
       setDownloadingPackId(null)
+    }
+  }
+
+  /** Download the issuable branded PDF for a stored pack (PX-143). */
+  const handleDownloadPackPdf = async (packId: number, packUuid: string) => {
+    if (!investigation || !investigationId) return
+    setDownloadingPdfPackId(packId)
+    setPackError(null)
+    try {
+      const pdf = await fetchCustomerPackPdf(investigationId, packId)
+      triggerPackPdfDownload(pdf, packPdfFilename(investigation.reference_number, packUuid))
+      toast.success('Customer pack PDF downloaded.')
+    } catch (err) {
+      trackError(err, { component: 'InvestigationDetail', action: 'downloadPackPdf' })
+      const message = getApiErrorMessage(err, 'Could not build the customer pack PDF.')
+      setPackError(message)
+      toast.error(message)
+    } finally {
+      setDownloadingPdfPackId(null)
     }
   }
 
@@ -491,7 +518,9 @@ export default function InvestigationDetail() {
       triggerPackDownload(buildGeneratedPackDownload(response.data))
       const log = response.data.redaction_log
       setLastRedactionLog(Array.isArray(log) ? log : null)
-      toast.success(t('investigations.report.generate_download_success'))
+      toast.success('Report generated — downloading PDF and JSON record.')
+      // The PDF is the issuable document; the JSON above is the machine-readable record.
+      await handleDownloadPackPdf(response.data.pack_id, response.data.pack_uuid)
       await loadPacks()
       await loadInvestigation()
     } catch (err: unknown) {
@@ -1713,8 +1742,9 @@ export default function InvestigationDetail() {
               <h3 className="text-lg font-semibold text-foreground">HSG245 report scope</h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 {String(investigation.level || 'medium').toUpperCase()} level sections required for this
-                investigation. Request omit from customer pack; H&S Advisor/Admin approval required
-                (`investigation:approve_customer_omit`).
+                investigation. You can ask for a section to be left out of the customer pack, but an
+                H&amp;S Advisor or Admin holding “{formatPermissionCode(OMIT_APPROVAL_PERMISSION)}”
+                has to approve it first.
               </p>
               <div className="mt-4 space-y-3">
                 {getReportSectionsForLevel(investigation.level).map((section) => {
@@ -1813,8 +1843,11 @@ export default function InvestigationDetail() {
               <h3 className="text-lg font-semibold text-foreground mb-2">
                 {t('investigations.generate_report')}
               </h3>
+              {/* Inline English: the locale copy still says the PDF is a follow-on, and
+                  i18n files are owned by another lane this wave. */}
               <p className="text-sm text-muted-foreground mb-4">
-                {t('investigations.report.generate_hint')}
+                Generating a pack produces a branded PDF for issue to the customer, plus a JSON
+                copy of the same payload for the record. Both carry a checksum for verification.
               </p>
               {!packCapability.canGenerate && (
                 <div
@@ -1963,6 +1996,19 @@ export default function InvestigationDetail() {
                             </p>
                           )}
                         </div>
+                        <Button
+                          size="sm"
+                          data-testid={`investigation-pack-download-pdf-${pack.id}`}
+                          disabled={downloadingPdfPackId === pack.id}
+                          onClick={() => void handleDownloadPackPdf(pack.id, pack.pack_uuid)}
+                        >
+                          {downloadingPdfPackId === pack.id ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4 mr-2" />
+                          )}
+                          PDF
+                        </Button>
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -1981,7 +2027,7 @@ export default function InvestigationDetail() {
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                              {t('investigations.report.download_manifest_tooltip')}
+                              Download JSON manifest stub (checksum metadata only)
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>

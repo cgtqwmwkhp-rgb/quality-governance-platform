@@ -700,10 +700,17 @@ describe('Actions Round 3 polish — CUJ honesty & upstream links', () => {
     mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: true } })
   })
 
-  it('shows Unassigned when no assignee email is on the row', async () => {
+  it('shows Unassigned only when the row genuinely has no owner', async () => {
     mockList.mockResolvedValue({
       data: {
-        items: [action({ action_key: 'capa:10', assigned_to_email: undefined, owner_email: undefined })],
+        items: [
+          action({
+            action_key: 'capa:10',
+            owner_id: undefined,
+            assigned_to_email: undefined,
+            owner_email: undefined,
+          }),
+        ],
       },
     })
 
@@ -713,7 +720,37 @@ describe('Actions Round 3 polish — CUJ honesty & upstream links', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByTestId('actions-row-assignee-capa:10')).toHaveTextContent('Unassigned')
+    const cell = await screen.findByTestId('actions-row-assignee-capa:10')
+    expect(cell).toHaveTextContent('Unassigned')
+    expect(cell).toHaveAttribute('data-assignee-state', 'unassigned')
+  })
+
+  // PX-151: the dashboard counts owner_id, the list can only print a name. A row with an
+  // owner whose name did not resolve must not claim nobody owns it.
+  it('does not claim Unassigned when the row has an owner but no resolved name', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [
+          action({
+            action_key: 'capa:11',
+            owner_id: 42,
+            assigned_to_email: undefined,
+            owner_email: undefined,
+          }),
+        ],
+      },
+    })
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    const cell = await screen.findByTestId('actions-row-assignee-capa:11')
+    expect(cell).not.toHaveTextContent('Unassigned')
+    expect(cell).toHaveTextContent('Assigned — owner name unavailable')
+    expect(cell).toHaveAttribute('data-assignee-state', 'assigned_unnamed')
   })
 
   it('prefers assigned_to_email over owner_email in row metadata', async () => {

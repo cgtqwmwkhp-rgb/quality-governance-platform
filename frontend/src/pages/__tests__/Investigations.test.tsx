@@ -36,7 +36,10 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate }
 })
 
+const mockApiGet = vi.fn()
+
 vi.mock('../../api/client', () => ({
+  default: { get: (...args: unknown[]) => mockApiGet(...args) },
   investigationsApi: {
     list: vi.fn(),
     create: vi.fn(),
@@ -141,6 +144,10 @@ describe('Investigations', () => {
     })
     actionsApi.list.mockResolvedValue({
       data: { items: [] },
+    })
+    // Default: registers fully covered, so the honesty strip stays off unless a test opts in.
+    mockApiGet.mockResolvedValue({
+      data: { items: [], total: 0, investigated: 0, not_investigated: 0 },
     })
   })
 
@@ -325,5 +332,60 @@ describe('Investigations', () => {
 
     expect(screen.getByText('reporting incident')).toBeInTheDocument()
     expect(screen.getByText('complaint')).toBeInTheDocument()
+  })
+
+  describe('source-register coverage honesty (PX-136)', () => {
+    it('states how many source records have no investigation', async () => {
+      mockApiGet.mockResolvedValue({
+        data: {
+          items: [
+            { source_type: 'reporting_incident', total: 27, investigated: 0, not_investigated: 27 },
+          ],
+          total: 27,
+          investigated: 0,
+          not_investigated: 27,
+        },
+      })
+
+      setup()
+
+      const strip = await screen.findByTestId('investigations-coverage-honesty')
+      expect(strip).toHaveTextContent('27 source records have no investigation')
+      expect(strip).toHaveTextContent('27 incidents')
+      expect(
+        screen.getByTestId('investigations-coverage-start'),
+      ).toBeInTheDocument()
+    })
+
+    it('stays off when every source record is investigated', async () => {
+      mockApiGet.mockResolvedValue({
+        data: {
+          items: [
+            { source_type: 'reporting_incident', total: 5, investigated: 5, not_investigated: 0 },
+          ],
+          total: 5,
+          investigated: 5,
+          not_investigated: 0,
+        },
+      })
+
+      setup()
+
+      await waitFor(() => {
+        expect(screen.getByText('Vehicle collision on A1 motorway')).toBeInTheDocument()
+      })
+      expect(screen.queryByTestId('investigations-coverage-honesty')).not.toBeInTheDocument()
+    })
+
+    it('stays off — rather than implying coverage — when the count cannot be read', async () => {
+      mockApiGet.mockRejectedValue(new Error('boom'))
+
+      setup()
+
+      await waitFor(() => {
+        expect(screen.getByText('Vehicle collision on A1 motorway')).toBeInTheDocument()
+      })
+      expect(screen.queryByTestId('investigations-coverage-honesty')).not.toBeInTheDocument()
+    })
   })
 })

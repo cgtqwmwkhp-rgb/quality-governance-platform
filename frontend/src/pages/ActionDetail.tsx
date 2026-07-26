@@ -39,6 +39,7 @@ import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { getActionSourceLink } from '../components/investigations/handoffLinks'
 import { buildActionDetailPath, parseActionDetailId } from './actionLinks'
+import { resolveActionAssignee } from './actionsDisplayHelpers'
 
 const MAX_EVIDENCE_FILE_SIZE_BYTES = 50 * 1024 * 1024
 /** Matches `ActionOwnerNoteCreate.body` max_length on the API. */
@@ -444,6 +445,7 @@ export default function ActionDetail() {
   const dueDirty = dueDraft !== dueDateInputValue(action.due_date)
   const isCapa = action.action_key.startsWith('capa:') || action.source_type === 'capa'
   const sourceLink = getActionSourceLink(action.source_type, action.source_id)
+  const currentOwner = resolveActionAssignee(action)
 
   return (
     <div className="space-y-6 p-4 max-w-3xl mx-auto animate-fade-in">
@@ -907,6 +909,22 @@ export default function ActionDetail() {
             </label>
             <p className="text-xs text-muted-foreground mt-1">
               Responsible person email (optional)
+            </p>
+            <p
+              className="text-xs mt-1"
+              data-testid="action-detail-current-owner"
+              data-assignee-state={currentOwner.state}
+            >
+              <span className="text-muted-foreground">Current owner: </span>
+              <span
+                className={
+                  currentOwner.state === 'assigned'
+                    ? 'font-medium text-foreground'
+                    : 'italic text-muted-foreground'
+                }
+              >
+                {currentOwner.label}
+              </span>
             </p>
             {isCapa && emailConfigured === false ? (
               <div

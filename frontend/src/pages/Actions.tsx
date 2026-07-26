@@ -70,7 +70,11 @@ import {
 } from './actionsViewScope'
 import { getActionSourceLink } from '../components/investigations/handoffLinks'
 import { buildActionDetailPath } from './actionLinks'
-import { formatActionSourceRef } from './actionsDisplayHelpers'
+import {
+  formatActionSourceRef,
+  resolveActionAssignee,
+  type ActionAssigneeDisplay,
+} from './actionsDisplayHelpers'
 import { isSafeReturnTo } from '../helpers/knowledgeExceptionsLinks'
 
 function startOfDay(d: Date): number {
@@ -149,6 +153,7 @@ function classifyError(error: unknown): ApiError {
 interface Action extends Omit<ApiAction, 'owner_email'> {
   source_ref: string
   assignee?: string
+  assigneeDisplay: ActionAssigneeDisplay
 }
 
 function isTerminalActionStatus(status: string | undefined): boolean {
@@ -347,16 +352,20 @@ export default function Actions() {
   }, [searchParams, setSearchParams])
 
   // Transform API response to UI model
-  const transformAction = (apiAction: ApiAction): Action => ({
-    ...apiAction,
-    source_ref: formatActionSourceRef({
-      source_type: apiAction.source_type,
-      source_id: apiAction.source_id,
-      source_reference: apiAction.source_reference,
-      source_title: apiAction.source_title,
-    }),
-    assignee: apiAction.assigned_to_email || apiAction.owner_email || undefined,
-  })
+  const transformAction = (apiAction: ApiAction): Action => {
+    const assigneeDisplay = resolveActionAssignee(apiAction)
+    return {
+      ...apiAction,
+      source_ref: formatActionSourceRef({
+        source_type: apiAction.source_type,
+        source_id: apiAction.source_id,
+        source_reference: apiAction.source_reference,
+        source_title: apiAction.source_title,
+      }),
+      assignee: assigneeDisplay.name,
+      assigneeDisplay,
+    }
+  }
 
   // Fetch actions from API with stable ordering (server returns created_at desc).
   // My Work / Overdue / My overdue are server-scoped via assigned_to + overdue.
@@ -1231,8 +1240,11 @@ export default function Actions() {
                 action.audit_run_id > 0
               const moreCount = hasAuditLinks ? 2 : 0
               const detailPanelId = `actions-detail-${action.action_key}`
+              const assignee = action.assigneeDisplay
               const assigneeLabel =
-                action.assignee || t('actions.list.unassigned', 'Unassigned')
+                assignee.state === 'unassigned'
+                  ? t('actions.list.unassigned', 'Unassigned')
+                  : assignee.label
               const showFindingLoopCta =
                 action.source_type === 'audit_finding' &&
                 Number.isFinite(action.source_id) &&
@@ -1304,9 +1316,10 @@ export default function Actions() {
                         <span
                           className={cn(
                             'inline-flex items-center gap-1 truncate',
-                            !action.assignee && 'italic opacity-80',
+                            assignee.state !== 'assigned' && 'italic opacity-80',
                           )}
                           data-testid={`actions-row-assignee-${action.action_key}`}
+                          data-assignee-state={assignee.state}
                         >
                           <User className="h-3 w-3 shrink-0" aria-hidden="true" />
                           {assigneeLabel}
@@ -1439,12 +1452,17 @@ export default function Actions() {
                           {t('actions.detail.type', 'Type')}:{' '}
                           <span className="font-medium text-foreground">{action.action_type}</span>
                         </span>
-                        <span data-testid={`actions-detail-assignee-${action.action_key}`}>
+                        <span
+                          data-testid={`actions-detail-assignee-${action.action_key}`}
+                          data-assignee-state={assignee.state}
+                        >
                           {t('actions.detail.assignee', 'Assignee')}:{' '}
                           <span
                             className={cn(
                               'font-medium',
-                              action.assignee ? 'text-foreground' : 'italic text-muted-foreground',
+                              assignee.state === 'assigned'
+                                ? 'text-foreground'
+                                : 'italic text-muted-foreground',
                             )}
                           >
                             {assigneeLabel}

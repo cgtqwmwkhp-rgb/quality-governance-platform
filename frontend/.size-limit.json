@@ -3,7 +3,7 @@
     "path": "dist/assets/index-*.js",
     "limit": "184.5 kB",
     "gzip": true,
-    "name": "index: 183\u2192184.5 kB \u2014 Run021 Lane H session warning + drawer inertness + offline retry (+930 B); base e00662d4 already measured 91 B over 183"
+    "name": "index: 183\u2192184.5 kB \u2014 Run021 Lane H session warning + drawer inertness + offline retry; Lane F then measures 184.17 kB on top of Lane H's 184.02 kB (+~150 B of Rollup chunk-graph glue from the PX-151 assignee helper now shared by Actions and ActionDetail; the investigation UI is already route-split). Budget unchanged, ~330 B headroom left."
   },
   {
     "path": "dist/assets/vendor-*.js",

@@ -197,3 +197,46 @@ describe('ActionDetail source deep-links', () => {
     )
   })
 })
+
+// PX-151: an owned action must not read as unowned just because no email resolved.
+describe('ActionDetail current owner (PX-151)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockListOwnerNotes.mockResolvedValue({ data: { items: [] } })
+    mockListEvidence.mockResolvedValue({ data: { items: [] } })
+    mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: true } })
+  })
+
+  it('names the owner when the API resolved one', async () => {
+    mockGetByKey.mockResolvedValue({
+      data: { ...auditFindingAction, owner_id: 42, assigned_to_email: 'lead@example.com' },
+    })
+
+    renderDetail()
+
+    const owner = await screen.findByTestId('action-detail-current-owner')
+    expect(owner).toHaveTextContent('lead@example.com')
+    expect(owner).toHaveAttribute('data-assignee-state', 'assigned')
+  })
+
+  it('does not claim Unassigned when an owner id exists without a resolved name', async () => {
+    mockGetByKey.mockResolvedValue({ data: { ...auditFindingAction, owner_id: 42 } })
+
+    renderDetail()
+
+    const owner = await screen.findByTestId('action-detail-current-owner')
+    expect(owner).not.toHaveTextContent('Unassigned')
+    expect(owner).toHaveTextContent('Assigned — owner name unavailable')
+    expect(owner).toHaveAttribute('data-assignee-state', 'assigned_unnamed')
+  })
+
+  it('says Unassigned when there is genuinely no owner', async () => {
+    mockGetByKey.mockResolvedValue({ data: { ...auditFindingAction } })
+
+    renderDetail()
+
+    const owner = await screen.findByTestId('action-detail-current-owner')
+    expect(owner).toHaveTextContent('Unassigned')
+    expect(owner).toHaveAttribute('data-assignee-state', 'unassigned')
+  })
+})
