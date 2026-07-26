@@ -70,6 +70,15 @@ function dashboardFixture(rtas: Record<string, number> = { total_in_period: 2, t
       },
       rtas,
       risks: { total_active: 4, by_level: {}, high_critical: 1, average_score: 10 },
+      audits: {
+        totals: 2,
+        completed: 1,
+        in_progress: 1,
+        avg_score: 85,
+        pass_rate: 100,
+        essential_compliance_pct: 100,
+        incomplete_critical_count: 0,
+      },
       kris: { total_active: 0, by_status: {}, at_risk: 0, pending_alerts: 0 },
       compliance: { total_assigned: 0, completed: 0, overdue: 0, completion_rate: 100 },
       sla_performance: { total_tracked: 0, met: 0, breached: 0, compliance_rate: 100 },
@@ -278,7 +287,7 @@ describe('Analytics', () => {
     })
 
     it('marks audit metrics unavailable without inventing zero counts', async () => {
-      mockListRuns.mockRejectedValue(new Error('audits down'))
+      mockGetDashboard.mockRejectedValue(new Error('dashboard down'))
       const Analytics = (await import('../Analytics')).default
       render(
         <MemoryRouter initialEntries={['/analytics?section=audits']}>
@@ -292,12 +301,40 @@ describe('Analytics', () => {
       expect(summary).toHaveTextContent(/Audit metrics unavailable/i)
       expect(summary).not.toHaveTextContent('0')
       expect(await screen.findByTestId('analytics-partial')).toHaveTextContent(
-        /Audits list unavailable/i,
+        /Executive dashboard unavailable/i,
       )
 
       const table = screen.getByTestId('analytics-module-table')
       const auditsRow = within(table).getByRole('row', { name: /Audits/i })
       expect(within(auditsRow).getAllByText('—').length).toBeGreaterThanOrEqual(3)
+    })
+
+    it('module distribution uses period-scoped totals and excludes register-only modules (PX-195)', async () => {
+      mockGetDashboard.mockResolvedValue(
+        dashboardFixture({
+          total_in_period: 2,
+          total: 50,
+          open: 10,
+          closed: 40,
+        }),
+      )
+      mockRiskSummary.mockResolvedValue({ data: { total_risks: 129 } })
+      const Analytics = (await import('../Analytics')).default
+      render(
+        <MemoryRouter initialEntries={['/analytics']}>
+          <Routes>
+            <Route path="/analytics" element={<Analytics />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+
+      const distribution = await screen.findByTestId('analytics-module-distribution')
+      expect(screen.getByText(/period-scoped/i)).toBeInTheDocument()
+      expect(within(distribution).getByText('Incidents')).toBeInTheDocument()
+      expect(within(distribution).getByText('Audits')).toBeInTheDocument()
+      expect(within(distribution).queryByText('Risks')).not.toBeInTheDocument()
+      expect(within(distribution).queryByText('Actions')).not.toBeInTheDocument()
+      expect(screen.getByTestId('analytics-hero-compliance')).toHaveTextContent('Evidence coverage')
     })
 
     // Was 'marks RTA open/closed unavailable without inventing zero counts', driven by a

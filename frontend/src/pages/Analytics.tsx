@@ -37,6 +37,11 @@ import { cn } from '../helpers/utils'
 import { formatTrend, type Trend } from '../helpers/formatters'
 import { toast } from '../contexts/ToastContext'
 import { CampaignCommandKpis } from './CampaignCommandKpis'
+import {
+  periodDistributionDenominator,
+  periodDistributionPercent,
+  rowsForPeriodDistribution,
+} from './analytics/moduleDistributionScope'
 
 type TimeRange = '7d' | '30d' | '90d' | '1y'
 type SectionId =
@@ -89,6 +94,8 @@ interface ModuleRow {
   href: string
   hrefOpen: string
   loadState?: ModuleLoadState
+  /** Period-scoped count for the distribution chart; null = register-only (excluded). */
+  distributionTotal?: MetricValue
 }
 
 /**
@@ -299,26 +306,19 @@ export default function Analytics() {
         setRiskClosed(0)
       }
 
-      if (auditsRes.status === 'fulfilled') {
-        const total = auditsRes.value.data.total ?? 0
-        const runs: AuditRun[] = auditsRes.value.data.items ?? []
-        const openOnPage = runs.filter(
-          (r: AuditRun) => r.status !== 'completed' && r.status !== 'cancelled',
-        ).length
-        const closedOnPage = runs.filter((r: AuditRun) => r.status === 'completed').length
-        setAuditsTotal(total)
-        setAuditsAvgResolutionDays(avgResolutionDaysFromCompleted(runs))
-        if (total <= runs.length) {
-          setAuditsOpen(openOnPage)
-          setAuditsClosed(closedOnPage)
+      if (dashRes.status === 'fulfilled') {
+        const auditSummary = dashRes.value.data.audits
+        if (auditSummary && typeof auditSummary.totals === 'number') {
+          setAuditsTotal(auditSummary.totals)
+          setAuditsClosed(auditSummary.completed)
+          setAuditsOpen(Math.max(0, auditSummary.totals - auditSummary.completed))
           setAuditsLoadState('live')
         } else {
-          const ratioOpen = runs.length ? openOnPage / runs.length : 0
-          const ratioClosed = runs.length ? closedOnPage / runs.length : 0
-          setAuditsOpen(Math.round(total * ratioOpen))
-          setAuditsClosed(Math.round(total * ratioClosed))
-          setAuditsLoadState('estimated')
-          notes.push('Audit open/closed mix estimated from first 100 runs')
+          setAuditsTotal(null)
+          setAuditsOpen(null)
+          setAuditsClosed(null)
+          setAuditsLoadState('unavailable')
+          notes.push('Audit period summary unavailable')
         }
       } else {
         setAuditsTotal(null)
@@ -326,7 +326,17 @@ export default function Analytics() {
         setAuditsClosed(null)
         setAuditsAvgResolutionDays(null)
         setAuditsLoadState('unavailable')
-        notes.push('Audits list unavailable')
+        notes.push('Executive dashboard unavailable — audit counts not shown')
+      }
+
+      if (auditsRes.status === 'fulfilled') {
+        const runs: AuditRun[] = auditsRes.value.data.items ?? []
+        setAuditsAvgResolutionDays(avgResolutionDaysFromCompleted(runs))
+      } else {
+        setAuditsAvgResolutionDays(null)
+        if (dashRes.status === 'fulfilled') {
+          notes.push('Audit list unavailable — average resolution not shown')
+        }
       }
 
       // RTA total/open/closed come from the executive dashboard aggregate so all three
@@ -394,8 +404,8 @@ export default function Analytics() {
     const complaintsTotal = dash?.complaints.total_in_period ?? null
     const complaintsOpen = dash?.complaints.open ?? null
     const complaintsClosed = dash?.complaints.closed_in_period ?? null
-    // Register-wide total, matching the population behind rtasOpen / rtasClosed.
-    const rtasTotal = dash?.rtas.total ?? null
+    const rtasRegisterTotal = dash?.rtas.total ?? null
+    const rtasPeriodTotal = dash?.rtas.total_in_period ?? null
     const actionsTotal = actionsSummary?.total ?? null
     const actionsOpen = actionsSummary ? openFromActions(actionsSummary) : null
     const actionsClosed = actionsSummary ? completedFromActions(actionsSummary) : null
@@ -403,6 +413,8 @@ export default function Analytics() {
       incidentsTotal != null && incidentsOpen != null
         ? Math.max(0, incidentsTotal - Math.min(incidentsOpen, incidentsTotal))
         : null
+
+    const auditsPeriodTotal = dash?.audits?.totals ?? auditsTotal
 
     return [
       {
@@ -420,11 +432,12 @@ export default function Analytics() {
         href: '/incidents',
         hrefOpen: '/incidents?status=open',
         loadState: dash ? 'live' : 'unavailable',
+        distributionTotal: incidentsTotal,
       },
       {
         id: 'rtas',
         module: 'RTAs',
-        total: rtasTotal,
+        total: rtasRegisterTotal,
         open: rtasOpen,
         closed: rtasClosed,
         avgResolutionDays: rtasAvgResolutionDays,
@@ -432,6 +445,7 @@ export default function Analytics() {
         href: '/rtas',
         hrefOpen: '/rtas',
         loadState: rtasLoadState,
+        distributionTotal: rtasPeriodTotal,
       },
       {
         id: 'complaints',
@@ -444,6 +458,7 @@ export default function Analytics() {
         href: '/complaints',
         hrefOpen: '/complaints?status=open',
         loadState: dash ? 'live' : 'unavailable',
+        distributionTotal: complaintsTotal,
       },
       {
         id: 'risks',
@@ -456,11 +471,12 @@ export default function Analytics() {
         href: '/risk-register',
         hrefOpen: '/risk-register?status=active',
         loadState: 'live',
+        distributionTotal: null,
       },
       {
         id: 'audits',
         module: 'Audits',
-        total: auditsTotal,
+        total: auditsPeriodTotal,
         open: auditsOpen,
         closed: auditsClosed,
         avgResolutionDays: auditsAvgResolutionDays,
@@ -468,6 +484,7 @@ export default function Analytics() {
         href: '/audits',
         hrefOpen: '/audits?view=board',
         loadState: auditsLoadState,
+        distributionTotal: auditsPeriodTotal,
       },
       {
         id: 'actions',
@@ -480,6 +497,7 @@ export default function Analytics() {
         href: '/actions',
         hrefOpen: '/actions?view=overdue',
         loadState: actionsSummary ? 'live' : 'unavailable',
+        distributionTotal: null,
       },
     ]
   }, [
@@ -497,6 +515,12 @@ export default function Analytics() {
     rtasAvgResolutionDays,
     rtasLoadState,
   ])
+
+  const distributionRows = useMemo(() => rowsForPeriodDistribution(moduleRows), [moduleRows])
+  const distributionDenominator = useMemo(
+    () => periodDistributionDenominator(distributionRows),
+    [distributionRows],
+  )
 
   const filteredRows = useMemo(() => {
     let rows = moduleRows
@@ -726,13 +750,15 @@ export default function Analytics() {
           {
             id: 'all' as HeroFilter,
             title: 'Health score',
+            subtitle: 'Composite org health',
             value: dash?.health_score?.score != null ? String(dash.health_score.score) : '—',
             icon: <Activity className="w-6 h-6" />,
             variant: 'primary' as const,
           },
           {
             id: 'compliance' as HeroFilter,
-            title: 'Compliance score',
+            title: 'Evidence coverage',
+            subtitle: 'ISO evidence links',
             value: complianceScore != null ? `${complianceScore}%` : '—',
             icon: <Shield className="w-6 h-6" />,
             variant: 'info' as const,
@@ -779,6 +805,9 @@ export default function Analytics() {
             </div>
             <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
             <p className="text-sm text-muted-foreground">{kpi.title}</p>
+            {'subtitle' in kpi && kpi.subtitle ? (
+              <p className="text-xs text-muted-foreground mt-0.5">{kpi.subtitle}</p>
+            ) : null}
           </button>
         ))}
       </div>
@@ -815,16 +844,20 @@ export default function Analytics() {
         </Card>
 
         <Card className="p-6">
-          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-6">
-            <PieChart className="w-5 h-5 text-primary" />
-            Module distribution
-          </h2>
-          <div className="space-y-4">
-            {moduleRows.map((stat) => {
-              const percentage =
-                totals.total != null && stat.total != null && totals.total > 0
-                  ? (stat.total / totals.total) * 100
-                  : 0
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <PieChart className="w-5 h-5 text-primary" />
+              Module distribution
+            </h2>
+            <span className="text-xs text-muted-foreground">{periodLabel(timeRange)} · period-scoped</span>
+          </div>
+          <p className="text-xs text-muted-foreground mb-4">
+            Counts created in the selected period. Risks and Actions are register snapshots and are
+            excluded from this chart.
+          </p>
+          <div className="space-y-4" data-testid="analytics-module-distribution">
+            {distributionRows.map((stat) => {
+              const percentage = periodDistributionPercent(stat.distributionTotal ?? null, distributionDenominator)
               return (
                 <button
                   key={stat.module}
@@ -834,7 +867,9 @@ export default function Analytics() {
                 >
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-foreground">{stat.module}</span>
-                    <span className="text-foreground font-medium">{formatMetric(stat.total)}</span>
+                    <span className="text-foreground font-medium">
+                      {formatMetric(stat.distributionTotal ?? null)}
+                    </span>
                   </div>
                   <div className="h-2 bg-surface rounded-full overflow-hidden">
                     <div
