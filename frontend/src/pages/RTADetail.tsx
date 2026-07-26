@@ -5,6 +5,7 @@ import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
 import { resolveRtaDetailTab } from './rtaStandardsTab'
+import { formatCodedValue } from '../helpers/displayLabels'
 import { trackError } from '../utils/errorTracker'
 import {
   ArrowLeft,
@@ -1046,7 +1047,7 @@ export default function RTADetail() {
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="Registration" value={rta.company_vehicle_registration} />
                   <Field label="Make / Model" value={rta.company_vehicle_make_model} />
-                  <Field label="Collision type" value={rta.collision_type} />
+                  <Field label="Collision type" value={formatCodedValue(rta.collision_type)} />
                   <Field label="Vehicle drivable" value={rta.vehicle_drivable == null ? undefined : rta.vehicle_drivable ? 'Yes' : 'No'} />
                   <Field label="Lost time injury" value={rta.is_lti ? 'Yes' : 'No'} />
                   <Field label="Days lost" value={rta.days_lost?.toString()} />

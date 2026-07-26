@@ -16,6 +16,7 @@ import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { cn } from '../../helpers/utils'
+import { formatFieldName } from '../../helpers/displayLabels'
 
 interface SettingCategory {
   id: string
@@ -301,7 +302,7 @@ export default function SystemSettings() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-foreground">{setting.description}</p>
-              <p className="text-xs text-muted-foreground">{setting.key}</p>
+              <p className="text-xs text-muted-foreground">{formatFieldName(setting.key)}</p>
             </div>
             <button
               onClick={() =>
@@ -334,7 +335,7 @@ export default function SystemSettings() {
               onChange={(e) => updateSetting(setting.key, e.target.value)}
               className="max-w-[150px]"
             />
-            <p className="text-xs text-muted-foreground mt-1">{setting.key}</p>
+            <p className="text-xs text-muted-foreground mt-1">{formatFieldName(setting.key)}</p>
           </div>
         )
 
@@ -359,7 +360,7 @@ export default function SystemSettings() {
                 className="max-w-[150px] font-mono"
               />
             </div>
-            <p className="text-xs text-muted-foreground mt-1">{setting.key}</p>
+            <p className="text-xs text-muted-foreground mt-1">{formatFieldName(setting.key)}</p>
           </div>
         )
 
@@ -375,7 +376,7 @@ export default function SystemSettings() {
               onChange={(e) => updateSetting(setting.key, e.target.value)}
               placeholder="email@example.com"
             />
-            <p className="text-xs text-muted-foreground mt-1">{setting.key}</p>
+            <p className="text-xs text-muted-foreground mt-1">{formatFieldName(setting.key)}</p>
           </div>
         )
 
@@ -389,7 +390,7 @@ export default function SystemSettings() {
               value={setting.value}
               onChange={(e) => updateSetting(setting.key, e.target.value)}
             />
-            <p className="text-xs text-muted-foreground mt-1">{setting.key}</p>
+            <p className="text-xs text-muted-foreground mt-1">{formatFieldName(setting.key)}</p>
           </div>
         )
     }
