@@ -31,8 +31,9 @@ import {
   type NotificationCategoryChannels,
 } from '../api/client'
 import {
+  formatNotificationDisplayText,
+  formatNotificationEntityLabel,
   formatNotificationListDate,
-  rewriteIsoDatesInNotificationText,
 } from './notificationDateHonesty'
 
 type UiNotificationType = 'alert' | 'info' | 'success' | 'warning' | 'reminder'
@@ -111,22 +112,16 @@ function mapApiType(entry: NotificationEntry): UiNotificationType {
   return 'info'
 }
 
-function humanizeModule(entityType?: string | null): string | undefined {
-  if (!entityType) return undefined
-  return entityType
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
 function mapEntry(entry: NotificationEntry): Notification {
   return {
     id: entry.id,
     type: mapApiType(entry),
-    title: rewriteIsoDatesInNotificationText(entry.title || ''),
-    message: rewriteIsoDatesInNotificationText(entry.message || ''),
+    // PX-188: titles like "New rta assigned to you" / chip "Rta" must read RTA.
+    title: formatNotificationDisplayText(entry.title || ''),
+    message: formatNotificationDisplayText(entry.message || ''),
     timestamp: entry.created_at ? formatRelativeTime(entry.created_at) : '',
     read: Boolean(entry.is_read),
-    module: humanizeModule(entry.entity_type),
+    module: formatNotificationEntityLabel(entry.entity_type),
     actionUrl: entry.action_url || undefined,
     actionLabel: entry.action_url ? 'View' : undefined,
   }

@@ -348,6 +348,10 @@ async def get_workflow_stats(current_user: CurrentUser):
     """Get workflow statistics.
 
     Scoped to the caller: `pending_approvals` counts the same queue returned by
-    `GET /approvals/pending`. Metrics the engine cannot measure are returned as null.
+    `GET /approvals/pending` (PX-286). Metrics the engine cannot measure are
+    returned as null — never fabricated organisation-wide constants.
+
+    Clients that render the pending list alongside this tile should treat the
+    list length as authoritative if the two ever diverge.
     """
     return workflow_engine.get_workflow_stats(current_user.id)
