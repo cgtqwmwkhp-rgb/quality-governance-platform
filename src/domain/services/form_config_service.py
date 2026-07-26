@@ -20,7 +20,10 @@ from src.domain.error_codes import ErrorCode
 from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 from src.domain.services.audit_service import record_audit_event
-from src.domain.services.form_publish_validation import collect_required_lookup_categories, validate_form_template_publishable
+from src.domain.services.form_publish_validation import (
+    collect_required_lookup_categories,
+    validate_form_template_publishable,
+)
 from src.domain.services.lookup_defaults_seed import count_active_lookup_options
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric

@@ -95,7 +95,9 @@ LOOKUP_DEFAULT_ROWS: tuple[LookupDefaultRow, ...] = (
     LookupDefaultRow("emergency_services", "police", "Police", 4),
     LookupDefaultRow("emergency_services", "hart", "Hazardous Area Response Team", 5),
     LookupDefaultRow("emergency_services", "national_highways", "National Highways / Traffic Officers", 6),
-    LookupDefaultRow("emergency_services", "utility_emergency", "Utility emergency response (gas, electricity, water)", 7),
+    LookupDefaultRow(
+        "emergency_services", "utility_emergency", "Utility emergency response (gas, electricity, water)", 7
+    ),
     LookupDefaultRow("emergency_services", "coastguard", "Coastguard", 8),
     LookupDefaultRow("emergency_services", "multiple", "Multiple services attended", 9),
 )
