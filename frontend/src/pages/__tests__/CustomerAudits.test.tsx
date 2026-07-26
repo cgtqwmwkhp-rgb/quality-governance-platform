@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import CustomerAudits from '../CustomerAudits'
@@ -7,6 +7,15 @@ import CustomerAudits from '../CustomerAudits'
 const mockListRuns = vi.fn()
 const mockListFindings = vi.fn()
 const mockRecordsList = vi.fn()
+const mockNavigate = vi.fn()
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  }
+})
 
 vi.mock('../../api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../api/client')>()
@@ -50,6 +59,14 @@ describe('CustomerAudits programme shell', () => {
     expect(
       screen.getByText(/not an Achilles or UVDB replacement/i),
     ).toBeInTheDocument()
+  })
+
+  it('PX-260: Import external audit opens the shared import dialog route', async () => {
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Import external audit' }))
+
+    expect(mockNavigate).toHaveBeenCalledWith('/audits?modal=import')
   })
 
   it('lists customer assurance runs and downstream hand-offs', async () => {

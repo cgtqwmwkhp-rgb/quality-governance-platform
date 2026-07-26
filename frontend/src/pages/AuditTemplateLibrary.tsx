@@ -347,6 +347,7 @@ export default function AuditTemplateLibrary() {
     recentTemplates.length > 4
 
   const categoryTotal = useMemo(() => categories.reduce((acc, c) => acc + c.count, 0), [categories])
+  const allCategoryCount = totalCount > 0 ? totalCount : categoryTotal
 
   const groupedTemplates = useMemo(() => {
     if (selectedCategory !== 'all' || debouncedSearch || publishFilter !== 'all') return null
@@ -781,9 +782,9 @@ export default function AuditTemplateLibrary() {
           >
             <Layers className="w-4 h-4" />
             <span className="text-sm font-medium">All</span>
-            {categoryTotal > 0 && (
+            {allCategoryCount > 0 && (
               <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 text-[10px] font-bold rounded-full bg-black/15 dark:bg-white/15 px-1">
-                {categoryTotal}
+                {allCategoryCount}
               </span>
             )}
           </button>

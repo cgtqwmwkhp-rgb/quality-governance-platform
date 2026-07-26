@@ -608,10 +608,15 @@ export function createAuditsApi(api: AxiosInstance) {
     api.patch<AuditResponse>(`/api/v1/audits/responses/${responseId}`, data),
 
   // Findings
-  listFindings: (page = 1, pageSize = 10, runId?: number) =>
-    api.get<PaginatedResponse<AuditFinding>>(
-      `/api/v1/audits/findings?page=${page}&page_size=${pageSize}${runId ? `&run_id=${runId}` : ''}`,
-    ),
+  listFindings: (page = 1, pageSize = 10, runId?: number, status?: string) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      page_size: String(pageSize),
+    })
+    if (runId != null) params.set('run_id', String(runId))
+    if (status) params.set('status', status)
+    return api.get<PaginatedResponse<AuditFinding>>(`/api/v1/audits/findings?${params}`)
+  },
   createFinding: (runId: number, data: AuditFindingCreate) =>
     api.post<AuditFinding>(`/api/v1/audits/runs/${runId}/findings`, data),
   updateFinding: (findingId: number, data: AuditFindingUpdate) =>
