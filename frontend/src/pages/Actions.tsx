@@ -70,6 +70,7 @@ import {
 } from './actionsViewScope'
 import { getActionSourceLink } from '../components/investigations/handoffLinks'
 import { buildActionDetailPath } from './actionLinks'
+import { formatActionSourceRef } from './actionsDisplayHelpers'
 import { isSafeReturnTo } from '../helpers/knowledgeExceptionsLinks'
 
 function startOfDay(d: Date): number {
@@ -348,10 +349,12 @@ export default function Actions() {
   // Transform API response to UI model
   const transformAction = (apiAction: ApiAction): Action => ({
     ...apiAction,
-    source_ref:
-      apiAction.source_reference ||
-      apiAction.source_title ||
-      `${apiAction.source_type.toUpperCase()}-${apiAction.source_id}`,
+    source_ref: formatActionSourceRef({
+      source_type: apiAction.source_type,
+      source_id: apiAction.source_id,
+      source_reference: apiAction.source_reference,
+      source_title: apiAction.source_title,
+    }),
     assignee: apiAction.assigned_to_email || apiAction.owner_email || undefined,
   })
 

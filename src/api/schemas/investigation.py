@@ -197,6 +197,7 @@ class InvestigationRunResponse(BaseModel):
     level: Optional[str] = None
     data: Dict[str, Any] = Field(default_factory=dict)
     reference_number: str
+    assigned_entity_reference: Optional[str] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     reviewed_at: Optional[datetime] = None
@@ -398,6 +399,11 @@ class CreateInvestigationCapaRequest(BaseModel):
     description: Optional[str] = None
     assignee_id: Optional[int] = None
     assignee_email: Optional[str] = None
+    assignee_name: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        description="Roster display name when the assignee has no portal login",
+    )
     due_date: Optional[str] = None
     priority: Optional[str] = None
 

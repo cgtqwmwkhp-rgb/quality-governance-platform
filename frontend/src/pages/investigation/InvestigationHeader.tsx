@@ -43,10 +43,13 @@ export default function InvestigationHeader({
   const { t } = useTranslation()
   const statusIndex = STATUS_STEPS.findIndex((s) => s.id === investigation.status)
   const entityLabel = investigation.assigned_entity_type.replace(/_/g, ' ')
+  const sourceDisplayRef =
+    investigation.assigned_entity_reference?.trim() ||
+    (sourceLink ? String(investigation.assigned_entity_id) : '')
   const sourceChip = sourceLink
     ? t('investigations.identity.source_label', {
         source: sourceLink.label,
-        id: investigation.assigned_entity_id,
+        id: sourceDisplayRef,
       })
     : t('investigations.identity.source_type_only', { type: entityLabel })
 

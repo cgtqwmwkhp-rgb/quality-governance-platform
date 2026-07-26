@@ -86,6 +86,8 @@ import InvestigationComments from './investigation/InvestigationComments'
 import InvestigationActions from './investigation/InvestigationActions'
 import type { ActionFormData } from './investigation/InvestigationActions'
 import InvestigationEvidence from './investigation/InvestigationEvidence'
+import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
+import { resolveInvestigationAssigneeSelection } from './workforce/employeePickerUtils'
 import {
   formatCapaActionsCount,
   getCapaHandoffLabelKey,
@@ -534,7 +536,9 @@ export default function InvestigationDetail() {
       description: form.description || undefined,
       priority: form.priority,
       due_date: form.due_date || undefined,
-      assignee_email: form.assigned_to || undefined,
+      assignee_id: form.assignee_id,
+      assignee_email: form.assignee_email || form.assigned_to || undefined,
+      assignee_name: form.assignee_name,
     })
     await loadActions()
     await loadClosureValidation()
@@ -880,6 +884,22 @@ export default function InvestigationDetail() {
         sourceLink={sourceLink}
       />
 
+      {(investigation.status === 'completed' || investigation.status === 'closed') &&
+      closureValidation &&
+      !closureValidation.can_close ? (
+        <Card
+          className="border-warning/40 bg-warning/10 p-4"
+          data-testid="investigation-invalid-completed-banner"
+        >
+          <p className="text-sm font-medium text-warning">
+            {t(
+              'investigations.closure.invalid_completed',
+              'This investigation is marked completed but does not meet closure requirements. Re-open or complete the missing sections before closing.',
+            )}
+          </p>
+        </Card>
+      ) : null}
+
       <Card className="p-5 border-primary/20 bg-primary/5" data-testid="investigation-capa-handoff-strip">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -894,12 +914,12 @@ export default function InvestigationDetail() {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
-            {sourceLink && (
+            {sourceLink ? (
               <Button variant="outline" onClick={() => navigate(sourceLink.href)}>
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 {t('investigations.handoff.open_source_report', { source: sourceLink.label })}
               </Button>
-            )}
+            ) : null}
             <Button
               onClick={() => {
                 if (capaHandoffMode === 'create') {
@@ -959,7 +979,10 @@ export default function InvestigationDetail() {
           })}
           {investigation.status !== 'closed' ? (
             <span className="text-xs text-muted-foreground">
-              {t('investigations.meta.status_hint')}
+              {t(
+                'investigations.meta.status_hint',
+                'Use the status stepper above. Closure uses the checklist when ready.',
+              )}
             </span>
           ) : (
             <Badge variant="outline" data-testid="investigation-workflow-closed">
@@ -972,7 +995,7 @@ export default function InvestigationDetail() {
           data-testid="investigation-workflow-proof"
         >
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {t('investigations.handoff.proof_eyebrow', 'Workflow proof')}
+            {t('investigations.handoff.proof_eyebrow', 'Progress summary')}
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-lg border border-primary/15 bg-background/60 p-3">
@@ -1023,12 +1046,6 @@ export default function InvestigationDetail() {
                 {t('investigations.handoff.open_source_report', { source: sourceLink.label })}
               </Button>
             ) : null}
-            <Button variant="outline" size="sm" onClick={() => navigate(capaHref)}>
-              <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-              {t(getCapaHandoffLabelKey('investigation', capaHandoffCount), {
-                count: actions.length,
-              })}
-            </Button>
           </div>
         </div>
         {actionsLoadFailed ? (
@@ -1085,24 +1102,14 @@ export default function InvestigationDetail() {
                   {t('investigations.source_snapshot')}
                 </h3>
                 <p className="text-xs text-muted-foreground mb-4">
-                  {t('investigations.source_snapshot_hint')}
+                  {t(
+                    'investigations.source_snapshot_hint',
+                    'Read-only copy from the source record. Edit intake facts on the source record.',
+                  )}
                 </p>
                 <p className="text-muted-foreground whitespace-pre-wrap">
                   {investigation.description || t('investigations.source_snapshot_empty')}
                 </p>
-                {sourceLink ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-4"
-                    onClick={() => navigate(sourceLink.href)}
-                  >
-                    <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-                    {t('investigations.handoff.open_source_report', {
-                      source: sourceLink.label,
-                    })}
-                  </Button>
-                ) : null}
               </Card>
               <Card className="p-6" data-testid="investigation-findings-editor">
                 <div className="flex items-start justify-between gap-3 mb-4">
@@ -1111,7 +1118,10 @@ export default function InvestigationDetail() {
                       {t('investigations.findings_conclusion')}
                     </h3>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {t('investigations.summary.edit_hint')}
+                      {t(
+                        'investigations.summary.edit_hint',
+                        'Editable investigation work product — save when you are ready.',
+                      )}
                     </p>
                   </div>
                   <Button
@@ -1224,7 +1234,10 @@ export default function InvestigationDetail() {
                       </Select>
                     )}
                     <p className="text-xs text-muted-foreground mt-1">
-                      {t('investigations.meta.status_hint')}
+                      {t(
+                        'investigations.meta.status_hint',
+                        'Use the status stepper above. Closure uses the checklist when ready.',
+                      )}
                     </p>
                   </div>
                   <div>
@@ -1252,15 +1265,19 @@ export default function InvestigationDetail() {
                     </label>
                     <div className="flex items-center gap-2">
                       <User className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <Input
-                        id="inv-lead"
-                        value={summaryLead}
-                        onChange={(e) => {
-                          setSummaryLead(e.target.value)
+                      <EngineerPeoplePicker
+                        valueLabel={summaryLead}
+                        requireLogin={false}
+                        onChange={(selection) => {
+                          const payload = resolveInvestigationAssigneeSelection(selection)
+                          const next =
+                            payload.assignee_email || payload.assignee_name || selection?.label || ''
+                          setSummaryLead(next)
                           setSummaryUnsaved(true)
                         }}
                         placeholder={t('investigations.meta.assignee_placeholder')}
-                        data-testid="investigation-assignee-input"
+                        testId="investigation-assignee-input"
+                        className="flex-1"
                       />
                     </div>
                   </div>

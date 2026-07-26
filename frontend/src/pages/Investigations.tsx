@@ -19,6 +19,7 @@ import {
   ListTodo,
   Clock,
   Eye,
+  FileQuestion,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
@@ -135,10 +136,11 @@ function countSeededSections(data: Record<string, unknown> | undefined): number 
   return Object.keys(sections as Record<string, unknown>).length
 }
 
-type HeroKey = 'total' | 'in_progress' | 'under_review' | 'completed'
+type HeroKey = 'total' | 'draft' | 'in_progress' | 'under_review' | 'completed'
 
 const HERO_TO_STATUS_FILTER: Record<HeroKey, string> = {
   total: 'all',
+  draft: 'draft',
   in_progress: 'in_progress',
   under_review: 'pending_review',
   completed: 'completed',
@@ -169,6 +171,7 @@ function parseEntityTypeParam(raw: string | null): EntityTypeFilter {
 }
 
 function heroKeyFromStatusFilter(statusFilter: string): HeroKey | null {
+  if (statusFilter === 'draft') return 'draft'
   if (statusFilter === 'in_progress') return 'in_progress'
   if (statusFilter === 'pending_review') return 'under_review'
   if (statusFilter === 'completed') return 'completed'
@@ -941,16 +944,23 @@ export default function Investigations() {
   ])
 
   const stats = useMemo((): Record<
-    'total' | 'inProgress' | 'underReview' | 'completed',
+    'total' | 'draft' | 'inProgress' | 'underReview' | 'completed',
     number | string
   > => {
     // A tile reading 0 because the fetch failed is a claim the page cannot
     // support. Show it as not known, the way the CAPA counts already do.
     if (catalogUnavailable) {
-      return { total: '—', inProgress: '—', underReview: '—', completed: '—' }
+      return {
+        total: '—',
+        draft: '—',
+        inProgress: '—',
+        underReview: '—',
+        completed: '—',
+      }
     }
     return {
       total: catalog.length,
+      draft: catalog.filter((i) => i.status === 'draft').length,
       inProgress: catalog.filter((i) => i.status === 'in_progress').length,
       underReview: catalog.filter((i) => i.status === 'under_review').length,
       completed: catalog.filter((i) => i.status === 'completed').length,
@@ -999,7 +1009,7 @@ export default function Investigations() {
 
       {/* Interactive hero filters */}
       <div
-        className="grid grid-cols-2 lg:grid-cols-4 gap-2"
+        className="grid grid-cols-2 lg:grid-cols-5 gap-2"
         role="group"
         aria-label={t('investigations.hero_filters', 'Filter by status')}
         data-testid="investigations-hero-board"
@@ -1012,6 +1022,13 @@ export default function Investigations() {
               value: stats.total,
               icon: ListTodo,
               tone: 'primary' as const,
+            },
+            {
+              key: 'draft' as const,
+              label: t('status.draft', 'Draft'),
+              value: stats.draft,
+              icon: FileQuestion,
+              tone: 'muted' as const,
             },
             {
               key: 'in_progress' as const,
@@ -1057,6 +1074,7 @@ export default function Investigations() {
                   className={cn(
                     'inline-flex h-7 w-7 items-center justify-center rounded-lg',
                     stat.tone === 'primary' && 'bg-primary/10 text-primary',
+                    stat.tone === 'muted' && 'bg-muted text-muted-foreground',
                     stat.tone === 'warning' && 'bg-warning/10 text-warning',
                     stat.tone === 'info' && 'bg-info/10 text-info',
                     stat.tone === 'success' && 'bg-success/10 text-success',

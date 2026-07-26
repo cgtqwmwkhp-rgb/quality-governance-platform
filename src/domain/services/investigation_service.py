@@ -180,6 +180,28 @@ def _resolve_entity_model(entity_type_value: str) -> Any:
     return getattr(module, class_name)
 
 
+async def resolve_assigned_entity_reference(
+    db: AsyncSession,
+    entity_type_value: str,
+    entity_id: int,
+    tenant_id: int | None = None,
+) -> str | None:
+    """Return user-facing reference_number for an investigation source entity."""
+    try:
+        model_class = _resolve_entity_model(entity_type_value)
+    except ValidationError:
+        return None
+    query = select(model_class).where(model_class.id == entity_id)
+    if hasattr(model_class, "tenant_id") and tenant_id is not None:
+        query = query.where(model_class.tenant_id == tenant_id)
+    result = await db.execute(query)
+    entity = result.scalar_one_or_none()
+    if entity is None:
+        return None
+    ref = getattr(entity, "reference_number", None)
+    return str(ref) if ref else None
+
+
 async def _paginate_query(
     db: AsyncSession,
     query: Any,

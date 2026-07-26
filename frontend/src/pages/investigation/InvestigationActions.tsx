@@ -25,6 +25,9 @@ import {
 } from '../../components/ui/Dialog'
 import { cn } from '../../helpers/utils'
 import { EngineerPeoplePicker } from '../../components/EngineerPeoplePicker'
+import {
+  resolveInvestigationAssigneeSelection,
+} from '../workforce/employeePickerUtils'
 
 const ACTION_STATUS_OPTIONS = [
   { value: 'open', label: 'Open', className: 'bg-warning/10 text-warning' },
@@ -56,6 +59,9 @@ export interface ActionFormData {
   priority: string
   due_date: string
   assigned_to: string
+  assignee_id?: number
+  assignee_email?: string
+  assignee_name?: string
 }
 
 interface InvestigationActionsProps {
@@ -317,13 +323,18 @@ export default function InvestigationActions({
               <span className="block text-sm font-medium text-foreground">Assign To</span>
               <EngineerPeoplePicker
                 valueLabel={actionForm.assigned_to}
-                requireLogin
-                onChange={(selection) =>
+                requireLogin={false}
+                onChange={(selection) => {
+                  const payload = resolveInvestigationAssigneeSelection(selection)
                   setActionForm({
                     ...actionForm,
-                    assigned_to: selection?.user?.email || selection?.label || '',
+                    assigned_to:
+                      payload.assignee_email || payload.assignee_name || selection?.label || '',
+                    assignee_id: payload.assignee_id,
+                    assignee_email: payload.assignee_email,
+                    assignee_name: payload.assignee_name,
                   })
-                }
+                }}
                 placeholder="Search active employees…"
                 testId="investigation-action-assignee-picker"
               />

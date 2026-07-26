@@ -5,6 +5,7 @@ import {
   employeePickerOptionLabel,
   employeePrimaryLabel,
   matrixEngineerLabel,
+  resolveInvestigationAssigneeSelection,
   sortEmployeesForPicker,
 } from './employeePickerUtils'
 
@@ -64,16 +65,21 @@ describe('employeePickerUtils', () => {
         department: 'Operations',
       }),
     ).toBe('Sam Operator — Plant Operator · Operations')
+  })
+
+  it('resolves linked user vs roster-only assignee (PX-168)', () => {
+    expect(
+      resolveInvestigationAssigneeSelection({
+        label: 'Jordan Field',
+        user: { id: 42, email: 'jordan@example.com', full_name: 'Jordan Field' },
+      }),
+    ).toEqual({ assignee_id: 42, assignee_email: 'jordan@example.com' })
 
     expect(
-      employeePickerOptionLabel({
-        id: 3,
-        display_name: null,
-        employee_number: 'E-003',
-        job_title: 'Joiner',
-        department: 'Workshop',
+      resolveInvestigationAssigneeSelection({
+        label: 'PAMS Only Tech',
       }),
-    ).toBe('E-003 — Joiner · Workshop')
+    ).toEqual({ assignee_name: 'PAMS Only Tech' })
   })
 
   it('sorts employees by picker label', () => {
