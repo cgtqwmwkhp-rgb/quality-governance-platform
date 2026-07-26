@@ -64,6 +64,7 @@ export default function SafetyInsightsAnalyst() {
   const [minCluster, setMinCluster] = useState(2)
   const [includeSynthesis, setIncludeSynthesis] = useState(true)
   const [includeBenchmark, setIncludeBenchmark] = useState(false)
+  const [externalProcessingAck, setExternalProcessingAck] = useState(false)
   const [run, setRun] = useState<SafetyInsightRun | null>(null)
   const [history, setHistory] = useState<SafetyInsightRun[]>([])
   const [error, setError] = useState('')
@@ -124,6 +125,12 @@ export default function SafetyInsightsAnalyst() {
 
   const startRun = async () => {
     setError('')
+    if (!externalProcessingAck) {
+      setError(
+        'Acknowledge external AI processing before starting a deep analysis run. Case narratives may include personal data.',
+      )
+      return
+    }
     setStarting(true)
     try {
       const res = await safetyInsightsApi.startRun({
@@ -135,7 +142,9 @@ export default function SafetyInsightsAnalyst() {
         min_cluster_size: minCluster,
         include_synthesis: includeSynthesis,
         include_benchmark: includeBenchmark,
-      })
+        // Backend DeepRunCreate requires this; client type may lag until a follow-on sync.
+        external_processing_acknowledged: true,
+      } as Parameters<typeof safetyInsightsApi.startRun>[0])
       setRun(res.data)
       loadHistory()
     } catch (err: unknown) {
@@ -254,7 +263,49 @@ export default function SafetyInsightsAnalyst() {
             Public HSE research
           </label>
         </div>
-        <Button onClick={() => void startRun()} disabled={starting || modules.length === 0}>
+
+        <div
+          data-testid="safety-insights-external-processing-notice"
+          className="rounded-md border border-warning/40 bg-warning/10 px-4 py-3 space-y-3 text-sm"
+          role="region"
+          aria-label="External AI processing disclosure"
+        >
+          <p className="font-medium text-foreground">External AI processing disclosure</p>
+          <p className="text-muted-foreground">
+            Deep analysis may transmit selected case narratives (incidents, near misses, RTAs,
+            complaints) — which can include employee names, vehicle registrations, injury details
+            and client identities — to third-party processors: <strong>Google Gemini</strong>{' '}
+            (micro-themes), <strong>Anthropic Claude</strong> (optional synthesis), and optionally{' '}
+            <strong>Perplexity</strong> (public HSE/gov research). Deterministic dimension rollups
+            stay on-platform; anything beyond that leaves the estate.
+          </p>
+          <p className="text-muted-foreground">
+            Lawful basis, processor agreements, client-notification position and DPIA close-out are
+            tracked under the platform DPIA (
+            <code className="text-xs">docs/compliance/dpia-quality-governance-platform.md</code>
+            ). DPO sign-off and client disclosure remain operator responsibilities before production
+            use on client contracts (PX-285 / PX-165).
+          </p>
+          <label className="flex items-start gap-2 text-foreground">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={externalProcessingAck}
+              onChange={(e) => setExternalProcessingAck(e.target.checked)}
+              data-testid="safety-insights-external-processing-ack"
+            />
+            <span>
+              I acknowledge that selected case data may be sent to the processors named above, and
+              that DPIA / client-disclosure obligations for this processing are understood before
+              starting a run.
+            </span>
+          </label>
+        </div>
+
+        <Button
+          onClick={() => void startRun()}
+          disabled={starting || modules.length === 0 || !externalProcessingAck}
+        >
           {starting ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Running…
@@ -539,9 +590,10 @@ export default function SafetyInsightsAnalyst() {
         <CardHeader>
           <CardTitle className="text-base">How this works</CardTitle>
           <CardDescription>
-            Deterministic dimensions → Gemini micro-themes with citation validation → Claude synthesis
-            → optional Perplexity HSE/gov research. Themes also feed Audit Builder and executive
-            surfaces.
+            Deterministic dimensions → Gemini micro-themes with citation validation → Claude
+            synthesis → optional Perplexity HSE/gov research. Themes also feed Audit Builder and
+            executive surfaces. External processors are only engaged after the disclosure
+            acknowledgment above; without it the run control stays disabled.
           </CardDescription>
         </CardHeader>
       </Card>

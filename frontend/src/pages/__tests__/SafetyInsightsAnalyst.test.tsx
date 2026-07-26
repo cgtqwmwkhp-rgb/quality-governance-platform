@@ -34,7 +34,33 @@ describe('SafetyInsightsAnalyst', () => {
     listRuns.mockResolvedValue({ data: { items: [], total: 0 } })
   })
 
-  it('posts deep-run payload from filters', async () => {
+  it('PX-285/PX-165: surfaces external-processor disclosure before run', () => {
+    render(
+      <MemoryRouter>
+        <SafetyInsightsAnalyst />
+      </MemoryRouter>,
+    )
+
+    const notice = screen.getByTestId('safety-insights-external-processing-notice')
+    expect(notice).toHaveTextContent(/Google Gemini/i)
+    expect(notice).toHaveTextContent(/Anthropic Claude/i)
+    expect(notice).toHaveTextContent(/Perplexity/i)
+    expect(notice).toHaveTextContent(/DPIA/i)
+    expect(screen.getByRole('button', { name: /Run deep analysis/i })).toBeDisabled()
+  })
+
+  it('does not start a run until external processing is acknowledged', async () => {
+    render(
+      <MemoryRouter>
+        <SafetyInsightsAnalyst />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Run deep analysis/i }))
+    expect(startRun).not.toHaveBeenCalled()
+  })
+
+  it('posts deep-run payload with external_processing_acknowledged after consent', async () => {
     startRun.mockResolvedValue({
       data: {
         id: 7,
@@ -56,6 +82,7 @@ describe('SafetyInsightsAnalyst', () => {
       </MemoryRouter>,
     )
 
+    fireEvent.click(screen.getByTestId('safety-insights-external-processing-ack'))
     fireEvent.click(screen.getByRole('button', { name: /Run deep analysis/i }))
 
     await waitFor(() => expect(startRun).toHaveBeenCalled())
@@ -65,6 +92,7 @@ describe('SafetyInsightsAnalyst', () => {
       min_cluster_size: 2,
       include_synthesis: true,
       include_benchmark: false,
+      external_processing_acknowledged: true,
     })
   })
 })

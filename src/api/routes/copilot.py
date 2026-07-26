@@ -301,20 +301,23 @@ async def execute_action(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Execute a copilot action directly."""
+    """Refuse direct action execution — demo must not claim writes it did not perform (PX-250)."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS
 
     if data.action_name not in COPILOT_ACTIONS:
         raise NotFoundError(f"Action {data.action_name} not found")
 
-    # Execute the action
-    # This would actually perform the action
-
+    # PX-250: previously returned status=executed / success=True without touching any
+    # register. That is a false completion claim on safety-event reporting paths.
     return {
-        "status": "executed",
+        "status": "not_performed",
         "action": data.action_name,
         "parameters": data.parameters,
-        "result": {"success": True},
+        "result": {
+            "success": False,
+            "performed": False,
+            "reason": "AI Copilot cannot execute writes or live-data reads; use the relevant module.",
+        },
     }
 
 
