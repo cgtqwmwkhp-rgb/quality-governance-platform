@@ -37,7 +37,7 @@ async def test_engineer_matrix_allows_null_user_id():
     """PAMS engineers without a linked login must not 500 response validation."""
     from src.api.schemas.analytics import WDPEngineerMatrixResponse
 
-    engineer = types.SimpleNamespace(id=10, user_id=None, employee_number="42")
+    engineer = types.SimpleNamespace(id=10, user_id=None, employee_number="42", display_name="Alex Technician")
     asset_type = types.SimpleNamespace(id=7, name="Transformer", category="network")
     db = types.SimpleNamespace(
         execute=AsyncMock(
@@ -58,6 +58,7 @@ async def test_engineer_matrix_allows_null_user_id():
     result = await get_engineer_competency_matrix(db, user)
     validated = WDPEngineerMatrixResponse.model_validate(result)
     assert validated.engineers[0].user_id is None
+    assert validated.engineers[0].display_name == "Alex Technician"
     assert validated.engineers[0].competencies[7] == "not_assessed"
 
 
@@ -77,7 +78,7 @@ async def test_engineer_matrix_uses_latest_record_per_asset_type():
         assessed_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
         created_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
     )
-    engineer = types.SimpleNamespace(id=10, user_id=42, employee_number="E001")
+    engineer = types.SimpleNamespace(id=10, user_id=42, employee_number="E001", display_name=None)
     asset_type = types.SimpleNamespace(id=7, name="Transformer", category="network")
     db = types.SimpleNamespace(
         execute=AsyncMock(
@@ -111,7 +112,7 @@ async def test_engineer_matrix_naive_expires_at_does_not_500():
         created_at=datetime(2026, 1, 1),
         expires_at=datetime(2026, 1, 2),  # naive — previously TypeError vs aware now()
     )
-    engineer = types.SimpleNamespace(id=10, user_id=None, employee_number="E001")
+    engineer = types.SimpleNamespace(id=10, user_id=None, employee_number="E001", display_name=None)
     asset_type = types.SimpleNamespace(id=7, name="Transformer", category="network")
     db = types.SimpleNamespace(
         execute=AsyncMock(
@@ -143,7 +144,7 @@ async def test_engineer_matrix_uses_effective_expired_state():
         created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
         expires_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
     )
-    engineer = types.SimpleNamespace(id=10, user_id=42, employee_number="E001")
+    engineer = types.SimpleNamespace(id=10, user_id=42, employee_number="E001", display_name=None)
     asset_type = types.SimpleNamespace(id=7, name="Transformer", category="network")
     db = types.SimpleNamespace(
         execute=AsyncMock(

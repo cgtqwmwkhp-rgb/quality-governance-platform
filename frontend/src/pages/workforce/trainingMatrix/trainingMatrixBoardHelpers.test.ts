@@ -87,9 +87,9 @@ describe('resolveBoardRole', () => {
 })
 
 describe('horizonForRow', () => {
-  it('treats overdue-family statuses without a due date as overdue', () => {
+  it('does not treat gap statuses without a due date as overdue (PX-307)', () => {
     for (const status of ['overdue', 'missing', 'pending', 'failed']) {
-      expect(horizonForRow(status, null, TODAY)).toBe('overdue')
+      expect(horizonForRow(status, null, TODAY)).toBe('ok')
     }
   })
 
@@ -116,7 +116,10 @@ describe('horizonForRow', () => {
 
 describe('statusLabel', () => {
   it('renders plain labels', () => {
-    expect(statusLabel(row({ status: 'overdue', qgp_due_on: null }), TODAY)).toBe('Overdue')
+    expect(statusLabel(row({ status: 'overdue', qgp_due_on: iso(-5) }), TODAY)).toBe('Overdue')
+    expect(statusLabel(row({ status: 'missing', qgp_due_on: null }), TODAY)).toBe('Not started')
+    expect(statusLabel(row({ status: 'pending', qgp_due_on: null }), TODAY)).toBe('Not started')
+    expect(statusLabel(row({ status: 'failed', qgp_due_on: null }), TODAY)).toBe('Failed')
     expect(statusLabel(row({ status: 'due_soon', qgp_due_on: iso(10) }), TODAY)).toBe('Due in 10d')
     expect(statusLabel(row({ status: 'compliant', qgp_due_on: iso(200) }), TODAY)).toBe(`OK until ${iso(200)}`)
   })
@@ -195,7 +198,7 @@ describe('buildPersonRollups', () => {
     expect(rollups[0].complete).toBe(1)
     expect(rollups[0].need).toBe(1)
     expect(rollups[0].pct).toBe(50)
-    expect(rollups[0].overdue).toBe(1)
+    expect(rollups[0].overdue).toBe(0)
   })
 
   it('coverage membership includes fully compliant people', () => {
@@ -237,7 +240,7 @@ describe('computeHorizonCounts', () => {
     expect(counts.d30).toBe(1)
     expect(counts.d60).toBe(1)
     expect(counts.d90).toBe(2)
-    expect(counts.overdue).toBe(1)
+    expect(counts.overdue).toBe(0)
   })
 })
 
@@ -408,7 +411,13 @@ describe('moduleViewForRole', () => {
   it('scopes to a role and computes Complete/Overdue/%/Need per course', () => {
     const rows = [
       row({ atlas_name: 'Alice', department: 'Mobile Engineers', course_key: 'a', status: 'compliant' }),
-      row({ atlas_name: 'Bob', department: 'Mobile Engineers', course_key: 'a', status: 'overdue' }),
+      row({
+        atlas_name: 'Bob',
+        department: 'Mobile Engineers',
+        course_key: 'a',
+        status: 'overdue',
+        qgp_due_on: iso(-5),
+      }),
       row({ atlas_name: 'Carl', department: 'Workshop', course_key: 'a', status: 'compliant' }),
     ]
     const view = moduleViewForRole(rows, 'Engineer', TODAY)

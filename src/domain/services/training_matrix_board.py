@@ -68,16 +68,16 @@ def horizon_for_row(
 ) -> Horizon:
     """Classify a single person x course compliance row into a due-date horizon bucket.
 
-    - overdue: status is overdue/missing/pending/failed, OR qgp_due_on is in the past.
-      (missing/pending/failed rows without a due date fall here too.)
+    - overdue: qgp_due_on is in the past, or status is explicitly overdue with a due date.
+      Rows without a QGP due date (never passed in Atlas) are not overdue — they are gaps only.
     - Otherwise, bucket by how far qgp_due_on is from today: d30 / d60 / d180 / ok.
     """
     today = today or date.today()
     status_l = (status or "").strip().lower()
-    if status_l in _OVERDUE_STATUSES and (qgp_due_on is None or qgp_due_on < today):
-        return "overdue"
     if qgp_due_on is None:
-        return "overdue" if status_l in _OVERDUE_STATUSES else "ok"
+        return "ok"
+    if status_l in _OVERDUE_STATUSES and qgp_due_on < today:
+        return "overdue"
     if qgp_due_on < today:
         return "overdue"
     if qgp_due_on <= today + timedelta(days=30):
