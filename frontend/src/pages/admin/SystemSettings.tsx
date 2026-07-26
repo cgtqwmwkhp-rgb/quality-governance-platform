@@ -301,6 +301,15 @@ export default function SystemSettings() {
   // formatFieldName() may render a humanized helper under the description.
   const settingFieldId = (setting: Setting) => `setting-${setting.key}`
 
+  /** Humanized key helper — omit when it only repeats the description. */
+  const fieldNameHelper = (setting: Setting) => {
+    const label = formatFieldName(setting.key)
+    if (label.trim().toLowerCase() === setting.description.trim().toLowerCase()) {
+      return null
+    }
+    return <p className="text-xs text-muted-foreground mt-1">{label}</p>
+  }
+
   const renderSettingInput = (setting: Setting) => {
     const fieldId = settingFieldId(setting)
 
@@ -312,7 +321,7 @@ export default function SystemSettings() {
               <Label htmlFor={fieldId} className="text-foreground">
                 {setting.description}
               </Label>
-              <p className="text-xs text-muted-foreground">{formatFieldName(setting.key)}</p>
+              {fieldNameHelper(setting)}
             </div>
             <Switch
               id={fieldId}
@@ -335,7 +344,7 @@ export default function SystemSettings() {
               onChange={(e) => updateSetting(setting.key, e.target.value)}
               className="max-w-[150px]"
             />
-            <p className="text-xs text-muted-foreground mt-1">{formatFieldName(setting.key)}</p>
+            {fieldNameHelper(setting)}
           </div>
         )
 
@@ -361,7 +370,7 @@ export default function SystemSettings() {
                 className="max-w-[150px] font-mono"
               />
             </div>
-            <p className="text-xs text-muted-foreground mt-1">{formatFieldName(setting.key)}</p>
+            {fieldNameHelper(setting)}
           </div>
         )
 
@@ -378,7 +387,7 @@ export default function SystemSettings() {
               onChange={(e) => updateSetting(setting.key, e.target.value)}
               placeholder="email@example.com"
             />
-            <p className="text-xs text-muted-foreground mt-1">{formatFieldName(setting.key)}</p>
+            {fieldNameHelper(setting)}
           </div>
         )
 
@@ -393,7 +402,7 @@ export default function SystemSettings() {
               value={setting.value}
               onChange={(e) => updateSetting(setting.key, e.target.value)}
             />
-            <p className="text-xs text-muted-foreground mt-1">{formatFieldName(setting.key)}</p>
+            {fieldNameHelper(setting)}
           </div>
         )
     }

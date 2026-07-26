@@ -97,7 +97,7 @@ describe('SystemSettings accessibility', () => {
     const toggle = screen.getByRole('switch', { name: 'Enable push notifications' })
     expect(toggle).toHaveAttribute('aria-checked', 'true')
 
-    await user.click(screen.getByText('Enable push notifications'))
+    await user.click(screen.getByText('Enable push notifications', { selector: 'label' }))
 
     expect(toggle).toHaveAttribute('aria-checked', 'false')
   })
