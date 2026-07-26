@@ -17,6 +17,7 @@ import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import { cn } from '../helpers/utils'
+import { buildPortalCatalogWarnings, formatCatalogWarning } from '../helpers/formLookupFields'
 import { API_BASE_URL } from '../config/apiBase'
 import { formTemplatesApi, getApiErrorMessage, lookupsApi } from '../api/client'
 import type { LookupOption } from '../api/lookupsClient'
@@ -1170,18 +1171,14 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
           ),
         )
 
-        const warnings: string[] = []
-        if ((customersOutcome.value.items || []).length === 0) {
-          warnings.push(
-            'No active customers found. An admin must add Customers under Admin → Lookups → Customers.',
-          )
-        }
-        if (roleItems.length === 0) {
-          warnings.push(
-            'No workforce roles found. An admin must configure Lookups → Workforce Roles.',
-          )
-        }
-        setCatalogWarning(warnings.length ? warnings.join(' ') : null)
+        const warnings = buildPortalCatalogWarnings(
+          loadedTemplate || FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident,
+          {
+            customers: (customersOutcome.value.items || []).length,
+            workforceRoles: roleItems.length,
+          },
+        )
+        setCatalogWarning(formatCatalogWarning(warnings))
       } catch (err) {
         if (cancelled) return
         console.error('Failed to load form configuration:', err)
