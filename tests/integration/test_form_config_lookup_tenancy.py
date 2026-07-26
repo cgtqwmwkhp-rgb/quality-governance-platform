@@ -11,11 +11,17 @@ impossible to complete.
 The absence of a write-then-read-back assertion is what let that ship, so that
 is the shape of the test here: every mutation is verified through the read path
 a real caller uses, not by inspecting the object the writer returned.
+
+Each test works in its own generated lookup category. Integration tests share a
+persistent schema on Postgres (see ``_seed_default_data`` in conftest), so a
+test that asserted on the contents of a real category would be reading other
+tests' rows and the deploy migration's rows as well as its own.
 """
 
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -25,8 +31,9 @@ from src.domain.exceptions import NotFoundError
 from src.domain.services.form_config_service import FormConfigService
 
 TENANT = 1
-OTHER_TENANT = 2
-CATEGORY = "workforce_roles"
+# A tenant that does not exist: enough to prove the mutation is scoped, without
+# inserting a second tenant into a schema other tests are also using.
+FOREIGN_TENANT = 987_654
 
 
 @pytest.fixture(autouse=True)
@@ -42,108 +49,112 @@ def _no_external_side_effects():
         yield
 
 
-def _option(code: str, label: str, **overrides) -> LookupOptionCreate:
-    payload = {
-        "category": CATEGORY,
-        "code": code,
-        "label": label,
-        "description": None,
-        "is_active": True,
-        "display_order": 1,
-        "parent_id": None,
-    }
-    payload.update(overrides)
-    return LookupOptionCreate(**payload)
+@pytest.fixture
+def category() -> str:
+    """A lookup category unique to this test."""
+    return f"px119_{uuid4().hex[:12]}"
+
+
+def _option(category: str, code: str, label: str) -> LookupOptionCreate:
+    return LookupOptionCreate(
+        category=category,
+        code=code,
+        label=label,
+        description=None,
+        is_active=True,
+        display_order=1,
+        parent_id=None,
+    )
 
 
 class TestServiceRoundTrip:
     """The regression test whose absence let the write-only black hole ship."""
 
-    async def test_created_option_is_returned_by_list_for_the_same_tenant(self, test_session):
+    async def test_created_option_is_returned_by_list_for_the_same_tenant(self, test_session, category):
         service = FormConfigService(test_session)
 
         created = await service.create_lookup_option(
-            CATEGORY, data=_option("field_engineer", "Field Engineer"), tenant_id=TENANT
+            category, data=_option(category, "field_engineer", "Field Engineer"), tenant_id=TENANT
         )
         assert created.tenant_id == TENANT, "the option was written without a tenant and is now unreadable"
 
-        options = await service.list_lookup_options(CATEGORY, tenant_id=TENANT)
+        options = await service.list_lookup_options(category, tenant_id=TENANT)
         assert [o.code for o in options] == ["field_engineer"]
 
-    async def test_round_trip_holds_for_every_portal_category(self, test_session):
-        """The portal reads customers, workforce_roles and medical_assistance."""
+    async def test_round_trip_holds_for_several_options(self, test_session, category):
         service = FormConfigService(test_session)
 
-        for category in ("customers", "workforce_roles", "medical_assistance"):
-            await service.create_lookup_option(
-                category, data=_option("round-trip", "Round Trip", category=category), tenant_id=TENANT
-            )
-            options = await service.list_lookup_options(category, tenant_id=TENANT)
-            assert [o.code for o in options] == ["round-trip"], f"category '{category}' is not readable back"
+        for code in ("mobile-engineer", "office", "trainee"):
+            await service.create_lookup_option(category, data=_option(category, code, code.title()), tenant_id=TENANT)
 
-    async def test_option_is_not_visible_to_another_tenant(self, test_session):
+        options = await service.list_lookup_options(category, tenant_id=TENANT)
+        assert sorted(o.code for o in options) == ["mobile-engineer", "office", "trainee"]
+
+    async def test_option_is_not_visible_to_another_tenant(self, test_session, category):
         service = FormConfigService(test_session)
-        await service.create_lookup_option(CATEGORY, data=_option("driver", "Driver"), tenant_id=TENANT)
+        await service.create_lookup_option(category, data=_option(category, "driver", "Driver"), tenant_id=TENANT)
 
-        assert await service.list_lookup_options(CATEGORY, tenant_id=OTHER_TENANT) == []
+        assert await service.list_lookup_options(category, tenant_id=FOREIGN_TENANT) == []
 
 
 class TestServiceCrossTenantMutation:
     """Update and delete looked rows up by id + category with no tenant filter."""
 
-    async def test_update_from_another_tenant_is_rejected(self, test_session):
+    async def test_update_from_another_tenant_is_rejected(self, test_session, category):
         service = FormConfigService(test_session)
         created = await service.create_lookup_option(
-            CATEGORY, data=_option("supervisor", "Supervisor"), tenant_id=TENANT
+            category, data=_option(category, "supervisor", "Supervisor"), tenant_id=TENANT
         )
 
         with pytest.raises(NotFoundError):
             await service.update_lookup_option(
-                CATEGORY,
+                category,
                 created.id,
                 data=LookupOptionUpdate(label="Hijacked"),
-                tenant_id=OTHER_TENANT,
+                tenant_id=FOREIGN_TENANT,
             )
 
-        survivor = (await service.list_lookup_options(CATEGORY, tenant_id=TENANT))[0]
-        assert survivor.label == "Supervisor"
+        survivors = await service.list_lookup_options(category, tenant_id=TENANT)
+        assert [o.label for o in survivors] == ["Supervisor"]
 
-    async def test_delete_from_another_tenant_is_rejected(self, test_session):
-        service = FormConfigService(test_session)
-        created = await service.create_lookup_option(CATEGORY, data=_option("director", "Director"), tenant_id=TENANT)
-
-        with pytest.raises(NotFoundError):
-            await service.delete_lookup_option(CATEGORY, created.id, tenant_id=OTHER_TENANT)
-
-        assert len(await service.list_lookup_options(CATEGORY, tenant_id=TENANT)) == 1
-
-    async def test_owning_tenant_can_still_update_and_delete(self, test_session):
+    async def test_delete_from_another_tenant_is_rejected(self, test_session, category):
         service = FormConfigService(test_session)
         created = await service.create_lookup_option(
-            CATEGORY, data=_option("apprentice", "Apprentice"), tenant_id=TENANT
+            category, data=_option(category, "director", "Director"), tenant_id=TENANT
+        )
+
+        with pytest.raises(NotFoundError):
+            await service.delete_lookup_option(category, created.id, tenant_id=FOREIGN_TENANT)
+
+        assert len(await service.list_lookup_options(category, tenant_id=TENANT)) == 1
+
+    async def test_owning_tenant_can_still_update_and_delete(self, test_session, category):
+        service = FormConfigService(test_session)
+        created = await service.create_lookup_option(
+            category, data=_option(category, "apprentice", "Apprentice"), tenant_id=TENANT
         )
 
         await service.update_lookup_option(
-            CATEGORY, created.id, data=LookupOptionUpdate(label="Apprentice (Y1)"), tenant_id=TENANT
+            category, created.id, data=LookupOptionUpdate(label="Apprentice (Y1)"), tenant_id=TENANT
         )
-        assert (await service.list_lookup_options(CATEGORY, tenant_id=TENANT))[0].label == "Apprentice (Y1)"
+        assert (await service.list_lookup_options(category, tenant_id=TENANT))[0].label == "Apprentice (Y1)"
 
-        await service.delete_lookup_option(CATEGORY, created.id, tenant_id=TENANT)
-        assert await service.list_lookup_options(CATEGORY, tenant_id=TENANT) == []
+        await service.delete_lookup_option(category, created.id, tenant_id=TENANT)
+        assert await service.list_lookup_options(category, tenant_id=TENANT) == []
 
 
 class TestApiRoundTrip:
     """The same round-trip over the live HTTP path the admin screen uses."""
 
     async def test_option_created_via_the_admin_api_is_listed_back(
-        self, superuser_client: AsyncClient, admin_client: AsyncClient
+        self, superuser_client: AsyncClient, admin_client: AsyncClient, category: str
     ):
         create = await superuser_client.post(
-            f"/api/v1/admin/config/lookup/{CATEGORY}",
+            f"/api/v1/admin/config/lookup/{category}",
             json={"code": "hs_advisor", "label": "Health & Safety Advisor", "is_active": True, "display_order": 1},
         )
         assert create.status_code == 201, create.text
 
-        listed = await admin_client.get(f"/api/v1/admin/config/lookup/{CATEGORY}?is_active=true")
+        listed = await admin_client.get(f"/api/v1/admin/config/lookup/{category}?is_active=true")
         assert listed.status_code == 200, listed.text
         assert [item["code"] for item in listed.json()["items"]] == ["hs_advisor"]
