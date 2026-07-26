@@ -70,11 +70,12 @@ export function horizonForRow(
   const statusLower = (status || '').trim().toLowerCase()
   const due = parseDueDate(qgpDueOn)
 
-  if (OVERDUE_STATUSES.has(statusLower) && (due === null || due < todayStart)) {
-    return 'overdue'
-  }
   if (due === null) {
-    return OVERDUE_STATUSES.has(statusLower) ? 'overdue' : 'ok'
+    // No QGP due date means the module was never passed in Atlas — not past due (PX-307).
+    return 'ok'
+  }
+  if (OVERDUE_STATUSES.has(statusLower) && due < todayStart) {
+    return 'overdue'
   }
   const daysAway = Math.round((due.getTime() - todayStart.getTime()) / DAY_MS)
   if (daysAway < 0) return 'overdue'
@@ -84,12 +85,18 @@ export function horizonForRow(
   return 'ok'
 }
 
-/** Plain status label: "Overdue" / "Due in Nd" / "OK until <date>". */
+/** Plain status label: "Overdue" / "Not started" / "Due in Nd" / "OK until <date>". */
 export function statusLabel(row: TrainingMatrixComplianceRow, today: Date = new Date()): string {
+  const statusLower = (row.status || '').trim().toLowerCase()
+  const due = parseDueDate(row.qgp_due_on)
+  if (!due) {
+    if (statusLower === 'failed') return 'Failed'
+    if (statusLower === 'missing' || statusLower === 'pending') return 'Not started'
+    if (statusLower === 'overdue') return 'Overdue'
+    return 'OK'
+  }
   const horizon = horizonForRow(row.status, row.qgp_due_on, today)
   if (horizon === 'overdue') return 'Overdue'
-  const due = parseDueDate(row.qgp_due_on)
-  if (!due) return 'OK'
   if (horizon === 'ok') return `OK until ${row.qgp_due_on}`
   const daysAway = Math.round((due.getTime() - startOfDay(today).getTime()) / DAY_MS)
   return `Due in ${daysAway}d`

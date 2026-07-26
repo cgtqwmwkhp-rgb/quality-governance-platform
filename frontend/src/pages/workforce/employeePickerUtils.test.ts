@@ -4,6 +4,7 @@ import {
   buildEmployeeLabelMap,
   employeePickerOptionLabel,
   employeePrimaryLabel,
+  matrixEngineerLabel,
   sortEmployeesForPicker,
 } from './employeePickerUtils'
 
@@ -25,6 +26,32 @@ describe('employeePickerUtils', () => {
         job_title: 'Tech',
       }),
     ).toBe('Alex Technician')
+  })
+
+  it('builds matrix labels preferring display_name over employee number (PX-238)', () => {
+    expect(
+      matrixEngineerLabel({
+        engineer_id: 224,
+        display_name: 'Jordan Field',
+        employee_number: 'UAT-19190324',
+      }),
+    ).toBe('Jordan Field')
+
+    expect(
+      matrixEngineerLabel({
+        engineer_id: 225,
+        display_name: null,
+        employee_number: 'E225',
+      }),
+    ).toBe('E225')
+
+    expect(
+      matrixEngineerLabel({
+        engineer_id: 226,
+        display_name: null,
+        employee_number: null,
+      }),
+    ).toBe('Employee #226')
   })
 
   it('builds role-aware option labels', () => {

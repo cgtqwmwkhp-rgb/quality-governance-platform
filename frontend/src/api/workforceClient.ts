@@ -332,6 +332,7 @@ export type WdpEngineerMatrix = {
     engineer_id: number
     user_id: number
     employee_number: string | null
+    display_name: string | null
     competencies: Record<number, string>
   }[]
 }

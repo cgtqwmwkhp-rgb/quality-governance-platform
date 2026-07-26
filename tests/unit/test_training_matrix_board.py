@@ -101,7 +101,7 @@ def test_module_ok_stats_count_due_soon_as_ok():
     assert rollup["complete"] == 1
     assert rollup["need"] == 1
     assert rollup["pct"] == 50
-    assert rollup["overdue"] == 1
+    assert rollup["overdue"] == 0
 
     summary = build_board_summary(rows, today=TODAY)
     assert summary["required_row_count"] == 3
@@ -109,9 +109,10 @@ def test_module_ok_stats_count_due_soon_as_ok():
     assert "d90" in summary["horizons"]
 
 
-def test_horizon_overdue_status_without_due_date():
+def test_horizon_gap_status_without_due_date_is_not_overdue():
+    """PX-307: modules never passed in Atlas have no QGP due date and must not inflate overdue."""
     for status in ("overdue", "missing", "pending", "failed"):
-        assert horizon_for_row(status, None, TODAY) == "overdue"
+        assert horizon_for_row(status, None, TODAY) == "ok"
 
 
 def test_horizon_overdue_past_due_date():

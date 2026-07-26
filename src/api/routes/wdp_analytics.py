@@ -189,6 +189,7 @@ async def get_engineer_competency_matrix(db: DbSession, user: CurrentUser):
             "engineer_id": eng.id,
             "user_id": eng.user_id,
             "employee_number": eng.employee_number,
+            "display_name": eng.display_name,
             "competencies": {at.id: record_map.get(at.id, "not_assessed") for at in asset_types},
         }
         matrix.append(row)
