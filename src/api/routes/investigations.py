@@ -5,7 +5,7 @@ import math
 from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -806,6 +806,76 @@ async def get_investigation_packs(
 
 
 @router.get(
+    "/{investigation_id:int}/packs/{pack_id:int}/pdf",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}, "description": "Branded customer pack PDF"}},
+)
+async def download_customer_pack_pdf(
+    investigation_id: int,
+    pack_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> Response:
+    """Render a previously generated customer pack as a branded PDF (PX-143).
+
+    Renders the stored, already-redacted pack payload — this endpoint never
+    re-reads the investigation, so it cannot leak content the pack omitted.
+    """
+    from src.domain.models.tenant import Tenant
+    from src.domain.services.investigation_pack_pdf import InvestigationPackPdfService
+
+    investigation = await _get_investigation_or_404(investigation_id, db, current_user)
+
+    result = await db.execute(
+        select(InvestigationCustomerPack).where(
+            InvestigationCustomerPack.id == pack_id,
+            InvestigationCustomerPack.investigation_id == investigation_id,
+        )
+    )
+    pack = result.scalar_one_or_none()
+    if pack is None:
+        raise NotFoundError(f"Customer pack {pack_id} not found for investigation {investigation_id}")
+
+    organisation_name: Optional[str] = None
+    primary_color: Optional[str] = None
+    if investigation.tenant_id is not None:
+        tenant = await db.scalar(select(Tenant).where(Tenant.id == investigation.tenant_id))
+        if tenant is not None:
+            organisation_name = tenant.name
+            primary_color = tenant.primary_color
+
+    payload = {
+        "pack_uuid": pack.pack_uuid,
+        "audience": pack.audience.value if hasattr(pack.audience, "value") else str(pack.audience),
+        "investigation_reference": investigation.reference_number,
+        "investigation_title": investigation.title,
+        "generated_at": pack.created_at.isoformat() if pack.created_at else None,
+        "checksum_sha256": pack.checksum_sha256,
+        "content": pack.content,
+        "redaction_log": pack.redaction_log,
+        "included_assets": pack.included_assets,
+    }
+
+    service = InvestigationPackPdfService()
+    try:
+        pdf_bytes = service.build_pdf_bytes(
+            payload,
+            organisation_name=organisation_name,
+            primary_color=primary_color,
+        )
+    except RuntimeError as exc:
+        # Fail loudly rather than handing back an empty or half-rendered file.
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    filename = service.pdf_filename(investigation.reference_number, pack.pack_uuid)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
     "/{investigation_id:int}/closure-validation",
     response_model=InvestigationClosureValidationResponse,
 )
@@ -1169,19 +1239,36 @@ async def create_investigation_from_record(
     # Parse source type enum
     source_type_enum = AssignedEntityType(source_type)
 
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+
     # === DUPLICATE CHECK: Return 409 if investigation already exists ===
-    existing_query = select(InvestigationRun).where(
-        InvestigationRun.assigned_entity_type == source_type_enum,
-        InvestigationRun.assigned_entity_id == source_id,
+    # Tenant-scoped: another tenant's investigation must never block this one.
+    existing_query = (
+        select(InvestigationRun)
+        .where(
+            InvestigationRun.assigned_entity_type == source_type_enum,
+            InvestigationRun.assigned_entity_id == source_id,
+            InvestigationRun.tenant_id == tenant_id,
+        )
+        .order_by(InvestigationRun.id.asc())
     )
     existing_result = await db.execute(existing_query)
-    existing_investigation = existing_result.scalar_one_or_none()
+    existing_investigation = existing_result.scalars().first()
 
     if existing_investigation:
-        raise ConflictError(f"An investigation already exists for this {source_type.replace('_', ' ')}")
+        raise ConflictError(
+            f"An investigation already exists for this {source_type.replace('_', ' ')}",
+            code="INV_ALREADY_EXISTS",
+            details={
+                "existing_investigation_id": int(existing_investigation.id),
+                "existing_reference_number": existing_investigation.reference_number,
+                "source_type": source_type,
+                "source_id": source_id,
+            },
+        )
 
-    # Get source record
-    record, error = await InvestigationService.get_source_record(db, source_type_enum, source_id)
+    # Get source record (tenant-scoped — never investigate another tenant's record)
+    record, error = await InvestigationService.get_source_record(db, source_type_enum, source_id, tenant_id=tenant_id)
     if error:
         raise NotFoundError(error)
 
@@ -1235,7 +1322,7 @@ async def create_investigation_from_record(
         mapping_log=mapping_log,
         version=1,
         reference_number=reference_number,
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -1266,6 +1353,100 @@ async def create_investigation_from_record(
     await db.refresh(investigation)
 
     return investigation
+
+
+# Source registers that can be turned into an investigation. Keyed by AssignedEntityType value.
+_SOURCE_RECORD_MODELS: dict[str, str] = {
+    AssignedEntityType.ROAD_TRAFFIC_COLLISION.value: "src.domain.models.rta:RoadTrafficCollision",
+    AssignedEntityType.REPORTING_INCIDENT.value: "src.domain.models.incident:Incident",
+    AssignedEntityType.COMPLAINT.value: "src.domain.models.complaint:Complaint",
+    AssignedEntityType.NEAR_MISS.value: "src.domain.models.near_miss:NearMiss",
+}
+
+
+def _resolve_source_record_model(source_type: str) -> Optional[Any]:
+    """Import the ORM model backing a source register, or None when unsupported."""
+    model_path = _SOURCE_RECORD_MODELS.get(source_type)
+    if not model_path:
+        return None
+    module_path, class_name = model_path.split(":")
+    module = __import__(module_path, fromlist=[class_name])
+    return getattr(module, class_name)
+
+
+class SourceCoverageItem(BaseModel):
+    """Investigation coverage for a single source register."""
+
+    source_type: str
+    total: int
+    investigated: int
+    not_investigated: int
+
+
+class SourceCoverageResponse(BaseModel):
+    """How much of each source register actually has an investigation attached."""
+
+    items: list[SourceCoverageItem]
+    total: int
+    investigated: int
+    not_investigated: int
+
+
+@router.get("/source-coverage", response_model=SourceCoverageResponse)
+async def get_source_coverage(
+    db: DbSession,
+    current_user: CurrentUser,
+) -> SourceCoverageResponse:
+    """Count source records with and without an investigation, per register.
+
+    Exists so the Investigations list can state plainly how many real incidents
+    (and other source records) have no investigation, instead of letting a short
+    list of test investigations imply the register is covered.
+    """
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+
+    items: list[SourceCoverageItem] = []
+    for source_type in _SOURCE_RECORD_MODELS:
+        model_class = _resolve_source_record_model(source_type)
+        if model_class is None:
+            continue
+        entity_type = AssignedEntityType(source_type)
+
+        total = (
+            await db.scalar(select(func.count()).select_from(model_class).where(model_class.tenant_id == tenant_id))
+        ) or 0
+
+        investigated_ids = select(InvestigationRun.assigned_entity_id).where(
+            InvestigationRun.assigned_entity_type == entity_type,
+            InvestigationRun.tenant_id == tenant_id,
+            InvestigationRun.assigned_entity_id.isnot(None),
+        )
+        investigated = (
+            await db.scalar(
+                select(func.count())
+                .select_from(model_class)
+                .where(
+                    model_class.tenant_id == tenant_id,
+                    model_class.id.in_(investigated_ids),
+                )
+            )
+        ) or 0
+
+        items.append(
+            SourceCoverageItem(
+                source_type=source_type,
+                total=int(total),
+                investigated=int(investigated),
+                not_investigated=max(int(total) - int(investigated), 0),
+            )
+        )
+
+    return SourceCoverageResponse(
+        items=items,
+        total=sum(i.total for i in items),
+        investigated=sum(i.investigated for i in items),
+        not_investigated=sum(i.not_investigated for i in items),
+    )
 
 
 @router.get("/source-records", response_model=SourceRecordsResponse)
@@ -1308,24 +1489,14 @@ async def list_source_records(
     except ValueError:
         raise BadRequestError(f"Invalid source type: {source_type}")
 
-    # Import models dynamically based on source type
-    entity_models = {
-        AssignedEntityType.ROAD_TRAFFIC_COLLISION.value: "src.domain.models.rta:RoadTrafficCollision",
-        AssignedEntityType.REPORTING_INCIDENT.value: "src.domain.models.incident:Incident",
-        AssignedEntityType.COMPLAINT.value: "src.domain.models.complaint:Complaint",
-        AssignedEntityType.NEAR_MISS.value: "src.domain.models.near_miss:NearMiss",
-    }
-
-    model_path = entity_models.get(source_type)
-    if not model_path:
+    model_class = _resolve_source_record_model(source_type)
+    if model_class is None:
         raise BadRequestError(f"Source type {source_type} is not supported")
 
-    module_path, class_name = model_path.split(":")
-    module = __import__(module_path, fromlist=[class_name])
-    model_class = getattr(module, class_name)
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
 
-    # Build base query for source records
-    base_query = select(model_class)
+    # Build base query for source records (tenant-scoped)
+    base_query = select(model_class).where(model_class.tenant_id == tenant_id)
 
     # Apply search filter if provided
     if q:
@@ -1361,6 +1532,7 @@ async def list_source_records(
     inv_query = select(InvestigationRun).where(
         InvestigationRun.assigned_entity_type == source_type_enum,
         InvestigationRun.assigned_entity_id.in_(source_ids),
+        InvestigationRun.tenant_id == tenant_id,
     )
     inv_result = await db.execute(inv_query)
     existing_investigations = {inv.assigned_entity_id: inv for inv in inv_result.scalars().all()}

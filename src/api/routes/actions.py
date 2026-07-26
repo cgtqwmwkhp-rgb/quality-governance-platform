@@ -376,6 +376,9 @@ async def _capa_to_response(db: "DbSession", capa: CAPAAction) -> ActionResponse
     arid = provenance.get("audit_run_id")
     audit_run_id = int(arid) if isinstance(arid, int) else None
     clean_description, roster_assignee = parse_roster_assignee_marker(capa.description)
+    # A roster-only assignee has no users row, so it is carried in both owner fields
+    # rather than left blank in one of them and read as unassigned.
+    roster_only = roster_assignee if capa.assigned_to_id is None and roster_assignee else None
     return ActionResponse(
         id=capa.id,
         reference_number=capa.reference_number,
@@ -397,7 +400,8 @@ async def _capa_to_response(db: "DbSession", capa: CAPAAction) -> ActionResponse
         clause_reference=cast(Optional[str], provenance["clause_reference"]),
         audit_run_id=audit_run_id,
         owner_id=capa.assigned_to_id,
-        owner_email=roster_assignee if capa.assigned_to_id is None and roster_assignee else None,
+        owner_email=roster_only,
+        assigned_to_email=roster_only,
         created_at=capa.created_at.isoformat() if capa.created_at else "",
     )
 
@@ -1712,7 +1716,10 @@ async def load_action_response_by_key(
         capa_row = cast(Optional[CAPAAction], result.scalar_one_or_none())
         if capa_row is None:
             raise NotFoundError("Action not found")
-        return await _capa_to_response(db, capa_row)
+        # Hydrate the assignee exactly as the list view does — otherwise a CAPA with a
+        # real assigned_to_id reads as unassigned on detail while the list shows an owner.
+        hydrated = await _hydrate_action_owner_emails(db, [await _capa_to_response(db, capa_row)])
+        return hydrated[0]
 
     if kind == STORAGE_CAPA_ITEM:
         result = await db.execute(

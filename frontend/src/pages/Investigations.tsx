@@ -28,7 +28,6 @@ import {
   Investigation,
   getApiErrorMessage,
   SourceRecordItem,
-  CreateFromRecordError,
 } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -64,6 +63,12 @@ import {
   statusMatchesFilter,
   type InvestigationStatusValue,
 } from '../utils/investigationStatusFilter'
+import { parseExistingInvestigationConflict } from './investigation/investigationConflict'
+import {
+  buildSourceCoverageHonesty,
+  fetchSourceCoverage,
+  type SourceCoverageResponse,
+} from './investigation/investigationCoverage'
 
 const ENTITY_ICONS: Record<string, typeof AlertTriangle> = {
   road_traffic_collision: Car,
@@ -346,24 +351,14 @@ function CreateInvestigationModal({
       onCreated()
       resetForm()
     } catch (err: any) {
-      // Safe error handling - check for 409 Conflict (already exists)
-      if (err.response?.status === 409) {
-        const errorData = err.response?.data?.detail as CreateFromRecordError | undefined
-        if (
-          errorData?.error_code === 'INV_ALREADY_EXISTS' &&
-          errorData.details?.existing_investigation_id
-        ) {
-          setExistingInvestigation({
-            id: errorData.details.existing_investigation_id,
-            reference: formatReferenceWithFallback(
-              errorData.details.existing_reference_number,
-              'INV',
-              errorData.details.existing_investigation_id,
-            ),
-          })
-          setError('An investigation already exists for this record.')
-          return
-        }
+      const conflict = parseExistingInvestigationConflict(err)
+      if (conflict) {
+        setExistingInvestigation({
+          id: conflict.id,
+          reference: formatReferenceWithFallback(conflict.reference, 'INV', conflict.id),
+        })
+        setError('An investigation already exists for this record.')
+        return
       }
       // Generic error handling
       setError(getApiErrorMessage(err))
@@ -662,8 +657,13 @@ export default function Investigations() {
   const [updatingAction, setUpdatingAction] = useState(false)
   const [actionUpdateError, setActionUpdateError] = useState<string | null>(null)
 
+  // Source-register coverage (PX-136): how much of the incident/near-miss/RTA/complaint
+  // backlog has no investigation at all. Null while unread — the strip stays off.
+  const [coverage, setCoverage] = useState<SourceCoverageResponse | null>(null)
+
   const heroKey = heroKeyFromStatusFilter(statusFilter)
   const statusFilterOptions = useMemo(() => getEnabledFilterOptions(), [])
+  const coverageHonesty = useMemo(() => buildSourceCoverageHonesty(coverage), [coverage])
 
   // Hydrate shareable filters from URL (back/forward + deep links).
   useEffect(() => {
@@ -745,9 +745,23 @@ export default function Investigations() {
     }
   }, [statusFilter, entityTypeFilter, debouncedQ])
 
+  const loadCoverage = useCallback(async () => {
+    try {
+      setCoverage(await fetchSourceCoverage())
+    } catch (err) {
+      trackError(err, { component: 'Investigations', action: 'loadSourceCoverage' })
+      // Leave coverage null: say nothing rather than imply full coverage.
+      setCoverage(null)
+    }
+  }, [])
+
   useEffect(() => {
     loadCatalog()
   }, [loadCatalog])
+
+  useEffect(() => {
+    loadCoverage()
+  }, [loadCoverage])
 
   useEffect(() => {
     loadInvestigations()
@@ -1091,6 +1105,33 @@ export default function Investigations() {
           )
         })}
       </div>
+
+      {/* Source-register coverage honesty (PX-136) */}
+      {coverageHonesty.hasGap && (
+        <div
+          className="rounded-xl border border-warning/40 bg-warning/5 px-4 py-3"
+          role="status"
+          data-testid="investigations-coverage-honesty"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">{coverageHonesty.headline}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{coverageHonesty.detail}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={() => setShowModal(true)}
+                data-testid="investigations-coverage-start"
+              >
+                <Plus size={16} aria-hidden="true" />
+                Start an investigation from a record
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Secondary filters + smart search */}
       <div className="flex flex-col lg:flex-row gap-3 lg:items-center">

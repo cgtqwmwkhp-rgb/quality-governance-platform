@@ -44,6 +44,23 @@ export async function updateEvidenceVisibility(assetId: number, visibility: stri
   return api.patch(`/api/v1/evidence-assets/${assetId}`, { visibility })
 }
 
+/**
+ * Fetch a generated customer pack as PDF bytes (PX-143).
+ *
+ * The server renders the stored pack payload, so this cannot return content the pack's
+ * redaction rules removed.
+ */
+export async function fetchCustomerPackPdf(
+  investigationId: number,
+  packId: number,
+): Promise<Blob> {
+  const response = await api.get<Blob>(
+    `/api/v1/investigations/${investigationId}/packs/${packId}/pdf`,
+    { responseType: 'blob' },
+  )
+  return response.data
+}
+
 export function readCustomerPackVisibility(
   data: Record<string, unknown> | null | undefined,
 ): Record<string, CustomerPackVisibilityMeta> {
