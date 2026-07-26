@@ -53,6 +53,9 @@ const CODED_VALUE_OVERRIDES: Record<string, string> = {
   side_impact: 'Side impact',
   single_vehicle: 'Single vehicle',
   under_investigation: 'Under investigation',
+  actions_in_progress: 'Actions in progress',
+  pending_actions: 'Pending actions',
+  pending_review: 'Pending review',
 }
 
 /**

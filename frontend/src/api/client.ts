@@ -28,6 +28,7 @@ import { createAuditsApi } from './auditsClient'
 import { createWorkforceApi } from './workforceClient'
 import { createEngineersApi } from './engineersClient'
 import { createPlanetMarkApi } from './planetMarkClient'
+import { humaniseCodedText } from '../helpers/displayLabels'
 import { createUvdbApi } from './uvdbClient'
 import { createUsersApi } from './usersClient'
 import { createWorkflowsApi } from './workflowsClient'
@@ -752,6 +753,11 @@ api.interceptors.response.use(
   },
 )
 
+/** Strip Python enum reprs and other coded tokens from a server-composed message. */
+function presentServerErrorMessage(raw: string): string {
+  return humaniseCodedText(raw)
+}
+
 /**
  * Get a user-friendly error message from an API error.
  * Use this in catch blocks for consistent error messaging.
@@ -760,7 +766,7 @@ export function getApiErrorMessage(error: unknown, fallback?: string): string {
   if (axios.isAxiosError(error)) {
     const classified = error as ClassifiedAxiosError
     if (classified.classifiedMessage) {
-      return classified.classifiedMessage
+      return presentServerErrorMessage(classified.classifiedMessage)
     }
     const data = error.response?.data as Record<string, unknown> | undefined
     // Unified API envelope: {"error":{"code":"...","message":"..."}}
@@ -768,15 +774,15 @@ export function getApiErrorMessage(error: unknown, fallback?: string): string {
     if (nestedError && typeof nestedError === 'object' && nestedError !== null) {
       const nestedMessage = (nestedError as Record<string, unknown>)['message']
       if (typeof nestedMessage === 'string' && nestedMessage.trim()) {
-        return nestedMessage
+        return presentServerErrorMessage(nestedMessage)
       }
     }
     if (typeof data?.['message'] === 'string' && data['message'].trim()) {
-      return data['message'] as string
+      return presentServerErrorMessage(data['message'] as string)
     }
     if (data?.['detail']) {
       if (typeof data['detail'] === 'string') {
-        return data['detail']
+        return presentServerErrorMessage(data['detail'])
       }
       if (
         typeof data['detail'] === 'object' &&
@@ -784,7 +790,7 @@ export function getApiErrorMessage(error: unknown, fallback?: string): string {
         'message' in data['detail'] &&
         typeof (data['detail'] as Record<string, unknown>).message === 'string'
       ) {
-        return (data['detail'] as Record<string, string>).message
+        return presentServerErrorMessage((data['detail'] as Record<string, string>).message)
       }
       return JSON.stringify(data['detail'])
     }
@@ -803,11 +809,11 @@ export function getApiErrorMessage(error: unknown, fallback?: string): string {
       return fallback ?? 'A server error occurred. Please try again.'
     }
     // Last resort - use axios error message
-    return error.message
+    return presentServerErrorMessage(error.message)
   }
   // Non-axios error
   if (error instanceof Error) {
-    return error.message
+    return presentServerErrorMessage(error.message)
   }
   return fallback ?? 'An unexpected error occurred'
 }

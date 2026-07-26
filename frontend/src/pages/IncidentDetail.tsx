@@ -5,6 +5,7 @@ import {
   SubmitButton,
   UnsavedChangesDialog,
   useUnsavedChangesGuard,
+  FormNotice,
 } from '../components/ui/form'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from '../contexts/ToastContext'
@@ -92,6 +93,8 @@ import {
   getSubmissionSnapshot,
 } from '../helpers/caseSubmission'
 import { cn } from '../helpers/utils'
+import { formatDisplayDate } from '../helpers/formatters'
+import { formatCodedValue } from '../helpers/displayLabels'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import { AssetPicker } from '../components/AssetPicker'
 import { getCapaLink } from '../components/investigations/handoffLinks'
@@ -207,6 +210,8 @@ export default function IncidentDetail() {
   const [editForm, setEditForm] = useState<IncidentUpdate>({})
   const [witnessesDraft, setWitnessesDraft] = useState<CaseWitnessesValue | null>(null)
   const [savingWitnesses, setSavingWitnesses] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [witnessSaveError, setWitnessSaveError] = useState<string | null>(null)
   const [careFieldsTouched, setCareFieldsTouched] = useState({
     medical: false,
     emergency: false,
@@ -456,6 +461,7 @@ export default function IncidentDetail() {
       return
     }
     setSaving(true)
+    setSaveError(null)
     try {
       // Omit unchanged status so no-op edits never hit transition validation.
       const payload: IncidentUpdate = { ...editForm }
@@ -478,9 +484,12 @@ export default function IncidentDetail() {
       toast.success(t('incidents.detail.save_success', 'Incident updated'))
     } catch (err) {
       trackError(err, { component: 'IncidentDetail', action: 'updateIncident' })
-      toast.error(
-        getApiErrorMessage(err, t('incidents.detail.save_failed', 'Could not save incident')),
+      const message = getApiErrorMessage(
+        err,
+        t('incidents.detail.save_failed', 'Could not save incident'),
       )
+      setSaveError(message)
+      toast.error(message)
     } finally {
       setSaving(false)
     }
@@ -491,11 +500,13 @@ export default function IncidentDetail() {
       setEditForm(buildIncidentEditForm(incident))
     }
     setCareFieldsTouched({ medical: false, emergency: false })
+    setSaveError(null)
     setIsEditing(false)
   }
 
   const startEditing = () => {
     setCareFieldsTouched({ medical: false, emergency: false })
+    setSaveError(null)
     setIsEditing(true)
   }
 
@@ -507,6 +518,7 @@ export default function IncidentDetail() {
   const handleSaveWitnesses = async () => {
     if (!incident) return
     setSavingWitnesses(true)
+    setWitnessSaveError(null)
     try {
       const response = await incidentsApi.update(incident.id, {
         witnesses_structured: witnessesValue as unknown as Record<string, unknown>,
@@ -516,9 +528,12 @@ export default function IncidentDetail() {
       toast.success(t('case.witnesses.save_success', 'Witnesses updated'))
     } catch (err) {
       trackError(err, { component: 'IncidentDetail', action: 'saveWitnesses' })
-      toast.error(
-        getApiErrorMessage(err, t('case.witnesses.save_failed', 'Could not save witnesses')),
+      const message = getApiErrorMessage(
+        err,
+        t('case.witnesses.save_failed', 'Could not save witnesses'),
       )
+      setWitnessSaveError(message)
+      toast.error(message)
     } finally {
       setSavingWitnesses(false)
     }
@@ -924,9 +939,11 @@ export default function IncidentDetail() {
           <div>
             <div className="flex items-center gap-3 mb-2">
               <span className="font-mono text-sm text-primary">{incident.reference_number}</span>
-              <Badge variant={getSeverityVariant(incident.severity)}>{incident.severity}</Badge>
+              <Badge variant={getSeverityVariant(incident.severity)}>
+                {formatCodedValue(incident.severity)}
+              </Badge>
               <Badge variant={getStatusVariant(incident.status)}>
-                {incident.status.replace('_', ' ')}
+                {formatCodedValue(incident.status)}
               </Badge>
             </div>
             <h1 className="text-2xl font-bold text-foreground">
@@ -934,7 +951,7 @@ export default function IncidentDetail() {
             </h1>
             <p className="text-muted-foreground mt-1">
               {t('incidents.detail.reported_on', {
-                date: new Date(incident.reported_date).toLocaleDateString(),
+                date: formatDisplayDate(incident.reported_date),
               })}
             </p>
           </div>
@@ -1005,6 +1022,38 @@ export default function IncidentDetail() {
           )}
         </div>
       </div>
+
+      {saveError ? (
+        <FormNotice
+          tone="error"
+          title={t('incidents.detail.save_failed_title', 'Changes were not saved')}
+          data-testid="incident-save-error"
+          action={
+            isEditing ? (
+              <Button size="sm" variant="outline" onClick={() => void handleSaveEdit()}>
+                {t('incidents.detail.try_again', 'Try again')}
+              </Button>
+            ) : undefined
+          }
+        >
+          {saveError}
+        </FormNotice>
+      ) : null}
+
+      {witnessSaveError ? (
+        <FormNotice
+          tone="error"
+          title={t('incidents.detail.save_failed_title', 'Changes were not saved')}
+          data-testid="incident-witness-save-error"
+          action={
+            <Button size="sm" variant="outline" onClick={() => void handleSaveWitnesses()}>
+              {t('incidents.detail.try_again', 'Try again')}
+            </Button>
+          }
+        >
+          {witnessSaveError}
+        </FormNotice>
+      ) : null}
 
       <CaseSummaryRail
         items={[
@@ -1568,7 +1617,7 @@ export default function IncidentDetail() {
                           <span className="text-sm font-medium text-muted-foreground">
                             {t('incidents.detail.severity')}
                           </span>
-                          <p className="mt-1 text-foreground capitalize">{incident.severity}</p>
+                          <p className="mt-1 text-foreground">{formatCodedValue(incident.severity)}</p>
                         </div>
                         <div>
                           <span className="text-sm font-medium text-muted-foreground">
@@ -1722,12 +1771,19 @@ export default function IncidentDetail() {
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">
                           {t('incidents.detail.linked_investigation')}
                         </p>
-                        <p className="mt-1 text-sm font-semibold text-foreground font-mono">
-                          {investigationHref
-                            ? latestInvestigation?.reference_number ||
-                              `INV-${latestInvestigation?.id}`
-                            : '0'}
-                        </p>
+                        {investigationHref ? (
+                          <button
+                            type="button"
+                            className="mt-1 text-sm font-semibold text-primary font-mono underline-offset-2 hover:underline"
+                            onClick={() => navigate(investigationHref)}
+                            data-testid="incident-linked-investigation"
+                          >
+                            {latestInvestigation?.reference_number ||
+                              `INV-${latestInvestigation?.id}`}
+                          </button>
+                        ) : (
+                          <p className="mt-1 text-sm font-semibold text-foreground">Not started</p>
+                        )}
                       </div>
                       <div className="rounded-lg border border-border bg-muted/20 p-3">
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -1775,18 +1831,6 @@ export default function IncidentDetail() {
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 pt-2 border-t border-border">
-                    <Button
-                      onClick={() =>
-                        investigationHref
-                          ? navigate(investigationHref)
-                          : setShowInvestigationModal(true)
-                      }
-                    >
-                      <FlaskConical className="w-4 h-4 mr-2" />
-                      {investigationHref
-                        ? t('incidents.detail.open_investigation')
-                        : t('incidents.detail.start_investigation')}
-                    </Button>
                     {actionsLoadFailed || actionsLoading ? null : actions.length > 0 ? (
                       <Button
                         variant="outline"

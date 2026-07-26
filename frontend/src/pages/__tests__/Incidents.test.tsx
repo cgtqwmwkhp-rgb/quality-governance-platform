@@ -177,6 +177,21 @@ describe('Incidents', () => {
     expect(mockList).toHaveBeenCalledWith(1, 50, undefined)
   })
 
+  it('PX-164: register severity and status render as title case labels, not raw codes', async () => {
+    render(<Incidents />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('INC-001')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('High')).toBeInTheDocument()
+    expect(screen.getByText('Reported')).toBeInTheDocument()
+    expect(screen.getByText('Medium')).toBeInTheDocument()
+    expect(screen.getByText('Under investigation')).toBeInTheDocument()
+    expect(screen.queryByText('reported')).not.toBeInTheDocument()
+    expect(screen.queryByText('under_investigation')).not.toBeInTheDocument()
+  })
+
   it('shows create form when button is clicked', async () => {
     render(<Incidents />, { wrapper: Wrapper })
 
