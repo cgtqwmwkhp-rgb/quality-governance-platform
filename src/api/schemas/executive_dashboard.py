@@ -65,9 +65,17 @@ class ComplaintSummary(BaseModel):
 
 
 class RTASummary(BaseModel):
-    """RTA module summary."""
+    """RTA module summary.
+
+    Two populations, kept apart on purpose: `total_in_period` is windowed by the
+    dashboard period, while `total` / `open` / `closed` describe the whole register.
+    `open` + `closed` always equals `total`.
+    """
 
     total_in_period: int
+    total: int = 0
+    open: int = 0
+    closed: int = 0
 
 
 class RiskSummary(BaseModel):

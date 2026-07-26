@@ -657,7 +657,12 @@ export default function Actions() {
     total: statsReady ? (summary?.total ?? 0) : null,
     open: statsReady ? (byD.open ?? 0) : null,
     inProgress: statsReady ? (byD.in_progress ?? 0) : null,
-    overdue: statsReady ? (byD.overdue ?? 0) : null,
+    // Server-derived overlay (open and past due) — the same aggregate behind the
+    // Overdue view chip. Never read by_display_status.overdue: that key only ever
+    // holds CAPA rows whose stored status is literally "overdue". A server that does
+    // not send the field is unmeasured, not zero; defaulting to 0 here would put back
+    // the "tile 0 / chip 10" contradiction this field exists to remove.
+    overdue: statsReady && typeof summary?.overdue === 'number' ? summary.overdue : null,
     completed: statsReady ? (byD.completed ?? 0) : null,
   }
 

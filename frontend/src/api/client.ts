@@ -2303,8 +2303,16 @@ export interface ExecutiveDashboardData {
     closed_in_period: number
     resolution_rate: number | null
   }
+  /**
+   * `total_in_period` is windowed by the dashboard period; `total`/`open`/`closed`
+   * describe the whole register and satisfy open + closed === total. Never pair a
+   * windowed total with a register-wide open (PX-223).
+   */
   rtas: {
     total_in_period: number
+    total: number
+    open: number
+    closed: number
   }
   risks: {
     total_active: number

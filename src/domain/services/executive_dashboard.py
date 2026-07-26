@@ -23,7 +23,7 @@ from src.domain.models.kri import KeyRiskIndicator, KRIAlert
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.policy_acknowledgment import AcknowledgmentStatus, PolicyAcknowledgment
 from src.domain.models.risk import Risk
-from src.domain.models.rta import RTA
+from src.domain.models.rta import RTA, RTAStatus
 from src.domain.models.training_matrix import TrainingMatrixCell, TrainingMatrixImport
 from src.domain.models.workflow_rules import SLATracking
 from src.domain.services.asset_health_analytics_service import AssetHealthRow, aggregate_asset_health_kpis
@@ -50,7 +50,12 @@ _EMPTY_COMPLAINT_SUMMARY: Dict[str, Any] = {
     "closed_in_period": 0,
     "resolution_rate": None,
 }
-_EMPTY_RTA_SUMMARY: Dict[str, Any] = {"total_in_period": 0}
+_EMPTY_RTA_SUMMARY: Dict[str, Any] = {
+    "total_in_period": 0,
+    "total": 0,
+    "open": 0,
+    "closed": 0,
+}
 _EMPTY_RISK_SUMMARY: Dict[str, Any] = {
     "total_active": 0,
     "by_level": {},
@@ -361,13 +366,33 @@ class ExecutiveDashboardService:
         }
 
     async def _get_rta_summary(self, cutoff: datetime) -> Dict[str, Any]:
-        """Get RTA summary statistics."""
+        """Get RTA summary statistics.
+
+        `total_in_period` answers "how many were reported in the window"; `total`,
+        `open` and `closed` answer "what does the register hold right now". They are
+        different populations, so both are returned explicitly and named for what they
+        are. Callers must not mix them: `open` is drawn from the register, and pairing
+        it with the windowed total is what produced Open 32 / Total 31 (PX-223).
+        """
         tf = self._tenant_filter(RTA)
-        total_result = await self.db.execute(select(func.count(RTA.id)).where(and_(tf, RTA.created_at >= cutoff)))
-        total = total_result.scalar() or 0
+        total_in_period_result = await self.db.execute(
+            select(func.count(RTA.id)).where(and_(tf, RTA.created_at >= cutoff))
+        )
+        total_in_period = total_in_period_result.scalar() or 0
+
+        register_total_result = await self.db.execute(select(func.count(RTA.id)).where(tf))
+        register_total = register_total_result.scalar() or 0
+
+        closed_result = await self.db.execute(
+            select(func.count(RTA.id)).where(and_(tf, RTA.status == RTAStatus.CLOSED))
+        )
+        closed = closed_result.scalar() or 0
 
         return {
-            "total_in_period": total,
+            "total_in_period": total_in_period,
+            "total": register_total,
+            "open": register_total - closed,
+            "closed": closed,
         }
 
     async def _get_risk_summary(self) -> Dict[str, Any]:
@@ -581,15 +606,18 @@ class ExecutiveDashboardService:
                     if created_at is None or created_at <= week_end
                 ]
                 summary_map = cast(Dict[str, Any], aggregate_asset_health_kpis(rows_as_of, as_of=week_end))
-                total = int(summary_map.get("total") or 0)
-                if total == 0:
+                bands = cast(Dict[str, Any], summary_map.get("expiry_bands") or {})
+                by_status = cast(Dict[str, Any], summary_map.get("by_status") or {})
+                # Removed assets are outside the compliance question entirely: they are no
+                # longer overdue (they cannot be re-certified) so they must also leave the
+                # denominator, or retiring expired kit would appear to improve compliance.
+                in_service = int(summary_map.get("total") or 0) - int(bands.get("removed", 0) or 0)
+                if in_service <= 0:
                     pct = 100.0
                 else:
-                    bands = cast(Dict[str, Any], summary_map.get("expiry_bands") or {})
-                    by_status = cast(Dict[str, Any], summary_map.get("by_status") or {})
                     overdue = int(bands.get("overdue", 0) or 0)
                     quarantined = int(by_status.get(AssetStatus.QUARANTINED.value, 0) or 0)
-                    pct = round(100.0 * (total - overdue - quarantined) / total, 1)
+                    pct = round(100.0 * (in_service - overdue - quarantined) / in_service, 1)
                 tool_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
         except Exception:
             logger.exception("tool_compliance_weekly trend failed")

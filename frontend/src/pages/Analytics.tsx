@@ -329,30 +329,37 @@ export default function Analytics() {
         notes.push('Audits list unavailable')
       }
 
-      if (rtasRes.status === 'fulfilled') {
-        const rtas: RTA[] = rtasRes.value.data.items ?? []
-        const total = rtasRes.value.data.total ?? rtas.length
-        const openOnPage = rtas.filter((rta) => rta.status !== 'closed').length
-        const closedOnPage = rtas.filter((rta) => rta.status === 'closed').length
-        setRtasAvgResolutionDays(avgResolutionDaysFromRtas(rtas))
-        if (total <= rtas.length) {
-          setRtasOpen(openOnPage)
-          setRtasClosed(closedOnPage)
-          setRtasLoadState('live')
-        } else {
-          const ratioOpen = rtas.length ? openOnPage / rtas.length : 0
-          const ratioClosed = rtas.length ? closedOnPage / rtas.length : 0
-          setRtasOpen(Math.round(total * ratioOpen))
-          setRtasClosed(Math.round(total * ratioClosed))
-          setRtasLoadState('estimated')
-          notes.push('RTA open/closed mix estimated from first 100 records')
+      // RTA total/open/closed come from the executive dashboard aggregate so all three
+      // describe one population. Deriving open/closed from a page of the register while
+      // total came from the dashboard is what let Open exceed Total (PX-223).
+      if (dashRes.status === 'fulfilled') {
+        const rtaSummary = dashRes.value.data.rtas
+        // Only trust the pair when the server actually sent both. A backend that predates
+        // these fields returns a truthy summary with them missing; reading that as live
+        // would print "—" under a "live" badge instead of admitting the gap.
+        const hasSplit =
+          typeof rtaSummary?.open === 'number' && typeof rtaSummary?.closed === 'number'
+        setRtasOpen(hasSplit ? rtaSummary.open : null)
+        setRtasClosed(hasSplit ? rtaSummary.closed : null)
+        setRtasLoadState(hasSplit ? 'live' : 'unavailable')
+        if (!hasSplit) {
+          notes.push('RTA open/closed unavailable')
         }
       } else {
         setRtasOpen(null)
         setRtasClosed(null)
-        setRtasAvgResolutionDays(null)
         setRtasLoadState('unavailable')
-        notes.push('RTA list unavailable')
+        notes.push('RTA open/closed unavailable')
+      }
+
+      // The register page is still fetched, but only for avg resolution — an explicitly
+      // page-scoped figure that carries its own caveat in the UI.
+      if (rtasRes.status === 'fulfilled') {
+        const rtas: RTA[] = rtasRes.value.data.items ?? []
+        setRtasAvgResolutionDays(avgResolutionDaysFromRtas(rtas))
+      } else {
+        setRtasAvgResolutionDays(null)
+        notes.push('RTA list unavailable — average resolution not shown')
       }
 
       if (scoreRes.status === 'fulfilled') {
@@ -387,7 +394,8 @@ export default function Analytics() {
     const complaintsTotal = dash?.complaints.total_in_period ?? null
     const complaintsOpen = dash?.complaints.open ?? null
     const complaintsClosed = dash?.complaints.closed_in_period ?? null
-    const rtasTotal = dash?.rtas.total_in_period ?? null
+    // Register-wide total, matching the population behind rtasOpen / rtasClosed.
+    const rtasTotal = dash?.rtas.total ?? null
     const actionsTotal = actionsSummary?.total ?? null
     const actionsOpen = actionsSummary ? openFromActions(actionsSummary) : null
     const actionsClosed = actionsSummary ? completedFromActions(actionsSummary) : null
@@ -553,8 +561,6 @@ export default function Analytics() {
     }
     if (rtasLoadState === 'unavailable') {
       lines.push('RTA open/closed unavailable — not shown as zero in the module table.')
-    } else if (rtasLoadState === 'estimated') {
-      lines.push('RTA open/closed mix is estimated from the first page of records.')
     }
     if (lines.length === 0) {
       lines.push('No material hotspots in the loaded live metrics for this period.')
@@ -1006,7 +1012,10 @@ export default function Analytics() {
                   <>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                       <div>
-                        <p className="text-muted-foreground">Total in period</p>
+                        {/* Register-wide, so it reconciles with Open + Closed beside it.
+                            Labelling this "in period" while Open counts the whole register
+                            is what produced Open 32 / Total 31 (PX-223). */}
+                        <p className="text-muted-foreground">Total</p>
                         <p className="text-lg font-semibold text-foreground">
                           {formatMetric(moduleRows.find((row) => row.id === 'rtas')?.total ?? null)}
                         </p>
@@ -1026,11 +1035,6 @@ export default function Analytics() {
                         </p>
                       </div>
                     </div>
-                    {rtasLoadState === 'estimated' && (
-                      <p className="mt-3 text-xs text-muted-foreground">
-                        Open/closed mix estimated from the first 100 records — use RTAs for authoritative counts.
-                      </p>
-                    )}
                     {rtasAvgResolutionDays == null && (
                       <p className="mt-3 text-xs text-muted-foreground">
                         Avg resolution unavailable — no closed RTAs with usable timestamps in the loaded page.
