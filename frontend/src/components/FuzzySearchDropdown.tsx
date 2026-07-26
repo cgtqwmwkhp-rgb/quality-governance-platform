@@ -105,8 +105,11 @@ export default function FuzzySearchDropdown({
         <button
           id={id}
           type="button"
+          role="combobox"
           onClick={() => !disabled && setIsOpen(!isOpen)}
           disabled={disabled}
+          aria-expanded={isOpen}
+          aria-haspopup="listbox"
           aria-required={required ? 'true' : undefined}
           className={cn(
             'w-full flex items-center justify-between gap-2 px-4 py-3',
