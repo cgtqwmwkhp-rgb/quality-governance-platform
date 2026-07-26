@@ -1,13 +1,18 @@
-"""PX-248 containment: the AI Copilot API must stay closed while the flag is off.
+"""PX-248 containment: the AI Copilot API must stay closed while the flag is off,
+and closed to anonymous callers when it is on.
 
 Copilot replies are hardcoded simulations rather than inference over tenant data,
 so every endpoint has to refuse before it can serve a fabricated payload.
 """
 
+from types import SimpleNamespace
+
 import pytest
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
+from src.api.dependencies import get_current_user
 from src.api.routes import copilot as copilot_routes
 from src.core.config import settings
 
@@ -42,6 +47,20 @@ def copilot_disabled(monkeypatch):
 def copilot_enabled(monkeypatch):
     monkeypatch.setattr(settings, "ai_copilot_enabled", True)
     monkeypatch.setattr(settings, "app_env", "development")
+
+
+@pytest.fixture
+def authenticated_caller(app):
+    """Stand in for a resolved bearer token so route bodies can be exercised."""
+
+    async def _current_user():
+        return SimpleNamespace(id=1, email="qhse@example.com", tenant_id=1, is_active=True, is_superuser=False)
+
+    app.dependency_overrides[get_current_user] = _current_user
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
 
 
 def test_flag_defaults_to_off():
@@ -82,8 +101,8 @@ def test_websocket_refuses_when_disabled(client: TestClient, copilot_disabled):
     assert exc_info.value.code == 4004
 
 
-def test_actions_endpoint_still_works_when_enabled(client: TestClient, copilot_enabled):
-    """Flag on preserves the pre-existing behaviour of the unauthenticated routes."""
+def test_actions_endpoint_still_works_when_enabled(client: TestClient, copilot_enabled, authenticated_caller):
+    """Flag on preserves the action catalogue — for authenticated callers only."""
     response = client.get(f"{COPILOT_PREFIX}/actions")
 
     assert response.status_code == 200
@@ -92,11 +111,46 @@ def test_actions_endpoint_still_works_when_enabled(client: TestClient, copilot_e
     assert "get_risk_summary" in action_names
 
 
-def test_suggest_actions_still_works_when_enabled(client: TestClient, copilot_enabled):
+def test_suggest_actions_still_works_when_enabled(client: TestClient, copilot_enabled, authenticated_caller):
     response = client.get(f"{COPILOT_PREFIX}/actions/suggest", params={"context_type": "incident"})
 
     assert response.status_code == 200
     assert [item["action"] for item in response.json()] == ["create_action", "search_incidents"]
+
+
+@pytest.mark.parametrize("path", ["/actions", "/actions/suggest"])
+def test_action_routes_reject_anonymous_callers_when_enabled(client: TestClient, copilot_enabled, path):
+    """PX-248 follow-up: both action routes shipped with no authentication dependency."""
+    response = client.get(f"{COPILOT_PREFIX}{path}")
+
+    assert response.status_code in {401, 403}, f"GET {path} served an anonymous caller: {response.text}"
+    assert "create_incident" not in response.text
+
+
+@pytest.mark.parametrize("path", ["/actions", "/actions/suggest"])
+def test_action_routes_reject_invalid_tokens_when_enabled(client: TestClient, copilot_enabled, path):
+    response = client.get(f"{COPILOT_PREFIX}{path}", headers={"Authorization": "Bearer not-a-real-token"})
+
+    assert response.status_code == 401
+    assert "create_incident" not in response.text
+
+
+def _dependency_calls(dependant):
+    for sub_dependant in dependant.dependencies:
+        yield sub_dependant.call
+        yield from _dependency_calls(sub_dependant)
+
+
+def test_every_copilot_http_route_is_authenticated_and_flag_guarded():
+    """Guard the whole module, not just the two routes that were found unauthenticated."""
+    http_routes = [route for route in copilot_routes.router.routes if isinstance(route, APIRoute)]
+
+    assert http_routes, "copilot router exposed no HTTP routes to check"
+
+    for route in http_routes:
+        calls = set(_dependency_calls(route.dependant))
+        assert get_current_user in calls, f"{sorted(route.methods)} {route.path} has no authentication dependency"
+        assert copilot_routes.require_copilot_enabled in calls, f"{route.path} is not behind the feature flag"
 
 
 def test_authenticated_routes_reach_auth_when_enabled(client: TestClient, copilot_enabled):

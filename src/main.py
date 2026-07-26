@@ -5,7 +5,7 @@ import logging
 import os as _os
 import sys
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator, Optional
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,6 +46,90 @@ async def _probe_dlq_depth_root(async_session_maker, logger, request_id: str) ->
     except Exception as e:
         logger.warning("Readiness: DLQ depth check failed: %s", e, extra={"request_id": request_id})
         return dlq_depth_from_exception(e)
+
+
+_COMPONENT_SCHEMA_REF_PREFIX = "#/components/schemas/"
+
+# PX-248 follow-up: the copilot routes stay mounted while AI_COPILOT_ENABLED is off so
+# their guard can answer with a stable 404 body. Left alone, FastAPI would still publish
+# those paths, advertising a contract nobody can call and leaking the shape of an
+# unreleased feature. They are filtered out of the schema instead.
+_COPILOT_PATH_PREFIX = "/api/v1/copilot"
+
+
+def _collect_component_refs(node: Any) -> set[str]:
+    """Component schema names referenced anywhere inside ``node``."""
+    refs: set[str] = set()
+    if isinstance(node, dict):
+        ref = node.get("$ref")
+        if isinstance(ref, str) and ref.startswith(_COMPONENT_SCHEMA_REF_PREFIX):
+            refs.add(ref[len(_COMPONENT_SCHEMA_REF_PREFIX) :])
+        for value in node.values():
+            refs |= _collect_component_refs(value)
+    elif isinstance(node, list):
+        for item in node:
+            refs |= _collect_component_refs(item)
+    return refs
+
+
+def _reachable_component_schemas(schema: dict[str, Any]) -> set[str]:
+    """Component schema names reachable from the schema's paths and other components."""
+    components = schema.get("components", {})
+    defined = components.get("schemas", {})
+
+    seeds = _collect_component_refs({key: value for key, value in schema.items() if key != "components"})
+    seeds |= _collect_component_refs({key: value for key, value in components.items() if key != "schemas"})
+
+    reachable: set[str] = set()
+    pending = [name for name in seeds if name in defined]
+    while pending:
+        name = pending.pop()
+        if name in reachable:
+            continue
+        reachable.add(name)
+        pending.extend(ref for ref in _collect_component_refs(defined[name]) if ref in defined)
+    return reachable
+
+
+def _strip_paths_with_prefix(schema: dict[str, Any], prefix: str) -> None:
+    """Remove every path under ``prefix``, plus components only those paths referenced."""
+    paths = schema.get("paths", {})
+    doomed = [path for path in paths if path.startswith(prefix)]
+    if not doomed:
+        return
+
+    reachable_before = _reachable_component_schemas(schema)
+    for path in doomed:
+        del paths[path]
+    orphaned = reachable_before - _reachable_component_schemas(schema)
+
+    defined = schema.get("components", {}).get("schemas", {})
+    for name in orphaned:
+        defined.pop(name, None)
+
+
+class FlagAwareOpenAPI(FastAPI):
+    """FastAPI app that keeps flag-disabled surfaces out of the published OpenAPI schema.
+
+    Filtering happens at schema-generation time rather than at route registration so the
+    flag stays switchable within a running process; the schema is re-derived whenever the
+    flag's value changes.
+    """
+
+    _cached_copilot_enabled: Optional[bool] = None
+
+    def openapi(self) -> dict[str, Any]:
+        from src.domain.services.copilot_service import copilot_is_enabled
+
+        copilot_enabled = copilot_is_enabled()
+        if self._cached_copilot_enabled != copilot_enabled:
+            self.openapi_schema = None
+            self._cached_copilot_enabled = copilot_enabled
+
+        schema = super().openapi()
+        if not copilot_enabled:
+            _strip_paths_with_prefix(schema, _COPILOT_PATH_PREFIX)
+        return schema
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -221,7 +305,7 @@ def configure_logging():
 def create_application() -> FastAPI:
     """Create and configure the FastAPI application."""
     configure_logging()
-    app = FastAPI(
+    app = FlagAwareOpenAPI(
         title=settings.app_name,
         description="Enterprise-grade Quality Governance (IMS) Platform for ISO compliance management",
         version="1.0.0",
