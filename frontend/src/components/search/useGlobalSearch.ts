@@ -47,6 +47,12 @@ export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
   })
   const [searchHistory, setSearchHistory] = useState<string[]>([])
   const [totalResults, setTotalResults] = useState(0)
+  /**
+   * Set when the search request itself failed. Kept separate from an empty
+   * result set: "the server did not answer" and "the record does not exist"
+   * are opposite claims and must not share a rendering (PX-181).
+   */
+  const [searchError, setSearchError] = useState<string | null>(null)
   const [interpreted, setInterpreted] = useState<SearchInterpretResponse | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   /** Last effective FTS params (from interpret/suggestion/typed search) for filter refresh merges. */
@@ -66,6 +72,7 @@ export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
       if (!activeQuery) return
 
       setIsSearching(true)
+      setSearchError(null)
       setQuery(activeQuery)
       setSearchHistory((prev) =>
         prev.includes(activeQuery)
@@ -111,9 +118,11 @@ export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
         }
         setResults(items)
       } catch (error) {
+        const message = getApiErrorMessage(error)
         setResults([])
         setTotalResults(0)
-        toast.error(getApiErrorMessage(error))
+        setSearchError(message)
+        toast.error(message)
       } finally {
         setIsSearching(false)
       }
@@ -219,11 +228,18 @@ export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
     }
   }
 
+  const retrySearch = useCallback(() => {
+    const params = lastParamsRef.current ?? { q: query.trim() }
+    if (!params.q) return
+    void runSearch(params)
+  }, [query, runSearch])
+
   const clearSearch = () => {
     setQuery('')
     setResults([])
     setTotalResults(0)
     setInterpreted(null)
+    setSearchError(null)
     lastParamsRef.current = null
     inputRef.current?.focus()
   }
@@ -252,6 +268,7 @@ export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
     searchHistory,
     totalResults,
     interpreted,
+    searchError,
     inputRef,
     handleSearch,
     handleKeyDown,
@@ -260,5 +277,6 @@ export function useGlobalSearch(options: UseGlobalSearchOptions = {}) {
     runSuggested,
     selectResult,
     runSearch,
+    retrySearch,
   }
 }

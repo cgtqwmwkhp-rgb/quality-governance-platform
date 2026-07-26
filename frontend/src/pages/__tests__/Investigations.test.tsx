@@ -263,14 +263,17 @@ describe('Investigations', () => {
     expect(screen.getByText('No investigations yet')).toBeInTheDocument()
   })
 
-  it('handles API errors gracefully', async () => {
+  it('shows failure state when the register API fails instead of an empty register', async () => {
     investigationsApi.list.mockRejectedValue(new Error('Network failure'))
 
     setup()
 
     await waitFor(() => {
-      expect(screen.getByText('No investigations yet')).toBeInTheDocument()
+      expect(screen.getByTestId('investigations-async-error')).toBeInTheDocument()
     })
+
+    expect(screen.getByText('Network failure')).toBeInTheDocument()
+    expect(screen.queryByText('No investigations yet')).not.toBeInTheDocument()
 
     const { trackError } = await import('../../utils/errorTracker')
     expect(trackError).toHaveBeenCalled()
