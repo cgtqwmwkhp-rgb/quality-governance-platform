@@ -154,6 +154,49 @@ describe('Layout accessibility', () => {
   })
 })
 
+// PX-179: the banner is lazy-loaded, so these also prove the Suspense
+// boundary resolves rather than leaving the shell blank.
+describe('Layout session expiry banner', () => {
+  beforeEach(() => {
+    window.history.pushState({}, '', '/dashboard')
+    getUnreadCount.mockReset()
+    getUnreadCount.mockResolvedValue({ data: { unread_count: 0 } })
+  })
+
+  async function renderLayoutWithSession(props: Record<string, unknown>) {
+    const Layout = (await import('../Layout')).default
+    return render(
+      <BrowserRouter>
+        <Layout onLogout={() => {}} {...props} />
+      </BrowserRouter>,
+    )
+  }
+
+  it('stays hidden while the session is healthy', async () => {
+    await renderLayoutWithSession({ onExtendSession: () => {} })
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('loads and announces the banner once expiry is imminent', async () => {
+    const onExtendSession = vi.fn()
+    await renderLayoutWithSession({ sessionExpiryImminent: true, onExtendSession })
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Your session expires soon.')
+
+    const { default: userEvent } = await import('@testing-library/user-event')
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Stay signed in' }))
+    expect(onExtendSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not render the banner when no extend handler is wired up', async () => {
+    await renderLayoutWithSession({ sessionExpiryImminent: true })
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
 /**
  * PX-162 — modal background inertness. The mobile drawer covers the page with
  * a dimming overlay, but the header and main content stayed in the

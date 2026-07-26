@@ -3,8 +3,6 @@ import { AlertTriangle } from 'lucide-react'
 import { Button } from './ui/Button'
 
 export interface SessionExpiryWarningProps {
-  /** Render only when the session is genuinely about to end. */
-  open: boolean
   /** True while the "stay signed in" refresh is in flight. */
   extending?: boolean
   onExtend: () => void
@@ -19,15 +17,16 @@ export interface SessionExpiryWarningProps {
  * not own the locale files, so no failure-state copy is added here. If the
  * extend attempt fails the banner simply stays put and the action can be
  * retried until the 401 interceptor takes over.
+ *
+ * Lazy-loaded by `Layout`, which is also what gates rendering — so this
+ * component has no `open` prop and its code stays out of the shell's entry
+ * chunk until the session is genuinely ending.
  */
 export default function SessionExpiryWarning({
-  open,
   extending = false,
   onExtend,
 }: SessionExpiryWarningProps) {
   const { t } = useTranslation()
-
-  if (!open) return null
 
   return (
     <div

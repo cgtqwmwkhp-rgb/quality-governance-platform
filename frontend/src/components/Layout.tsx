@@ -45,7 +45,6 @@ import { useTranslation } from 'react-i18next'
 import { notificationsApi } from '../api/client'
 import { safetyAssetsApi } from '../api/safetyAssetsClient'
 import OfflineIndicator from './OfflineIndicator'
-import SessionExpiryWarning from './SessionExpiryWarning'
 import KeyboardShortcutHelp from './KeyboardShortcutHelp'
 import { ThemeToggle } from './ui/ThemeToggle'
 import { Button } from './ui/Button'
@@ -60,6 +59,8 @@ import { CUSTOMER_AUDITS_PROGRAMME_PATH, navItemIsActive } from './assuranceHubH
 /** Deferred until the shell opens Copilot — keeps authenticated first paint lean (S14). */
 const AICopilot = lazy(() => import('./copilot/AICopilot'))
 const GlobalSearchPalette = lazy(() => import('./search/GlobalSearchPalette'))
+/** Only ever rendered in the last two minutes of a session — keep it off the shell's critical path. */
+const SessionExpiryWarning = lazy(() => import('./SessionExpiryWarning'))
 
 interface LayoutProps {
   onLogout: () => void
@@ -797,11 +798,14 @@ export default function Layout({
       <OfflineIndicator />
 
       {/* Session about to end — warn before the 401 interceptor redirects */}
-      <SessionExpiryWarning
-        open={sessionExpiryImminent && Boolean(onExtendSession)}
-        extending={sessionExtending}
-        onExtend={() => onExtendSession?.()}
-      />
+      {sessionExpiryImminent && onExtendSession ? (
+        <Suspense fallback={null}>
+          <SessionExpiryWarning
+            extending={sessionExtending}
+            onExtend={onExtendSession}
+          />
+        </Suspense>
+      ) : null}
     </div>
   )
 }

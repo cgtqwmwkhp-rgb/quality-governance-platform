@@ -112,21 +112,15 @@ describe('PX-179 session expiry warning', () => {
     })
   })
 
+  // Rendering is gated by Layout (see Layout.a11y), which also lazy-loads this
+  // component — so the banner itself has no `open` prop to test.
   describe('SessionExpiryWarning banner', () => {
-    it('renders nothing until the session is actually about to end', async () => {
-      const SessionExpiryWarning = (await import('../SessionExpiryWarning')).default
-
-      render(<SessionExpiryWarning open={false} onExtend={() => {}} />)
-
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    })
-
     it('announces the warning and offers a way to stay signed in', async () => {
       const user = userEvent.setup()
       const onExtend = vi.fn()
       const SessionExpiryWarning = (await import('../SessionExpiryWarning')).default
 
-      render(<SessionExpiryWarning open onExtend={onExtend} />)
+      render(<SessionExpiryWarning onExtend={onExtend} />)
 
       const alert = screen.getByRole('alert')
       expect(alert).toHaveTextContent('Your session expires soon.')
@@ -140,7 +134,7 @@ describe('PX-179 session expiry warning', () => {
     it('disables the action while the extend request is in flight', async () => {
       const SessionExpiryWarning = (await import('../SessionExpiryWarning')).default
 
-      render(<SessionExpiryWarning open extending onExtend={() => {}} />)
+      render(<SessionExpiryWarning extending onExtend={() => {}} />)
 
       expect(screen.getByRole('button', { name: 'Stay signed in' })).toBeDisabled()
     })

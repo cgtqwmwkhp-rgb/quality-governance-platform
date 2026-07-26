@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "183 kB",
+    "limit": "184.5 kB",
     "gzip": true,
-    "name": "index: 182\u2192183 kB \u2014 Wave 2 portal/API tip (+729 B over 182)"
+    "name": "index: 183\u2192184.5 kB \u2014 Run021 Lane H session warning + drawer inertness + offline retry (+930 B); base e00662d4 already measured 91 B over 183"
   },
   {
     "path": "dist/assets/vendor-*.js",
