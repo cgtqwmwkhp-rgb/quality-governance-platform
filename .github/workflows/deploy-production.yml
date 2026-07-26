@@ -707,6 +707,18 @@ jobs:
           AZURE_STORAGE_CONTAINER_NAME="${STORAGE_CONTAINER_NAME:-evidence-assets}" \
             bash scripts/infra/deploy_celery_apps.sh
 
+      # The API apps have no provisioning script that matches live production — the only
+      # one whose names do is provision-production.yml, which is a one-time manual
+      # dispatch nobody runs on a normal release. So the deploy is the only place that
+      # reliably re-asserts the setting, and it does so idempotently: an app that already
+      # has it is a no-op, and no permission means a warning, never a failed deploy.
+      - name: Ensure API log sink (Log Analytics)
+        continue-on-error: true
+        run: |
+          API_WEBAPP_NAME="${{ env.AZURE_WEBAPP_NAME }}" \
+          RESOURCE_GROUP="${{ env.AZURE_RESOURCE_GROUP }}" \
+            bash scripts/infra/ensure_api_log_sink.sh
+
       - name: Canary traffic routing — 10% ramp (D18 progressive delivery)
         continue-on-error: true
         env:

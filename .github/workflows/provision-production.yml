@@ -252,6 +252,12 @@ jobs:
           echo "- **Name**: ${{ env.APP_NAME }}" >> $GITHUB_STEP_SUMMARY
           echo "- **URL**: https://${{ env.APP_NAME }}.azurewebsites.net" >> $GITHUB_STEP_SUMMARY
 
+      - name: Configure Log Analytics diagnostic setting
+        run: |
+          API_WEBAPP_NAME="${{ env.APP_NAME }}" \
+          RESOURCE_GROUP="${{ env.RG_NAME }}" \
+            bash scripts/infra/ensure_api_log_sink.sh
+
       - name: Configure Existing Service Principal
         id: sp
         run: |
