@@ -193,6 +193,46 @@ describe('ComplaintDetail', () => {
     })
   })
 
+  it('PX-208: a failed save leaves a persistent error on the page, not just a toast', async () => {
+    client.complaintsApi.update.mockRejectedValue(new Error('Invalid status transition'))
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Late repairs response' })).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'edit' }))
+    await userEvent.click(screen.getByTestId('complaint-save-edit'))
+
+    const notice = await screen.findByTestId('complaint-save-error')
+    expect(notice).toHaveTextContent('Invalid status transition')
+    expect(notice).toHaveTextContent('Changes were not saved')
+    expect(notice).toHaveAttribute('role', 'alert')
+
+    // Long after the toast would have auto-dismissed, the page still says so.
+    await new Promise((resolve) => setTimeout(resolve, 80))
+    expect(screen.getByTestId('complaint-save-error')).toBeInTheDocument()
+  })
+
+  it('PX-208: the persistent error clears when the user leaves edit mode', async () => {
+    client.complaintsApi.update.mockRejectedValue(new Error('Invalid status transition'))
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Late repairs response' })).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'edit' }))
+    await userEvent.click(screen.getByTestId('complaint-save-edit'))
+    await screen.findByTestId('complaint-save-error')
+
+    await userEvent.click(screen.getByRole('button', { name: 'cancel' }))
+
+    await waitFor(() =>
+      expect(screen.queryByTestId('complaint-save-error')).not.toBeInTheDocument(),
+    )
+  })
+
   it('investigation modal only collects title (API contract honest)', async () => {
     renderPage()
 

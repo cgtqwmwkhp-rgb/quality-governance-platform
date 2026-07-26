@@ -2,6 +2,7 @@ import { useEffect, useState, useDeferredValue } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
+import { formatDisplayDate, formatReference } from '../helpers/formatters'
 import { Plus, MessageSquare, Search, Loader2, MailWarning, Paperclip } from 'lucide-react'
 import api, {
   complaintsApi,
@@ -845,7 +846,7 @@ export default function Complaints() {
                         onClick={() => navigate(`/complaints/${complaint.id}`)}
                       >
                         <span className="font-mono text-sm text-primary">
-                          {complaint.reference_number}
+                          {formatReference(complaint.reference_number)}
                         </span>
                       </td>
                       <td
@@ -878,7 +879,7 @@ export default function Complaints() {
                         </Badge>
                       </td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">
-                        {new Date(complaint.received_date).toLocaleDateString()}
+                        {formatDisplayDate(complaint.received_date)}
                       </td>
                       {ownerFilter === 'unassigned' ? (
                         <td

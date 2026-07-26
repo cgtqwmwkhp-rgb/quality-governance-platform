@@ -13,6 +13,7 @@ import api, {
   type PaginatedResponse,
 } from '../api/client'
 import { trackError } from '../utils/errorTracker'
+import { formatDisplayDate, formatReference } from '../helpers/formatters'
 import { toast } from '../contexts/ToastContext'
 import { Button } from '../components/ui/Button'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -418,7 +419,9 @@ export default function NearMisses() {
                     className="border-t border-border hover:bg-muted/30 cursor-pointer transition-colors"
                     onClick={() => navigate(`/near-misses/${item.id}`)}
                   >
-                    <td className="p-4 font-medium text-foreground">{item.reference_number}</td>
+                    <td className="p-4 font-medium text-foreground">
+                      {formatReference(item.reference_number)}
+                    </td>
                     <td className="p-4">
                       <div className="font-medium text-foreground">{item.contract}</div>
                       <div className="text-sm text-muted-foreground line-clamp-1">
@@ -426,7 +429,7 @@ export default function NearMisses() {
                       </div>
                     </td>
                     <td className="p-4 text-sm text-muted-foreground">
-                      {new Date(item.event_date).toLocaleDateString()}
+                      {formatDisplayDate(item.event_date)}
                     </td>
                     <td className="p-4">
                       <div className="flex flex-wrap gap-1">

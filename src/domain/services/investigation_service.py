@@ -8,6 +8,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -90,6 +91,26 @@ class SourceRecordsResult:
 
 
 @dataclass
+class ClosureMissingItem:
+    """One named, resolvable blocker behind a closure reason code.
+
+    ``missing_fields`` carries opaque keys only, which is why the UI could not
+    say *which* section was missing. This carries the human labels alongside
+    the keys so callers can name the blocker and link straight to it.
+    """
+
+    code: str
+    section_key: str
+    section_label: str
+    field_key: Optional[str] = None
+    field_label: Optional[str] = None
+
+    @property
+    def path(self) -> str:
+        return f"{self.section_key}.{self.field_key}" if self.field_key else self.section_key
+
+
+@dataclass
 class ClosureValidationResult:
     """Result of closure validation check."""
 
@@ -99,6 +120,7 @@ class ClosureValidationResult:
     checked_at_utc: datetime
     investigation_id: int
     investigation_level: Optional[str]
+    missing_items: List[ClosureMissingItem] = dataclass_field(default_factory=list)
 
 
 @dataclass
@@ -1769,6 +1791,7 @@ class InvestigationService:
 
         reason_codes: List[str] = []
         missing_fields: List[str] = []
+        missing_items: List[ClosureMissingItem] = []
 
         template_query = select(InvestigationTemplate).where(
             InvestigationTemplate.id == investigation.template_id,
@@ -1814,6 +1837,7 @@ class InvestigationService:
                 continue
 
             section_id = section.section_key
+            section_label = section.title or section_id
             section_data = section_values.get(section_id)
             required_fields = [f for f in section.fields if f.required]
 
@@ -1821,6 +1845,13 @@ class InvestigationService:
                 if required_fields:
                     reason_codes.append(ClosureReasonCode.MISSING_REQUIRED_SECTION)
                     missing_fields.append(section_id)
+                    missing_items.append(
+                        ClosureMissingItem(
+                            code=ClosureReasonCode.MISSING_REQUIRED_SECTION,
+                            section_key=section_id,
+                            section_label=section_label,
+                        )
+                    )
                 continue
 
             for field in required_fields:
@@ -1830,14 +1861,25 @@ class InvestigationService:
                 field_value = section_data.get(field_id)
 
                 if field_value is None:
-                    reason_codes.append(ClosureReasonCode.MISSING_REQUIRED_FIELD)
-                    missing_fields.append(field_path)
+                    code = ClosureReasonCode.MISSING_REQUIRED_FIELD
                 elif field_type == "text" and isinstance(field_value, str) and not field_value.strip():
-                    reason_codes.append(ClosureReasonCode.MISSING_REQUIRED_FIELD)
-                    missing_fields.append(field_path)
+                    code = ClosureReasonCode.MISSING_REQUIRED_FIELD
                 elif field_type == "array" and isinstance(field_value, list) and len(field_value) == 0:
-                    reason_codes.append(ClosureReasonCode.INVALID_ARRAY_EMPTY)
-                    missing_fields.append(field_path)
+                    code = ClosureReasonCode.INVALID_ARRAY_EMPTY
+                else:
+                    continue
+
+                reason_codes.append(code)
+                missing_fields.append(field_path)
+                missing_items.append(
+                    ClosureMissingItem(
+                        code=code,
+                        section_key=section_id,
+                        section_label=section_label,
+                        field_key=field_id,
+                        field_label=field.label or field_id,
+                    )
+                )
 
         unique_reason_codes = list(dict.fromkeys(reason_codes))
         closure_status = "OK" if not unique_reason_codes else "BLOCKED"
@@ -1849,6 +1891,7 @@ class InvestigationService:
             checked_at_utc=checked_at,
             investigation_id=investigation_id,
             investigation_level=level_str,
+            missing_items=missing_items,
         )
 
     @staticmethod

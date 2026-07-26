@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useEscapeToGoBack } from '../hooks/useEscapeToGoBack'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
@@ -46,6 +47,7 @@ import {
   lookupsApi,
 } from '../api/client'
 import { Button } from '../components/ui/Button'
+import { FormNotice } from '../components/ui/form'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Textarea } from '../components/ui/Textarea'
@@ -120,6 +122,7 @@ export default function ComplaintDetail() {
   const [creating, setCreating] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [raisingRisk, setRaisingRisk] = useState(false)
   const [editForm, setEditForm] = useState<ComplaintUpdate>({})
   const [witnessesDraft, setWitnessesDraft] = useState<CaseWitnessesValue | null>(null)
@@ -183,13 +186,8 @@ export default function ComplaintDetail() {
     }
   }, [])
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isEditing) navigate('/complaints')
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [navigate, isEditing])
+  const goBackToComplaints = useCallback(() => navigate('/complaints'), [navigate])
+  useEscapeToGoBack(!isEditing, goBackToComplaints)
 
   useEffect(() => {
     if (!isEditing) return
@@ -303,13 +301,16 @@ export default function ComplaintDetail() {
       return
     }
     setSaving(true)
+    setSaveError(null)
     try {
       const response = await complaintsApi.update(complaint.id, editForm)
       setComplaint(response.data)
       setIsEditing(false)
     } catch (err) {
       trackError(err, { component: 'ComplaintDetail', action: 'updateComplaint' })
-      toast.error(getApiErrorMessage(err))
+      const message = getApiErrorMessage(err)
+      setSaveError(message)
+      toast.error(message)
     } finally {
       setSaving(false)
     }
@@ -330,6 +331,7 @@ export default function ComplaintDetail() {
         lessons_learnt: complaint.lessons_learnt ?? '',
       })
     }
+    setSaveError(null)
     setIsEditing(false)
   }
 
@@ -808,6 +810,23 @@ export default function ComplaintDetail() {
           )}
         </div>
       </div>
+
+      {/* PX-208: a failed save must leave something on the page after the toast
+          has auto-dismissed, so the user cannot mistake edit mode for success. */}
+      {saveError ? (
+        <FormNotice
+          tone="error"
+          title={t('complaints.detail.save_failed', 'Changes were not saved')}
+          data-testid="complaint-save-error"
+          action={
+            <Button size="sm" variant="outline" onClick={() => void handleSaveEdit()}>
+              {t('complaints.detail.try_again')}
+            </Button>
+          }
+        >
+          {saveError}
+        </FormNotice>
+      ) : null}
 
       <CaseSummaryRail
         items={[
