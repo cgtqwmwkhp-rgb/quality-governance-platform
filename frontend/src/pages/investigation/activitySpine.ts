@@ -16,6 +16,7 @@ export interface ActivitySpineItem {
   body?: string
   createdAt: string
   actorId?: number | null
+  actorName?: string | null
   hrefTab?: 'timeline' | 'evidence' | 'actions' | 'report' | 'rca' | 'summary'
   meta?: Record<string, unknown>
 }
@@ -46,6 +47,7 @@ export function buildActivitySpine(input: {
           : event.field_path || undefined,
       createdAt: asIso(event.created_at),
       actorId: event.actor_id,
+      actorName: event.actor_name,
       hrefTab: isManual ? 'timeline' : undefined,
       meta: { field_path: event.field_path, event_metadata: event.event_metadata },
     })

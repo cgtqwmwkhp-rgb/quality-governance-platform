@@ -265,6 +265,7 @@ class InvestigationTimelineEventResponse(BaseModel):
     old_value: Optional[str] = None
     new_value: Optional[str] = None
     actor_id: Optional[int] = None
+    actor_name: Optional[str] = None
     event_metadata: Optional[dict] = None
     version: Optional[int] = None
     created_at: datetime

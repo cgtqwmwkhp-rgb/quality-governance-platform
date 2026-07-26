@@ -660,6 +660,9 @@ class FormConfigService:
         # Path category is authoritative (body may omit category).
         data.category = category  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
 
+        # tenant_id is not optional decoration: list_lookup_options filters on
+        # ``LookupOption.tenant_id == tenant_id`` and ``NULL = 1`` is never true
+        # in SQL, so an option written without it can never be read back.
         option = LookupOption(  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
             category=category,
             code=data.code,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
@@ -668,6 +671,7 @@ class FormConfigService:
             is_active=data.is_active,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
             display_order=data.display_order,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
             parent_id=data.parent_id,  # type: ignore[union-attr]  # TYPE-IGNORE: MYPY-OVERRIDE
+            tenant_id=tenant_id,
         )
         self.db.add(option)
         await self.db.commit()
@@ -684,9 +688,12 @@ class FormConfigService:
         data: BaseModel,
         tenant_id: int,
     ) -> LookupOption:
-        """Update a lookup option."""
+        """Update a lookup option belonging to *tenant_id*."""
         result = await self.db.execute(
-            select(LookupOption).where(LookupOption.id == option_id).where(LookupOption.category == category)
+            select(LookupOption)
+            .where(LookupOption.id == option_id)
+            .where(LookupOption.category == category)
+            .where(LookupOption.tenant_id == tenant_id)
         )
         option = result.scalar_one_or_none()
         if not option:
@@ -707,9 +714,12 @@ class FormConfigService:
         *,
         tenant_id: int,
     ) -> None:
-        """Delete a lookup option."""
+        """Delete a lookup option belonging to *tenant_id*."""
         result = await self.db.execute(
-            select(LookupOption).where(LookupOption.id == option_id).where(LookupOption.category == category)
+            select(LookupOption)
+            .where(LookupOption.id == option_id)
+            .where(LookupOption.category == category)
+            .where(LookupOption.tenant_id == tenant_id)
         )
         option = result.scalar_one_or_none()
         if not option:

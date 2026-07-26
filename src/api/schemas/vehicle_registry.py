@@ -80,4 +80,5 @@ class FleetHealthResponse(BaseModel):
     non_compliant: int
     overdue_check: int
     suspended: int
-    compliance_rate: float
+    # None when no vehicles are registered — see src.domain.metrics (PX-216).
+    compliance_rate: Optional[float] = None

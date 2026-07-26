@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from pydantic import ValidationError
 
 from src.api.routes.employee_portal import (
@@ -48,11 +49,19 @@ def test_portal_reference_generation_is_unique() -> None:
 
 @pytest.mark.asyncio
 async def test_track_report_rejects_missing_tracking_code() -> None:
-    with pytest.raises(NotFoundError) as exc_info:
+    """PX-315: an uncredentialled request is 401, not a misleading 404.
+
+    This assertion previously expected 404. That answer is what made the dead
+    "Track My Report" journey look like missing data for the whole of Run 021,
+    so the expectation moves with the fix rather than the fix moving with it.
+    Genuinely-unknown references are still 404 — see
+    tests/unit/test_portal_track_endpoint.py.
+    """
+    with pytest.raises(HTTPException) as exc_info:
         await track_report(reference_number="INC-2026-0001", db=_TrackingDb(None), tracking_code=None)
 
-    assert exc_info.value.http_status == 404
-    assert exc_info.value.message == "Report not found. Please check your reference details."
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail["code"] == "AUTHENTICATION_REQUIRED"
 
 
 @pytest.mark.asyncio
@@ -64,6 +73,8 @@ async def test_track_report_accepts_valid_tracking_code() -> None:
         severity=IncidentSeverity.MEDIUM,
         created_at=datetime(2026, 3, 22, tzinfo=timezone.utc),
         updated_at=datetime(2026, 3, 22, tzinfo=timezone.utc),
+        reporter_email="reporter@example.com",
+        tenant_id=1,
     )
 
     response = await track_report(

@@ -55,6 +55,16 @@ const KIND_ICON: Record<ActivityKind, typeof History> = {
   manual: PenLine,
 }
 
+/** Human-readable label per spine kind; the raw kind is an internal discriminator. */
+export const KIND_LABEL: Record<ActivityKind, { key: string; fallback: string }> = {
+  revision: { key: 'investigations.timeline.kind_revision', fallback: 'Audit event' },
+  comment: { key: 'investigations.timeline.kind_comment', fallback: 'Comment' },
+  capa: { key: 'investigations.timeline.kind_capa', fallback: 'CAPA action' },
+  evidence: { key: 'investigations.timeline.kind_evidence', fallback: 'Evidence' },
+  pack: { key: 'investigations.timeline.kind_pack', fallback: 'Customer pack' },
+  manual: { key: 'investigations.timeline.kind_manual', fallback: 'Manual entry' },
+}
+
 interface InvestigationTimelineProps {
   timeline: TimelineEvent[]
   comments: InvestigationComment[]
@@ -185,6 +195,12 @@ export default function InvestigationTimeline({
         <div className="space-y-4" data-testid="investigation-activity-spine">
           {spine.map((item) => {
             const Icon = KIND_ICON[item.kind] || History
+            const kindLabel = KIND_LABEL[item.kind]
+            // Prefer the resolved user; fall back to the opaque id only when the
+            // join produced nothing, and show nothing when there is no actor at all.
+            const actor =
+              item.actorName?.trim() ||
+              (item.actorId != null ? t('investigations.timeline.actor', { id: item.actorId }) : '')
             return (
               <Card
                 key={item.id}
@@ -198,12 +214,15 @@ export default function InvestigationTimeline({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-medium text-foreground">{item.title}</span>
-                      <Badge variant="outline" className="text-xs capitalize">
-                        {item.kind}
+                      <Badge variant="outline" className="text-xs">
+                        {kindLabel ? t(kindLabel.key, kindLabel.fallback) : item.kind}
                       </Badge>
-                      {item.actorId != null ? (
-                        <span className="text-xs text-muted-foreground">
-                          {t('investigations.timeline.actor', { id: item.actorId })}
+                      {actor ? (
+                        <span
+                          className="text-xs text-muted-foreground"
+                          data-testid={`timeline-actor-${item.id}`}
+                        >
+                          {actor}
                         </span>
                       ) : null}
                     </div>

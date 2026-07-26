@@ -1,6 +1,10 @@
 import type { AxiosInstance } from 'axios'
 
-export type PortalClearState = 'clear' | 'attention' | 'blocked'
+/**
+ * `no_data` means we hold no assets and no van for this person, as opposed to
+ * `clear`, which asserts that we checked and nothing is outstanding (PX-320).
+ */
+export type PortalClearState = 'clear' | 'attention' | 'blocked' | 'no_data'
 
 export type PortalToolBand =
   | 'overdue'
