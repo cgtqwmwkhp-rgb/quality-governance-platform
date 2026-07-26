@@ -112,9 +112,7 @@ async def test_unchanged_field_emits_no_event():
 
 @pytest.mark.asyncio
 async def test_multiple_changed_fields_emit_one_event_each():
-    spy = await _patch(
-        _investigation(), {"status": "completed", "description": "Revised description"}
-    )
+    spy = await _patch(_investigation(), {"status": "completed", "description": "Revised description"})
 
     assert spy.await_count == 2
     emitted = {call.kwargs["field_path"]: call.kwargs["event_type"] for call in spy.await_args_list}
