@@ -1,5 +1,6 @@
 import { useEffect, useState, useDeferredValue } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { CaseRegisterReferenceLink } from '../components/register/CaseRegisterReferenceLink'
 import { useTranslation } from 'react-i18next'
 import { Plus, AlertTriangle, Search, Loader2, MailWarning } from 'lucide-react'
 import api, {
@@ -729,19 +730,22 @@ export default function Incidents() {
                 header: registerLabels.reference,
                 width: 'reference',
                 render: (incident) => (
-                  <span className="font-mono text-sm text-primary">
+                  <CaseRegisterReferenceLink to={`/incidents/${incident.id}`}>
                     {formatReference(incident.reference_number)}
-                  </span>
+                  </CaseRegisterReferenceLink>
                 ),
               },
               {
                 key: 'title',
                 header: registerLabels.title,
-                render: (incident) => (
-                  <span className="text-sm font-medium text-foreground">
-                    {displayIncidentText(incident.title)}
-                  </span>
-                ),
+                render: (incident) => {
+                  const title = displayIncidentText(incident.title)
+                  return (
+                    <span className="text-sm font-medium text-foreground" title={title}>
+                      {title}
+                    </span>
+                  )
+                },
               },
               {
                 key: 'type',

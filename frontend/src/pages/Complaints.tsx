@@ -1,5 +1,7 @@
 import { useEffect, useState, useDeferredValue } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { CaseRegisterReferenceLink } from '../components/register/CaseRegisterReferenceLink'
+import { formatCodedValue } from '../helpers/displayLabels'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
 import { formatDisplayDate, formatReference } from '../helpers/formatters'
@@ -130,7 +132,7 @@ function parseListFilter(raw: string | null): string {
 function buildComplaintsListSearch(params: {
   q: string
   status: string
-  severity: string
+  priority: string
   page: number
   owner: OwnerFilter
   ids: string
@@ -139,7 +141,7 @@ function buildComplaintsListSearch(params: {
   const q = params.q.trim()
   if (q) next.set('q', q)
   if (params.status !== ALL_FILTER) next.set('status', params.status)
-  if (params.severity !== ALL_FILTER) next.set('severity', params.severity)
+  if (params.priority !== ALL_FILTER) next.set('priority', params.priority)
   if (params.page > 1) next.set('page', String(params.page))
   if (params.owner === 'unassigned') next.set('owner', 'unassigned')
   const ids = params.ids.trim()
@@ -164,8 +166,8 @@ export default function Complaints() {
   const [statusFilter, setStatusFilter] = useState(() =>
     parseListFilter(searchParams.get('status')),
   )
-  const [severityFilter, setSeverityFilter] = useState(() =>
-    parseListFilter(searchParams.get('severity')),
+  const [priorityFilter, setPriorityFilter] = useState(() =>
+    parseListFilter(searchParams.get('priority') || searchParams.get('severity')),
   )
   const [page, setPage] = useState(() => parseListPage(searchParams.get('page')))
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>(
@@ -302,24 +304,26 @@ export default function Complaints() {
   useEffect(() => {
     const nextQ = searchParams.get('q') || ''
     const nextStatus = parseListFilter(searchParams.get('status'))
-    const nextSeverity = parseListFilter(searchParams.get('severity'))
+    const nextPriority = parseListFilter(
+      searchParams.get('priority') || searchParams.get('severity'),
+    )
     const nextPage = parseListPage(searchParams.get('page'))
     const nextOwner: OwnerFilter = searchParams.get('owner') === 'unassigned' ? 'unassigned' : 'all'
     const nextIds = searchParams.get('ids') || ''
     setSearchTerm((prev) => (prev === nextQ ? prev : nextQ))
     setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus))
-    setSeverityFilter((prev) => (prev === nextSeverity ? prev : nextSeverity))
+    setPriorityFilter((prev) => (prev === nextPriority ? prev : nextPriority))
     setPage((prev) => (prev === nextPage ? prev : nextPage))
     setOwnerFilter((prev) => (prev === nextOwner ? prev : nextOwner))
     setIdsFilter((prev) => (prev === nextIds ? prev : nextIds))
   }, [searchParams])
 
-  // Keep q/status/severity/page/owner/ids in the URL (omit defaults); replace history entry.
+  // Keep q/status/priority/page/owner/ids in the URL (omit defaults); replace history entry.
   useEffect(() => {
     const desired = buildComplaintsListSearch({
       q: searchTerm,
       status: statusFilter,
-      severity: severityFilter,
+      priority: priorityFilter,
       page,
       owner: ownerFilter,
       ids: idsFilter,
@@ -332,7 +336,7 @@ export default function Complaints() {
   }, [
     searchTerm,
     statusFilter,
-    severityFilter,
+    priorityFilter,
     page,
     ownerFilter,
     idsFilter,
@@ -614,7 +618,7 @@ export default function Complaints() {
   // Null-safe client filter — never throw on missing complainant/title fields from API.
   const filteredComplaints = complaints.filter((c) => {
     if (statusFilter !== ALL_FILTER && c.status !== statusFilter) return false
-    if (severityFilter !== ALL_FILTER && c.priority !== severityFilter) return false
+    if (priorityFilter !== ALL_FILTER && c.priority !== priorityFilter) return false
     if (!needle) return true
     const haystack = [c.title, c.reference_number, c.complainant_name]
       .filter((v): v is string => typeof v === 'string' && v.length > 0)
@@ -803,16 +807,18 @@ export default function Complaints() {
                 header: registerLabels.reference,
                 width: 'reference',
                 render: (complaint) => (
-                  <span className="font-mono text-sm text-primary">
+                  <CaseRegisterReferenceLink to={`/complaints/${complaint.id}`}>
                     {formatReference(complaint.reference_number)}
-                  </span>
+                  </CaseRegisterReferenceLink>
                 ),
               },
               {
                 key: 'title',
                 header: registerLabels.title,
                 render: (complaint) => (
-                  <span className="text-sm font-medium text-foreground">{complaint.title}</span>
+                  <span className="text-sm font-medium text-foreground" title={complaint.title}>
+                    {complaint.title}
+                  </span>
                 ),
               },
               {
@@ -821,7 +827,7 @@ export default function Complaints() {
                 render: (complaint) => (
                   <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
                     <span>{getTypeIcon(complaint.complaint_type)}</span>
-                    {complaint.complaint_type}
+                    {formatCodedValue(complaint.complaint_type)}
                   </span>
                 ),
               },
@@ -840,7 +846,7 @@ export default function Complaints() {
                 width: 'badge',
                 render: (complaint) => (
                   <Badge variant={getPriorityVariant(complaint.priority)}>
-                    {complaint.priority}
+                    {formatCodedValue(complaint.priority)}
                   </Badge>
                 ),
               },
@@ -850,7 +856,7 @@ export default function Complaints() {
                 width: 'badge',
                 render: (complaint) => (
                   <Badge variant={getStatusVariant(complaint.status)}>
-                    {complaint.status.replace('_', ' ')}
+                    {formatCodedValue(complaint.status)}
                   </Badge>
                 ),
               },

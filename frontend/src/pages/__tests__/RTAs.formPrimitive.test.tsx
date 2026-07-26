@@ -55,13 +55,20 @@ vi.mock('../../api/client', () => ({
 
 vi.mock('../../utils/errorTracker', () => ({ trackError: vi.fn() }))
 
+vi.mock('../../utils/platformSessionReporter', () => ({
+  resolvePlatformReporterIdentity: vi.fn().mockResolvedValue({
+    reporter_name: 'Alex Controller',
+    reporter_email: 'alex@example.com',
+  }),
+}))
+
 function Wrapper({ children }: { children: ReactNode }) {
   return <MemoryRouter>{children}</MemoryRouter>
 }
 
 /** Every required control in the New RTA modal, by DOM id. */
 const REQUIRED_CONTROL_IDS = ['rtas-field-0', 'rtas-field-1', 'rtas-field-2', 'rtas-field-6']
-const OPTIONAL_CONTROL_IDS = ['rtas-field-4', 'rtas-field-5']
+const OPTIONAL_CONTROL_IDS = ['rtas-field-4', 'rtas-field-5', 'rtas-field-reporter']
 
 async function openCreateModal() {
   const user = userEvent.setup()

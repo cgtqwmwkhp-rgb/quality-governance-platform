@@ -3047,7 +3047,7 @@
   "rtas.detail.police_attended": "Police Attended",
   "rtas.detail.quick_info": "Quick Info",
   "rtas.detail.record_created": "Record created in system",
-  "rtas.detail.reported_on": "Reported on",
+  "rtas.detail.reported_on": "Reported on {{date}}",
   "rtas.detail.rta_reported": "RTA reported",
   "rtas.detail.running_sheet_empty_description": "Add notes to build the incident narrative over time",
   "rtas.detail.save_changes": "Save Changes",
@@ -3913,5 +3913,13 @@
   "safetyInsights.run": "Run deep analysis",
   "safetyInsights.startFailed": "Could not start deep analysis.",
   "safetyInsights.microThemes": "Micro-themes",
-  "incidents.search.register_scope": "Searching the full incident register for \"{{query}}\"."
+  "incidents.search.register_scope": "Searching the full incident register for \"{{query}}\".",
+  "rtas.detail.audit_this_collision": "Audit this collision",
+  "rtas.detail.driver": "Driver",
+  "rtas.detail.reporter": "Reporter",
+  "rtas.detail.not_provided": "Not provided",
+  "rtas.detail.no_reporter_contact": "No reporter contact captured",
+  "rtas.detail.reporter_independent_hint": "Reporter is separate from the driver — add a reporter name when editing or creating the record.",
+  "rtas.form.reporter_name": "Reporter name",
+  "rtas.form.placeholder.reporter_name": "Who is reporting this collision…"
 }

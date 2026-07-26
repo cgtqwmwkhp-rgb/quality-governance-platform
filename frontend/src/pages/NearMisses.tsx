@@ -1,5 +1,7 @@
 import { useDeferredValue, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { CaseRegisterReferenceLink } from '../components/register/CaseRegisterReferenceLink'
+import { formatCodedValue } from '../helpers/displayLabels'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, Loader2, Plus, Search } from 'lucide-react'
 import api, {
@@ -438,23 +440,27 @@ export default function NearMisses() {
                   header: registerLabels.reference,
                   width: 'reference',
                   render: (item) => (
-                    <span className="font-mono text-sm text-primary">
+                    <CaseRegisterReferenceLink to={`/near-misses/${item.id}`}>
                       {formatReference(item.reference_number)}
-                    </span>
+                    </CaseRegisterReferenceLink>
                   ),
                 },
                 {
                   key: 'customer',
                   header: registerLabels.customer,
                   render: (item) => (
-                    <span className="text-sm font-medium text-foreground">{item.contract}</span>
+                    <span className="text-sm font-medium text-foreground" title={item.contract}>
+                      {item.contract}
+                    </span>
                   ),
                 },
                 {
                   key: 'location',
                   header: registerLabels.location,
                   render: (item) => (
-                    <span className="text-sm text-muted-foreground">{item.location}</span>
+                    <span className="text-sm text-muted-foreground" title={item.location}>
+                      {item.location}
+                    </span>
                   ),
                 },
                 {
@@ -473,7 +479,9 @@ export default function NearMisses() {
                   width: 'badge',
                   render: (item) => (
                     <div className="flex flex-wrap gap-1">
-                      <Badge variant="secondary">{item.potential_severity || 'medium'}</Badge>
+                      <Badge variant="secondary">
+                        {formatCodedValue(item.potential_severity || 'medium')}
+                      </Badge>
                       {item.is_hipo ? (
                         <Badge variant="destructive">{t('near_misses.badge.hipo', 'HiPo')}</Badge>
                       ) : null}
@@ -484,7 +492,9 @@ export default function NearMisses() {
                   key: 'status',
                   header: registerLabels.status,
                   width: 'badge',
-                  render: (item) => <Badge variant="outline">{item.status}</Badge>,
+                  render: (item) => (
+                    <Badge variant="outline">{formatCodedValue(item.status)}</Badge>
+                  ),
                 },
               ]}
             />

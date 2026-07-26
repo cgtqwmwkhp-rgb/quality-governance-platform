@@ -156,11 +156,13 @@ describe('CaseRegisterTable', () => {
     expect(cell.querySelector('span.xl\\:hidden')).toBeNull()
   })
 
-  it('opens a row on click, Enter and Space', () => {
+  it('opens a row on click, Enter and Space without role=button (PX-173)', () => {
     const onOpenRow = vi.fn()
     renderRegister({ onOpenRow, rowLabel: (row) => `View ${row.reference}` })
 
-    const row = screen.getByRole('button', { name: 'View NM-2026-20033D1D' })
+    const row = screen.getByLabelText('View NM-2026-20033D1D')
+    expect(row.tagName).toBe('TR')
+    expect(row).not.toHaveAttribute('role', 'button')
     fireEvent.click(row)
     fireEvent.keyDown(row, { key: 'Enter' })
     fireEvent.keyDown(row, { key: ' ' })
@@ -173,7 +175,7 @@ describe('CaseRegisterTable', () => {
     const onOpenRow = vi.fn()
     renderRegister({ onOpenRow, rowLabel: (row) => `View ${row.reference}` })
 
-    fireEvent.keyDown(screen.getByRole('button', { name: 'View NM-2026-0002' }), { key: 'a' })
+    fireEvent.keyDown(screen.getByLabelText('View NM-2026-0002'), { key: 'a' })
 
     expect(onOpenRow).not.toHaveBeenCalled()
   })
