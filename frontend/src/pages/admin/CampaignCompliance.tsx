@@ -14,6 +14,9 @@ import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import {
   ALL_REMINDER_PRESET_KEYS,
   CAMPAIGN_REMINDER_PRESETS,
+  formatCampaignReference,
+  isUatCampaignArtefact,
+  partitionUatCampaigns,
   presetKeysFromReminderHours,
   reminderHoursFromPresetKeys,
   type CampaignReminderPresetKey,
@@ -38,11 +41,19 @@ export default function CampaignCompliance() {
   const [expandedCampaignId, setExpandedCampaignId] = useState<number | null>(null)
   const [groupRowsByCampaign, setGroupRowsByCampaign] = useState<Record<number, GroupComplianceRow[]>>({})
   const [groupLoadingId, setGroupLoadingId] = useState<number | null>(null)
+  /** PX-221: hide UAT/thin-suite artefacts from the operational register by default. */
+  const [showUatArtefacts, setShowUatArtefacts] = useState(false)
 
   const reminderHours = useMemo(
     () => reminderHoursFromPresetKeys(reminderPresets),
     [reminderPresets],
   )
+
+  const { operational: operationalCampaigns, uatArtefacts } = useMemo(
+    () => partitionUatCampaigns(complianceRows),
+    [complianceRows],
+  )
+  const visibleCampaigns = showUatArtefacts ? complianceRows : operationalCampaigns
 
   const loadDefaults = useCallback(async () => {
     setDefaultsLoading(true)
@@ -197,14 +208,39 @@ export default function CampaignCompliance() {
 
       <Card>
         <CardHeader>
-          <h2 className="text-lg font-semibold">{t('admin.campaign_compliance.table_title')}</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold">{t('admin.campaign_compliance.table_title')}</h2>
+            {uatArtefacts.length > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-testid="campaign-compliance-uat-toggle"
+                onClick={() => setShowUatArtefacts((prev) => !prev)}
+              >
+                {showUatArtefacts
+                  ? `Hide UAT artefacts (${uatArtefacts.length})`
+                  : `Show UAT artefacts (${uatArtefacts.length})`}
+              </Button>
+            ) : null}
+          </div>
+          {uatArtefacts.length > 0 && !showUatArtefacts ? (
+            <p
+              className="mt-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground"
+              data-testid="campaign-compliance-uat-honesty"
+            >
+              {`Hiding ${uatArtefacts.length} UAT / thin-suite campaign artefact${
+                uatArtefacts.length === 1 ? '' : 's'
+              }. Operational campaigns remain listed. Data cleanup is an ops task — this screen does not delete rows.`}
+            </p>
+          ) : null}
         </CardHeader>
         <CardContent>
           {complianceLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
             </div>
-          ) : complianceRows.length === 0 ? (
+          ) : visibleCampaigns.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t('admin.campaign_compliance.empty')}</p>
           ) : (
             <div className="overflow-x-auto">
@@ -222,10 +258,11 @@ export default function CampaignCompliance() {
                   </tr>
                 </thead>
                 <tbody>
-                  {complianceRows.map((row) => {
+                  {visibleCampaigns.map((row) => {
                     const hasGroups = (row.audience_group_ids?.length ?? 0) > 0
                     const expanded = expandedCampaignId === row.campaign_id
                     const groupRows = groupRowsByCampaign[row.campaign_id] ?? []
+                    const ref = formatCampaignReference(row.campaign_id, row.launched_at)
 
                     return (
                       <Fragment key={row.campaign_id}>
@@ -254,8 +291,16 @@ export default function CampaignCompliance() {
                             <p className="font-medium text-foreground">
                               {row.title || row.document_title || `#${row.document_id}`}
                             </p>
-                            <p className="text-xs text-muted-foreground">
-                              {t('admin.campaign_compliance.campaign_id', { id: row.campaign_id })}
+                            <p
+                              className="text-xs text-muted-foreground font-mono"
+                              data-testid={`campaign-compliance-ref-${row.campaign_id}`}
+                            >
+                              {ref}
+                              {isUatCampaignArtefact(row) ? (
+                                <span className="ml-2 rounded border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                                  UAT
+                                </span>
+                              ) : null}
                             </p>
                           </td>
                           <td className="py-3 pr-4 capitalize">{row.status}</td>

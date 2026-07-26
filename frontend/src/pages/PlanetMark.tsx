@@ -42,6 +42,7 @@ import {
   formatEmissions,
   hasPositiveCarbonTotal,
   initiativeToCreateActionPayload,
+  isStaleDraftCertification,
   parsePlanetMarkSection,
   resolveSelectedYearId,
   sortReportingYearsDesc,
@@ -536,29 +537,15 @@ export default function PlanetMark() {
               ))
             )}
           </select>
-          <select
-            value={section}
-            onChange={(e) => setQuery({ section: e.target.value === 'years' ? null : e.target.value })}
-            aria-label={t('planet_mark.shell.tabs_aria')}
-            data-testid="planet-mark-section-filter"
-            className="rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground"
-          >
-            {PLANET_MARK_SECTIONS.map(({ id, labelKey }) => (
-              <option key={id} value={id}>
-                {t(labelKey)}
-              </option>
-            ))}
-          </select>
-          <Button type="button" variant="outline" size="sm" data-testid="planet-mark-filter-apply">
-            Filter
-          </Button>
         </div>
       </header>
 
+      {/* PX-247: single tab row only — remove duplicate section select + Filter chrome */}
       <div
         className="flex bg-surface rounded-xl p-1 border border-border overflow-x-auto"
         role="tablist"
         aria-label={t('planet_mark.shell.tabs_aria')}
+        data-testid="planet-mark-section-tabs"
       >
         {PLANET_MARK_SECTIONS.map(({ id, labelKey, icon: Icon }) => (
           <button
@@ -644,6 +631,16 @@ export default function PlanetMark() {
                         )}
                         {selectedYear.certification_status || '—'}
                       </p>
+                      {isStaleDraftCertification(selectedYear) ? (
+                        <p
+                          className="mt-2 text-xs text-muted-foreground"
+                          data-testid="planet-mark-stale-draft-honesty"
+                        >
+                          Reporting period has ended while certification is still Draft. A Certified
+                          status requires recorded certificate evidence — this screen does not invent
+                          one.
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 </CardContent>

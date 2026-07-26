@@ -392,6 +392,30 @@ describe('PlanetMark shell', () => {
     })
   })
 
+  it('PX-247: renders a single section tab row without duplicate select+Filter chrome', async () => {
+    renderPlanetMark()
+
+    expect(await screen.findByTestId('planet-mark-section-tabs')).toBeInTheDocument()
+    expect(screen.queryByTestId('planet-mark-section-filter')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('planet-mark-filter-apply')).not.toBeInTheDocument()
+  })
+
+  it('PX-246: shows stale-draft honesty when YE2025 is still Draft', async () => {
+    mockListYears.mockResolvedValue({
+      data: {
+        total: 1,
+        years: [{ ...yearRecord2025, certification_status: 'draft' }],
+      },
+    })
+
+    renderPlanetMark('/planet-mark?year=2')
+
+    expect(await screen.findByTestId('planet-mark-stale-draft-honesty')).toBeInTheDocument()
+    expect(screen.getByTestId('planet-mark-stale-draft-honesty')).toHaveTextContent(
+      /does not invent/i,
+    )
+  })
+
   it('shows hotspot initiatives and wires Add as Improve action', async () => {
     mockGetScope3.mockResolvedValue({
       data: {

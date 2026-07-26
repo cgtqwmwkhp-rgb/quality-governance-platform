@@ -358,6 +358,58 @@ export function yearHasIngestedCarbon(year: PlanetMarkReportingYearRecord): bool
   )
 }
 
+/**
+ * PX-246 honesty: reporting year has ended but certification is still Draft.
+ * Does not invent a Certified status — ops must record the certificate.
+ */
+export function isStaleDraftCertification(
+  year: Pick<PlanetMarkReportingYearRecord, 'year_number' | 'period' | 'certification_status'>,
+  now: Date = new Date(),
+): boolean {
+  const status = (year.certification_status || '').trim().toLowerCase()
+  if (status !== 'draft') return false
+
+  const periodEnd = parsePlanetMarkPeriodEnd(year.period)
+  if (periodEnd) return periodEnd.getTime() < now.getTime()
+
+  // Fallback when period string is unparseable: year_number strictly before current calendar year.
+  return year.year_number < now.getUTCFullYear()
+}
+
+/** Parse trailing end date from strings like "01 Jan 2025 - 31 Dec 2025". */
+export function parsePlanetMarkPeriodEnd(period: string | null | undefined): Date | null {
+  if (!period?.trim()) return null
+  const parts = period.split(/\s[-–—]\s/)
+  const endRaw = (parts.length > 1 ? parts[parts.length - 1] : period).trim()
+  const match = endRaw.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/)
+  if (!match) {
+    const parsed = Date.parse(endRaw)
+    if (Number.isNaN(parsed)) return null
+    const d = new Date(parsed)
+    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59))
+  }
+  const day = Number(match[1])
+  const monthToken = match[2].toLowerCase()
+  const year = Number(match[3])
+  const months: Record<string, number> = {
+    jan: 0,
+    feb: 1,
+    mar: 2,
+    apr: 3,
+    may: 4,
+    jun: 5,
+    jul: 6,
+    aug: 7,
+    sep: 8,
+    oct: 9,
+    nov: 10,
+    dec: 11,
+  }
+  const month = months[monthToken]
+  if (month == null || !Number.isFinite(day) || !Number.isFinite(year)) return null
+  return new Date(Date.UTC(year, month, day, 23, 59, 59))
+}
+
 export function buildPlanetMarkYearIngestRow(
   year: PlanetMarkReportingYearRecord,
 ): PlanetMarkYearIngestRow {

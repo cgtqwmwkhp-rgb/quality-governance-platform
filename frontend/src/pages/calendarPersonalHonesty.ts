@@ -1,4 +1,4 @@
-/** CAL personal-product honesty shell (not full Option C). */
+/** CAL personal-product honesty shell (governance feed live; personal calendar product not). */
 
 export const CAL_PERSONAL_CAPABILITIES = [
   'governance_feed',

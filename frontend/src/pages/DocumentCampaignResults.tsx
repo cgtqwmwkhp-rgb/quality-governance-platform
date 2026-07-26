@@ -12,6 +12,7 @@ import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { EmptyState } from '../components/ui'
 import { CampaignRosterPanel } from './CampaignRosterPanel'
+import { formatCampaignListLabel } from './documentCampaignHelpers'
 
 interface DocumentCampaignResultsProps {
   documentId: number
@@ -146,8 +147,7 @@ export function DocumentCampaignResults({
             >
               {campaigns.map((campaign) => (
                 <option key={campaign.id} value={campaign.id}>
-                  #{campaign.id}
-                  {campaign.title ? ` · ${campaign.title}` : ''} · {campaign.status}
+                  {formatCampaignListLabel(campaign)} · {campaign.status}
                   {typeof campaign.completion_rate === 'number'
                     ? ` · ${Math.round(campaign.completion_rate)}%`
                     : ''}

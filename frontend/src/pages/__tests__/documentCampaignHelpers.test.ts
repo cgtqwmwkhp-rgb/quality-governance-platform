@@ -6,7 +6,11 @@ import {
   campaignRingPercent,
   campaignRingTone,
   canLaunchCampaign,
+  formatCampaignListLabel,
+  formatCampaignReference,
+  isUatCampaignArtefact,
   parseSpecificUserIds,
+  partitionUatCampaigns,
 } from '../documentCampaignHelpers'
 
 function complianceRow(overrides: Partial<CampaignComplianceRow> = {}): CampaignComplianceRow {
@@ -106,5 +110,38 @@ describe('campaign ring helpers', () => {
     expect(campaignRingLabel(complianceRow({ completion_rate: 100, overdue: 0 }))).toBe(
       'Campaign 100% complete',
     )
+  })
+})
+
+describe('campaign reference + UAT honesty (PX-222 / PX-221)', () => {
+  it('formats CAM-YYYY-NNNN references', () => {
+    expect(formatCampaignReference(16, '2026-03-01T00:00:00Z')).toBe('CAM-2026-0016')
+    expect(formatCampaignReference(3, new Date('2025-12-15T00:00:00Z'))).toBe('CAM-2025-0003')
+  })
+
+  it('prefers title in list labels when present', () => {
+    expect(
+      formatCampaignListLabel({
+        id: 16,
+        title: 'Policy read',
+        launched_at: '2026-01-10T00:00:00Z',
+        created_at: '2026-01-01T00:00:00Z',
+      }),
+    ).toBe('CAM-2026-0016 · Policy read')
+  })
+
+  it('flags UAT / thin-suite campaign artefacts without false positives', () => {
+    expect(isUatCampaignArtefact({ title: 'UAT-TX-191150 d14' })).toBe(true)
+    expect(isUatCampaignArtefact({ title: 'UAT-THIN camp bogus' })).toBe(true)
+    expect(isUatCampaignArtefact({ document_title: 'Health & Safety Policy' })).toBe(false)
+  })
+
+  it('partitions operational campaigns from UAT artefacts', () => {
+    const { operational, uatArtefacts } = partitionUatCampaigns([
+      { title: 'Real policy campaign', document_title: 'HS Policy' },
+      { title: 'UAT-TX-191150 d1', document_title: 'Doc' },
+    ])
+    expect(operational).toHaveLength(1)
+    expect(uatArtefacts).toHaveLength(1)
   })
 })
