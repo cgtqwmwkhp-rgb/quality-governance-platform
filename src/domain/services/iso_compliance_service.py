@@ -2976,9 +2976,7 @@ Write only the conformance statement. Use formal auditor language (past tense, s
             justification_source = "not_recorded"
             if include_justification and evidence_count > 0:
                 titles = [e.title or f"{e.entity_type}/{e.entity_id}" for e in evidence]
-                justification = (
-                    "Evidence of implementation exists: " + "; ".join(titles[:3]) + "."
-                )
+                justification = "Evidence of implementation exists: " + "; ".join(titles[:3]) + "."
                 justification_source = "derived_from_evidence"
 
             controls.append(

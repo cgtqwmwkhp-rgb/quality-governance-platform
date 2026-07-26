@@ -41,9 +41,7 @@ def rate_per_100000(*, count: int, hours: float) -> float:
     return round((count / hours) * 100000, 2) if hours else 0.0
 
 
-def lti_rate(
-    *, ltis: int, injuries: int, lti_assessed_injuries: int, hours: float
-) -> tuple[float | None, str | None]:
+def lti_rate(*, ltis: int, injuries: int, lti_assessed_injuries: int, hours: float) -> tuple[float | None, str | None]:
     """LTIFR, or (None, reason) when the data cannot support a rate.
 
     0.00 is only honest when someone actually assessed lost time. ``is_lti`` is

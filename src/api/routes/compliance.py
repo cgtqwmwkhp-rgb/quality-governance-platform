@@ -26,8 +26,8 @@ from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
 from src.domain.models.ims_unification import IMSRequirement
 from src.domain.models.standard import Clause, Standard
-from src.domain.models.user import User
 from src.domain.models.tenant import Tenant
+from src.domain.models.user import User
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
 from src.infrastructure.monitoring.azure_monitor import get_tracer
 
@@ -49,6 +49,7 @@ async def _resolve_organization_name(
     result = await db.execute(select(Tenant.name).where(Tenant.id == tenant_id))
     name = result.scalar_one_or_none()
     return name if name else None
+
 
 _STANDARD_DB_MATCHERS: dict[ISOStandard, tuple[str, ...]] = {
     ISOStandard.ISO_9001: ("9001",),

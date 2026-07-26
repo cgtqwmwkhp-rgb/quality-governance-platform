@@ -25,10 +25,7 @@ const RATE_UNAVAILABLE_TEXT: Record<string, string> = {
     'No injury in this period has been assessed for lost time. A zero rate would assert an all-clear the records do not support.',
 }
 
-function formatRateValue(
-  value: number | null | undefined,
-  reason: string | null | undefined,
-): string {
+function formatRateValue(value: number | null | undefined): string {
   if (value == null) return '—'
   return Number.isFinite(value) ? String(value) : '—'
 }
@@ -129,7 +126,7 @@ export default function HsPerformance() {
                 ? latest?.afr_unavailable_reason
                 : null
           const display = isRate
-            ? formatRateValue(raw as number | null | undefined, reason)
+            ? formatRateValue(raw as number | null | undefined)
             : raw ?? '—'
           return (
             <Card key={key} data-testid={`hs-kpi-${key}`}>
@@ -207,10 +204,10 @@ export default function HsPerformance() {
                   <td>{year.ltis}</td>
                   <td>{year.riddor}</td>
                   <td data-testid={`hs-table-ltifr-${year.reporting_year}`}>
-                    {formatRateValue(year.ltifr, year.ltifr_unavailable_reason)}
+                    {formatRateValue(year.ltifr)}
                   </td>
                   <td data-testid={`hs-table-afr-${year.reporting_year}`}>
-                    {formatRateValue(year.afr, year.afr_unavailable_reason)}
+                    {formatRateValue(year.afr)}
                   </td>
                 </tr>
               ))}

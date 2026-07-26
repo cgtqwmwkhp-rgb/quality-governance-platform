@@ -735,26 +735,18 @@ class ExecutiveDashboardService:
                 training_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
             return training_compliance_weekly
 
-        incidents_weekly = await _series(
-            "incidents_weekly", lambda: _count_in_window(Incident, Incident.incident_date)
-        )
+        incidents_weekly = await _series("incidents_weekly", lambda: _count_in_window(Incident, Incident.incident_date))
         complaints_weekly = await _series(
             "complaints_weekly",
-            lambda: _count_in_window(
-                Complaint, func.coalesce(Complaint.received_date, Complaint.created_at)
-            ),
+            lambda: _count_in_window(Complaint, func.coalesce(Complaint.received_date, Complaint.created_at)),
         )
         near_misses_weekly = await _series(
             "near_misses_weekly",
-            lambda: _count_in_window(
-                NearMiss, func.coalesce(NearMiss.event_date, NearMiss.created_at)
-            ),
+            lambda: _count_in_window(NearMiss, func.coalesce(NearMiss.event_date, NearMiss.created_at)),
         )
         audits_weekly = await _series("audits_weekly", _audits_weekly)
         tool_compliance_weekly = await _series("tool_compliance_weekly", _tool_compliance_weekly)
-        training_compliance_weekly = await _series(
-            "training_compliance_weekly", _training_compliance_weekly
-        )
+        training_compliance_weekly = await _series("training_compliance_weekly", _training_compliance_weekly)
 
         return {
             "incidents_weekly": incidents_weekly,
