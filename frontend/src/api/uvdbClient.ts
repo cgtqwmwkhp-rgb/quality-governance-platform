@@ -39,6 +39,13 @@ export interface UVDBQuestion {
   guidance?: string
 }
 
+/**
+ * Provenance of a UVDB score: calculated in-app from protocol responses, or
+ * lifted from an externally issued report at import time. `null` on a list
+ * item means the audit carries no score.
+ */
+export type UVDBScoreSource = 'imported' | 'calculated' | 'unknown'
+
 export interface UVDBAuditListItem {
   id: number
   audit_reference: string
@@ -47,7 +54,10 @@ export interface UVDBAuditListItem {
   audit_date: string | null
   status: string
   percentage_score: number | null
+  score_source: UVDBScoreSource | null
   lead_auditor: string | null
+  audit_run_id: number | null
+  import_job_id: number | null
 }
 
 export interface UVDBAuditResponse {
@@ -64,7 +74,9 @@ export interface UVDBDashboardResponse {
     total_audits: number
     active_audits: number
     completed_audits: number
-    average_score: number
+    /** null when no completed audit carries a score — not 0, not 100. */
+    average_score: number | null
+    scored_audits?: number
   }
   protocol: {
     name: string
