@@ -9,3 +9,4 @@ export { useFeatureFlag, setFeatureFlagOverride, clearFeatureFlagOverride } from
 export { useGeolocation } from './useGeolocation'
 export { useVoiceToText } from './useVoiceToText'
 export { useOptimisticUpdate } from './useOptimisticUpdate'
+export { useEscapeToGoBack } from './useEscapeToGoBack'

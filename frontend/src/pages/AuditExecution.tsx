@@ -437,18 +437,15 @@ const ResponseButton = ({
   autoAdvancePending?: boolean
   disabled?: boolean
 }) => {
-  const variantStyles = {
-    success: 'border-success bg-success/20 text-success',
-    danger: 'border-destructive bg-destructive/20 text-destructive',
-    warning: 'border-warning bg-warning/20 text-warning',
-    neutral: 'border-muted-foreground bg-muted-foreground/20 text-muted-foreground',
-  }
-
-  const hoverStyles = {
-    success: 'hover:bg-success/30 hover:border-success',
-    danger: 'hover:bg-destructive/30 hover:border-destructive',
-    warning: 'hover:bg-warning/30 hover:border-warning',
-    neutral: 'hover:bg-muted-foreground/30 hover:border-muted-foreground',
+  // PX-242: hovering an unanswered button used to tint it in the *same* colour
+  // family as the selected state (and at a higher opacity). Auto-advance leaves
+  // the pointer sitting over the next question's button, so the next question
+  // looked answered. Selected is now a solid fill; hover stays colour-neutral.
+  const selectedStyles = {
+    success: 'border-success bg-success text-success-foreground',
+    danger: 'border-destructive bg-destructive text-destructive-foreground',
+    warning: 'border-warning bg-warning text-warning-foreground',
+    neutral: 'border-foreground bg-foreground text-background',
   }
 
   const accessibleLabel = typeof children === 'string' ? children : undefined
@@ -459,8 +456,14 @@ const ResponseButton = ({
       onClick={onClick}
       disabled={disabled}
       aria-label={accessibleLabel}
+      aria-pressed={selected}
+      data-selected={selected ? 'true' : 'false'}
       className={`relative flex-1 flex items-center justify-center gap-2 py-4 px-4 rounded-xl border-2 font-semibold transition-all duration-200 overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed
-        ${selected ? variantStyles[variant] : `border-border bg-secondary text-muted-foreground ${hoverStyles[variant]}`}`}
+        ${
+          selected
+            ? `${selectedStyles[variant]} shadow-md ring-2 ring-offset-2 ring-offset-background ring-current`
+            : 'border-border bg-secondary text-muted-foreground hover:bg-muted hover:text-foreground hover:border-muted-foreground/50'
+        }`}
     >
       {Icon && <Icon className="w-5 h-5" />}
       {children}
