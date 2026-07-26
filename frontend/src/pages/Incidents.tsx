@@ -192,6 +192,8 @@ export default function Incidents() {
   ]
   const [typeOptions, setTypeOptions] = useState(defaultTypeOptions)
   const [severityOptions, setSeverityOptions] = useState(defaultSeverityOptions)
+  const deferredSearch = useDeferredValue(searchTerm)
+  const searchNeedle = deferredSearch.trim()
 
   useEffect(() => {
     if (!showModal) {
@@ -328,6 +330,7 @@ export default function Incidents() {
         const ids = idsFilter.trim()
         const idCount = ids ? ids.split(',').filter((part) => part.trim()).length : 0
         const pageSize = ids ? Math.min(Math.max(idCount, PAGE_SIZE), 100) : PAGE_SIZE
+        const serverSearch = deferredSearch.trim() || undefined
         let response
         if (ids) {
           const params = new URLSearchParams({
@@ -336,15 +339,15 @@ export default function Incidents() {
             ids,
           })
           if (ownerFilter === 'unassigned') params.set('owner', 'unassigned')
+          if (serverSearch) params.set('search', serverSearch)
           response = await api.get<PaginatedResponse<Incident>>(
             `/api/v1/incidents/?${params.toString()}`,
           )
         } else {
-          response = await incidentsApi.list(
-            page,
-            PAGE_SIZE,
-            ownerFilter === 'unassigned' ? { owner: 'unassigned' } : undefined,
-          )
+          response = await incidentsApi.list(page, PAGE_SIZE, {
+            owner: ownerFilter === 'unassigned' ? 'unassigned' : undefined,
+            search: serverSearch,
+          })
         }
         if (!cancelled) {
           const rows = normalizeIncidentItems(response.data)
@@ -391,7 +394,7 @@ export default function Incidents() {
     return () => {
       cancelled = true
     }
-  }, [ownerFilter, page, idsFilter])
+  }, [ownerFilter, page, idsFilter, deferredSearch])
 
   const setFilter = (next: OwnerFilter) => {
     setOwnerFilter(next)
@@ -551,17 +554,10 @@ export default function Incidents() {
     }
   }
 
-  const deferredSearch = useDeferredValue(searchTerm)
-  const searchNeedle = deferredSearch.trim()
   const filteredIncidents = incidents.filter((i) => {
     if (statusFilter !== ALL_FILTER && i.status !== statusFilter) return false
     if (severityFilter !== ALL_FILTER && i.severity !== severityFilter) return false
-    const needle = searchNeedle.toLowerCase()
-    if (!needle) return true
-    return (
-      (i.title || '').toLowerCase().includes(needle) ||
-      (i.reference_number || '').toLowerCase().includes(needle)
-    )
+    return true
   })
 
   const showingFrom = listTotal === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
@@ -670,16 +666,10 @@ export default function Incidents() {
         </div>
       </div>
       {searchNeedle ? (
-        <p
-          className="text-sm text-muted-foreground"
-          role="status"
-          data-testid="incidents-search-scope-honesty"
-        >
-          {t(
-            'incidents.search.page_scope',
-            'Search filters this page only ({{from}}–{{to}} of {{total}}). Use pagination to scan other pages.',
-            { from: showingFrom, to: showingTo, total: listTotal },
-          )}
+        <p className="text-sm text-muted-foreground" role="status" data-testid="incidents-search-active">
+          {t('incidents.search.register_scope', 'Searching the full incident register for "{{query}}".', {
+            query: searchNeedle,
+          })}
         </p>
       ) : listTotal > PAGE_SIZE ? (
         <p className="text-sm text-muted-foreground" data-testid="incidents-list-range">
@@ -710,14 +700,14 @@ export default function Incidents() {
                 icon={<AlertTriangle className="w-6 h-6 text-muted-foreground" />}
                 title={
                   searchNeedle
-                    ? t('incidents.empty.no_match', 'No matching incidents on this page')
+                    ? t('incidents.empty.no_match', 'No matching incidents')
                     : t('incidents.empty.title', 'No incidents found')
                 }
                 description={
                   searchNeedle
                     ? t(
                         'incidents.empty.no_match_hint',
-                        'Try another term or move to another page — search does not scan the full register yet.',
+                        'Try another term or clear the search box.',
                       )
                     : t(
                         'incidents.empty.subtitle',

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.pagination import PaginationInput, paginate
@@ -215,6 +215,7 @@ class IncidentService:
         owner: Optional[str] = None,
         asset_id: Optional[int] = None,
         ids: Optional[list[int]] = None,
+        search: Optional[str] = None,
         skip_tenant_check: bool = False,
     ):
         """List incidents with pagination and optional filters."""
@@ -236,6 +237,16 @@ class IncidentService:
 
         if ids:
             query = query.where(Incident.id.in_(ids))
+
+        if search and search.strip():
+            needle = f"%{search.strip()}%"
+            query = query.where(
+                or_(
+                    Incident.title.ilike(needle),
+                    Incident.reference_number.ilike(needle),
+                    Incident.description.ilike(needle),
+                )
+            )
 
         query = query.order_by(Incident.reported_date.desc(), Incident.id.asc())
         return await paginate(self.db, query, params)
