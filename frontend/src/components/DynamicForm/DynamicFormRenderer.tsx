@@ -268,6 +268,7 @@ function FieldRenderer({
     isListening,
     isSupported: voiceSupported,
     toggleListening,
+    error: voiceError,
   } = useVoiceToText({
     onResult: (transcript) => {
       const currentValue = (value as string) || ''
@@ -335,6 +336,7 @@ function FieldRenderer({
               <button
                 type="button"
                 onClick={toggleListening}
+                aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
                 className={cn(
                   'absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full transition-colors',
                   isListening
@@ -350,6 +352,12 @@ function FieldRenderer({
             <p className="mt-1 text-xs text-muted-foreground flex items-center gap-1">
               <Info className="w-3 h-3" />
               {field.help_text}
+            </p>
+          )}
+          {voiceError && (
+            <p className="mt-1 text-xs text-destructive flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              {voiceError}
             </p>
           )}
           {error && (
@@ -383,6 +391,7 @@ function FieldRenderer({
               <button
                 type="button"
                 onClick={toggleListening}
+                aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
                 className={cn(
                   'absolute right-3 bottom-3 p-2 rounded-full transition-colors',
                   isListening
@@ -400,7 +409,13 @@ function FieldRenderer({
               Listening... speak now
             </p>
           )}
-          {field.help_text && !isListening && (
+          {voiceError && (
+            <p className="mt-1 text-xs text-destructive flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              {voiceError}
+            </p>
+          )}
+          {field.help_text && !isListening && !voiceError && (
             <p className="mt-1 text-xs text-muted-foreground">{field.help_text}</p>
           )}
           {error && (

@@ -69,7 +69,7 @@ export interface PortalUploadedAttachment {
  * Pydantic with a 422 covering the whole submission, so it has to be caught
  * here rather than sent and hoped for.
  */
-export const REPORTER_PHONE_MAX_LENGTH = 20
+export const REPORTER_PHONE_MAX_LENGTH = 50
 
 export type ContactKind = 'email' | 'phone' | 'unknown'
 
@@ -481,12 +481,12 @@ const FALLBACK_TEMPLATES: Record<string, FormTemplate> = {
           {
             id: 5,
             name: 'person_contact',
-            label: 'Contact Number',
-            field_type: 'phone',
+            label: 'Contact details',
+            field_type: 'text',
             order: 3,
             is_required: false,
             width: 'full',
-            placeholder: '+44...',
+            placeholder: 'Phone or email',
           },
           {
             id: 6,
@@ -1212,7 +1212,7 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       complaint_date: today,
     }
     if (!user) return base
-    return { ...base, person_name: user.name, person_contact: user.email }
+    return { ...base, person_name: user.name }
   }, [user])
 
   const validateData = useCallback(
