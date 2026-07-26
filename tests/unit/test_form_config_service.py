@@ -95,12 +95,54 @@ class TestPublishTemplate:
     @patch("src.domain.services.form_config_service.record_audit_event", new_callable=AsyncMock)
     async def test_publish_sets_published(self, _audit):
         svc, db = _make_service()
-        template = MagicMock(id=1, is_published=False, published_at=None)
+        field = MagicMock(
+            name="description",
+            label="Description",
+            field_type="textarea",
+            is_required=True,
+            options=None,
+        )
+        step = MagicMock(fields=[field])
+        template = MagicMock(
+            id=1,
+            is_published=False,
+            published_at=None,
+            name="Incident",
+            steps=[step],
+        )
         db.execute.return_value = _mock_scalar(template)
         db.refresh = AsyncMock()
-        result = await svc.publish_template(1, user_id=1, tenant_id=1, request_id="r1")
+
+        with patch.object(svc, "_lookup_counts_for_template", new_callable=AsyncMock, return_value={}):
+            result = await svc.publish_template(1, user_id=1, tenant_id=1, request_id="r1")
+
         assert result.is_published is True
         assert result.published_at is not None
+
+    @pytest.mark.asyncio
+    async def test_publish_rejects_empty_required_lookup(self):
+        from src.domain.exceptions import ValidationError
+
+        svc, db = _make_service()
+        field = MagicMock(
+            name="person_role",
+            label="Role",
+            field_type="select",
+            is_required=True,
+            options=None,
+        )
+        step = MagicMock(fields=[field])
+        template = MagicMock(id=1, name="Incident", steps=[step], is_published=False)
+        db.execute.return_value = _mock_scalar(template)
+
+        with patch.object(
+            svc,
+            "_lookup_counts_for_template",
+            new_callable=AsyncMock,
+            return_value={"workforce_roles": 0},
+        ):
+            with pytest.raises(ValidationError, match="Workforce Roles"):
+                await svc.publish_template(1, user_id=1, tenant_id=1, request_id="r1")
 
 
 # ---------------------------------------------------------------------------
