@@ -12,7 +12,7 @@ from src.domain.models.risk_register import EnterpriseRisk
 from src.infrastructure.database import async_session_maker
 
 
-async def _insert_pending_risk(*, reference_suffix: str) -> int:
+async def _insert_pending_risk(*, reference_suffix: str, with_owner: bool = True) -> int:
     async with async_session_maker() as session:
         risk = EnterpriseRisk(
             tenant_id=1,
@@ -38,6 +38,8 @@ async def _insert_pending_risk(*, reference_suffix: str) -> int:
             is_escalated=False,
             linked_audits=["AUD-TEST-1", "FIND-TEST-1"],
             suggestion_triage_status="pending",
+            risk_owner_id=1 if with_owner else None,
+            risk_owner_name="Triage Owner" if with_owner else None,
             created_by=1,
         )
         session.add(risk)
@@ -127,3 +129,21 @@ async def test_suggestion_triage_list_pending_filter(admin_client: AsyncClient) 
     assert pending_after.status_code == 200
     ids_after = {r["id"] for r in pending_after.json().get("items", [])}
     assert risk_id not in ids_after
+
+
+@pytest.mark.asyncio
+async def test_suggestion_triage_accept_requires_owner(admin_client: AsyncClient) -> None:
+    """PX-264: unassigned import suggestions cannot be accepted into the live register."""
+    suffix = uuid.uuid4().hex[:8]
+    risk_id = await _insert_pending_risk(reference_suffix=suffix, with_owner=False)
+
+    res = await admin_client.post(
+        f"/api/v1/risk-register/{risk_id}/suggestion-triage",
+        json={"decision": "accept"},
+    )
+    assert res.status_code == 400, res.text
+    assert "owner" in res.text.lower()
+
+    async with async_session_maker() as session:
+        row = (await session.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one()
+        assert row.suggestion_triage_status == "pending"

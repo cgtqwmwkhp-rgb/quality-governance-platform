@@ -166,8 +166,28 @@ async def list_documents(
     result = await db.execute(stmt.order_by(ControlledDocument.updated_at.desc()).offset(skip).limit(limit))
     documents = result.scalars().all()
 
+    # PX-263 honesty: how many Library uploads exist while Document Control may be empty.
+    # Count is informational only — Library rows are not controlled lifecycle records.
+    library_document_count: Optional[int] = None
+    try:
+        from src.domain.models.document import Document
+
+        tenant_id = _tenant_id(current_user)
+        lib_count = await db.execute(
+            select(func.count(Document.id)).where(
+                Document.tenant_id == tenant_id,
+                Document.is_active == True,  # noqa: E712
+                Document.is_latest == True,  # noqa: E712
+            )
+        )
+        library_document_count = int(lib_count.scalar_one() or 0)
+    except Exception:  # noqa: BLE001 — honesty field must never break the list
+        logger.exception("Failed to count library documents for document-control honesty")
+        library_document_count = None
+
     return {
         "total": total,
+        "library_document_count": library_document_count,
         "documents": [
             {
                 "id": d.id,

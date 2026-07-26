@@ -33,6 +33,7 @@ import {
 } from '../components/ui/Select'
 import { DocumentVersionControlBar } from '../components/DocumentVersionControlBar'
 import { cn } from '../helpers/utils'
+import { buildDocumentControlEmptyCopy } from '../components/risk/documentControlHonesty'
 
 const reportFailure = (err: unknown): string => {
   const message = getApiErrorMessage(err)
@@ -75,6 +76,7 @@ export default function DocumentControl() {
   const [goldenThreadLoading, setGoldenThreadLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [libraryDocumentCount, setLibraryDocumentCount] = useState<number | null>(null)
 
   const [createForm, setCreateForm] = useState({
     title: '',
@@ -99,13 +101,21 @@ export default function DocumentControl() {
         status: statusFilter === 'all' ? undefined : statusFilter,
       })
       setDocuments(response.data.documents ?? [])
+      const libCount = (response.data as { library_document_count?: number | null }).library_document_count
+      setLibraryDocumentCount(typeof libCount === 'number' ? libCount : null)
     } catch (err) {
       setError(reportFailure(err))
       setDocuments([])
+      setLibraryDocumentCount(null)
     } finally {
       setLoading(false)
     }
   }, [search, statusFilter])
+
+  const emptyCopy = buildDocumentControlEmptyCopy({
+    hasActiveFilters: Boolean(search.trim()) || statusFilter !== 'all',
+    libraryDocumentCount,
+  })
 
   const loadDetail = useCallback(async (documentId: number) => {
     setDetailLoading(true)
@@ -383,20 +393,29 @@ export default function DocumentControl() {
         retryLabel="Try again"
         data-testid="document-control-async"
         empty={
-          <EmptyState
-            icon={<FileText className="w-8 h-8 text-muted-foreground" />}
-            title="No controlled documents"
-            description="Create a draft shell to start the controlled document workflow."
-            action={
-              <Button
-                onClick={() => setShowCreate(true)}
-                data-testid="document-control-empty-new-draft"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                New draft
-              </Button>
-            }
-          />
+          <div data-testid={`document-control-empty-${emptyCopy.kind}`}>
+            <EmptyState
+              icon={<FileText className="w-8 h-8 text-muted-foreground" />}
+              title={emptyCopy.title}
+              description={emptyCopy.description}
+              action={
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => setShowCreate(true)}
+                    data-testid="document-control-empty-new-draft"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    New draft
+                  </Button>
+                  {emptyCopy.kind === 'unpopulated' ? (
+                    <Button variant="outline" asChild data-testid="document-control-empty-library">
+                      <Link to="/documents">Open Library</Link>
+                    </Button>
+                  ) : null}
+                </div>
+              }
+            />
+          </div>
         }
       >
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
