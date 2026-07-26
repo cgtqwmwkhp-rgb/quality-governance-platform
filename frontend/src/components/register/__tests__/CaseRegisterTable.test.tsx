@@ -53,6 +53,25 @@ const columns: CaseRegisterColumn<Row>[] = [
   },
 ]
 
+/** The triage view: a cell with its own controls sitting inside an activatable row. */
+const withOwner: CaseRegisterColumn<Row>[] = [
+  ...columns,
+  {
+    key: 'owner',
+    header: 'Assign owner',
+    width: 'action',
+    isolateClicks: true,
+    hideStackedLabel: true,
+    cellTestId: (row) => `assign-${row.id}`,
+    render: (row) => (
+      <div>
+        <input placeholder="Search owner" />
+        <button type="button">Assign {row.id}</button>
+      </div>
+    ),
+  },
+]
+
 function renderRegister(overrides: Partial<Parameters<typeof CaseRegisterTable<Row>>[0]> = {}) {
   return render(
     <CaseRegisterTable
@@ -94,7 +113,7 @@ describe('CaseRegisterTable', () => {
     renderRegister()
 
     const table = screen.getByRole('table', { name: 'Near misses' })
-    expect(table.className).toContain('lg:table-fixed')
+    expect(table.className).toContain('xl:table-fixed')
     expect(table.className).toContain('w-full')
   })
 
@@ -121,7 +140,7 @@ describe('CaseRegisterTable', () => {
     const firstRow = screen.getAllByRole('row')[1]
     const stackedLabels = within(firstRow)
       .getAllByRole('cell')
-      .map((cell) => cell.querySelector('span.lg\\:hidden')?.textContent)
+      .map((cell) => cell.querySelector('span.xl\\:hidden')?.textContent)
 
     expect(stackedLabels).toEqual(['Reference', 'Details', 'Status', 'Occurred'])
   })
@@ -132,7 +151,7 @@ describe('CaseRegisterTable', () => {
     })
 
     const cell = screen.getAllByRole('cell')[0]
-    expect(cell.querySelector('span.lg\\:hidden')).toBeNull()
+    expect(cell.querySelector('span.xl\\:hidden')).toBeNull()
   })
 
   it('opens a row on click, Enter and Space', () => {
@@ -159,27 +178,23 @@ describe('CaseRegisterTable', () => {
 
   it('does not open the row when an isolated cell is clicked', () => {
     const onOpenRow = vi.fn()
-    renderRegister({
-      onOpenRow,
-      rowLabel: (row) => `View ${row.reference}`,
-      columns: [
-        ...columns,
-        {
-          key: 'owner',
-          header: 'Assign owner',
-          width: 'action',
-          isolateClicks: true,
-          hideStackedLabel: true,
-          cellTestId: (row) => `assign-${row.id}`,
-          render: (row) => <button type="button">Assign {row.id}</button>,
-        },
-      ],
-    })
+    renderRegister({ onOpenRow, rowLabel: (row) => `View ${row.reference}`, columns: withOwner })
 
     fireEvent.click(screen.getByText('Assign 1'))
 
     expect(onOpenRow).not.toHaveBeenCalled()
     expect(screen.getByTestId('assign-1')).toBeInTheDocument()
+  })
+
+  it('does not open the row when a space is typed into a control inside a cell', () => {
+    const onOpenRow = vi.fn()
+    renderRegister({ onOpenRow, rowLabel: (row) => `View ${row.reference}`, columns: withOwner })
+
+    const search = screen.getAllByPlaceholderText('Search owner')[0]
+    fireEvent.keyDown(search, { key: ' ' })
+    fireEvent.keyDown(search, { key: 'Enter' })
+
+    expect(onOpenRow).not.toHaveBeenCalled()
   })
 
   it('leaves rows inert when the register has no open action', () => {

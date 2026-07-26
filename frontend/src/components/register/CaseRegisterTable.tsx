@@ -15,11 +15,16 @@ import { cn } from '../../helpers/utils'
  *
  * Two rules fix it and both live here rather than in four page files:
  *
- *  - At `lg` and above the table is `table-fixed`, so column widths come from
+ *  - At `xl` and above the table is `table-fixed`, so column widths come from
  *    the headers and no cell can widen the table. Long values wrap or clamp
  *    inside their own column instead of stealing space from their neighbours.
- *  - Below `lg` the same markup restyles into stacked cards, each cell carrying
+ *  - Below `xl` the same markup restyles into stacked cards, each cell carrying
  *    its own visible label, so every column survives a narrow viewport.
+ *
+ * `xl` rather than `lg` because the register never gets the whole viewport:
+ * `Layout` gives the sidebar 288px and the page 32px of padding either side, so
+ * a 1024px screen leaves a 672px table — not enough for six or seven columns
+ * even with perfect widths. 1280px leaves 928px, which is.
  *
  * The `overflow-x-auto` wrapper is kept only as a safety valve for content with
  * a hard `min-width`; with `table-fixed` there is nothing for it to scroll.
@@ -28,13 +33,20 @@ import { cn } from '../../helpers/utils'
 /** Layout intent for a column. Drives its width, wrapping and clamping. */
 export type CaseRegisterColumnWidth = 'reference' | 'text' | 'badge' | 'date' | 'action'
 
-/** Fixed widths applied to the header cells; only meaningful once `table-fixed` is on. */
+/**
+ * Fixed widths for the header cells; only meaningful once `table-fixed` is on.
+ * Columns left `text` share whatever is left over, equally.
+ *
+ * `reference` is 176px because the longest reference in the platform is a near
+ * miss — `NM-2026-20033D1D`, sixteen monospace characters — and it has to fit
+ * on one line with the cell's 32px of padding.
+ */
 const HEADER_WIDTH_CLASS: Record<CaseRegisterColumnWidth, string> = {
-  reference: 'lg:w-40',
+  reference: 'xl:w-44',
   text: '',
-  badge: 'lg:w-36',
-  date: 'lg:w-36',
-  action: 'lg:w-64',
+  badge: 'xl:w-32',
+  date: 'xl:w-28',
+  action: 'xl:w-64',
 }
 
 /**
@@ -98,13 +110,20 @@ export function CaseRegisterTable<T>({
 
   return (
     <div className={cn('w-full overflow-x-auto', className)}>
-      <table className="w-full lg:table-fixed" aria-label={label}>
-        <thead className="hidden lg:table-header-group">
-          <tr className="border-b border-border">
+      {/*
+        Explicit roles because the stacked layout drops every element to
+        `display: block`, and a browser strips a table's implicit roles the
+        moment its display stops being table-like. Rows are the exception: an
+        activatable row keeps the `role="button"` the registers already used.
+      */}
+      <table className="block w-full xl:table xl:table-fixed" role="table" aria-label={label}>
+        <thead className="hidden xl:table-header-group" role="rowgroup">
+          <tr className="border-b border-border" role="row">
             {columns.map((column) => (
               <th
                 key={column.key}
                 scope="col"
+                role="columnheader"
                 className={cn(
                   'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground',
                   HEADER_WIDTH_CLASS[column.width ?? 'text'],
@@ -115,10 +134,10 @@ export function CaseRegisterTable<T>({
             ))}
           </tr>
         </thead>
-        <tbody className="block lg:table-row-group">
+        <tbody className="block xl:table-row-group" role="rowgroup">
           {rows.length === 0 ? (
-            <tr className="block lg:table-row">
-              <td colSpan={columns.length} className="block lg:table-cell">
+            <tr className="block xl:table-row" role="row">
+              <td colSpan={columns.length} className="block xl:table-cell" role="cell">
                 {empty}
               </td>
             </tr>
@@ -128,13 +147,17 @@ export function CaseRegisterTable<T>({
                 key={rowKey(row)}
                 data-testid={rowTestId}
                 className={cn(
-                  'block border-b border-border py-2 transition-colors last:border-b-0 lg:table-row lg:py-0',
+                  'block border-b border-border py-2 transition-colors last:border-b-0 xl:table-row xl:py-0',
                   interactive && 'cursor-pointer hover:bg-surface',
                 )}
                 onClick={onOpenRow ? () => onOpenRow(row) : undefined}
                 onKeyDown={
                   onOpenRow
                     ? (event) => {
+                        // Only the row's own keystrokes open it. Without this, a
+                        // space typed into the owner-search box inside a cell
+                        // bubbles up here and navigates the user off the page.
+                        if (event.target !== event.currentTarget) return
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault()
                           onOpenRow(row)
@@ -142,7 +165,7 @@ export function CaseRegisterTable<T>({
                       }
                     : undefined
                 }
-                role={interactive ? 'button' : undefined}
+                role={interactive ? 'button' : 'row'}
                 tabIndex={interactive ? 0 : undefined}
                 aria-label={interactive ? rowLabel?.(row) : undefined}
               >
@@ -152,13 +175,13 @@ export function CaseRegisterTable<T>({
                     <td
                       key={column.key}
                       data-testid={column.cellTestId?.(row)}
-                      className="flex items-baseline gap-3 px-4 py-1 text-sm lg:table-cell lg:py-3 lg:align-middle"
+                      className="flex items-baseline gap-3 px-4 py-1 text-sm xl:table-cell xl:py-3 xl:align-middle"
                       onClick={
                         column.isolateClicks ? (event) => event.stopPropagation() : undefined
                       }
                     >
                       {column.hideStackedLabel ? null : (
-                        <span className="w-28 shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground lg:hidden">
+                        <span className="w-28 shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground xl:hidden">
                           {column.header}
                         </span>
                       )}
