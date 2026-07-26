@@ -279,6 +279,13 @@ def validate_tracking_code(reference_number: str, provided_code: Optional[str]) 
 
 _PORTAL_REFERENCE_PREFIXES = ("INC-", "COMP-", "RTA-", "NM-")
 
+# One wording for every "no report for you here" outcome. The session path
+# answers 404 rather than 403 on an ownership mismatch so that it cannot
+# confirm somebody else's reference exists — which only holds if the body is
+# identical to a genuinely-unknown reference as well as the status code.
+# Keep this a single constant; two hand-written strings drifted apart before.
+_REPORT_NOT_FOUND_MESSAGE = "Report not found. Please check your reference number."
+
 # How the caller earned the right to read a report. ``tracking_code`` is the
 # anonymous grant; ``session`` additionally requires ownership of the record.
 PortalReadGrant = Literal["tracking_code", "session"]
@@ -346,7 +353,7 @@ def assert_session_owns_report(
     user_tenant = getattr(current_user, "tenant_id", None)
 
     if not record_email or record_email != user_email or (tenant_id is not None and tenant_id != user_tenant):
-        raise NotFoundError("Report not found. Please check your reference details.")
+        raise NotFoundError(_REPORT_NOT_FOUND_MESSAGE)
 
 
 _STAFF_HREF_BY_TYPE = {
@@ -1230,7 +1237,7 @@ async def track_report(
         incident = inc_result.scalar_one_or_none()
 
         if not incident:
-            raise NotFoundError("Report not found. Please check your reference number.")
+            raise NotFoundError(_REPORT_NOT_FOUND_MESSAGE)
 
         assert_session_owns_report(
             grant,
@@ -1276,7 +1283,7 @@ async def track_report(
         complaint = comp_result.scalar_one_or_none()
 
         if not complaint:
-            raise NotFoundError("Report not found. Please check your reference number.")
+            raise NotFoundError(_REPORT_NOT_FOUND_MESSAGE)
 
         assert_session_owns_report(
             grant,
@@ -1322,7 +1329,7 @@ async def track_report(
         rta = rta_result.scalar_one_or_none()
 
         if not rta:
-            raise NotFoundError("Report not found. Please check your reference number.")
+            raise NotFoundError(_REPORT_NOT_FOUND_MESSAGE)
 
         assert_session_owns_report(
             grant,
@@ -1367,7 +1374,7 @@ async def track_report(
         near_miss = nm_result.scalar_one_or_none()
 
         if not near_miss:
-            raise NotFoundError("Report not found. Please check your reference number.")
+            raise NotFoundError(_REPORT_NOT_FOUND_MESSAGE)
 
         assert_session_owns_report(
             grant,

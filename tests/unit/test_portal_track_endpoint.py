@@ -99,6 +99,13 @@ def _track(client: TestClient, reference: str, **params: str):
     return client.get(f"/api/v1/portal/reports/{reference}/", params=params)
 
 
+def _comparable(response: Any) -> dict[str, Any]:
+    """The error body minus the per-request correlation id, which always differs."""
+    body = response.json()
+    body["error"].pop("request_id", None)
+    return body
+
+
 # ---------------------------------------------------------------------------
 # PX-315 — one status code per failure mode
 # ---------------------------------------------------------------------------
@@ -184,6 +191,37 @@ def test_signed_in_user_from_another_tenant_cannot_read_the_report() -> None:
     response = _track(client, INCIDENT_REF)
 
     assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("label", "user", "params"),
+    [
+        ("no credential", None, {}),
+        ("wrong tracking code", None, {"tracking_code": "not-the-right-code"}),
+        (
+            "signed in, not the submitter",
+            SimpleNamespace(email="someone.else@example.com", tenant_id=TENANT_ID),
+            {},
+        ),
+    ],
+)
+def test_a_refused_read_never_reveals_whether_the_reference_exists(
+    label: str,
+    user: Optional[Any],
+    params: dict[str, str],
+) -> None:
+    """A caller who may not read a report must not learn whether one is there.
+
+    Every refusal is compared against the same refusal for a reference with no
+    row behind it. Status code *and* body must match, because a 404 chosen to
+    hide existence hides nothing if the wording differs — which is exactly how
+    the ownership mismatch leaked before.
+    """
+    present = _track(_client(record=_incident(), user=user), INCIDENT_REF, **params)
+    absent = _track(_client(record=None, user=user), INCIDENT_REF, **params)
+
+    assert present.status_code == absent.status_code, label
+    assert _comparable(present) == _comparable(absent), label
 
 
 def test_anonymous_submission_stays_code_only_for_signed_in_users() -> None:
