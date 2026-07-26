@@ -19,6 +19,7 @@ import { Button } from '../components/ui/Button'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Input } from '../components/ui/Input'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
+import { AsyncState } from '../components/ui/async'
 import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -82,6 +83,8 @@ export default function NearMisses() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  /** Bumped by the retry control to re-run the list effect. */
+  const [reloadToken, setReloadToken] = useState(0)
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '')
   const [statusFilter, setStatusFilter] = useState(() =>
     parseListFilter(searchParams.get('status')),
@@ -223,6 +226,10 @@ export default function NearMisses() {
   useEffect(() => {
     let cancelled = false
     const load = async () => {
+      setLoading(true)
+      // Without this the previous failure survives a successful reload, and the
+      // page shows a failure over rows that are actually current.
+      setLoadError(null)
       try {
         const ids = idsFilter.trim()
         const idCount = ids ? ids.split(',').filter((part) => part.trim()).length : 0
@@ -249,7 +256,7 @@ export default function NearMisses() {
     return () => {
       cancelled = true
     }
-  }, [page, idsFilter])
+  }, [page, idsFilter, reloadToken])
 
   const freshNearMissForm = (): NearMissCreate => ({
     reporter_name: '',
@@ -339,20 +346,25 @@ export default function NearMisses() {
           <h1 className="text-2xl font-bold text-foreground">{t('near_misses.title')}</h1>
           <p className="text-muted-foreground mt-1">{t('near_misses.subtitle')}</p>
         </div>
-        <Card>
-          <CardContent className="p-6">
-            <TableSkeleton rows={6} columns={5} />
-          </CardContent>
-        </Card>
+        <AsyncState
+          loading
+          onRetry={() => setReloadToken((token) => token + 1)}
+          retryLabel={t('common.retry', 'Try again')}
+          loadingFallback={
+            <Card>
+              <CardContent className="p-6">
+                <TableSkeleton rows={6} columns={5} />
+              </CardContent>
+            </Card>
+          }
+          data-testid="near-misses-loading"
+        />
       </div>
     )
   }
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {loadError && (
-        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{loadError}</div>
-      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{t('near_misses.title')}</h1>
@@ -377,19 +389,33 @@ export default function NearMisses() {
         </div>
       </div>
 
-      {filteredNearMisses.length === 0 ? (
-        <EmptyState
-          icon={<AlertTriangle className="w-10 h-10" />}
-          title={t('near_misses.empty.title')}
-          description={t('near_misses.empty.subtitle')}
-          action={
-            <Button onClick={() => setShowModal(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              {t('near_misses.create')}
-            </Button>
-          }
-        />
-      ) : (
+      {/* The failure banner used to sit above an empty state, so a 503 read as
+          "no near misses were reported". Only one of the two can be true. */}
+      <AsyncState
+        error={loadError}
+        isEmpty={filteredNearMisses.length === 0}
+        onRetry={() => setReloadToken((token) => token + 1)}
+        errorTitle={t('near_misses.load_failed', 'Near misses unavailable')}
+        errorDescription={t(
+          'near_misses.load_failed_hint',
+          'The register could not be read, so this is not a statement that nothing was reported.',
+        )}
+        retryLabel={t('common.retry', 'Try again')}
+        data-testid="near-misses-async"
+        empty={
+          <EmptyState
+            icon={<AlertTriangle className="w-10 h-10" />}
+            title={t('near_misses.empty.title')}
+            description={t('near_misses.empty.subtitle')}
+            action={
+              <Button onClick={() => setShowModal(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                {t('near_misses.create')}
+              </Button>
+            }
+          />
+        }
+      >
         <Card>
           <CardContent className="p-0 overflow-x-auto">
             <table className="w-full">
@@ -450,7 +476,7 @@ export default function NearMisses() {
             </table>
           </CardContent>
         </Card>
-      )}
+      </AsyncState>
 
       <Dialog
         open={showModal}
