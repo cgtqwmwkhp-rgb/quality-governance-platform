@@ -973,7 +973,12 @@ export default function DynamicFormRenderer({
       setSubmittedRef(result.reference_number)
     } catch (error) {
       trackError(error, { component: 'DynamicFormRenderer', action: 'handleSubmit' })
-      setErrors({ _form: 'Submission failed. Please try again.' })
+      // Append the real reason when there is one — "please try again" is no use
+      // to someone whose attachment was rejected for being the wrong type.
+      const reason = error instanceof Error && error.message ? error.message : ''
+      setErrors({
+        _form: reason ? `Submission failed. ${reason}` : 'Submission failed. Please try again.',
+      })
     } finally {
       setIsSubmitting(false)
     }
