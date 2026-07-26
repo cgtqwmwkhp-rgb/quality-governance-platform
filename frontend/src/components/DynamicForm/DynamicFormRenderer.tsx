@@ -10,7 +10,7 @@
  * - Offline-capable with sync
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { trackError } from '../../utils/errorTracker'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -52,21 +52,166 @@ interface DynamicFormRendererProps {
   contractOptions?: Array<{ value: string; label: string; sublabel?: string }>
   roleOptions?: Array<{ value: string; label: string }>
   medicalAssistanceOptions?: Array<{ value: string; label: string }>
+  /**
+   * Cross-field validation owned by the hosting page, keyed by field name.
+   * Runs alongside per-step validation on Continue, and across every step on
+   * Submit so a value entered on an earlier step cannot reach the server.
+   */
+  validateData?: (data: DynamicFormData) => Record<string, string>
+}
+
+// ==================== Upload Validation (PX-325 / PX-326) ====================
+
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp']
+const DOCUMENT_EXTENSIONS = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'rtf']
+const DOCUMENT_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+  'text/plain',
+  'application/rtf',
+]
+
+export function formatFileSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)}KB`
+  return `${bytes} bytes`
+}
+
+function fileExtension(name: string): string {
+  const dot = name.lastIndexOf('.')
+  return dot > 0 ? name.slice(dot + 1).toLowerCase() : ''
+}
+
+export function isAllowedUploadFile(file: File, imagesOnly: boolean): boolean {
+  const extension = fileExtension(file.name)
+  const isImage = file.type.startsWith('image/') || IMAGE_EXTENSIONS.includes(extension)
+  if (imagesOnly) return isImage
+  return isImage || DOCUMENT_EXTENSIONS.includes(extension) || DOCUMENT_MIME_TYPES.includes(file.type)
+}
+
+export interface UploadValidationResult {
+  accepted: File[]
+  errors: string[]
+}
+
+/**
+ * Screens a selection of files against the type and size rules before they are
+ * added to the form, so the user is told immediately instead of discovering the
+ * problem at submit time.
+ */
+export function validateUploadFiles(
+  files: File[],
+  options: { imagesOnly: boolean; maxBytes?: number },
+): UploadValidationResult {
+  const maxBytes = options.maxBytes ?? MAX_UPLOAD_BYTES
+  const accepted: File[] = []
+  const errors: string[] = []
+
+  for (const file of files) {
+    if (!isAllowedUploadFile(file, options.imagesOnly)) {
+      errors.push(
+        options.imagesOnly
+          ? `"${file.name}" is not an image. Upload a JPG, PNG, GIF, WEBP or HEIC file.`
+          : `"${file.name}" is not an accepted file type. Upload an image, PDF, Word, Excel, CSV or text file.`,
+      )
+      continue
+    }
+    if (file.size > maxBytes) {
+      errors.push(
+        `"${file.name}" is ${formatFileSize(file.size)}, which is over the ${formatFileSize(maxBytes)} limit.`,
+      )
+      continue
+    }
+    accepted.push(file)
+  }
+
+  return { accepted, errors }
+}
+
+// ==================== Draft Helpers (PX-300) ====================
+
+function isEmptyValue(value: unknown): boolean {
+  if (value === undefined || value === null || value === '') return true
+  if (Array.isArray(value) && value.length === 0) return true
+  return false
+}
+
+function isBinaryValue(value: unknown): boolean {
+  if (typeof File !== 'undefined' && value instanceof File) return true
+  if (typeof Blob !== 'undefined' && value instanceof Blob) return true
+  return false
+}
+
+/**
+ * Files cannot survive a JSON round-trip — they serialise to `{}` and come back
+ * as objects with no `name`, which corrupts the upload field on restore. Drop
+ * them rather than persisting placeholders.
+ */
+export function stripNonSerializableValues(data: DynamicFormData): DynamicFormData {
+  const clean: DynamicFormData = {}
+  for (const [key, value] of Object.entries(data)) {
+    if (isBinaryValue(value)) continue
+    if (Array.isArray(value)) {
+      const items = value.filter((item) => !isBinaryValue(item))
+      if (items.length !== value.length) {
+        if (items.length > 0) clean[key] = items
+        continue
+      }
+    }
+    clean[key] = value
+  }
+  return clean
+}
+
+/**
+ * A draft is only worth offering when it holds something the user actually
+ * typed. Prefilled values (name, today's date, ...) are not user input, so a
+ * draft equal to the prefill baseline must not trigger the restore prompt.
+ */
+export function draftHasUserInput(
+  draft: DynamicFormData | null,
+  baseline: DynamicFormData,
+): boolean {
+  if (!draft) return false
+  return Object.entries(draft).some(([key, value]) => {
+    if (isEmptyValue(value)) return false
+    return JSON.stringify(value) !== JSON.stringify(baseline[key])
+  })
 }
 
 // ==================== Auto-save Hook ====================
 
-function useAutoSave(formSlug: string, data: DynamicFormData, enabled: boolean) {
+function useAutoSave(
+  formSlug: string,
+  data: DynamicFormData,
+  enabled: boolean,
+  baseline: DynamicFormData,
+) {
   const storageKey = `draft_${formSlug}`
+  const baselineRef = useRef(baseline)
+  baselineRef.current = baseline
 
   useEffect(() => {
     if (!enabled) return
 
     const timer = setTimeout(() => {
+      const serializable = stripNonSerializableValues(data)
+      // Never persist a draft that is just the prefilled blank form, otherwise
+      // every abandoned page load resurfaces as a meaningless "draft found".
+      if (!draftHasUserInput(serializable, baselineRef.current)) {
+        localStorage.removeItem(storageKey)
+        return
+      }
       localStorage.setItem(
         storageKey,
         JSON.stringify({
-          data,
+          data: serializable,
           savedAt: new Date().toISOString(),
         }),
       )
@@ -80,7 +225,9 @@ function useAutoSave(formSlug: string, data: DynamicFormData, enabled: boolean) 
       const saved = localStorage.getItem(storageKey)
       if (saved) {
         const { data } = JSON.parse(saved)
-        return data
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          return data as DynamicFormData
+        }
       }
     } catch {
       // Ignore parse errors
@@ -92,11 +239,7 @@ function useAutoSave(formSlug: string, data: DynamicFormData, enabled: boolean) 
     localStorage.removeItem(storageKey)
   }, [storageKey])
 
-  const hasDraft = useCallback((): boolean => {
-    return !!localStorage.getItem(storageKey)
-  }, [storageKey])
-
-  return { loadDraft, clearDraft, hasDraft }
+  return { loadDraft, clearDraft }
 }
 
 // ==================== Field Renderer ====================
@@ -132,11 +275,26 @@ function FieldRenderer({
   })
 
   const { isLoading: geoLoading, getLocationString, error: geoError } = useGeolocation()
+  const [uploadErrors, setUploadErrors] = useState<string[]>([])
 
   const handleLocationDetect = async () => {
     const location = await getLocationString()
     if (location) {
       onChange(location)
+    }
+  }
+
+  const handleFilesSelected = (input: HTMLInputElement, imagesOnly: boolean) => {
+    const selected = input.files ? Array.from(input.files) : []
+    // Reset so re-picking the same file after a rejection fires `change` again.
+    input.value = ''
+    if (selected.length === 0) return
+
+    const existing = Array.isArray(value) ? (value as File[]) : []
+    const { accepted, errors: rejections } = validateUploadFiles(selected, { imagesOnly })
+    setUploadErrors(rejections)
+    if (accepted.length > 0) {
+      onChange([...existing, ...accepted])
     }
   }
 
@@ -448,8 +606,9 @@ function FieldRenderer({
       )
 
     case 'file':
-    case 'image':
-      const files = (value as File[]) || []
+    case 'image': {
+      const files = Array.isArray(value) ? (value as File[]) : []
+      const imagesOnly = field.field_type === 'image'
       return (
         <div className={widthClass}>
           <label className="block text-sm font-medium text-foreground mb-2">
@@ -460,25 +619,46 @@ function FieldRenderer({
             <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all">
               <Upload className="w-8 h-8 text-muted-foreground mb-2" />
               <span className="text-sm text-muted-foreground">
-                {field.field_type === 'image' ? 'Upload photos' : 'Upload files'}
+                {imagesOnly ? 'Upload photos' : 'Upload files'}
               </span>
               <input
                 type="file"
-                accept={field.field_type === 'image' ? 'image/*' : undefined}
+                data-testid={`file-input-${field.name}`}
+                accept={
+                  imagesOnly ? 'image/*' : 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf'
+                }
                 multiple
-                onChange={(e) => {
-                  if (e.target.files) {
-                    onChange([...files, ...Array.from(e.target.files)])
-                  }
-                }}
+                onChange={(e) => handleFilesSelected(e.target, imagesOnly)}
                 className="hidden"
               />
             </label>
+            <p className="text-xs text-muted-foreground">
+              {imagesOnly
+                ? `JPG, PNG, GIF, WEBP or HEIC. Up to ${formatFileSize(MAX_UPLOAD_BYTES)} per file.`
+                : `Images, PDF, Word, Excel, CSV or text. Up to ${formatFileSize(MAX_UPLOAD_BYTES)} per file.`}
+            </p>
+            {uploadErrors.length > 0 && (
+              <ul
+                data-testid={`upload-errors-${field.name}`}
+                role="alert"
+                className="space-y-1 rounded-lg bg-destructive/10 p-3"
+              >
+                {uploadErrors.map((message) => (
+                  <li
+                    key={message}
+                    className="flex items-start gap-1 text-xs text-destructive"
+                  >
+                    <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                    <span>{message}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
             {files.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {files.map((file, index) => (
                   <div
-                    key={index}
+                    key={`${file.name}-${index}`}
                     className="flex items-center gap-2 px-3 py-2 bg-muted rounded-lg"
                   >
                     <span className="text-sm text-foreground truncate max-w-[150px]">
@@ -499,6 +679,7 @@ function FieldRenderer({
           {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
         </div>
       )
+    }
 
     case 'signature':
       // Simplified signature - in production would use a canvas
@@ -588,42 +769,70 @@ export default function DynamicFormRenderer({
   contractOptions = [],
   roleOptions = [],
   medicalAssistanceOptions = [],
+  validateData,
 }: DynamicFormRendererProps) {
   const [currentStep, setCurrentStep] = useState(0)
+  const [maxStepReached, setMaxStepReached] = useState(0)
   const [formData, setFormData] = useState<DynamicFormData>(initialData)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submittedRef, setSubmittedRef] = useState<string | null>(null)
   const [showDraftPrompt, setShowDraftPrompt] = useState(false)
+  const [pendingDraft, setPendingDraft] = useState<DynamicFormData | null>(null)
+  const [draftChecked, setDraftChecked] = useState(false)
 
-  const { loadDraft, clearDraft, hasDraft } = useAutoSave(
+  // The prefill baseline is whatever the page handed us on mount. Callers build
+  // it inline, so re-reading the prop on every render would make it look like it
+  // had changed continuously.
+  const baselineRef = useRef<DynamicFormData>(initialData)
+
+  const { loadDraft, clearDraft } = useAutoSave(
     template.slug,
     formData,
-    template.allow_drafts,
+    // Pause auto-save while the restore prompt is open, so the blank form
+    // cannot overwrite the very draft being offered.
+    template.allow_drafts && !showDraftPrompt,
+    baselineRef.current,
   )
 
-  const steps = useMemo(() => template.steps.sort((a, b) => a.order - b.order), [template.steps])
-  const currentStepData = steps[currentStep]
-  const isLastStep = currentStep === steps.length - 1
-  const progress = ((currentStep + 1) / steps.length) * 100
+  // `Array.prototype.sort` mutates in place; sorting the prop array directly
+  // rewrites the caller's template on every render.
+  const steps = useMemo(
+    () => [...(template.steps ?? [])].sort((a, b) => a.order - b.order),
+    [template.steps],
+  )
+  const stepCount = steps.length
+  const activeStep = stepCount > 0 ? Math.min(currentStep, stepCount - 1) : 0
+  const currentStepData = steps[activeStep]
+  const isLastStep = stepCount > 0 && activeStep === stepCount - 1
+  const progress = stepCount > 0 ? ((activeStep + 1) / stepCount) * 100 : 0
 
-  // Check for draft on mount
+  // Offer a saved draft once on mount. Prefilled fields (name, today's date)
+  // must not suppress the offer, so compare the draft against the prefill
+  // baseline rather than checking whether any initial data exists.
   useEffect(() => {
-    if (template.allow_drafts && hasDraft() && Object.keys(initialData).length === 0) {
+    if (draftChecked) return
+    setDraftChecked(true)
+    if (!template.allow_drafts) return
+    const draft = loadDraft()
+    if (draftHasUserInput(draft, baselineRef.current)) {
+      setPendingDraft(draft)
       setShowDraftPrompt(true)
     }
-  }, [template.allow_drafts, hasDraft, initialData])
+  }, [draftChecked, template.allow_drafts, loadDraft])
 
   const handleLoadDraft = () => {
-    const draft = loadDraft()
-    if (draft) {
-      setFormData(draft)
+    if (pendingDraft) {
+      // Draft values win, but prefilled keys the draft never touched survive.
+      setFormData({ ...baselineRef.current, ...pendingDraft })
     }
+    setPendingDraft(null)
     setShowDraftPrompt(false)
   }
 
   const handleDiscardDraft = () => {
     clearDraft()
+    setPendingDraft(null)
     setShowDraftPrompt(false)
   }
 
@@ -644,6 +853,7 @@ export default function DynamicFormRenderer({
 
   const validateStep = useCallback((): boolean => {
     const stepErrors: Record<string, string> = {}
+    if (!currentStepData) return true
 
     for (const field of currentStepData.fields) {
       const value = formData[field.name]
@@ -691,22 +901,70 @@ export default function DynamicFormRenderer({
       }
     }
 
+    // Page-supplied rules, narrowed to the fields visible on this step.
+    if (validateData) {
+      const custom = validateData(formData)
+      for (const field of currentStepData.fields) {
+        const message = custom[field.name]
+        if (message && !stepErrors[field.name]) {
+          stepErrors[field.name] = message
+        }
+      }
+    }
+
     setErrors(stepErrors)
     return Object.keys(stepErrors).length === 0
-  }, [currentStepData, formData])
+  }, [currentStepData, formData, validateData])
 
-  const handleNext = () => {
-    if (validateStep()) {
-      setCurrentStep((prev) => prev + 1)
-    }
-  }
+  const handleNext = useCallback(() => {
+    if (stepCount === 0) return
+    if (!validateStep()) return
 
-  const handleBack = () => {
-    setCurrentStep((prev) => prev - 1)
-  }
+    const target = Math.min(activeStep + 1, stepCount - 1)
+    if (target === activeStep) return
+    // Guard against a second click landing before the re-render: without this
+    // both calls apply `prev + 1` and the user skips a step (and its validation).
+    setCurrentStep((prev) => (prev === activeStep ? target : prev))
+    setMaxStepReached((prev) => Math.max(prev, target))
+  }, [activeStep, stepCount, validateStep])
+
+  const handleBack = useCallback(() => {
+    // Errors belong to the step being left; carrying them back highlights
+    // same-named fields on the previous step.
+    setErrors({})
+    setCurrentStep((prev) => Math.max(prev - 1, 0))
+  }, [])
+
+  const handleStepSelect = useCallback(
+    (index: number) => {
+      if (index === activeStep || index < 0 || index > maxStepReached) return
+      setErrors({})
+      setCurrentStep(index)
+    },
+    [activeStep, maxStepReached],
+  )
 
   const handleSubmit = async () => {
     if (!validateStep()) return
+
+    // Submit validates only the final step, so a bad value captured on an
+    // earlier step would otherwise reach the server. Re-check everything and
+    // send the user back to the field at fault.
+    if (validateData) {
+      const custom = validateData(formData)
+      const failedFields = Object.keys(custom)
+      if (failedFields.length > 0) {
+        setErrors(custom)
+        const offendingStep = steps.findIndex((step) =>
+          step.fields.some((field) => failedFields.includes(field.name)),
+        )
+        if (offendingStep >= 0 && offendingStep !== activeStep) {
+          setCurrentStep(offendingStep)
+          setMaxStepReached((prev) => Math.max(prev, offendingStep))
+        }
+        return
+      }
+    }
 
     setIsSubmitting(true)
     try {
@@ -744,6 +1002,14 @@ export default function DynamicFormRenderer({
           </Button>
         )}
       </motion.div>
+    )
+  }
+
+  if (!currentStepData) {
+    return (
+      <Card className="p-6">
+        <p className="text-sm text-muted-foreground">This form has no steps configured yet.</p>
+      </Card>
     )
   }
 
@@ -793,38 +1059,46 @@ export default function DynamicFormRenderer({
           />
         </div>
         <div className="flex justify-between mt-2">
-          {steps.map((step, index) => (
-            <button
-              key={step.id}
-              onClick={() => index < currentStep && setCurrentStep(index)}
-              disabled={index > currentStep}
-              className={cn(
-                'flex items-center gap-2 text-xs font-medium transition-colors',
-                index === currentStep && 'text-primary',
-                index < currentStep && 'text-primary cursor-pointer hover:text-primary/80',
-                index > currentStep && 'text-muted-foreground cursor-not-allowed',
-              )}
-            >
-              <span
+          {steps.map((step, index) => {
+            const isCurrent = index === activeStep
+            const isVisited = index <= maxStepReached
+            const isComplete = !isCurrent && index < maxStepReached
+            return (
+              <button
+                key={step.id}
+                type="button"
+                data-testid={`step-indicator-${index}`}
+                aria-current={isCurrent ? 'step' : undefined}
+                onClick={() => handleStepSelect(index)}
+                disabled={!isVisited}
                 className={cn(
-                  'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold',
-                  index === currentStep && 'bg-primary text-primary-foreground',
-                  index < currentStep && 'bg-primary/20 text-primary',
-                  index > currentStep && 'bg-muted text-muted-foreground',
+                  'flex items-center gap-2 text-xs font-medium transition-colors',
+                  isCurrent && 'text-primary',
+                  !isCurrent && isVisited && 'text-primary cursor-pointer hover:text-primary/80',
+                  !isVisited && 'text-muted-foreground cursor-not-allowed',
                 )}
               >
-                {index < currentStep ? <Check className="w-3 h-3" /> : index + 1}
-              </span>
-              <span className="hidden sm:inline">{step.name}</span>
-            </button>
-          ))}
+                <span
+                  className={cn(
+                    'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold',
+                    isCurrent && 'bg-primary text-primary-foreground',
+                    !isCurrent && isVisited && 'bg-primary/20 text-primary',
+                    !isVisited && 'bg-muted text-muted-foreground',
+                  )}
+                >
+                  {isComplete ? <Check className="w-3 h-3" /> : index + 1}
+                </span>
+                <span className="hidden sm:inline">{step.name}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
 
       {/* Step Content */}
       <AnimatePresence mode="wait">
         <motion.div
-          key={currentStep}
+          key={activeStep}
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
@@ -839,7 +1113,7 @@ export default function DynamicFormRenderer({
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              {currentStepData.fields
+              {[...currentStepData.fields]
                 .sort((a, b) => a.order - b.order)
                 .map((field) => (
                   <div key={field.id} data-testid={`field-${field.name}`}>
@@ -869,11 +1143,11 @@ export default function DynamicFormRenderer({
       <div className="flex items-center justify-between">
         <Button
           variant="outline"
-          onClick={currentStep === 0 ? onCancel : handleBack}
+          onClick={activeStep === 0 ? onCancel : handleBack}
           disabled={isSubmitting}
         >
           <ChevronLeft className="w-4 h-4 mr-2" />
-          {currentStep === 0 ? 'Cancel' : 'Back'}
+          {activeStep === 0 ? 'Cancel' : 'Back'}
         </Button>
 
         <div className="flex items-center gap-3">

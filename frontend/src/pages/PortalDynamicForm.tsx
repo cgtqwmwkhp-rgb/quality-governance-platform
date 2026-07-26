@@ -8,7 +8,7 @@
  * 4. Handles submission to the portal API
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
@@ -29,7 +29,7 @@ interface PortalDynamicFormProps {
 }
 
 // Portal report submission - uses public endpoint (no auth required)
-interface PortalReportPayload {
+export interface PortalReportPayload {
   report_type: 'incident' | 'complaint' | 'rta' | 'near_miss'
   title: string
   description: string
@@ -42,6 +42,144 @@ interface PortalReportPayload {
   department?: string
   is_anonymous: boolean
   reporter_submission?: Record<string, unknown>
+}
+
+/**
+ * Mirrors the `reporter_phone` constraint on QuickReportCreate
+ * (`src/api/routes/employee_portal.py`). Anything longer is rejected by
+ * Pydantic with a 422 covering the whole submission, so it has to be caught
+ * here rather than sent and hoped for.
+ */
+export const REPORTER_PHONE_MAX_LENGTH = 20
+
+export type ContactKind = 'email' | 'phone' | 'unknown'
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const PHONE_PATTERN = /^\+?[\d\s().-]+$/
+
+/**
+ * The complaint form collects "Phone or email" in a single free-text field, so
+ * the value has to be classified before it can be mapped onto a typed API field.
+ */
+export function classifyContactValue(raw: unknown): { kind: ContactKind; value: string } {
+  const value = raw === undefined || raw === null ? '' : String(raw).trim()
+  if (!value) return { kind: 'unknown', value: '' }
+  if (EMAIL_PATTERN.test(value)) return { kind: 'email', value }
+  const digitCount = value.replace(/\D/g, '').length
+  if (PHONE_PATTERN.test(value) && digitCount >= 6) return { kind: 'phone', value }
+  return { kind: 'unknown', value }
+}
+
+/**
+ * Client-side rules that stop a submission the API would reject outright.
+ * Keyed by form field name so DynamicFormRenderer can show them inline.
+ */
+export function validatePortalFormData(formData: DynamicFormData): Record<string, string> {
+  const errors: Record<string, string> = {}
+
+  const contact = classifyContactValue(formData.complainant_contact)
+  if (contact.kind === 'phone' && contact.value.length > REPORTER_PHONE_MAX_LENGTH) {
+    errors.complainant_contact =
+      `Phone numbers must be ${REPORTER_PHONE_MAX_LENGTH} characters or fewer ` +
+      `(this one is ${contact.value.length}). Shorten the number, or enter an email address instead.`
+  }
+
+  return errors
+}
+
+interface BuildPayloadArgs {
+  formType: string
+  formData: DynamicFormData
+  templateName?: string
+  user?: { name?: string; email?: string } | null
+}
+
+// Map form type to correct report type for proper routing
+const REPORT_TYPE_MAP: Record<string, 'incident' | 'complaint' | 'rta' | 'near_miss'> = {
+  incident: 'incident',
+  complaint: 'complaint',
+  rta: 'rta',
+  'near-miss': 'near_miss',
+  near_miss: 'near_miss',
+}
+
+export function buildPortalReportPayload({
+  formType,
+  formData,
+  templateName,
+  user,
+}: BuildPayloadArgs): PortalReportPayload {
+  const reportType = REPORT_TYPE_MAP[formType] || 'incident'
+
+  // Extract description - try multiple possible field names
+  const descriptionRaw =
+    formData.description ||
+    formData.complaint_description ||
+    formData.full_description ||
+    formData.what_happened ||
+    ''
+  // Ensure minimum length for API validation (10 chars required)
+  const baseDescription =
+    String(descriptionRaw).trim().length >= 10
+      ? String(descriptionRaw).trim()
+      : `${templateName || 'Report'} submitted via portal. ${String(descriptionRaw || 'No additional details provided.')}`
+
+  // Build a descriptive title (minimum 5 chars required)
+  const contractName = formData.contract ? String(formData.contract) : ''
+  const locationName = formData.location ? String(formData.location) : ''
+  const titleSuffix = contractName || locationName || 'Report'
+  const title = `${templateName || 'Incident Report'} - ${titleSuffix}`.substring(0, 200)
+
+  const customerCode = formData.contract ? String(formData.contract) : ''
+
+  // PX-281: the complaint form's single "Contact Details" field used to be
+  // written straight into `reporter_phone`. Emails routinely exceed the API's
+  // 20-char phone limit and 422'd the entire submission. Send the value to the
+  // field that actually represents it, and never drop it.
+  const contact = classifyContactValue(formData.complainant_contact)
+  // Keep the authenticated user's email: My Reports linkage depends on it.
+  let reporterEmail = user?.email || undefined
+  let reporterPhone: string | undefined
+  const extraDetails: string[] = []
+
+  if (contact.kind === 'phone' && contact.value.length <= REPORTER_PHONE_MAX_LENGTH) {
+    reporterPhone = contact.value
+  } else if (contact.kind === 'email') {
+    if (!reporterEmail) {
+      reporterEmail = contact.value
+    } else if (reporterEmail.trim().toLowerCase() !== contact.value.toLowerCase()) {
+      extraDetails.push(`Complainant contact: ${contact.value}`)
+    }
+  } else if (contact.value) {
+    // Free-text, or a phone too long for the API field. Surfaced in the case
+    // body instead of being truncated or silently discarded.
+    extraDetails.push(`Complainant contact: ${contact.value}`)
+  }
+
+  const description = extraDetails.length
+    ? `${baseDescription}\n\n${extraDetails.join('\n')}`
+    : baseDescription
+
+  return {
+    report_type: reportType,
+    title: title.length >= 5 ? title : `${templateName || 'Report'} - Submitted`,
+    description,
+    location: formData.location ? String(formData.location) : undefined,
+    severity: formData.severity ? String(formData.severity) : 'medium',
+    reporter_name: formData.person_name
+      ? String(formData.person_name)
+      : formData.complainant_name
+        ? String(formData.complainant_name)
+        : user?.name,
+    reporter_email: reporterEmail,
+    reporter_phone: reporterPhone,
+    // Near miss only: department bridges customer → NearMiss.contract (do not stuff incidents).
+    ...(reportType === 'near_miss' && customerCode ? { department: customerCode } : {}),
+    is_anonymous: false,
+    // Full reporter-entered snapshot, so the raw contact value is always
+    // retrievable by an investigator regardless of how it was mapped above.
+    reporter_submission: { ...formData },
+  }
 }
 
 interface PortalReportResponse {
@@ -865,80 +1003,36 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
     }
   }, [formType])
 
-  // Pre-fill user data
-  const initialData: DynamicFormData = user
-    ? {
-        person_name: user.name,
-        person_contact: user.email,
-        incident_date: new Date().toISOString().split('T')[0],
-        incident_time: new Date().toTimeString().slice(0, 5),
-        complaint_date: new Date().toISOString().split('T')[0],
-      }
-    : {
-        incident_date: new Date().toISOString().split('T')[0],
-        incident_time: new Date().toTimeString().slice(0, 5),
-        complaint_date: new Date().toISOString().split('T')[0],
-      }
+  // Pre-fill user data. Memoised so DynamicFormRenderer sees a stable baseline
+  // (a fresh object each render made draft detection re-run continuously).
+  const initialData: DynamicFormData = useMemo(() => {
+    const now = new Date()
+    const today = now.toISOString().split('T')[0]
+    const base: DynamicFormData = {
+      incident_date: today,
+      incident_time: now.toTimeString().slice(0, 5),
+      complaint_date: today,
+    }
+    if (!user) return base
+    return { ...base, person_name: user.name, person_contact: user.email }
+  }, [user])
+
+  const validateData = useCallback(
+    (formData: DynamicFormData) => validatePortalFormData(formData),
+    [],
+  )
 
   const handleSubmit = async (formData: DynamicFormData): Promise<{ reference_number: string }> => {
     if (import.meta.env.DEV) {
       console.log('[PortalDynamicForm] Form data received:', formData)
     }
 
-    // Build the portal report payload from dynamic form data
-    // Map form type to correct report type for proper routing
-    const reportTypeMap: Record<string, 'incident' | 'complaint' | 'rta' | 'near_miss'> = {
-      incident: 'incident',
-      complaint: 'complaint',
-      rta: 'rta',
-      'near-miss': 'near_miss',
-      near_miss: 'near_miss',
-    }
-    const reportType = reportTypeMap[formType] || 'incident'
-
-    // Extract description - try multiple possible field names
-    const descriptionRaw =
-      formData.description ||
-      formData.complaint_description ||
-      formData.full_description ||
-      formData.what_happened ||
-      ''
-    // Ensure minimum length for API validation (10 chars required)
-    const description =
-      String(descriptionRaw).trim().length >= 10
-        ? String(descriptionRaw).trim()
-        : `${template?.name || 'Report'} submitted via portal. ${String(descriptionRaw || 'No additional details provided.')}`
-
-    // Build a descriptive title (minimum 5 chars required)
-    const contractName = formData.contract ? String(formData.contract) : ''
-    const locationName = formData.location ? String(formData.location) : ''
-    const titleSuffix = contractName || locationName || 'Report'
-    const title = `${template?.name || 'Incident Report'} - ${titleSuffix}`.substring(0, 200)
-
-    const customerCode = formData.contract ? String(formData.contract) : ''
-
-    const payload: PortalReportPayload = {
-      report_type: reportType,
-      title: title.length >= 5 ? title : `${template?.name || 'Report'} - Submitted`,
-      description: description,
-      location: formData.location ? String(formData.location) : undefined,
-      severity: formData.severity ? String(formData.severity) : 'medium',
-      reporter_name: formData.person_name
-        ? String(formData.person_name)
-        : formData.complainant_name
-          ? String(formData.complainant_name)
-          : user?.name,
-      // CRITICAL: reporter_email MUST match authenticated user's email for My Reports linkage
-      // Always use the authenticated user's email, not form input (which may be a phone number)
-      reporter_email: user?.email || undefined,
-      reporter_phone: formData.complainant_contact
-        ? String(formData.complainant_contact)
-        : undefined,
-      // Near miss only: department bridges customer → NearMiss.contract (do not stuff incidents).
-      ...(reportType === 'near_miss' && customerCode ? { department: customerCode } : {}),
-      is_anonymous: false,
-      reporter_submission: { ...formData },
-    }
+    const payload = buildPortalReportPayload({
+      formType,
+      formData,
+      templateName: template?.name,
+      user,
+    })
 
     if (import.meta.env.DEV) {
       console.log('[PortalDynamicForm] Submitting payload:', payload)
@@ -1060,6 +1154,7 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
           contractOptions={contractOptions}
           roleOptions={roleOptions}
           medicalAssistanceOptions={medicalAssistanceOptions}
+          validateData={validateData}
         />
       </main>
     </div>
