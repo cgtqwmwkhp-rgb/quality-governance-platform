@@ -12,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.domain.services.form_config_service import FormConfigService
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.form_config import (
     ContractCreate,
@@ -265,6 +266,9 @@ async def update_form_template(
     update_data = data.model_dump(exclude_unset=True)
     if update_data.get("is_published") is False:
         template.published_at = None
+    if update_data.get("is_published") is True and not template.is_published:
+        service = FormConfigService(db)
+        await service.validate_template_publishable(template_id, tenant_id=current_user.tenant_id)
     for field, value in update_data.items():
         setattr(template, field, value)
 
@@ -298,37 +302,13 @@ async def publish_form_template(
     request_id: str = Depends(get_request_id),
 ) -> FormTemplate:
     """Publish a form template to make it available in the portal."""
-    result = await db.execute(
-        select(FormTemplate).where(
-            FormTemplate.id == template_id,
-            FormTemplate.tenant_id == current_user.tenant_id,
-        )
-    )
-    template = result.scalar_one_or_none()
-
-    if not template:
-        raise NotFoundError(f"Form template {template_id} not found")
-
-    template.is_published = True
-    template.published_at = datetime.now(timezone.utc)
-    template.updated_by_id = current_user.id
-
-    await db.commit()
-    await db.refresh(template)
-
-    await record_audit_event(
-        db=db,
-        event_type="form_template.published",
-        entity_type="form_template",
-        entity_id=template.id,
-        action="published",
+    service = FormConfigService(db)
+    return await service.publish_template(
+        template_id,
         user_id=current_user.id,
-        payload={"published_at": template.published_at.isoformat()},
-        request_id=request_id,
         tenant_id=current_user.tenant_id,
+        request_id=request_id,
     )
-
-    return template
 
 
 @router.delete("/templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
