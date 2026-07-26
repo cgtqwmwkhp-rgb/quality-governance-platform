@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Save, CheckCircle, Sparkles } from 'lucide-react'
+import { IconButton } from '../../components/ui/IconButton'
 
 export interface TemplateHeaderProps {
   templateName: string
@@ -41,18 +42,20 @@ export default function TemplateHeader({
       <div className="max-w-7xl mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button
+            <IconButton
+              label={t('common.back')}
               onClick={onBack}
-              className="p-2 hover:bg-secondary rounded-lg transition-colors"
+              className="h-auto w-auto p-2 hover:bg-secondary rounded-lg transition-colors"
             >
-              <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-            </button>
+              <ArrowLeft className="w-5 h-5 text-muted-foreground" aria-hidden="true" />
+            </IconButton>
             <div>
               <input
                 type="text"
                 value={templateName}
                 onChange={(e) => onNameChange(e.target.value)}
                 placeholder={t('audit_builder.untitled_template')}
+                aria-label={t('audit_builder.template_name', 'Template name')}
                 className="bg-transparent text-xl font-bold text-foreground placeholder:text-muted-foreground focus:outline-none"
               />
               <div className="flex items-center gap-2 mt-1">

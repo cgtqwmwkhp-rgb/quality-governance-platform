@@ -1,6 +1,8 @@
 // UI Components - Plantexpand Design System
 
 export { Button, buttonVariants } from './Button'
+export { IconButton, iconOnlyControlProps } from './IconButton'
+export type { IconButtonProps, IconOnlyControlProps } from './IconButton'
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent } from './Card'
 export { Badge, badgeVariants } from './Badge'
 export { Input } from './Input'
