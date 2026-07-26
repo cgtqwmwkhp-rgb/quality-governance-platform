@@ -226,6 +226,10 @@ export default function NearMisses() {
   useEffect(() => {
     let cancelled = false
     const load = async () => {
+      setLoading(true)
+      // Without this the previous failure survives a successful reload and the
+      // page shows a failure banner over rows that are actually current.
+      setLoadError(null)
       try {
         const ids = idsFilter.trim()
         const idCount = ids ? ids.split(',').filter((part) => part.trim()).length : 0
