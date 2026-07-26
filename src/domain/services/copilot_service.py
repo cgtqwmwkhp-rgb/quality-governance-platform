@@ -406,9 +406,7 @@ class CopilotService:
         )
 
         # Create incident — honest refusal, never "Shall I proceed?" + false success (PX-250).
-        if "incident" in message_lower and any(
-            word in message_lower for word in ("create", "log", "report", "new")
-        ):
+        if "incident" in message_lower and any(word in message_lower for word in ("create", "log", "report", "new")):
             return (
                 write_refusal,
                 {

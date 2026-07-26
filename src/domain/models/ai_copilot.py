@@ -85,7 +85,9 @@ class CopilotMessage(Base):
     action_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     action_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     action_result: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    action_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # pending, completed, failed, not_performed
+    action_status: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )  # pending, completed, failed, not_performed
 
     # AI metadata
     model_used: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
