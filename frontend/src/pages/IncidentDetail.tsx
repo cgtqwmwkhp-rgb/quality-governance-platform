@@ -10,6 +10,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { CardSkeleton } from '../components/ui/SkeletonLoader'
+import { AsyncState, ErrorState } from '../components/ui/async'
 import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
 import { resolveIncidentDetailTab } from './incidentStandardsTab'
 import { displayIncidentText } from './incidentTextDisplay'
@@ -183,6 +184,7 @@ function buildIncidentEditForm(data: Incident): IncidentUpdate {
 export default function IncidentDetail() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
+  const routeIncidentId = id && /^\d+$/.test(id) ? Number(id) : null
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const defaultTab = resolveIncidentDetailTab(searchParams.get('tab'))
@@ -284,11 +286,16 @@ export default function IncidentDetail() {
   })
 
   useEffect(() => {
-    if (id) {
-      loadIncident(parseInt(id))
+    if (routeIncidentId === null) {
+      // Without a usable id there is nothing to fetch, and nothing would ever
+      // clear `loading` — leaving the skeleton on screen for good (PX-170).
+      setError(t('incidents.detail.failed_to_load'))
+      setLoading(false)
+      return
     }
+    loadIncident(routeIncidentId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id])
+  }, [routeIncidentId])
 
   useEffect(() => {
     let cancelled = false
@@ -347,6 +354,7 @@ export default function IncidentDetail() {
 
   const loadIncident = async (incidentId: number) => {
     setError(null)
+    setLoading(true)
     try {
       const response = await incidentsApi.get(incidentId)
       setIncident(response.data)
@@ -357,10 +365,15 @@ export default function IncidentDetail() {
       loadRunningSheet(incidentId)
     } catch (err) {
       trackError(err, { component: 'IncidentDetail', action: 'loadIncident' })
-      setError(t('incidents.detail.failed_to_load'))
+      setError(getApiErrorMessage(err, t('incidents.detail.failed_to_load')))
     } finally {
       setLoading(false)
     }
+  }
+
+  const retryLoadIncident = () => {
+    if (routeIncidentId === null) return
+    void loadIncident(routeIncidentId)
   }
 
   const loadActions = async () => {
@@ -779,20 +792,31 @@ export default function IncidentDetail() {
     }
   }
 
-  if (loading) {
-    return <CardSkeleton count={3} />
-  }
-
-  if (!incident) {
+  if (loading || !incident) {
+    // Precedence matters here: a 503 or a timeout must not be reported as
+    // "incident not found", which tells the user the case does not exist
+    // (PX-170). Only a load that actually succeeded may say that.
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <AlertTriangle className="w-12 h-12 text-muted-foreground" />
-        <p className="text-muted-foreground">{t('incidents.detail.not_found')}</p>
-        <Button variant="outline" onClick={() => navigate('/incidents')}>
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          {t('incidents.back')}
-        </Button>
-      </div>
+      <AsyncState
+        loading={loading}
+        error={error}
+        isEmpty={!incident}
+        onRetry={routeIncidentId === null ? undefined : retryLoadIncident}
+        loadingFallback={<CardSkeleton count={3} />}
+        errorTitle={t('incidents.detail.failed_to_load')}
+        retryLabel={t('incidents.detail.try_again')}
+        data-testid="incident-detail-async"
+        empty={
+          <div className="flex flex-col items-center justify-center h-64 gap-4">
+            <AlertTriangle className="w-12 h-12 text-muted-foreground" />
+            <p className="text-muted-foreground">{t('incidents.detail.not_found')}</p>
+            <Button variant="outline" onClick={() => navigate('/incidents')}>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              {t('incidents.back')}
+            </Button>
+          </div>
+        }
+      />
     )
   }
 
@@ -870,19 +894,16 @@ export default function IncidentDetail() {
         ]}
       />
 
+      {/* Reached when a refresh fails over an incident that already loaded:
+          the record below is stale, so say so rather than silently keeping it. */}
       {error && (
-        <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
-          <p className="text-sm text-destructive">{error}</p>
-          <button
-            onClick={() => {
-              setError(null)
-              if (id) loadIncident(parseInt(id))
-            }}
-            className="text-sm font-medium text-destructive hover:underline"
-          >
-            {t('incidents.detail.try_again')}
-          </button>
-        </div>
+        <ErrorState
+          title={t('incidents.detail.failed_to_load')}
+          message={error}
+          onRetry={routeIncidentId === null ? undefined : retryLoadIncident}
+          retryLabel={t('incidents.detail.try_again')}
+          data-testid="incident-detail-refresh-error"
+        />
       )}
 
       {/* Header */}

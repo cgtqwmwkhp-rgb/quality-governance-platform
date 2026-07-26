@@ -25,6 +25,7 @@ import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Card, CardContent } from '../ui/Card'
 import { Input } from '../ui/Input'
+import { ErrorState } from '../ui/async'
 import { cn } from '../../helpers/utils'
 import { getSuggestedSearches } from './suggestedSearches'
 import type { useGlobalSearch } from './useGlobalSearch'
@@ -90,6 +91,7 @@ export default function GlobalSearchPanel({
     searchHistory,
     totalResults,
     interpreted,
+    searchError,
     inputRef,
     handleSearch,
     handleKeyDown,
@@ -97,6 +99,7 @@ export default function GlobalSearchPanel({
     applyFilter,
     runSuggested,
     selectResult,
+    retrySearch,
   } = search
 
   const interpretedLabel =
@@ -370,7 +373,25 @@ export default function GlobalSearchPanel({
         </div>
       )}
 
-      {query && !isSearching && results.length === 0 && (
+      {/* A failed search is not an absent record. Telling someone "no results"
+          after the API returned 503 is a confident false negative (PX-181). */}
+      {query && !isSearching && searchError !== null && (
+        <div className={cn(!compact && 'max-w-4xl mx-auto')}>
+          <ErrorState
+            title={t('search.failed_title', 'Search is unavailable')}
+            description={t(
+              'search.failed_hint',
+              'This is a problem reaching the server, not a sign that the record does not exist.',
+            )}
+            message={searchError}
+            onRetry={retrySearch}
+            retryLabel={t('common.retry', 'Try again')}
+            data-testid="global-search-error"
+          />
+        </div>
+      )}
+
+      {query && !isSearching && searchError === null && results.length === 0 && (
         <div className={cn('text-center py-8', !compact && 'max-w-4xl mx-auto')}>
           <Search className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
           <h3 className="text-lg font-semibold text-foreground mb-1">
