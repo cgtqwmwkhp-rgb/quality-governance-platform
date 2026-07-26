@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import PortalWork from '../PortalWork'
@@ -208,6 +208,45 @@ describe('PortalWork CUJ-P10', () => {
     )
     expect(screen.getByText(/Show 1 compliant module/i)).toBeInTheDocument()
     openSpy.mockRestore()
+  })
+
+  it('labels modules without a QGP due date as Not started, not Overdue (PX-307)', async () => {
+    mockGetByUserMe.mockResolvedValue({
+      data: {
+        linked: true,
+        id: 10,
+        external_id: 'eng-1',
+        user_id: 42,
+        job_title: 'Field Engineer',
+        employee_number: 'E-42',
+        is_active: true,
+      },
+    })
+    mockMyTraining.mockResolvedValue({
+      items: [
+        {
+          atlas_name: 'David Harris',
+          course_key: 'hand-hygiene',
+          course_display_name: 'Hand Hygiene',
+          frequency_years: 1,
+          status: 'missing',
+          qgp_due_on: null,
+          expires_on: null,
+          passed_on: null,
+          atlas_hub_url: 'https://www.atlas-hub.co.uk/o/test/',
+          expiry_without_passed: false,
+        },
+      ],
+      total: 1,
+      atlas_hub_url: 'https://www.atlas-hub.co.uk/o/test/',
+    })
+
+    renderPage()
+
+    expect(await screen.findByTestId('portal-work-training-gaps')).toBeInTheDocument()
+    const gaps = screen.getByTestId('portal-work-training-gaps')
+    expect(within(gaps).getByText('Not started')).toBeInTheDocument()
+    expect(within(gaps).queryByText('Overdue')).not.toBeInTheDocument()
   })
 
   it('shows honest empty actions when server returns none', async () => {

@@ -3739,5 +3739,5 @@
   "safetyInsights.run": "Rhedeg dadansoddiad dwfn",
   "safetyInsights.startFailed": "Methwyd â chychwyn dadansoddiad dwfn.",
   "safetyInsights.microThemes": "Micro-themâu",
-  "incidents.search.register_scope": "Chwilio’r gofrestr digwyddiadau lawn am \"{{query}}\"."
+  "incidents.search.register_scope": "Chwilio'r gofrestr digwyddiadau lawn am \"{{query}}\"."
 }
