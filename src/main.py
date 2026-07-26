@@ -242,6 +242,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     pool_metrics_task: asyncio.Task[None] | None = None
 
+    if _os.environ.get("TESTING") != "1":
+        try:
+            from src.domain.services.lookup_defaults_seed import seed_lookup_defaults
+            from src.infrastructure.database import async_session_maker
+
+            async with async_session_maker() as session:
+                seed_result = await seed_lookup_defaults(session)
+                if seed_result.rows_inserted:
+                    logger.info(
+                        "Lookup defaults seeded at startup",
+                        extra={
+                            "rows_inserted": seed_result.rows_inserted,
+                            "categories_seeded": seed_result.categories_seeded,
+                        },
+                    )
+        except Exception as exc:
+            logger.warning("Lookup defaults startup seed failed (non-fatal): %s", exc)
+
     async def _pool_metrics_loop() -> None:
         interval_s = 60.0
         while True:

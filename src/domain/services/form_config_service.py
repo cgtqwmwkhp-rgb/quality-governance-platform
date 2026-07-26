@@ -17,9 +17,14 @@ from sqlalchemy.orm import selectinload
 
 from src.core.update import apply_updates
 from src.domain.error_codes import ErrorCode
-from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
+from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.form_publish_validation import (
+    collect_required_lookup_categories,
+    validate_form_template_publishable,
+)
+from src.domain.services.lookup_defaults_seed import count_active_lookup_options
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
@@ -238,6 +243,30 @@ class FormConfigService:
 
         return template
 
+    async def _lookup_counts_for_template(self, template: FormTemplate, tenant_id: int) -> dict[str, int]:
+        categories = collect_required_lookup_categories(template)
+        counts: dict[str, int] = {}
+        for category in categories:
+            counts[category] = await count_active_lookup_options(self.db, tenant_id=tenant_id, category=category)
+        return counts
+
+    async def _get_template_for_publish(self, template_id: int, tenant_id: int) -> FormTemplate:
+        result = await self.db.execute(
+            select(FormTemplate)
+            .where(FormTemplate.id == template_id, FormTemplate.tenant_id == tenant_id)
+            .options(selectinload(FormTemplate.steps).selectinload(FormStep.fields))
+        )
+        template = result.scalar_one_or_none()
+        if template is None:
+            raise NotFoundError(f"FormTemplate with ID {template_id} not found")
+        return template
+
+    async def validate_template_publishable(self, template_id: int, *, tenant_id: int) -> None:
+        """Raise ValidationError when required lookup-backed fields have no options."""
+        template = await self._get_template_for_publish(template_id, tenant_id)
+        lookup_counts = await self._lookup_counts_for_template(template, tenant_id)
+        validate_form_template_publishable(template, lookup_counts)
+
     async def publish_template(
         self,
         template_id: int,
@@ -247,7 +276,9 @@ class FormConfigService:
         request_id: str,
     ) -> FormTemplate:
         """Publish a form template to make it available in the portal."""
-        template = await self._get_or_raise(FormTemplate, template_id, tenant_id=tenant_id)
+        template = await self._get_template_for_publish(template_id, tenant_id)
+        lookup_counts = await self._lookup_counts_for_template(template, tenant_id)
+        validate_form_template_publishable(template, lookup_counts)
 
         template.is_published = True
         template.published_at = datetime.now(timezone.utc)
