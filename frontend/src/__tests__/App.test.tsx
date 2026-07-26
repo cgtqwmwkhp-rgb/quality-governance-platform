@@ -153,9 +153,68 @@ vi.mock('../pages/admin/PartnerWebhooks', () => ({ default: () => <div>PartnerWe
 describe('App', () => {
   beforeEach(() => {
     localStorage.clear()
+    sessionStorage.clear()
     window.history.pushState({}, '', '/')
     isAIIntelligenceRouteEnabledMock.mockReset()
     isAIIntelligenceRouteEnabledMock.mockReturnValue(false)
+  })
+
+  // PX-179: an expired session dropped the user on /login with no route back
+  // to the work they were in the middle of.
+  it('remembers where an unauthenticated visitor was headed', async () => {
+    window.history.pushState({}, '', '/help?topic=audits')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(screen.getByTestId('login-page')).toBeInTheDocument()
+    expect(sessionStorage.getItem('auth_return_path')).toBe('/help?topic=audits')
+  })
+
+  it('returns the user to where the session ended once they sign back in', async () => {
+    sessionStorage.setItem('auth_return_path', '/help')
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/login')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(await screen.findByText('StaffHelp')).toBeInTheDocument()
+    // Consumed, so a later sign-in starts from the dashboard again.
+    expect(sessionStorage.getItem('auth_return_path')).toBeNull()
+  })
+
+  it('falls back to the dashboard when there is nothing to return to', async () => {
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/login')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(await screen.findByTestId('dashboard-page')).toBeInTheDocument()
+  })
+
+  it('ignores a return path that would redirect off-origin', async () => {
+    sessionStorage.setItem('auth_return_path', '//evil.example/phish')
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/login')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(await screen.findByTestId('dashboard-page')).toBeInTheDocument()
   })
 
   it('renders login page when no token in localStorage', async () => {

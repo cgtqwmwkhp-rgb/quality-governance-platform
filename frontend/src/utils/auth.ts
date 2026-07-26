@@ -19,6 +19,73 @@ const PORTAL_REFRESH_TOKEN_KEY = 'platform_refresh_token'
 const PORTAL_USER_KEY = 'portal_user'
 const PORTAL_SESSION_TIME_KEY = 'portal_session_time'
 const PORTAL_ID_TOKEN_KEY = 'portal_id_token'
+const RETURN_PATH_KEY = 'auth_return_path'
+
+/** Login surfaces — never a useful place to send someone back to. */
+const LOGIN_PATHS = ['/login', '/portal/login', '/forgot-password', '/reset-password']
+
+/**
+ * Whether a stored return path is safe to navigate to after sign-in.
+ *
+ * Only same-origin, app-relative paths qualify. A value that starts with `//`
+ * or `/\` is protocol-relative and would leave the origin entirely, so it is
+ * rejected — otherwise an attacker who can seed sessionStorage (an XSS on any
+ * subdomain sharing the origin, a malicious extension) turns re-login into an
+ * open redirect to a credential-harvesting clone.
+ */
+export function isSafeReturnPath(path: string | null | undefined): path is string {
+  if (!path) return false
+  if (!path.startsWith('/')) return false
+  if (path.startsWith('//') || path.startsWith('/\\')) return false
+  const [pathname] = path.split(/[?#]/)
+  return !LOGIN_PATHS.includes(pathname)
+}
+
+/**
+ * Remember where the user was so sign-in can put them back.
+ *
+ * Stored in sessionStorage rather than localStorage so the return path dies
+ * with the tab and cannot resurrect a stale destination weeks later.
+ */
+export function stashReturnPath(path: string): void {
+  if (!isSafeReturnPath(path)) return
+  try {
+    sessionStorage.setItem(RETURN_PATH_KEY, path)
+  } catch {
+    // Private-mode quota failures must never block the auth flow.
+  }
+}
+
+/** Read and remove the stashed return path, if it is still safe to use. */
+export function consumeReturnPath(): string | null {
+  let stored: string | null = null
+  try {
+    stored = sessionStorage.getItem(RETURN_PATH_KEY)
+    sessionStorage.removeItem(RETURN_PATH_KEY)
+  } catch {
+    return null
+  }
+  return isSafeReturnPath(stored) ? stored : null
+}
+
+/** Read the stashed return path without consuming it. */
+export function peekReturnPath(): string | null {
+  try {
+    const stored = sessionStorage.getItem(RETURN_PATH_KEY)
+    return isSafeReturnPath(stored) ? stored : null
+  } catch {
+    return null
+  }
+}
+
+/** Forget any stashed return path (deliberate sign-out). */
+export function clearReturnPath(): void {
+  try {
+    sessionStorage.removeItem(RETURN_PATH_KEY)
+  } catch {
+    // Nothing to do — a missing stash is the desired end state anyway.
+  }
+}
 
 /**
  * Get the platform refresh token (portal/SSO only).
@@ -71,8 +138,17 @@ export function clearTokens(): void {
 
 /**
  * Clear tokens plus portal profile / OAuth scratch keys (full auth wipe).
+ *
+ * Records where the user was standing before wiping state (PX-179). Every
+ * auth-loss path already funnels through here — including the hard
+ * `location.href` redirect in `api/client.ts` — so capturing it here is what
+ * makes the return path survive a full page navigation. Deliberate sign-out
+ * calls `clearReturnPath()` afterwards so logging out does not resume.
  */
 export function clearAuthState(): void {
+  if (typeof window !== 'undefined') {
+    stashReturnPath(`${window.location.pathname}${window.location.search}`)
+  }
   clearTokens()
   localStorage.removeItem(PORTAL_USER_KEY)
   localStorage.removeItem(PORTAL_SESSION_TIME_KEY)
@@ -180,6 +256,26 @@ export const TOKEN_SKEW_SECONDS = 120
  * Used by the session-keepalive hook to keep long audit sessions warm.
  */
 export const TOKEN_REFRESH_LEAD_SECONDS = 300
+
+/**
+ * Warn the user this many seconds before `exp`.
+ *
+ * Deliberately well inside TOKEN_REFRESH_LEAD_SECONDS: silent refresh is
+ * attempted at 300s out, so if we are still counting down at 120s the
+ * keepalive has already failed and the session really is about to end. That
+ * makes the warning meaningful rather than routine noise (PX-179).
+ */
+export const SESSION_WARNING_LEAD_SECONDS = 120
+
+/**
+ * Seconds until the token's `exp`, or null when there is no readable expiry.
+ * Negative once the token has passed `exp`.
+ */
+export function getSecondsUntilExpiry(token: string): number | null {
+  const exp = getTokenExpirySeconds(token)
+  if (exp === null) return null
+  return exp - Math.floor(Date.now() / 1000)
+}
 
 /**
  * Read the JWT `exp` claim (unix seconds) or null if absent/invalid.

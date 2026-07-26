@@ -12,7 +12,10 @@ import {
   getValidPlatformToken,
   establishPlatformSession,
   clearAuthState,
+  clearReturnPath,
+  consumeReturnPath,
   revokeSession,
+  stashReturnPath,
 } from './utils/auth'
 import { useFeatureFlag } from './hooks/useFeatureFlag'
 import { isAIIntelligenceRouteEnabled } from './config/aiIntelligenceRoute'
@@ -193,6 +196,33 @@ function RedirectToRiskRegister() {
   return <Navigate to={`/risk-register${search}`} replace />
 }
 
+/**
+ * Send an unauthenticated visitor to sign in, remembering where they were
+ * heading (PX-179).
+ *
+ * Stashing during render is safe here: the value is derived purely from the
+ * current location and writing it twice (StrictMode) stores the same string.
+ * Doing it in an effect would be too late — `<Navigate>` is a child, so its
+ * effect would fire first.
+ */
+function RedirectToLogin() {
+  const { pathname, search } = useLocation()
+  stashReturnPath(`${pathname}${search}`)
+  return <Navigate to="/login" replace />
+}
+
+/**
+ * Put the user back where the session ended, falling back to the dashboard.
+ *
+ * The target is resolved once per mount: `consumeReturnPath()` clears the
+ * stash as it reads, so calling it straight from render would lose the
+ * destination on any re-render that beats the navigation.
+ */
+function PostLoginRedirect() {
+  const [target] = useState(() => consumeReturnPath() ?? '/dashboard')
+  return <Navigate to={target} replace />
+}
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(getValidPlatformToken()))
   const adminUserManagementEnabled = useFeatureFlag('admin_user_management')
@@ -200,7 +230,7 @@ function App() {
   // Keep the access JWT warm for long sessions (e.g. tablet auditors who
   // can sit on the questionnaire for >30 min between API calls without
   // realising the access token has expired).
-  useSessionKeepalive({ enabled: isAuthenticated })
+  const session = useSessionKeepalive({ enabled: isAuthenticated })
 
   // When the service worker reports a 401/403 from a fetch it intercepted,
   // trigger a silent token refresh instead of waiting for the next axios
@@ -222,6 +252,9 @@ function App() {
   const handleLogout = async () => {
     await revokeSession()
     clearAuthState()
+    // Signing out deliberately is not a session loss: drop the return path
+    // clearAuthState() just recorded so the next sign-in starts clean.
+    clearReturnPath()
     useNotificationStore.getState().clearAll()
     setIsAuthenticated(false)
   }
@@ -281,11 +314,7 @@ function App() {
             <Route
               path="/login"
               element={
-                isAuthenticated ? (
-                  <Navigate to="/dashboard" replace />
-                ) : (
-                  <Login onLogin={handleLogin} />
-                )
+                isAuthenticated ? <PostLoginRedirect /> : <Login onLogin={handleLogin} />
               }
             />
 
@@ -297,9 +326,14 @@ function App() {
               path="/"
               element={
                 isAuthenticated ? (
-                  <Layout onLogout={handleLogout} />
+                  <Layout
+                    onLogout={handleLogout}
+                    sessionExpiryImminent={session.expiryImminent}
+                    sessionExtending={session.extending}
+                    onExtendSession={() => void session.extendSession()}
+                  />
                 ) : (
-                  <Navigate to="/login" replace />
+                  <RedirectToLogin />
                 )
               }
             >
