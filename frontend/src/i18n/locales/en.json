@@ -3912,5 +3912,6 @@
   "safetyInsights.scope": "Analysis scope",
   "safetyInsights.run": "Run deep analysis",
   "safetyInsights.startFailed": "Could not start deep analysis.",
-  "safetyInsights.microThemes": "Micro-themes"
+  "safetyInsights.microThemes": "Micro-themes",
+  "incidents.search.register_scope": "Searching the full incident register for \"{{query}}\"."
 }
