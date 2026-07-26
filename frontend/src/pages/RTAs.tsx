@@ -19,6 +19,9 @@ import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Switch } from '../components/ui/Switch'
+import { CaseRegisterTable } from '../components/register/CaseRegisterTable'
+import { useCaseRegisterLabels } from '../components/register/useCaseRegisterLabels'
+import { formatDisplayDate, formatReference } from '../helpers/formatters'
 import {
   Dialog,
   DialogContent,
@@ -89,6 +92,7 @@ function buildRtasListSearch(params: { ids: string }): string {
 
 export default function RTAs() {
   const { t } = useTranslation()
+  const registerLabels = useCaseRegisterLabels()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [rtas, setRtas] = useState<RTA[]>([])
@@ -353,89 +357,78 @@ export default function RTAs() {
           {/* RTAs Table */}
           <Card>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        {t('rtas.table.reference')}
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        {t('rtas.table.title')}
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        {t('rtas.table.location')}
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        {t('rtas.table.severity')}
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        {t('rtas.table.status')}
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        {t('rtas.table.date')}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {filteredRtas.length === 0 ? (
-                      <tr>
-                        <td colSpan={6}>
-                          <EmptyState
-                            icon={<Car className="w-8 h-8 text-muted-foreground" />}
-                            title={t('rtas.empty.title')}
-                            description={t('rtas.empty.subtitle')}
-                          />
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredRtas.map((rta, index) => (
-                        <tr
-                          key={rta.id}
-                          className="hover:bg-surface transition-colors cursor-pointer"
-                          style={{ animationDelay: `${index * 30}ms` }}
-                          onClick={() => navigate(`/rtas/${rta.id}`)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') navigate(`/rtas/${rta.id}`)
-                          }}
-                          role="button"
-                          tabIndex={0}
-                          aria-label={`View RTA: ${rta.title}`}
-                        >
-                          <td className="px-6 py-4">
-                            <span className="font-mono text-sm text-primary">
-                              {rta.reference_number}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <p className="text-sm font-medium text-foreground truncate max-w-xs">
-                              {rta.title}
-                            </p>
-                          </td>
-                          <td className="px-6 py-4">
-                            <p className="text-sm text-foreground truncate max-w-xs">
-                              {rta.location}
-                            </p>
-                          </td>
-                          <td className="px-6 py-4">
-                            <Badge variant={getSeverityVariant(rta.severity) as any}>
-                              {rta.severity.replace('_', ' ')}
-                            </Badge>
-                          </td>
-                          <td className="px-6 py-4">
-                            <Badge variant={getStatusVariant(rta.status) as any}>
-                              {rta.status.replace('_', ' ')}
-                            </Badge>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-muted-foreground">
-                            {new Date(rta.collision_date).toLocaleDateString()}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <CaseRegisterTable
+                label={t('rtas.title')}
+                rows={filteredRtas}
+                rowKey={(rta) => rta.id}
+                onOpenRow={(rta) => navigate(`/rtas/${rta.id}`)}
+                rowLabel={(rta) =>
+                  t('rtas.row.open', 'View road traffic accident: {{reference}}', {
+                    reference: formatReference(rta.reference_number),
+                  })
+                }
+                empty={
+                  <EmptyState
+                    icon={<Car className="w-8 h-8 text-muted-foreground" />}
+                    title={t('rtas.empty.title')}
+                    description={t('rtas.empty.subtitle')}
+                  />
+                }
+                columns={[
+                  {
+                    key: 'reference',
+                    header: registerLabels.reference,
+                    width: 'reference',
+                    render: (rta) => (
+                      <span className="font-mono text-sm text-primary">
+                        {formatReference(rta.reference_number)}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: 'title',
+                    header: registerLabels.title,
+                    render: (rta) => (
+                      <span className="text-sm font-medium text-foreground">{rta.title}</span>
+                    ),
+                  },
+                  {
+                    key: 'location',
+                    header: registerLabels.location,
+                    render: (rta) => <span className="text-sm text-foreground">{rta.location}</span>,
+                  },
+                  {
+                    key: 'severity',
+                    header: registerLabels.severity,
+                    width: 'badge',
+                    render: (rta) => (
+                      <Badge variant={getSeverityVariant(rta.severity) as any}>
+                        {rta.severity.replace('_', ' ')}
+                      </Badge>
+                    ),
+                  },
+                  {
+                    key: 'status',
+                    header: registerLabels.status,
+                    width: 'badge',
+                    render: (rta) => (
+                      <Badge variant={getStatusVariant(rta.status) as any}>
+                        {rta.status.replace('_', ' ')}
+                      </Badge>
+                    ),
+                  },
+                  {
+                    key: 'occurred',
+                    header: registerLabels.occurred,
+                    width: 'date',
+                    render: (rta) => (
+                      <span className="text-sm text-muted-foreground">
+                        {formatDisplayDate(rta.collision_date)}
+                      </span>
+                    ),
+                  },
+                ]}
+              />
             </CardContent>
           </Card>
         </>
