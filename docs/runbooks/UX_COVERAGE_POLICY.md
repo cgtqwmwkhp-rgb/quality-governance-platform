@@ -45,6 +45,43 @@ Score = 100 - (P1_failures × 10) - (P2_failures × 2)
 
 **P0 failures bypass scoring** - Any P0 failure results in immediate HOLD regardless of score.
 
+## P0 Execution Coverage (precedes scoring)
+
+The score says nothing about whether anything ran. An entry that skipped costs no
+points, so a run in which every entry skipped used to score 100, count zero P0
+failures and report GO — indistinguishable from a run that passed everything.
+
+Two numbers are therefore reported separately, and a single blended score is
+never used to decide the verdict:
+
+| Number | Definition |
+|--------|------------|
+| **P0 execution rate** | P0 entries that produced PASS or FAIL, over P0 entries in scope |
+| **P0 pass rate** | P0 entries that passed, over P0 entries that executed |
+
+**A run that did not exercise its P0 coverage cannot report GO.** Specifically,
+the gate HOLDs when any of these is true, regardless of score:
+
+- No P0 entry was audited at all.
+- Any non-waived P0 entry did not execute.
+- An audit produced fewer entries than it declared it would (a crashed worker or
+  an aborted serial suite drops entries with no record to count).
+
+The HOLD message names every entry that did not execute.
+
+### Waivers
+
+An entry is excluded from the execution denominator only if its result record
+carries **both** `waived: true` **and** a non-empty `waiver_reason`. The reason is
+mandatory so that a stray boolean cannot silently delete coverage, and every
+waiver is listed by name in `ux_coverage.md`.
+
+No registry in `docs/ops/` defines a waiver field today, so nothing is waived in
+practice and every non-executing P0 blocks the gate. Waiving *every* P0 does not
+clear the gate either: the run still exercised nothing.
+
+Waivers require VP approval per the exception rule at the foot of this policy.
+
 ## Thresholds
 
 | Environment | Min Score | Max P0 | Max P1 | Notes |
@@ -99,7 +136,26 @@ If token acquisition fails, the gate behavior is:
 | Tokens missing (secrets not configured) | **HOLD** | `AUTH_TEST_CONFIG_MISSING` |
 | Token acquisition failed (wrong credentials) | **HOLD** | `AUTH_TEST_CREDENTIALS_INVALID` |
 | Token acquisition failed (staging unreachable) | **HOLD** | `AUTH_TEST_STAGING_UNREACHABLE` |
-| P0 route skipped due to missing auth | **P0 FAIL** | `AUTH_REQUIRED_NOT_TESTED` |
+| P0 route skipped due to missing auth | **HOLD** (P0 not executed) | `AUTH_REQUIRED_NOT_TESTED` |
+
+The last row previously read "P0 FAIL", and the workflow audit did report those
+skips as failures — but only because `test.skip()` was called inside a `try`
+whose `catch` rewrote the resulting `TestSkipError` into a failure. The gate
+outcome is unchanged (blocked either way); the artifact now says the workflow was
+never executed instead of claiming it ran and failed at a step it never reached.
+
+## Target Environment
+
+The gate mints its tokens against staging, so it may only drive the matching
+pre-production frontend. `scripts/governance/resolve-ux-frontend-url.cjs`
+resolves that target per run: it derives candidate hostnames for the named
+Static Web Apps environment, accepts one only after confirming it answers and
+serves a bundle baked against the staging API, and **refuses the production
+hostname on every path**. If nothing verifies, the gate fails with the list of
+hostnames it tried rather than falling back to production.
+
+`UX_FRONTEND_URL` (repository variable, or the `frontend_url` dispatch input)
+overrides the derivation. It is subject to the same verification.
 
 ### Auto-Triage
 

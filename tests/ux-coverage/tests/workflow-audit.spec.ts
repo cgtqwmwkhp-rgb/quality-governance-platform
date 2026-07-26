@@ -140,20 +140,39 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
       };
       
       const workflowStartTime = Date.now();
-      
-      try {
-        // Setup auth if needed
-        if (workflow.auth_type !== 'none') {
-          const authReady = await setupAuth(page, workflow.auth_type);
-          if (!authReady) {
-            result.result = 'SKIP';
-            result.error_message = `Auth type ${workflow.auth_type} not configured`;
-            workflowAuditResults.push(result);
-            test.skip(true, result.error_message);
-            return;
-          }
+
+      // Auth is resolved before the try/catch below, and deliberately so.
+      // test.skip() aborts the test by throwing a TestSkipError; inside the try
+      // that error was caught and rewritten into a P0 FAIL, so a workflow that
+      // never ran was reported — twice, since `result` was pushed on both
+      // paths — as a workflow that ran and failed. The aggregator now holds the
+      // gate on P0 entries that did not execute, so a skip can be recorded
+      // honestly as SKIP without turning a token-less run green.
+      let authReady = true;
+      if (workflow.auth_type !== 'none') {
+        try {
+          authReady = await setupAuth(page, workflow.auth_type);
+        } catch (error: any) {
+          // Auth setup threw rather than reporting "no token configured": that
+          // is a real failure, and the entry must still reach the artifact.
+          result.error_message = `Auth setup failed: ${error.message?.slice(0, 200)}`;
+          result.total_duration_ms = Date.now() - workflowStartTime;
+          workflowAuditResults.push(result);
+          expect(result.result).toBe('PASS');
+          return;
         }
-        
+      }
+
+      if (!authReady) {
+        result.result = 'SKIP';
+        result.error_message = `Auth type ${workflow.auth_type} not configured`;
+        result.total_duration_ms = Date.now() - workflowStartTime;
+        workflowAuditResults.push(result);
+        test.skip(true, result.error_message);
+        return;
+      }
+
+      try {
         // Track API calls
         page.on('request', (request: Request) => {
           if (request.resourceType() === 'fetch' || request.resourceType() === 'xhr') {
@@ -331,6 +350,10 @@ test.afterAll(async () => {
   fs.writeFileSync(outputPath, JSON.stringify({
     audit_type: 'workflow',
     timestamp: new Date().toISOString(),
+    // How many entries the registry asked for, as opposed to how many arrived.
+    // A serial suite that aborts, or a crashed worker, drops entries silently;
+    // the aggregator holds the gate when this count is not met.
+    expected_entries: workflows.length,
     total_workflows: workflowAuditResults.length,
     passed: workflowAuditResults.filter(r => r.result === 'PASS').length,
     failed: workflowAuditResults.filter(r => r.result === 'FAIL').length,

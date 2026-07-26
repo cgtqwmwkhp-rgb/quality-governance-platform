@@ -138,6 +138,22 @@ jobs:
           chmod +x ./scripts/governance/runtime-smoke-gate.sh
           ./scripts/governance/runtime-smoke-gate.sh --self-test
 
+  governance-script-tests:
+    name: Governance Script Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Run governance script unit tests
+        run: node --test scripts/governance/__tests__/*.test.cjs
+
 
 
   config-drift-guard:

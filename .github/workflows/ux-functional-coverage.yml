@@ -8,7 +8,11 @@ on:
   workflow_dispatch:
     inputs:
       app_url:
-        description: 'Application URL to test'
+        description: 'API base URL to mint tokens against and audit'
+        required: false
+        default: ''
+      frontend_url:
+        description: 'Pre-production frontend URL (verified before use; production is refused)'
         required: false
         default: ''
 
@@ -18,7 +22,24 @@ concurrency:
 
 env:
   NODE_VERSION: '20'
-  FRONTEND_URL: 'https://purple-water-03205fa03.6.azurestaticapps.net'
+
+  # PX-179: FRONTEND_URL is NOT set here. It used to be pinned to the production
+  # Static Web App hostname, which meant Playwright (baseURL = FRONTEND_URL ||
+  # APP_URL) drove the *production* frontend using tokens minted against
+  # *staging* — so a governance gate generated synthetic traffic and login
+  # attempts against a live production system, and anything needing real data
+  # failed against a stack the credentials did not belong to. The target is now
+  # resolved and verified per run by the resolve-frontend job, which refuses the
+  # production hostname on every path.
+  SWA_PRODUCTION_HOST: purple-water-03205fa03.6.azurestaticapps.net
+  SWA_STAGING_ENVIRONMENT: staging
+  # Named environments on this Static Web App carry a region segment
+  # (…-<env>.westeurope.6.azurestaticapps.net); the pattern documented in the
+  # SWA workflow omits it. Both forms are offered as candidates and neither is
+  # trusted until it answers and proves it serves the staging bake.
+  SWA_REGION: westeurope
+  STAGING_API_URL: https://qgp-staging-plantexpand.azurewebsites.net
+  PRODUCTION_API_URL: https://app-qgp-prod.azurewebsites.net
 
 jobs:
   # Only run if staging deployment succeeded
@@ -63,6 +84,46 @@ jobs:
             echo "⏭️ Skipping: staging deployment did not succeed"
           fi
 
+  # Establish which frontend this run is allowed to drive. Fails the job — and
+  # therefore blocks every audit — rather than defaulting to a hostname the test
+  # credentials do not belong to.
+  resolve-frontend:
+    runs-on: ubuntu-latest
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should_run == 'true'
+    outputs:
+      frontend_url: ${{ steps.resolve.outputs.frontend_url }}
+      frontend_url_source: ${{ steps.resolve.outputs.frontend_url_source }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Resolve pre-production frontend
+        id: resolve
+        env:
+          UX_FRONTEND_URL: ${{ github.event.inputs.frontend_url || vars.UX_FRONTEND_URL }}
+        run: node scripts/governance/resolve-ux-frontend-url.cjs
+
+      - name: Record resolved target
+        env:
+          RESOLVED_URL: ${{ steps.resolve.outputs.frontend_url }}
+          RESOLVED_SOURCE: ${{ steps.resolve.outputs.frontend_url_source }}
+        run: |
+          {
+            echo "### UX coverage target"
+            echo
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Frontend | ${RESOLVED_URL} |"
+            echo "| Resolved by | ${RESOLVED_SOURCE} |"
+            echo "| API (tokens minted here) | ${STAGING_API_URL} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # Acquire auth tokens for testing
   acquire-tokens:
     runs-on: ubuntu-latest
@@ -104,7 +165,7 @@ jobs:
   # Page Load Audit
   page-audit:
     runs-on: ubuntu-latest
-    needs: [check-trigger, acquire-tokens]
+    needs: [check-trigger, resolve-frontend, acquire-tokens]
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
@@ -148,6 +209,7 @@ jobs:
       - name: Run Page Audit
         working-directory: tests/ux-coverage
         env:
+          FRONTEND_URL: ${{ needs.resolve-frontend.outputs.frontend_url }}
           APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
         run: npx playwright test tests/page-audit.spec.ts --reporter=list
         continue-on-error: true
@@ -162,7 +224,7 @@ jobs:
   # Link Audit
   link-audit:
     runs-on: ubuntu-latest
-    needs: [check-trigger, acquire-tokens]
+    needs: [check-trigger, resolve-frontend, acquire-tokens]
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
@@ -202,6 +264,7 @@ jobs:
       - name: Run Link Audit
         working-directory: tests/ux-coverage
         env:
+          FRONTEND_URL: ${{ needs.resolve-frontend.outputs.frontend_url }}
           APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
         run: npx playwright test tests/link-audit.spec.ts --reporter=list
         continue-on-error: true
@@ -216,7 +279,7 @@ jobs:
   # Button Wiring Audit
   button-audit:
     runs-on: ubuntu-latest
-    needs: [check-trigger, acquire-tokens]
+    needs: [check-trigger, resolve-frontend, acquire-tokens]
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
@@ -256,6 +319,7 @@ jobs:
       - name: Run Button Audit
         working-directory: tests/ux-coverage
         env:
+          FRONTEND_URL: ${{ needs.resolve-frontend.outputs.frontend_url }}
           APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
         run: npx playwright test tests/button-audit.spec.ts --reporter=list
         continue-on-error: true
@@ -270,7 +334,7 @@ jobs:
   # Workflow Audit (P0 Critical Paths)
   workflow-audit:
     runs-on: ubuntu-latest
-    needs: [check-trigger, acquire-tokens]
+    needs: [check-trigger, resolve-frontend, acquire-tokens]
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
@@ -310,6 +374,7 @@ jobs:
       - name: Run Workflow Audit
         working-directory: tests/ux-coverage
         env:
+          FRONTEND_URL: ${{ needs.resolve-frontend.outputs.frontend_url }}
           APP_URL: ${{ needs.check-trigger.outputs.use_custom_url == 'true' && needs.check-trigger.outputs.custom_url || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
           TEST_USER_EMAIL: ${{ secrets.UX_TEST_USER_EMAIL }}
           TEST_USER_PASSWORD: ${{ secrets.UX_TEST_USER_PASSWORD }}
@@ -326,9 +391,17 @@ jobs:
   # Aggregate Results and Enforce Gate
   aggregate-and-gate:
     runs-on: ubuntu-latest
-    needs: [check-trigger, acquire-tokens, page-audit, link-audit, button-audit, workflow-audit]
+    needs: [check-trigger, resolve-frontend, acquire-tokens, page-audit, link-audit, button-audit, workflow-audit]
     if: always() && needs.check-trigger.outputs.should_run == 'true'
     steps:
+      # Without a verified target the audits never ran, so there is nothing to
+      # aggregate. Say that plainly instead of failing later on absent artifacts.
+      - name: Require a resolved frontend target
+        if: needs.resolve-frontend.result != 'success'
+        run: |
+          echo "::error title=UX coverage gate::No verified pre-production frontend was resolved, so no audit ran. See the 'resolve-frontend' job for the hostnames tried."
+          exit 1
+
       - name: Checkout code
         uses: actions/checkout@v6
 
@@ -378,20 +451,40 @@ jobs:
             P0_FAILS="$(jq -r '.summary.p0_failures' "artifacts/ux_coverage.json")"
             P1_FAILS="$(jq -r '.summary.p1_failures' "artifacts/ux_coverage.json")"
             DEAD_ENDS="$(jq -r '.summary.dead_ends_count' "artifacts/ux_coverage.json")"
+            P0_EXECUTED="$(jq -r '.p0_coverage.executed' "artifacts/ux_coverage.json")"
+            P0_EXPECTED="$(jq -r '.p0_coverage.expected' "artifacts/ux_coverage.json")"
+            P0_PASSED="$(jq -r '.p0_coverage.passed' "artifacts/ux_coverage.json")"
+            P0_WAIVED="$(jq -r '.p0_coverage.waived' "artifacts/ux_coverage.json")"
+            COVERAGE_COMPLETE="$(jq -r '.coverage_complete' "artifacts/ux_coverage.json")"
+            # Flattened to one line: GITHUB_OUTPUT is newline-delimited.
+            HOLD_REASONS="$(jq -r '.hold_reasons | join("; ")' "artifacts/ux_coverage.json" | tr -d '\n\r')"
             {
               echo "score=${SCORE}"
               echo "status=${STATUS}"
               echo "p0_fails=${P0_FAILS}"
               echo "p1_fails=${P1_FAILS}"
               echo "dead_ends=${DEAD_ENDS}"
+              echo "p0_executed=${P0_EXECUTED}"
+              echo "p0_expected=${P0_EXPECTED}"
+              echo "p0_passed=${P0_PASSED}"
+              echo "p0_waived=${P0_WAIVED}"
+              echo "coverage_complete=${COVERAGE_COMPLETE}"
+              echo "hold_reasons=${HOLD_REASONS}"
             } >> "$GITHUB_OUTPUT"
           else
+            # No report at all is the most complete absence of evidence there is.
             {
               echo "score=0"
               echo "status=HOLD"
               echo "p0_fails=-1"
               echo "p1_fails=-1"
               echo "dead_ends=-1"
+              echo "p0_executed=0"
+              echo "p0_expected=0"
+              echo "p0_passed=0"
+              echo "p0_waived=0"
+              echo "coverage_complete=false"
+              echo "hold_reasons=The aggregator produced no coverage report."
             } >> "$GITHUB_OUTPUT"
           fi
 
@@ -402,20 +495,39 @@ jobs:
           COVERAGE_P0_FAILS: ${{ steps.coverage.outputs.p0_fails }}
           COVERAGE_P1_FAILS: ${{ steps.coverage.outputs.p1_fails }}
           COVERAGE_DEAD_ENDS: ${{ steps.coverage.outputs.dead_ends }}
+          COVERAGE_P0_EXECUTED: ${{ steps.coverage.outputs.p0_executed }}
+          COVERAGE_P0_EXPECTED: ${{ steps.coverage.outputs.p0_expected }}
+          COVERAGE_P0_PASSED: ${{ steps.coverage.outputs.p0_passed }}
+          COVERAGE_P0_WAIVED: ${{ steps.coverage.outputs.p0_waived }}
+          COVERAGE_COMPLETE: ${{ steps.coverage.outputs.coverage_complete }}
+          COVERAGE_HOLD_REASONS: ${{ steps.coverage.outputs.hold_reasons }}
+          FRONTEND_TARGET: ${{ needs.resolve-frontend.outputs.frontend_url }}
           TOKENS_ACQUIRED: ${{ needs.acquire-tokens.outputs.tokens_acquired }}
         run: |
           {
             echo "## UX Functional Coverage Gate"
             echo
+            echo "Execution and pass rates are reported separately: a pass rate over"
+            echo "a handful of executed entries is not coverage."
+            echo
             echo "| Metric | Value |"
             echo "|--------|-------|"
+            echo "| P0 executed | ${COVERAGE_P0_EXECUTED} / ${COVERAGE_P0_EXPECTED} |"
+            echo "| P0 passed | ${COVERAGE_P0_PASSED} / ${COVERAGE_P0_EXECUTED} |"
+            echo "| P0 waived | ${COVERAGE_P0_WAIVED} |"
+            echo "| P0 coverage complete | ${COVERAGE_COMPLETE} |"
             echo "| Score | ${COVERAGE_SCORE}/100 |"
             echo "| Status | ${COVERAGE_STATUS} |"
             echo "| P0 Failures | ${COVERAGE_P0_FAILS} |"
             echo "| P1 Failures | ${COVERAGE_P1_FAILS} |"
             echo "| Dead Ends | ${COVERAGE_DEAD_ENDS} |"
+            echo "| Frontend tested | ${FRONTEND_TARGET} |"
             echo "| Tokens Acquired | ${TOKENS_ACQUIRED} |"
             echo
+            if [ -n "${COVERAGE_HOLD_REASONS}" ] && [ "${COVERAGE_STATUS}" = "HOLD" ]; then
+              echo "**Why this run is held:** ${COVERAGE_HOLD_REASONS}"
+              echo
+            fi
             if [ "${COVERAGE_STATUS}" = "GO" ]; then
               echo "PASS: Ready for production"
             elif [ "${COVERAGE_STATUS}" = "CANARY" ]; then
@@ -434,8 +546,23 @@ jobs:
           echo "See ux_coverage.md artifact for details"
           exit 1
 
+      # A run that did not exercise its P0 coverage proved nothing. It is not a
+      # score problem, so it does not borrow the score message.
+      - name: Enforce Gate (Fail on unexecuted P0 coverage)
+        if: steps.coverage.outputs.p0_fails == '0' && steps.coverage.outputs.coverage_complete != 'true'
+        env:
+          HOLD_REASONS: ${{ steps.coverage.outputs.hold_reasons }}
+          P0_EXECUTED: ${{ steps.coverage.outputs.p0_executed }}
+          P0_EXPECTED: ${{ steps.coverage.outputs.p0_expected }}
+        run: |
+          echo "❌ Gate FAILED: P0 coverage was not exercised"
+          echo "   P0 executed: ${P0_EXECUTED}/${P0_EXPECTED}"
+          echo "   ${HOLD_REASONS}"
+          echo "See ux_coverage.md for the entries that did not execute"
+          exit 1
+
       - name: Enforce Gate (Fail on HOLD)
-        if: steps.coverage.outputs.status == 'HOLD' && steps.coverage.outputs.p0_fails == '0'
+        if: steps.coverage.outputs.status == 'HOLD' && steps.coverage.outputs.p0_fails == '0' && steps.coverage.outputs.coverage_complete == 'true'
         run: |
           echo "⚠️ Gate HOLD: Score ${{ steps.coverage.outputs.score }} below threshold"
           echo "See ux_coverage.md artifact for details"
