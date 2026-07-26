@@ -71,7 +71,7 @@ describe('employeePickerUtils', () => {
     expect(
       resolveInvestigationAssigneeSelection({
         label: 'Jordan Field',
-        user: { id: 42, email: 'jordan@example.com', full_name: 'Jordan Field' },
+        user: { id: 42, email: 'jordan@example.com' },
       }),
     ).toEqual({ assignee_id: 42, assignee_email: 'jordan@example.com' })
 
