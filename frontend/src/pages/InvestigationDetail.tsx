@@ -2013,6 +2013,9 @@ export default function InvestigationDetail() {
       </Dialog>
 
       <Dialog
+        open={deleteEvidenceTarget !== null}
+        onOpenChange={() => setDeleteEvidenceTarget(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Evidence</DialogTitle>

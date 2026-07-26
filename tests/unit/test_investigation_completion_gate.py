@@ -59,13 +59,16 @@ async def test_collect_readiness_reasons_flags_empty_summary_on_complete_gate():
         assigned_to_user_id=None,
         data={},
     )
-    with patch(
-        "src.domain.services.investigation_closure_helpers.fetch_open_work_for_investigation",
-        AsyncMock(return_value=[]),
-    ), patch.object(
-        InvestigationService,
-        "validate_closure",
-        AsyncMock(return_value=_empty_validation()),
+    with (
+        patch(
+            "src.domain.services.investigation_closure_helpers.fetch_open_work_for_investigation",
+            AsyncMock(return_value=[]),
+        ),
+        patch.object(
+            InvestigationService,
+            "validate_closure",
+            AsyncMock(return_value=_empty_validation()),
+        ),
     ):
         reasons, _open_work, missing = await _collect_readiness_reasons(
             db,
@@ -87,13 +90,16 @@ async def test_collect_readiness_reasons_flags_empty_summary_on_complete_gate():
 async def test_collect_readiness_reasons_adds_status_not_complete_for_close_gate():
     db = AsyncMock()
     inv = _investigation(status=InvestigationStatus.IN_PROGRESS)
-    with patch(
-        "src.domain.services.investigation_closure_helpers.fetch_open_work_for_investigation",
-        AsyncMock(return_value=[]),
-    ), patch.object(
-        InvestigationService,
-        "validate_closure",
-        AsyncMock(return_value=_empty_validation()),
+    with (
+        patch(
+            "src.domain.services.investigation_closure_helpers.fetch_open_work_for_investigation",
+            AsyncMock(return_value=[]),
+        ),
+        patch.object(
+            InvestigationService,
+            "validate_closure",
+            AsyncMock(return_value=_empty_validation()),
+        ),
     ):
         reasons, _, _ = await _collect_readiness_reasons(
             db,
@@ -146,18 +152,22 @@ async def test_patch_completed_allows_supervisor_override_for_open_work():
     open_item.status = "open"
     open_item.action_key = "investigation_action:3"
 
-    with patch(
-        "src.domain.services.investigation_closure_helpers.fetch_open_work_for_investigation",
-        AsyncMock(return_value=[open_item]),
-    ), patch.object(
-        InvestigationService,
-        "validate_closure",
-        AsyncMock(return_value=_empty_validation()),
-    ), patch.object(
-        InvestigationService,
-        "create_revision_event",
-        new=AsyncMock(),
-    ) as revision_spy:
+    with (
+        patch(
+            "src.domain.services.investigation_closure_helpers.fetch_open_work_for_investigation",
+            AsyncMock(return_value=[open_item]),
+        ),
+        patch.object(
+            InvestigationService,
+            "validate_closure",
+            AsyncMock(return_value=_empty_validation()),
+        ),
+        patch.object(
+            InvestigationService,
+            "create_revision_event",
+            new=AsyncMock(),
+        ) as revision_spy,
+    ):
         await update_investigation(
             request=MagicMock(headers={"X-Request-ID": "req-2"}),
             investigation_id=7,
@@ -190,13 +200,16 @@ async def test_patch_completed_override_requires_reason():
     result.scalar_one_or_none = MagicMock(return_value=inv)
     db.execute = AsyncMock(return_value=result)
 
-    with patch(
-        "src.domain.services.investigation_closure_helpers.fetch_open_work_for_investigation",
-        AsyncMock(return_value=[MagicMock()]),
-    ), patch.object(
-        InvestigationService,
-        "validate_closure",
-        AsyncMock(return_value=_empty_validation()),
+    with (
+        patch(
+            "src.domain.services.investigation_closure_helpers.fetch_open_work_for_investigation",
+            AsyncMock(return_value=[MagicMock()]),
+        ),
+        patch.object(
+            InvestigationService,
+            "validate_closure",
+            AsyncMock(return_value=_empty_validation()),
+        ),
     ):
         with pytest.raises(BadRequestError) as exc_info:
             await _ensure_investigation_ready_for_status(
