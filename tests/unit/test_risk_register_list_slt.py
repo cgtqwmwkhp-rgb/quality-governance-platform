@@ -51,8 +51,10 @@ def _risk(**overrides):
         "is_escalated": False,
         "escalation_reason": None,
         "risk_owner_name": "SLT Owner",
+        "last_review_date": datetime(2025, 12, 1, 0, 0, 0),
         "next_review_date": datetime(2026, 1, 1, 0, 0, 0),
         "updated_at": datetime(2026, 7, 10, 9, 15, 0),
+        "created_at": datetime(2026, 4, 6, 10, 0, 0),
         "tags": write_score_trend_to_tags(None, "increasing"),
         "linked_audits": [],
         "linked_actions": [],
@@ -81,6 +83,8 @@ async def test_list_risks_includes_trend_and_updated_at():
     item = result["items"][0]
     assert item["trend"] == "increasing"
     assert item["updated_at"] == "2026-07-10T09:15:00"
+    assert item["created_at"] == "2026-04-06T10:00:00"
+    assert item["last_review_date"] == "2025-12-01T00:00:00"
     assert item["next_review_date"] == "2026-01-01T00:00:00"
     assert item["residual_score"] == 16
 
