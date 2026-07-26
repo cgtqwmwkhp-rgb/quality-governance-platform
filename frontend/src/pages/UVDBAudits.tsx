@@ -66,6 +66,14 @@ interface UVDBSection {
   title_provisional: boolean
 }
 
+/**
+ * Where a displayed score came from. A UVDB score is either calculated in-app
+ * from protocol responses or lifted from an externally issued report at import
+ * time; presenting the second as the first is a governance defect (PX-255).
+ * `null` means the audit carries no score at all.
+ */
+type ScoreSource = 'imported' | 'calculated' | 'unknown'
+
 interface UVDBAudit {
   id: number
   audit_reference: string
@@ -74,6 +82,7 @@ interface UVDBAudit {
   audit_date: string | null
   status: string
   percentage_score: number | null
+  score_source: ScoreSource | null
   lead_auditor: string | null
   audit_run_id?: number | null
   import_job_id?: number | null
@@ -81,9 +90,10 @@ interface UVDBAudit {
 
 interface ScoreBreakdownEntry {
   label: string
-  score: number
-  max_score: number
-  percentage: number
+  score: number | null
+  max_score: number | null
+  percentage: number | null
+  score_source?: ScoreSource | null
 }
 
 interface UVDBAuditDetail {
@@ -99,6 +109,7 @@ interface UVDBAuditDetail {
   total_score: number | null
   max_possible_score: number | null
   percentage_score: number | null
+  score_source: ScoreSource | null
   section_scores: { sections: ScoreBreakdownEntry[] } | null
   score_breakdown: ScoreBreakdownEntry[]
   source_document_asset_id: number | null
@@ -115,10 +126,11 @@ interface UVDBAuditDetail {
 
 interface SectionScoreData {
   label: string
-  score: number
-  max_score: number
-  percentage: number
-  audit_reference: string
+  score: number | null
+  max_score: number | null
+  percentage: number | null
+  audit_reference: string | null
+  score_source?: ScoreSource | null
 }
 
 interface UVDBContentCoverage {
@@ -136,7 +148,7 @@ interface UVDBDashboardState {
   total_audits: number
   active_audits: number
   completed_audits: number
-  average_score: number
+  average_score: number | null
   protocol_name: string
   protocol_version: string
   content_coverage: UVDBContentCoverage | null
@@ -153,6 +165,91 @@ interface UVDBIsoMappingRow {
 }
 
 type LoadState = 'idle' | 'loading' | 'success' | 'error' | 'setup_required'
+
+const SCORE_SOURCE_LABEL: Record<ScoreSource, string> = {
+  imported: 'Imported from report',
+  calculated: 'Calculated in-app',
+  unknown: 'Provenance unverified',
+}
+
+const SCORE_SOURCE_TITLE: Record<ScoreSource, string> = {
+  imported: 'Taken from the imported audit report, not calculated from protocol responses.',
+  calculated: 'Calculated in-app from UVDB protocol responses.',
+  unknown: 'The provenance of this score could not be established.',
+}
+
+const SCORE_SOURCE_STYLE: Record<ScoreSource, string> = {
+  imported: 'border-info/30 bg-info/10 text-info',
+  calculated: 'border-success/30 bg-success/10 text-success',
+  unknown: 'border-warning/30 bg-warning/10 text-warning',
+}
+
+/**
+ * Names the provenance of an adjacent score. Rendered wherever a UVDB score is
+ * shown so an imported number is never mistaken for a calculated one.
+ */
+function ScoreProvenanceBadge({
+  source,
+  className = '',
+}: {
+  source: ScoreSource | null | undefined
+  className?: string
+}) {
+  if (!source) return null
+  return (
+    <span
+      data-testid={`uvdb-score-source-${source}`}
+      title={SCORE_SOURCE_TITLE[source]}
+      className={`inline-flex items-center whitespace-nowrap rounded border px-1.5 py-0.5 text-[11px] font-medium ${SCORE_SOURCE_STYLE[source]} ${className}`.trim()}
+    >
+      {SCORE_SOURCE_LABEL[source]}
+    </span>
+  )
+}
+
+/**
+ * Resolve the provenance to display for a score.
+ *
+ * Returns null when there is no score to attribute. When the payload omits
+ * `score_source` we only claim "imported" where an import job proves it, and
+ * otherwise report the provenance as unverified rather than implying the
+ * number was calculated here.
+ */
+export function resolveScoreSource(
+  percentageScore: number | null | undefined,
+  rawSource: string | null | undefined,
+  fallback: { importJobId?: number | null } = {},
+): ScoreSource | null {
+  if (percentageScore == null) return null
+  if (rawSource === 'imported' || rawSource === 'calculated' || rawSource === 'unknown') {
+    return rawSource
+  }
+  const importJobId = fallback.importJobId
+  if (importJobId != null && Number.isFinite(importJobId) && importJobId > 0) {
+    return 'imported'
+  }
+  return 'unknown'
+}
+
+/**
+ * Renders the absence of a score. Never falls back to 0 or 100% — an audit
+ * with no recorded score has not scored zero, and an empty denominator is not
+ * full marks.
+ */
+function NotScored({ testId, compact = false }: { testId?: string; compact?: boolean }) {
+  return (
+    <span className="text-muted-foreground" data-testid={testId} title="No score recorded">
+      {compact ? (
+        <>
+          <span aria-hidden="true">—</span>
+          <span className="sr-only">Not scored</span>
+        </>
+      ) : (
+        'Not scored'
+      )}
+    </span>
+  )
+}
 
 function ScoreBar({ percentage }: { percentage: number }) {
   const color =
@@ -261,16 +358,26 @@ function AuditDetailPanel({
             Overall Score
           </h4>
           {detail.percentage_score != null ? (
-            <div className="flex items-end gap-3">
-              <span className="text-4xl font-bold text-success">{detail.percentage_score}%</span>
-              {detail.total_score != null && detail.max_possible_score != null && (
-                <span className="text-sm text-muted-foreground pb-1">
-                  {detail.total_score} / {detail.max_possible_score}
-                </span>
-              )}
+            <div className="space-y-2" data-testid="uvdb-detail-score">
+              <div className="flex items-end gap-3">
+                <span className="text-4xl font-bold text-success">{detail.percentage_score}%</span>
+                {detail.total_score != null && detail.max_possible_score != null && (
+                  <span className="text-sm text-muted-foreground pb-1">
+                    {detail.total_score} / {detail.max_possible_score}
+                  </span>
+                )}
+              </div>
+              <ScoreProvenanceBadge source={detail.score_source} />
+              {detail.score_source === 'imported' ? (
+                <p className="text-xs text-muted-foreground" data-testid="uvdb-detail-imported-note">
+                  This score was read from the imported audit report
+                  {detail.source_filename ? ` (${detail.source_filename})` : ''}. It was not
+                  calculated from UVDB protocol responses in this system.
+                </p>
+              ) : null}
             </div>
           ) : (
-            <p className="text-muted-foreground">No score data available</p>
+            <NotScored testId="uvdb-detail-not-scored" />
           )}
 
           {detail.percentage_score != null && (
@@ -315,13 +422,18 @@ function AuditDetailPanel({
 
         {/* Score breakdown */}
         <div className="space-y-3">
-          <h4 className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">
-            Section Breakdown
-          </h4>
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">
+              Section Breakdown
+            </h4>
+            {breakdown.length > 0 ? (
+              <ScoreProvenanceBadge source={breakdown[0]?.score_source ?? detail.score_source} />
+            ) : null}
+          </div>
           {breakdown.length > 0 ? (
             <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
               {breakdown.map((item, index) => {
-                const pct = Number(item.percentage ?? 0)
+                const pct = item.percentage
                 return (
                   <div key={`breakdown-${index}`} className="space-y-1">
                     <div className="flex items-center justify-between text-sm">
@@ -329,10 +441,14 @@ function AuditDetailPanel({
                         {String(item.label || `Section ${index + 1}`)}
                       </span>
                       <span className="text-muted-foreground whitespace-nowrap">
-                        {String(item.score ?? '-')} / {String(item.max_score ?? '-')}
+                        {item.score ?? '—'} / {item.max_score ?? '—'}
                       </span>
                     </div>
-                    <ScoreBar percentage={pct} />
+                    {pct != null ? (
+                      <ScoreBar percentage={pct} />
+                    ) : (
+                      <NotScored testId={`uvdb-breakdown-not-scored-${index}`} compact />
+                    )}
                   </div>
                 )
               })}
@@ -487,6 +603,7 @@ export default function UVDBAudits() {
   const [auditDetailError, setAuditDetailError] = useState<string | null>(null)
   const [documentError, setDocumentError] = useState<string | null>(null)
   const [sectionScores, setSectionScores] = useState<Record<string, SectionScoreData>>({})
+  const [unmappedSectionScores, setUnmappedSectionScores] = useState<SectionScoreData[]>([])
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
   const [sectionQuestions, setSectionQuestions] = useState<Record<string, unknown[]>>({})
   const [loadingSectionQuestions, setLoadingSectionQuestions] = useState<string | null>(null)
@@ -526,6 +643,7 @@ export default function UVDBAudits() {
     audit_date: string | null
     status: string
     percentage_score: number | null
+    score_source?: string | null
     lead_auditor: string | null
     audit_run_id?: number | null
     import_job_id?: number | null
@@ -537,6 +655,9 @@ export default function UVDBAudits() {
     audit_date: apiAudit.audit_date,
     status: apiAudit.status,
     percentage_score: apiAudit.percentage_score,
+    score_source: resolveScoreSource(apiAudit.percentage_score, apiAudit.score_source, {
+      importJobId: apiAudit.import_job_id,
+    }),
     lead_auditor: apiAudit.lead_auditor,
     audit_run_id: apiAudit.audit_run_id,
     import_job_id: apiAudit.import_job_id,
@@ -594,7 +715,7 @@ export default function UVDBAudits() {
           total_audits: dashboardResponse.data.summary.total_audits,
           active_audits: dashboardResponse.data.summary.active_audits,
           completed_audits: dashboardResponse.data.summary.completed_audits,
-          average_score: dashboardResponse.data.summary.average_score,
+          average_score: dashboardResponse.data.summary.average_score ?? null,
           protocol_name: dashboardResponse.data.protocol.name,
           protocol_version: dashboardResponse.data.protocol.version,
           content_coverage:
@@ -640,6 +761,11 @@ export default function UVDBAudits() {
         if (scoresResponse.data?.sections) {
           setSectionScores(scoresResponse.data.sections as Record<string, SectionScoreData>)
         }
+        setUnmappedSectionScores(
+          Array.isArray(scoresResponse.data?.unmapped_sections)
+            ? (scoresResponse.data.unmapped_sections as SectionScoreData[])
+            : [],
+        )
 
         setLoadState('success')
       } catch (err) {
@@ -1311,9 +1437,12 @@ export default function UVDBAudits() {
                     { label: 'Completed', value: dashboard?.completed_audits ?? 0 },
                     {
                       label: 'Average score',
-                      value: dashboard?.completed_audits
-                        ? `${dashboard.average_score}%`
-                        : 'Not scored',
+                      // Absent when nothing is scored — completed audits with
+                      // no recorded score do not average to 0%.
+                      value:
+                        dashboard?.completed_audits && dashboard.average_score != null
+                          ? `${dashboard.average_score}%`
+                          : 'Not scored',
                     },
                   ].map((kpi) => (
                     <div key={kpi.label} className="bg-surface/50 rounded-lg p-4 text-center">
@@ -1424,16 +1553,23 @@ export default function UVDBAudits() {
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
-                        {audit.percentage_score != null && (
-                          <div className="text-right">
-                            <div className="text-2xl font-bold text-success">
-                              {audit.percentage_score}%
+                        <div className="text-right">
+                          {audit.percentage_score != null ? (
+                            <>
+                              <div className="text-2xl font-bold text-success">
+                                {audit.percentage_score}%
+                              </div>
+                              <ScoreProvenanceBadge source={audit.score_source} />
+                            </>
+                          ) : (
+                            <div className="text-2xl font-bold">
+                              <NotScored testId={`uvdb-recent-not-scored-${audit.id}`} />
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                              {t('uvdb.audit_score')}
-                            </div>
+                          )}
+                          <div className="text-xs text-muted-foreground">
+                            {t('uvdb.audit_score')}
                           </div>
-                        )}
+                        </div>
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(audit.status)}`}
                         >
@@ -1484,6 +1620,44 @@ export default function UVDBAudits() {
                   Sections 3–11 are structural shells pending v11.8 PDF ingest.
                 </p>
               </div>
+              {unmappedSectionScores.length > 0 ? (
+                <div
+                  className="rounded-xl border border-info/30 bg-info/5 p-4"
+                  data-testid="uvdb-unmapped-section-scores"
+                >
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Imported scores not matched to a protocol section
+                  </h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    These scores were read from the imported audit report but their labels could
+                    not be matched to a UVDB protocol section with certainty, so they are listed
+                    separately rather than attributed to a section.
+                  </p>
+                  <ul className="mt-3 space-y-2">
+                    {unmappedSectionScores.map((item, index) => (
+                      <li
+                        key={`unmapped-${index}-${item.label}`}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background px-3 py-2 text-sm"
+                      >
+                        <span className="text-foreground">{item.label || 'Unlabelled score'}</span>
+                        <span className="flex items-center gap-2">
+                          <span className="text-muted-foreground">
+                            {item.score ?? '—'} / {item.max_score ?? '—'}
+                          </span>
+                          {item.percentage != null ? (
+                            <span className="font-medium text-foreground">
+                              {item.percentage.toFixed(0)}%
+                            </span>
+                          ) : (
+                            <NotScored testId={`uvdb-unmapped-not-scored-${index}`} compact />
+                          )}
+                          <ScoreProvenanceBadge source={item.score_source} />
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               {sections.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center">
                   <ClipboardList className="mx-auto h-10 w-10 text-muted-foreground" />
@@ -1520,18 +1694,26 @@ export default function UVDBAudits() {
                             <div className={`p-3 ${bgColor} rounded-xl`}>
                               <Icon className="w-6 h-6 text-white" />
                             </div>
-                            <div className="text-right">
+                            <div className="flex flex-col items-end gap-1 text-right">
                               {scoreData ? (
                                 <>
                                   <div className="text-2xl font-bold text-success">
-                                    {scoreData.score}
+                                    {scoreData.score ?? '—'}
                                     <span className="text-base text-muted-foreground font-normal">
-                                      /{scoreData.max_score}
+                                      /{scoreData.max_score ?? '—'}
                                     </span>
                                   </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {scoreData.percentage.toFixed(0)}%
-                                  </div>
+                                  {scoreData.percentage != null ? (
+                                    <div className="text-xs text-muted-foreground">
+                                      {scoreData.percentage.toFixed(0)}%
+                                    </div>
+                                  ) : (
+                                    <NotScored
+                                      testId={`uvdb-section-${section.number}-not-scored`}
+                                      compact
+                                    />
+                                  )}
+                                  <ScoreProvenanceBadge source={scoreData.score_source} />
                                 </>
                               ) : (
                                 <>
@@ -1546,11 +1728,23 @@ export default function UVDBAudits() {
                             </div>
                           </div>
 
-                          {scoreData && (
+                          {scoreData?.percentage != null && (
                             <div className="mb-3">
                               <ScoreBar percentage={scoreData.percentage} />
                             </div>
                           )}
+
+                          {scoreData?.score_source === 'imported' &&
+                          section.content_status === 'pending_protocol_pdf' ? (
+                            <p
+                              className="mb-3 rounded border border-info/30 bg-info/10 px-2 py-1.5 text-xs text-info"
+                              data-testid={`uvdb-section-${section.number}-imported-note`}
+                            >
+                              Score read from the imported report. This section&apos;s protocol
+                              questions are not loaded, so the figure has not been verified against
+                              UVDB scoring in this system.
+                            </p>
+                          ) : null}
 
                           <div className="text-lg font-bold text-card-foreground mb-1 flex flex-wrap items-center gap-2">
                             <span>Section {section.number}</span>
@@ -1833,11 +2027,14 @@ export default function UVDBAudits() {
                               <td className="px-4 py-3 text-foreground">{audit.lead_auditor}</td>
                               <td className="px-4 py-3 text-center">
                                 {audit.percentage_score != null ? (
-                                  <span className="text-success font-bold">
-                                    {audit.percentage_score}%
-                                  </span>
+                                  <div className="flex flex-col items-center gap-1">
+                                    <span className="text-success font-bold">
+                                      {audit.percentage_score}%
+                                    </span>
+                                    <ScoreProvenanceBadge source={audit.score_source} />
+                                  </div>
                                 ) : (
-                                  <span className="text-muted-foreground">—</span>
+                                  <NotScored testId={`uvdb-audit-not-scored-${audit.id}`} compact />
                                 )}
                               </td>
                               <td className="px-4 py-3 text-center">
