@@ -68,13 +68,13 @@ export function OrgCommandStrip({ data, compact = false }: { data: OrgData; comp
         <Card hoverable className={cn('h-full p-5', compact && 'p-4')}>
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Risk + forecast</p>
+              <p className="text-sm font-medium text-muted-foreground">High residual risks</p>
               <p className="mt-1 text-2xl font-bold text-foreground">
                 {riskHigh.status === 'ok' ? riskHigh.value : '—'}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {riskOutsideAppetite.status === 'ok'
-                  ? `${riskOutsideAppetite.value} outside appetite`
+                  ? `${riskOutsideAppetite.value} outside appetite (not total risks)`
                   : 'Appetite data unavailable'}
               </p>
               <div className="mt-2">

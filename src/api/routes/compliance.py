@@ -26,12 +26,30 @@ from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod, EvidenceLinkStatus
 from src.domain.models.ims_unification import IMSRequirement
 from src.domain.models.standard import Clause, Standard
+from src.domain.models.tenant import Tenant
 from src.domain.models.user import User
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
 from src.infrastructure.monitoring.azure_monitor import get_tracer
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+async def _resolve_organization_name(
+    db: DbSession,
+    *,
+    tenant_id: Optional[int],
+    organization_name: Optional[str],
+) -> Optional[str]:
+    """Prefer an explicit query param; otherwise the tenant display name (PX-251)."""
+    if organization_name and organization_name.strip() and organization_name.strip() != "Organisation":
+        return organization_name.strip()
+    if tenant_id is None:
+        return None
+    result = await db.execute(select(Tenant.name).where(Tenant.id == tenant_id))
+    name = result.scalar_one_or_none()
+    return name if name else None
+
 
 _STANDARD_DB_MATCHERS: dict[ISOStandard, tuple[str, ...]] = {
     ISOStandard.ISO_9001: ("9001",),
@@ -134,6 +152,8 @@ class ComplianceStandardResponse(BaseModel):
     has_canonical_standard: bool = False
     canonical_data_degraded: bool = False
     canonical_data_message: Optional[str] = None
+    # ISO 27001: management clauses (4–10) vs Annex A — SoA uses Annex A only (PX-254).
+    clause_count_breakdown: dict[str, int] = {}
 
 
 class ComplianceSummary(BaseModel):
@@ -601,7 +621,10 @@ async def export_audit_pack(
         ),
     ),
     include_soa: bool = Query(True, description="Include ISO 27001 SoA section"),
-    organization_name: str = Query(default="Organisation", description="Organisation name for SoA"),
+    organization_name: Optional[str] = Query(
+        default=None,
+        description="Organisation name for SoA (defaults to tenant name when omitted)",
+    ),
 ):
     """
     Server-side ISO audit evidence pack with full CEL provenance.
@@ -614,6 +637,9 @@ async def export_audit_pack(
     std_enum = _parse_standard_filter(standard)
     links = await _load_evidence_links(db, tenant_id=current_user.tenant_id, standard=std_enum)
     evidence_models = [_build_evidence_link_model(link) for link in links]
+    resolved_org = await _resolve_organization_name(
+        db, tenant_id=current_user.tenant_id, organization_name=organization_name
+    )
 
     soa_payload: Optional[dict[str, Any]] = None
     if include_soa:
@@ -626,7 +652,7 @@ async def export_audit_pack(
             )
         soa_payload = iso_compliance_service.generate_soa(
             [_build_evidence_link_model(link) for link in soa_links],
-            organization_name=organization_name,
+            organization_name=resolved_org,
             include_justification=True,
         )
         soa_payload["persisted_evidence_links"] = len(soa_links)
@@ -637,7 +663,7 @@ async def export_audit_pack(
         include_nonconformity=include_nonconformity,
         include_soa=soa_payload,
         exported_by=getattr(current_user, "email", None),
-        organization_name=organization_name,
+        organization_name=resolved_org,
     )
     pack["persisted_evidence_links"] = len(links)
 
@@ -689,7 +715,10 @@ async def analyze_evidence(
 async def get_statement_of_applicability(
     db: DbSession,
     current_user: CurrentUser,
-    organization_name: str = Query(default="Organisation", description="Organisation name for SoA header"),
+    organization_name: Optional[str] = Query(
+        default=None,
+        description="Organisation name for SoA header (defaults to tenant name when omitted)",
+    ),
     include_justification: bool = Query(default=True, description="Include implementation justification per control"),
 ):
     """
@@ -699,25 +728,22 @@ async def get_statement_of_applicability(
     ISMS Statement of Applicability entity (a DB-backed record managed by the
     ISMS module with full lifecycle, versioning, and approval workflow).
 
-    This endpoint dynamically derives control applicability from the live
+    This endpoint dynamically derives control evidence coverage from the live
     evidence link database.  All 93 ISO 27001:2022 Annex A controls are assessed
-    against persisted evidence items and returned with:
-
-    - Implementation status (Implemented / Partially Implemented / Not Implemented)
-    - Evidence count and evidence item list (including ``notes`` field)
-    - Auditor justification statement
-
-    Suitable for exporting a point-in-time evidence SoA for external auditors or
-    feeding into the ISO certification pack via the Audit Pack download.
+    against persisted evidence items. Applicability decisions are not recorded
+    in this path and are not invented.
     """
     links = await _load_evidence_links(
         db,
         tenant_id=current_user.tenant_id,
         standard=_parse_standard_filter("iso27001"),
     )
+    resolved_org = await _resolve_organization_name(
+        db, tenant_id=current_user.tenant_id, organization_name=organization_name
+    )
     soa = iso_compliance_service.generate_soa(
         [_build_evidence_link_model(link) for link in links],
-        organization_name=organization_name,
+        organization_name=resolved_org,
         include_justification=include_justification,
     )
     soa["persisted_evidence_links"] = len(links)
@@ -742,13 +768,23 @@ async def list_standards(db: DbSession, current_user: CurrentUser):
         defaults = _STANDARD_DEFAULTS[iso_standard]
         canonical_row = canonical_rows.get(iso_standard)
         canonical_coverage = coverage_by_standard.get(iso_standard.value, {})
+        level_2 = [c for c in iso_compliance_service.get_all_clauses(iso_standard) if c.level == 2]
+        annex_a = [c for c in level_2 if c.clause_number.startswith("A.")]
+        breakdown = (
+            {
+                "management_clauses": len(level_2) - len(annex_a),
+                "annex_a_controls": len(annex_a),
+            }
+            if annex_a
+            else {}
+        )
         response.append(
             ComplianceStandardResponse(
                 id=iso_standard.value,
                 code=defaults["code"],
                 name=defaults["name"],
                 description=defaults["description"],
-                clause_count=len([c for c in iso_compliance_service.get_all_clauses(iso_standard) if c.level == 2]),
+                clause_count=len(level_2),
                 db_standard_id=canonical_row.id if canonical_row else None,
                 db_standard_code=canonical_row.code if canonical_row else None,
                 db_standard_name=canonical_row.name if canonical_row else None,
@@ -759,6 +795,7 @@ async def list_standards(db: DbSession, current_user: CurrentUser):
                 has_canonical_standard=canonical_row is not None,
                 canonical_data_degraded=canonical_data_message is not None,
                 canonical_data_message=canonical_data_message,
+                clause_count_breakdown=breakdown,
             )
         )
     return response

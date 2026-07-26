@@ -947,20 +947,31 @@ export default function IMSDashboard() {
             </div>
           ) : ismsData ? (
             <>
-              {/* ISMS Compliance Score Banner */}
+              {/* ISMS Annex A implementation banner (PX-235) */}
               <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-2xl font-bold text-white mb-1">ISO 27001:2022 ISMS Compliance</h2>
-                    <p className="text-purple-100">Information Security Management System</p>
+                    <h2 className="text-2xl font-bold text-white mb-1">ISO 27001:2022 Annex A implementation</h2>
+                    <p className="text-purple-100">
+                      Control implementation from the ISMS register — not catalogue evidence coverage.
+                    </p>
                   </div>
                   <div className="text-right">
-                    <div className="text-5xl font-bold text-white" aria-label={`${ismsData.compliance_score}% ISMS compliance`}>
+                    <div
+                      className="text-5xl font-bold text-white"
+                      aria-label={`${ismsData.compliance_score}% of applicable Annex A controls implemented`}
+                      data-testid="ims-annex-a-implementation"
+                    >
                       {ismsData.compliance_score}%
                     </div>
-                    <div className="flex items-center gap-1 text-purple-100 mt-1">
+                    <div
+                      className="flex items-center gap-1 text-purple-100 mt-1"
+                      data-testid="ims-annex-a-counts"
+                    >
                       <ShieldCheck className="w-4 h-4" aria-hidden="true" />
-                      <span>Annex A Controls Implemented</span>
+                      <span>
+                        {ismsData.controls.implemented} of {ismsData.controls.applicable} applicable controls
+                      </span>
                     </div>
                   </div>
                 </div>

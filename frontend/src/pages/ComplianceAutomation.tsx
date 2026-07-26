@@ -50,6 +50,7 @@ import { IconButton } from '../components/ui/IconButton'
 import { EmptyState } from '../components/ui/EmptyState'
 import { toast } from '../contexts/ToastContext'
 import {
+  CERT_EXPIRY_WINDOW_DAYS,
   countOverdueMonitoringRuns,
   countPendingChangesInbox,
   countUnreviewedRegulatoryUpdates,
@@ -60,6 +61,7 @@ import {
   MONITORING_AUDITS_HANDOFF_PATH,
   MONITORING_SCORE_HANDOFF_EVIDENCE,
   MONITORING_SCORE_HANDOFF_IMS,
+  summariseCertificateShelf,
   type MonitoringAuditRunRow,
   type MonitoringRiddorPack,
 } from './complianceAutomationHelpers'
@@ -162,7 +164,7 @@ export default function ComplianceAutomation() {
         let status = certificate.status
         if (expiry) {
           if (expiry < now) status = 'expired'
-          else if (expiry.getTime() - now.getTime() <= 30 * 24 * 60 * 60 * 1000) status = 'expiring_soon'
+          else if (expiry.getTime() - now.getTime() <= CERT_EXPIRY_WINDOW_DAYS * 24 * 60 * 60 * 1000) status = 'expiring_soon'
         }
         return { ...certificate, status }
       })
@@ -388,13 +390,10 @@ export default function ComplianceAutomation() {
             {scoreIsLive ? `${complianceScore.overall}%` : '—'}
           </div>
           <div className="text-primary-foreground/80 text-sm mb-3">
-            {t('compliance.automation.overall_score', 'Overall Compliance Score')}
+            Clause evidence coverage
           </div>
-          <p className="text-xs text-primary-foreground/70 mb-3" data-testid="monitoring-score-tab-retired">
-            {t(
-              'compliance.automation.score.tab.retired',
-              'Score breakdown tab removed — open IMS for multi-scheme scores or Compliance Evidence for coverage.',
-            )}
+          <p className="text-xs text-primary-foreground/70 mb-3" data-testid="monitoring-score-definition">
+            Clauses with ≥1 evidence link, across all adopted standards. Open IMS for multi-scheme scores or Compliance Evidence for coverage.
           </p>
           <div className="flex flex-wrap gap-2">
             <Link
@@ -431,17 +430,32 @@ export default function ComplianceAutomation() {
           </div>
         </div>
 
-        <div className="bg-card/50 border border-border rounded-xl p-4">
+        <div className="bg-card/50 border border-border rounded-xl p-4" data-testid="monitoring-cert-expiry-tile">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 rounded-lg bg-warning/20">
               <Clock className="w-5 h-5 text-warning" />
             </div>
             <span className="text-muted-foreground text-sm">Expiring Certificates</span>
           </div>
-          <div className="text-2xl font-bold text-foreground">
-            {certificates.filter((c) => c.status === 'expiring_soon').length}
-          </div>
-          <div className="text-sm text-muted-foreground">Within 60 days</div>
+          {(() => {
+            const shelf = summariseCertificateShelf(certificates)
+            if (shelf.tracked === 0) {
+              return (
+                <>
+                  <div className="text-2xl font-bold text-foreground">—</div>
+                  <div className="text-sm text-muted-foreground">No certificates tracked</div>
+                </>
+              )
+            }
+            return (
+              <>
+                <div className="text-2xl font-bold text-foreground">{shelf.expiringSoon}</div>
+                <div className="text-sm text-muted-foreground">
+                  of {shelf.tracked} tracked, within {CERT_EXPIRY_WINDOW_DAYS} days
+                </div>
+              </>
+            )
+          })()}
         </div>
 
         <div className="bg-card/50 border border-border rounded-xl p-4">

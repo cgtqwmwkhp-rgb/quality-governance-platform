@@ -42,6 +42,13 @@ import {
   periodDistributionPercent,
   rowsForPeriodDistribution,
 } from './analytics/moduleDistributionScope'
+import {
+  formatResolutionMetric,
+  resolutionFromAvgDays,
+  resolutionMetricNote,
+  type ResolutionMetric,
+} from './analytics/resolutionMetric'
+import { scopeCaption, scopeLabel, type ModuleScope } from './analytics/moduleScope'
 
 type TimeRange = '7d' | '30d' | '90d' | '1y'
 type SectionId =
@@ -89,7 +96,8 @@ interface ModuleRow {
   total: MetricValue
   open: MetricValue
   closed: MetricValue
-  avgResolutionDays: number | null
+  resolution: ResolutionMetric
+  scope: ModuleScope
   trend: Trend
   href: string
   hrefOpen: string
@@ -399,20 +407,22 @@ export default function Analytics() {
   }, [load])
 
   const moduleRows: ModuleRow[] = useMemo(() => {
-    const incidentsTotal = dash?.incidents.total_in_period ?? null
-    const incidentsOpen = dash?.incidents.open ?? null
-    const complaintsTotal = dash?.complaints.total_in_period ?? null
-    const complaintsOpen = dash?.complaints.open ?? null
-    const complaintsClosed = dash?.complaints.closed_in_period ?? null
+    const incidentsPeriodTotal = dash?.incidents.total_in_period ?? null
+    const complaintsPeriodTotal = dash?.complaints.total_in_period ?? null
     const rtasRegisterTotal = dash?.rtas.total ?? null
     const rtasPeriodTotal = dash?.rtas.total_in_period ?? null
     const actionsTotal = actionsSummary?.total ?? null
     const actionsOpen = actionsSummary ? openFromActions(actionsSummary) : null
     const actionsClosed = actionsSummary ? completedFromActions(actionsSummary) : null
-    const incidentsClosed =
-      incidentsTotal != null && incidentsOpen != null
-        ? Math.max(0, incidentsTotal - Math.min(incidentsOpen, incidentsTotal))
-        : null
+
+    const incidentsRegister =
+      typeof dash?.incidents.register_total === 'number' &&
+      typeof dash?.incidents.register_open === 'number' &&
+      typeof dash?.incidents.register_closed === 'number'
+    const complaintsRegister =
+      typeof dash?.complaints.register_total === 'number' &&
+      typeof dash?.complaints.register_open === 'number' &&
+      typeof dash?.complaints.register_closed === 'number'
 
     const auditsPeriodTotal = dash?.audits?.totals ?? auditsTotal
 
@@ -420,10 +430,13 @@ export default function Analytics() {
       {
         id: 'incidents',
         module: 'Incidents',
-        total: incidentsTotal,
-        open: incidentsOpen,
-        closed: incidentsClosed,
-        avgResolutionDays: null,
+        total: incidentsRegister ? dash!.incidents.register_total! : null,
+        open: incidentsRegister ? dash!.incidents.register_open! : null,
+        closed: incidentsRegister ? dash!.incidents.register_closed! : null,
+        resolution: dash
+          ? resolutionFromAvgDays(dash.incidents.avg_resolution_days ?? null, 'register')
+          : { kind: 'unavailable' },
+        scope: 'register',
         // PX-224: this was bound to `near_misses.trend_percent`, so the Incidents row
         // reported the near-miss trend (500.0% off a baseline of one) while the incident
         // chart beside it was empty. The exec-dashboard payload carries no incident
@@ -431,8 +444,8 @@ export default function Analytics() {
         trend: NO_TREND_DATA,
         href: '/incidents',
         hrefOpen: '/incidents?status=open',
-        loadState: dash ? 'live' : 'unavailable',
-        distributionTotal: incidentsTotal,
+        loadState: incidentsRegister ? 'live' : dash ? 'unavailable' : 'unavailable',
+        distributionTotal: incidentsPeriodTotal,
       },
       {
         id: 'rtas',
@@ -440,7 +453,8 @@ export default function Analytics() {
         total: rtasRegisterTotal,
         open: rtasOpen,
         closed: rtasClosed,
-        avgResolutionDays: rtasAvgResolutionDays,
+        resolution: resolutionFromAvgDays(rtasAvgResolutionDays, 'loaded_page'),
+        scope: 'register',
         trend: NO_TREND_DATA,
         href: '/rtas',
         hrefOpen: '/rtas',
@@ -450,15 +464,18 @@ export default function Analytics() {
       {
         id: 'complaints',
         module: 'Complaints',
-        total: complaintsTotal,
-        open: complaintsOpen,
-        closed: complaintsClosed,
-        avgResolutionDays: null,
+        total: complaintsRegister ? dash!.complaints.register_total! : null,
+        open: complaintsRegister ? dash!.complaints.register_open! : null,
+        closed: complaintsRegister ? dash!.complaints.register_closed! : null,
+        resolution: dash
+          ? resolutionFromAvgDays(dash.complaints.avg_resolution_days ?? null, 'register')
+          : { kind: 'unavailable' },
+        scope: 'register',
         trend: NO_TREND_DATA,
         href: '/complaints',
         hrefOpen: '/complaints?status=open',
-        loadState: dash ? 'live' : 'unavailable',
-        distributionTotal: complaintsTotal,
+        loadState: complaintsRegister ? 'live' : dash ? 'unavailable' : 'unavailable',
+        distributionTotal: complaintsPeriodTotal,
       },
       {
         id: 'risks',
@@ -466,7 +483,8 @@ export default function Analytics() {
         total: riskTotal + riskClosed,
         open: riskTotal,
         closed: riskClosed,
-        avgResolutionDays: null,
+        resolution: { kind: 'not_measured' },
+        scope: 'register',
         trend: NO_TREND_DATA,
         href: '/risk-register',
         hrefOpen: '/risk-register?status=active',
@@ -479,7 +497,8 @@ export default function Analytics() {
         total: auditsPeriodTotal,
         open: auditsOpen,
         closed: auditsClosed,
-        avgResolutionDays: auditsAvgResolutionDays,
+        resolution: resolutionFromAvgDays(auditsAvgResolutionDays, 'loaded_page'),
+        scope: 'period',
         trend: NO_TREND_DATA,
         href: '/audits',
         hrefOpen: '/audits?view=board',
@@ -492,7 +511,8 @@ export default function Analytics() {
         total: actionsTotal,
         open: actionsOpen,
         closed: actionsClosed,
-        avgResolutionDays: null,
+        resolution: { kind: 'not_measured' },
+        scope: 'register',
         trend: NO_TREND_DATA,
         href: '/actions',
         hrefOpen: '/actions?view=overdue',
@@ -571,12 +591,12 @@ export default function Analytics() {
     }
     if (complianceScore != null) {
       lines.push(
-        `Evidence coverage score is ${complianceScore}% — drill into ISO Compliance for clause gaps.`,
+        `Clause evidence coverage is ${complianceScore}% — clauses carrying at least one evidence link across adopted standards.`,
       )
     }
     const complaintResolutionRate = dash?.complaints.resolution_rate
     if (complaintResolutionRate != null) {
-      lines.push(`Complaint resolution rate this period: ${complaintResolutionRate}%.`)
+      lines.push(`${complaintResolutionRate}% of complaints received in this period are now closed.`)
     }
     if (auditsLoadState === 'unavailable') {
       lines.push('Audit summary unavailable — open/closed counts are not shown as zero.')
@@ -757,8 +777,8 @@ export default function Analytics() {
           },
           {
             id: 'compliance' as HeroFilter,
-            title: 'Evidence coverage',
-            subtitle: 'ISO evidence links',
+            title: 'Clause evidence coverage',
+            subtitle: 'Clauses with ≥1 evidence link, across adopted standards',
             value: complianceScore != null ? `${complianceScore}%` : '—',
             icon: <Shield className="w-6 h-6" />,
             variant: 'info' as const,
@@ -822,7 +842,11 @@ export default function Analytics() {
             <span className="text-xs text-muted-foreground">{periodLabel(timeRange)} · live</span>
           </div>
           <div className="h-64 flex items-end justify-between gap-2" data-testid="analytics-trends">
-            {weeklyTrends.length === 0 ? (
+            {dash?.trends?.unavailable?.includes('incidents_weekly') ? (
+              <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm" data-testid="analytics-trends-unavailable">
+                Incident trend unavailable — the trend query failed. This is not an empty period.
+              </div>
+            ) : weeklyTrends.length === 0 ? (
               <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
                 No incident trend points for this period
               </div>
@@ -893,12 +917,16 @@ export default function Analytics() {
           <p className="text-xs text-muted-foreground">
             Click a row to focus the section · use Open source for the live register
           </p>
+          <p className="text-xs text-muted-foreground mt-1" data-testid="analytics-scope-caption">
+            {scopeCaption(periodLabel(timeRange))}
+          </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full" data-testid="analytics-module-table">
             <thead className="bg-surface">
               <tr>
                 <th className="text-left p-4 text-sm font-medium text-muted-foreground">Module</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Scope</th>
                 <th className="text-center p-4 text-sm font-medium text-muted-foreground">Total</th>
                 <th className="text-center p-4 text-sm font-medium text-muted-foreground">Open</th>
                 <th className="text-center p-4 text-sm font-medium text-muted-foreground">Closed</th>
@@ -918,6 +946,7 @@ export default function Analytics() {
                   onClick={() => setQuery({ section: stat.id })}
                 >
                   <td className="p-4 font-medium text-foreground">{stat.module}</td>
+                  <td className="p-4 text-center text-xs text-muted-foreground">{scopeLabel(stat.scope)}</td>
                   <td className="p-4 text-center text-foreground">{formatMetric(stat.total)}</td>
                   <td className="p-4 text-center">
                     <span
@@ -943,8 +972,8 @@ export default function Analytics() {
                       {formatMetric(stat.closed)}
                     </span>
                   </td>
-                  <td className="p-4 text-center text-muted-foreground">
-                    {formatResolutionDays(stat.avgResolutionDays)}
+                  <td className="p-4 text-center text-muted-foreground" title={resolutionMetricNote(stat.resolution) ?? undefined}>
+                    {formatResolutionMetric(stat.resolution)}
                   </td>
                   <td className="p-4 text-center">
                     <TrendIndicator change={stat.trend} invertGood />
