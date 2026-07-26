@@ -6,6 +6,7 @@ import Portal from '../Portal'
 const mockMyCompliance = vi.fn()
 const mockListMyAssignments = vi.fn()
 const mockMyTraining = vi.fn()
+const mockActionsList = vi.fn()
 const mockAnnounce = vi.fn()
 
 vi.mock('../../api/client', () => ({
@@ -17,6 +18,9 @@ vi.mock('../../api/client', () => ({
   },
   portalComplianceApi: {
     myCompliance: (...args: unknown[]) => mockMyCompliance(...args),
+  },
+  actionsApi: {
+    list: (...args: unknown[]) => mockActionsList(...args),
   },
 }))
 
@@ -44,6 +48,7 @@ describe('Portal tools + van landing', () => {
     vi.clearAllMocks()
     mockListMyAssignments.mockResolvedValue({ data: { items: [] } })
     mockMyTraining.mockResolvedValue({ items: [] })
+    mockActionsList.mockResolvedValue({ data: { items: [] } })
   })
 
   it('shows clear-to-work and tool/van actions before report', async () => {
