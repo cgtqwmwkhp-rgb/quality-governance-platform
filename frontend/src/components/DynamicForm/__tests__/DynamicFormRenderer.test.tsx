@@ -217,6 +217,27 @@ describe('PX-282 stepper navigation', () => {
     expect(screen.queryByText(/submission failed/i)).not.toBeInTheDocument()
   })
 
+  it('shows why the submission failed, not just that it did (PX-327)', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi
+      .fn()
+      .mockRejectedValue(
+        new Error('"clip.mp4" could not be attached: wrong file type. Your report has not been submitted.'),
+      )
+    renderForm({ onSubmit })
+
+    await user.type(fieldInput('alpha'), 'first answer')
+    await user.click(continueButton())
+    await user.type(await findFieldInput('bravo'), 'second answer')
+    await user.click(continueButton())
+    await screen.findByRole('heading', { name: 'Step Three' })
+
+    await user.click(screen.getByTestId('submit-report-btn'))
+
+    expect(await screen.findByText(/clip\.mp4/)).toBeInTheDocument()
+    expect(screen.getByText(/has not been submitted/)).toBeInTheDocument()
+  })
+
   it('does not mutate the caller template when sorting steps and fields', () => {
     const template = threeStepTemplate()
     // Present the steps out of order; the renderer must sort a copy.
