@@ -360,11 +360,6 @@ export default function CalendarView() {
                     </Badge>
                   ))}
                 </div>
-                {!personalHonesty.personalProductLive && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    {t('calendar.personal_honesty.option_c_followon')}
-                  </p>
-                )}
               </div>
             )
           })()}

@@ -136,4 +136,38 @@ describe('Notifications', () => {
     await waitFor(() => expect(mockGetPreferences).toHaveBeenCalled())
     expect(await screen.findByText('notifications.pref.high_priority_alerts')).toBeInTheDocument()
   })
+
+  it('renders RTA acronym casing in title and entity chip (PX-188)', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 22,
+            type: 'assignment',
+            priority: 'high',
+            title: 'New rta assigned to you',
+            message: 'You have been assigned a rta',
+            entity_type: 'rta',
+            action_url: '/rtas/9',
+            is_read: false,
+            created_at: '2026-07-09T12:00:00.000Z',
+          },
+        ],
+        total: 1,
+        unread_count: 1,
+      },
+    })
+
+    render(
+      <Wrapper>
+        <Notifications />
+      </Wrapper>,
+    )
+
+    expect(await screen.findByText('New RTA assigned to you')).toBeInTheDocument()
+    expect(screen.getByText('You have been assigned a RTA')).toBeInTheDocument()
+    expect(screen.getByText('RTA')).toBeInTheDocument()
+    expect(screen.queryByText('Rta')).not.toBeInTheDocument()
+    expect(screen.queryByText('New rta assigned to you')).not.toBeInTheDocument()
+  })
 })

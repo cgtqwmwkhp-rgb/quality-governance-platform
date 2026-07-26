@@ -152,7 +152,7 @@ describe('CalendarView', () => {
     expect(banner).toBeInTheDocument()
   })
 
-  it('shows personal-product honesty shell (not Option C)', async () => {
+  it('shows personal-product honesty shell without delivery codenames (PX-287)', async () => {
     const CalendarView = (await import('../CalendarView')).default
     render(
       <MemoryRouter initialEntries={['/calendar']}>
@@ -162,13 +162,17 @@ describe('CalendarView', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByTestId('calendar-personal-honesty')).toBeInTheDocument()
+    const panel = await screen.findByTestId('calendar-personal-honesty')
+    expect(panel).toBeInTheDocument()
     expect(screen.getByTestId('calendar-personal-honesty-copy')).toHaveTextContent(
       'calendar.personal_honesty.title',
     )
     expect(screen.getByTestId('calendar-personal-cap-governance_feed')).toBeInTheDocument()
     expect(screen.getByTestId('calendar-personal-cap-personal_events')).toBeInTheDocument()
     expect(screen.getByTestId('calendar-personal-cap-ics_sync')).toBeInTheDocument()
+    expect(panel).not.toHaveTextContent(/Option C/i)
+    expect(panel).not.toHaveTextContent(/AM-THREAD/i)
+    expect(panel.textContent || '').not.toMatch(/option_c/i)
   })
 })
 

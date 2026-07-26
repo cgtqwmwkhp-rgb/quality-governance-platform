@@ -38,6 +38,8 @@ const {
   mockGetTrends,
   mockAuditRuns,
   mockAuditFindings,
+  mockResolveSuggestionTriage,
+  mockUpdateOwner,
 } = vi.hoisted(() => ({
   mockRiskList: vi.fn(),
   mockGetSummary: vi.fn(),
@@ -45,6 +47,8 @@ const {
   mockGetTrends: vi.fn(),
   mockAuditRuns: vi.fn(),
   mockAuditFindings: vi.fn(),
+  mockResolveSuggestionTriage: vi.fn(),
+  mockUpdateOwner: vi.fn(),
 }))
 
 vi.mock('../../api/client', () => ({
@@ -53,7 +57,8 @@ vi.mock('../../api/client', () => ({
     getSummary: mockGetSummary,
     getHeatmap: mockGetHeatmap,
     getTrends: mockGetTrends,
-    resolveSuggestionTriage: vi.fn(),
+    resolveSuggestionTriage: mockResolveSuggestionTriage,
+    updateOwner: mockUpdateOwner,
   },
   auditsApi: {
     listRuns: mockAuditRuns,
@@ -652,5 +657,189 @@ describe('RiskRegister export honesty (PX-293)', () => {
 
     clickSpy.mockRestore()
     vi.unstubAllGlobals()
+  })
+})
+
+describe('RiskRegister Run021 residual honesty (Lane C)', () => {
+  const emptyHeatmap = {
+    data: {
+      matrix: Array.from({ length: 5 }, (_, row) =>
+        Array.from({ length: 5 }, (__, col) => ({
+          likelihood: 5 - row,
+          impact: col + 1,
+          score: (5 - row) * (col + 1),
+          level: 'low',
+          color: '#22c55e',
+          risk_count: 0,
+          risk_ids: [],
+          risk_titles: [],
+        })),
+      ),
+      summary: {
+        total_risks: 129,
+        critical_risks: 0,
+        high_risks: 1,
+        outside_appetite: 0,
+        average_inherent_score: 0,
+        average_residual_score: 0,
+      },
+      likelihood_labels: {},
+      impact_labels: {},
+    },
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    delete window.__FEATURE_FLAGS__
+    mockGetTrends.mockResolvedValue({ data: { series: [], top_movers: [] } })
+    mockAuditRuns.mockResolvedValue({ data: { items: [] } })
+    mockAuditFindings.mockResolvedValue({ data: { items: [] } })
+    mockGetHeatmap.mockResolvedValue(emptyHeatmap)
+    mockResolveSuggestionTriage.mockResolvedValue({ data: { id: 1, suggestion_triage_status: 'accepted' } })
+    mockUpdateOwner.mockResolvedValue({ data: { id: 1, risk_owner_name: 'Assigned Owner' } })
+  })
+
+  it('PX-157: shows never-reviewed honesty when summary reports unassessed majority', async () => {
+    mockRiskList
+      .mockResolvedValueOnce({ data: { items: [], total: 129 } })
+      .mockResolvedValueOnce({ data: { items: [], total: 73 } })
+    mockGetSummary.mockResolvedValue({
+      data: {
+        total_risks: 129,
+        by_level: { critical: 0, high: 1, medium: 1, low: 1 },
+        outside_appetite: 0,
+        overdue_review: 125,
+        never_reviewed: 126,
+        escalated: 0,
+      },
+    })
+
+    renderRegister()
+
+    const banner = await screen.findByTestId('risk-never-reviewed-honesty')
+    expect(banner).toHaveTextContent('126 of 129')
+    expect(banner).toHaveTextContent(/Outside Appetite/i)
+    expect(banner).toHaveTextContent(/not assurance/i)
+  })
+
+  it('PX-267: overdue review dates render as dd/mm/yyyy (not month-name locale)', async () => {
+    mockRiskList
+      .mockResolvedValueOnce({
+        data: {
+          items: [
+            {
+              id: 9,
+              reference: 'RSK-00009',
+              title: 'Overdue review risk',
+              status: 'active',
+              residual_score: 12,
+              inherent_score: 16,
+              category: 'operational',
+              next_review_date: '2026-05-17T00:00:00',
+              updated_at: '2026-07-10T09:15:00',
+            },
+          ],
+          total: 1,
+        },
+      })
+      .mockResolvedValueOnce({ data: { items: [], total: 0 } })
+    mockGetSummary.mockResolvedValue({
+      data: {
+        total_risks: 1,
+        by_level: { critical: 0, high: 1, medium: 0, low: 0 },
+        outside_appetite: 0,
+        overdue_review: 1,
+        never_reviewed: 0,
+        escalated: 0,
+      },
+    })
+
+    renderRegister()
+
+    const list = await screen.findByTestId('risk-slt-overdue-list')
+    expect(list).toHaveTextContent('17/05/2026')
+    expect(list).not.toHaveTextContent(/May/)
+    expect(await screen.findByTestId('risk-updated-9')).toHaveTextContent('10/07/2026')
+  })
+
+  it('PX-268: overdue hint uses plain English (no raw next_review_date field name)', async () => {
+    mockRiskList
+      .mockResolvedValueOnce({ data: { items: [], total: 0 } })
+      .mockResolvedValueOnce({ data: { items: [], total: 0 } })
+    mockGetSummary.mockResolvedValue({
+      data: {
+        total_risks: 0,
+        by_level: { critical: 0, high: 0, medium: 0, low: 0 },
+        outside_appetite: 0,
+        overdue_review: 0,
+        never_reviewed: 0,
+        escalated: 0,
+      },
+    })
+
+    renderRegister()
+
+    const overdue = await screen.findByTestId('risk-slt-overdue')
+    expect(overdue).not.toHaveTextContent('next_review_date')
+    expect(overdue).toHaveTextContent(/review due date/i)
+  })
+
+  it('PX-264: accept on unassigned triage risk opens owner dialog', async () => {
+    const pendingItem = {
+      id: 44,
+      reference: 'RSK-IMP-044',
+      title: 'Unassigned import risk',
+      status: 'identified',
+      residual_score: 6,
+      inherent_score: 6,
+      category: 'compliance',
+      risk_owner_name: null,
+      suggestion_triage_status: 'pending',
+      created_at: '2026-04-06T10:00:00Z',
+    }
+    mockRiskList.mockImplementation(async (params?: { suggestion_triage?: string }) => {
+      if (params?.suggestion_triage === 'pending') {
+        return { data: { items: [pendingItem], total: 73 } }
+      }
+      return { data: { items: [], total: 0 } }
+    })
+    mockGetSummary.mockResolvedValue({
+      data: {
+        total_risks: 1,
+        by_level: { critical: 0, high: 0, medium: 1, low: 0 },
+        outside_appetite: 0,
+        overdue_review: 0,
+        never_reviewed: 1,
+        escalated: 0,
+      },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/risk-register?triage=import']}>
+        <TooltipProvider>
+          <Routes>
+            <Route path="*" element={<RiskRegister />} />
+          </Routes>
+        </TooltipProvider>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('risk-import-triage-honesty')).toHaveTextContent(/73 import-sourced/)
+    expect(screen.getByTestId('risk-import-triage-honesty')).toHaveTextContent(/unassigned/)
+
+    fireEvent.click(await screen.findByTestId('risk-accept-44'))
+    expect(await screen.findByTestId('risk-import-accept-dialog')).toBeInTheDocument()
+    expect(mockResolveSuggestionTriage).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByTestId('risk-import-accept-owner'), {
+      target: { value: 'Audit Owner' },
+    })
+    fireEvent.click(screen.getByTestId('risk-import-accept-confirm'))
+
+    await waitFor(() => {
+      expect(mockUpdateOwner).toHaveBeenCalledWith(44, { risk_owner_name: 'Audit Owner' })
+      expect(mockResolveSuggestionTriage).toHaveBeenCalledWith(44, { decision: 'accept' })
+    })
   })
 })

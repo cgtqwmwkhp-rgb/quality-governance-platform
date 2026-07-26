@@ -32,20 +32,14 @@ import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { UserEmailSearch } from '../components/UserEmailSearch'
 import { trackError } from '../utils/errorTracker'
+import { formatDisplayDate, formatDisplayDateTime, NOT_PROVIDED } from '../helpers/formatters'
 
 const MAX_NOTE_BODY_CHARS = 16000
 
 function formatDateTime(value?: string | null): string {
-  if (!value) return '—'
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return value
-  return d.toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  if (!value) return NOT_PROVIDED
+  const formatted = formatDisplayDateTime(value)
+  return formatted || NOT_PROVIDED
 }
 
 function formatRelativeTime(iso?: string | null): string {
@@ -63,14 +57,9 @@ function formatRelativeTime(iso?: string | null): string {
   return ''
 }
 function formatDate(value?: string | null): string {
-  if (!value) return '—'
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return value
-  return d.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+  if (!value) return NOT_PROVIDED
+  const formatted = formatDisplayDate(value)
+  return formatted || NOT_PROVIDED
 }
 
 function levelBadgeVariant(
