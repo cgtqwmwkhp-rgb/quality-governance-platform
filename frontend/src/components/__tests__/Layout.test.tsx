@@ -251,6 +251,34 @@ describe('Layout', () => {
     )
   })
 
+  // docs/ops/BUTTON_REGISTRY.yml targets these hooks by name for the UX coverage
+  // gate (dashboard::nav-to-incidents / nav-to-rtas). Renaming the hub id or moving
+  // either route to another hub must fail here, at PR time, rather than in the gate
+  // after deployment.
+  it('keeps the safety-cases hub hooks the UX coverage registry depends on', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    const toggle = screen.getByTestId('nav-hub-btn-safety-cases')
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    const container = screen.getByTestId('nav-hub-safety-cases')
+    expect(container.querySelector('a[href="/incidents"]')).not.toBeInTheDocument()
+    expect(container.querySelector('a[href="/rtas"]')).not.toBeInTheDocument()
+
+    await user.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(container.querySelector('a[href="/incidents"]')).toBeInTheDocument()
+    expect(container.querySelector('a[href="/rtas"]')).toBeInTheDocument()
+  })
+
   it('exposes Insights hub links for analytics, calendar, exports, and AI', async () => {
     const user = userEvent.setup()
     const Layout = (await import('../Layout')).default

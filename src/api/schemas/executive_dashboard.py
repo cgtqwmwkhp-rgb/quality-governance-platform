@@ -7,22 +7,31 @@ from pydantic import BaseModel, Field
 
 
 class HealthScoreComponent(BaseModel):
-    """Individual health score component."""
+    """Individual health score component.
+
+    ``None`` means the component had nothing to measure and was excluded from the
+    weighted score — it is not a 0 and not a 100 (PX-216).
+
+    Only the ratio-derived components are nullable. ``incidents`` and
+    ``near_miss_culture`` score absolute counts, so they are always measurable and
+    stay required — widening them would force clients to null-check a value the
+    server cannot produce.
+    """
 
     incidents: float
     near_miss_culture: float
-    risk_management: float
-    kri_performance: float
-    compliance: float
-    sla_performance: float
+    risk_management: Optional[float] = None
+    kri_performance: Optional[float] = None
+    compliance: Optional[float] = None
+    sla_performance: Optional[float] = None
 
 
 class HealthScore(BaseModel):
-    """Overall health score."""
+    """Overall health score, or ``None`` when no component was measurable."""
 
-    score: float = Field(..., ge=0, le=100)
-    status: str  # healthy, attention_needed, at_risk
-    color: str  # green, amber, red
+    score: Optional[float] = Field(None, ge=0, le=100)
+    status: str  # healthy, attention_needed, at_risk, not_measured
+    color: str  # green, amber, red, grey
     components: HealthScoreComponent
 
 
@@ -52,7 +61,7 @@ class ComplaintSummary(BaseModel):
     total_in_period: int
     open: int
     closed_in_period: int
-    resolution_rate: float
+    resolution_rate: Optional[float] = None
 
 
 class RTASummary(BaseModel):
@@ -85,7 +94,7 @@ class ComplianceSummary(BaseModel):
     total_assigned: int
     completed: int
     overdue: int
-    completion_rate: float
+    completion_rate: Optional[float] = None
 
 
 class SLASummary(BaseModel):
@@ -94,7 +103,7 @@ class SLASummary(BaseModel):
     total_tracked: int
     met: int
     breached: int
-    compliance_rate: float
+    compliance_rate: Optional[float] = None
 
 
 class AuditSummary(BaseModel):
@@ -179,7 +188,9 @@ class VehicleGovernanceSummary(BaseModel):
     active_vehicles: int = 0
     compliant_vehicles: int = 0
     non_compliant_vehicles: int = 0
-    compliance_rate: float = 100.0
+    # None when the fleet register is empty — an unregistered fleet is not a
+    # compliant one (PX-216).
+    compliance_rate: Optional[float] = None
     open_defects: int = 0
     open_p1_defects: int = 0
     open_p2_defects: int = 0
@@ -192,7 +203,7 @@ class VehicleGovernanceSummary(BaseModel):
 class DashboardSummaryResponse(BaseModel):
     """Simplified dashboard summary for quick overview."""
 
-    health_score: float
+    health_score: Optional[float] = None
     health_status: str
     open_incidents: int
     pending_actions: int

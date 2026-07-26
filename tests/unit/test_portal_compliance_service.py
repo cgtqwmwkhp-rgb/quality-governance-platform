@@ -64,30 +64,110 @@ def test_tool_display_band_quarantined_wins() -> None:
     assert tool_display_band(asset) == "quarantined"
 
 
+def _clear_state(**overrides: object) -> str:
+    kwargs: dict[str, object] = {
+        "overdue": 0,
+        "quarantined": 0,
+        "due_30": 0,
+        "open_p1": 0,
+        "open_other_defects": 0,
+        "has_tool_data": True,
+        "has_van_data": True,
+    }
+    kwargs.update(overrides)
+    return derive_clear_state(**kwargs)  # type: ignore[arg-type]
+
+
 def test_derive_clear_state_blocked_on_p1_or_quarantine() -> None:
-    assert derive_clear_state(overdue=0, quarantined=1, due_30=0, open_p1=0, open_other_defects=0) == "blocked"
-    assert derive_clear_state(overdue=0, quarantined=0, due_30=0, open_p1=1, open_other_defects=0) == "blocked"
+    assert _clear_state(quarantined=1) == "blocked"
+    assert _clear_state(open_p1=1) == "blocked"
 
 
 def test_derive_clear_state_attention() -> None:
-    assert derive_clear_state(overdue=1, quarantined=0, due_30=0, open_p1=0, open_other_defects=0) == "attention"
-    assert derive_clear_state(overdue=0, quarantined=0, due_30=1, open_p1=0, open_other_defects=0) == "attention"
-    assert derive_clear_state(overdue=0, quarantined=0, due_30=0, open_p1=0, open_other_defects=2) == "attention"
-    assert (
-        derive_clear_state(
-            overdue=0,
-            quarantined=0,
-            due_30=0,
-            open_p1=0,
-            open_other_defects=0,
-            van_assignment_issue=True,
-        )
-        == "attention"
+    assert _clear_state(overdue=1) == "attention"
+    assert _clear_state(due_30=1) == "attention"
+    assert _clear_state(open_other_defects=2) == "attention"
+    assert _clear_state(van_assignment_issue=True) == "attention"
+
+
+def test_derive_clear_state_clear_requires_data() -> None:
+    """PX-320: 'clear' must mean 'we checked and nothing is outstanding'.
+
+    Previously this test asserted that all-zero counts yield "clear", which
+    locked in the defect: a person with no assets and no van was told they were
+    compliant. Zero counts only mean "clear" when there was something to count.
+    """
+    assert _clear_state() == "clear"
+    assert _clear_state(has_tool_data=True, has_van_data=False) == "clear"
+    assert _clear_state(has_tool_data=False, has_van_data=True) == "clear"
+
+
+def test_derive_clear_state_no_data_is_not_clear() -> None:
+    assert _clear_state(has_tool_data=False, has_van_data=False) == "no_data"
+
+
+def test_derive_clear_state_real_findings_outrank_no_data() -> None:
+    """A finding is evidence we hold data, even if the summaries look empty."""
+    assert _clear_state(quarantined=1, has_tool_data=False, has_van_data=False) == "blocked"
+    assert _clear_state(van_assignment_issue=True, has_tool_data=False, has_van_data=False) == "attention"
+
+
+def _empty_tool_summary() -> dict[str, int]:
+    return {
+        "total": 0,
+        "overdue": 0,
+        "due_30": 0,
+        "due_60": 0,
+        "due_90": 0,
+        "in_date": 0,
+        "quarantined": 0,
+        "mine": 0,
+        "on_van": 0,
+    }
+
+
+def _van_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "linked_driver": False,
+        "vehicle_reg": None,
+        "assignment_conflict": False,
+        "conflicting_regs": [],
+        "empty_reason": "no_van",
+        "daily_last_at": None,
+        "daily_pass": None,
+        "monthly_last_at": None,
+        "open_defects": [],
+        "defect_counts": {"p1": 0, "p2": 0, "p3": 0, "total": 0},
+    }
+    payload.update(overrides)
+    return payload
+
+
+async def test_my_compliance_reports_no_data_when_nothing_is_recorded() -> None:
+    """PX-320: no assets and no van must not read as 'clear to work'."""
+    service = PortalComplianceService(SimpleNamespace())
+    service.my_tools = AsyncMock(  # type: ignore[method-assign]
+        return_value={"items": [], "summary": _empty_tool_summary(), "empty_reason": "no_tools"}
+    )
+    service.my_van_status = AsyncMock(return_value=_van_payload())  # type: ignore[method-assign]
+
+    payload = await service.my_compliance(user_id=7, tenant_id=3)
+
+    assert payload["clear_state"] == "no_data"
+
+
+async def test_my_compliance_is_clear_when_a_van_is_known_and_sound() -> None:
+    service = PortalComplianceService(SimpleNamespace())
+    service.my_tools = AsyncMock(  # type: ignore[method-assign]
+        return_value={"items": [], "summary": _empty_tool_summary(), "empty_reason": "no_tools"}
+    )
+    service.my_van_status = AsyncMock(  # type: ignore[method-assign]
+        return_value=_van_payload(vehicle_reg="AB12CDE", linked_driver=True, empty_reason=None)
     )
 
+    payload = await service.my_compliance(user_id=7, tenant_id=3)
 
-def test_derive_clear_state_clear() -> None:
-    assert derive_clear_state(overdue=0, quarantined=0, due_30=0, open_p1=0, open_other_defects=0) == "clear"
+    assert payload["clear_state"] == "clear"
 
 
 @pytest.mark.parametrize("allocated_vehicle", [None, SimpleNamespace(vehicle_reg="OLD-VAN", assigned_driver_id=99)])

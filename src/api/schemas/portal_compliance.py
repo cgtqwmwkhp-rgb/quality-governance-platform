@@ -6,7 +6,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-ClearState = Literal["clear", "attention", "blocked"]
+ClearState = Literal["clear", "attention", "blocked", "no_data"]
 ToolBand = Literal[
     "overdue",
     "due_30",
