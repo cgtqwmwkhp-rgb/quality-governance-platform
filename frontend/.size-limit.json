@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "182 kB",
+    "limit": "183 kB",
     "gzip": true,
-    "name": "index: 181\u2192182 kB \u2014 Wave 2 investigations/incidents (+386 B headroom)"
+    "name": "index: 182\u2192183 kB \u2014 Wave 2 portal/API tip (+729 B over 182)"
   },
   {
     "path": "dist/assets/vendor-*.js",
