@@ -2275,11 +2275,13 @@ export const workflowsApi = createWorkflowsApi(api)
 export interface ExecutiveDashboardData {
   generated_at: string
   period_days: number
+  // Percentage fields are null when nothing was measured — render as "not
+  // measured", never 0% or 100% (PX-216, see src/utils/percentage.ts).
   health_score: {
-    score: number
+    score: number | null
     status: string
     color: string
-    components: Record<string, number>
+    components: Record<string, number | null>
   }
   incidents: {
     total_in_period: number
@@ -2299,7 +2301,7 @@ export interface ExecutiveDashboardData {
     total_in_period: number
     open: number
     closed_in_period: number
-    resolution_rate: number
+    resolution_rate: number | null
   }
   rtas: {
     total_in_period: number
@@ -2320,13 +2322,13 @@ export interface ExecutiveDashboardData {
     total_assigned: number
     completed: number
     overdue: number
-    completion_rate: number
+    completion_rate: number | null
   }
   sla_performance: {
     total_tracked: number
     met: number
     breached: number
-    compliance_rate: number
+    compliance_rate: number | null
   }
   trends: {
     incidents_weekly: { week_start: string; count: number; value?: number | null }[]
@@ -2349,7 +2351,7 @@ export const executiveDashboardApi = {
     api.get<ExecutiveDashboardData>(`/api/v1/executive-dashboard?period_days=${periodDays}`),
   getSummary: () =>
     api.get<{
-      health_score: number
+      health_score: number | null
       health_status: string
       open_incidents: number
       pending_actions: number

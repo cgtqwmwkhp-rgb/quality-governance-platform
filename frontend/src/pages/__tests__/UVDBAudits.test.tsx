@@ -674,6 +674,317 @@ describe('UVDBAudits', () => {
     expect(screen.getByText('No ISO cross-mapping data is available yet.')).toBeInTheDocument()
   })
 
+  /**
+   * PX-255 — the original defect report called this a scoring bug. It is a
+   * score *presentation* bug: an imported score must be shown and labelled as
+   * imported, a calculated score must keep working, and an absent score must
+   * read as absent rather than as 0 or 100%.
+   */
+  describe('PX-255 score provenance and absent scores', () => {
+    const auditRow = (overrides: Record<string, unknown> = {}) => ({
+      id: 5,
+      audit_reference: 'UVDB-2026-0001',
+      company_name: 'Plantexpand Limited',
+      audit_type: 'B2',
+      audit_date: '2026-03-20',
+      status: 'completed',
+      percentage_score: 93,
+      score_source: 'calculated',
+      lead_auditor: 'Jane Smith',
+      audit_run_id: null,
+      import_job_id: null,
+      ...overrides,
+    })
+
+    const auditDetail = (overrides: Record<string, unknown> = {}) => ({
+      id: 5,
+      audit_reference: 'UVDB-2026-0001',
+      company_name: 'Plantexpand Limited',
+      audit_type: 'B2',
+      audit_date: '2026-03-20',
+      status: 'completed',
+      lead_auditor: 'Jane Smith',
+      total_score: 93,
+      max_possible_score: 100,
+      percentage_score: 93,
+      score_source: 'calculated',
+      section_scores: null,
+      score_breakdown: [],
+      source_document_asset_id: null,
+      source_filename: null,
+      findings_count: 0,
+      major_findings: 0,
+      minor_findings: 0,
+      observations: 0,
+      certifications: {},
+      audit_notes: null,
+      ...overrides,
+    })
+
+    it('displays an imported score and labels it as imported', async () => {
+      mockListAudits.mockResolvedValue({
+        data: {
+          total: 1,
+          audits: [
+            auditRow({ score_source: 'imported', audit_run_id: 41, import_job_id: 72 }),
+          ],
+        },
+      })
+
+      const UVDBAudits = (await import('../UVDBAudits')).default
+      render(
+        <MemoryRouter initialEntries={['/uvdb?section=audits']}>
+          <UVDBAudits />
+        </MemoryRouter>,
+      )
+
+      expect(await screen.findByText('UVDB-2026-0001')).toBeInTheDocument()
+      // The number itself is shown, not hidden or zeroed.
+      expect(screen.getByText('93%')).toBeInTheDocument()
+      // And its provenance is stated, so it cannot pass as calculated.
+      const badges = screen.getAllByTestId('uvdb-score-source-imported')
+      expect(badges.length).toBeGreaterThan(0)
+      expect(badges[0]).toHaveTextContent('Imported from report')
+      expect(screen.queryByTestId('uvdb-score-source-calculated')).not.toBeInTheDocument()
+    })
+
+    it('labels the imported provenance on the audit detail panel with the source report', async () => {
+      mockListAudits.mockResolvedValue({
+        data: {
+          total: 1,
+          audits: [
+            auditRow({ score_source: 'imported', audit_run_id: 41, import_job_id: 72 }),
+          ],
+        },
+      })
+      mockGetAudit.mockResolvedValue({
+        data: auditDetail({
+          score_source: 'imported',
+          source_filename: 'achilles-b2.pdf',
+          source_document_asset_id: 901,
+          score_breakdown: [
+            {
+              label: 'Section 3 Health and Safety',
+              score: 14,
+              max_score: 15,
+              percentage: 93.3,
+              score_source: 'imported',
+            },
+          ],
+        }),
+      })
+
+      const UVDBAudits = (await import('../UVDBAudits')).default
+      renderPage(<UVDBAudits />)
+
+      fireEvent.click(await screen.findByText('UVDB-2026-0001'))
+
+      expect(await screen.findByTestId('uvdb-detail-score')).toBeInTheDocument()
+      expect(screen.getByTestId('uvdb-detail-imported-note')).toHaveTextContent('achilles-b2.pdf')
+      expect(screen.getByTestId('uvdb-detail-imported-note')).toHaveTextContent(
+        /not calculated from UVDB protocol responses/i,
+      )
+    })
+
+    it('still displays a calculated score and labels it as calculated', async () => {
+      mockListAudits.mockResolvedValue({
+        data: { total: 1, audits: [auditRow({ percentage_score: 88 })] },
+      })
+
+      const UVDBAudits = (await import('../UVDBAudits')).default
+      render(
+        <MemoryRouter initialEntries={['/uvdb?section=audits']}>
+          <UVDBAudits />
+        </MemoryRouter>,
+      )
+
+      expect(await screen.findByText('UVDB-2026-0001')).toBeInTheDocument()
+      expect(screen.getByText('88%')).toBeInTheDocument()
+      const badges = screen.getAllByTestId('uvdb-score-source-calculated')
+      expect(badges[0]).toHaveTextContent('Calculated in-app')
+      expect(screen.queryByTestId('uvdb-score-source-imported')).not.toBeInTheDocument()
+    })
+
+    it('renders an absent score as absent, never as 0% or 100%', async () => {
+      mockListAudits.mockResolvedValue({
+        data: {
+          total: 1,
+          audits: [auditRow({ percentage_score: null, score_source: null })],
+        },
+      })
+
+      const UVDBAudits = (await import('../UVDBAudits')).default
+      render(
+        <MemoryRouter initialEntries={['/uvdb?section=audits']}>
+          <UVDBAudits />
+        </MemoryRouter>,
+      )
+
+      expect(await screen.findByText('UVDB-2026-0001')).toBeInTheDocument()
+      expect(screen.getByTestId('uvdb-audit-not-scored-5')).toHaveTextContent('Not scored')
+      expect(screen.queryByText('0%')).not.toBeInTheDocument()
+      expect(screen.queryByText('100%')).not.toBeInTheDocument()
+      // No provenance is claimed for a score that does not exist.
+      expect(screen.queryByTestId('uvdb-score-source-calculated')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('uvdb-score-source-imported')).not.toBeInTheDocument()
+    })
+
+    it('reports no average when completed audits carry no score', async () => {
+      mockGetDashboard.mockResolvedValue({
+        data: {
+          summary: {
+            total_audits: 2,
+            active_audits: 0,
+            completed_audits: 2,
+            average_score: null,
+            scored_audits: 0,
+          },
+          protocol: {
+            name: 'UVDB Verify B2',
+            version: '11.8-target',
+            sections: 15,
+            content_coverage: mockContentCoverage,
+          },
+          certification_alignment: {},
+          content_coverage: mockContentCoverage,
+        },
+      })
+      mockListAudits.mockResolvedValue({
+        data: {
+          total: 1,
+          audits: [auditRow({ percentage_score: null, score_source: null })],
+        },
+      })
+
+      const UVDBAudits = (await import('../UVDBAudits')).default
+      renderPage(<UVDBAudits />)
+
+      // The KPI value sits immediately before its label in the summary card.
+      const averageLabel = await screen.findByText('Average score')
+      expect(averageLabel.previousElementSibling).toHaveTextContent('Not scored')
+      expect(screen.queryByText('0%')).not.toBeInTheDocument()
+      expect(screen.queryByText('100%')).not.toBeInTheDocument()
+    })
+
+    it('labels an imported section score on a protocol section with no loaded questions', async () => {
+      mockApiGet.mockResolvedValue({
+        data: {
+          audit_reference: 'UVDB-2026-0001',
+          score_source: 'imported',
+          unmapped_sections: [],
+          sections: {
+            '3': {
+              label: 'Section 3 Health and Safety',
+              score: 14,
+              max_score: 15,
+              percentage: 93.3,
+              audit_reference: 'UVDB-2026-0001',
+              score_source: 'imported',
+            },
+          },
+        },
+      })
+
+      const UVDBAudits = (await import('../UVDBAudits')).default
+      render(
+        <MemoryRouter initialEntries={['/uvdb?section=protocol']}>
+          <UVDBAudits />
+        </MemoryRouter>,
+      )
+
+      expect(await screen.findByTestId('uvdb-section-3-imported-note')).toHaveTextContent(
+        /protocol questions are not loaded/i,
+      )
+      expect(screen.getAllByTestId('uvdb-score-source-imported').length).toBeGreaterThan(0)
+      expect(screen.getByText('93%')).toBeInTheDocument()
+    })
+
+    it('surfaces imported section scores that cannot be matched to a protocol section', async () => {
+      mockApiGet.mockResolvedValue({
+        data: {
+          audit_reference: 'UVDB-2026-0001',
+          score_source: 'imported',
+          sections: {},
+          unmapped_sections: [
+            {
+              label: 'ISO 45001 alignment',
+              score: 8,
+              max_score: 10,
+              percentage: 80,
+              audit_reference: 'UVDB-2026-0001',
+              score_source: 'imported',
+            },
+          ],
+        },
+      })
+
+      const UVDBAudits = (await import('../UVDBAudits')).default
+      render(
+        <MemoryRouter initialEntries={['/uvdb?section=protocol']}>
+          <UVDBAudits />
+        </MemoryRouter>,
+      )
+
+      const panel = await screen.findByTestId('uvdb-unmapped-section-scores')
+      expect(panel).toHaveTextContent('ISO 45001 alignment')
+      expect(panel).toHaveTextContent('80%')
+      expect(panel).toHaveTextContent('Imported from report')
+    })
+
+    it('renders a section score with no percentage as absent rather than 0%', async () => {
+      mockApiGet.mockResolvedValue({
+        data: {
+          audit_reference: 'UVDB-2026-0001',
+          score_source: 'imported',
+          unmapped_sections: [],
+          sections: {
+            '1': {
+              label: 'Section 1',
+              score: null,
+              max_score: null,
+              percentage: null,
+              audit_reference: 'UVDB-2026-0001',
+              score_source: 'imported',
+            },
+          },
+        },
+      })
+
+      const UVDBAudits = (await import('../UVDBAudits')).default
+      render(
+        <MemoryRouter initialEntries={['/uvdb?section=protocol']}>
+          <UVDBAudits />
+        </MemoryRouter>,
+      )
+
+      expect(await screen.findByTestId('uvdb-section-1-not-scored')).toHaveTextContent('Not scored')
+      expect(screen.queryByText('0%')).not.toBeInTheDocument()
+      expect(screen.queryByText('100%')).not.toBeInTheDocument()
+    })
+
+    it('does not claim a score was calculated when the payload omits its provenance', async () => {
+      mockListAudits.mockResolvedValue({
+        data: {
+          total: 1,
+          audits: [{ ...auditRow(), score_source: undefined }],
+        },
+      })
+
+      const UVDBAudits = (await import('../UVDBAudits')).default
+      render(
+        <MemoryRouter initialEntries={['/uvdb?section=audits']}>
+          <UVDBAudits />
+        </MemoryRouter>,
+      )
+
+      expect(await screen.findByText('UVDB-2026-0001')).toBeInTheDocument()
+      expect(screen.getAllByTestId('uvdb-score-source-unknown')[0]).toHaveTextContent(
+        'Provenance unverified',
+      )
+      expect(screen.queryByTestId('uvdb-score-source-calculated')).not.toBeInTheDocument()
+    })
+  })
+
   it('shows a retryable error state when UVDB data cannot be loaded', async () => {
     mockCreateApiError.mockReturnValue({ error_class: 'AUTH_ERROR' })
     mockGetDashboard.mockRejectedValueOnce(new Error('unauthorized'))

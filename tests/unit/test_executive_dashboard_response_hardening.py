@@ -78,5 +78,8 @@ async def test_get_full_dashboard_survives_failed_subqueries():
     validated = ExecutiveDashboardResponse.model_validate(payload)
     assert validated.incidents.total_in_period == 0
     assert validated.near_misses.reporting_rate == "stable"
-    assert validated.complaints.resolution_rate == 100.0
+    # PX-216: a sub-query that never returned is not a 100% resolution rate.
+    assert validated.complaints.resolution_rate is None
+    assert validated.compliance.completion_rate is None
+    assert validated.sla_performance.compliance_rate is None
     assert validated.trends.incidents_weekly == []

@@ -504,24 +504,6 @@
         "title": "ActionCreate",
         "type": "object"
       },
-      "ActionExecute": {
-        "properties": {
-          "action_name": {
-            "title": "Action Name",
-            "type": "string"
-          },
-          "parameters": {
-            "additionalProperties": true,
-            "title": "Parameters",
-            "type": "object"
-          }
-        },
-        "required": [
-          "action_name"
-        ],
-        "title": "ActionExecute",
-        "type": "object"
-      },
       "ActionImportConfirm": {
         "properties": {
           "selected_indices": {
@@ -4093,8 +4075,15 @@
         "description": "One row of a dimensional breakdown (e.g. one asset type, one week).",
         "properties": {
           "avg_score": {
-            "title": "Avg Score",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Score"
           },
           "completed_count": {
             "title": "Completed Count",
@@ -4112,8 +4101,15 @@
             "title": "Essential Compliance Pct"
           },
           "fail_rate": {
-            "title": "Fail Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fail Rate"
           },
           "key": {
             "title": "Key",
@@ -4132,9 +4128,7 @@
           "key",
           "label",
           "run_count",
-          "completed_count",
-          "avg_score",
-          "fail_rate"
+          "completed_count"
         ],
         "title": "AuditAnalyticsDimensionItem",
         "type": "object"
@@ -4167,19 +4161,33 @@
         "type": "object"
       },
       "AuditAnalyticsSummaryResponse": {
-        "description": "Headline KPIs for the audit reporting pack.",
+        "description": "Headline KPIs for the audit reporting pack.\n\nPercentage fields are ``None`` when nothing was measured in the period \u2014 see\n:mod:`src.domain.metrics`. Clients must render that as \"not measured\", never 0%\nor 100%.",
         "properties": {
           "avg_score": {
-            "title": "Avg Score",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Score"
           },
           "completed": {
             "title": "Completed",
             "type": "integer"
           },
           "essential_compliance_pct": {
-            "title": "Essential Compliance Pct",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Essential Compliance Pct"
           },
           "in_progress": {
             "title": "In Progress",
@@ -4190,8 +4198,15 @@
             "type": "integer"
           },
           "pass_rate": {
-            "title": "Pass Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pass Rate"
           },
           "period_days": {
             "title": "Period Days",
@@ -4207,9 +4222,6 @@
           "totals",
           "completed",
           "in_progress",
-          "avg_score",
-          "pass_rate",
-          "essential_compliance_pct",
           "incomplete_critical_count"
         ],
         "title": "AuditAnalyticsSummaryResponse",
@@ -13775,8 +13787,15 @@
             "type": "integer"
           },
           "resolution_rate": {
-            "title": "Resolution Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Rate"
           },
           "total_in_period": {
             "title": "Total In Period",
@@ -13786,8 +13805,7 @@
         "required": [
           "total_in_period",
           "open",
-          "closed_in_period",
-          "resolution_rate"
+          "closed_in_period"
         ],
         "title": "ComplaintSummary",
         "type": "object"
@@ -14703,8 +14721,15 @@
             "type": "integer"
           },
           "completion_rate": {
-            "title": "Completion Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Rate"
           },
           "overdue": {
             "title": "Overdue",
@@ -14718,8 +14743,7 @@
         "required": [
           "total_assigned",
           "completed",
-          "overdue",
-          "completion_rate"
+          "overdue"
         ],
         "title": "ComplianceSummary",
         "type": "object"
@@ -22159,38 +22183,6 @@
         "title": "FeatureFlagUpdate",
         "type": "object"
       },
-      "FeedbackCreate": {
-        "properties": {
-          "feedback_text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Feedback Text"
-          },
-          "feedback_type": {
-            "pattern": "^(helpful|inaccurate|inappropriate|other)$",
-            "title": "Feedback Type",
-            "type": "string"
-          },
-          "rating": {
-            "maximum": 5.0,
-            "minimum": 1.0,
-            "title": "Rating",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "rating",
-          "feedback_type"
-        ],
-        "title": "FeedbackCreate",
-        "type": "object"
-      },
       "FindingClassificationRequest": {
         "properties": {
           "finding_text": {
@@ -22368,8 +22360,15 @@
             "type": "integer"
           },
           "compliance_rate": {
-            "title": "Compliance Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compliance Rate"
           },
           "compliant": {
             "title": "Compliant",
@@ -22413,8 +22412,7 @@
           "compliant",
           "non_compliant",
           "overdue_check",
-          "suspended",
-          "compliance_rate"
+          "suspended"
         ],
         "title": "FleetHealthResponse",
         "type": "object"
@@ -24304,7 +24302,7 @@
         "type": "object"
       },
       "HealthScore": {
-        "description": "Overall health score.",
+        "description": "Overall health score, or ``None`` when no component was measurable.",
         "properties": {
           "color": {
             "title": "Color",
@@ -24314,10 +24312,17 @@
             "$ref": "#/components/schemas/HealthScoreComponent"
           },
           "score": {
-            "maximum": 100.0,
-            "minimum": 0.0,
-            "title": "Score",
-            "type": "number"
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
           },
           "status": {
             "title": "Status",
@@ -24325,7 +24330,6 @@
           }
         },
         "required": [
-          "score",
           "status",
           "color",
           "components"
@@ -24334,40 +24338,64 @@
         "type": "object"
       },
       "HealthScoreComponent": {
-        "description": "Individual health score component.",
+        "description": "Individual health score component.\n\n``None`` means the component had nothing to measure and was excluded from the\nweighted score \u2014 it is not a 0 and not a 100 (PX-216).\n\nOnly the ratio-derived components are nullable. ``incidents`` and\n``near_miss_culture`` score absolute counts, so they are always measurable and\nstay required \u2014 widening them would force clients to null-check a value the\nserver cannot produce.",
         "properties": {
           "compliance": {
-            "title": "Compliance",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compliance"
           },
           "incidents": {
             "title": "Incidents",
             "type": "number"
           },
           "kri_performance": {
-            "title": "Kri Performance",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kri Performance"
           },
           "near_miss_culture": {
             "title": "Near Miss Culture",
             "type": "number"
           },
           "risk_management": {
-            "title": "Risk Management",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Management"
           },
           "sla_performance": {
-            "title": "Sla Performance",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sla Performance"
           }
         },
         "required": [
           "incidents",
-          "near_miss_culture",
-          "risk_management",
-          "kri_performance",
-          "compliance",
-          "sla_performance"
+          "near_miss_culture"
         ],
         "title": "HealthScoreComponent",
         "type": "object"
@@ -30050,110 +30078,6 @@
           "email"
         ],
         "title": "MentionSearchResult",
-        "type": "object"
-      },
-      "MessageCreate": {
-        "properties": {
-          "content": {
-            "maxLength": 4000,
-            "minLength": 1,
-            "title": "Content",
-            "type": "string"
-          }
-        },
-        "required": [
-          "content"
-        ],
-        "title": "MessageCreate",
-        "type": "object"
-      },
-      "MessageResponse": {
-        "properties": {
-          "action_data": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Action Data"
-          },
-          "action_result": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Action Result"
-          },
-          "action_status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Action Status"
-          },
-          "action_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Action Type"
-          },
-          "content": {
-            "title": "Content",
-            "type": "string"
-          },
-          "content_type": {
-            "title": "Content Type",
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "role": {
-            "title": "Role",
-            "type": "string"
-          },
-          "session_id": {
-            "title": "Session Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "session_id",
-          "role",
-          "content",
-          "content_type",
-          "action_type",
-          "action_data",
-          "action_result",
-          "action_status",
-          "created_at"
-        ],
-        "title": "MessageResponse",
         "type": "object"
       },
       "MyAssignmentsResponse": {
@@ -41704,8 +41628,15 @@
             "type": "integer"
           },
           "compliance_rate": {
-            "title": "Compliance Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compliance Rate"
           },
           "met": {
             "title": "Met",
@@ -41719,8 +41650,7 @@
         "required": [
           "total_tracked",
           "met",
-          "breached",
-          "compliance_rate"
+          "breached"
         ],
         "title": "SLASummary",
         "type": "object"
@@ -42826,130 +42756,6 @@
           "body"
         ],
         "title": "SendNotificationRequest",
-        "type": "object"
-      },
-      "SessionCreate": {
-        "properties": {
-          "context_data": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Context Data"
-          },
-          "context_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Context Id"
-          },
-          "context_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Context Type"
-          },
-          "current_page": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Current Page"
-          }
-        },
-        "title": "SessionCreate",
-        "type": "object"
-      },
-      "SessionResponse": {
-        "properties": {
-          "context_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Context Id"
-          },
-          "context_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Context Type"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "is_active": {
-            "title": "Is Active",
-            "type": "boolean"
-          },
-          "last_message_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Message At"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "context_type",
-          "context_id",
-          "is_active",
-          "created_at",
-          "last_message_at"
-        ],
-        "title": "SessionResponse",
         "type": "object"
       },
       "SetFishboneRootCauseRequest": {
@@ -44185,34 +43991,6 @@
           "questions"
         ],
         "title": "SuggestStandardLinksRequest",
-        "type": "object"
-      },
-      "SuggestedAction": {
-        "properties": {
-          "action": {
-            "title": "Action",
-            "type": "string"
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "display_name": {
-            "title": "Display Name",
-            "type": "string"
-          },
-          "parameters": {
-            "additionalProperties": true,
-            "title": "Parameters",
-            "type": "object"
-          }
-        },
-        "required": [
-          "action",
-          "display_name",
-          "description"
-        ],
-        "title": "SuggestedAction",
         "type": "object"
       },
       "SuggestionTriageResolve": {
@@ -47736,9 +47514,15 @@
             "type": "integer"
           },
           "compliance_rate": {
-            "default": 100.0,
-            "title": "Compliance Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compliance Rate"
           },
           "compliant_vehicles": {
             "default": 0,
@@ -51704,8 +51488,15 @@
         "description": "Simplified dashboard summary for quick overview.",
         "properties": {
           "health_score": {
-            "title": "Health Score",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Score"
           },
           "health_status": {
             "title": "Health Status",
@@ -51729,7 +51520,6 @@
           }
         },
         "required": [
-          "health_score",
           "health_status",
           "open_incidents",
           "pending_actions",
@@ -68034,765 +67824,6 @@
         "summary": "List Standards",
         "tags": [
           "ISO Compliance & Evidence"
-        ]
-      }
-    },
-    "/api/v1/copilot/actions": {
-      "get": {
-        "description": "List available copilot actions.",
-        "operationId": "list_actions_api_v1_copilot_actions_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "category",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Category"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "additionalProperties": true,
-                    "type": "object"
-                  },
-                  "title": "Response List Actions Api V1 Copilot Actions Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "List Actions",
-        "tags": [
-          "AI Copilot"
-        ]
-      }
-    },
-    "/api/v1/copilot/actions/execute": {
-      "post": {
-        "description": "Execute a copilot action directly.",
-        "operationId": "execute_action_api_v1_copilot_actions_execute_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ActionExecute"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Execute Action",
-        "tags": [
-          "AI Copilot"
-        ]
-      }
-    },
-    "/api/v1/copilot/actions/suggest": {
-      "get": {
-        "description": "Get suggested actions for current context.",
-        "operationId": "suggest_actions_api_v1_copilot_actions_suggest_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Page"
-            }
-          },
-          {
-            "in": "query",
-            "name": "context_type",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Context Type"
-            }
-          },
-          {
-            "in": "query",
-            "name": "context_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Context Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/SuggestedAction"
-                  },
-                  "title": "Response Suggest Actions Api V1 Copilot Actions Suggest Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Suggest Actions",
-        "tags": [
-          "AI Copilot"
-        ]
-      }
-    },
-    "/api/v1/copilot/knowledge": {
-      "post": {
-        "description": "Add to the knowledge base.",
-        "operationId": "add_knowledge_api_v1_copilot_knowledge_post",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "title",
-            "required": true,
-            "schema": {
-              "title": "Title",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "content",
-            "required": true,
-            "schema": {
-              "title": "Content",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "category",
-            "required": true,
-            "schema": {
-              "title": "Category",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": "array"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Tags"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Add Knowledge",
-        "tags": [
-          "AI Copilot"
-        ]
-      }
-    },
-    "/api/v1/copilot/knowledge/search": {
-      "get": {
-        "description": "Search the copilot knowledge base.",
-        "operationId": "search_knowledge_api_v1_copilot_knowledge_search_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "query",
-            "required": true,
-            "schema": {
-              "minLength": 2,
-              "title": "Query",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "category",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Category"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 5,
-              "maximum": 20,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Search Knowledge",
-        "tags": [
-          "AI Copilot"
-        ]
-      }
-    },
-    "/api/v1/copilot/messages/{message_id}/feedback": {
-      "post": {
-        "description": "Submit feedback on a copilot response.",
-        "operationId": "submit_feedback_api_v1_copilot_messages__message_id__feedback_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "message_id",
-            "required": true,
-            "schema": {
-              "title": "Message Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FeedbackCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Submit Feedback",
-        "tags": [
-          "AI Copilot"
-        ]
-      }
-    },
-    "/api/v1/copilot/sessions": {
-      "get": {
-        "description": "List user's recent sessions.",
-        "operationId": "list_sessions_api_v1_copilot_sessions_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "offset",
-            "required": false,
-            "schema": {
-              "default": 0,
-              "minimum": 0,
-              "title": "Offset",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/SessionResponse"
-                  },
-                  "title": "Response List Sessions Api V1 Copilot Sessions Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Sessions",
-        "tags": [
-          "AI Copilot"
-        ]
-      },
-      "post": {
-        "description": "Create a new copilot conversation session.",
-        "operationId": "create_session_api_v1_copilot_sessions_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SessionCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Create Session",
-        "tags": [
-          "AI Copilot"
-        ]
-      }
-    },
-    "/api/v1/copilot/sessions/active": {
-      "get": {
-        "description": "Get the user's active session, if any.",
-        "operationId": "get_active_session_api_v1_copilot_sessions_active_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionResponse"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ],
-                  "title": "Response Get Active Session Api V1 Copilot Sessions Active Get"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Active Session",
-        "tags": [
-          "AI Copilot"
-        ]
-      }
-    },
-    "/api/v1/copilot/sessions/{session_id}": {
-      "delete": {
-        "description": "Close a session.",
-        "operationId": "close_session_api_v1_copilot_sessions__session_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Close Session",
-        "tags": [
-          "AI Copilot"
-        ]
-      },
-      "get": {
-        "description": "Get a session by ID.",
-        "operationId": "get_session_api_v1_copilot_sessions__session_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Session",
-        "tags": [
-          "AI Copilot"
-        ]
-      }
-    },
-    "/api/v1/copilot/sessions/{session_id}/messages": {
-      "get": {
-        "description": "Get messages for a session.",
-        "operationId": "get_messages_api_v1_copilot_sessions__session_id__messages_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/MessageResponse"
-                  },
-                  "title": "Response Get Messages Api V1 Copilot Sessions  Session Id  Messages Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Messages",
-        "tags": [
-          "AI Copilot"
-        ]
-      },
-      "post": {
-        "description": "Send a message and get AI response.",
-        "operationId": "send_message_api_v1_copilot_sessions__session_id__messages_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "session_id",
-            "required": true,
-            "schema": {
-              "title": "Session Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MessageCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Send Message",
-        "tags": [
-          "AI Copilot"
         ]
       }
     },

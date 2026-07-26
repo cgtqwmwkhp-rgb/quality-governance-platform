@@ -527,8 +527,9 @@ export default function Analytics() {
         `Evidence coverage score is ${complianceScore}% — drill into ISO Compliance for clause gaps.`,
       )
     }
-    if ((dash?.complaints.resolution_rate ?? 0) > 0) {
-      lines.push(`Complaint resolution rate this period: ${dash!.complaints.resolution_rate}%.`)
+    const complaintResolutionRate = dash?.complaints.resolution_rate
+    if (complaintResolutionRate != null) {
+      lines.push(`Complaint resolution rate this period: ${complaintResolutionRate}%.`)
     }
     if (auditsLoadState === 'unavailable') {
       lines.push('Audit summary unavailable — open/closed counts are not shown as zero.')
