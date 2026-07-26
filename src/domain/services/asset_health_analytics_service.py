@@ -21,10 +21,26 @@ class AssetHealthRow:
     expiry_date: datetime | None
 
 
-def _expiry_band(expiry_date: datetime | None, *, as_of: datetime) -> str:
+#: Statuses meaning "no longer in service". A removed asset cannot be re-certified,
+#: so it is never overdue — the safety asset register takes the same view
+#: (`isRemovedAsset` in frontend/src/pages/safetyAssets/safetyAssetBoardHelpers.ts).
+REMOVED_ASSET_STATUSES: frozenset[str] = frozenset({"decommissioned"})
+
+
+def is_removed_asset_status(status: str | None) -> bool:
+    """True when the asset has left service and must be excluded from expiry bands."""
+    return (status or "").strip().lower() in REMOVED_ASSET_STATUSES
+
+
+def _expiry_band(expiry_date: datetime | None, *, status: str, as_of: datetime) -> str:
+    if is_removed_asset_status(status):
+        return "removed"
     if expiry_date is None:
         return "no_expiry"
-    if expiry_date < as_of:
+    # Day granularity: an asset expiring at any point today is still due, not overdue.
+    # Comparing raw timestamps would report a midnight-stamped expiry as overdue from
+    # 00:00, contradicting the register's day-based banding for the whole of that day.
+    if expiry_date.date() < as_of.date():
         return "overdue"
     if expiry_date < as_of + timedelta(days=30):
         return "due_30"
@@ -40,7 +56,12 @@ def aggregate_asset_health_kpis(
     *,
     as_of: datetime | None = None,
 ) -> dict[str, object]:
-    """Aggregate asset counts by mutually exclusive expiry band, type, and status."""
+    """Aggregate asset counts by mutually exclusive expiry band, type, and status.
+
+    Bands partition every row, so they always sum to `total`. Assets that have left
+    service land in `removed` instead of `overdue`, which is what keeps this KPI equal
+    to the count the safety asset register shows for the same band.
+    """
 
     as_of = as_of or datetime.now(timezone.utc)
     expiry_bands = Counter(
@@ -51,13 +72,14 @@ def aggregate_asset_health_kpis(
             "due_90": 0,
             "in_date": 0,
             "no_expiry": 0,
+            "removed": 0,
         }
     )
     by_type: Counter[str] = Counter()
     by_status: Counter[str] = Counter()
 
     for row in rows:
-        expiry_bands[_expiry_band(row.expiry_date, as_of=as_of)] += 1
+        expiry_bands[_expiry_band(row.expiry_date, status=row.status, as_of=as_of)] += 1
         by_type[row.asset_type or "Unclassified"] += 1
         by_status[row.status] += 1
 

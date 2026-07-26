@@ -33,6 +33,7 @@ from src.domain.models.asset import (
 )
 from src.domain.models.audit import AuditTemplate
 from src.domain.models.location import Location, LocationKind
+from src.domain.services.asset_health_analytics_service import REMOVED_ASSET_STATUSES
 
 # ---------------------------------------------------------------------------
 # Value objects
@@ -446,15 +447,28 @@ class AssetService:
             query = query.where(Asset.owner_user_id == owner_user_id)
         if expiry_band is not None and expiry_band in _EXPIRY_BANDS:
             now = datetime.now(timezone.utc)
+            # Day boundary in UTC, matching `_expiry_band`'s date comparison. Expressed as
+            # a timestamp rather than date(expiry_date) so the index stays usable and the
+            # result does not depend on the database session timezone.
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            # Removed assets are excluded from every expiry band so this drill-down
+            # returns exactly the rows counted by aggregate_asset_health_kpis.
+            query = query.where(Asset.status.notin_([AssetStatus(s) for s in sorted(REMOVED_ASSET_STATUSES)]))
             if expiry_band == "overdue":
-                query = query.where(Asset.expiry_date.is_not(None), Asset.expiry_date < now)
+                query = query.where(
+                    Asset.expiry_date.is_not(None),
+                    Asset.expiry_date < today_start,
+                )
             else:
                 days = {"due_30": 30, "due_60": 60, "due_90": 90}[expiry_band]
                 end = now + timedelta(days=days)
+                # Lower bound is the start of today, not `now`: anything expiring earlier
+                # today is counted as due by the aggregate, and bounding at `now` would
+                # drop those rows from both this band and overdue.
                 query = query.where(
                     Asset.expiry_date.is_not(None),
-                    Asset.expiry_date >= now,
-                    Asset.expiry_date <= end,
+                    Asset.expiry_date >= today_start,
+                    Asset.expiry_date < end,
                 )
         query = query.order_by(Asset.asset_number)
         return await self._paginate(query, page, page_size)

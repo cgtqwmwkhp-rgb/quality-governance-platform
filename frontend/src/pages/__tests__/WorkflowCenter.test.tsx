@@ -160,4 +160,71 @@ describe('WorkflowCenter', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delegation' }))
     expect(await screen.findByText('Jane Smith')).toBeInTheDocument()
   })
+
+  describe('KPI honesty', () => {
+    it('cannot show pending approvals while the panel says the queue is empty', async () => {
+      // PX-286: the tile read a fabricated organisation-wide constant while the panel
+      // listed the caller's own queue, so "12 pending" sat above "none assigned to you".
+      mockGetPendingApprovals.mockResolvedValue({ data: { approvals: [], total: 0 } })
+      mockGetStats.mockResolvedValue({
+        data: {
+          pending_approvals: 0,
+          pending_approvals_scope: 'assigned_to_me',
+          active_workflows: null,
+          overdue: null,
+          completed_today: null,
+        },
+      })
+      const WorkflowCenter = (await import('../WorkflowCenter')).default
+
+      render(<WorkflowCenter />)
+
+      expect(
+        await screen.findByText('No pending approvals are assigned to you right now.'),
+      ).toBeInTheDocument()
+      expect(screen.getByTestId('workflow-stat-pending')).toHaveTextContent('0')
+    })
+
+    it('labels the pending tile as the caller’s own queue, not a global total', async () => {
+      const WorkflowCenter = (await import('../WorkflowCenter')).default
+
+      render(<WorkflowCenter />)
+
+      expect(await screen.findByTestId('workflow-stat-pending')).toBeInTheDocument()
+      expect(screen.getByText('workflows.pending_approvals_mine')).toBeInTheDocument()
+    })
+
+    it('withholds unmeasured stats as em dashes and explains why', async () => {
+      mockGetStats.mockResolvedValue({
+        data: {
+          pending_approvals: 1,
+          pending_approvals_scope: 'assigned_to_me',
+          active_workflows: null,
+          overdue: null,
+          completed_today: null,
+        },
+      })
+      const WorkflowCenter = (await import('../WorkflowCenter')).default
+
+      render(<WorkflowCenter />)
+
+      expect(await screen.findByTestId('workflow-stat-active')).toHaveTextContent('—')
+      expect(screen.getByTestId('workflow-stat-overdue')).toHaveTextContent('—')
+      expect(screen.getByTestId('workflow-stat-completed-today')).toHaveTextContent('—')
+      expect(screen.getByTestId('workflow-stats-unmeasured')).toBeInTheDocument()
+      // The measured figure is still shown; withholding is per-metric, not blanket.
+      expect(screen.getByTestId('workflow-stat-pending')).toHaveTextContent('1')
+    })
+
+    it('withholds every stat when the stats call fails', async () => {
+      mockGetStats.mockRejectedValue(new Error('stats down'))
+      const WorkflowCenter = (await import('../WorkflowCenter')).default
+
+      render(<WorkflowCenter />)
+
+      expect(await screen.findByTestId('workflow-stat-pending')).toHaveTextContent('—')
+      expect(screen.getByTestId('workflow-stat-active')).toHaveTextContent('—')
+      expect(screen.getByTestId('workflow-stats-unmeasured')).toBeInTheDocument()
+    })
+  })
 })
