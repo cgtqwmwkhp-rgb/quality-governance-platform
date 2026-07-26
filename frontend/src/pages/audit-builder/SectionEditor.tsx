@@ -9,6 +9,7 @@ import {
   Trash2,
   GitBranch,
 } from 'lucide-react'
+import { IconButton } from '../../components/ui/IconButton'
 import type { Section, Question } from './types'
 import { ASSESSMENT_MODES } from './types'
 import QuestionEditor from './QuestionEditor'
@@ -159,6 +160,9 @@ export default function SectionEditor({
   allQuestions = [],
 }: SectionEditorProps) {
   const { t } = useTranslation()
+  // Sections repeat down the page, so every control here names the section it
+  // belongs to — "Delete" alone is indistinguishable between them.
+  const sectionLabel = section.title.trim() || 'untitled section'
 
   return (
     // overflow-visible so question-type dropdowns are not clipped by the section card
@@ -169,20 +173,25 @@ export default function SectionEditor({
         <div className="bg-card p-4 rounded-t-[0.9rem]">
           <div className="flex items-center gap-3">
             <div className="p-1.5 bg-secondary rounded cursor-grab hover:bg-muted">
-              <GripVertical className="w-5 h-5 text-muted-foreground" />
+              <GripVertical className="w-5 h-5 text-muted-foreground" aria-hidden="true" />
             </div>
 
-            <button
-              type="button"
+            <IconButton
+              label={
+                section.isExpanded
+                  ? `${t('a11y.collapse')} ${sectionLabel}`
+                  : `${t('a11y.expand')} ${sectionLabel}`
+              }
+              aria-expanded={section.isExpanded}
               onClick={() => onUpdate({ isExpanded: !section.isExpanded })}
-              className="p-1"
+              className="h-auto w-auto p-1"
             >
               {section.isExpanded ? (
-                <ChevronDown className="w-5 h-5 text-foreground" />
+                <ChevronDown className="w-5 h-5 text-foreground" aria-hidden="true" />
               ) : (
-                <ChevronRight className="w-5 h-5 text-foreground" />
+                <ChevronRight className="w-5 h-5 text-foreground" aria-hidden="true" />
               )}
-            </button>
+            </IconButton>
 
             <div className="flex-1">
               <input
@@ -190,6 +199,7 @@ export default function SectionEditor({
                 value={section.title}
                 onChange={(e) => onUpdate({ title: e.target.value })}
                 placeholder="Section title..."
+                aria-label="Section title"
                 className="w-full bg-transparent text-lg font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none"
               />
               <input
@@ -197,6 +207,7 @@ export default function SectionEditor({
                 value={section.description || ''}
                 onChange={(e) => onUpdate({ description: e.target.value })}
                 placeholder="Section description..."
+                aria-label={`Description for ${sectionLabel}`}
                 className="w-full bg-transparent text-sm text-muted-foreground placeholder:text-muted-foreground focus:outline-none mt-1"
               />
             </div>
@@ -214,16 +225,17 @@ export default function SectionEditor({
                   min="0"
                   max="10"
                   step="0.5"
+                  aria-label={`Weight for ${sectionLabel}`}
                   className="w-14 px-2 py-1 bg-secondary border border-border rounded text-sm text-foreground text-center"
                 />
               </div>
-              <button
-                type="button"
+              <IconButton
+                label={`${t('common.delete')} ${sectionLabel}`}
                 onClick={onDelete}
-                className="p-1.5 text-muted-foreground hover:text-destructive rounded"
+                className="h-auto w-auto p-1.5 text-muted-foreground hover:text-destructive rounded"
               >
-                <Trash2 className="w-4 h-4" />
-              </button>
+                <Trash2 className="w-4 h-4" aria-hidden="true" />
+              </IconButton>
             </div>
           </div>
           <SectionApplicabilityEditor section={section} onUpdate={onUpdate} />

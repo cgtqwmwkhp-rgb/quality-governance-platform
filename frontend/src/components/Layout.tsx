@@ -47,6 +47,7 @@ import OfflineIndicator from './OfflineIndicator'
 import KeyboardShortcutHelp from './KeyboardShortcutHelp'
 import { ThemeToggle } from './ui/ThemeToggle'
 import { Button } from './ui/Button'
+import { IconButton, iconOnlyControlProps } from './ui/IconButton'
 import { cn } from '../helpers/utils'
 import { hasRole, isSuperuser } from '../utils/auth'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
@@ -61,6 +62,9 @@ const GlobalSearchPalette = lazy(() => import('./search/GlobalSearchPalette'))
 interface LayoutProps {
   onLogout: () => void
 }
+
+/** Referenced by the mobile menu button's aria-controls. */
+const SIDEBAR_ID = 'app-sidebar'
 
 export default function Layout({ onLogout }: LayoutProps) {
   const { t } = useTranslation()
@@ -378,14 +382,22 @@ export default function Layout({ onLogout }: LayoutProps) {
 
           <NavLink
             to="/notifications"
+            {...iconOnlyControlProps(
+              unreadNotifications > 0
+                ? t('a11y.notifications_unread', { count: unreadNotifications })
+                : t('nav.notifications'),
+            )}
             className={cn(
               'relative p-2 rounded-lg transition-colors',
               'text-muted-foreground hover:text-foreground hover:bg-surface',
             )}
           >
-            <Bell className="w-5 h-5" />
+            <Bell className="w-5 h-5" aria-hidden="true" />
             {unreadNotifications > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+              <span
+                aria-hidden="true"
+                className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center"
+              >
                 {unreadNotifications}
               </span>
             )}
@@ -415,15 +427,19 @@ export default function Layout({ onLogout }: LayoutProps) {
       </header>
 
       {/* Mobile menu button */}
-      <button
+      <IconButton
+        label={sidebarOpen ? t('a11y.close_menu') : t('a11y.open_menu')}
+        aria-expanded={sidebarOpen}
+        aria-controls={SIDEBAR_ID}
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-card border border-border text-foreground shadow-sm"
+        className="lg:hidden fixed top-4 left-4 z-50 h-auto w-auto p-2 rounded-lg bg-card border border-border text-foreground shadow-sm"
       >
-        {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
-      </button>
+        {sidebarOpen ? <X size={24} aria-hidden="true" /> : <Menu size={24} aria-hidden="true" />}
+      </IconButton>
 
       {/* Sidebar */}
       <aside
+        id={SIDEBAR_ID}
         className={cn(
           'fixed inset-y-0 left-0 z-40 w-72 bg-card/95 backdrop-blur-xl border-r border-border',
           'transform transition-transform duration-300 ease-in-out',
@@ -437,9 +453,11 @@ export default function Layout({ onLogout }: LayoutProps) {
             <div className="flex items-center gap-3">
               <BrandMarkTile size={56} />
               <div className="min-w-0">
-                <h1 className="text-sm font-bold text-foreground leading-snug">
+                {/* Not a heading: the shell renders on every route, so an <h1>
+                    here collides with the page's own <h1> (PX-290). */}
+                <p className="text-sm font-bold text-foreground leading-snug">
                   {t('brand.product_name', 'Quality Governance Platform')}
-                </h1>
+                </p>
                 <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
                   {t('brand.company_line', 'Plantexpand Limited')}
                 </p>
@@ -448,7 +466,7 @@ export default function Layout({ onLogout }: LayoutProps) {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 overflow-y-auto">
+          <nav className="flex-1 p-4 overflow-y-auto" aria-label={t('a11y.navigation_menu')}>
             <div className="space-y-1">
               <NavLink
                 to="/dashboard"
