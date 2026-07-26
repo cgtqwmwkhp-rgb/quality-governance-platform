@@ -15,6 +15,8 @@ import {
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
+import { Label } from '../../components/ui/Label'
+import { Switch } from '../../components/ui/Switch'
 import { cn } from '../../helpers/utils'
 
 interface SettingCategory {
@@ -294,102 +296,98 @@ export default function SystemSettings() {
     }
   }
 
+  // The storage key doubles as the control id, so every visible label is also
+  // the programmatic label. It is deliberately not rendered as visible copy —
+  // "company_name" is an internal field name, not something an admin needs to
+  // read (PX-198).
+  const settingFieldId = (setting: Setting) => `setting-${setting.key}`
+
   const renderSettingInput = (setting: Setting) => {
+    const fieldId = settingFieldId(setting)
+
     switch (setting.value_type) {
       case 'boolean':
         return (
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-foreground">{setting.description}</p>
-              <p className="text-xs text-muted-foreground">{setting.key}</p>
-            </div>
-            <button
-              onClick={() =>
-                updateSetting(setting.key, setting.value === 'true' ? 'false' : 'true')
-              }
-              className={cn(
-                'w-12 h-6 rounded-full transition-colors relative',
-                setting.value === 'true' ? 'bg-primary' : 'bg-muted',
-              )}
-            >
-              <div
-                className={cn(
-                  'w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-sm',
-                  setting.value === 'true' ? 'translate-x-6' : 'translate-x-0.5',
-                )}
-              />
-            </button>
+          <div className="flex items-center justify-between gap-4">
+            <Label htmlFor={fieldId} className="text-foreground">
+              {setting.description}
+            </Label>
+            <Switch
+              id={fieldId}
+              checked={setting.value === 'true'}
+              onCheckedChange={(checked) => updateSetting(setting.key, checked ? 'true' : 'false')}
+            />
           </div>
         )
 
       case 'number':
         return (
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
+            <Label htmlFor={fieldId} className="block mb-1 text-foreground">
               {setting.description}
-            </label>
+            </Label>
             <Input
+              id={fieldId}
               type="number"
               value={setting.value}
               onChange={(e) => updateSetting(setting.key, e.target.value)}
               className="max-w-[150px]"
             />
-            <p className="text-xs text-muted-foreground mt-1">{setting.key}</p>
           </div>
         )
 
       case 'color':
         return (
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
+            <Label htmlFor={fieldId} className="block mb-1 text-foreground">
               {setting.description}
-            </label>
+            </Label>
             <div className="flex items-center gap-3">
               <input
+                id={fieldId}
                 type="color"
                 value={setting.value}
                 onChange={(e) => updateSetting(setting.key, e.target.value)}
                 className="w-10 h-10 rounded-lg border border-border cursor-pointer"
-                aria-label="Brand color"
               />
               <Input
                 value={setting.value}
                 onChange={(e) => updateSetting(setting.key, e.target.value)}
                 placeholder="#000000"
+                aria-label={`${setting.description} (hex value)`}
                 className="max-w-[150px] font-mono"
               />
             </div>
-            <p className="text-xs text-muted-foreground mt-1">{setting.key}</p>
           </div>
         )
 
       case 'email':
         return (
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
+            <Label htmlFor={fieldId} className="block mb-1 text-foreground">
               {setting.description}
-            </label>
+            </Label>
             <Input
+              id={fieldId}
               type="email"
               value={setting.value}
               onChange={(e) => updateSetting(setting.key, e.target.value)}
               placeholder="email@example.com"
             />
-            <p className="text-xs text-muted-foreground mt-1">{setting.key}</p>
           </div>
         )
 
       default:
         return (
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
+            <Label htmlFor={fieldId} className="block mb-1 text-foreground">
               {setting.description}
-            </label>
+            </Label>
             <Input
+              id={fieldId}
               value={setting.value}
               onChange={(e) => updateSetting(setting.key, e.target.value)}
             />
-            <p className="text-xs text-muted-foreground mt-1">{setting.key}</p>
           </div>
         )
     }
