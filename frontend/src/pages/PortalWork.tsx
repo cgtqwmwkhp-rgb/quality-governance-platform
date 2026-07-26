@@ -42,6 +42,7 @@ import {
   isOkStatus,
   myTrainingSummary,
   statusLabel,
+  trainingAtlasReconciliationNote,
 } from './workforce/trainingMatrix/trainingMatrixBoardHelpers'
 
 type LoadState<T> = {
@@ -571,7 +572,8 @@ export default function PortalWork() {
                     </p>
                     {trainingSummary?.nextDue ? (
                       <p className="text-sm text-muted-foreground mt-0.5">
-                        Next due: {trainingSummary.nextDue.course_display_name} on{' '}
+                        {trainingSummary.nextDue.kind === 'most_overdue' ? 'Most overdue' : 'Next due'}:{' '}
+                        {trainingSummary.nextDue.course_display_name} on{' '}
                         {formatDue(trainingSummary.nextDue.qgp_due_on) ??
                           trainingSummary.nextDue.qgp_due_on}
                       </p>
@@ -609,6 +611,9 @@ export default function PortalWork() {
                           ) : null}
                         </div>
                         <p className="font-medium text-foreground">{row.course_display_name}</p>
+                        {trainingAtlasReconciliationNote(row) ? (
+                          <p className="text-xs text-muted-foreground">{trainingAtlasReconciliationNote(row)}</p>
+                        ) : null}
                         <p className="text-sm text-muted-foreground">
                           QGP due{' '}
                           {formatDue(row.qgp_due_on) ?? row.qgp_due_on ?? 'not set'}

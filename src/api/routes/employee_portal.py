@@ -338,6 +338,50 @@ def generate_portal_reference(prefix: str) -> str:
     return f"{prefix}-{year}-{secrets.token_hex(4).upper()}"
 
 
+_CUSTOMER_DISPLAY_LABELS = {
+    "plantexpand_ltd": "Plantexpand Ltd",
+    "plantexpand": "Plantexpand Ltd",
+    "ukpn": "UK Power Networks",
+    "defra": "DEFRA",
+    "openreach": "Openreach",
+    "thames_water": "Thames Water",
+    "cadent": "Cadent",
+    "network_rail": "Network Rail",
+    "novuna": "Novuna",
+}
+
+
+def humanize_customer_code(code: Optional[str]) -> str:
+    """Employee-facing customer label — never show raw lookup slugs (PX-299)."""
+    if not code:
+        return "Not specified"
+    trimmed = str(code).strip()
+    if not trimmed:
+        return "Not specified"
+    known = _CUSTOMER_DISPLAY_LABELS.get(trimmed.lower())
+    if known:
+        return known
+    if "_" in trimmed or "-" in trimmed:
+        return trimmed.replace("_", " ").title()
+    if trimmed == trimmed.lower():
+        return trimmed.upper()
+    return trimmed
+
+
+def format_portal_report_title(title: Optional[str]) -> str:
+    """Rewrite generic type-plus-slug titles for portal track lists (PX-318)."""
+    if not title:
+        return ""
+    text = str(title).strip()
+    if " - " not in text:
+        return text
+    prefix, suffix = text.rsplit(" - ", 1)
+    humanized = humanize_customer_code(suffix)
+    if humanized == suffix:
+        return text
+    return f"{prefix} - {humanized}"
+
+
 def hash_tracking_code(code: str) -> str:
     """Hash tracking code for storage."""
     return hashlib.sha256(code.encode()).hexdigest()
@@ -1734,7 +1778,7 @@ async def track_report(
         return ReportStatusResponse(
             reference_number=near_miss.reference_number,
             report_type="Near Miss",
-            title=f"Near Miss - {near_miss.contract}",
+            title=format_portal_report_title(f"Near Miss - {near_miss.contract}"),
             status=near_miss.status,
             status_label=get_status_label(near_miss.status),
             submitted_at=near_miss.created_at,
@@ -1994,7 +2038,7 @@ async def get_my_reports(
         MyReportSummary(
             reference_number=row.reference_number,
             report_type=row.report_type,
-            title=row.title,
+            title=format_portal_report_title(row.title),
             status=row.status,
             status_label=get_status_label(row.status),
             submitted_at=row.submitted_at,

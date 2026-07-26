@@ -53,7 +53,7 @@ const REPORT_TYPES = [
     iconColor: 'text-orange-600 dark:text-orange-400',
     title: 'Road Traffic Collision',
     subtitle: 'Vehicle incident',
-    description: 'Report an RTC involving a company vehicle',
+    description: 'Report a road traffic collision involving a company vehicle',
   },
 ]
 

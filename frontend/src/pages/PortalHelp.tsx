@@ -75,7 +75,11 @@ const CategoryCard = ({
   colorClass: string
   onClick: () => void
 }) => (
-  <Card hoverable className="p-4 cursor-pointer group" onClick={onClick}>
+  <button
+    type="button"
+    onClick={onClick}
+    className="w-full text-left rounded-2xl border border-border bg-card p-4 cursor-pointer group hover:border-primary/30 transition-colors"
+  >
     <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center mb-3', colorClass)}>
       <Icon className="w-6 h-6 text-current" />
     </div>
@@ -84,7 +88,7 @@ const CategoryCard = ({
     </h3>
     <p className="text-xs text-muted-foreground mt-1">{description}</p>
     <p className="text-xs text-primary mt-2 font-medium">{count} articles</p>
-  </Card>
+  </button>
 )
 
 // Quick link
@@ -143,7 +147,7 @@ export default function PortalHelp() {
       category: 'tracking',
       question: 'How do I check the status of my report?',
       answer:
-        'Select "Track my report" and enter the reference number you were given when you submitted. If you are signed in to the portal, your recent reports are also listed there, so you can open one without typing a reference number.',
+        'Select "Track my report" while signed in to see your submitted reports and their current status. If you have a reference number from when you submitted, you can open that report directly from the list.',
     },
     {
       category: 'tracking',
@@ -220,6 +224,8 @@ export default function PortalHelp() {
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
           <button
+            type="button"
+            aria-label="Back to portal home"
             onClick={() => navigate('/portal')}
             className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface hover:bg-muted transition-colors"
           >
