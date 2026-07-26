@@ -115,6 +115,7 @@ export interface TimelineEvent {
   old_value?: string
   new_value?: string
   actor_id?: number
+  actor_name?: string
   event_metadata?: Record<string, unknown>
 }
 
