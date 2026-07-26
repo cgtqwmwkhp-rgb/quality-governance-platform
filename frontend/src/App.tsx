@@ -15,6 +15,7 @@ import {
   revokeSession,
 } from './utils/auth'
 import { useFeatureFlag } from './hooks/useFeatureFlag'
+import { isAIIntelligenceRouteEnabled } from './config/aiIntelligenceRoute'
 import { LegacyActionItemRedirect } from './pages/actionLinks'
 import { useSessionKeepalive } from './hooks/useSessionKeepalive'
 import { useServiceWorkerAuthBridge } from './hooks/useServiceWorkerAuthBridge'
@@ -478,7 +479,9 @@ function App() {
                 <Route path="risk-register" element={<RiskRegister />} />
                 <Route path="risk-register/:riskId" element={<RiskProfile />} />
                 <Route path="ims" element={<IMSDashboard />} />
-                <Route path="ai-intelligence" element={<AIIntelligence />} />
+                {isAIIntelligenceRouteEnabled() && (
+                  <Route path="ai-intelligence" element={<AIIntelligence />} />
+                )}
                 <Route
                   path="admin"
                   element={

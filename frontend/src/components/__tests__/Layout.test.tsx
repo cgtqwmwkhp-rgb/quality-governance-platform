@@ -7,6 +7,7 @@ const hasRoleMock = vi.fn(() => true)
 const isSuperuserMock = vi.fn(() => true)
 const useFeatureFlagMock = vi.fn(() => true)
 const isAICopilotDemoEnabledMock = vi.fn(() => false)
+const isAIIntelligenceRouteEnabledMock = vi.fn(() => false)
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -52,6 +53,10 @@ vi.mock('../../config/aiCopilotDemo', () => ({
   isAICopilotDemoEnabled: () => isAICopilotDemoEnabledMock(),
 }))
 
+vi.mock('../../config/aiIntelligenceRoute', () => ({
+  isAIIntelligenceRouteEnabled: () => isAIIntelligenceRouteEnabledMock(),
+}))
+
 vi.mock('../copilot/AICopilot', () => ({
   default: () => <div data-testid="ai-copilot" />,
 }))
@@ -80,6 +85,8 @@ describe('Layout', () => {
     useFeatureFlagMock.mockReturnValue(true)
     isAICopilotDemoEnabledMock.mockReset()
     isAICopilotDemoEnabledMock.mockReturnValue(false)
+    isAIIntelligenceRouteEnabledMock.mockReset()
+    isAIIntelligenceRouteEnabledMock.mockReturnValue(false)
   })
 
   it('renders the requested first-level hub structure', async () => {
@@ -169,7 +176,7 @@ describe('Layout', () => {
       ['nav.risk_improvement', ['/risk-register']],
       [
         'nav.insights',
-        ['/analytics', '/calendar', '/exports', '/ai-intelligence'],
+        ['/analytics', '/calendar', '/exports'],
       ],
       [
         'nav.admin',
@@ -251,7 +258,7 @@ describe('Layout', () => {
     )
   })
 
-  it('exposes Insights hub links for analytics, calendar, exports, and AI', async () => {
+  it('exposes Insights hub links for analytics, calendar, and exports', async () => {
     const user = userEvent.setup()
     const Layout = (await import('../Layout')).default
 
@@ -264,9 +271,26 @@ describe('Layout', () => {
     const insightsHub = screen.getByRole('button', { name: 'nav.insights' })
     await user.click(insightsHub)
 
-    for (const path of ['/analytics', '/calendar', '/exports', '/ai-intelligence']) {
+    for (const path of ['/analytics', '/calendar', '/exports']) {
       expect(navLink(path)).toBeInTheDocument()
     }
+    expect(navLink('/ai-intelligence')).not.toBeInTheDocument()
+  })
+
+  it('restores the AI Intelligence alias link only when its flag is on', async () => {
+    isAIIntelligenceRouteEnabledMock.mockReturnValue(true)
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'nav.insights' }))
+
+    expect(navLink('/ai-intelligence')).toBeInTheDocument()
   })
 
   it('does not expose orphaned analytics subpaths or demo routes in the sidebar', async () => {
@@ -283,6 +307,7 @@ describe('Layout', () => {
       '/analytics/dashboards',
       '/analytics/reports',
       '/signatures',
+      '/ai-intelligence',
     ]) {
       expect(navLink(path)).not.toBeInTheDocument()
     }

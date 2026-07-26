@@ -51,6 +51,7 @@ import { cn } from '../helpers/utils'
 import { hasRole, isSuperuser } from '../utils/auth'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { isAICopilotDemoEnabled } from '../config/aiCopilotDemo'
+import { isAIIntelligenceRouteEnabled } from '../config/aiIntelligenceRoute'
 import { CUSTOMER_AUDITS_PROGRAMME_PATH, navItemIsActive } from './assuranceHubHelpers'
 
 /** Deferred until the shell opens Copilot — keeps authenticated first paint lean (S14). */
@@ -202,7 +203,9 @@ export default function Layout({ onLogout }: LayoutProps) {
         },
         { path: '/calendar', icon: Calendar, label: t('nav.calendar') },
         { path: '/exports', icon: Download, label: t('nav.export_center') },
-        { path: '/ai-intelligence', icon: Bot, label: t('nav.ai_intelligence') },
+        ...(isAIIntelligenceRouteEnabled()
+          ? [{ path: '/ai-intelligence', icon: Bot, label: t('nav.ai_intelligence') }]
+          : []),
       ],
     },
     ...(canManageUsers && adminUserManagementEnabled
