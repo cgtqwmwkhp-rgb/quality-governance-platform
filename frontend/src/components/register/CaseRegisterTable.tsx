@@ -15,38 +15,93 @@ import { cn } from '../../helpers/utils'
  *
  * Two rules fix it and both live here rather than in four page files:
  *
- *  - At `xl` and above the table is `table-fixed`, so column widths come from
+ *  - Once there is room, the table is `table-fixed`, so column widths come from
  *    the headers and no cell can widen the table. Long values wrap or clamp
  *    inside their own column instead of stealing space from their neighbours.
- *  - Below `xl` the same markup restyles into stacked cards, each cell carrying
- *    its own visible label, so every column survives a narrow viewport.
+ *  - Before then the same markup restyles into stacked cards, each cell
+ *    carrying its own visible label, so every column survives a narrow
+ *    viewport.
  *
- * `xl` rather than `lg` because the register never gets the whole viewport:
+ * "Room" is `xl`, not `lg`, because the register never gets the whole viewport:
  * `Layout` gives the sidebar 288px and the page 32px of padding either side, so
  * a 1024px screen leaves a 672px table — not enough for six or seven columns
- * even with perfect widths. 1280px leaves 928px, which is.
+ * even with perfect widths. 1280px leaves 928px, which is. Registers carrying
+ * an inline action column wait for `2xl`; see `layout` below.
  *
  * The `overflow-x-auto` wrapper is kept only as a safety valve for content with
  * a hard `min-width`; with `table-fixed` there is nothing for it to scroll.
+ *
+ * Two known limits, both carried over rather than introduced here:
+ *
+ *  - An activatable row is a `<tr role="button">`, which is what all four
+ *    registers already shipped. It is invalid ARIA — a rowgroup may only
+ *    contain rows — and adding the explicit roles the stacked layout wants
+ *    makes axe say so. The real fix is a focusable link in the reference cell
+ *    and a plain `role="row"` on the row, but that changes the keyboard
+ *    contract pinned by the PX-008 regression test in `Incidents.test.tsx`, so
+ *    it needs deciding rather than sneaking in here.
+ *  - Consequently the stacked layout carries no explicit roles, and a browser
+ *    drops a table's implicit roles once its display stops being table-like.
+ *    Below `xl` a screen reader gets a labelled button per record whose text
+ *    reads "REFERENCE INC-2026-0057 TITLE …" rather than a navigable table.
+ *    That is the trade for the columns being on screen at all.
  */
 
 /** Layout intent for a column. Drives its width, wrapping and clamping. */
 export type CaseRegisterColumnWidth = 'reference' | 'text' | 'badge' | 'date' | 'action'
 
 /**
- * Fixed widths for the header cells; only meaningful once `table-fixed` is on.
- * Columns left `text` share whatever is left over, equally.
+ * Every class that switches between the stacked and table layouts, for each
+ * breakpoint the register can use. Written out rather than composed, because
+ * Tailwind only ships classes it can find as whole strings in the source.
  *
- * `reference` is 176px because the longest reference in the platform is a near
- * miss — `NM-2026-20033D1D`, sixteen monospace characters — and it has to fit
- * on one line with the cell's 32px of padding.
+ * `reference` is 176px: the longest reference the platform mints is eighteen
+ * monospace characters (`INC-2026-CACDA723` and friends), which measures 141px
+ * and has to sit on one line inside the cell's 32px of padding.
  */
-const HEADER_WIDTH_CLASS: Record<CaseRegisterColumnWidth, string> = {
-  reference: 'xl:w-44',
-  text: '',
-  badge: 'xl:w-32',
-  date: 'xl:w-28',
-  action: 'xl:w-64',
+interface RegisterLayoutClasses {
+  table: string
+  thead: string
+  tbody: string
+  emptyRow: string
+  emptyCell: string
+  row: string
+  cell: string
+  stackedLabel: string
+  width: Record<CaseRegisterColumnWidth, string>
+}
+
+const LAYOUT: Record<'xl' | '2xl', RegisterLayoutClasses> = {
+  xl: {
+    table: 'block w-full xl:table xl:table-fixed',
+    thead: 'hidden xl:table-header-group',
+    tbody: 'block xl:table-row-group',
+    emptyRow: 'block xl:table-row',
+    emptyCell: 'block xl:table-cell',
+    row: 'block border-b border-border py-2 transition-colors last:border-b-0 xl:table-row xl:py-0',
+    cell: 'flex items-baseline gap-3 px-4 py-1 text-sm xl:table-cell xl:py-3 xl:align-middle',
+    stackedLabel:
+      'w-28 shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground xl:hidden',
+    width: { reference: 'xl:w-44', text: '', badge: 'xl:w-32', date: 'xl:w-28', action: 'xl:w-64' },
+  },
+  '2xl': {
+    table: 'block w-full 2xl:table 2xl:table-fixed',
+    thead: 'hidden 2xl:table-header-group',
+    tbody: 'block 2xl:table-row-group',
+    emptyRow: 'block 2xl:table-row',
+    emptyCell: 'block 2xl:table-cell',
+    row: 'block border-b border-border py-2 transition-colors last:border-b-0 2xl:table-row 2xl:py-0',
+    cell: 'flex items-baseline gap-3 px-4 py-1 text-sm 2xl:table-cell 2xl:py-3 2xl:align-middle',
+    stackedLabel:
+      'w-28 shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground 2xl:hidden',
+    width: {
+      reference: '2xl:w-44',
+      text: '',
+      badge: '2xl:w-32',
+      date: '2xl:w-28',
+      action: '2xl:w-64',
+    },
+  },
 }
 
 /**
@@ -108,25 +163,23 @@ export function CaseRegisterTable<T>({
 }: CaseRegisterTableProps<T>) {
   const interactive = Boolean(onOpenRow)
 
+  // An inline action column costs 256px and comes with an extra column of its
+  // own, which leaves the free-text columns around 40px each at `xl`. Wait for
+  // the next breakpoint rather than ship a table nobody can read.
+  const layout = columns.some((column) => column.width === 'action') ? LAYOUT['2xl'] : LAYOUT.xl
+
   return (
     <div className={cn('w-full overflow-x-auto', className)}>
-      {/*
-        Explicit roles because the stacked layout drops every element to
-        `display: block`, and a browser strips a table's implicit roles the
-        moment its display stops being table-like. Rows are the exception: an
-        activatable row keeps the `role="button"` the registers already used.
-      */}
-      <table className="block w-full xl:table xl:table-fixed" role="table" aria-label={label}>
-        <thead className="hidden xl:table-header-group" role="rowgroup">
-          <tr className="border-b border-border" role="row">
+      <table className={layout.table} aria-label={label}>
+        <thead className={layout.thead}>
+          <tr className="border-b border-border">
             {columns.map((column) => (
               <th
                 key={column.key}
                 scope="col"
-                role="columnheader"
                 className={cn(
                   'px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground',
-                  HEADER_WIDTH_CLASS[column.width ?? 'text'],
+                  layout.width[column.width ?? 'text'],
                 )}
               >
                 {column.header}
@@ -134,10 +187,10 @@ export function CaseRegisterTable<T>({
             ))}
           </tr>
         </thead>
-        <tbody className="block xl:table-row-group" role="rowgroup">
+        <tbody className={layout.tbody}>
           {rows.length === 0 ? (
-            <tr className="block xl:table-row" role="row">
-              <td colSpan={columns.length} className="block xl:table-cell" role="cell">
+            <tr className={layout.emptyRow}>
+              <td colSpan={columns.length} className={layout.emptyCell}>
                 {empty}
               </td>
             </tr>
@@ -146,10 +199,7 @@ export function CaseRegisterTable<T>({
               <tr
                 key={rowKey(row)}
                 data-testid={rowTestId}
-                className={cn(
-                  'block border-b border-border py-2 transition-colors last:border-b-0 xl:table-row xl:py-0',
-                  interactive && 'cursor-pointer hover:bg-surface',
-                )}
+                className={cn(layout.row, interactive && 'cursor-pointer hover:bg-surface')}
                 onClick={onOpenRow ? () => onOpenRow(row) : undefined}
                 onKeyDown={
                   onOpenRow
@@ -165,7 +215,7 @@ export function CaseRegisterTable<T>({
                       }
                     : undefined
                 }
-                role={interactive ? 'button' : 'row'}
+                role={interactive ? 'button' : undefined}
                 tabIndex={interactive ? 0 : undefined}
                 aria-label={interactive ? rowLabel?.(row) : undefined}
               >
@@ -175,15 +225,13 @@ export function CaseRegisterTable<T>({
                     <td
                       key={column.key}
                       data-testid={column.cellTestId?.(row)}
-                      className="flex items-baseline gap-3 px-4 py-1 text-sm xl:table-cell xl:py-3 xl:align-middle"
+                      className={layout.cell}
                       onClick={
                         column.isolateClicks ? (event) => event.stopPropagation() : undefined
                       }
                     >
                       {column.hideStackedLabel ? null : (
-                        <span className="w-28 shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground xl:hidden">
-                          {column.header}
-                        </span>
+                        <span className={layout.stackedLabel}>{column.header}</span>
                       )}
                       <div className={cn('min-w-0 flex-1', CONTENT_CLASS[width])}>
                         {column.render(row)}
