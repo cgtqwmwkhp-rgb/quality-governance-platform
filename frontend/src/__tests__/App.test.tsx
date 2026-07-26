@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 
+const isAIIntelligenceRouteEnabledMock = vi.fn(() => false)
+
 function createToken(expOffsetSeconds: number): string {
   const payload = btoa(JSON.stringify({ sub: '1', exp: Math.floor(Date.now() / 1000) + expOffsetSeconds }))
     .replace(/\+/g, '-')
@@ -25,8 +27,16 @@ vi.mock('../services/errorTracker', () => ({
   trackComponentError: vi.fn(),
 }))
 
+// detectEnvironment is reached via Layout -> aiCopilotDemo. Without it the
+// authenticated tree throws into the ErrorBoundary and every assertion below
+// would pass against an error screen rather than the real app.
 vi.mock('../config/apiBase', () => ({
   API_BASE_URL: 'http://localhost:3000',
+  detectEnvironment: () => 'production',
+}))
+
+vi.mock('../config/aiIntelligenceRoute', () => ({
+  isAIIntelligenceRouteEnabled: () => isAIIntelligenceRouteEnabledMock(),
 }))
 
 vi.mock('../api/client', () => ({
@@ -142,6 +152,9 @@ vi.mock('../pages/admin/PartnerWebhooks', () => ({ default: () => <div>PartnerWe
 describe('App', () => {
   beforeEach(() => {
     localStorage.clear()
+    window.history.pushState({}, '', '/')
+    isAIIntelligenceRouteEnabledMock.mockReset()
+    isAIIntelligenceRouteEnabledMock.mockReturnValue(false)
   })
 
   it('renders login page when no token in localStorage', async () => {
@@ -177,5 +190,49 @@ describe('App', () => {
     })
 
     expect(screen.getByTestId('login-page')).toBeInTheDocument()
+  })
+
+  // PX-285: typing the URL is the whole point — a missing sidebar link proves nothing.
+  it('does not serve /ai-intelligence on direct navigation while the flag is off', async () => {
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/ai-intelligence')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(screen.queryByText('AIIntelligence')).not.toBeInTheDocument()
+    // The alias must not fall through to the Analyst it used to redirect to.
+    expect(window.location.pathname).toBe('/ai-intelligence')
+  })
+
+  it('does not serve /ai-intelligence sub-paths while the flag is off', async () => {
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/ai-intelligence/insights')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(screen.queryByText('AIIntelligence')).not.toBeInTheDocument()
+    expect(window.location.pathname).toBe('/ai-intelligence/insights')
+  })
+
+  it('serves /ai-intelligence on direct navigation when the flag is on', async () => {
+    isAIIntelligenceRouteEnabledMock.mockReturnValue(true)
+    localStorage.setItem('access_token', createToken(3600))
+    window.history.pushState({}, '', '/ai-intelligence')
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(screen.getByText('AIIntelligence')).toBeInTheDocument()
   })
 })
