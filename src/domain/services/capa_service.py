@@ -53,6 +53,7 @@ def parse_roster_assignee_marker(description: str | None) -> tuple[str, str | No
     clean = _ROSTER_ASSIGNEE_PATTERN.sub("", description).strip()
     return clean, name or None
 
+
 # Golden-thread CAPA sources that require a resolvable integer source_id (R47).
 _GT_SOURCE_MODELS: dict[CAPASource, type[Any]] = {
     CAPASource.AUDIT_FINDING: AuditFinding,

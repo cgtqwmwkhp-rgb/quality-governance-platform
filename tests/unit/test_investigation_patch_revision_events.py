@@ -8,6 +8,7 @@ and "Field updates" filters were permanently empty.
 
 from __future__ import annotations
 
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -23,16 +24,21 @@ def _investigation(**overrides):
     base = dict(
         id=42,
         tenant_id=7,
+        template_id=1,
         version=3,
         status=InvestigationStatus.IN_PROGRESS,
         title="Fork lift near miss",
         description="Original description",
         data={"summary": "before"},
-        started_at="2026-07-01T00:00:00",
+        reference_number="INV-42",
+        started_at=datetime(2026, 7, 1),
         completed_at=None,
         closed_at=None,
-        assigned_entity_type=None,
-        assigned_entity_id=None,
+        assigned_entity_type="incident",
+        assigned_entity_id=99,
+        assigned_entity_reference=None,
+        created_at=datetime(2026, 7, 1),
+        updated_at=datetime(2026, 7, 1),
         updated_by_id=1,
     )
     base.update(overrides)
@@ -59,6 +65,10 @@ async def _patch(investigation, payload):
         patch(
             "src.api.routes.investigations._ensure_investigation_ready_for_status",
             new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "src.domain.services.investigation_service.resolve_assigned_entity_reference",
+            new=AsyncMock(return_value="INC-99"),
         ),
         patch.object(InvestigationService, "create_revision_event", new=AsyncMock()) as spy,
     ):
