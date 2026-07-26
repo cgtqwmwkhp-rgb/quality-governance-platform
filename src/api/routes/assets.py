@@ -25,10 +25,10 @@ from src.api.schemas.asset import (
     LocationUpdate,
     SafetyLookupActionResponse,
     SafetyLookupMergeRequest,
-    SafetyLookupRejectRequest,
     SafetyLookupPendingListResponse,
     SafetyLookupPreviewRequest,
     SafetyLookupPreviewResponse,
+    SafetyLookupRejectRequest,
     TemplateListResponse,
 )
 from src.domain.models.asset import AssetType
