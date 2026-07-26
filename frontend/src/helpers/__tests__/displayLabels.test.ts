@@ -18,6 +18,8 @@ describe('formatCodedValue', () => {
     expect(formatCodedValue('PENDING_REVIEW')).toBe('Pending review')
     expect(formatCodedValue('near-miss')).toBe('Near miss')
     expect(formatCodedValue('daysLost')).toBe('Days lost')
+    expect(formatCodedValue('pending_actions')).toBe('Pending actions')
+    expect(formatCodedValue('actions_in_progress')).toBe('Actions in progress')
   })
 
   it('unwraps a Python enum repr (PX-207)', () => {
