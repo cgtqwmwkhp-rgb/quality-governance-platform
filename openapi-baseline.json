@@ -4093,8 +4093,15 @@
         "description": "One row of a dimensional breakdown (e.g. one asset type, one week).",
         "properties": {
           "avg_score": {
-            "title": "Avg Score",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Score"
           },
           "completed_count": {
             "title": "Completed Count",
@@ -4112,8 +4119,15 @@
             "title": "Essential Compliance Pct"
           },
           "fail_rate": {
-            "title": "Fail Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fail Rate"
           },
           "key": {
             "title": "Key",
@@ -4132,9 +4146,7 @@
           "key",
           "label",
           "run_count",
-          "completed_count",
-          "avg_score",
-          "fail_rate"
+          "completed_count"
         ],
         "title": "AuditAnalyticsDimensionItem",
         "type": "object"
@@ -4167,19 +4179,33 @@
         "type": "object"
       },
       "AuditAnalyticsSummaryResponse": {
-        "description": "Headline KPIs for the audit reporting pack.",
+        "description": "Headline KPIs for the audit reporting pack.\n\nPercentage fields are ``None`` when nothing was measured in the period \u2014 see\n:mod:`src.domain.metrics`. Clients must render that as \"not measured\", never 0%\nor 100%.",
         "properties": {
           "avg_score": {
-            "title": "Avg Score",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Score"
           },
           "completed": {
             "title": "Completed",
             "type": "integer"
           },
           "essential_compliance_pct": {
-            "title": "Essential Compliance Pct",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Essential Compliance Pct"
           },
           "in_progress": {
             "title": "In Progress",
@@ -4190,8 +4216,15 @@
             "type": "integer"
           },
           "pass_rate": {
-            "title": "Pass Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pass Rate"
           },
           "period_days": {
             "title": "Period Days",
@@ -4207,9 +4240,6 @@
           "totals",
           "completed",
           "in_progress",
-          "avg_score",
-          "pass_rate",
-          "essential_compliance_pct",
           "incomplete_critical_count"
         ],
         "title": "AuditAnalyticsSummaryResponse",
@@ -13775,8 +13805,15 @@
             "type": "integer"
           },
           "resolution_rate": {
-            "title": "Resolution Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Rate"
           },
           "total_in_period": {
             "title": "Total In Period",
@@ -13786,8 +13823,7 @@
         "required": [
           "total_in_period",
           "open",
-          "closed_in_period",
-          "resolution_rate"
+          "closed_in_period"
         ],
         "title": "ComplaintSummary",
         "type": "object"
@@ -14703,8 +14739,15 @@
             "type": "integer"
           },
           "completion_rate": {
-            "title": "Completion Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Rate"
           },
           "overdue": {
             "title": "Overdue",
@@ -14718,8 +14761,7 @@
         "required": [
           "total_assigned",
           "completed",
-          "overdue",
-          "completion_rate"
+          "overdue"
         ],
         "title": "ComplianceSummary",
         "type": "object"
@@ -22368,8 +22410,15 @@
             "type": "integer"
           },
           "compliance_rate": {
-            "title": "Compliance Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compliance Rate"
           },
           "compliant": {
             "title": "Compliant",
@@ -22413,8 +22462,7 @@
           "compliant",
           "non_compliant",
           "overdue_check",
-          "suspended",
-          "compliance_rate"
+          "suspended"
         ],
         "title": "FleetHealthResponse",
         "type": "object"
@@ -24304,7 +24352,7 @@
         "type": "object"
       },
       "HealthScore": {
-        "description": "Overall health score.",
+        "description": "Overall health score, or ``None`` when no component was measurable.",
         "properties": {
           "color": {
             "title": "Color",
@@ -24314,10 +24362,17 @@
             "$ref": "#/components/schemas/HealthScoreComponent"
           },
           "score": {
-            "maximum": 100.0,
-            "minimum": 0.0,
-            "title": "Score",
-            "type": "number"
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
           },
           "status": {
             "title": "Status",
@@ -24325,7 +24380,6 @@
           }
         },
         "required": [
-          "score",
           "status",
           "color",
           "components"
@@ -24334,40 +24388,64 @@
         "type": "object"
       },
       "HealthScoreComponent": {
-        "description": "Individual health score component.",
+        "description": "Individual health score component.\n\n``None`` means the component had nothing to measure and was excluded from the\nweighted score \u2014 it is not a 0 and not a 100 (PX-216).\n\nOnly the ratio-derived components are nullable. ``incidents`` and\n``near_miss_culture`` score absolute counts, so they are always measurable and\nstay required \u2014 widening them would force clients to null-check a value the\nserver cannot produce.",
         "properties": {
           "compliance": {
-            "title": "Compliance",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compliance"
           },
           "incidents": {
             "title": "Incidents",
             "type": "number"
           },
           "kri_performance": {
-            "title": "Kri Performance",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kri Performance"
           },
           "near_miss_culture": {
             "title": "Near Miss Culture",
             "type": "number"
           },
           "risk_management": {
-            "title": "Risk Management",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Management"
           },
           "sla_performance": {
-            "title": "Sla Performance",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sla Performance"
           }
         },
         "required": [
           "incidents",
-          "near_miss_culture",
-          "risk_management",
-          "kri_performance",
-          "compliance",
-          "sla_performance"
+          "near_miss_culture"
         ],
         "title": "HealthScoreComponent",
         "type": "object"
@@ -41704,8 +41782,15 @@
             "type": "integer"
           },
           "compliance_rate": {
-            "title": "Compliance Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compliance Rate"
           },
           "met": {
             "title": "Met",
@@ -41719,8 +41804,7 @@
         "required": [
           "total_tracked",
           "met",
-          "breached",
-          "compliance_rate"
+          "breached"
         ],
         "title": "SLASummary",
         "type": "object"
@@ -47736,9 +47820,15 @@
             "type": "integer"
           },
           "compliance_rate": {
-            "default": 100.0,
-            "title": "Compliance Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compliance Rate"
           },
           "compliant_vehicles": {
             "default": 0,
@@ -51704,8 +51794,15 @@
         "description": "Simplified dashboard summary for quick overview.",
         "properties": {
           "health_score": {
-            "title": "Health Score",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Score"
           },
           "health_status": {
             "title": "Health Status",
@@ -51729,7 +51826,6 @@
           }
         },
         "required": [
-          "health_score",
           "health_status",
           "open_incidents",
           "pending_actions",
