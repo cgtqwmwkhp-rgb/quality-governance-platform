@@ -8,15 +8,20 @@ from pydantic import BaseModel, ConfigDict
 
 
 class AuditAnalyticsSummaryResponse(BaseModel):
-    """Headline KPIs for the audit reporting pack."""
+    """Headline KPIs for the audit reporting pack.
+
+    Percentage fields are ``None`` when nothing was measured in the period — see
+    :mod:`src.domain.metrics`. Clients must render that as "not measured", never 0%
+    or 100%.
+    """
 
     period_days: int
     totals: int
     completed: int
     in_progress: int
-    avg_score: float
-    pass_rate: float
-    essential_compliance_pct: float
+    avg_score: Optional[float] = None
+    pass_rate: Optional[float] = None
+    essential_compliance_pct: Optional[float] = None
     incomplete_critical_count: int
 
 
@@ -27,8 +32,8 @@ class AuditAnalyticsDimensionItem(BaseModel):
     label: str
     run_count: int
     completed_count: int
-    avg_score: float
-    fail_rate: float
+    avg_score: Optional[float] = None
+    fail_rate: Optional[float] = None
     essential_compliance_pct: Optional[float] = None
 
 
