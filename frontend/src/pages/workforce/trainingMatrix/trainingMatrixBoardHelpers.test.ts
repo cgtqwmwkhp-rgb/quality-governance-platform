@@ -579,4 +579,14 @@ describe('myTrainingSummary', () => {
     expect(summary.okCount).toBe(2) // compliant + due_soon
     expect(summary.nextDue?.course_display_name).toBe('GDPR')
   })
+
+  it('prefers the next upcoming due date over the oldest overdue (PX-309)', () => {
+    const rows = [
+      row({ course_display_name: 'DSE', status: 'overdue', qgp_due_on: iso(-400) }),
+      row({ course_display_name: 'Fire Safety', status: 'missing', qgp_due_on: iso(15) }),
+    ]
+    const summary = myTrainingSummary(rows)
+    expect(summary.nextDue?.course_display_name).toBe('Fire Safety')
+    expect(summary.nextDue?.kind).toBe('next')
+  })
 })

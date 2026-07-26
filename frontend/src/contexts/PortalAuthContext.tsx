@@ -215,6 +215,33 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
 
   // Check for existing session on mount
   useEffect(() => {
+    const bootstrapFromSharedToken = async (token: string) => {
+      try {
+        const meRes = await fetch(`${API_BASE}/api/v1/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (meRes.ok) {
+          const me = await meRes.json()
+          const bootstrapped = portalUserFromMe(me)
+          establishPlatformSession(token)
+          localStorage.setItem('portal_user', JSON.stringify(bootstrapped))
+          localStorage.setItem('portal_session_time', Date.now().toString())
+          setUser(bootstrapped)
+          setPlatformToken(token)
+          if (import.meta.env.DEV) {
+            console.log(
+              '[PortalAuth] Bootstrapped portal session from shared JWT for:',
+              bootstrapped.email,
+            )
+          }
+        } else {
+          console.warn('[PortalAuth] /auth/me failed during bootstrap:', meRes.status)
+        }
+      } catch (bootstrapErr) {
+        console.error('[PortalAuth] Bootstrap from shared JWT failed:', bootstrapErr)
+      }
+    }
+
     const checkSession = async () => {
       setIsLoading(true)
 
@@ -270,37 +297,21 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
                 setPlatformToken(null)
               }
             } else {
-              // Session expired - clear everything
-              console.log('[PortalAuth] Session expired - clearing stored data')
+              // Portal local session expired — bootstrap from a still-valid admin JWT when present (PX-167).
               localStorage.removeItem('portal_user')
               localStorage.removeItem('portal_session_time')
               localStorage.removeItem('portal_id_token')
-              sessionStorage.removeItem('platform_access_token')
-              sessionStorage.removeItem('platform_refresh_token')
-              setPlatformToken(null)
+              if (sharedToken) {
+                await bootstrapFromSharedToken(sharedToken)
+              } else {
+                sessionStorage.removeItem('platform_access_token')
+                sessionStorage.removeItem('platform_refresh_token')
+                setPlatformToken(null)
+              }
             }
           }
         } else if (sharedToken) {
-          // Admin (or other) shell already authenticated — bootstrap portal profile via /me.
-          try {
-            const meRes = await fetch(`${API_BASE}/api/v1/auth/me`, {
-              headers: { Authorization: `Bearer ${sharedToken}` },
-            })
-            if (meRes.ok) {
-              const me = await meRes.json()
-              const bootstrapped = portalUserFromMe(me)
-              establishPlatformSession(sharedToken)
-              localStorage.setItem('portal_user', JSON.stringify(bootstrapped))
-              localStorage.setItem('portal_session_time', Date.now().toString())
-              setUser(bootstrapped)
-              setPlatformToken(sharedToken)
-              console.log('[PortalAuth] Bootstrapped portal session from shared JWT for:', bootstrapped.email)
-            } else {
-              console.warn('[PortalAuth] /auth/me failed during bootstrap:', meRes.status)
-            }
-          } catch (bootstrapErr) {
-            console.error('[PortalAuth] Bootstrap from shared JWT failed:', bootstrapErr)
-          }
+          await bootstrapFromSharedToken(sharedToken)
         }
       } catch (err) {
         console.error('Session check failed:', err)

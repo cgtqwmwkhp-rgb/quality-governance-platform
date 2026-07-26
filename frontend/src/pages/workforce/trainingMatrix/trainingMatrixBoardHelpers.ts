@@ -838,22 +838,51 @@ export function rowsToCsv(rows: TrainingMatrixComplianceRow[], today: Date = new
   return lines.map((cols) => cols.map((c) => escape(String(c))).join(',')).join('\n')
 }
 
+export type MyTrainingDueKind = 'next' | 'most_overdue'
+
 export type MyTrainingSummary = {
   total: number
   okCount: number
-  nextDue: { course_display_name: string; qgp_due_on: string } | null
+  nextDue: { course_display_name: string; qgp_due_on: string; kind: MyTrainingDueKind } | null
 }
 
 /** Progress counts + next due module for the "My training" panel (Complete = compliant + due_soon). */
+
 export function myTrainingSummary(rows: TrainingMatrixComplianceRow[]): MyTrainingSummary {
   const okCount = rows.filter((r) => isOkStatus(r.status)).length
-  const withDue = rows
+  const todayStart = startOfDay(new Date())
+  const gaps = rows
     .filter((r) => r.qgp_due_on && isGapStatus(r.status))
-    .sort((a, b) => (a.qgp_due_on! < b.qgp_due_on! ? -1 : 1))
-  const nextDue = withDue[0]
-    ? { course_display_name: withDue[0].course_display_name, qgp_due_on: withDue[0].qgp_due_on! }
+    .map((row) => ({ row, due: parseDueDate(row.qgp_due_on)! }))
+    .sort((a, b) => a.due.getTime() - b.due.getTime())
+
+  const upcoming = gaps.filter(({ due }) => due >= todayStart)
+  const overdue = gaps.filter(({ due }) => due < todayStart)
+
+  // PX-309: prefer the next upcoming due date; only fall back to overdue when nothing future exists.
+  const pick = upcoming[0] ?? overdue[overdue.length - 1]
+  const nextDue = pick
+    ? {
+        course_display_name: pick.row.course_display_name,
+        qgp_due_on: pick.row.qgp_due_on!,
+        kind: (upcoming[0] ? 'next' : 'most_overdue') as MyTrainingDueKind,
+      }
     : null
   return { total: rows.length, okCount, nextDue }
+}
+
+/** When Atlas expiry is still in the future but QGP marks overdue, explain the conflict (PX-308). */
+export function trainingAtlasReconciliationNote(
+  row: TrainingMatrixComplianceRow,
+  today: Date = new Date(),
+): string | null {
+  if (!row.expires_on || !row.qgp_due_on) return null
+  const atlasExpiry = parseDueDate(row.expires_on)
+  const qgpDue = parseDueDate(row.qgp_due_on)
+  if (!atlasExpiry || !qgpDue) return null
+  if (horizonForRow(row.status, row.qgp_due_on, today) !== 'overdue') return null
+  if (atlasExpiry < startOfDay(today)) return null
+  return 'Overdue under Plantexpand frequency rules — Atlas still shows in date until that expiry.'
 }
 
 /** CSV for By individual person rollups. */

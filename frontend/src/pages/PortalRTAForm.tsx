@@ -180,7 +180,7 @@ export function portalRtaCanProceed(step: Step, formData: FormData): boolean {
     case 2:
       return !!formData.location && !!formData.accidentType
     case 3:
-      return true
+      return formData.hasWitnesses !== null
     case 4:
       return !!formData.damageDescription
     case 5:
@@ -449,6 +449,8 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
           <button
+            type="button"
+            aria-label={step === 1 ? 'Back to report types' : 'Back to previous step'}
             onClick={() =>
               step === 1 ? navigate('/portal/report') : setStep((s) => (s - 1) as Step)
             }
