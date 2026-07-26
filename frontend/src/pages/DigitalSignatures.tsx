@@ -37,6 +37,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../helpers/utils'
 import { Button } from '../components/ui/Button'
+import { IconButton } from '../components/ui/IconButton'
 import { Input } from '../components/ui/Input'
 import { Card, CardHeader, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -297,9 +298,9 @@ const DigitalSignatures: React.FC = () => {
                 <SelectItem value="expired">Expired</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="secondary" size="sm">
-              <RefreshCw className="w-5 h-5" />
-            </Button>
+            <IconButton variant="secondary" size="icon-sm" label="Refresh signature requests">
+              <RefreshCw className="w-5 h-5" aria-hidden="true" />
+            </IconButton>
           </div>
 
           {/* Requests List */}
@@ -370,15 +371,21 @@ const DigitalSignatures: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedRequest(request)}>
-                        <Eye className="w-5 h-5" />
-                      </Button>
-                      <Button variant="ghost" size="sm">
-                        <Download className="w-5 h-5" />
-                      </Button>
-                      <Button variant="ghost" size="sm">
-                        <MoreVertical className="w-5 h-5" />
-                      </Button>
+                      {/* One row per request, so each control names the request
+                          it acts on rather than repeating "View" down the list. */}
+                      <IconButton
+                        size="icon-sm"
+                        label={`View ${request.title}`}
+                        onClick={() => setSelectedRequest(request)}
+                      >
+                        <Eye className="w-5 h-5" aria-hidden="true" />
+                      </IconButton>
+                      <IconButton size="icon-sm" label={`Download ${request.title}`}>
+                        <Download className="w-5 h-5" aria-hidden="true" />
+                      </IconButton>
+                      <IconButton size="icon-sm" label={`More actions for ${request.title}`}>
+                        <MoreVertical className="w-5 h-5" aria-hidden="true" />
+                      </IconButton>
                     </div>
                   </div>
 
@@ -708,9 +715,9 @@ const SigningModal: React.FC<{
               <h2 className="text-xl font-semibold text-foreground">Sign Document</h2>
               <p className="text-sm text-muted-foreground">{request.title}</p>
             </div>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <XCircle className="w-6 h-6" />
-            </Button>
+            <IconButton size="icon-sm" label="Close signing dialog" onClick={onClose}>
+              <XCircle className="w-6 h-6" aria-hidden="true" />
+            </IconButton>
           </div>
         </div>
 

@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useId, useRef } from 'react'
 import { trackError } from '../utils/errorTracker'
 import { Search, User, Loader2, X } from 'lucide-react'
+import { IconButton } from './ui/IconButton'
 import { Input } from './ui/Input'
+import { Label } from './ui/Label'
 import { usersApi, UserSearchResult } from '../api/client'
 
 interface UserEmailSearchProps {
@@ -26,6 +28,7 @@ export function UserEmailSearch({
   const [selectedUser, setSelectedUser] = useState<UserSearchResult | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const inputId = useId()
 
   useEffect(() => {
     setQuery(value)
@@ -106,32 +109,40 @@ export function UserEmailSearch({
   return (
     <div ref={containerRef} className="relative">
       {label && (
-        <label className="block text-sm font-medium text-foreground mb-1">
-          {label} {required && <span className="text-destructive">*</span>}
-        </label>
+        <Label htmlFor={inputId} required={required} className="block mb-1 text-foreground">
+          {label}
+        </Label>
       )}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Search
+          aria-hidden="true"
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+        />
         <Input
+          id={inputId}
           type="email"
           value={query}
           onChange={handleInputChange}
           onFocus={() => query.length >= 2 && setShowDropdown(true)}
           placeholder={placeholder}
+          aria-label={label ? undefined : placeholder}
           className="pl-9 pr-8"
           required={required}
         />
         {loading && (
-          <Loader2 className="absolute right-8 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin" />
+          <Loader2
+            aria-hidden="true"
+            className="absolute right-8 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin"
+          />
         )}
         {query && (
-          <button
-            type="button"
+          <IconButton
+            label={label ? `Clear ${label}` : 'Clear search'}
             onClick={handleClear}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded"
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-auto w-auto p-1 hover:bg-muted rounded"
           >
-            <X className="w-4 h-4 text-muted-foreground" />
-          </button>
+            <X className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+          </IconButton>
         )}
       </div>
 

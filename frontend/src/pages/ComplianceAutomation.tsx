@@ -46,6 +46,7 @@ import {
 } from '../api/client'
 import { cn } from '../helpers/utils'
 import { Button } from '../components/ui/Button'
+import { IconButton } from '../components/ui/IconButton'
 import { EmptyState } from '../components/ui/EmptyState'
 import { toast } from '../contexts/ToastContext'
 import {
@@ -841,9 +842,12 @@ export default function ComplianceAutomation() {
                         Expires: {new Date(cert.expiry_date).toLocaleDateString()}
                       </p>
                     </div>
-                    <button className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent">
-                      <Eye className="w-4 h-4" />
-                    </button>
+                    <IconButton
+                      label={`View ${cert.name}`}
+                      className="h-auto w-auto p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent"
+                    >
+                      <Eye className="w-4 h-4" aria-hidden="true" />
+                    </IconButton>
                   </div>
                 </div>
               </div>

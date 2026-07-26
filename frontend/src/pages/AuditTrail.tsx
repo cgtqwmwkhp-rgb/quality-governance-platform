@@ -18,6 +18,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { auditTrailApi, type AuditLogEntry } from '../api/client'
+import { IconButton } from '../components/ui/IconButton'
 import { AdminLoadUnavailable, captureAdminLoadError } from './admin/adminLoadHelpers'
 
 interface AuditEntry {
@@ -200,14 +201,15 @@ export default function AuditTrail() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
+          <IconButton
+            label="Refresh audit trail"
             onClick={handleRefresh}
-            className={`p-2 bg-secondary rounded-lg text-muted-foreground hover:text-foreground transition-all ${
+            className={`h-auto w-auto p-2 bg-secondary rounded-lg text-muted-foreground hover:text-foreground transition-all ${
               isLoading ? 'animate-spin' : ''
             }`}
           >
-            <RefreshCw className="w-5 h-5" />
-          </button>
+            <RefreshCw className="w-5 h-5" aria-hidden="true" />
+          </IconButton>
 
           <button
             type="button"
