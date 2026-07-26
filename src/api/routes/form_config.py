@@ -177,12 +177,14 @@ async def create_form_template(
 
     await record_audit_event(
         db=db,
+        event_type="form_template.created",
         entity_type="form_template",
         entity_id=template.id,
         action="created",
         user_id=current_user.id,
-        details={"name": template.name, "form_type": template.form_type},
+        payload={"name": template.name, "form_type": template.form_type},
         request_id=request_id,
+        tenant_id=current_user.tenant_id,
     )
 
     return template
@@ -274,12 +276,14 @@ async def update_form_template(
 
     await record_audit_event(
         db=db,
+        event_type="form_template.updated",
         entity_type="form_template",
         entity_id=template.id,
         action="updated",
         user_id=current_user.id,
-        details=update_data,
+        payload=update_data,
         request_id=request_id,
+        tenant_id=current_user.tenant_id,
     )
 
     return template
@@ -314,12 +318,14 @@ async def publish_form_template(
 
     await record_audit_event(
         db=db,
+        event_type="form_template.published",
         entity_type="form_template",
         entity_id=template.id,
         action="published",
         user_id=current_user.id,
-        details={"published_at": template.published_at.isoformat()},
+        payload={"published_at": template.published_at.isoformat()},
         request_id=request_id,
+        tenant_id=current_user.tenant_id,
     )
 
     return template
@@ -347,12 +353,14 @@ async def delete_form_template(
 
     await record_audit_event(
         db=db,
+        event_type="form_template.deleted",
         entity_type="form_template",
         entity_id=template.id,
         action="deleted",
         user_id=current_user.id,
-        details={"name": template.name},
+        payload={"name": template.name},
         request_id=request_id,
+        tenant_id=current_user.tenant_id,
     )
 
     await db.delete(template)
@@ -670,12 +678,14 @@ async def create_contract(
 
     await record_audit_event(
         db=db,
+        event_type="contract.created",
         entity_type="contract",
         entity_id=contract.id,
         action="created",
         user_id=current_user.id,
-        details={"name": contract.name, "code": contract.code},
+        payload={"name": contract.name, "code": contract.code},
         request_id=request_id,
+        tenant_id=current_user.tenant_id,
     )
 
     return contract
@@ -734,12 +744,14 @@ async def update_contract(
 
     await record_audit_event(
         db=db,
+        event_type="contract.updated",
         entity_type="contract",
         entity_id=contract.id,
         action="updated",
         user_id=current_user.id,
-        details=update_data,
+        payload=update_data,
         request_id=request_id,
+        tenant_id=current_user.tenant_id,
     )
 
     return contract
@@ -767,12 +779,14 @@ async def delete_contract(
 
     await record_audit_event(
         db=db,
+        event_type="contract.deleted",
         entity_type="contract",
         entity_id=contract.id,
         action="deleted",
         user_id=current_user.id,
-        details={"name": contract.name},
+        payload={"name": contract.name},
         request_id=request_id,
+        tenant_id=current_user.tenant_id,
     )
 
     await db.delete(contract)
