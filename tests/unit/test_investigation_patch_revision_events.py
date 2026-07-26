@@ -55,7 +55,10 @@ def _request():
 
 async def _patch(investigation, payload):
     db = _db(investigation)
-    with patch.object(InvestigationService, "create_revision_event", new=AsyncMock()) as spy:
+    with patch(
+        "src.api.routes.investigations._ensure_investigation_ready_for_status",
+        new=AsyncMock(return_value=None),
+    ), patch.object(InvestigationService, "create_revision_event", new=AsyncMock()) as spy:
         await update_investigation(
             request=_request(),
             investigation_id=42,

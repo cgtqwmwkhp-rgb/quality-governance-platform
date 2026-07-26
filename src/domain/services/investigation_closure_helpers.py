@@ -17,6 +17,8 @@ from src.domain.models.rca_tools import CAPAItem
 logger = logging.getLogger(__name__)
 
 CLOSURE_REASON_OPEN_ACTIONS_REMAIN = "OPEN_ACTIONS_REMAIN"
+SUMMARY_SECTION_KEY = "summary"
+SUMMARY_SECTION_LABEL = "Summary"
 _INVESTIGATION_ACTION_STORAGE_KIND = "investigation_action"
 
 _INVESTIGATION_ACTION_DONE_STATUSES: tuple[InvestigationActionStatus, ...] = (
@@ -172,6 +174,86 @@ def open_work_to_payload(items: list[OpenWorkItem]) -> list[dict[str, Any]]:
         }
         for item in items
     ]
+
+
+def _non_empty_text(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def collect_summary_readiness_blockers(investigation: Any) -> tuple[list[str], list]:
+    """Return reason codes + missing_items for summary-tab narrative gates."""
+    from src.domain.models.investigation import InvestigationStatus
+    from src.domain.services.investigation_service import ClosureMissingItem, ClosureReasonCode
+
+    reasons: list[str] = []
+    missing_items: list = []
+
+    status_val = investigation.status.value if hasattr(investigation.status, "value") else str(investigation.status)
+    if status_val == InvestigationStatus.DRAFT.value or getattr(investigation, "started_at", None) is None:
+        reasons.append(ClosureReasonCode.INVESTIGATION_NOT_STARTED)
+        missing_items.append(
+            ClosureMissingItem(
+                code=ClosureReasonCode.INVESTIGATION_NOT_STARTED,
+                section_key=SUMMARY_SECTION_KEY,
+                section_label=SUMMARY_SECTION_LABEL,
+                field_key="started_at",
+                field_label="Investigation start",
+            )
+        )
+
+    has_lead = bool(getattr(investigation, "assigned_to_user_id", None))
+    raw_data = investigation.data if isinstance(getattr(investigation, "data", None), dict) else {}
+    if not has_lead and not _non_empty_text(raw_data.get("lead_investigator")):
+        reasons.append(ClosureReasonCode.LEAD_INVESTIGATOR_NOT_ASSIGNED)
+        missing_items.append(
+            ClosureMissingItem(
+                code=ClosureReasonCode.LEAD_INVESTIGATOR_NOT_ASSIGNED,
+                section_key=SUMMARY_SECTION_KEY,
+                section_label=SUMMARY_SECTION_LABEL,
+                field_key="lead_investigator",
+                field_label="Lead investigator",
+            )
+        )
+
+    if not _non_empty_text(raw_data.get("findings")):
+        reasons.append(ClosureReasonCode.MISSING_FINDINGS)
+        missing_items.append(
+            ClosureMissingItem(
+                code=ClosureReasonCode.MISSING_FINDINGS,
+                section_key=SUMMARY_SECTION_KEY,
+                section_label=SUMMARY_SECTION_LABEL,
+                field_key="findings",
+                field_label="Findings",
+            )
+        )
+
+    if not _non_empty_text(raw_data.get("conclusion")):
+        reasons.append(ClosureReasonCode.MISSING_CONCLUSION)
+        missing_items.append(
+            ClosureMissingItem(
+                code=ClosureReasonCode.MISSING_CONCLUSION,
+                section_key=SUMMARY_SECTION_KEY,
+                section_label=SUMMARY_SECTION_LABEL,
+                field_key="conclusion",
+                field_label="Conclusion",
+            )
+        )
+
+    return reasons, missing_items
+
+
+def user_can_supervisor_override_closure(user: Any, investigation: Any) -> bool:
+    """Supervisor/senior investigator may override open-work gates with a reason."""
+    if getattr(user, "is_superuser", False):
+        return True
+    has_permission = getattr(user, "has_permission", None)
+    if callable(has_permission) and has_permission("investigations:view_all"):
+        return True
+    user_id = getattr(user, "id", None)
+    return user_id in {
+        getattr(investigation, "reviewer_user_id", None),
+        getattr(investigation, "approved_by_id", None),
+    }
 
 
 async def assert_investigation_can_close(

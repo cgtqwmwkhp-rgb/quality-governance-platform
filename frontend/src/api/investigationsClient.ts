@@ -95,6 +95,8 @@ export interface InvestigationUpdate {
   status?: string
   data?: Record<string, unknown>
   notes?: string
+  closure_override?: boolean
+  closure_override_reason?: string
 }
 
 /**
@@ -198,7 +200,9 @@ export interface ClosureMissingItem {
 
 export interface ClosureValidation {
   can_close: boolean
+  can_complete?: boolean
   reasons: string[]
+  completion_reasons?: string[]
   open_work?: ClosureBlockingItem[]
   open_work_count?: number
   /** Named section/field blockers behind the MISSING_REQUIRED_* reason codes. */
