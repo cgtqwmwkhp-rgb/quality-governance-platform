@@ -58,6 +58,10 @@ class ClosureReasonCode:
     LEVEL_NOT_SET = "LEVEL_NOT_SET"
     STATUS_NOT_COMPLETE = "STATUS_NOT_COMPLETE"
     OPEN_ACTIONS_REMAIN = "OPEN_ACTIONS_REMAIN"
+    LEAD_INVESTIGATOR_NOT_ASSIGNED = "LEAD_INVESTIGATOR_NOT_ASSIGNED"
+    INVESTIGATION_NOT_STARTED = "INVESTIGATION_NOT_STARTED"
+    MISSING_FINDINGS = "MISSING_FINDINGS"
+    MISSING_CONCLUSION = "MISSING_CONCLUSION"
 
 
 def _missing_items_to_payload(validation: Any) -> list[dict]:
@@ -108,23 +112,38 @@ async def _get_investigation_or_404(
     return investigation
 
 
-async def _collect_closure_reasons(
+async def _collect_readiness_reasons(
     db: AsyncSession,
     *,
     investigation: InvestigationRun,
     investigation_id: int,
     tenant_id: int,
-) -> tuple[list[str], list]:
-    """Collect closure readiness reasons (same contract as GET /closure-validation)."""
+    gate: str,
+) -> tuple[list[str], list, list]:
+    """Collect completion/closure readiness reasons (shared by GET + PATCH gates).
+
+    ``gate`` is ``complete`` (status → completed) or ``close`` (status → closed).
+    Returns ``(reasons, open_work, missing_items)``.
+    """
     from src.domain.services.investigation_closure_helpers import (
         CLOSURE_REASON_OPEN_ACTIONS_REMAIN,
+        collect_summary_readiness_blockers,
         fetch_open_work_for_investigation,
     )
 
     reasons: list[str] = []
+    missing_items: list = []
+
     if not investigation.level:
         reasons.append(ClosureReasonCode.LEVEL_NOT_SET)
-    if investigation.status != InvestigationStatus.COMPLETED:
+
+    summary_reasons, summary_items = collect_summary_readiness_blockers(investigation)
+    for code in summary_reasons:
+        if code not in reasons:
+            reasons.append(code)
+    missing_items.extend(summary_items)
+
+    if gate == "close" and investigation.status != InvestigationStatus.COMPLETED:
         reasons.append(ClosureReasonCode.STATUS_NOT_COMPLETE)
 
     open_work: list = []
@@ -154,6 +173,7 @@ async def _collect_closure_reasons(
             code_str = code.value if hasattr(code, "value") else str(code)
             if code_str not in reasons:
                 reasons.append(code_str)
+        missing_items.extend(getattr(template_validation, "missing_items", None) or [])
     except Exception:  # noqa: BLE001
         logger.exception(
             "closure_gate_template_failed",
@@ -162,7 +182,126 @@ async def _collect_closure_reasons(
         if ClosureReasonCode.MISSING_REQUIRED_SECTION not in reasons:
             reasons.append(ClosureReasonCode.MISSING_REQUIRED_SECTION)
 
+    return reasons, open_work, missing_items
+
+
+def _apply_open_work_override(
+    reasons: list[str],
+    open_work: list,
+    *,
+    allow_override: bool,
+    override_reason: str | None,
+    current_user: Any,
+    investigation: InvestigationRun,
+) -> tuple[list[str], list, dict | None]:
+    """Strip OPEN_ACTIONS_REMAIN when a supervisor supplies an override reason."""
+    from src.domain.services.investigation_closure_helpers import (
+        CLOSURE_REASON_OPEN_ACTIONS_REMAIN,
+        user_can_supervisor_override_closure,
+    )
+
+    if CLOSURE_REASON_OPEN_ACTIONS_REMAIN not in reasons:
+        return reasons, open_work, None
+    if not allow_override:
+        return reasons, open_work, None
+
+    reason_text = (override_reason or "").strip()
+    if not reason_text:
+        raise BadRequestError(
+            "Supervisor override reason is required when open CAPA/actions remain",
+            code="CLOSURE_OVERRIDE_REASON_REQUIRED",
+        )
+    if not user_can_supervisor_override_closure(current_user, investigation):
+        raise BadRequestError(
+            "Supervisor permission is required to override open CAPA/actions",
+            code="CLOSURE_OVERRIDE_FORBIDDEN",
+        )
+
+    filtered = [code for code in reasons if code != CLOSURE_REASON_OPEN_ACTIONS_REMAIN]
+    return filtered, [], {"closure_override": True, "closure_override_reason": reason_text}
+
+
+async def _collect_closure_reasons(
+    db: AsyncSession,
+    *,
+    investigation: InvestigationRun,
+    investigation_id: int,
+    tenant_id: int,
+) -> tuple[list[str], list]:
+    """Collect closure readiness reasons (same contract as GET /closure-validation)."""
+    reasons, open_work, _missing = await _collect_readiness_reasons(
+        db,
+        investigation=investigation,
+        investigation_id=investigation_id,
+        tenant_id=tenant_id,
+        gate="close",
+    )
     return reasons, open_work
+
+
+async def _ensure_investigation_ready_for_status(
+    db: AsyncSession,
+    *,
+    investigation: InvestigationRun,
+    investigation_id: int,
+    current_user: Any,
+    gate: str,
+    allow_open_work_override: bool = False,
+    override_reason: str | None = None,
+) -> dict | None:
+    """Raise BadRequestError(400) when the run cannot reach completed/closed."""
+    from src.domain.services.investigation_closure_helpers import open_work_to_payload
+
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    reasons, open_work, missing_items = await _collect_readiness_reasons(
+        db,
+        investigation=investigation,
+        investigation_id=investigation_id,
+        tenant_id=tenant_id,
+        gate=gate,
+    )
+    reasons, open_work, override_meta = _apply_open_work_override(
+        reasons,
+        open_work,
+        allow_override=allow_open_work_override,
+        override_reason=override_reason,
+        current_user=current_user,
+        investigation=investigation,
+    )
+    if not reasons:
+        return override_meta
+    label = "completed" if gate == "complete" else "closed"
+    raise BadRequestError(
+        f"Investigation cannot be marked {label} until readiness validation passes",
+        code="CLOSURE_VALIDATION_FAILED",
+        details={
+            "can_close": False,
+            "can_complete": gate == "complete" and False,
+            "reasons": reasons,
+            "missing_items": _missing_items_to_payload_from_list(missing_items),
+            "open_work": open_work_to_payload(open_work),
+            "open_work_count": len(open_work),
+        },
+    )
+
+
+def _missing_items_to_payload_from_list(missing_items: list) -> list[dict]:
+    """Serialize ClosureMissingItem rows without a full validation result wrapper."""
+    payload: list[dict] = []
+    for item in missing_items:
+        section_key = str(getattr(item, "section_key", "") or "")
+        field_key = getattr(item, "field_key", None)
+        payload.append(
+            {
+                "code": str(getattr(item, "code", "") or ""),
+                "section_key": section_key,
+                "section_label": str(getattr(item, "section_label", "") or section_key),
+                "field_key": field_key,
+                "field_label": getattr(item, "field_label", None),
+                "path": getattr(item, "path", None) or (f"{section_key}.{field_key}" if field_key else section_key),
+            }
+        )
+    return payload
 
 
 async def _ensure_investigation_ready_to_close(
@@ -171,28 +310,18 @@ async def _ensure_investigation_ready_to_close(
     investigation: InvestigationRun,
     investigation_id: int,
     current_user: Any,
-) -> None:
+    allow_open_work_override: bool = False,
+    override_reason: str | None = None,
+) -> dict | None:
     """Raise BadRequestError(400) with closure reasons when the run cannot close."""
-    from src.domain.services.investigation_closure_helpers import open_work_to_payload
-
-    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
-    reasons, open_work = await _collect_closure_reasons(
+    return await _ensure_investigation_ready_for_status(
         db,
         investigation=investigation,
         investigation_id=investigation_id,
-        tenant_id=tenant_id,
-    )
-    if not reasons:
-        return
-    raise BadRequestError(
-        "Investigation cannot be closed until closure validation passes",
-        code="CLOSURE_VALIDATION_FAILED",
-        details={
-            "can_close": False,
-            "reasons": reasons,
-            "open_work": open_work_to_payload(open_work),
-            "open_work_count": len(open_work),
-        },
+        current_user=current_user,
+        gate="close",
+        allow_open_work_override=allow_open_work_override,
+        override_reason=override_reason,
     )
 
 
@@ -658,68 +787,44 @@ async def get_closure_validation(
     current_user: CurrentUser,
 ):
     """Return closure-validation state for a given investigation."""
-    from src.domain.services.investigation_closure_helpers import (
-        CLOSURE_REASON_OPEN_ACTIONS_REMAIN,
-        fetch_open_work_for_investigation,
-        open_work_to_payload,
-    )
+    from src.domain.services.investigation_closure_helpers import open_work_to_payload
 
     investigation = await _get_investigation_or_404(investigation_id, db, current_user)
-    reasons: list[str] = []
-    if not investigation.level:
-        reasons.append(ClosureReasonCode.LEVEL_NOT_SET)
-    if investigation.status != InvestigationStatus.COMPLETED:
-        reasons.append(ClosureReasonCode.STATUS_NOT_COMPLETE)
-
     tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
 
-    # Readiness probe must never 500 for "not ready" — fail soft on open-work / template checks.
-    open_work: list = []
-    try:
-        open_work = await fetch_open_work_for_investigation(
-            db,
-            investigation_id=investigation_id,
-            tenant_id=tenant_id,
-        )
-        if open_work:
-            reasons.append(CLOSURE_REASON_OPEN_ACTIONS_REMAIN)
-    except Exception:  # noqa: BLE001 — probe honesty over hard failure
-        logger.exception(
-            "closure_validation_open_work_failed",
-            extra={"investigation_id": investigation_id, "tenant_id": tenant_id},
-        )
-        if CLOSURE_REASON_OPEN_ACTIONS_REMAIN not in reasons:
-            reasons.append(CLOSURE_REASON_OPEN_ACTIONS_REMAIN)
+    close_reasons, open_work, missing_items = await _collect_readiness_reasons(
+        db,
+        investigation=investigation,
+        investigation_id=investigation_id,
+        tenant_id=tenant_id,
+        gate="close",
+    )
+    complete_reasons, _complete_open_work, complete_missing = await _collect_readiness_reasons(
+        db,
+        investigation=investigation,
+        investigation_id=investigation_id,
+        tenant_id=tenant_id,
+        gate="complete",
+    )
 
-    # Emit MISSING_REQUIRED_FIELD / MISSING_REQUIRED_SECTION from template validation.
-    from src.domain.services.investigation_service import InvestigationService
-
-    missing_items: list[dict] = []
-    try:
-        template_validation = await InvestigationService.validate_closure(
-            db,
-            investigation_id=investigation_id,
-            tenant_id=tenant_id,
-        )
-        for code in getattr(template_validation, "reason_codes", None) or []:
-            code_str = code.value if hasattr(code, "value") else str(code)
-            if code_str not in reasons:
-                reasons.append(code_str)
-        missing_items = _missing_items_to_payload(template_validation)
-    except Exception:  # noqa: BLE001 — never turn template parse errors into HTTP 500
-        logger.exception(
-            "closure_validation_template_failed",
-            extra={"investigation_id": investigation_id, "tenant_id": tenant_id},
-        )
-        if ClosureReasonCode.MISSING_REQUIRED_SECTION not in reasons:
-            reasons.append(ClosureReasonCode.MISSING_REQUIRED_SECTION)
+    # Merge missing_items from both probes (dedupe by path).
+    merged_missing: list = []
+    seen_paths: set[str] = set()
+    for item in [*missing_items, *complete_missing]:
+        path = getattr(item, "path", None) or ""
+        if path in seen_paths:
+            continue
+        seen_paths.add(path)
+        merged_missing.append(item)
 
     return {
-        "can_close": len(reasons) == 0,
-        "reasons": reasons,
+        "can_close": len(close_reasons) == 0,
+        "can_complete": len(complete_reasons) == 0,
+        "reasons": close_reasons,
+        "completion_reasons": complete_reasons,
         "open_work": open_work_to_payload(open_work),
         "open_work_count": len(open_work),
-        "missing_items": missing_items,
+        "missing_items": _missing_items_to_payload_from_list(merged_missing),
     }
 
 
@@ -849,7 +954,7 @@ async def create_capa_for_investigation(
 
 
 @router.patch("/{investigation_id:int}", response_model=InvestigationRunResponse)
-async def update_investigation(
+async def update_investigation(  # noqa: C901 - completion/close gates + revision events
     request: Request,
     investigation_id: int,
     investigation_data: InvestigationRunUpdate,
@@ -872,19 +977,26 @@ async def update_investigation(
         raise NotFoundError(f"Investigation with ID {investigation_id} not found")
 
     update_data = investigation_data.model_dump(exclude_unset=True)
-    if update_data.get("status") == "closed":
-        # Mirror GET /closure-validation: return 400 with reason codes, never 500.
-        await _ensure_investigation_ready_to_close(
+    override_meta: dict | None = None
+    new_status = update_data.get("status")
+    if new_status in {"completed", "closed"}:
+        gate = "complete" if new_status == "completed" else "close"
+        override_meta = await _ensure_investigation_ready_for_status(
             db,
             investigation=investigation,
             investigation_id=investigation_id,
             current_user=current_user,
+            gate=gate,
+            allow_open_work_override=bool(update_data.get("closure_override")),
+            override_reason=update_data.get("closure_override_reason"),
         )
 
     previous_values = {field: getattr(investigation, field, None) for field in update_data}
 
-    # Update fields
+    # Update fields (closure override fields are gate-only, not persisted on the run).
     for field, value in update_data.items():
+        if field in {"closure_override", "closure_override_reason"}:
+            continue
         if field == "status" and value is not None:
             setattr(investigation, field, InvestigationStatus(value))
         elif field == "level" and value is not None:
@@ -932,6 +1044,8 @@ async def update_investigation(
             )
 
     for field, previous in previous_values.items():
+        if field in {"closure_override", "closure_override_reason"}:
+            continue
         before = _revision_event_value(previous)
         after = _revision_event_value(getattr(investigation, field, None))
         if before == after:
@@ -939,6 +1053,9 @@ async def update_investigation(
         # JSON blobs (notably `data`) are recorded by field_path only: the full
         # before/after would be stringified into the timeline body by GET /timeline.
         structured = isinstance(before, (list, dict)) or isinstance(after, (list, dict))
+        event_metadata: dict = {"request_id": request_id, "source": "investigation_patch"}
+        if field == "status" and override_meta:
+            event_metadata.update(override_meta)
         await InvestigationService.create_revision_event(
             db=db,
             investigation=investigation,
@@ -947,7 +1064,19 @@ async def update_investigation(
             field_path=field,
             old_value=None if structured else before,
             new_value=None if structured else after,
-            metadata={"request_id": request_id, "source": "investigation_patch"},
+            metadata=event_metadata,
+        )
+
+    if override_meta and "status" not in update_data:
+        await InvestigationService.create_revision_event(
+            db=db,
+            investigation=investigation,
+            event_type="CLOSURE_OVERRIDE",
+            actor_id=current_user.id,
+            field_path="closure",
+            old_value=None,
+            new_value=override_meta.get("closure_override_reason"),
+            metadata={"request_id": request_id, "source": "investigation_patch", **override_meta},
         )
 
     await db.commit()

@@ -3,7 +3,7 @@
  * told the user nothing about which section blocked closure.
  */
 import { describe, expect, it } from 'vitest'
-import { describeClosureBlockers } from '../investigationClosureReasons'
+import { describeClosureBlockers, describeCompletionBlockers, isOnlyOpenActionsBlocking } from '../investigationClosureReasons'
 
 /** Stand-in for i18next's `t(key, defaultValue, options)`. */
 const t = (_key: string, fallback: string, options?: Record<string, unknown>) =>
@@ -108,6 +108,31 @@ describe('describeClosureBlockers', () => {
   it('humanises an unknown code rather than rendering raw SCREAMING_CASE', () => {
     const [line] = describeClosureBlockers({ reasons: ['SOME_NEW_GATE'] }, t)
     expect(line.text).toBe('Some new gate')
+  })
+
+  it('names completion blockers from completion_reasons', () => {
+    const lines = describeCompletionBlockers(
+      {
+        completion_reasons: ['MISSING_FINDINGS'],
+        missing_items: [
+          {
+            code: 'MISSING_FINDINGS',
+            section_key: 'summary',
+            section_label: 'Summary',
+            field_key: 'findings',
+            field_label: 'Findings',
+            path: 'summary.findings',
+          },
+        ],
+      },
+      t,
+    )
+    expect(lines[0].text).toContain('Findings')
+  })
+
+  it('detects when only open actions block completion', () => {
+    expect(isOnlyOpenActionsBlocking(['OPEN_ACTIONS_REMAIN'])).toBe(true)
+    expect(isOnlyOpenActionsBlocking(['OPEN_ACTIONS_REMAIN', 'MISSING_FINDINGS'])).toBe(false)
   })
 
   it('returns nothing when the investigation is ready to close', () => {

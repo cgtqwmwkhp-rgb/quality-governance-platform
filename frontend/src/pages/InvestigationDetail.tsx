@@ -1,6 +1,10 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { describeClosureBlockers } from './investigationClosureReasons'
+import {
+  describeClosureBlockers,
+  describeCompletionBlockers,
+  isOnlyOpenActionsBlocking,
+} from './investigationClosureReasons'
 import { useParams, useNavigate } from 'react-router-dom'
 import { trackError } from '../utils/errorTracker'
 import { toast } from '../contexts/ToastContext'
@@ -187,6 +191,9 @@ export default function InvestigationDetail() {
   const [savingSummary, setSavingSummary] = useState(false)
   const [summarySaveError, setSummarySaveError] = useState<string | null>(null)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [completeOverrideOpen, setCompleteOverrideOpen] = useState(false)
+  const [completeOverrideReason, setCompleteOverrideReason] = useState('')
+  const [pendingCompleteStatus, setPendingCompleteStatus] = useState<string | null>(null)
 
   // ── Loaders ──────────────────────────────────────────────
 
@@ -609,15 +616,41 @@ export default function InvestigationDetail() {
     }
   }
 
-  const handleStatusChange = async (nextStatus: string) => {
+  const handleStatusChange = async (
+    nextStatus: string,
+    opts?: { closureOverride?: boolean; closureOverrideReason?: string },
+  ) => {
     if (!investigationId || !investigation || nextStatus === investigation.status) return
     if (nextStatus === 'closed') {
       toast.error(t('investigations.meta.status_close_via_checklist'))
       return
     }
+    if (
+      nextStatus === 'completed' &&
+      closureValidation?.can_complete === false &&
+      !opts?.closureOverride
+    ) {
+      const reasons = closureValidation.completion_reasons ?? closureValidation.reasons ?? []
+      if (isOnlyOpenActionsBlocking(reasons)) {
+        setPendingCompleteStatus(nextStatus)
+        setCompleteOverrideOpen(true)
+        return
+      }
+      const blockers = describeCompletionBlockers(closureValidation, t)
+      toast.error(blockers[0]?.text ?? t('investigations.closure.complete_blocked'))
+      return
+    }
     setUpdatingStatus(true)
     try {
-      await investigationsApi.update(investigationId, { status: nextStatus })
+      await investigationsApi.update(investigationId, {
+        status: nextStatus,
+        ...(opts?.closureOverride
+          ? {
+              closure_override: true,
+              closure_override_reason: opts.closureOverrideReason,
+            }
+          : {}),
+      })
       toast.success(t('investigations.meta.status_updated'))
       await loadInvestigation()
       await loadClosureValidation()
@@ -626,7 +659,23 @@ export default function InvestigationDetail() {
       toast.error(getApiErrorMessage(err))
     } finally {
       setUpdatingStatus(false)
+      setCompleteOverrideOpen(false)
+      setCompleteOverrideReason('')
+      setPendingCompleteStatus(null)
     }
+  }
+
+  const submitCompleteOverride = async () => {
+    const reason = completeOverrideReason.trim()
+    if (!reason) {
+      toast.error(t('investigations.closure.override_reason_required'))
+      return
+    }
+    if (!pendingCompleteStatus) return
+    await handleStatusChange(pendingCompleteStatus, {
+      closureOverride: true,
+      closureOverrideReason: reason,
+    })
   }
 
   // ── Effects ──────────────────────────────────────────────
@@ -695,6 +744,10 @@ export default function InvestigationDetail() {
   // PX-134: name each blocker rather than echoing the raw reason code.
   const closureBlockers = useMemo(
     () => (closureValidation ? describeClosureBlockers(closureValidation, t) : []),
+    [closureValidation, t],
+  )
+  const completionBlockers = useMemo(
+    () => (closureValidation ? describeCompletionBlockers(closureValidation, t) : []),
     [closureValidation, t],
   )
 
@@ -880,12 +933,17 @@ export default function InvestigationDetail() {
             )
             const isCurrent = investigation.status === status
             const isPast = currentIdx > idx
+            const isCompleteBlocked =
+              status === 'completed' &&
+              investigation.status !== 'completed' &&
+              closureValidation?.can_complete === false
             return (
               <button
                 key={status}
                 type="button"
-                disabled={updatingStatus || investigation.status === 'closed'}
+                disabled={updatingStatus || investigation.status === 'closed' || isCompleteBlocked}
                 onClick={() => void handleStatusChange(status)}
+                title={isCompleteBlocked ? completionBlockers[0]?.text : undefined}
                 className={cn(
                   'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
                   isCurrent && 'border-primary bg-primary text-primary-foreground',
@@ -1240,6 +1298,48 @@ export default function InvestigationDetail() {
                   </div>
                 ) : closureValidation ? (
                   <div className="space-y-3" data-testid="investigation-closure-checklist">
+                    {investigation.status !== 'completed' && investigation.status !== 'closed' ? (
+                      <div
+                        className={cn(
+                          'flex items-center gap-2 p-3 rounded-lg',
+                          closureValidation.can_complete
+                            ? 'bg-success/10 text-success'
+                            : 'bg-warning/10 text-warning',
+                        )}
+                        data-testid="investigation-completion-readiness"
+                      >
+                        {closureValidation.can_complete ? (
+                          <CheckCircle2 className="w-5 h-5" />
+                        ) : (
+                          <XCircle className="w-5 h-5" />
+                        )}
+                        <span className="font-medium">
+                          {closureValidation.can_complete
+                            ? t('investigations.closure.ready_to_complete', 'Ready to complete')
+                            : t('investigations.closure.cannot_complete_yet', 'Cannot complete yet')}
+                        </span>
+                      </div>
+                    ) : null}
+                    {investigation.status !== 'completed' &&
+                    investigation.status !== 'closed' &&
+                    completionBlockers.length > 0 ? (
+                      <div className="space-y-1" data-testid="investigation-completion-blockers">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          {t('investigations.closure.completion_issues_label', 'Before completing:')}
+                        </p>
+                        <ul className="space-y-1">
+                          {completionBlockers.map((blocker) => (
+                            <li
+                              key={blocker.id}
+                              className="text-xs text-destructive"
+                              data-testid={`completion-reason-${blocker.code}`}
+                            >
+                              • {blocker.text}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
                     <div
                       className={cn(
                         'flex items-center gap-2 p-3 rounded-lg',
@@ -1878,6 +1978,39 @@ export default function InvestigationDetail() {
           </div>
         )}
       </div>
+
+      <Dialog open={completeOverrideOpen} onOpenChange={setCompleteOverrideOpen}>
+        <DialogContent data-testid="investigation-complete-override-dialog">
+          <DialogHeader>
+            <DialogTitle>
+              {t('investigations.closure.complete_with_override', 'Complete with supervisor override')}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {t(
+              'investigations.closure.complete_override_hint',
+              'Open CAPA/actions remain. A supervisor may complete the investigation with a documented reason.',
+            )}
+          </p>
+          <Textarea
+            value={completeOverrideReason}
+            onChange={(event) => setCompleteOverrideReason(event.target.value)}
+            placeholder={t(
+              'investigations.closure.override_reason_placeholder',
+              'Reason for completing without closing all actions…',
+            )}
+            data-testid="investigation-complete-override-reason"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCompleteOverrideOpen(false)}>
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            <Button onClick={() => void submitCompleteOverride()} disabled={updatingStatus}>
+              {t('investigations.closure.complete_with_override', 'Complete with override')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={deleteEvidenceTarget !== null}
