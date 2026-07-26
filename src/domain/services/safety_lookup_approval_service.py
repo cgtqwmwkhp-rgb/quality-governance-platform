@@ -227,20 +227,24 @@ class SafetyLookupApprovalService:
         if kind == "asset_type":
             usage = (
                 await self.db.execute(
-                    select(Asset.id).where(
+                    select(Asset.id)
+                    .where(
                         Asset.asset_type_id == entity_id,
                         or_(Asset.tenant_id == tenant_id, Asset.tenant_id.is_(None)),
-                    ).limit(1)
+                    )
+                    .limit(1)
                 )
             ).scalar_one_or_none()
             label = "asset type"
         else:
             usage = (
                 await self.db.execute(
-                    select(Asset.id).where(
+                    select(Asset.id)
+                    .where(
                         Asset.location_id == entity_id,
                         or_(Asset.tenant_id == tenant_id, Asset.tenant_id.is_(None)),
-                    ).limit(1)
+                    )
+                    .limit(1)
                 )
             ).scalar_one_or_none()
             label = "location"

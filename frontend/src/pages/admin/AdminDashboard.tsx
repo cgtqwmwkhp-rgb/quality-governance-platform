@@ -222,9 +222,11 @@ export default function AdminDashboard() {
 
       setStats([
         {
-          label: t('admin.dashboard.stat_active_forms', formsHonesty.label),
+          // Honesty copy is dynamic (PX-186/PX-272) — do not wrap in fixed i18n keys
+          // or en.json would override "Form Builder templates" / zero-builder messaging.
+          label: formsHonesty.label,
           value: formsTotal === null ? '—' : String(formsTotal),
-          change: t('admin.dashboard.stat_forms_change', formsHonesty.change),
+          change: formsHonesty.change,
           trend: formsHonesty.zeroIsNotAbsenceOfLiveForms ? 'down' : 'neutral',
           icon: <FileText className="w-5 h-5" />,
           unavailable: formsTotal === null,
