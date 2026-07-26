@@ -735,14 +735,17 @@ class ExecutiveDashboardService:
 
         Components with nothing to measure score ``None`` and are dropped from the
         weighted average rather than contributing a free 100 (PX-216). If no
-        component was measurable the overall score is ``None``/``not_measured``.
+        component was measurable the overall score is ``None``/``not_measured``;
+        that branch is a fallback rather than a live path, because the two
+        count-based components below always carry weight.
         """
         # Absolute counts, not ratios: zero critical incidents is genuinely 100,
-        # and near-miss reporting culture is scored on volume reported.
-        incident_score: Optional[float] = 100.0
+        # and near-miss reporting culture is scored on volume reported. Both are
+        # always measurable, so they stay non-nullable and always carry weight.
+        incident_score: float = 100.0
         if incidents["critical_high"] > 0:
             incident_score = float(max(0, 100 - (incidents["critical_high"] * 10)))
-        nm_score: Optional[float] = float(min(100, near_misses["total_in_period"] * 5))
+        nm_score: float = float(min(100, near_misses["total_in_period"] * 5))
 
         # Ratio-based: an empty register is unmeasured, not risk-free.
         risk_score = percentage_or_none(

@@ -11,10 +11,15 @@ class HealthScoreComponent(BaseModel):
 
     ``None`` means the component had nothing to measure and was excluded from the
     weighted score — it is not a 0 and not a 100 (PX-216).
+
+    Only the ratio-derived components are nullable. ``incidents`` and
+    ``near_miss_culture`` score absolute counts, so they are always measurable and
+    stay required — widening them would force clients to null-check a value the
+    server cannot produce.
     """
 
-    incidents: Optional[float] = None
-    near_miss_culture: Optional[float] = None
+    incidents: float
+    near_miss_culture: float
     risk_management: Optional[float] = None
     kri_performance: Optional[float] = None
     compliance: Optional[float] = None
