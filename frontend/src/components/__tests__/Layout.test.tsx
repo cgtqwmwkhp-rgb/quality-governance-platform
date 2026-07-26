@@ -187,7 +187,7 @@ describe('Layout', () => {
           '/admin/forms',
           '/admin/settings',
           '/admin/notifications',
-          '/admin/hsec-inbox',
+          '/admin/hseq-inbox',
           '/admin/lookups',
         ],
       ],

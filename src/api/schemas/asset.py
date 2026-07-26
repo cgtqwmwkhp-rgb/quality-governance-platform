@@ -435,6 +435,12 @@ class SafetyLookupMergeRequest(BaseModel):
     target_id: int = Field(..., ge=1)
 
 
+class SafetyLookupRejectRequest(BaseModel):
+    """Optional target remaps assets; omit to discard an unused provisional lookup."""
+
+    target_id: Optional[int] = Field(None, ge=1)
+
+
 class SafetyLookupPreviewRequest(BaseModel):
     kind: str
     name: str = Field(..., min_length=1, max_length=200)

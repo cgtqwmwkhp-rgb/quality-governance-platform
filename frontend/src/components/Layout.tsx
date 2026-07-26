@@ -238,7 +238,7 @@ export default function Layout({ onLogout }: LayoutProps) {
                 label: t('nav.notifications', { defaultValue: 'Notifications' }),
               },
               {
-                path: '/admin/hsec-inbox',
+                path: '/admin/hseq-inbox',
                 icon: MessageSquare,
                 label: t('nav.hsec_inbox', { defaultValue: 'HSEQ Inbox' }),
               },

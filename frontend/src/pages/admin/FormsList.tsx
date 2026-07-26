@@ -37,6 +37,7 @@ import {
 import { cn } from '../../helpers/utils'
 import { formConfigApi, type FormTemplateListItem } from '../../api/formConfigClient'
 import { captureAdminLoadError } from './adminLoadHelpers'
+import { formBuilderEmptyStateCopy } from './formBuilderHonesty'
 
 const FORM_TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   incident: {
@@ -294,14 +295,19 @@ export default function FormsList() {
             </Button>
           </Card>
         ) : filteredForms.length === 0 ? (
-          <Card className="p-12 text-center">
+          <Card className="p-12 text-center" data-testid="forms-list-empty-honesty">
             <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">No forms found</h3>
-            <p className="text-muted-foreground mb-4">
-              {searchQuery
-                ? 'Try adjusting your search or filters'
-                : 'Get started by creating your first form'}
-            </p>
+            {(() => {
+              const empty = formBuilderEmptyStateCopy({
+                hasSearchOrFilter: Boolean(searchQuery || filterType),
+              })
+              return (
+                <>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">{empty.title}</h3>
+                  <p className="text-muted-foreground mb-4 max-w-xl mx-auto">{empty.body}</p>
+                </>
+              )
+            })()}
             <Button onClick={() => navigate('/admin/forms/new')}>
               <Plus className="w-4 h-4 mr-2" />
               Create New Form

@@ -25,6 +25,7 @@ from src.api.schemas.asset import (
     LocationUpdate,
     SafetyLookupActionResponse,
     SafetyLookupMergeRequest,
+    SafetyLookupRejectRequest,
     SafetyLookupPendingListResponse,
     SafetyLookupPreviewRequest,
     SafetyLookupPreviewResponse,
@@ -428,7 +429,7 @@ async def merge_safety_lookup(
 async def reject_safety_lookup(
     kind: str,
     entity_id: int,
-    body: SafetyLookupMergeRequest,
+    body: SafetyLookupRejectRequest,
     db: DbSession,
     user: CurrentUser,
     _: Annotated[User, Depends(require_permission("asset:create"))],

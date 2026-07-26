@@ -209,18 +209,59 @@ class SafetyLookupApprovalService:
         kind: Kind,
         entity_id: int,
         *,
-        target_id: int,
+        target_id: int | None = None,
         tenant_id: int,
         actor_user_id: int,
     ) -> dict[str, Any]:
-        # Reject requires remap to an existing lookup so assets are never left on a dead type.
-        return await self.merge(
-            kind,
-            entity_id,
-            target_id=target_id,
-            tenant_id=tenant_id,
-            actor_user_id=actor_user_id,
-        )
+        if target_id is not None:
+            # Remap referencing assets onto an approved lookup, then reject.
+            return await self.merge(
+                kind,
+                entity_id,
+                target_id=target_id,
+                tenant_id=tenant_id,
+                actor_user_id=actor_user_id,
+            )
+
+        row = await self._get_pending(kind, entity_id, tenant_id=tenant_id)
+        if kind == "asset_type":
+            usage = (
+                await self.db.execute(
+                    select(Asset.id).where(
+                        Asset.asset_type_id == entity_id,
+                        or_(Asset.tenant_id == tenant_id, Asset.tenant_id.is_(None)),
+                    ).limit(1)
+                )
+            ).scalar_one_or_none()
+            label = "asset type"
+        else:
+            usage = (
+                await self.db.execute(
+                    select(Asset.id).where(
+                        Asset.location_id == entity_id,
+                        or_(Asset.tenant_id == tenant_id, Asset.tenant_id.is_(None)),
+                    ).limit(1)
+                )
+            ).scalar_one_or_none()
+            label = "location"
+
+        if usage is not None:
+            raise ValidationError(
+                f"Cannot discard this provisional {label}: assets still reference it. "
+                "Merge into an approved lookup first."
+            )
+
+        row.is_active = False
+        row.approval_status = "rejected"
+        row.updated_by_id = actor_user_id
+        await self.db.commit()
+        return {
+            "kind": kind,
+            "id": entity_id,
+            "approval_status": "rejected",
+            "is_active": False,
+            "merged": False,
+        }
 
     async def preview_create(
         self,

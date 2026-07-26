@@ -96,4 +96,14 @@ describe('FormsList API wiring', () => {
       expect(mockPublishTemplate).toHaveBeenCalledWith(1)
     })
   })
+
+  it('explains empty Form Builder catalogue honestly (PX-272)', async () => {
+    mockListTemplates.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 100 })
+    render(<FormsList />)
+
+    expect(await screen.findByTestId('forms-list-empty-honesty')).toBeInTheDocument()
+    expect(screen.getByText('No Form Builder templates')).toBeInTheDocument()
+    expect(screen.getByText(/live portal intake forms/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Get started by creating your first form/i)).not.toBeInTheDocument()
+  })
 })
