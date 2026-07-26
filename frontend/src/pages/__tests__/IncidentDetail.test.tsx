@@ -8,8 +8,13 @@ const mockNavigate = vi.fn()
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, fallbackOrOptions?: string | Record<string, unknown>) =>
-      typeof fallbackOrOptions === 'string' ? fallbackOrOptions : key,
+    t: (key: string, fallbackOrOptions?: string | Record<string, unknown>) => {
+      if (typeof fallbackOrOptions === 'string') return fallbackOrOptions
+      if (key === 'incidents.detail.reported_on' && fallbackOrOptions && 'date' in fallbackOrOptions) {
+        return `Reported on ${String(fallbackOrOptions.date)}`
+      }
+      return key
+    },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
@@ -194,7 +199,7 @@ describe('IncidentDetail', () => {
       expect(screen.getByRole('heading', { name: 'Loader slip' })).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'incidents.detail.open_investigation' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'incidents.detail.open_investigation' }))
     expect(mockNavigate).toHaveBeenCalledWith('/investigations/21')
 
     fireEvent.click(screen.getByTestId('incident-open-capa'))
@@ -289,6 +294,85 @@ describe('IncidentDetail', () => {
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Conflict: cannot transition')
     })
+  })
+
+  it('PX-164: severity and status badges use title case, not raw lowercase codes', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Loader slip' })).toBeInTheDocument()
+    })
+
+    expect(screen.getAllByText('High').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Reported').length).toBeGreaterThan(0)
+    expect(screen.queryByText('high')).not.toBeInTheDocument()
+    expect(screen.queryByText('reported')).not.toBeInTheDocument()
+  })
+
+  it('PX-176: reported-on header includes the formatted date, not a bare label', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('Reported on 12/03/2026')).toBeInTheDocument()
+    })
+  })
+
+  it('PX-175: only one Start/Open investigation control is rendered on the page', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Loader slip' })).toBeInTheDocument()
+    })
+
+    expect(
+      screen.getAllByRole('button', { name: 'incidents.detail.open_investigation' }),
+    ).toHaveLength(1)
+  })
+
+  it('PX-208: a failed edit save leaves a persistent error on the page, not just a toast', async () => {
+    client.incidentsApi.update.mockRejectedValue(new Error('Conflict: cannot transition'))
+
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Loader slip' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'edit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'incidents.detail.save_changes' }))
+
+    const notice = await screen.findByTestId('incident-save-error')
+    expect(notice).toHaveTextContent('Conflict: cannot transition')
+    expect(notice).toHaveTextContent('Changes were not saved')
+    expect(notice).toHaveAttribute('role', 'alert')
+
+    await new Promise((resolve) => setTimeout(resolve, 80))
+    expect(screen.getByTestId('incident-save-error')).toBeInTheDocument()
+  })
+
+  it('PX-208: witness save failures also leave a persistent error banner', async () => {
+    client.incidentsApi.update.mockRejectedValue(new Error('Witness save rejected'))
+
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Loader slip' })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('incident-witnesses-add'))
+    fireEvent.click(screen.getByTestId('incident-witnesses-save'))
+
+    const notice = await screen.findByTestId('incident-witness-save-error')
+    expect(notice).toHaveTextContent('Witness save rejected')
+  })
+
+  it('linked investigation in workflow proof navigates to the investigation workspace', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('incident-linked-investigation')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('incident-linked-investigation'))
+    expect(mockNavigate).toHaveBeenCalledWith('/investigations/21')
   })
 
   it('omits unchanged status on save so reported→reported never patches status', async () => {
