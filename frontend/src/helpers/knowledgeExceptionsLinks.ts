@@ -16,13 +16,28 @@ export function exceptionEntityHref(entityType: string, entityId: string): strin
   return builder ? builder(entityId) : null
 }
 
-/** Prevent open redirects — only same-app absolute paths. */
+/**
+ * Prevent open redirects — only same-app absolute paths.
+ *
+ * A syntactic check alone is not enough here. Before resolving a URL, browsers
+ * normalise backslashes to forward slashes and strip tab, newline and carriage
+ * return entirely, so `/\evil.com` and `/<tab>/evil.com` both resolve
+ * off-origin despite looking like relative paths. The final origin comparison
+ * is the authority; the cheap checks above it just fail fast.
+ */
 export function isSafeReturnTo(path: string | null | undefined): path is string {
   if (!path) return false
+  if (/[\\\t\n\r]/.test(path)) return false
   if (!path.startsWith('/')) return false
   if (path.startsWith('//')) return false
   if (path.includes('://')) return false
-  return true
+
+  if (typeof window === 'undefined') return true
+  try {
+    return new URL(path, window.location.origin).origin === window.location.origin
+  } catch {
+    return false
+  }
 }
 
 const ENTITY_TYPE_VALUES = [

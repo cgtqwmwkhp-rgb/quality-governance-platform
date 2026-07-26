@@ -11,28 +11,77 @@ name: Azure Static Web Apps CI/CD
 #   - Actual deployment only happens on push to main
 #
 # Push to Main Behavior:
-#   1. deploy_to_staging: Build with STAGING API and deploy to SWA (verification slot)
-#   2. staging_ui_verification: Run Playwright E2E tests (HARD GATE)
-#   3. deploy_production_swa: Rebuild with PRODUCTION API and redeploy to purple-water
+#   1. deploy_to_staging: Build with STAGING API, deploy to the *named*
+#      pre-production SWA environment (separate hostname)
+#   2. staging_ui_verification: Run Playwright E2E against that separate hostname
+#      (HARD GATE)
+#   3. deploy_production_swa: Rebuild with PRODUCTION API, deploy to the default
+#      (production) SWA environment behind PRODUCTION_SWA_HOST
+#   4. production_isolation_audit: Assert the staging bake never touched
+#      PRODUCTION_SWA_HOST
 #
-# tip==LIVE (env integrity): purple-water is the user-facing production SWA.
-# After a successful main run, the default SWA environment MUST bake the
-# production API so tip (UI) talks to LIVE (prod API). Staging bake is only a
-# temporary verification artifact overwritten by deploy_production_swa.
+# =============================================================================
+# ENVIRONMENT SPLIT — WHY TWO HOSTNAMES (PX-178 / PX-191)
+# =============================================================================
+# A single Azure Static Web App resource serves several *environments*, each on
+# its own hostname:
+#
+#   default  (production)     https://purple-water-03205fa03.6.azurestaticapps.net
+#   staging  (pre-production) https://purple-water-03205fa03-staging.6.azurestaticapps.net
+#
+# The named environment is selected with the `deployment_environment` input of
+# Azure/static-web-apps-deploy. Omitting that input deploys to `default`, i.e.
+# straight to the user-facing production hostname.
+#
+# THE DEFECT THIS PREVENTS (PX-178, P0):
+#   This workflow previously omitted `deployment_environment` on the staging
+#   upload, so the STAGING bake (baked against STAGING_API_URL) was published to
+#   the SAME hostname that serves production. For the whole duration of the
+#   Playwright gate — typically 10-20 minutes — real production users were served
+#   a frontend wired to the staging API. deploy_production_swa only overwrote it
+#   *afterwards*, and only if the gate passed. On a gate failure, or on any
+#   workflow_dispatch validation run (which never runs deploy_production_swa),
+#   the staging bake was left on the production hostname indefinitely until a
+#   human ran the emergency recovery job.
+#
+# THE RULE, ENFORCED BELOW:
+#   Exactly two jobs may write to the default/production environment, and both
+#   build with PRODUCTION_API_URL:
+#     - deploy_production_swa      (post-gate, push to main)
+#     - emergency_production_bake  (manual recovery)
+#   Every other deploying job MUST pass `deployment_environment` and therefore
+#   cannot reach PRODUCTION_SWA_HOST.
+#
+# Full runbook, including recovery: docs/runbooks/SWA_ENVIRONMENT_ISOLATION.md
 #
 # =============================================================================
 # VITE_API_URL RATIONALE (INTENTIONAL)
 # =============================================================================
-# Two bakes, one hostname (purple-water default environment):
+# Two bakes, two hostnames:
 #   1. PR validation + deploy_to_staging → STAGING API
 #      https://qgp-staging-plantexpand.azurewebsites.net
-#      Purpose: E2E / staging UI verification against the staging stack
+#      Lands on: the named pre-production environment ONLY (PR builds do not
+#      deploy at all)
 #   2. deploy_production_swa (post-gate, push to main only) → PRODUCTION API
 #      https://app-qgp-prod.azurewebsites.net
-#      Purpose: User-facing tip==LIVE integrity on purple-water
+#      Lands on: the default environment == PRODUCTION_SWA_HOST (tip==LIVE)
 #
 # Preview / PR builds never deploy and never bake production API.
-# Validation mode (workflow_dispatch) NEVER runs deploy_production_swa.
+# Validation mode (workflow_dispatch) NEVER runs deploy_production_swa — which is
+# safe now precisely because it also never writes to the production hostname.
+#
+# =============================================================================
+# SAFETY NETS RETAINED (do not remove)
+# =============================================================================
+#   - staging_ui_verification: hard Playwright gate before any production write.
+#   - "Verify tip==LIVE production API bake": asserts the production dist inlines
+#     PRODUCTION_API_URL and does not bake staging as VITE_API_URL.
+#   - emergency_production_bake: manual recovery that re-publishes a production
+#     bake to the production hostname.
+#   - production_isolation_audit: fails the run if the staging upload was ever
+#     observed on the production hostname. It runs *after* deploy_production_swa
+#     deliberately, so detection never blocks self-healing.
+#
 # =============================================================================
 # VALIDATION MODE (Manual Testing)
 # =============================================================================
@@ -84,15 +133,33 @@ on:
         default: false
 
 env:
-  # purple-water is the single user-facing SWA hostname (also used as staging
-  # verification target before the production API bake overwrites it).
-  STAGING_SWA_URL: https://purple-water-03205fa03.6.azurestaticapps.net
+  # --- Production (default SWA environment) --------------------------------
+  # The one user-facing hostname. Only deploy_production_swa and
+  # emergency_production_bake are permitted to publish here, and both bake
+  # PRODUCTION_API_URL. PRODUCTION_SWA_HOST is the bare host used for
+  # string-equality isolation checks.
+  PRODUCTION_SWA_HOST: purple-water-03205fa03.6.azurestaticapps.net
   PRODUCTION_SWA_URL: https://purple-water-03205fa03.6.azurestaticapps.net
+
+  # --- Pre-production (named SWA environment) ------------------------------
+  # PX-178: the staging bake goes here, never to the default environment. The
+  # name is passed to Azure/static-web-apps-deploy as `deployment_environment`.
+  # Azure derives the hostname as <app-name>-<environment>.<region>.azurestaticapps.net,
+  # which is what STAGING_SWA_URL_FALLBACK encodes. The authoritative URL is the
+  # deploy action's `static_web_app_url` output; the fallback only covers the
+  # case where the action returns an empty output.
+  STAGING_SWA_ENVIRONMENT: staging
+  STAGING_SWA_URL_FALLBACK: https://purple-water-03205fa03-staging.6.azurestaticapps.net
+
+  # --- API backends --------------------------------------------------------
   STAGING_API_URL: https://qgp-staging-plantexpand.azurewebsites.net
   PRODUCTION_API_URL: https://app-qgp-prod.azurewebsites.net
 
 jobs:
-  # For PRs: build-only (no deployment) to satisfy branch protection
+  # For PRs: build-only (no deployment) to satisfy branch protection.
+  # PX-178: despite the legacy job name, this job contains no deploy step and
+  # therefore targets no hostname at all. Keep it that way — a PR build bakes the
+  # staging API.
   build_and_deploy_job:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -118,16 +185,28 @@ jobs:
 
   # ============================================================================
   # STAGING DEPLOYMENT
-  # Deploys to Azure Static Web App (staging environment)
-  # Also runs on workflow_dispatch for validation mode testing.
+  # Builds the STAGING API bake and publishes it to the NAMED pre-production SWA
+  # environment (STAGING_SWA_ENVIRONMENT), which lives on its own hostname.
+  # PX-178: this job must never be able to write to PRODUCTION_SWA_HOST.
+  #
+  # Skipped when force_production_bake is requested: an emergency recovery run
+  # should do nothing except re-publish a production bake. Previously this job
+  # ran alongside emergency_production_bake and raced it for the same hostname.
   # ============================================================================
   deploy_to_staging:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.force_production_bake != true)
     runs-on: ubuntu-latest
-    name: Deploy to Staging
+    name: Deploy to Staging (pre-production environment)
     outputs:
       deploy_sha: ${{ github.sha }}
       deploy_time: ${{ steps.set_version.outputs.build_time }}
+      # Hostname the staging bake actually landed on. Consumed by
+      # staging_ui_verification so the gate always tests what was just deployed.
+      staging_url: ${{ steps.staging_url.outputs.url }}
+      staging_host: ${{ steps.staging_url.outputs.host }}
+      staging_url_source: ${{ steps.staging_url.outputs.source }}
+      # 'true' only if the staging bake demonstrably did not reach production.
+      isolation_ok: ${{ steps.isolation.outputs.isolation_ok }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -178,7 +257,7 @@ jobs:
         run: |
           node scripts/check-no-http-api.cjs
       
-      - name: Deploy staging bake to SWA (temporary — overwritten by prod bake)
+      - name: Deploy staging bake to the named pre-production SWA environment
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
@@ -187,18 +266,185 @@ jobs:
           action: "upload"
           app_location: "frontend/dist"
           skip_app_build: true
+          # PX-178: THE line that keeps this bundle off the production hostname.
+          # Without it the action targets the `default` environment, which is
+          # PRODUCTION_SWA_HOST. Do not remove, and do not set production_branch
+          # here — that would re-classify this upload as a production deployment.
+          deployment_environment: ${{ env.STAGING_SWA_ENVIRONMENT }}
+
+      # PX-178: establish, from the deploy we just performed, which hostname the
+      # staging bake is on. Never fails the job: if isolation was somehow
+      # violated we want the pipeline to continue to the production bake so it
+      # self-heals, and production_isolation_audit turns the run red at the end.
+      - name: Resolve pre-production hostname
+        id: staging_url
+        env:
+          ACTION_URL: ${{ steps.builddeploy.outputs.static_web_app_url }}
+          FALLBACK_URL: ${{ env.STAGING_SWA_URL_FALLBACK }}
+          PRODUCTION_HOST: ${{ env.PRODUCTION_SWA_HOST }}
+        run: |
+          set -euo pipefail
+
+          URL="${ACTION_URL:-}"
+          SOURCE="action_output"
+          if [ -z "$URL" ]; then
+            URL="$FALLBACK_URL"
+            SOURCE="fallback"
+            echo "[WARN] Deploy action returned no static_web_app_url; using derived name."
+          fi
+
+          case "$URL" in
+            https://*) ;;
+            http://*)  URL="https://${URL#http://}" ;;
+            *)         URL="https://${URL}" ;;
+          esac
+          URL="${URL%/}"
+          HOST="${URL#https://}"
+          HOST="${HOST%%/*}"
+
+          {
+            echo "url=$URL"
+            echo "host=$HOST"
+            echo "source=$SOURCE"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$HOST" = "$PRODUCTION_HOST" ]; then
+            echo "separated=false" >> "$GITHUB_OUTPUT"
+            echo "::error title=PX-178 environment split failed::Staging bake was published to the production hostname ${HOST}. Expected the named '${STAGING_SWA_ENVIRONMENT:-staging}' environment."
+          else
+            echo "separated=true" >> "$GITHUB_OUTPUT"
+            echo "[OK] Staging bake is isolated on ${HOST} (production is ${PRODUCTION_HOST})."
+          fi
+
+      # PX-178 defence in depth: the check above trusts the deploy action. This
+      # one asks the production hostname directly whether it is now serving a
+      # staging-API bundle. Best-effort — it only inspects the entry chunks
+      # referenced by index.html — and never fails the job on its own.
+      - name: Probe production hostname for a staging bake
+        id: prod_probe
+        env:
+          PROBE_BASE_URL: ${{ env.PRODUCTION_SWA_URL }}
+          STAGING_API_URL: ${{ env.STAGING_API_URL }}
+        run: |
+          python3 <<'PY'
+          import os
+          import re
+          import sys
+          import urllib.request
+
+          base = os.environ["PROBE_BASE_URL"].rstrip("/")
+          staging = os.environ["STAGING_API_URL"]
+          out = os.environ["GITHUB_OUTPUT"]
+
+          def emit(value, note):
+              print(note)
+              with open(out, "a", encoding="utf-8") as fh:
+                  fh.write(f"contaminated={value}\n")
+
+          def fetch(url):
+              req = urllib.request.Request(
+                  url,
+                  headers={
+                      "User-Agent": "px178-isolation-probe",
+                      "Cache-Control": "no-cache",
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  return resp.read().decode("utf-8", errors="ignore")
+
+          try:
+              index = fetch(base + "/")
+          except Exception as exc:  # network/DNS/5xx - inconclusive, not a failure
+              emit("unknown", f"UNVERIFIED: could not fetch {base}/ ({exc})")
+              sys.exit(0)
+
+          assets = sorted(set(re.findall(r'(?:src|href)="(/assets/[^"]+\.js)"', index)))
+          if not assets:
+              emit("unknown", f"UNVERIFIED: no /assets/*.js entry chunks referenced by {base}/")
+              sys.exit(0)
+
+          # The production bundle legitimately contains the staging URL inside the
+          # static API_URLS map in src/config/apiBase.ts. Only an occurrence
+          # OUTSIDE that map means staging was baked in as VITE_API_URL.
+          staging_map = re.compile(r'staging\s*:\s*[\'"]' + re.escape(staging) + r'[\'"]')
+
+          contaminated = False
+          checked = 0
+          for path in assets[:10]:
+              try:
+                  text = fetch(base + path)
+              except Exception as exc:
+                  print(f"WARN: could not fetch {path} ({exc})")
+                  continue
+              checked += 1
+              if staging in staging_map.sub("", text):
+                  contaminated = True
+                  print(f"DETECTED: staging API baked as VITE_API_URL in {base}{path}")
+
+          if not checked:
+              emit("unknown", "UNVERIFIED: no entry chunk could be downloaded")
+          elif contaminated:
+              emit("true", f"FAIL: {base} is serving a staging-API bundle")
+          else:
+              emit("false", f"OK: {base} is not serving a staging-API bundle ({checked} chunk(s) checked)")
+          PY
+
+      - name: Record PX-178 isolation status
+        id: isolation
+        env:
+          SEPARATED: ${{ steps.staging_url.outputs.separated }}
+          CONTAMINATED: ${{ steps.prod_probe.outputs.contaminated }}
+          STAGING_HOST: ${{ steps.staging_url.outputs.host }}
+          STAGING_URL: ${{ steps.staging_url.outputs.url }}
+          URL_SOURCE: ${{ steps.staging_url.outputs.source }}
+          PRODUCTION_HOST: ${{ env.PRODUCTION_SWA_HOST }}
+        run: |
+          set -euo pipefail
+
+          if [ "$SEPARATED" = "true" ] && [ "$CONTAMINATED" != "true" ]; then
+            ISOLATION_OK="true"
+          else
+            ISOLATION_OK="false"
+          fi
+          echo "isolation_ok=$ISOLATION_OK" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## PX-178 Hostname Isolation"
+            echo ""
+            echo "| Check | Value |"
+            echo "|-------|-------|"
+            echo "| Staging bake hostname | \`$STAGING_HOST\` |"
+            echo "| Hostname source | \`$URL_SOURCE\` |"
+            echo "| Production hostname | \`$PRODUCTION_HOST\` |"
+            echo "| Hostnames separated | \`$SEPARATED\` |"
+            echo "| Production serving staging bake | \`$CONTAMINATED\` |"
+            echo "| **Isolation OK** | \`$ISOLATION_OK\` |"
+            echo ""
+            echo "Staging UI verification target: $STAGING_URL"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$ISOLATION_OK" != "true" ]; then
+            echo "::warning title=PX-178 isolation not confirmed::Continuing so the production bake can still run; production_isolation_audit will fail this run."
+          fi
 
   # ============================================================================
   # STAGING UI VERIFICATION (HARD GATE)
-  # Runs Playwright against deployed staging SWA to verify UI renders correctly.
+  # Runs Playwright against the pre-production SWA environment deployed above.
   # CRITICAL: This job MUST pass for production promotion to proceed.
   # Also runs on workflow_dispatch for validation mode testing.
+  #
+  # PX-178: the target hostname is taken from deploy_to_staging rather than a
+  # workflow-level constant, so the gate always exercises the bundle that was
+  # just published and can never silently be pointed at production.
   # ============================================================================
   staging_ui_verification:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.force_production_bake != true)
     needs: deploy_to_staging
     runs-on: ubuntu-latest
     name: Staging UI Verification (GATE)
+    env:
+      STAGING_SWA_URL: ${{ needs.deploy_to_staging.outputs.staging_url }}
     outputs:
       test_status: ${{ steps.playwright_gate.outputs.test_status }}
       failure_type: ${{ steps.playwright_gate.outputs.failure_type }}
@@ -210,6 +456,23 @@ jobs:
       results_exist: ${{ steps.playwright_gate.outputs.results_exist }}
       junit_exist: ${{ steps.playwright_gate.outputs.junit_exist }}
     steps:
+      # PX-178: fail fast rather than silently fall back to a default URL if the
+      # upstream job did not hand us a hostname.
+      - name: Confirm verification target
+        run: |
+          set -euo pipefail
+          if [ -z "${STAGING_SWA_URL:-}" ]; then
+            echo "[FAIL] deploy_to_staging did not report a pre-production hostname."
+            exit 1
+          fi
+          echo "[OK] Verifying: $STAGING_SWA_URL"
+          echo "Hostname source: ${{ needs.deploy_to_staging.outputs.staging_url_source }}"
+          if [ "${{ needs.deploy_to_staging.outputs.isolation_ok }}" != "true" ]; then
+            # Deliberately non-fatal: blocking here would also block the
+            # production bake that repairs the production hostname.
+            echo "::warning title=PX-178::Isolation was not confirmed for this run; see production_isolation_audit."
+          fi
+      
       - uses: actions/checkout@v6
       
       - name: Setup Node.js
@@ -264,7 +527,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Staging URL** | ${{ env.STAGING_SWA_URL }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Staging URL** (pre-production env) | ${{ env.STAGING_SWA_URL }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Production URL** (not touched here) | ${{ env.PRODUCTION_SWA_URL }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Deploy SHA** | \`${{ needs.deploy_to_staging.outputs.deploy_sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Deploy Time** | ${{ needs.deploy_to_staging.outputs.deploy_time }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Workflow Run** | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY
@@ -659,9 +923,15 @@ jobs:
 
   # ============================================================================
   # PRODUCTION SWA BAKE + DEPLOY (tip==LIVE)
-  # Rebuilds the frontend with the PRODUCTION API URL and redeploys to purple-water.
+  # Rebuilds the frontend with the PRODUCTION API URL and publishes it to the
+  # DEFAULT SWA environment == PRODUCTION_SWA_HOST.
   # Only runs if BOTH deploy_to_staging AND staging_ui_verification succeed.
   # SECURITY: workflow_dispatch (validation mode) NEVER runs this job.
+  #
+  # PX-178: this is one of only two jobs allowed to write to the production
+  # hostname, and it is the only one on the automated path. Since the staging
+  # bake now lands elsewhere, this job is no longer a *repair* of the production
+  # hostname — it is the sole thing that ever changes it.
   # ============================================================================
   deploy_production_swa:
     if: github.event_name == 'push'
@@ -792,7 +1062,7 @@ jobs:
           print(f"OK: production bake inlines {prod} and does not bake staging as VITE_API_URL")
           PY
 
-      - name: Deploy production bake to purple-water SWA
+      - name: Deploy production bake to purple-water SWA (default environment)
         id: proddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
@@ -801,6 +1071,10 @@ jobs:
           action: "upload"
           app_location: "frontend/dist"
           skip_app_build: true
+          # PX-178: `deployment_environment` is intentionally ABSENT so this
+          # upload targets the default environment (PRODUCTION_SWA_HOST). This
+          # is the only automated job permitted to do so, and the step above has
+          # already proven the artifact bakes PRODUCTION_API_URL.
 
       - name: Production SWA bake summary
         if: always()
@@ -825,8 +1099,14 @@ jobs:
 
   # ============================================================================
   # EMERGENCY PRODUCTION BAKE (workflow_dispatch only)
-  # Restores tip==LIVE when a staging bake was left on purple-water after a
-  # failed staging_ui_verification gate. Always includes Entra VITE_* secrets.
+  # Restores tip==LIVE on PRODUCTION_SWA_HOST. Always includes Entra VITE_* secrets.
+  #
+  # PX-178: retained as a safety net. With the environment split in place the
+  # original trigger for this job — a staging bake stranded on the production
+  # hostname by a failed gate — should no longer occur, but this remains the
+  # recovery path for any bad production bake (including one flagged by
+  # production_isolation_audit). deploy_to_staging is skipped when this runs, so
+  # nothing else is publishing concurrently.
   # ============================================================================
   emergency_production_bake:
     if: github.event_name == 'workflow_dispatch' && inputs.force_production_bake == true
@@ -901,7 +1181,7 @@ jobs:
           print(f"OK: emergency production bake inlines {prod}")
           PY
 
-      - name: Deploy production bake to purple-water SWA
+      - name: Deploy production bake to purple-water SWA (default environment)
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PURPLE_WATER_03205FA03 }}
@@ -909,3 +1189,67 @@ jobs:
           action: "upload"
           app_location: "frontend/dist"
           skip_app_build: true
+          # PX-178: `deployment_environment` intentionally ABSENT — recovery must
+          # reach the default environment (PRODUCTION_SWA_HOST). This is the
+          # second and last job permitted to write there.
+
+  # ============================================================================
+  # PRODUCTION HOSTNAME ISOLATION AUDIT (PX-178)
+  # Turns the run red if the staging bake was ever observed on the production
+  # hostname.
+  #
+  # Ordering is deliberate. This job depends on deploy_production_swa with
+  # always(), so it reports *after* the production bake has had its chance to
+  # overwrite any bad content. Failing earlier would starve deploy_production_swa
+  # of its `needs` and strand a staging bundle on the production hostname —
+  # exactly the outcome PX-178 is about.
+  #
+  # Only runs when deploy_to_staging actually succeeded; on any other path there
+  # is no staging upload to audit.
+  # ============================================================================
+  production_isolation_audit:
+    if: always() && needs.deploy_to_staging.result == 'success'
+    needs: [deploy_to_staging, staging_ui_verification, deploy_production_swa]
+    runs-on: ubuntu-latest
+    name: Production Hostname Isolation Audit
+    steps:
+      - name: Assert the staging bake never reached the production hostname
+        env:
+          ISOLATION_OK: ${{ needs.deploy_to_staging.outputs.isolation_ok }}
+          STAGING_HOST: ${{ needs.deploy_to_staging.outputs.staging_host }}
+          URL_SOURCE: ${{ needs.deploy_to_staging.outputs.staging_url_source }}
+          GATE_RESULT: ${{ needs.staging_ui_verification.result }}
+          PROD_DEPLOY_RESULT: ${{ needs.deploy_production_swa.result }}
+        run: |
+          set -euo pipefail
+
+          {
+            echo "# PX-178 Production Hostname Isolation Audit"
+            echo ""
+            echo "| Job | Target hostname | Result |"
+            echo "|-----|-----------------|--------|"
+            echo "| deploy_to_staging | \`$STAGING_HOST\` (source: $URL_SOURCE) | success |"
+            echo "| staging_ui_verification | \`$STAGING_HOST\` | $GATE_RESULT |"
+            echo "| deploy_production_swa | \`$PRODUCTION_SWA_HOST\` | $PROD_DEPLOY_RESULT |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$ISOLATION_OK" = "true" ]; then
+            echo "**Result: PASS** — the staging bake stayed off \`$PRODUCTION_SWA_HOST\`." >> "$GITHUB_STEP_SUMMARY"
+            echo "[OK] Isolation confirmed."
+            exit 0
+          fi
+
+          {
+            echo "**Result: FAIL** — isolation could not be confirmed for this run."
+            echo ""
+            echo "Either the staging upload resolved to \`$PRODUCTION_SWA_HOST\`, or that"
+            echo "hostname was observed serving a bundle baked against the staging API."
+            echo ""
+            echo "Recovery: re-run this workflow via workflow_dispatch with"
+            echo "\`force_production_bake=true\` to republish a production bake, then"
+            echo "confirm \`deployment_environment\` is still set on the staging upload."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "::error title=PX-178 isolation audit failed::Staging bake may have reached ${PRODUCTION_SWA_HOST}. See job summary for recovery steps."
+          exit 1
