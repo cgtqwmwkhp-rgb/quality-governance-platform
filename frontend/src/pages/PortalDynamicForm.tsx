@@ -42,6 +42,25 @@ export interface PortalReportPayload {
   department?: string
   is_anonymous: boolean
   reporter_submission?: Record<string, unknown>
+  /** Handles returned by the attachment upload endpoint, linked on submit. */
+  attachment_ids?: string[]
+}
+
+/** Receipt returned by `POST /api/v1/portal/reports/attachments`. */
+export interface PortalAttachmentReceipt {
+  attachment_id: string
+  filename?: string
+  content_type: string
+  size_bytes: number
+}
+
+/** An uploaded file, remembered against the form field it came from. */
+export interface PortalUploadedAttachment {
+  field: string
+  attachment_id: string
+  name: string
+  type: string
+  size: number
 }
 
 /**
@@ -87,11 +106,146 @@ export function validatePortalFormData(formData: DynamicFormData): Record<string
   return errors
 }
 
+// ==================== Attachments (PX-327) ====================
+
+function isFileValue(value: unknown): value is File {
+  return typeof File !== 'undefined' && value instanceof File
+}
+
+function containsFile(value: unknown): boolean {
+  if (isFileValue(value)) return true
+  return Array.isArray(value) && value.some(isFileValue)
+}
+
+/**
+ * Every file the user attached, paired with the field that holds it.
+ *
+ * These live in form state as `File` objects. `JSON.stringify` turns a `File`
+ * into `{}`, so anything left in the payload is lost on the wire — they have to
+ * be pulled out and uploaded separately before the report is submitted.
+ */
+export function collectFormFiles(formData: DynamicFormData): Array<{ field: string; file: File }> {
+  const collected: Array<{ field: string; file: File }> = []
+  for (const [field, value] of Object.entries(formData)) {
+    if (isFileValue(value)) {
+      collected.push({ field, file: value })
+    } else if (Array.isArray(value)) {
+      for (const item of value) {
+        if (isFileValue(item)) collected.push({ field, file: item })
+      }
+    }
+  }
+  return collected
+}
+
+/**
+ * The reporter-entered snapshot, with upload fields replaced by what was
+ * actually stored. Raw `File` objects must never reach the payload: they
+ * serialise to `{}` and the evidence disappears without trace.
+ */
+export function buildReporterSubmission(
+  formData: DynamicFormData,
+  attachments: PortalUploadedAttachment[] = [],
+): Record<string, unknown> {
+  const byField = new Map<string, PortalUploadedAttachment[]>()
+  for (const attachment of attachments) {
+    const existing = byField.get(attachment.field)
+    if (existing) existing.push(attachment)
+    else byField.set(attachment.field, [attachment])
+  }
+
+  const submission: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(formData)) {
+    if (!containsFile(value)) {
+      submission[key] = value
+      continue
+    }
+    const uploaded = byField.get(key) ?? []
+    submission[key] = {
+      count: uploaded.length,
+      files: uploaded.map(({ attachment_id, name, type, size }) => ({
+        attachment_id,
+        name,
+        type,
+        size,
+      })),
+      evidence_spine: 'evidence_assets',
+    }
+  }
+  return submission
+}
+
+function nestedMessage(value: unknown): string | undefined {
+  if (value && typeof value === 'object') {
+    const message = (value as Record<string, unknown>).message
+    if (typeof message === 'string' && message) return message
+  }
+  return undefined
+}
+
+/**
+ * The API's error envelope is `{ error: { code, message, details } }`, but
+ * validation failures and some middleware answer with `detail` instead. Read
+ * all of them: falling back to a generic string here is how a precise reason
+ * ("that file type is not accepted") turns into "something went wrong".
+ */
+export function extractApiMessage(payload: unknown, fallback: string): string {
+  if (payload && typeof payload === 'object') {
+    const record = payload as Record<string, unknown>
+    const fromEnvelope = nestedMessage(record.error)
+    if (fromEnvelope) return fromEnvelope
+    if (typeof record.message === 'string' && record.message) return record.message
+    const detail = record.detail
+    if (typeof detail === 'string' && detail) return detail
+    const fromDetail = nestedMessage(detail)
+    if (fromDetail) return fromDetail
+  }
+  return fallback
+}
+
+/**
+ * Uploads one file and returns the handle to quote in `attachment_ids`.
+ *
+ * Throws on every failure path. The caller must let that abort the submission:
+ * reporting success while the evidence was dropped is the defect this exists to
+ * prevent.
+ */
+export async function uploadPortalAttachment(
+  file: File,
+  reportType: string,
+): Promise<PortalAttachmentReceipt> {
+  const body = new FormData()
+  body.append('file', file)
+  body.append('report_type', reportType)
+
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}/api/v1/portal/reports/attachments`, {
+      method: 'POST',
+      body,
+    })
+  } catch {
+    throw new Error(
+      `"${file.name}" could not be uploaded — check your connection and try again. ` +
+        'Your report has not been submitted.',
+    )
+  }
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}))
+    const reason = extractApiMessage(errorData, `Upload failed (${response.status}).`)
+    throw new Error(`"${file.name}" could not be attached: ${reason} Your report has not been submitted.`)
+  }
+
+  return response.json()
+}
+
 interface BuildPayloadArgs {
   formType: string
   formData: DynamicFormData
   templateName?: string
   user?: { name?: string; email?: string } | null
+  attachments?: PortalUploadedAttachment[]
 }
 
 // Map form type to correct report type for proper routing
@@ -108,6 +262,7 @@ export function buildPortalReportPayload({
   formData,
   templateName,
   user,
+  attachments = [],
 }: BuildPayloadArgs): PortalReportPayload {
   const reportType = REPORT_TYPE_MAP[formType] || 'incident'
 
@@ -178,16 +333,59 @@ export function buildPortalReportPayload({
     is_anonymous: false,
     // Full reporter-entered snapshot, so the raw contact value is always
     // retrievable by an investigator regardless of how it was mapped above.
-    reporter_submission: { ...formData },
+    reporter_submission: buildReporterSubmission(formData, attachments),
+    ...(attachments.length > 0
+      ? { attachment_ids: attachments.map((attachment) => attachment.attachment_id) }
+      : {}),
   }
 }
 
-interface PortalReportResponse {
+export interface PortalReportResponse {
   success: boolean
   reference_number: string
   tracking_code: string
   message: string
   estimated_response: string
+}
+
+/**
+ * Uploads any attached evidence, then submits the report referencing it.
+ *
+ * Attachments go first because the API links them by handle at submit time.
+ * That ordering also gives the honest failure: if an upload fails, no case is
+ * created, the form keeps its contents, and the error names the file at fault —
+ * instead of returning a reference number for a report whose evidence was
+ * silently dropped (PX-327).
+ */
+export async function submitPortalReportWithAttachments({
+  formType,
+  formData,
+  templateName,
+  user,
+}: BuildPayloadArgs): Promise<PortalReportResponse> {
+  const reportType = REPORT_TYPE_MAP[formType] || 'incident'
+
+  const uploaded: PortalUploadedAttachment[] = []
+  for (const { field, file } of collectFormFiles(formData)) {
+    const receipt = await uploadPortalAttachment(file, reportType)
+    uploaded.push({
+      field,
+      attachment_id: receipt.attachment_id,
+      name: file.name,
+      type: file.type,
+      size: file.size,
+    })
+  }
+
+  const payload = buildPortalReportPayload({
+    formType,
+    formData,
+    templateName,
+    user,
+    attachments: uploaded,
+  })
+
+  return submitPortalReport(payload)
 }
 
 async function submitPortalReport(payload: PortalReportPayload): Promise<PortalReportResponse> {
@@ -199,7 +397,7 @@ async function submitPortalReport(payload: PortalReportPayload): Promise<PortalR
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}))
-    throw new Error(errorData.message || `Submission failed: ${response.status}`)
+    throw new Error(extractApiMessage(errorData, `Submission failed: ${response.status}`))
   }
 
   return response.json()
@@ -1027,19 +1225,12 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       console.log('[PortalDynamicForm] Form data received:', formData)
     }
 
-    const payload = buildPortalReportPayload({
+    const result = await submitPortalReportWithAttachments({
       formType,
       formData,
       templateName: template?.name,
       user,
     })
-
-    if (import.meta.env.DEV) {
-      console.log('[PortalDynamicForm] Submitting payload:', payload)
-    }
-
-    // Call the real API
-    const result = await submitPortalReport(payload)
 
     if (import.meta.env.DEV) {
       console.log('[PortalDynamicForm] API response:', result)
