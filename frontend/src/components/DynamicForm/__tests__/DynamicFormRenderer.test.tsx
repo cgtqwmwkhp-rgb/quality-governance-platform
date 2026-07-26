@@ -657,6 +657,7 @@ describe('PX-301 portal field accessibility', () => {
     expect(trigger).toHaveAttribute('id', 'portal-field-contract')
     expect(trigger).toHaveAttribute('role', 'combobox')
     expect(trigger).toHaveAccessibleName('Customer / contract')
+    expect(trigger).toHaveAttribute('aria-controls', 'portal-field-contract-listbox')
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
     expect(trigger).toHaveAttribute('aria-haspopup', 'listbox')
     expect(trigger).toHaveAttribute('aria-required', 'true')
