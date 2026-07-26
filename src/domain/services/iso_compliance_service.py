@@ -2928,17 +2928,15 @@ Write only the conformance statement. Use formal auditor language (past tense, s
     def generate_soa(
         self,
         evidence_links: List[EvidenceLink],
-        organization_name: str = "Organisation",
+        organization_name: Optional[str] = None,
         include_justification: bool = True,
     ) -> Dict[str, Any]:
         """
-        Generate a Statement of Applicability (SoA) for ISO 27001:2022.
+        Generate an evidence-derived Statement of Applicability for ISO 27001:2022.
 
-        The SoA documents which Annex A controls are applicable, whether they are
-        implemented, and the justification for inclusion or exclusion.  This is a
-        mandatory artefact for ISO 27001 certification.
-
-        Returns a structured SoA document ready for auditor review.
+        This reports evidence coverage against Annex A controls. Applicability
+        decisions and human justifications are not recorded in this path, so the
+        document must not invent them (PX-251).
         """
         from datetime import datetime, timezone
 
@@ -2951,7 +2949,14 @@ Write only the conformance statement. Use formal auditor language (past tense, s
             evidence_by_clause.setdefault(link.clause_id, []).append(link)
 
         controls: List[Dict[str, Any]] = []
-        stats = {"applicable": 0, "implemented": 0, "partial": 0, "not_implemented": 0, "excluded": 0}
+        stats = {
+            "applicable": 0,
+            "implemented": 0,
+            "partial": 0,
+            "not_implemented": 0,
+            "excluded": 0,
+            "assessed": len(annex_a_clauses),
+        }
 
         for clause in annex_a_clauses:
             evidence = evidence_by_clause.get(clause.id, [])
@@ -2959,31 +2964,20 @@ Write only the conformance statement. Use formal auditor language (past tense, s
 
             if evidence_count >= 2:
                 implementation_status = "Implemented"
-                applicable = True
                 stats["implemented"] += 1
             elif evidence_count == 1:
                 implementation_status = "Partially Implemented"
-                applicable = True
                 stats["partial"] += 1
             else:
                 implementation_status = "Not Implemented"
-                applicable = True  # Default: applicable unless explicitly excluded
                 stats["not_implemented"] += 1
 
-            stats["applicable"] += 1
-
-            justification = ""
-            if include_justification:
-                if evidence_count > 0:
-                    titles = [e.title or f"{e.entity_type}/{e.entity_id}" for e in evidence]
-                    justification = (
-                        f"Control is applicable and evidence of implementation exists: " f"{'; '.join(titles[:3])}."
-                    )
-                else:
-                    justification = (
-                        f"Control is applicable to {organization_name} operations. "
-                        f"Implementation evidence is pending — gap identified for remediation."
-                    )
+            justification = None
+            justification_source = "not_recorded"
+            if include_justification and evidence_count > 0:
+                titles = [e.title or f"{e.entity_type}/{e.entity_id}" for e in evidence]
+                justification = "Evidence of implementation exists: " + "; ".join(titles[:3]) + "."
+                justification_source = "derived_from_evidence"
 
             controls.append(
                 {
@@ -2991,7 +2985,9 @@ Write only the conformance statement. Use formal auditor language (past tense, s
                     "clause_id": clause.id,
                     "title": clause.title,
                     "description": clause.description,
-                    "applicable": applicable,
+                    # Applicability is not determined on this path (PX-251).
+                    "applicable": None,
+                    "applicability_decision": "not_recorded",
                     "implementation_status": implementation_status,
                     "evidence_count": evidence_count,
                     "evidence": [
@@ -3006,6 +3002,7 @@ Write only the conformance statement. Use formal auditor language (past tense, s
                         for e in evidence
                     ],
                     "justification": justification,
+                    "justification_source": justification_source,
                 }
             )
 
@@ -3022,7 +3019,9 @@ Write only the conformance statement. Use formal auditor language (past tense, s
                 f"{stats['implemented']} controls fully implemented, "
                 f"{stats['partial']} partially implemented, "
                 f"{stats['not_implemented']} not yet implemented "
-                f"({len(annex_a_clauses)} total Annex A controls assessed)."
+                f"({len(annex_a_clauses)} total Annex A controls assessed). "
+                "Applicability decisions are not recorded in this platform — "
+                "this document reports evidence coverage, not applicability."
             ),
         }
 

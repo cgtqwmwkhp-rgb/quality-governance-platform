@@ -18,8 +18,11 @@ export interface HsKpiYear {
   complaints: number
   ltis: number
   riddor: number
-  ltifr: number
-  afr: number
+  ltifr: number | null
+  afr: number | null
+  ltifr_unavailable_reason?: string | null
+  afr_unavailable_reason?: string | null
+  lti_assessed_injuries?: number
   rate_unit: string
   lessons_learnt_extract?: Array<{
     module: string

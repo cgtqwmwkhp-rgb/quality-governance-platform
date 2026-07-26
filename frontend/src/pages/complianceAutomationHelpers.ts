@@ -210,3 +210,31 @@ export function mapRiddorSubmissionsToPacks(raw: unknown): MonitoringRiddorPack[
     return pack ? [pack] : []
   })
 }
+
+/** Certificate shelf expiry window used by Monitoring tiles (PX-236). */
+export const CERT_EXPIRY_WINDOW_DAYS = 30
+
+export function summariseCertificateShelf(
+  certs: ReadonlyArray<{ expiry_date: string | null; status: string }>,
+  now: Date = new Date(),
+): { tracked: number; expiringSoon: number; expired: number } {
+  const windowMs = CERT_EXPIRY_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  let expiringSoon = 0
+  let expired = 0
+  for (const cert of certs) {
+    if (cert.status === 'expired') {
+      expired += 1
+      continue
+    }
+    if (cert.status === 'expiring_soon') {
+      expiringSoon += 1
+      continue
+    }
+    if (!cert.expiry_date) continue
+    const expiry = new Date(cert.expiry_date)
+    if (Number.isNaN(expiry.getTime())) continue
+    if (expiry < now) expired += 1
+    else if (expiry.getTime() - now.getTime() <= windowMs) expiringSoon += 1
+  }
+  return { tracked: certs.length, expiringSoon, expired }
+}

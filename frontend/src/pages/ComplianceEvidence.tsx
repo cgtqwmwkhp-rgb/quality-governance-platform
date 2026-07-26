@@ -71,6 +71,11 @@ import {
   parseComplianceEvidenceSection,
   type ComplianceEvidenceSectionId,
 } from './complianceEvidenceHelpers'
+import {
+  clauseDenominatorNote,
+  standardCoverageState,
+  standardProvenanceLabel,
+} from './compliance/standardCoverageHonesty'
 
 /**
  * Maps entity_type values (as stored in ComplianceEvidenceLink) to valid SPA routes.
@@ -889,11 +894,17 @@ export default function ComplianceEvidence() {
               partial: 0,
               gaps: standard.clause_count,
             }
-            const percentage = Math.round(
-              stats.total > 0 ? ((stats.covered + stats.partial * 0.5) / stats.total) * 100 : 0,
-            )
+            const coverageState = standardCoverageState({
+              coverageUnavailable,
+              canonicalDataDegraded: Boolean(standard.canonical_data_degraded),
+              canonicalDataMessage: standard.canonical_data_message ?? null,
+              hasCanonicalStandard: Boolean(standard.has_canonical_standard),
+              stats,
+            })
             const Icon = standardIcons[standard.id]
-            const scoreUnavailable = coverageUnavailable
+            const showPercent = coverageState.kind === 'coverage'
+            const percentage = showPercent ? coverageState.percent : 0
+            const denomNote = clauseDenominatorNote(standard.clause_count_breakdown)
 
             return (
               <div
@@ -924,57 +935,69 @@ export default function ComplianceEvidence() {
                       <h3 className="font-bold text-foreground">{standard.code}</h3>
                       <p className="text-xs text-muted-foreground">
                         {standard.name}
-                        {standard.canonical_data_degraded
-                          ? ' • canonical enrichment degraded'
-                          : standard.has_canonical_standard
-                            ? ' • live canonical'
-                            : ' • fallback'}
-                        {scoreUnavailable ? ' • coverage unavailable' : ''}
+                        {' • '}
+                        {standardProvenanceLabel(coverageState)}
                       </p>
                     </div>
                   </div>
                   <div
                     className={
-                      scoreUnavailable
-                        ? 'text-lg font-bold text-muted-foreground'
-                        : standardPercentageClass[standard.id] ?? 'text-2xl font-bold text-primary'
+                      showPercent
+                        ? standardPercentageClass[standard.id] ?? 'text-2xl font-bold text-primary'
+                        : 'text-lg font-bold text-muted-foreground'
                     }
                     aria-label={
-                      scoreUnavailable
+                      coverageState.kind === 'unavailable'
                         ? 'Coverage unavailable'
-                        : `${percentage}% compliance`
+                        : showPercent
+                          ? `${percentage}% weighted clause evidence coverage for ${standard.code}`
+                          : standardProvenanceLabel(coverageState)
                     }
                     data-testid={`compliance-score-${standard.id}`}
                   >
-                    {scoreUnavailable ? '—' : `${percentage}%`}
+                    {showPercent ? `${percentage}%` : '—'}
                   </div>
                 </div>
 
-                <div
-                  className="w-full bg-surface rounded-full h-2 mb-3"
-                  role="progressbar"
-                  aria-valuenow={scoreUnavailable ? 0 : percentage}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-label={scoreUnavailable ? 'Coverage unavailable' : undefined}
-                >
+                {showPercent ? (
                   <div
-                    className={standardProgressClass[standard.id] ?? 'h-2 rounded-full bg-primary'}
-                    style={{ width: scoreUnavailable ? '0%' : `${percentage}%` }}
-                  />
-                </div>
+                    className="w-full bg-surface rounded-full h-2 mb-3"
+                    role="progressbar"
+                    aria-valuenow={percentage}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    <div
+                      className={standardProgressClass[standard.id] ?? 'h-2 rounded-full bg-primary'}
+                      style={{ width: `${percentage}%` }}
+                    />
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground mb-3" data-testid={`compliance-score-note-${standard.id}`}>
+                    {coverageState.kind === 'not_adopted'
+                      ? `${coverageState.clausesWithEvidence} of ${coverageState.clauseTotal} built-in clauses have evidence links. No coverage percentage: this tenant has no standard record, so there is no adopted clause set to score against.`
+                      : coverageState.kind === 'degraded'
+                        ? 'Coverage percentage withheld while canonical enrichment is degraded.'
+                        : 'Coverage metrics unavailable'}
+                  </p>
+                )}
 
                 <div className="flex justify-between text-xs">
-                  {scoreUnavailable ? (
-                    <span className="text-muted-foreground">Coverage metrics unavailable</span>
-                  ) : (
+                  {showPercent ? (
                     <>
-                      <span className="text-success">{stats.covered} Full</span>
-                      <span className="text-warning">{stats.partial} Partial</span>
-                      <span className="text-destructive">{stats.gaps} Gaps</span>
+                      <span className="text-success">{coverageState.covered} Full</span>
+                      <span className="text-warning">{coverageState.partial} Partial</span>
+                      <span className="text-destructive">{coverageState.gaps} Gaps</span>
                     </>
+                  ) : (
+                    <span className="text-muted-foreground">Coverage metrics withheld</span>
                   )}
                 </div>
+                {denomNote ? (
+                  <p className="mt-2 text-[11px] text-muted-foreground" data-testid={`compliance-denom-${standard.id}`}>
+                    {denomNote}
+                  </p>
+                ) : null}
               </div>
             )
           })}
@@ -1904,6 +1927,12 @@ export default function ComplianceEvidence() {
           </DialogHeader>
           {soaData && (
             <div className="flex flex-col gap-4 overflow-hidden min-h-0 flex-1">
+              <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-foreground" data-testid="soa-honesty-banner">
+                Evidence-derived. Applicability decisions and justifications are not recorded in this platform,
+                so this is not a certification-ready Statement of Applicability.
+                Organisation: {soaData.organization ?? 'Organisation name not set'}.
+                93 Annex A controls. The ISO 27001 tile also counts ISMS management clauses (4–10), which this document does not assess.
+              </div>
               <div className="flex items-center justify-between flex-shrink-0">
                 <p className="text-sm text-muted-foreground">{soaData.summary}</p>
                 <Button size="sm" variant="outline" onClick={() => {
@@ -1965,9 +1994,9 @@ export default function ComplianceEvidence() {
                             <span className="text-xs text-muted-foreground">{control.evidence_count} evidence item{control.evidence_count !== 1 ? 's' : ''}</span>
                           )}
                         </div>
-                        {control.justification && (
-                          <p className="text-xs text-muted-foreground">{control.justification}</p>
-                        )}
+                        <p className="text-xs text-muted-foreground">
+                          {control.justification ?? 'No applicability justification recorded.'}
+                        </p>
                       </div>
                     </div>
                   </div>

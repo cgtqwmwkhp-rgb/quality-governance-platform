@@ -18,6 +18,18 @@ const metrics = [
   ['afr', 'AFR'],
 ] as const
 
+const RATE_UNAVAILABLE_TEXT: Record<string, string> = {
+  no_hours_recorded:
+    'No hours recorded for this period — a rate per 100,000 hours cannot be calculated.',
+  no_lti_classification:
+    'No injury in this period has been assessed for lost time. A zero rate would assert an all-clear the records do not support.',
+}
+
+function formatRateValue(value: number | null | undefined): string {
+  if (value == null) return '—'
+  return Number.isFinite(value) ? String(value) : '—'
+}
+
 export default function HsPerformance() {
   const [summary, setSummary] = useState<HsKpiSummary | null>(null)
   const [error, setError] = useState('')
@@ -40,6 +52,22 @@ export default function HsPerformance() {
   const latest = summary?.by_year.length
     ? summary.by_year[summary.by_year.length - 1]
     : undefined
+
+  const unavailableNotes = (summary?.by_year ?? [])
+    .flatMap((year) => {
+      const notes: string[] = []
+      if (year.ltifr == null && year.ltifr_unavailable_reason) {
+        notes.push(
+          `${year.reporting_year} LTIFR: ${RATE_UNAVAILABLE_TEXT[year.ltifr_unavailable_reason] ?? year.ltifr_unavailable_reason}`,
+        )
+      }
+      if (year.afr == null && year.afr_unavailable_reason) {
+        notes.push(
+          `${year.reporting_year} AFR: ${RATE_UNAVAILABLE_TEXT[year.afr_unavailable_reason] ?? year.afr_unavailable_reason}`,
+        )
+      }
+      return notes
+    })
 
   const handleDryRun = async () => {
     if (!file) return
@@ -88,15 +116,40 @@ export default function HsPerformance() {
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4 xl:grid-cols-7">
-        {metrics.map(([key, label]) => (
-          <Card key={key}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">{label}</CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-semibold">{latest?.[key] ?? '—'}</CardContent>
-          </Card>
-        ))}
+        {metrics.map(([key, label]) => {
+          const raw = latest?.[key]
+          const isRate = key === 'ltifr' || key === 'afr'
+          const reason =
+            key === 'ltifr'
+              ? latest?.ltifr_unavailable_reason
+              : key === 'afr'
+                ? latest?.afr_unavailable_reason
+                : null
+          const display = isRate
+            ? formatRateValue(raw as number | null | undefined)
+            : raw ?? '—'
+          return (
+            <Card key={key} data-testid={`hs-kpi-${key}`}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs text-muted-foreground">{label}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-semibold">{display}</div>
+                {isRate && reason ? (
+                  <p className="mt-1 text-xs text-muted-foreground" data-testid={`hs-kpi-${key}-reason`}>
+                    {RATE_UNAVAILABLE_TEXT[reason] ?? reason}
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
+      {unavailableNotes.length > 0 ? (
+        <p className="text-xs text-muted-foreground" data-testid="hs-rate-unavailable-footnote">
+          {unavailableNotes.join(' ')}
+        </p>
+      ) : null}
       {latest?.lessons_learnt_extract && latest.lessons_learnt_extract.length > 0 ? (
         <Card>
           <CardHeader>
@@ -150,8 +203,12 @@ export default function HsPerformance() {
                   <td>{year.rtas}</td>
                   <td>{year.ltis}</td>
                   <td>{year.riddor}</td>
-                  <td>{year.ltifr}</td>
-                  <td>{year.afr}</td>
+                  <td data-testid={`hs-table-ltifr-${year.reporting_year}`}>
+                    {formatRateValue(year.ltifr)}
+                  </td>
+                  <td data-testid={`hs-table-afr-${year.reporting_year}`}>
+                    {formatRateValue(year.afr)}
+                  </td>
                 </tr>
               ))}
             </tbody>

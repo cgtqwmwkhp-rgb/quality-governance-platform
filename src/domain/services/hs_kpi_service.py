@@ -15,6 +15,8 @@ from src.domain.models.near_miss import NearMiss
 from src.domain.models.rta import RoadTrafficCollision
 
 RATE_UNIT = "per_100000_hours"
+LTIFR_NO_HOURS = "no_hours_recorded"
+LTIFR_NOT_CLASSIFIED = "no_lti_classification"
 
 
 def pro_rated_hours(*, average_fte: float, hours_per_fte_year: float, period_start: date, period_end: date) -> float:
@@ -37,6 +39,24 @@ def effective_hours(period: HsReportingPeriod) -> float:
 
 def rate_per_100000(*, count: int, hours: float) -> float:
     return round((count / hours) * 100000, 2) if hours else 0.0
+
+
+def lti_rate(*, ltis: int, injuries: int, lti_assessed_injuries: int, hours: float) -> tuple[float | None, str | None]:
+    """LTIFR, or (None, reason) when the data cannot support a rate.
+
+    0.00 is only honest when someone actually assessed lost time. ``is_lti`` is
+    NOT NULL DEFAULT false, so it cannot distinguish "assessed, no LTI" from
+    "never assessed"; a non-null ``days_lost`` is the corroborating evidence (PX-270).
+    """
+    if hours <= 0:
+        return None, LTIFR_NO_HOURS
+    if ltis > 0:
+        return rate_per_100000(count=ltis, hours=hours), None
+    if injuries == 0:
+        return 0.0, None
+    if lti_assessed_injuries == 0:
+        return None, LTIFR_NOT_CLASSIFIED
+    return 0.0, None
 
 
 class HsKpiService:
@@ -168,6 +188,25 @@ class HsKpiService:
         # Injuries as the board denominator for NM:I (Excel SLT convention).
         near_miss_to_injury_ratio = round(near_misses / injuries, 2) if injuries else None
         hipo_near_miss_to_injury_ratio = round(hipo_near_misses / injuries, 2) if injuries else None
+        ltis = incident_ltis + rta_ltis
+        # Non-null days_lost (including 0) or an explicit is_lti=True counts as assessed.
+        lti_assessed_injuries = await self._count(
+            Incident,
+            Incident.incident_date,
+            period.tenant_id,
+            start,
+            end,
+            or_(Incident.is_injury.is_(True), Incident.is_minor_injury.is_(True)),
+            or_(Incident.is_lti.is_(True), Incident.days_lost.is_not(None)),
+        )
+        ltifr, ltifr_reason = lti_rate(
+            ltis=ltis,
+            injuries=injuries,
+            lti_assessed_injuries=lti_assessed_injuries,
+            hours=hours,
+        )
+        afr = rate_per_100000(count=injuries, hours=hours) if hours > 0 else None
+        afr_reason = LTIFR_NO_HOURS if hours <= 0 else None
         return {
             "reporting_year": period.reporting_year,
             "period_start": start.isoformat(),
@@ -184,10 +223,13 @@ class HsKpiService:
             "hipo_near_miss_to_injury_ratio": hipo_near_miss_to_injury_ratio,
             "rtas": rtas,
             "complaints": await self._count(Complaint, Complaint.received_date, period.tenant_id, start, end),
-            "ltis": incident_ltis + rta_ltis,
+            "ltis": ltis,
             "riddor": riddor_incidents + riddor_rtas,
-            "ltifr": rate_per_100000(count=incident_ltis + rta_ltis, hours=hours),
-            "afr": rate_per_100000(count=injuries, hours=hours),
+            "ltifr": ltifr,
+            "ltifr_unavailable_reason": ltifr_reason,
+            "lti_assessed_injuries": lti_assessed_injuries,
+            "afr": afr,
+            "afr_unavailable_reason": afr_reason,
             "rate_unit": RATE_UNIT,
             "lessons_learnt_extract": await self._lessons_extract(period.tenant_id, start, end),
         }
