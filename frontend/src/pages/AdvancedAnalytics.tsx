@@ -624,12 +624,12 @@ export default function AdvancedAnalytics() {
                         }
                         strokeWidth="8"
                         fill="none"
-                        strokeDasharray={`${(item.score / 100) * 251.2} 251.2`}
+                        strokeDasharray={`${((item.score ?? 0) / 100) * 251.2} 251.2`}
                         strokeLinecap="round"
                       />
                     </svg>
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-xl font-bold text-white">{item.score}%</span>
+                      <span className="text-xl font-bold text-white">{item.score == null ? "—" : `${item.score}%`}</span>
                     </div>
                   </div>
                   <div className="text-sm font-medium text-gray-300">{item.standard}</div>

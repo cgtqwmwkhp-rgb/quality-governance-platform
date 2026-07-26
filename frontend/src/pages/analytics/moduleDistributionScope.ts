@@ -1,6 +1,7 @@
 export type DistributionRow = {
   module: string
-  distributionTotal: number | null
+  /** Period-scoped count; null/undefined = register-only (excluded from chart). */
+  distributionTotal?: number | null
 }
 
 /** Rows eligible for the period-scoped module distribution chart (PX-195). */
@@ -17,7 +18,7 @@ export function periodDistributionDenominator(rows: DistributionRow[]): number |
 }
 
 export function periodDistributionPercent(
-  rowTotal: number | null,
+  rowTotal: number | null | undefined,
   denominator: number | null,
 ): number {
   if (rowTotal == null || denominator == null || denominator <= 0) return 0
