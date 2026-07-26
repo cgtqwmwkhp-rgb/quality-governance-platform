@@ -185,6 +185,29 @@ describe('WorkflowCenter', () => {
       expect(screen.getByTestId('workflow-stat-pending')).toHaveTextContent('0')
     })
 
+    it('reconciles a divergent stats payload to the loaded pending list (PX-286)', async () => {
+      // Belt-and-suspenders: even if /stats still returns a stale org-wide total,
+      // the tile must match the list rendered beneath it.
+      mockGetPendingApprovals.mockResolvedValue({ data: { approvals: [], total: 0 } })
+      mockGetStats.mockResolvedValue({
+        data: {
+          pending_approvals: 12,
+          pending_approvals_scope: 'organisation',
+          active_workflows: 23,
+          overdue: 3,
+          completed_today: 8,
+        },
+      })
+      const WorkflowCenter = (await import('../WorkflowCenter')).default
+
+      render(<WorkflowCenter />)
+
+      expect(
+        await screen.findByText('No pending approvals are assigned to you right now.'),
+      ).toBeInTheDocument()
+      expect(screen.getByTestId('workflow-stat-pending')).toHaveTextContent('0')
+    })
+
     it('labels the pending tile as the caller’s own queue, not a global total', async () => {
       const WorkflowCenter = (await import('../WorkflowCenter')).default
 
@@ -216,7 +239,21 @@ describe('WorkflowCenter', () => {
       expect(screen.getByTestId('workflow-stat-pending')).toHaveTextContent('1')
     })
 
-    it('withholds every stat when the stats call fails', async () => {
+    it('withholds unmeasured stats when the stats call fails, but keeps list-backed pending', async () => {
+      // PX-286: pending is sourced from the loaded approvals list when available.
+      // Other KPIs have no list to fall back on, so they stay unmeasured (—).
+      mockGetStats.mockRejectedValue(new Error('stats down'))
+      const WorkflowCenter = (await import('../WorkflowCenter')).default
+
+      render(<WorkflowCenter />)
+
+      expect(await screen.findByTestId('workflow-stat-pending')).toHaveTextContent('1')
+      expect(screen.getByTestId('workflow-stat-active')).toHaveTextContent('—')
+      expect(screen.getByTestId('workflow-stats-unmeasured')).toBeInTheDocument()
+    })
+
+    it('withholds pending as an em dash when both stats and the approvals list fail', async () => {
+      mockGetPendingApprovals.mockRejectedValue(new Error('approvals down'))
       mockGetStats.mockRejectedValue(new Error('stats down'))
       const WorkflowCenter = (await import('../WorkflowCenter')).default
 
