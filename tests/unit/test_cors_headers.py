@@ -17,10 +17,15 @@ from src.main import app
 
 # Production SWA origin
 PROD_ORIGIN = "https://purple-water-03205fa03.6.azurestaticapps.net"
-# Staging SWA origin pattern
-STAGING_ORIGIN = "https://test-app.1.azurestaticapps.net"
+# Staging SWA origin — the named pre-production environment, on the regional
+# hostname Azure actually serves it from.
+STAGING_ORIGIN = "https://purple-water-03205fa03-staging.westeurope.6.azurestaticapps.net"
 # Invalid origin
 INVALID_ORIGIN = "https://evil.com"
+# A Static Web App that is not ours. This used to be allowed: the origin regex
+# matched any `*.N.azurestaticapps.net`, so anyone could host a SWA and, because
+# the middleware sends credentials, make authenticated cross-origin calls.
+FOREIGN_SWA_ORIGIN = "https://test-app.1.azurestaticapps.net"
 
 
 @pytest.fixture
@@ -95,6 +100,21 @@ class TestCORSPreflight:
         )
         assert response.status_code == 200
         assert response.headers.get("access-control-allow-origin") == STAGING_ORIGIN
+
+    def test_preflight_foreign_static_web_app_is_refused(self, client):
+        """A Static Web App that is not ours must not be granted CORS.
+
+        `evil.com` was the only hostile origin covered here, which missed the
+        cheaper attack: register any Azure Static Web App and inherit access.
+        """
+        response = client.options(
+            "/api/v1/planet-mark/dashboard",
+            headers={
+                "Origin": FOREIGN_SWA_ORIGIN,
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert response.headers.get("access-control-allow-origin") != FOREIGN_SWA_ORIGIN
 
     def test_preflight_invalid_origin_no_cors(self, client):
         """OPTIONS preflight should not return CORS for invalid origins."""
