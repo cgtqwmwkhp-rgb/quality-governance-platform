@@ -48,6 +48,7 @@ import {
 } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { FormNotice } from '../components/ui/form'
+import { formatCodedValue } from '../helpers/displayLabels'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Textarea } from '../components/ui/Textarea'
@@ -303,7 +304,13 @@ export default function ComplaintDetail() {
     setSaving(true)
     setSaveError(null)
     try {
-      const response = await complaintsApi.update(complaint.id, editForm)
+      // Omit unchanged status so the server does not reject a no-op transition
+      // (ACKNOWLEDGED → ACKNOWLEDGED) and discard field edits (PX-206).
+      const payload: ComplaintUpdate = { ...editForm }
+      if (payload.status === complaint.status) {
+        delete payload.status
+      }
+      const response = await complaintsApi.update(complaint.id, payload)
       setComplaint(response.data)
       setIsEditing(false)
     } catch (err) {
@@ -735,10 +742,10 @@ export default function ComplaintDetail() {
             <div className="flex items-center gap-3 mb-2">
               <span className="font-mono text-sm text-primary">{complaint.reference_number}</span>
               <Badge variant={getPriorityVariant(complaint.priority) as any}>
-                {complaint.priority}
+                {formatCodedValue(complaint.priority)}
               </Badge>
               <Badge variant={getStatusVariant(complaint.status) as any}>
-                {complaint.status.replace('_', ' ')}
+                {formatCodedValue(complaint.status)}
               </Badge>
             </div>
             <h1 className="text-2xl font-bold text-foreground">{complaint.title}</h1>
@@ -1048,7 +1055,7 @@ export default function ComplaintDetail() {
                             {t('common.status')}
                           </span>
                           <p className="mt-1 text-foreground capitalize">
-                            {complaint.status.replace('_', ' ')}
+                            {formatCodedValue(complaint.status)}
                           </p>
                         </div>
                         <div>
@@ -1170,6 +1177,7 @@ export default function ComplaintDetail() {
                   {isEditing ? (
                     <div className="space-y-4">
                       <Textarea
+                        data-testid="complaint-resolution-summary"
                         value={editForm.resolution_summary || ''}
                         onChange={(e) =>
                           setEditForm({ ...editForm, resolution_summary: e.target.value })

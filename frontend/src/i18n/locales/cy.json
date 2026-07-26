@@ -2391,7 +2391,7 @@
   "rtas.detail.police_attended": "Heddlu wedi Mynychu",
   "rtas.detail.quick_info": "Gwybodaeth Gyflym",
   "rtas.detail.record_created": "Cofnod wedi'i greu yn y system",
-  "rtas.detail.reported_on": "Adroddwyd ar",
+  "rtas.detail.reported_on": "Adroddwyd ar {{date}}",
   "rtas.detail.rta_reported": "GTF wedi'i adrodd",
   "rtas.detail.running_sheet_empty_description": "Ychwanegwch nodiadau i adeiladu naratif y digwyddiad dros amser",
   "rtas.detail.save_changes": "Cadw Newidiadau",
@@ -3739,5 +3739,13 @@
   "safetyInsights.run": "Rhedeg dadansoddiad dwfn",
   "safetyInsights.startFailed": "Methwyd â chychwyn dadansoddiad dwfn.",
   "safetyInsights.microThemes": "Micro-themâu",
-  "incidents.search.register_scope": "Chwilio'r gofrestr digwyddiadau lawn am \"{{query}}\"."
+  "incidents.search.register_scope": "Chwilio'r gofrestr digwyddiadau lawn am \"{{query}}\".",
+  "rtas.detail.audit_this_collision": "Archwilio'r gwrthdrawiad hwn",
+  "rtas.detail.driver": "Gyrrwr",
+  "rtas.detail.reporter": "Adroddwr",
+  "rtas.detail.not_provided": "Heb ei ddarparu",
+  "rtas.detail.no_reporter_contact": "Dim manylion cyswllt adroddwr wedi'u cofnodi",
+  "rtas.detail.reporter_independent_hint": "Mae'r adroddwr ar wahân i'r gyrrwr — ychwanegwch enw adroddwr wrth olygu neu greu'r cofnod.",
+  "rtas.form.reporter_name": "Enw'r adroddwr",
+  "rtas.form.placeholder.reporter_name": "Pwy sy'n adrodd y gwrthdrawiad hwn…"
 }

@@ -31,20 +31,17 @@ import { cn } from '../../helpers/utils'
  * The `overflow-x-auto` wrapper is kept only as a safety valve for content with
  * a hard `min-width`; with `table-fixed` there is nothing for it to scroll.
  *
- * Two known limits, both carried over rather than introduced here:
+ * Row activation (PX-173 / PX-200):
  *
- *  - An activatable row is a `<tr role="button">`, which is what all four
- *    registers already shipped. It is invalid ARIA — a rowgroup may only
- *    contain rows — and adding the explicit roles the stacked layout wants
- *    makes axe say so. The real fix is a focusable link in the reference cell
- *    and a plain `role="row"` on the row, but that changes the keyboard
- *    contract pinned by the PX-008 regression test in `Incidents.test.tsx`, so
- *    it needs deciding rather than sneaking in here.
- *  - Consequently the stacked layout carries no explicit roles, and a browser
- *    drops a table's implicit roles once its display stops being table-like.
- *    Below `xl` a screen reader gets a labelled button per record whose text
- *    reads "REFERENCE INC-2026-0057 TITLE …" rather than a navigable table.
- *    That is the trade for the columns being on screen at all.
+ *  - The row stays a plain table row (no `role="button"`). Invalid ARIA on a
+ *    `<tr>` confused assistive tech into announcing a button while only the
+ *    styled reference looked clickable.
+ *  - Mouse: the whole row still opens via `onOpenRow` so title/date cells work.
+ *  - Keyboard / new-tab: each register renders a real `<Link>` in the reference
+ *    cell (`CaseRegisterReferenceLink`). Enter/Space on a focused row remains a
+ *    convenience for the PX-008 contract in `Incidents.test.tsx`.
+ *  - Stacked layout still drops implicit table roles below `xl`; that is the
+ *    trade for keeping every column on screen (PX-288).
  */
 
 /** Layout intent for a column. Drives its width, wrapping and clamping. */
@@ -215,7 +212,6 @@ export function CaseRegisterTable<T>({
                       }
                     : undefined
                 }
-                role={interactive ? 'button' : undefined}
                 tabIndex={interactive ? 0 : undefined}
                 aria-label={interactive ? rowLabel?.(row) : undefined}
               >

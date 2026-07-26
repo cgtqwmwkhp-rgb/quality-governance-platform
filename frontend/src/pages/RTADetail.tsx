@@ -6,6 +6,7 @@ import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
 import { resolveRtaDetailTab } from './rtaStandardsTab'
 import { formatCodedValue } from '../helpers/displayLabels'
+import { formatDisplayDate } from '../helpers/formatters'
 import { trackError } from '../utils/errorTracker'
 import {
   ArrowLeft,
@@ -609,12 +610,15 @@ export default function RTADetail() {
           <div>
             <div className="flex items-center gap-3 mb-2">
               <span className="font-mono text-sm text-primary">{rta.reference_number}</span>
-              <Badge variant={getSeverityVariant(rta.severity) as any}>{rta.severity.replace('_', ' ')}</Badge>
-              <Badge variant={getStatusVariant(rta.status) as any}>{rta.status.replace('_', ' ')}</Badge>
+              <Badge variant={getSeverityVariant(rta.severity) as any}>{formatCodedValue(rta.severity)}</Badge>
+              <Badge variant={getStatusVariant(rta.status) as any}>{formatCodedValue(rta.status)}</Badge>
             </div>
             <h1 className="text-2xl font-bold text-foreground">{rta.title}</h1>
             <p className="text-muted-foreground mt-1">
-              {t('rtas.detail.reported_on', { date: new Date(rta.reported_date).toLocaleDateString() })}
+              {t('rtas.detail.reported_on', {
+                date: formatDisplayDate(rta.reported_date),
+                defaultValue: `Reported on ${formatDisplayDate(rta.reported_date)}`,
+              })}
             </p>
           </div>
         </div>
@@ -636,11 +640,11 @@ export default function RTADetail() {
               </Button>
               <Button
                 variant="outline"
-                data-testid="rta-audit-this-risk"
+                data-testid="rta-audit-this-collision"
                 onClick={() => navigate(`/audit-templates/new?ai=1&caseType=rta&caseId=${rta.id}`)}
               >
                 <Sparkles className="w-4 h-4 mr-2" />
-                {t('auditBuilder.auditThisRisk', 'Audit this risk')}
+                {t('rtas.detail.audit_this_collision', 'Audit this collision')}
               </Button>
               {actions.length > 0 ? (
                 <Button
@@ -679,7 +683,16 @@ export default function RTADetail() {
 
       <CaseSummaryRail
         items={[
-          { label: 'Driver / Reporter', value: rta.reporter_name || rta.driver_name || 'Not provided', icon: <User className="w-4 h-4" /> },
+          {
+            label: t('rtas.detail.driver', 'Driver'),
+            value: rta.driver_name || t('rtas.detail.not_provided', 'Not provided'),
+            icon: <User className="w-4 h-4" />,
+          },
+          {
+            label: t('rtas.detail.reporter', 'Reporter'),
+            value: rta.reporter_name || t('rtas.detail.not_provided', 'Not provided'),
+            icon: <User className="w-4 h-4" />,
+          },
           { label: 'Vehicle', value: rta.company_vehicle_registration || 'Not provided', icon: <Car className="w-4 h-4" /> },
           { label: 'Occurred at', value: new Date(rta.collision_date).toLocaleString(), icon: <Calendar className="w-4 h-4" /> },
           { label: 'Location', value: rta.location || 'Not specified', icon: <MapPin className="w-4 h-4" /> },
@@ -798,8 +811,8 @@ export default function RTADetail() {
                         <p className="mt-1 text-foreground whitespace-pre-wrap">{rta.description || t('rtas.detail.no_description')}</p>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
-                        <Field label={t('rtas.detail.severity')} value={rta.severity.replace('_', ' ')} />
-                        <Field label={t('common.status')} value={rta.status.replace('_', ' ')} />
+                        <Field label={t('rtas.detail.severity')} value={formatCodedValue(rta.severity)} />
+                        <Field label={t('common.status')} value={formatCodedValue(rta.status)} />
                         <Field label={t('rtas.detail.collision_date')} value={new Date(rta.collision_date).toLocaleString()} />
                         <Field label={t('common.location')} value={rta.location} />
                         {rta.weather_conditions && <Field label="Weather" value={rta.weather_conditions} />}
@@ -840,9 +853,22 @@ export default function RTADetail() {
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center"><User className="w-5 h-5 text-success" /></div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Reporter</p>
-                      <p className="font-medium text-foreground">{rta.reporter_name || rta.driver_name || 'Not provided'}</p>
-                      <p className="text-xs text-muted-foreground">{rta.reporter_email || rta.driver_email || 'No contact captured'}</p>
+                      <p className="text-sm text-muted-foreground">{t('rtas.detail.reporter', 'Reporter')}</p>
+                      <p className="font-medium text-foreground">
+                        {rta.reporter_name || t('rtas.detail.not_provided', 'Not provided')}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {rta.reporter_email ||
+                          t('rtas.detail.no_reporter_contact', 'No reporter contact captured')}
+                      </p>
+                      {!rta.reporter_name ? (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {t(
+                            'rtas.detail.reporter_independent_hint',
+                            'Reporter is separate from the driver — add a reporter name when editing or creating the record.',
+                          )}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 </CardContent>

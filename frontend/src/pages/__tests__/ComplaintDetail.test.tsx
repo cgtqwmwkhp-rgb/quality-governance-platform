@@ -233,6 +233,37 @@ describe('ComplaintDetail', () => {
     )
   })
 
+  it('PX-206: saving field edits omits an unchanged status so no-op transitions cannot discard work', async () => {
+    client.complaintsApi.get.mockResolvedValue({
+      data: { ...complaintRecord, status: 'acknowledged' },
+    })
+    client.complaintsApi.update.mockResolvedValue({
+      data: {
+        ...complaintRecord,
+        status: 'acknowledged',
+        resolution_summary: 'Parts ordered and visit rebooked.',
+      },
+    })
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Late repairs response' })).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'edit' }))
+    const resolution = screen.getByTestId('complaint-resolution-summary')
+    await userEvent.clear(resolution)
+    await userEvent.type(resolution, 'Parts ordered and visit rebooked.')
+    await userEvent.click(screen.getByTestId('complaint-save-edit'))
+
+    await waitFor(() => {
+      expect(client.complaintsApi.update).toHaveBeenCalled()
+    })
+    const payload = client.complaintsApi.update.mock.calls[0][1] as Record<string, unknown>
+    expect(payload).not.toHaveProperty('status')
+    expect(payload.resolution_summary).toBe('Parts ordered and visit rebooked.')
+  })
+
   it('investigation modal only collects title (API contract honest)', async () => {
     renderPage()
 

@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { CaseRegisterReferenceLink } from '../components/register/CaseRegisterReferenceLink'
+import { formatCodedValue } from '../helpers/displayLabels'
+import { resolvePlatformReporterIdentity } from '../utils/platformSessionReporter'
 import { trackError } from '../utils/errorTracker'
 import { Plus, Car, Search, AlertCircle, RefreshCw } from 'lucide-react'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
@@ -54,6 +57,7 @@ type RtaFormField =
   | 'severity'
   | 'company_vehicle_registration'
   | 'driver_name'
+  | 'reporter_name'
   | 'collision_date'
 
 /** Stable control ids — also used by the "scroll to first invalid field" behaviour. */
@@ -64,6 +68,7 @@ const RTA_CONTROL_IDS: Record<RtaFormField, string> = {
   severity: 'rtas-field-3',
   company_vehicle_registration: 'rtas-field-4',
   driver_name: 'rtas-field-5',
+  reporter_name: 'rtas-field-reporter',
   collision_date: 'rtas-field-6',
 }
 
@@ -77,6 +82,7 @@ function buildInitialRtaForm(): RTACreate {
     reported_date: now,
     location: '',
     driver_name: '',
+    reporter_name: '',
     company_vehicle_registration: '',
     police_attended: false,
     driver_injured: false,
@@ -223,6 +229,7 @@ export default function RTAs() {
     severity: { label: t('rtas.table.severity') },
     company_vehicle_registration: { label: t('rtas.form.vehicle_reg') },
     driver_name: { label: t('rtas.form.driver_name') },
+    reporter_name: { label: t('rtas.form.reporter_name', 'Reporter name') },
     collision_date: { label: t('rtas.form.collision_date'), required: true },
   }
 
@@ -236,8 +243,10 @@ export default function RTAs() {
     },
     onSubmit: async () => {
       const nonEmptyParties = thirdParties.filter((p) => p.name || p.vehicle_reg || p.phone)
+      const sessionReporter = await resolvePlatformReporterIdentity()
       await rtasApi.create({
         ...formData,
+        reporter_name: formData.reporter_name || sessionReporter.reporter_name || undefined,
         collision_date: new Date(formData.collision_date).toISOString(),
         reported_date: new Date(formData.reported_date).toISOString(),
         third_parties: nonEmptyParties.length > 0 ? { parties: nonEmptyParties } : undefined,
@@ -252,6 +261,12 @@ export default function RTAs() {
   const openCreateModal = () => {
     createForm.resetFeedback()
     setShowModal(true)
+    void resolvePlatformReporterIdentity().then((identity) => {
+      if (!identity.reporter_name) return
+      setFormData((prev) =>
+        prev.reporter_name ? prev : { ...prev, reporter_name: identity.reporter_name },
+      )
+    })
   }
 
   const getSeverityVariant = (severity: string) => {
@@ -380,16 +395,18 @@ export default function RTAs() {
                     header: registerLabels.reference,
                     width: 'reference',
                     render: (rta) => (
-                      <span className="font-mono text-sm text-primary">
+                      <CaseRegisterReferenceLink to={`/rtas/${rta.id}`}>
                         {formatReference(rta.reference_number)}
-                      </span>
+                      </CaseRegisterReferenceLink>
                     ),
                   },
                   {
                     key: 'title',
                     header: registerLabels.title,
                     render: (rta) => (
-                      <span className="text-sm font-medium text-foreground">{rta.title}</span>
+                      <span className="text-sm font-medium text-foreground" title={rta.title}>
+                        {rta.title}
+                      </span>
                     ),
                   },
                   {
@@ -403,7 +420,7 @@ export default function RTAs() {
                     width: 'badge',
                     render: (rta) => (
                       <Badge variant={getSeverityVariant(rta.severity) as any}>
-                        {rta.severity.replace('_', ' ')}
+                        {formatCodedValue(rta.severity)}
                       </Badge>
                     ),
                   },
@@ -413,7 +430,7 @@ export default function RTAs() {
                     width: 'badge',
                     render: (rta) => (
                       <Badge variant={getStatusVariant(rta.status) as any}>
-                        {rta.status.replace('_', ' ')}
+                        {formatCodedValue(rta.status)}
                       </Badge>
                     ),
                   },
@@ -532,6 +549,22 @@ export default function RTAs() {
                   value={formData.driver_name || ''}
                   onChange={(e) => updateForm({ driver_name: e.target.value })}
                   placeholder={t('rtas.form.placeholder.driver_name')}
+                />
+              )}
+            </FormField>
+
+            <FormField {...createForm.fieldProps('reporter_name')}>
+              {(control) => (
+                <Input
+                  {...control}
+                  type="text"
+                  value={formData.reporter_name || ''}
+                  onChange={(e) => updateForm({ reporter_name: e.target.value })}
+                  placeholder={t(
+                    'rtas.form.placeholder.reporter_name',
+                    'Who is reporting this collision…',
+                  )}
+                  data-testid="rta-create-reporter-name"
                 />
               )}
             </FormField>

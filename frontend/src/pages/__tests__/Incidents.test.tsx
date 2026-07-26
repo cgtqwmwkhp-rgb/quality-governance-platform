@@ -384,9 +384,44 @@ describe('Incidents', () => {
     })
 
     const row = screen.getAllByTestId('incident-row-link')[0]
+    expect(row).not.toHaveAttribute('role', 'button')
     fireEvent.keyDown(row, { key: 'Enter' })
 
     expect(mockNavigate).toHaveBeenCalledWith('/incidents/1')
+  })
+
+  it('PX-173/PX-200: reference is a real link and title cell also opens the row', async () => {
+    render(<Incidents />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText('INC-001')).toBeInTheDocument()
+    })
+
+    const refLink = screen.getByRole('link', { name: 'INC-001' })
+    expect(refLink).toHaveAttribute('href', '/incidents/1')
+
+    fireEvent.click(screen.getByText('Slip in warehouse'))
+    expect(mockNavigate).toHaveBeenCalledWith('/incidents/1')
+  })
+
+  it('PX-123: clamped title cells expose the full title for hover/assistive use', async () => {
+    const longTitle =
+      'Without warning the grinder disc shattered and fragments struck the operator forearm'
+    mockList.mockResolvedValue({
+      data: {
+        items: [{ ...sampleIncidents[0], title: longTitle }],
+        total: 1,
+        page: 1,
+        page_size: 50,
+        pages: 1,
+      },
+    })
+    render(<Incidents />, { wrapper: Wrapper })
+
+    await waitFor(() => {
+      expect(screen.getByText(longTitle)).toBeInTheDocument()
+    })
+    expect(screen.getByText(longTitle)).toHaveAttribute('title', longTitle)
   })
 
   it('shows pagination when total exceeds page size (PX-004)', async () => {

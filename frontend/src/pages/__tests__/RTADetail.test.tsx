@@ -218,6 +218,37 @@ describe('RTADetail', () => {
     expect(screen.queryByText('object_strike')).not.toBeInTheDocument()
   })
 
+  it('PX-201: audit CTA uses collision wording, not risk', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Fleet collision' })).toBeInTheDocument()
+    })
+
+    expect(screen.getByTestId('rta-audit-this-collision')).toHaveTextContent('Audit this collision')
+    expect(screen.queryByText('Audit this risk')).not.toBeInTheDocument()
+  })
+
+  it('PX-202: driver and reporter are shown as separate identities', async () => {
+    client.rtasApi.get.mockResolvedValue({
+      data: {
+        ...mockRta,
+        driver_name: 'Sam Driver',
+        reporter_name: 'Alex Controller',
+        reporter_email: 'alex@example.com',
+      },
+    })
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Fleet collision' })).toBeInTheDocument()
+    })
+
+    expect(screen.getAllByText('Sam Driver').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Alex Controller').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Driver / Reporter')).not.toBeInTheDocument()
+  })
+
   it('surfaces reporter submission and investigation briefing fields', async () => {
     renderPage()
 
