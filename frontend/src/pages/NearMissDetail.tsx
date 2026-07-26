@@ -473,10 +473,7 @@ export default function NearMissDetail() {
         items={[
           { label: t('near_misses.title', 'Near Misses'), href: '/near-misses' },
           {
-            label: caseBreadcrumbLabel(
-              nearMiss.reference_number,
-              t('near_misses.detail.breadcrumb_fallback', 'Near miss'),
-            ),
+            label: caseBreadcrumbLabel(nearMiss.reference_number, 'Near miss'),
           },
         ]}
       />

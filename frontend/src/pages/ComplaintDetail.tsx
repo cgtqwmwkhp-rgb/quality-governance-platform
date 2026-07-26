@@ -698,10 +698,7 @@ export default function ComplaintDetail() {
         items={[
           { label: t('complaints.title', 'Complaints'), href: '/complaints' },
           {
-            label: caseBreadcrumbLabel(
-              complaint?.reference_number,
-              t('complaints.detail.breadcrumb_fallback', 'Complaint'),
-            ),
+            label: caseBreadcrumbLabel(complaint?.reference_number, 'Complaint'),
           },
         ]}
       />
@@ -745,14 +742,8 @@ export default function ComplaintDetail() {
         role="status"
         data-testid="complaint-detail-sla-not-configured"
       >
-        <p className="font-semibold">
-          {t('complaints.detail.sla_not_configured_title', 'No response SLA on this record')}
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t(
-            'complaints.detail.sla_not_configured_body',
-            'This complaints module does not store a response-due date or SLA deadline yet. Empty complainant contact fields mean no contact was captured — not that a deadline exists elsewhere.',
-          )}
+        <p className="text-sm text-muted-foreground">
+          No response SLA on this record — none stored; empty contacts ≠ deadline.
         </p>
       </div>
 

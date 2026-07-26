@@ -2402,7 +2402,7 @@
   "rtas.detail.try_again": "Rhowch Gynnig Arall",
   "rtas.detail.vehicle_driver_info": "Gwybodaeth Cerbyd a Gyrrwr",
   "rtas.detail.vehicle_registration": "Rhif Cofrestru'r Cerbyd",
-  "rtas.dialog.description": "Adrodd am wrthdrawiad traffig ffordd newydd",
+  "rtas.dialog.description": "Adrodd am wrthdrawiad newydd",
   "rtas.dialog.title": "GTF Newydd",
   "rtas.empty.subtitle": "Cofnodwch GTF i ddechrau",
   "rtas.empty.title": "Dim GTFs wedi'u canfod",
@@ -2433,7 +2433,7 @@
   "rtas.severity.minor_injury": "Anaf Bychan",
   "rtas.severity.near_miss": "Digwyddiad Agos",
   "rtas.severity.serious_injury": "Anaf Difrifol",
-  "rtas.subtitle": "Olrhain a rheoli gwrthdrawiadau traffig ffordd",
+  "rtas.subtitle": "Olrhain gwrthdrawiadau traffig ffordd",
   "rtas.table.date": "Dyddiad",
   "rtas.table.driver": "Gyrrwr",
   "rtas.table.location": "Lleoliad",
@@ -3749,14 +3749,5 @@
   "rtas.form.reporter_name": "Enw'r adroddwr",
   "rtas.form.placeholder.reporter_name": "Pwy sy'n adrodd y gwrthdrawiad hwn…",
   "investigations.closure.invalid_completed": "Mae'r ymchwiliad hwn wedi'i farcio'n gyflawn ond mae'n dal i fethu rhestr wirio'r cau. Trwsiwch y rhwystrau isod cyn ei drin fel un wedi'i gau.",
-  "investigations.timeline.save_manual": "Cadw cofnod",
-  "rtas.detail.breadcrumb_fallback": "Gwrthdrawiad",
-  "incidents.detail.breadcrumb_fallback": "Digwyddiad",
-  "incidents.register.mixed_references_title": "Dwy fformat cyfeirnod ar y dudalen hon",
-  "incidents.register.mixed_references_body": "Mae'r dudalen hon yn cymysgu cyfeirnodau dilyniannol (INC-2026-0057) â rhai hen arddull hecs (INC-2026-CACDA723). Gall didoli a chwilio yn ôl cyfeirnod edrych yn annibynadwy nes i gofnodion etifeddol gael eu hailfathru — nid yw'r fformatau eu hunain wedi newid.",
-  "incidents.register.legacy_hex_reference": "Cyfeirnod hecs etifeddol",
-  "complaints.detail.breadcrumb_fallback": "Cwyn",
-  "complaints.detail.sla_not_configured_title": "Dim SLA ymateb ar y cofnod hwn",
-  "complaints.detail.sla_not_configured_body": "Nid yw'r modiwl cwynion hwn yn storio dyddiad dyledus ymateb nac SLA eto. Mae meysydd cyswllt gwag yn golygu na chafodd cyswllt ei gofnodi — nid bod terfyn amser yn bodoli rhywle arall.",
-  "near_misses.detail.breadcrumb_fallback": "Digwyddiad agos"
+  "investigations.timeline.save_manual": "Cadw cofnod"
 }

@@ -3058,7 +3058,7 @@
   "rtas.detail.try_again": "Try Again",
   "rtas.detail.vehicle_driver_info": "Vehicle & Driver Information",
   "rtas.detail.vehicle_registration": "Vehicle Registration",
-  "rtas.dialog.description": "Report a new road traffic collision",
+  "rtas.dialog.description": "Report a new collision",
   "rtas.dialog.title": "New RTA",
   "rtas.empty.subtitle": "Record an RTA to get started",
   "rtas.empty.title": "No RTAs found",
@@ -3089,7 +3089,7 @@
   "rtas.severity.minor_injury": "Minor Injury",
   "rtas.severity.near_miss": "Near Miss",
   "rtas.severity.serious_injury": "Serious Injury",
-  "rtas.subtitle": "Track and manage road traffic collisions",
+  "rtas.subtitle": "Track road traffic collisions",
   "rtas.table.date": "Date",
   "rtas.table.driver": "Driver",
   "rtas.table.location": "Location",
@@ -3923,14 +3923,5 @@
   "rtas.form.reporter_name": "Reporter name",
   "rtas.form.placeholder.reporter_name": "Who is reporting this collision…",
   "investigations.closure.invalid_completed": "This investigation is marked completed but still fails the closure checklist. Fix the blockers below before treating it as closed.",
-  "investigations.timeline.save_manual": "Save entry",
-  "rtas.detail.breadcrumb_fallback": "Collision",
-  "incidents.detail.breadcrumb_fallback": "Incident",
-  "incidents.register.mixed_references_title": "Two reference formats on this page",
-  "incidents.register.mixed_references_body": "This page mixes sequential references (INC-2026-0057) with older hex-style ones (INC-2026-CACDA723). Sorting and lookup by reference can look unreliable until legacy records are reminted — the formats themselves are unchanged.",
-  "incidents.register.legacy_hex_reference": "Legacy hex-style reference",
-  "complaints.detail.breadcrumb_fallback": "Complaint",
-  "complaints.detail.sla_not_configured_title": "No response SLA on this record",
-  "complaints.detail.sla_not_configured_body": "This complaints module does not store a response-due date or SLA deadline yet. Empty complainant contact fields mean no contact was captured — not that a deadline exists elsewhere.",
-  "near_misses.detail.breadcrumb_fallback": "Near miss"
+  "investigations.timeline.save_manual": "Save entry"
 }

@@ -618,14 +618,8 @@ export default function Incidents() {
           role="status"
           data-testid="incidents-mixed-reference-formats"
         >
-          <p className="font-semibold">
-            {t('incidents.register.mixed_references_title', 'Two reference formats on this page')}
-          </p>
-          <p className="mt-1 text-sm">
-            {t(
-              'incidents.register.mixed_references_body',
-              'This page mixes sequential references (INC-2026-0057) with older hex-style ones (INC-2026-CACDA723). Sorting and lookup by reference can look unreliable until legacy records are reminted — the formats themselves are unchanged.',
-            )}
+          <p className="text-sm">
+            Mixed sequential/hex refs — lookup may look unreliable until remint.
           </p>
         </div>
       ) : null}
@@ -765,14 +759,7 @@ export default function Incidents() {
                   return (
                     <CaseRegisterReferenceLink
                       to={`/incidents/${incident.id}`}
-                      title={
-                        legacyHex
-                          ? t(
-                              'incidents.register.legacy_hex_reference',
-                              'Legacy hex-style reference',
-                            )
-                          : undefined
-                      }
+                      title={legacyHex ? 'Legacy hex-style reference' : undefined}
                     >
                       {reference}
                     </CaseRegisterReferenceLink>

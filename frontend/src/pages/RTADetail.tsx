@@ -593,10 +593,7 @@ export default function RTADetail() {
         items={[
           { label: t('rtas.title', 'Road Traffic Collisions'), href: '/rtas' },
           {
-            label: caseBreadcrumbLabel(
-              rta?.reference_number,
-              t('rtas.detail.breadcrumb_fallback', 'Collision'),
-            ),
+            label: caseBreadcrumbLabel(rta?.reference_number, 'Collision'),
           },
         ]}
       />

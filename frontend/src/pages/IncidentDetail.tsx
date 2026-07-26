@@ -919,10 +919,7 @@ export default function IncidentDetail() {
         items={[
           { label: t('incidents.title', 'Incidents'), href: '/incidents' },
           {
-            label: caseBreadcrumbLabel(
-              incident?.reference_number,
-              t('incidents.detail.breadcrumb_fallback', 'Incident'),
-            ),
+            label: caseBreadcrumbLabel(incident?.reference_number, 'Incident'),
           },
         ]}
       />
