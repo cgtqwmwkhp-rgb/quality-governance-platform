@@ -30,6 +30,7 @@ import api from '../api/client'
 import { getImportReviewPath } from '../components/audit-import/importReviewHelpers'
 import {
   CUSTOMER_AUDITS_AUDITS_PATH,
+  ACHILLES_UVDB_AUDITS_PATH,
   getCustomerCapaActionsPath,
   getCustomerRiskRegisterPath,
 } from '../components/assuranceHubHelpers'
@@ -43,6 +44,7 @@ import {
   CUSTOMER_AUDITS_SECTIONS,
   AUDITS_IMPORT_MODAL_PATH,
   buildCustomerAuditsSummary,
+  buildCustomerCrossProgrammeHonesty,
   filterCustomerAssuranceRuns,
   getCustomerAuditWorkspacePath,
   isExternalAuditImportRun,
@@ -131,6 +133,9 @@ export default function CustomerAudits() {
   const section = parseCustomerAuditsSection(searchParams.get('section'))
 
   const [runs, setRuns] = useState<AuditRun[]>([])
+  const [crossProgramme, setCrossProgramme] = useState(() =>
+    buildCustomerCrossProgrammeHonesty([]),
+  )
   const [findings, setFindings] = useState<AuditFinding[]>([])
   const [records, setRecords] = useState<ExternalAuditRecordSummary[]>([])
   const [recordsAvailable, setRecordsAvailable] = useState<boolean | null>(null)
@@ -167,6 +172,7 @@ export default function CustomerAudits() {
         auditsRes.status === 'fulfilled' ? auditsRes.value.data.items || [] : []
       const scopedRuns = filterCustomerAssuranceRuns(allRuns)
       setRuns(scopedRuns)
+      setCrossProgramme(buildCustomerCrossProgrammeHonesty(allRuns))
 
       const allFindings =
         findingsRes.status === 'fulfilled' ? findingsRes.value.data.items || [] : []
@@ -394,6 +400,38 @@ export default function CustomerAudits() {
 
           {section === 'runs' && (
             <div className="space-y-4" data-testid="customer-audits-section-runs">
+              {crossProgramme.showEmptyHonesty ? (
+                <div
+                  className="rounded-lg border border-border bg-surface/70 px-4 py-3 text-sm"
+                  data-testid="customer-audits-cross-programme-honesty"
+                  role="status"
+                >
+                  <p className="font-medium text-foreground">
+                    Customer programme is empty — {crossProgramme.otherExternalOnBoard} other
+                    external run
+                    {crossProgramme.otherExternalOnBoard === 1 ? '' : 's'} exist on the Audits board
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Achilles UVDB: {crossProgramme.uvdb} · Planet Mark: {crossProgramme.planet_mark}.
+                    Those programmes are not listed here because they are not tagged customer.
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Link
+                      to={ACHILLES_UVDB_AUDITS_PATH}
+                      className="text-xs font-medium text-primary hover:underline"
+                      data-testid="customer-audits-open-uvdb-board"
+                    >
+                      Open Achilles / UVDB on Audits
+                    </Link>
+                    <Link
+                      to={CUSTOMER_AUDITS_AUDITS_PATH}
+                      className="text-xs font-medium text-primary hover:underline"
+                    >
+                      Open customer filter on Audits
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
               {runs.length === 0 ? (
                 <EmptyState
                   icon={<Users className="h-8 w-8 text-muted-foreground" />}

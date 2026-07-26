@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { cn } from '../helpers/utils'
 import { formatDisplayDate } from '../helpers/formatters'
@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
+  auditsApi,
   uvdbApi,
   externalAuditImportsApi,
   ErrorClass,
@@ -47,12 +48,15 @@ import {
   ACHILLES_UVDB_AUDITS_PATH,
   getUvdbCapaActionsPath,
   getUvdbRiskRegisterPath,
+  isAchillesUvdbAssuranceAudit,
 } from '../components/assuranceHubHelpers'
 import { SetupRequiredPanel } from '../components/ui/SetupRequiredPanel'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import {
   UVDB_SECTIONS,
+  buildUvdbBoardAlignment,
+  formatUvdbAverageKpi,
   parseUvdbSection,
   type UvdbSectionId,
 } from './uvdbHelpers'
@@ -583,6 +587,7 @@ export default function UVDBAudits() {
   const [audits, setAudits] = useState<UVDBAudit[]>([])
   const [isoMappings, setIsoMappings] = useState<UVDBIsoMappingRow[]>([])
   const [dashboard, setDashboard] = useState<UVDBDashboardState | null>(null)
+  const [boardAchillesTotal, setBoardAchillesTotal] = useState(0)
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [errorClass, setErrorClass] = useState<ErrorClass | null>(null)
   const [setupRequired, setSetupRequired] = useState<SetupRequiredResponse | null>(null)
@@ -678,6 +683,7 @@ export default function UVDBAudits() {
           auditsResponse,
           mappingResponse,
           scoresResponse,
+          boardRunsResult,
         ] = await Promise.all([
           uvdbApi.getDashboard(),
           uvdbApi.listSections(),
@@ -689,6 +695,7 @@ export default function UVDBAudits() {
           }),
           uvdbApi.getISOMapping(),
           api.get('/api/v1/uvdb/sections/scores').catch(() => ({ data: { sections: {} } })),
+          auditsApi.listRuns(1, 100).catch(() => null),
         ])
 
         if (isSetupRequired(dashboardResponse.data)) {
@@ -711,6 +718,9 @@ export default function UVDBAudits() {
           setLoadState('setup_required')
           return
         }
+
+        const boardItems = boardRunsResult?.data?.items || []
+        setBoardAchillesTotal(boardItems.filter(isAchillesUvdbAssuranceAudit).length)
 
         setDashboard({
           total_audits: dashboardResponse.data.summary.total_audits,
@@ -968,6 +978,26 @@ export default function UVDBAudits() {
       section.content_status === 'pending_protocol_pdf' ? sum : sum + section.max_score,
     0,
   )
+
+  const boardAlignment = useMemo(
+    () =>
+      buildUvdbBoardAlignment({
+        protocolTotal: dashboard?.total_audits ?? audits.length,
+        protocolCompleted: dashboard?.completed_audits ?? 0,
+        // Treat average as absent when nothing completed — a zero denominator
+        // must not render as 0% (empty-state honesty).
+        protocolAverage:
+          dashboard?.completed_audits && dashboard.average_score != null
+            ? dashboard.average_score
+            : null,
+        boardAchillesTotal,
+        scoredSources: audits
+          .filter((audit) => audit.status === 'completed' && audit.percentage_score != null)
+          .map((audit) => audit.score_source),
+      }),
+    [dashboard, audits, boardAchillesTotal],
+  )
+  const averageKpi = useMemo(() => formatUvdbAverageKpi(boardAlignment), [boardAlignment])
 
   const loadedSectionCount =
     dashboard?.content_coverage?.loaded_sections.length ??
@@ -1329,32 +1359,12 @@ export default function UVDBAudits() {
         </button>
       </div>
 
-      <div
-        className="flex flex-col sm:flex-row sm:items-center gap-2 mb-6"
-        data-testid="uvdb-section-filters"
-      >
-        <select
-          value={section}
-          onChange={(e) => navigateToSection(e.target.value as UvdbSectionId)}
-          aria-label={t('uvdb.shell.tabs_aria')}
-          data-testid="uvdb-section-filter"
-          className="rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground"
-        >
-          {UVDB_SECTIONS.map(({ id, labelKey }) => (
-            <option key={id} value={id}>
-              {t(labelKey)}
-            </option>
-          ))}
-        </select>
-        <Button type="button" variant="outline" size="sm" data-testid="uvdb-section-filter-apply">
-          Filter
-        </Button>
-      </div>
-
+      {/* PX-258: single tab row only — remove duplicate select+Filter chrome */}
       <div
         className="flex bg-surface rounded-xl p-1 border border-border overflow-x-auto mb-6"
         role="tablist"
         aria-label={t('uvdb.shell.tabs_aria')}
+        data-testid="uvdb-section-tabs"
       >
         {UVDB_SECTIONS.map(({ id, labelKey, icon: Icon }) => (
           <button
@@ -1431,19 +1441,14 @@ export default function UVDBAudits() {
                 <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
                     {
-                      label: 'Total audits',
+                      label: 'Protocol audits',
                       value: dashboard?.total_audits ?? audits.length,
                     },
                     { label: 'Active', value: dashboard?.active_audits ?? 0 },
                     { label: 'Completed', value: dashboard?.completed_audits ?? 0 },
                     {
                       label: 'Average score',
-                      // Absent when nothing is scored — completed audits with
-                      // no recorded score do not average to 0%.
-                      value:
-                        dashboard?.completed_audits && dashboard.average_score != null
-                          ? `${dashboard.average_score}%`
-                          : 'Not scored',
+                      value: averageKpi.value,
                     },
                   ].map((kpi) => (
                     <div key={kpi.label} className="bg-surface/50 rounded-lg p-4 text-center">
@@ -1451,6 +1456,34 @@ export default function UVDBAudits() {
                       <div className="text-xs text-muted-foreground">{kpi.label}</div>
                     </div>
                   ))}
+                </div>
+                <p
+                  className="px-6 pb-2 text-xs text-muted-foreground"
+                  data-testid="uvdb-average-provenance"
+                >
+                  {averageKpi.caption}
+                </p>
+                <div
+                  className="mx-6 mb-6 rounded-lg border border-border bg-surface/60 px-4 py-3 text-sm text-foreground"
+                  data-testid="uvdb-board-alignment"
+                  role="status"
+                >
+                  <p className="font-medium">
+                    Protocol table: {boardAlignment.protocolTotal} · Audits board Achilles /
+                    UVDB runs: {boardAlignment.boardAchillesTotal}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {boardAlignment.countsDisagree
+                      ? 'These counts disagree because this module lists synced UVDB protocol audits only. Imported Achilles runs on the Audits board are a separate register — open Achilles / UVDB on Audits to reconcile.'
+                      : 'Protocol audits and the Audits board Achilles slice currently agree.'}
+                  </p>
+                  <Link
+                    to={ACHILLES_UVDB_AUDITS_PATH}
+                    className="mt-2 inline-flex text-xs font-medium text-primary hover:underline"
+                    data-testid="uvdb-board-alignment-link"
+                  >
+                    Open Achilles / UVDB on Audits
+                  </Link>
                 </div>
               </div>
 
@@ -1872,45 +1905,14 @@ export default function UVDBAudits() {
                 </p>
               </div>
               <div className="bg-card rounded-xl border border-border">
-                <div className="p-4 bg-surface border-b border-border flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <input
-                        type="text"
-                        placeholder={t('uvdb.search_placeholder')}
-                        value={auditSearch}
-                        onChange={(e) => setAuditSearch(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') void loadData()
-                        }}
-                        className="pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-transparent"
-                      />
-                    </div>
-                    <select
-                      value={auditStatusFilter}
-                      onChange={(e) => {
-                        setAuditStatusFilter(e.target.value)
-                      }}
-                      className="px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:ring-2 focus:ring-ring"
-                      aria-label="Filter by status"
-                    >
-                      <option value="">All Statuses</option>
-                      <option value="completed">Completed</option>
-                      <option value="in_progress">In Progress</option>
-                      <option value="scheduled">Scheduled</option>
-                    </select>
-                    <button
-                      className="flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg transition-colors"
-                      onClick={() => void loadData()}
-                    >
-                      <Filter className="w-4 h-4" />
-                      {t('uvdb.filter')}
-                    </button>
-                  </div>
+                <div className="p-4 bg-surface border-b border-border flex items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    Search and status filters sit above the section tabs. This list shows synced
+                    UVDB protocol audits only.
+                  </p>
                   <button
                     onClick={handleOpenCreateAuditForm}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors shrink-0"
                   >
                     <Plus className="w-4 h-4" />
                     {t('uvdb.new_audit')}

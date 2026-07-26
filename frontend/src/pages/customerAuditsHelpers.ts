@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react'
 import { AlertCircle, ClipboardList, FileText } from 'lucide-react'
 import type { AuditRun } from '../api/client'
 import { isCustomerAssuranceAudit } from '../components/assuranceHubHelpers'
+import { classifyAuditProgram } from './auditsBoardModel'
 
 export type CustomerAuditsSectionId = 'runs' | 'findings' | 'sources'
 
@@ -65,5 +66,27 @@ export function buildCustomerAuditsSummary(runs: AuditRun[], openFindings: numbe
       (run) =>
         run.source_document_asset_id != null && Number(run.source_document_asset_id) > 0,
     ).length,
+  }
+}
+
+/**
+ * PX-259 / PX-245: when the customer programme is empty, explain sibling
+ * external runs that live on other Audits programmes (Achilles / Planet Mark).
+ */
+export function buildCustomerCrossProgrammeHonesty(allRuns: AuditRun[]) {
+  const counts = {
+    customer: 0,
+    uvdb: 0,
+    planet_mark: 0,
+    internal: 0,
+  }
+  for (const run of allRuns) {
+    counts[classifyAuditProgram(run)] += 1
+  }
+  const otherExternalOnBoard = counts.uvdb + counts.planet_mark
+  return {
+    ...counts,
+    otherExternalOnBoard,
+    showEmptyHonesty: counts.customer === 0 && otherExternalOnBoard > 0,
   }
 }

@@ -301,4 +301,46 @@ describe('AuditTemplateLibrary', () => {
       expect(screen.getByText('Batch Import')).toBeInTheDocument()
     })
   })
+
+  it('PX-266: hides Playwright / CUJ fixtures by default and can reveal them', async () => {
+    auditsApi.listTemplates.mockResolvedValue({
+      data: {
+        items: [
+          ...MOCK_TEMPLATES,
+          {
+            id: 99,
+            reference_number: 'CUJ-AT-08',
+            name: 'Playwright CUJ audit template',
+            description: 'Automation fixture',
+            category: 'Vehicles',
+            audit_type: 'inspection',
+            version: 1,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-02-15T00:00:00Z',
+            scoring_method: 'percentage',
+            question_count: 1,
+            section_count: 1,
+          },
+        ],
+        total: 3,
+      },
+    })
+
+    setup()
+
+    await waitFor(() => {
+      expect(screen.getByText('Vehicle Inspection Checklist')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('Playwright CUJ audit template')).not.toBeInTheDocument()
+    expect(screen.getByTestId('audit-templates-hide-automation')).toHaveTextContent(/Hiding 1 fixture/i)
+
+    fireEvent.click(screen.getByTestId('audit-templates-hide-automation'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Playwright CUJ audit template')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('audit-template-fixture-badge')).toBeInTheDocument()
+  })
 })

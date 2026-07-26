@@ -12,6 +12,7 @@ const mockCreateAudit = vi.fn()
 const mockDownloadProtocolPack = vi.fn()
 const mockCreateApiError = vi.fn()
 const mockGetReconciliation = vi.fn()
+const mockListRuns = vi.fn()
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -26,6 +27,9 @@ vi.mock('../../api/client', () => ({
   default: {
     get: (...args: unknown[]) => mockApiGet(...args),
     defaults: { baseURL: '' },
+  },
+  auditsApi: {
+    listRuns: (...args: unknown[]) => mockListRuns(...args),
   },
   uvdbApi: {
     getDashboard: (...args: unknown[]) => mockGetDashboard(...args),
@@ -261,6 +265,16 @@ describe('UVDBAudits', () => {
           actions: '/actions?sourceType=audit_finding',
           risk_register: '/risk-register?auditOnly=1&auditRef=UVDB-2026-0002',
         },
+      },
+    })
+    mockListRuns.mockResolvedValue({
+      data: {
+        items: [
+          { id: 101, assurance_scheme: 'Achilles UVDB Verify B2', status: 'completed' },
+          { id: 102, external_audit_type: 'uvdb', status: 'completed' },
+          { id: 103, source_origin: 'achilles', status: 'in_progress' },
+          { id: 104, source_origin: 'internal', status: 'completed' },
+        ],
       },
     })
   })
@@ -1023,5 +1037,58 @@ describe('UVDBAudits', () => {
 
     expect(await screen.findByText('20/02/2026')).toBeInTheDocument()
     expect(screen.queryByText('2026-02-20T00:00:00')).not.toBeInTheDocument()
+  })
+
+  it('PX-258: renders a single section tab row without duplicate select+Filter chrome', async () => {
+    const UVDBAudits = (await import('../UVDBAudits')).default
+    renderPage(<UVDBAudits />)
+
+    expect(await screen.findByTestId('uvdb-section-tabs')).toBeInTheDocument()
+    expect(screen.queryByTestId('uvdb-section-filters')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('uvdb-section-filter')).not.toBeInTheDocument()
+  })
+
+  it('PX-256: shows protocol vs Audits board Achilles alignment honesty', async () => {
+    mockListAudits.mockResolvedValue({
+      data: {
+        total: 1,
+        audits: [
+          {
+            id: 5,
+            audit_reference: 'UVDB-2026-0001',
+            company_name: 'Plantexpand Limited',
+            audit_type: 'B2',
+            audit_date: '2026-03-20',
+            status: 'completed',
+            percentage_score: 99,
+            score_source: 'imported',
+            lead_auditor: 'Jane Smith',
+          },
+        ],
+      },
+    })
+
+    mockListRuns.mockResolvedValue({
+      data: {
+        items: Array.from({ length: 12 }, (_, index) => ({
+          id: 200 + index,
+          assurance_scheme: 'Achilles UVDB Verify B2',
+          status: 'completed',
+        })),
+      },
+    })
+
+    const UVDBAudits = (await import('../UVDBAudits')).default
+    renderPage(<UVDBAudits />)
+
+    expect(await screen.findByTestId('uvdb-board-alignment')).toHaveTextContent(
+      /Audits board Achilles \/ UVDB runs: 12/i,
+    )
+    expect(screen.getByTestId('uvdb-board-alignment')).toHaveTextContent(/disagree/i)
+    expect(screen.getByTestId('uvdb-average-provenance')).toHaveTextContent(/not verified/i)
+    expect(screen.getByTestId('uvdb-board-alignment-link')).toHaveAttribute(
+      'href',
+      '/audits?source=achilles',
+    )
   })
 })

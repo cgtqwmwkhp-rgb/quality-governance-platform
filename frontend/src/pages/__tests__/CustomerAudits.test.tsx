@@ -61,6 +61,43 @@ describe('CustomerAudits programme shell', () => {
     ).toBeInTheDocument()
   })
 
+  it('PX-259 / PX-245: explains sibling external runs when customer programme is empty', async () => {
+    mockListRuns.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 1,
+            reference_number: 'AUD-UVDB-1',
+            template_id: 1,
+            template_version: 1,
+            status: 'completed',
+            created_at: '2026-01-01T00:00:00Z',
+            assurance_scheme: 'Achilles UVDB Verify B2',
+          },
+          {
+            id: 2,
+            reference_number: 'AUD-PM-1',
+            template_id: 1,
+            template_version: 1,
+            status: 'completed',
+            created_at: '2026-01-01T00:00:00Z',
+            external_audit_type: 'planet_mark',
+          },
+        ],
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByTestId('customer-audits-cross-programme-honesty')).toHaveTextContent(
+      /2 other external runs exist/i,
+    )
+    expect(screen.getByTestId('customer-audits-open-uvdb-board')).toHaveAttribute(
+      'href',
+      '/audits?source=achilles',
+    )
+  })
+
   it('PX-260: Import external audit opens the shared import dialog route', async () => {
     renderPage()
 
