@@ -17,6 +17,8 @@ import {
   hasRecordedCarbonValue,
   hasTrendData,
   initiativeToCreateActionPayload,
+  isStaleDraftCertification,
+  parsePlanetMarkPeriodEnd,
   parsePlanetMarkSection,
   resolveSelectedYearId,
   sortReportingYearsDesc,
@@ -345,5 +347,34 @@ describe('planetMarkHelpers PM-W3 export + initiatives', () => {
 
   it('keeps legacy export URL helper for reference', () => {
     expect(buildPlanetMarkExportUrl(42)).toBe('/api/v1/planet-mark/years/42/export')
+  })
+
+  it('PX-246: flags draft certification after the reporting period ends', () => {
+    const now = new Date('2026-07-26T12:00:00Z')
+    expect(
+      isStaleDraftCertification(
+        { ...baseYear, year_number: 2025, period: '01 Jan 2025 - 31 Dec 2025', certification_status: 'draft' },
+        now,
+      ),
+    ).toBe(true)
+    expect(
+      isStaleDraftCertification(
+        { ...baseYear, year_number: 2025, period: '01 Jan 2025 - 31 Dec 2025', certification_status: 'certified' },
+        now,
+      ),
+    ).toBe(false)
+    expect(
+      isStaleDraftCertification(
+        { ...baseYear, year_number: 2026, period: '01 Jan 2026 - 31 Dec 2026', certification_status: 'draft' },
+        now,
+      ),
+    ).toBe(false)
+  })
+
+  it('parses Planet Mark period end dates', () => {
+    const end = parsePlanetMarkPeriodEnd('01 Jan 2025 - 31 Dec 2025')
+    expect(end?.getUTCFullYear()).toBe(2025)
+    expect(end?.getUTCMonth()).toBe(11)
+    expect(end?.getUTCDate()).toBe(31)
   })
 })

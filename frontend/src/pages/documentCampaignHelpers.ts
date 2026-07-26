@@ -2,6 +2,7 @@ import type {
   CampaignAudienceType,
   CampaignComplianceRow,
   CreateCampaignPayload,
+  DocumentCampaign,
 } from '../api/documentCampaignClient'
 
 export const CAMPAIGN_REMINDER_PRESETS = [
@@ -118,8 +119,68 @@ export function buildCampaignResultsHref(documentId: number, campaignId: number)
   return `/documents/${documentId}?tab=campaign-results&campaignId=${campaignId}`
 }
 
+/**
+ * Platform-style campaign reference (PX-222): CAM-YYYY-NNNN.
+ * Prefer launched/created year when available; else calendar year.
+ */
+export function formatCampaignReference(
+  campaignId: number,
+  at: string | Date | null | undefined = null,
+): string {
+  let year = new Date().getUTCFullYear()
+  if (at instanceof Date && !Number.isNaN(at.getTime())) {
+    year = at.getUTCFullYear()
+  } else if (typeof at === 'string' && at.trim()) {
+    const parsed = new Date(at)
+    if (!Number.isNaN(parsed.getTime())) year = parsed.getUTCFullYear()
+  }
+  const seq = Math.max(0, Math.trunc(campaignId))
+  return `CAM-${year}-${String(seq).padStart(4, '0')}`
+}
+
+/** UAT / thin-suite campaign artefacts (PX-221 honesty — data purge is ops). */
+const UAT_CAMPAIGN_PATTERNS: RegExp[] = [
+  /\buat[-_]?tx\b/i,
+  /\buat[-_]?thin\b/i,
+  /\buat[-_]?\d{4,}\b/i,
+  /\bcamp\s+bogus\b/i,
+]
+
+export type CampaignHonestyLike = {
+  title?: string | null
+  document_title?: string | null
+  status?: string | null
+}
+
+export function isUatCampaignArtefact(row: CampaignHonestyLike): boolean {
+  const blob = [row.title, row.document_title].filter(Boolean).join(' ')
+  if (!blob) return false
+  return UAT_CAMPAIGN_PATTERNS.some((pattern) => pattern.test(blob))
+}
+
+export function partitionUatCampaigns<T extends CampaignHonestyLike>(
+  rows: T[],
+): { operational: T[]; uatArtefacts: T[] } {
+  const operational: T[] = []
+  const uatArtefacts: T[] = []
+  for (const row of rows) {
+    if (isUatCampaignArtefact(row)) uatArtefacts.push(row)
+    else operational.push(row)
+  }
+  return { operational, uatArtefacts }
+}
+
 export function formatCampaignHealthBadge(row: CampaignComplianceRow): string {
   return `Campaign ${Math.round(row.completion_rate)}% · ${row.overdue} overdue`
+}
+
+/** Label for a campaign row/selector that prefers a real title when present. */
+export function formatCampaignListLabel(
+  campaign: Pick<DocumentCampaign, 'id' | 'title' | 'launched_at' | 'created_at'>,
+): string {
+  const ref = formatCampaignReference(campaign.id, campaign.launched_at ?? campaign.created_at)
+  const title = campaign.title?.trim()
+  return title ? `${ref} · ${title}` : ref
 }
 
 export type CampaignRingTone = 'success' | 'warning' | 'destructive'

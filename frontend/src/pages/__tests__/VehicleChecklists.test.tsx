@@ -3,8 +3,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 import VehicleChecklists, {
+  formatChecklistCellValue,
+  formatChecklistColumnLabel,
   formatChecklistLoadError,
   formatKitExpiryLabel,
+  getFailedCheckLabels,
   isKitAssetType,
   kitExpiryBadgeVariant,
 } from '../VehicleChecklists'
@@ -300,5 +303,146 @@ describe('VehicleChecklists PAMS unavailable honesty (VAN-CL-503)', () => {
         'PAMS unavailable — van checklist data cannot be loaded right now. Please try again shortly.',
       ),
     ).toContain('PAMS unavailable')
+  })
+})
+
+describe('VehicleChecklists register presentation (PX-230 / PX-231 / PX-232 / PX-288)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    mockListMonthly.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 1 },
+    })
+    mockListDefects.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 1 },
+    })
+    mockAnalyticsSummary.mockResolvedValue({
+      data: {
+        total_daily_checks: 0,
+        total_monthly_checks: 0,
+        open_defects: 0,
+        p1_defects: 0,
+        p2_defects: 0,
+        p3_defects: 0,
+        overdue_actions: 0,
+        last_sync: null,
+      },
+    })
+    mockAnalyticsTrends.mockResolvedValue({ data: [] })
+    mockAnalyticsHeatmap.mockResolvedValue({ data: [] })
+    mockApiGet.mockResolvedValue({ data: { assets: [] } })
+  })
+
+  it('humanises PAMS column keys instead of exposing raw field names (PX-231)', () => {
+    expect(formatChecklistColumnLabel('userName')).toBe('Technician')
+    expect(formatChecklistColumnLabel('vanID')).toBe('Vehicle')
+    expect(formatChecklistColumnLabel('startTimeDate')).toBe('Started')
+    expect(formatChecklistColumnLabel('endTimeDate')).toBe('Ended')
+    expect(formatChecklistColumnLabel('checkFluids')).toBe('Fluids')
+    expect(formatChecklistColumnLabel('checkWheels')).toBe('Wheels')
+    expect(formatChecklistColumnLabel('bodyWorkDamage')).toBe('Bodywork damage')
+    expect(formatChecklistColumnLabel('inc id')).toBe('Record ID')
+  })
+
+  it('formats timestamps as UK dd/mm/yyyy and booleans as Pass/Fail (PX-231 / PX-232)', () => {
+    expect(formatChecklistCellValue('startTimeDate', '2026/07/24 16:45:53')).toBe('24/07/2026')
+    expect(formatChecklistCellValue('endTimeDate', '2026-07-24T16:45:53')).toBe('24/07/2026')
+    expect(formatChecklistCellValue('checkFluids', true)).toBe('Pass')
+    expect(formatChecklistCellValue('checkWheels', false)).toBe('Fail')
+    expect(formatChecklistCellValue('uploaded', true)).toBe('Yes')
+    expect(formatChecklistCellValue('uploaded', 'false')).toBe('No')
+  })
+
+  it('surfaces free-text defect notes and failed boolean checks', () => {
+    expect(
+      getFailedCheckLabels({
+        vanID: 'DL73NKG',
+        userName: 'Alex',
+        checkFluids: true,
+        checkWheels: false,
+        defects: 'SERVICE LIGHT ON',
+      }),
+    ).toEqual(['Wheels', 'SERVICE LIGHT ON'])
+  })
+
+  it('keeps Flag as the first reachable control on curated records rows (PX-230)', async () => {
+    mockListDaily.mockResolvedValue({
+      data: {
+        items: [
+          {
+            'inc id': 24958,
+            id: 24958,
+            userName: 'Alex Driver',
+            vanID: 'DL73NKG',
+            startTimeDate: '2026/07/24 16:45:53',
+            endTimeDate: '2026/07/24 17:02:11',
+            mileage: 61234,
+            bodyWorkDamage: true,
+            defects: 'SERVICE LIGHT ON',
+            uploaded: true,
+            checkFluids: true,
+            checkWheels: false,
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByTestId('vehicle-checklist-records-table')).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Flag' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Vehicle' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Technician' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Started' })).toBeInTheDocument()
+
+    // Raw PAMS keys must not appear as headings.
+    expect(screen.queryByRole('columnheader', { name: 'userName' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'vanID' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'startTimeDate' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'inc id' })).not.toBeInTheDocument()
+
+    expect(screen.getByText('DL73NKG')).toBeInTheDocument()
+    expect(screen.getByText('Alex Driver')).toBeInTheDocument()
+    expect(screen.getAllByText('24/07/2026').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText(/SERVICE LIGHT ON/)).toBeInTheDocument()
+
+    const flagButton = screen.getByTestId('vehicle-checklist-flag-button')
+    expect(flagButton).toBeInTheDocument()
+    // Flag is the first interactive control in the row — not buried past 12 columns.
+    const row = screen.getByTestId('vehicle-checklist-record-row')
+    expect(row.querySelector('[data-testid="vehicle-checklist-flag-button"]')).toBe(flagButton)
+    expect(row.firstElementChild?.textContent).toMatch(/Flag/i)
+  })
+
+  it('stacks row labels for narrow viewports via responsive classes (PX-288 vehicle)', async () => {
+    mockListDaily.mockResolvedValue({
+      data: {
+        items: [
+          {
+            userName: 'Sam',
+            vanID: 'AB12CDE',
+            startTimeDate: '2026-07-22',
+            checkFluids: 'pass',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    renderPage()
+
+    const table = await screen.findByTestId('vehicle-checklist-records-table')
+    expect(table.querySelector('table')?.className).toMatch(/xl:table/)
+    expect(table.querySelector('thead')?.className).toMatch(/xl:table-header-group/)
+    // Stacked labels stay in the DOM for tablet/phone; xl hides them.
+    const stackedLabels = table.querySelectorAll('td span.xl\\:hidden')
+    expect(stackedLabels.length).toBeGreaterThanOrEqual(4)
   })
 })

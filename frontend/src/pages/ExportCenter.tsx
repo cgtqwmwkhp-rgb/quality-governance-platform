@@ -5,8 +5,12 @@ import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 
 /**
- * Honest unavailable state — no fabricated counts or demo export history (PX-011).
- * Route kept so deep links and future wiring do not break.
+ * Honest unavailable state — no fabricated counts, demo job history, or fake
+ * export endpoints (PX-011, PX-160).
+ *
+ * There is no `/api/v1/exports` (or equivalent bulk-export / job-history) route
+ * in this codebase. Claiming a working Export Center would require inventing
+ * those APIs. Route kept so deep links and future wiring do not break.
  */
 export default function ExportCenter() {
   const { t } = useTranslation()
