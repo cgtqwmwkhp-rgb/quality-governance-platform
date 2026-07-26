@@ -53,6 +53,8 @@ const columns: CaseRegisterColumn<Row>[] = [
   },
 ]
 
+const classesOf = (el: Element) => el.className.split(/\s+/)
+
 /** The triage view: a cell with its own controls sitting inside an activatable row. */
 const withOwner: CaseRegisterColumn<Row>[] = [
   ...columns,
@@ -112,9 +114,9 @@ describe('CaseRegisterTable', () => {
   it('lays the table out fixed so no cell can widen it (PX-147, PX-205)', () => {
     renderRegister()
 
-    const table = screen.getByRole('table', { name: 'Near misses' })
-    expect(table.className).toContain('xl:table-fixed')
-    expect(table.className).toContain('w-full')
+    const classes = classesOf(screen.getByRole('table', { name: 'Near misses' }))
+    expect(classes).toContain('xl:table-fixed')
+    expect(classes).toContain('w-full')
   })
 
   it('breaks and clamps free text instead of letting it stretch its column (PX-147)', () => {
@@ -184,6 +186,25 @@ describe('CaseRegisterTable', () => {
 
     expect(onOpenRow).not.toHaveBeenCalled()
     expect(screen.getByTestId('assign-1')).toBeInTheDocument()
+  })
+
+  it('waits for a wider viewport when a register carries an inline action column', () => {
+    const { rerender } = renderRegister()
+    expect(classesOf(screen.getByRole('table'))).toContain('xl:table-fixed')
+
+    rerender(
+      <CaseRegisterTable
+        label="Near misses"
+        columns={withOwner}
+        rows={rows}
+        rowKey={(row) => row.id}
+        empty={null}
+      />,
+    )
+
+    const classes = classesOf(screen.getByRole('table'))
+    expect(classes).toContain('2xl:table-fixed')
+    expect(classes).not.toContain('xl:table-fixed')
   })
 
   it('does not open the row when a space is typed into a control inside a cell', () => {
