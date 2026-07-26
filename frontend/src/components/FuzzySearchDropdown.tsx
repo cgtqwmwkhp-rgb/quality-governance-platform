@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useId } from 'react'
 import { Search, Check, ChevronDown, X } from 'lucide-react'
 import { cn } from '../helpers/utils'
 
@@ -37,6 +37,8 @@ export default function FuzzySearchDropdown({
   const [search, setSearch] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const generatedListboxId = useId()
+  const listboxId = `${id ?? generatedListboxId}-listbox`
 
   // Fuzzy search implementation
   const fuzzyMatch = (text: string, pattern: string): boolean => {
@@ -105,8 +107,13 @@ export default function FuzzySearchDropdown({
         <button
           id={id}
           type="button"
+          role="combobox"
           onClick={() => !disabled && setIsOpen(!isOpen)}
           disabled={disabled}
+          aria-controls={listboxId}
+          aria-expanded={isOpen}
+          aria-haspopup="listbox"
+          aria-label={label ?? placeholder}
           aria-required={required ? 'true' : undefined}
           className={cn(
             'w-full flex items-center justify-between gap-2 px-4 py-3',
@@ -178,12 +185,18 @@ export default function FuzzySearchDropdown({
             </div>
 
             {/* Options list */}
-            <div className="max-h-64 overflow-y-auto overscroll-contain">
+            <div
+              id={listboxId}
+              role="listbox"
+              className="max-h-64 overflow-y-auto overscroll-contain"
+            >
               {filteredOptions.length > 0 ? (
                 filteredOptions.map((option) => (
                   <button
                     key={option.value}
                     type="button"
+                    role="option"
+                    aria-selected={value === option.value}
                     onClick={() => handleSelect(option.value)}
                     className={cn(
                       'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors',

@@ -627,7 +627,7 @@ describe('PX-301 portal field accessibility', () => {
     expect(input).toHaveAttribute('aria-required', 'true')
   })
 
-  it('wires FuzzySearchDropdown selects with id, label, and aria-required', () => {
+  it('wires FuzzySearchDropdown selects as required comboboxes', () => {
     const selectTemplate: FormTemplate = {
       ...threeStepTemplate(),
       steps: [
@@ -655,6 +655,11 @@ describe('PX-301 portal field accessibility', () => {
 
     const trigger = screen.getByLabelText(/Customer \/ contract/)
     expect(trigger).toHaveAttribute('id', 'portal-field-contract')
+    expect(trigger).toHaveAttribute('role', 'combobox')
+    expect(trigger).toHaveAccessibleName('Customer / contract')
+    expect(trigger).toHaveAttribute('aria-controls', 'portal-field-contract-listbox')
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(trigger).toHaveAttribute('aria-haspopup', 'listbox')
     expect(trigger).toHaveAttribute('aria-required', 'true')
   })
 })
