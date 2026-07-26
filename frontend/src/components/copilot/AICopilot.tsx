@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { cn } from '../../helpers/utils'
+import { isAICopilotDemoEnabled } from '../../config/aiCopilotDemo'
 
 interface Message {
   id: number
@@ -81,7 +82,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
       const welcomeMessage: Message = {
         id: Date.now(),
         role: 'assistant',
-        content: `Hello! I'm your AI assistant for the Quality Governance Platform.\n\nI can help you with:\n• Creating and managing incidents\n• Scheduling audits\n• Risk assessment\n• Compliance queries\n• Generating reports\n\nHow can I assist you today?`,
+        content: `This is a demonstration of a planned AI assistant. It is not connected to any AI model or to your organisation's records.\n\nReplies are fixed sample text chosen by keyword, so any counts, percentages or reference numbers you see are invented illustrations.\n\nTry a phrase such as "compliance status" or "risk summary" to preview the intended experience.`,
         contentType: 'text',
         createdAt: new Date(),
       }
@@ -327,6 +328,10 @@ const AICopilot: React.FC<AICopilotProps> = ({
     }
   }
 
+  // Second line of defence behind Layout's gate: never render simulated answers
+  // when the demo flag is off, however this component gets mounted (PX-248).
+  if (!isAICopilotDemoEnabled()) return null
+
   if (!isOpen) return null
 
   if (isMinimized) {
@@ -334,7 +339,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
       <div className="fixed bottom-4 right-4 z-50">
         <Button onClick={() => setIsMinimized(false)} className="rounded-full gap-2 shadow-glow">
           <Bot className="w-5 h-5" />
-          <span className="font-medium">AI Copilot</span>
+          <span className="font-medium">AI Copilot (Demo)</span>
           {messages.length > 1 && (
             <span className="bg-primary-foreground/20 px-2 py-0.5 rounded-full text-xs">
               {messages.length - 1}
@@ -354,8 +359,8 @@ const AICopilot: React.FC<AICopilotProps> = ({
             <Bot className="w-6 h-6 text-primary-foreground" />
           </div>
           <div>
-            <h3 className="font-semibold text-primary-foreground">AI Copilot</h3>
-            <p className="text-xs text-primary-foreground/70">Your QHSE Assistant</p>
+            <h3 className="font-semibold text-primary-foreground">AI Copilot (Demo)</h3>
+            <p className="text-xs text-primary-foreground/70">Simulated — not live data</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -381,6 +386,16 @@ const AICopilot: React.FC<AICopilotProps> = ({
             <X className="w-4 h-4" />
           </button>
         </div>
+      </div>
+
+      <div
+        role="alert"
+        data-testid="ai-copilot-demo-banner"
+        className="px-4 py-2 bg-warning/15 border-b border-warning/40 text-xs text-foreground"
+      >
+        <strong>Demonstration only.</strong> Every figure and answer below is scripted sample
+        content. Nothing here is read from your organisation&apos;s records — do not rely on it or
+        quote it.
       </div>
 
       {/* Messages */}

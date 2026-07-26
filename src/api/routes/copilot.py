@@ -7,7 +7,7 @@ Interactive conversational AI assistant for QHSE management.
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -17,7 +17,27 @@ from src.core.security import decode_token
 from src.domain.exceptions import NotFoundError
 from src.infrastructure.database import async_session_maker
 
+# PX-248: copilot answers are hardcoded simulations, not inference over tenant data.
+# Serving them would present fabricated figures as fact, so the surface is closed
+# unless an operator explicitly opts a non-production environment in.
+COPILOT_DISABLED_DETAIL = "AI Copilot is not enabled in this environment."
+
+
+def require_copilot_enabled() -> None:
+    """Reject every copilot HTTP request unless the feature is explicitly opted in."""
+    from src.domain.services.copilot_service import copilot_is_enabled
+
+    if not copilot_is_enabled():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=COPILOT_DISABLED_DETAIL)
+
+
+# Exported router: carries the WebSocket route, which must refuse via a handshake
+# close rather than an HTTPException, plus every guarded HTTP route (included below).
 router = APIRouter()
+
+# All HTTP routes hang off this router so the flag guard applies to any route added
+# later without the author having to remember it.
+_enabled_router = APIRouter(dependencies=[Depends(require_copilot_enabled)])
 
 
 # ============================================================================
@@ -88,7 +108,7 @@ class SuggestedAction(BaseModel):
 # ============================================================================
 
 
-@router.post("/sessions", response_model=SessionResponse)
+@_enabled_router.post("/sessions", response_model=SessionResponse)
 async def create_session(
     data: SessionCreate,
     current_user: CurrentUser,
@@ -114,7 +134,7 @@ async def create_session(
     return session
 
 
-@router.get("/sessions/active", response_model=Optional[SessionResponse])
+@_enabled_router.get("/sessions/active", response_model=Optional[SessionResponse])
 async def get_active_session(
     current_user: CurrentUser,
     db: DbSession,
@@ -128,7 +148,7 @@ async def get_active_session(
     return session
 
 
-@router.get("/sessions/{session_id}", response_model=SessionResponse)
+@_enabled_router.get("/sessions/{session_id}", response_model=SessionResponse)
 async def get_session(session_id: int, db: DbSession, current_user: CurrentUser):
     """Get a session by ID."""
     from src.domain.services.copilot_service import CopilotService
@@ -142,7 +162,7 @@ async def get_session(session_id: int, db: DbSession, current_user: CurrentUser)
     return session
 
 
-@router.delete("/sessions/{session_id}")
+@_enabled_router.delete("/sessions/{session_id}")
 async def close_session(session_id: int, db: DbSession, current_user: CurrentUser):
     """Close a session."""
     from src.domain.services.copilot_service import CopilotService
@@ -156,7 +176,7 @@ async def close_session(session_id: int, db: DbSession, current_user: CurrentUse
     return {"status": "closed"}
 
 
-@router.get("/sessions", response_model=list[SessionResponse])
+@_enabled_router.get("/sessions", response_model=list[SessionResponse])
 async def list_sessions(
     current_user: CurrentUser,
     db: DbSession,
@@ -183,7 +203,7 @@ async def list_sessions(
 # ============================================================================
 
 
-@router.post("/sessions/{session_id}/messages", response_model=MessageResponse)
+@_enabled_router.post("/sessions/{session_id}/messages", response_model=MessageResponse)
 async def send_message(
     session_id: int,
     data: MessageCreate,
@@ -206,7 +226,7 @@ async def send_message(
         raise NotFoundError(str(e))
 
 
-@router.get("/sessions/{session_id}/messages", response_model=list[MessageResponse])
+@_enabled_router.get("/sessions/{session_id}/messages", response_model=list[MessageResponse])
 async def get_messages(
     session_id: int,
     db: DbSession,
@@ -225,7 +245,7 @@ async def get_messages(
     return messages
 
 
-@router.post("/messages/{message_id}/feedback")
+@_enabled_router.post("/messages/{message_id}/feedback")
 async def submit_feedback(
     message_id: int,
     data: FeedbackCreate,
@@ -259,7 +279,7 @@ async def submit_feedback(
 # ============================================================================
 
 
-@router.get("/actions", response_model=list[dict])
+@_enabled_router.get("/actions", response_model=list[dict])
 async def list_actions(category: Optional[str] = None):
     """List available copilot actions."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS
@@ -272,7 +292,7 @@ async def list_actions(category: Optional[str] = None):
     return actions
 
 
-@router.post("/actions/execute")
+@_enabled_router.post("/actions/execute")
 async def execute_action(
     data: ActionExecute,
     db: DbSession,
@@ -295,7 +315,7 @@ async def execute_action(
     }
 
 
-@router.get("/actions/suggest", response_model=list[SuggestedAction])
+@_enabled_router.get("/actions/suggest", response_model=list[SuggestedAction])
 async def suggest_actions(
     page: Optional[str] = None,
     context_type: Optional[str] = None,
@@ -374,7 +394,7 @@ async def suggest_actions(
 # ============================================================================
 
 
-@router.get("/knowledge/search")
+@_enabled_router.get("/knowledge/search")
 async def search_knowledge(
     current_user: CurrentUser,
     db: DbSession,
@@ -406,7 +426,7 @@ async def search_knowledge(
     ]
 
 
-@router.post("/knowledge")
+@_enabled_router.post("/knowledge")
 async def add_knowledge(
     title: str,
     content: str,
@@ -462,7 +482,11 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
     """WebSocket endpoint for real-time chat. Requires token in query params."""
     from src.domain.models.ai_copilot import CopilotSession
     from src.domain.models.user import User
-    from src.domain.services.copilot_service import CopilotService
+    from src.domain.services.copilot_service import CopilotService, copilot_is_enabled
+
+    if not copilot_is_enabled():
+        await websocket.close(code=4004, reason=COPILOT_DISABLED_DETAIL)
+        return
 
     token = websocket.query_params.get("token")
     if not token:
@@ -565,3 +589,6 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
 
     except WebSocketDisconnect:
         manager.disconnect(session_id)
+
+
+router.include_router(_enabled_router)

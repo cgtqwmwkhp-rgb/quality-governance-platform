@@ -50,6 +50,7 @@ import { Button } from './ui/Button'
 import { cn } from '../helpers/utils'
 import { hasRole, isSuperuser } from '../utils/auth'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
+import { isAICopilotDemoEnabled } from '../config/aiCopilotDemo'
 import { CUSTOMER_AUDITS_PROGRAMME_PATH, navItemIsActive } from './assuranceHubHelpers'
 
 /** Deferred until the shell opens Copilot — keeps authenticated first paint lean (S14). */
@@ -280,6 +281,7 @@ export default function Layout({ onLogout }: LayoutProps) {
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [pendingSafetyLookups, setPendingSafetyLookups] = useState(0)
   const [copilotOpen, setCopilotOpen] = useState(false)
+  const copilotDemoEnabled = isAICopilotDemoEnabled()
 
   const fetchUnreadCount = useCallback(() => {
     notificationsApi
@@ -394,16 +396,18 @@ export default function Layout({ onLogout }: LayoutProps) {
             <Settings className="w-5 h-5" />
           </NavLink>
 
-          {/* AI Copilot Toggle */}
-          <Button
-            onClick={() => setCopilotOpen(!copilotOpen)}
-            variant={copilotOpen ? 'default' : 'ghost'}
-            size="sm"
-            className={cn('gap-2', copilotOpen && 'shadow-glow')}
-          >
-            <Bot className="w-4 h-4" />
-            <span className="hidden sm:inline">{t('nav.copilot')}</span>
-          </Button>
+          {/* AI Copilot Toggle — demo only, hidden unless explicitly enabled (PX-248) */}
+          {copilotDemoEnabled && (
+            <Button
+              onClick={() => setCopilotOpen(!copilotOpen)}
+              variant={copilotOpen ? 'default' : 'ghost'}
+              size="sm"
+              className={cn('gap-2', copilotOpen && 'shadow-glow')}
+            >
+              <Bot className="w-4 h-4" />
+              <span className="hidden sm:inline">{t('nav.copilot')}</span>
+            </Button>
+          )}
         </div>
       </header>
 
@@ -668,8 +672,8 @@ export default function Layout({ onLogout }: LayoutProps) {
         />
       )}
 
-      {/* AI Copilot — code-split; mount only when opened */}
-      {copilotOpen ? (
+      {/* AI Copilot — code-split; mount only when enabled and opened */}
+      {copilotDemoEnabled && copilotOpen ? (
         <Suspense fallback={null}>
           <AICopilot
             isOpen={copilotOpen}
