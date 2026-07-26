@@ -109,7 +109,7 @@ function renderForm(overrides: Partial<Parameters<typeof DynamicFormRenderer>[0]
   return { ...utils, onSubmit, props }
 }
 
-/** Labels in FieldRenderer are not associated with their input, so scope by the field wrapper. */
+/** Scope by field wrapper; labels are now associated via htmlFor/id (PX-301). */
 function fieldInput(name: string): HTMLElement {
   return within(screen.getByTestId(`field-${name}`)).getByRole('textbox')
 }
@@ -587,5 +587,72 @@ describe('validateData integration', () => {
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
     expect(await screen.findByText('CMP-1')).toBeInTheDocument()
+  })
+})
+
+// ==================== PX-301: programmatic labels & required ====================
+
+describe('PX-301 portal field accessibility', () => {
+  it('associates required text fields with labels and required attributes', async () => {
+    renderForm()
+
+    const input = screen.getByLabelText(/Alpha/)
+    expect(input).toHaveAttribute('id', 'portal-field-alpha')
+    expect(input).toBeRequired()
+    expect(input).toHaveAttribute('aria-required', 'true')
+  })
+
+  it('wires FuzzySearchDropdown selects with id, label, and aria-required', () => {
+    const selectTemplate: FormTemplate = {
+      ...threeStepTemplate(),
+      steps: [
+        {
+          id: 1,
+          name: 'Customer',
+          order: 0,
+          fields: [
+            field({
+              id: 1,
+              name: 'contract',
+              label: 'Customer / contract',
+              field_type: 'select',
+              is_required: true,
+            }),
+          ],
+        },
+      ],
+    }
+
+    renderForm({
+      template: selectTemplate,
+      contractOptions: [{ value: 'acme', label: 'Acme Corp' }],
+    })
+
+    const trigger = screen.getByLabelText(/Customer \/ contract/)
+    expect(trigger).toHaveAttribute('id', 'portal-field-contract')
+    expect(trigger).toHaveAttribute('aria-required', 'true')
+  })
+})
+
+describe('validateAllSteps on submit', () => {
+  it('re-validates earlier steps when the user jumps back and clears a required field', async () => {
+    const user = userEvent.setup()
+    const { onSubmit } = renderForm()
+
+    await user.type(fieldInput('alpha'), 'first answer')
+    await user.click(continueButton())
+    await user.type(await findFieldInput('bravo'), 'second answer')
+    await user.click(continueButton())
+    await screen.findByRole('heading', { name: 'Step Three' })
+
+    await user.click(screen.getByTestId('step-indicator-0'))
+    await user.clear(fieldInput('alpha'))
+    await user.click(screen.getByTestId('step-indicator-2'))
+
+    await user.click(screen.getByTestId('submit-report-btn'))
+
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(await screen.findByText('Alpha is required')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Step One' })).toBeInTheDocument()
   })
 })

@@ -28,6 +28,7 @@ import {
   Upload,
 } from 'lucide-react'
 import { Card } from '../ui/Card'
+import { portalFieldId, portalRequiredProps } from '../../utils/portalFormA11y'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Textarea } from '../ui/Textarea'
@@ -298,6 +299,9 @@ function FieldRenderer({
     }
   }
 
+  const controlId = portalFieldId(field.name)
+  const requiredProps = portalRequiredProps(field.is_required)
+
   const widthClass =
     {
       full: 'col-span-2',
@@ -313,17 +317,19 @@ function FieldRenderer({
     case 'number':
       return (
         <div className={widthClass}>
-          <label className="block text-sm font-medium text-foreground mb-2">
+          <label htmlFor={controlId} className="block text-sm font-medium text-foreground mb-2">
             {field.label}
             {field.is_required && <span className="text-destructive ml-1">*</span>}
           </label>
           <div className="relative">
             <Input
+              id={controlId}
               type={field.field_type === 'phone' ? 'tel' : field.field_type}
               value={(value as string) || ''}
               onChange={(e) => onChange(e.target.value)}
               placeholder={field.placeholder}
               className={cn(error && 'border-destructive')}
+              {...requiredProps}
             />
             {voiceSupported && ['text'].includes(field.field_type) && (
               <button
@@ -359,17 +365,19 @@ function FieldRenderer({
     case 'rich_text':
       return (
         <div className={widthClass}>
-          <label className="block text-sm font-medium text-foreground mb-2">
+          <label htmlFor={controlId} className="block text-sm font-medium text-foreground mb-2">
             {field.label}
             {field.is_required && <span className="text-destructive ml-1">*</span>}
           </label>
           <div className="relative">
             <Textarea
+              id={controlId}
               value={(value as string) || ''}
               onChange={(e) => onChange(e.target.value)}
               placeholder={field.placeholder}
               rows={4}
               className={cn(error && 'border-destructive')}
+              {...requiredProps}
             />
             {voiceSupported && (
               <button
@@ -407,15 +415,17 @@ function FieldRenderer({
     case 'date':
       return (
         <div className={widthClass}>
-          <label className="block text-sm font-medium text-foreground mb-2">
+          <label htmlFor={controlId} className="block text-sm font-medium text-foreground mb-2">
             {field.label}
             {field.is_required && <span className="text-destructive ml-1">*</span>}
           </label>
           <Input
+            id={controlId}
             type="date"
             value={(value as string) || ''}
             onChange={(e) => onChange(e.target.value)}
             className={cn(error && 'border-destructive')}
+            {...requiredProps}
           />
           {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
         </div>
@@ -424,15 +434,17 @@ function FieldRenderer({
     case 'time':
       return (
         <div className={widthClass}>
-          <label className="block text-sm font-medium text-foreground mb-2">
+          <label htmlFor={controlId} className="block text-sm font-medium text-foreground mb-2">
             {field.label}
             {field.is_required && <span className="text-destructive ml-1">*</span>}
           </label>
           <Input
+            id={controlId}
             type="time"
             value={(value as string) || ''}
             onChange={(e) => onChange(e.target.value)}
             className={cn(error && 'border-destructive')}
+            {...requiredProps}
           />
           {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
         </div>
@@ -441,15 +453,17 @@ function FieldRenderer({
     case 'datetime':
       return (
         <div className={widthClass}>
-          <label className="block text-sm font-medium text-foreground mb-2">
+          <label htmlFor={controlId} className="block text-sm font-medium text-foreground mb-2">
             {field.label}
             {field.is_required && <span className="text-destructive ml-1">*</span>}
           </label>
           <Input
+            id={controlId}
             type="datetime-local"
             value={(value as string) || ''}
             onChange={(e) => onChange(e.target.value)}
             className={cn(error && 'border-destructive')}
+            {...requiredProps}
           />
           {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
         </div>
@@ -474,7 +488,9 @@ function FieldRenderer({
       return (
         <div className={widthClass}>
           <FuzzySearchDropdown
-            label={field.label + (field.is_required ? ' *' : '')}
+            id={controlId}
+            label={field.label}
+            required={field.is_required}
             options={selectOptions}
             value={(value as string) || ''}
             onChange={(v) => onChange(v)}
@@ -561,17 +577,19 @@ function FieldRenderer({
     case 'location':
       return (
         <div className={widthClass}>
-          <label className="block text-sm font-medium text-foreground mb-2">
+          <label htmlFor={controlId} className="block text-sm font-medium text-foreground mb-2">
             {field.label}
             {field.is_required && <span className="text-destructive ml-1">*</span>}
           </label>
           <div className="relative">
             <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
+              id={controlId}
               value={(value as string) || ''}
               onChange={(e) => onChange(e.target.value)}
               placeholder={field.placeholder || 'Enter location or use GPS'}
               className="pl-10 pr-20"
+              {...requiredProps}
             />
             <button
               type="button"
@@ -851,70 +869,104 @@ export default function DynamicFormRenderer({
     [errors],
   )
 
+  const collectStepErrors = useCallback(
+    (stepData: typeof currentStepData): Record<string, string> => {
+      const stepErrors: Record<string, string> = {}
+      if (!stepData) return stepErrors
+
+      for (const field of stepData.fields) {
+        const value = formData[field.name]
+
+        // Required validation
+        if (field.is_required) {
+          if (
+            value === undefined ||
+            value === null ||
+            value === '' ||
+            (Array.isArray(value) && value.length === 0)
+          ) {
+            stepErrors[field.name] = `${field.label} is required`
+            continue
+          }
+        }
+
+        // Skip other validations if field is empty and not required
+        if (!value) continue
+
+        // Min/max length for strings
+        if (typeof value === 'string') {
+          if (field.min_length && value.length < field.min_length) {
+            stepErrors[field.name] = `Minimum ${field.min_length} characters required`
+          }
+          if (field.max_length && value.length > field.max_length) {
+            stepErrors[field.name] = `Maximum ${field.max_length} characters allowed`
+          }
+        }
+
+        // Pattern validation
+        if (field.pattern && typeof value === 'string') {
+          const regex = new RegExp(field.pattern)
+          if (!regex.test(value)) {
+            stepErrors[field.name] = `Invalid format`
+          }
+        }
+
+        // Email validation
+        if (field.field_type === 'email' && typeof value === 'string') {
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+          if (!emailRegex.test(value)) {
+            stepErrors[field.name] = 'Please enter a valid email address'
+          }
+        }
+      }
+
+      // Page-supplied rules, narrowed to the fields visible on this step.
+      if (validateData) {
+        const custom = validateData(formData)
+        for (const field of stepData.fields) {
+          const message = custom[field.name]
+          if (message && !stepErrors[field.name]) {
+            stepErrors[field.name] = message
+          }
+        }
+      }
+
+      return stepErrors
+    },
+    [formData, validateData],
+  )
+
   const validateStep = useCallback((): boolean => {
-    const stepErrors: Record<string, string> = {}
-    if (!currentStepData) return true
-
-    for (const field of currentStepData.fields) {
-      const value = formData[field.name]
-
-      // Required validation
-      if (field.is_required) {
-        if (
-          value === undefined ||
-          value === null ||
-          value === '' ||
-          (Array.isArray(value) && value.length === 0)
-        ) {
-          stepErrors[field.name] = `${field.label} is required`
-          continue
-        }
-      }
-
-      // Skip other validations if field is empty and not required
-      if (!value) continue
-
-      // Min/max length for strings
-      if (typeof value === 'string') {
-        if (field.min_length && value.length < field.min_length) {
-          stepErrors[field.name] = `Minimum ${field.min_length} characters required`
-        }
-        if (field.max_length && value.length > field.max_length) {
-          stepErrors[field.name] = `Maximum ${field.max_length} characters allowed`
-        }
-      }
-
-      // Pattern validation
-      if (field.pattern && typeof value === 'string') {
-        const regex = new RegExp(field.pattern)
-        if (!regex.test(value)) {
-          stepErrors[field.name] = `Invalid format`
-        }
-      }
-
-      // Email validation
-      if (field.field_type === 'email' && typeof value === 'string') {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailRegex.test(value)) {
-          stepErrors[field.name] = 'Please enter a valid email address'
-        }
-      }
-    }
-
-    // Page-supplied rules, narrowed to the fields visible on this step.
-    if (validateData) {
-      const custom = validateData(formData)
-      for (const field of currentStepData.fields) {
-        const message = custom[field.name]
-        if (message && !stepErrors[field.name]) {
-          stepErrors[field.name] = message
-        }
-      }
-    }
-
+    const stepErrors = collectStepErrors(currentStepData)
     setErrors(stepErrors)
     return Object.keys(stepErrors).length === 0
-  }, [currentStepData, formData, validateData])
+  }, [collectStepErrors, currentStepData])
+
+  const validateAllSteps = useCallback((): boolean => {
+    const allErrors: Record<string, string> = {}
+    for (const step of steps) {
+      Object.assign(allErrors, collectStepErrors(step))
+    }
+
+    if (validateData) {
+      const custom = validateData(formData)
+      for (const [name, message] of Object.entries(custom)) {
+        if (!allErrors[name]) allErrors[name] = message
+      }
+    }
+
+    setErrors(allErrors)
+    if (Object.keys(allErrors).length === 0) return true
+
+    const offendingStep = steps.findIndex((step) =>
+      step.fields.some((field) => allErrors[field.name]),
+    )
+    if (offendingStep >= 0) {
+      setCurrentStep(offendingStep)
+      setMaxStepReached((prev) => Math.max(prev, offendingStep))
+    }
+    return false
+  }, [steps, collectStepErrors, formData, validateData])
 
   const handleNext = useCallback(() => {
     if (stepCount === 0) return
@@ -945,26 +997,7 @@ export default function DynamicFormRenderer({
   )
 
   const handleSubmit = async () => {
-    if (!validateStep()) return
-
-    // Submit validates only the final step, so a bad value captured on an
-    // earlier step would otherwise reach the server. Re-check everything and
-    // send the user back to the field at fault.
-    if (validateData) {
-      const custom = validateData(formData)
-      const failedFields = Object.keys(custom)
-      if (failedFields.length > 0) {
-        setErrors(custom)
-        const offendingStep = steps.findIndex((step) =>
-          step.fields.some((field) => failedFields.includes(field.name)),
-        )
-        if (offendingStep >= 0 && offendingStep !== activeStep) {
-          setCurrentStep(offendingStep)
-          setMaxStepReached((prev) => Math.max(prev, offendingStep))
-        }
-        return
-      }
-    }
+    if (!validateAllSteps()) return
 
     setIsSubmitting(true)
     try {
