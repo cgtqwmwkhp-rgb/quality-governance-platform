@@ -32,6 +32,9 @@ class _Result:
     def scalar(self):
         return self.value
 
+    def scalar_one(self):
+        return self.value
+
     def scalar_one_or_none(self):
         return self.value
 
@@ -77,7 +80,12 @@ async def test_list_documents_uses_exact_tenant_scope():
 
     async def execute(statement):
         statements.append(statement)
-        return _Result(0 if len(statements) == 1 else [])
+        # 1: controlled-doc count, 2: controlled-doc list, 3: library honesty count
+        if len(statements) == 1:
+            return _Result(0)
+        if len(statements) == 2:
+            return _Result([])
+        return _Result(0)
 
     db = SimpleNamespace(execute=AsyncMock(side_effect=execute))
     user = SimpleNamespace(tenant_id=17)
@@ -94,8 +102,8 @@ async def test_list_documents_uses_exact_tenant_scope():
         limit=50,
     )
 
-    assert response == {"total": 0, "documents": []}
-    assert len(statements) == 2
+    assert response == {"total": 0, "library_document_count": 0, "documents": []}
+    assert len(statements) == 3
     for statement in statements:
         sql = _sql(statement)
         assert "tenant_id = 17" in sql
