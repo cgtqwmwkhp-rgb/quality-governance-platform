@@ -122,6 +122,24 @@ describe('Layout accessibility', () => {
     expect(screen.getByRole('button', { name: 'Open search' })).toBeInTheDocument()
   })
 
+  it('opens the search palette when the header search control is clicked (PX-182)', async () => {
+    const { default: userEvent } = await import('@testing-library/user-event')
+    const user = userEvent.setup()
+    await renderLayout()
+
+    await user.click(screen.getByRole('button', { name: 'Open search' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toBeInTheDocument()
+    const searchInput = screen.getByPlaceholderText(/Search incidents/i)
+    expect(searchInput).toBeInTheDocument()
+    await waitFor(() => {
+      expect(searchInput).toHaveFocus()
+    })
+    await user.type(searchInput, 'Cut Wrist')
+    expect(searchInput).toHaveValue('Cut Wrist')
+  })
+
   it('leaves no unnamed interactive control in the shell', async () => {
     const { container } = await renderLayout()
 

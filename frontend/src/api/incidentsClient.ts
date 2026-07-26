@@ -155,12 +155,14 @@ export interface RunningSheetEntry {
 
 export function createIncidentsApi(api: AxiosInstance) {
   return {
-    list: (page = 1, pageSize = 10, options?: { owner?: 'unassigned' }) => {
+    list: (page = 1, pageSize = 10, options?: { owner?: 'unassigned'; search?: string }) => {
       const params = new URLSearchParams({
         page: String(page),
         page_size: String(pageSize),
       })
       if (options?.owner) params.set('owner', options.owner)
+      const search = options?.search?.trim()
+      if (search) params.set('search', search)
       return api.get<PaginatedResponse<Incident>>(`/api/v1/incidents/?${params.toString()}`)
     },
     create: (data: IncidentCreate) => api.post<Incident>('/api/v1/incidents/', data),
