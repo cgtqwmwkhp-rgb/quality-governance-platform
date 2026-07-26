@@ -7,7 +7,8 @@ Implements Mapping Contract v1 and Customer Pack Redaction Rules v1.
 import hashlib
 import json
 import uuid
-from dataclasses import dataclass, field as dataclass_field
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
