@@ -96,6 +96,7 @@ class FormConfigService:
         data: BaseModel,
         user_id: int,
         request_id: str,
+        tenant_id: int | None = None,
     ) -> FormTemplate:
         """Create a new form template with optional nested steps and fields."""
         existing = await self.db.execute(
@@ -168,12 +169,14 @@ class FormConfigService:
 
         await record_audit_event(
             db=self.db,
+            event_type="form_template.created",
             entity_type="form_template",
             entity_id=template.id,
             action="created",
             user_id=user_id,
-            details={"name": template.name, "form_type": template.form_type},
+            payload={"name": template.name, "form_type": template.form_type},
             request_id=request_id,
+            tenant_id=tenant_id,
         )
 
         return template
@@ -223,12 +226,14 @@ class FormConfigService:
 
         await record_audit_event(
             db=self.db,
+            event_type="form_template.updated",
             entity_type="form_template",
             entity_id=template.id,
             action="updated",
             user_id=user_id,
-            details=update_data,
+            payload=update_data,
             request_id=request_id,
+            tenant_id=tenant_id,
         )
 
         return template
@@ -253,12 +258,14 @@ class FormConfigService:
 
         await record_audit_event(
             db=self.db,
+            event_type="form_template.published",
             entity_type="form_template",
             entity_id=template.id,
             action="published",
             user_id=user_id,
-            details={"published_at": template.published_at.isoformat()},
+            payload={"published_at": template.published_at.isoformat()},
             request_id=request_id,
+            tenant_id=tenant_id,
         )
 
         return template
@@ -276,12 +283,14 @@ class FormConfigService:
 
         await record_audit_event(
             db=self.db,
+            event_type="form_template.deleted",
             entity_type="form_template",
             entity_id=template.id,
             action="deleted",
             user_id=user_id,
-            details={"name": template.name},
+            payload={"name": template.name},
             request_id=request_id,
+            tenant_id=tenant_id,
         )
 
         await self.db.delete(template)
@@ -475,12 +484,14 @@ class FormConfigService:
 
         await record_audit_event(
             db=self.db,
+            event_type="contract.created",
             entity_type="contract",
             entity_id=contract.id,
             action="created",
             user_id=user_id,
-            details={"name": contract.name, "code": contract.code},
+            payload={"name": contract.name, "code": contract.code},
             request_id=request_id,
+            tenant_id=tenant_id,
         )
 
         return contract
@@ -516,12 +527,14 @@ class FormConfigService:
 
         await record_audit_event(
             db=self.db,
+            event_type="contract.updated",
             entity_type="contract",
             entity_id=contract.id,
             action="updated",
             user_id=user_id,
-            details=update_data,
+            payload=update_data,
             request_id=request_id,
+            tenant_id=tenant_id,
         )
 
         return contract
@@ -539,12 +552,14 @@ class FormConfigService:
 
         await record_audit_event(
             db=self.db,
+            event_type="contract.deleted",
             entity_type="contract",
             entity_id=contract.id,
             action="deleted",
             user_id=user_id,
-            details={"name": contract.name},
+            payload={"name": contract.name},
             request_id=request_id,
+            tenant_id=tenant_id,
         )
 
         await self.db.delete(contract)

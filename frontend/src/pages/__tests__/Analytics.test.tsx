@@ -268,4 +268,90 @@ describe('Analytics', () => {
       expect(within(rtaRow).getAllByText('—').length).toBeGreaterThanOrEqual(2)
     })
   })
+
+  describe('trend honesty (PX-224)', () => {
+    /**
+     * The Incidents row used to render `near_misses.trend_percent`. With six near
+     * misses against a baseline of one that printed "500.0%" next to an incident
+     * chart that had no points at all.
+     */
+    async function renderWithNearMissSpike(route = '/analytics?section=incidents') {
+      mockGetDashboard.mockResolvedValue({
+        data: {
+          generated_at: '2026-07-16T00:00:00Z',
+          period_days: 30,
+          health_score: { score: 72, status: 'ok', color: 'green', components: {} },
+          incidents: {
+            total_in_period: 0,
+            open: 0,
+            by_severity: {},
+            sif_count: 0,
+            psif_count: 0,
+            critical_high: 0,
+          },
+          near_misses: {
+            total_in_period: 6,
+            previous_period: 1,
+            trend_percent: 500.0,
+            reporting_rate: 'improving',
+          },
+          complaints: {
+            total_in_period: 0,
+            open: 0,
+            closed_in_period: 0,
+            resolution_rate: null,
+          },
+          rtas: { total_in_period: 0 },
+          risks: { total_active: 0, by_level: {}, high_critical: 0, average_score: 0 },
+          kris: { total_active: 0, by_status: {}, at_risk: 0, pending_alerts: 0 },
+          compliance: { total_assigned: 0, completed: 0, overdue: 0, completion_rate: 100 },
+          sla_performance: { total_tracked: 0, met: 0, breached: 0, compliance_rate: 100 },
+          trends: { incidents_weekly: [] },
+          alerts: [],
+        },
+      })
+
+      const Analytics = (await import('../Analytics')).default
+      render(
+        <MemoryRouter initialEntries={[route]}>
+          <Routes>
+            <Route path="/analytics" element={<Analytics />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+      return screen.findByTestId('analytics-module-table')
+    }
+
+    it('never shows the near-miss trend on the Incidents row', async () => {
+      const table = await renderWithNearMissSpike()
+      const incidentsRow = within(table).getByRole('row', { name: /Incidents/i })
+
+      expect(incidentsRow).not.toHaveTextContent('500.0%')
+      expect(incidentsRow).not.toHaveTextContent('500')
+      expect(incidentsRow).toHaveTextContent('No data')
+    })
+
+    it('does not claim stability for modules the API reports no trend for', async () => {
+      // Unfiltered so every module row is on screen.
+      const table = await renderWithNearMissSpike('/analytics')
+
+      // "No change" asserts the rate held steady. The exec-dashboard payload carries
+      // no trend for any of these modules, so it has no basis to say so.
+      for (const module of [/Incidents/i, /RTAs/i, /Complaints/i, /Audits/i]) {
+        const row = within(table).getByRole('row', { name: module })
+        expect(row).not.toHaveTextContent('No change')
+        expect(row).toHaveTextContent('No data')
+      }
+    })
+
+    it('shows no trend percentage anywhere while the incident chart is empty', async () => {
+      await renderWithNearMissSpike()
+
+      expect(await screen.findByTestId('analytics-trends')).toHaveTextContent(
+        /No incident trend points for this period/i,
+      )
+      const table = screen.getByTestId('analytics-module-table')
+      expect(within(table).queryByText(/\d+\.\d%/)).toBeNull()
+    })
+  })
 })

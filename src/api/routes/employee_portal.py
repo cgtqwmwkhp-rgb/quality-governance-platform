@@ -10,13 +10,14 @@ import hashlib
 import hmac
 import logging
 import secrets
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Literal, Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query, status
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import String, cast, func, literal, select, union_all
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
 from src.api.dependencies import CurrentUser, DbSession, OptionalCurrentUser
 from src.api.schemas.error_codes import ErrorCode
@@ -24,7 +25,13 @@ from src.api.utils.errors import api_error
 from src.core.config import settings
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType
-from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule
+from src.domain.models.evidence_asset import (
+    EvidenceAsset,
+    EvidenceAssetType,
+    EvidenceRetentionPolicy,
+    EvidenceSourceModule,
+    EvidenceVisibility,
+)
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.rta import RoadTrafficCollision, RTASeverity, RTAStatus
@@ -193,6 +200,18 @@ class QuickReportResponse(BaseModel):
     staff_href: Optional[str] = None
     can_open_staff_record: bool = False
     triage_assigned: bool = False
+
+
+class PortalAttachmentUploadResponse(BaseModel):
+    """Receipt for one uploaded file, to be passed back in ``attachment_ids``."""
+
+    attachment_id: str = Field(
+        ...,
+        description="Opaque handle to send in attachment_ids when submitting the report",
+    )
+    filename: Optional[str] = None
+    content_type: str
+    size_bytes: int
 
 
 class ReportStatusResponse(BaseModel):
@@ -711,7 +730,7 @@ def build_near_miss_portal_fields(
 
 
 # ============================================================================
-# Attachment fidelity — link pre-uploaded EvidenceAsset rows to portal cases
+# Attachment fidelity — portal evidence upload, then linking onto portal cases
 # ============================================================================
 
 _PORTAL_EVIDENCE_SOURCE_MODULE = {
@@ -721,6 +740,72 @@ _PORTAL_EVIDENCE_SOURCE_MODULE = {
     "near_miss": EvidenceSourceModule.NEAR_MISS,
 }
 
+# An asset that has been uploaded but not yet claimed by a case parks on this
+# sentinel source_id. No authenticated upload path can produce it
+# (``_normalize_evidence_upload_source`` rejects source_id < 1 and writes the
+# action_key otherwise), so it unambiguously means "pending portal upload".
+PORTAL_PENDING_SOURCE_ID = "0"
+
+# Mirrors MAX_UPLOAD_BYTES in
+# frontend/src/components/DynamicForm/DynamicFormRenderer.tsx. Deliberately
+# below the 50MB staff ceiling in evidence_assets.py: this endpoint is public.
+PORTAL_MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+
+_PORTAL_UPLOAD_CHUNK_BYTES = 64 * 1024
+
+# Narrower than evidence_assets.ALLOWED_CONTENT_TYPES: no video or audio, so an
+# anonymous caller cannot park large media in blob storage. Matches the `accept`
+# list the portal upload control offers.
+PORTAL_ALLOWED_CONTENT_TYPES: dict[str, EvidenceAssetType] = {
+    "image/jpeg": EvidenceAssetType.PHOTO,
+    "image/png": EvidenceAssetType.PHOTO,
+    "image/gif": EvidenceAssetType.PHOTO,
+    "image/webp": EvidenceAssetType.PHOTO,
+    "image/heic": EvidenceAssetType.PHOTO,
+    "image/heif": EvidenceAssetType.PHOTO,
+    "application/pdf": EvidenceAssetType.PDF,
+    "application/msword": EvidenceAssetType.DOCUMENT,
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": EvidenceAssetType.DOCUMENT,
+    "application/vnd.ms-excel": EvidenceAssetType.DOCUMENT,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": EvidenceAssetType.DOCUMENT,
+    "text/csv": EvidenceAssetType.DOCUMENT,
+    "text/plain": EvidenceAssetType.DOCUMENT,
+}
+
+# An abandoned form must not strand evidence in storage forever. Pending uploads
+# carry a short temporary retention; claiming one promotes it to standard.
+PORTAL_PENDING_RETENTION_DAYS = 7
+
+_PORTAL_UPLOAD_TOKEN_KEY = "portal_upload_token"
+
+
+def _parse_portal_attachment_handle(raw: str) -> tuple[Optional[int], Optional[str]]:
+    """Split an ``<id>`` or ``<id>.<token>`` handle into its parts.
+
+    Returns ``(None, ...)`` when the id part is not an integer, so the caller
+    can report it as malformed rather than guessing.
+    """
+    id_part, _, token_part = raw.partition(".")
+    try:
+        asset_id = int(id_part)
+    except (TypeError, ValueError):
+        return None, None
+    return asset_id, token_part or None
+
+
+def _portal_upload_token_matches(asset: EvidenceAsset, token: Optional[str]) -> bool:
+    """Check the one-shot token issued when a pending upload was created.
+
+    Asset ids are sequential, so without this a caller could claim a stranger's
+    in-flight upload simply by guessing the number. Assets seeded without a
+    token (staff tooling, fixtures) keep the older plain-id contract.
+    """
+    metadata = asset.metadata_json if isinstance(asset.metadata_json, dict) else {}
+    expected = metadata.get(_PORTAL_UPLOAD_TOKEN_KEY)
+    if not expected:
+        return True
+    return bool(token) and hmac.compare_digest(str(expected), str(token))
+
 
 async def resolve_portal_attachment_assets(
     db: DbSession,
@@ -728,61 +813,76 @@ async def resolve_portal_attachment_assets(
     tenant_id: int,
     attachment_ids: Optional[list[str]],
 ) -> list[EvidenceAsset]:
-    """Resolve and validate pre-uploaded EvidenceAsset rows for portal linking.
+    """Resolve and validate pending portal uploads for linking to a new case.
 
-    Fails closed (422) when any id is malformed, not found, soft-deleted, or
-    belongs to a different tenant — evidence must never cross a tenant boundary
-    and invalid ids must never be silently dropped (world-class data integrity).
+    Fails closed (422) when any handle is malformed, unknown, soft-deleted,
+    already attached to a case, owned by another tenant, or carries a token that
+    does not match. Evidence must never cross a tenant boundary, must never be
+    lifted off an existing case, and an unusable handle must never be silently
+    dropped — that is the failure mode this whole path exists to prevent.
     """
     if not attachment_ids:
         return []
 
     seen: set[str] = set()
-    numeric_ids: list[int] = []
+    requested: list[tuple[str, int, Optional[str]]] = []
     malformed: list[str] = []
     for raw_id in attachment_ids:
         raw = str(raw_id).strip()
         if not raw or raw in seen:
             continue
         seen.add(raw)
-        try:
-            numeric_ids.append(int(raw))
-        except (TypeError, ValueError):
+        asset_id, token = _parse_portal_attachment_handle(raw)
+        if asset_id is None:
             malformed.append(raw)
+            continue
+        requested.append((raw, asset_id, token))
 
     if malformed:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=api_error(
                 ErrorCode.VALIDATION_ERROR,
-                "attachment_ids must be numeric evidence asset ids.",
+                "attachment_ids must be evidence asset handles returned by the portal upload endpoint.",
                 details={"invalid_ids": malformed},
             ),
         )
 
-    if not numeric_ids:
+    if not requested:
         return []
 
-    result = await db.execute(select(EvidenceAsset).where(EvidenceAsset.id.in_(numeric_ids)))
+    result = await db.execute(select(EvidenceAsset).where(EvidenceAsset.id.in_([a for _, a, _ in requested])))
     found = {asset.id: asset for asset in result.scalars().all()}
 
-    invalid_ids = [
-        str(asset_id)
-        for asset_id in numeric_ids
-        if asset_id not in found or found[asset_id].tenant_id != tenant_id or found[asset_id].deleted_at is not None
-    ]
+    invalid_ids: list[str] = []
+    resolved: list[EvidenceAsset] = []
+    for raw, asset_id, token in requested:
+        asset = found.get(asset_id)
+        if asset is None or asset.tenant_id != tenant_id or asset.deleted_at is not None:
+            invalid_ids.append(raw)
+            continue
+        # Only an unclaimed upload may be linked. Without this a public caller
+        # could re-point evidence off a live investigation onto its own report.
+        if str(asset.source_id) != PORTAL_PENDING_SOURCE_ID:
+            invalid_ids.append(raw)
+            continue
+        if not _portal_upload_token_matches(asset, token):
+            invalid_ids.append(raw)
+            continue
+        resolved.append(asset)
+
     if invalid_ids:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=api_error(
                 ErrorCode.VALIDATION_ERROR,
-                "One or more attachment_ids could not be linked: not found, deleted, "
-                "or belong to a different tenant.",
+                "One or more attachment_ids could not be linked: not found, expired, already "
+                "attached to another record, or belong to a different tenant.",
                 details={"invalid_ids": invalid_ids},
             ),
         )
 
-    return [found[asset_id] for asset_id in numeric_ids]
+    return resolved
 
 
 def apply_portal_attachment_links(
@@ -791,10 +891,20 @@ def apply_portal_attachment_links(
     source_module: EvidenceSourceModule,
     source_id: int,
 ) -> None:
-    """Re-point pre-uploaded evidence assets onto the newly created portal case."""
+    """Attach resolved uploads to the newly created portal case.
+
+    Promotes the asset out of the pending-upload retention window and burns the
+    one-shot token, so the same handle cannot be replayed onto a second case.
+    """
     for asset in assets:
         asset.source_module = source_module
         asset.source_id = str(source_id)
+        if asset.retention_policy == EvidenceRetentionPolicy.TEMPORARY:
+            asset.retention_policy = EvidenceRetentionPolicy.STANDARD
+            asset.retention_expires_at = None
+        metadata = dict(asset.metadata_json) if isinstance(asset.metadata_json, dict) else {}
+        if metadata.pop(_PORTAL_UPLOAD_TOKEN_KEY, None) is not None:
+            asset.metadata_json = metadata
 
 
 async def persist_near_miss_reporter_snapshot(
@@ -935,6 +1045,170 @@ async def complete_portal_intake_triage(
 # ============================================================================
 # API Endpoints
 # ============================================================================
+
+
+async def _read_upload_within_limit(file: UploadFile, max_bytes: int) -> bytes:
+    """Read an upload, aborting as soon as it exceeds ``max_bytes``.
+
+    Chunked rather than a single ``await file.read()``: this endpoint is public,
+    so an oversized body must not be buffered in full before being rejected.
+    """
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(_PORTAL_UPLOAD_CHUNK_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=api_error(
+                    ErrorCode.VALIDATION_ERROR,
+                    f"File is larger than the {max_bytes // (1024 * 1024)}MB limit for portal uploads.",
+                    details={"max_size_bytes": max_bytes},
+                ),
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+@router.post(
+    "/reports/attachments",
+    response_model=PortalAttachmentUploadResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload evidence for a portal report",
+    description="Upload one photo or document before submitting a portal report. Can be anonymous.",
+)
+async def upload_portal_attachment(
+    db: DbSession,
+    file: UploadFile = File(..., description="Photo or document to attach to the report"),
+    report_type: str = Form(..., description="Type: incident, complaint, rta or near_miss"),
+    current_user: OptionalCurrentUser = None,
+):
+    """Upload one evidence file ahead of submitting a portal report.
+
+    Public, like the submit endpoint itself, and rate limited by path prefix in
+    ``rate_limiter.ENDPOINT_LIMITS``. The returned ``attachment_id`` must be
+    passed back in ``attachment_ids`` on submit; until it is claimed the asset is
+    parked as a pending upload on a short retention, so an abandoned form cannot
+    strand evidence in storage indefinitely.
+
+    Fails loudly on every rejection path. A caller that gets an error here has
+    not had its file stored, and must not be told the evidence was accepted.
+    """
+    from src.infrastructure.storage import StorageDependencyError, StorageError, storage_service
+
+    tenant_id = get_default_portal_tenant_id()
+
+    normalized_type = (report_type or "").strip().lower()
+    if normalized_type not in _PORTAL_EVIDENCE_SOURCE_MODULE:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "report_type must be one of: incident, complaint, rta, near_miss.",
+                details={"report_type": report_type},
+            ),
+        )
+    source_module = _PORTAL_EVIDENCE_SOURCE_MODULE[normalized_type]
+
+    # Strip any ``; charset=`` parameter before matching the allowlist.
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    asset_type = PORTAL_ALLOWED_CONTENT_TYPES.get(content_type)
+    if asset_type is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                f"Files of type '{content_type or 'unknown'}' cannot be attached to a portal report.",
+                details={"allowed_types": sorted(PORTAL_ALLOWED_CONTENT_TYPES)},
+            ),
+        )
+
+    content = await _read_upload_within_limit(file, PORTAL_MAX_UPLOAD_BYTES)
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=api_error(ErrorCode.VALIDATION_ERROR, "The selected file is empty."),
+        )
+
+    safe_filename = (file.filename or "attachment").replace("/", "_").replace("\\", "_")[:255]
+    storage_key = f"evidence/portal-pending/{normalized_type}/{uuid.uuid4().hex}_{safe_filename}"
+    checksum = hashlib.sha256(content).hexdigest()
+
+    try:
+        await storage_service().upload(
+            storage_key=storage_key,
+            content=content,
+            content_type=content_type,
+            metadata={"portal_pending": "true", "checksum_sha256": checksum},
+        )
+    except StorageDependencyError:
+        logger.exception("Portal attachment upload blocked by storage dependency failure")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=api_error(
+                ErrorCode.CONFIGURATION_ERROR,
+                "Attachment upload is temporarily unavailable. Please try again shortly.",
+            ),
+        )
+    except StorageError:
+        logger.exception("Portal attachment upload failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=api_error(
+                ErrorCode.CONFIGURATION_ERROR,
+                "Attachment upload failed. Please try again, or submit without attachments.",
+            ),
+        )
+
+    token = secrets.token_urlsafe(24)
+    asset = EvidenceAsset(
+        tenant_id=tenant_id,
+        storage_key=storage_key,
+        original_filename=safe_filename,
+        content_type=content_type,
+        file_size_bytes=len(content),
+        checksum_sha256=checksum,
+        asset_type=asset_type,
+        source_module=source_module,
+        source_id=PORTAL_PENDING_SOURCE_ID,
+        # Un-triaged content from an anonymous reporter must never default into
+        # a customer pack; staff can widen visibility after review.
+        visibility=EvidenceVisibility.INTERNAL_ONLY,
+        retention_policy=EvidenceRetentionPolicy.TEMPORARY,
+        retention_expires_at=datetime.now(timezone.utc) + timedelta(days=PORTAL_PENDING_RETENTION_DAYS),
+        metadata_json={_PORTAL_UPLOAD_TOKEN_KEY: token, "portal_pending": True},
+        created_by_id=getattr(current_user, "id", None),
+    )
+    db.add(asset)
+    try:
+        await db.commit()
+        await db.refresh(asset)
+    except (IntegrityError, ProgrammingError, OperationalError) as exc:
+        await db.rollback()
+        # The blob is already written but will never be referenced. Drop it
+        # rather than leaving an orphan a public caller can accumulate at will.
+        try:
+            await storage_service().delete(storage_key)
+        except StorageError:
+            logger.warning("Could not remove orphaned portal upload %s", storage_key, exc_info=True)
+        logger.exception("Portal attachment record could not be persisted")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=api_error(
+                ErrorCode.CONFIGURATION_ERROR,
+                "Attachment upload could not be recorded. Please try again, or submit without attachments.",
+            ),
+        ) from exc
+
+    return PortalAttachmentUploadResponse(
+        attachment_id=f"{asset.id}.{token}",
+        filename=asset.original_filename,
+        content_type=asset.content_type,
+        size_bytes=len(content),
+    )
 
 
 @router.post(
