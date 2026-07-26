@@ -1,6 +1,6 @@
 """PX-285 / PX-165: Safety Insights deep-run requires external-processing acknowledgment."""
 
-from src.api.routes.safety_insights import DeepRunCreate, EXTERNAL_PROCESSING_ACK_REQUIRED
+from src.api.routes.safety_insights import EXTERNAL_PROCESSING_ACK_REQUIRED, DeepRunCreate
 
 
 def test_deep_run_create_defaults_acknowledgment_to_false():
