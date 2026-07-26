@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "180 kB",
+    "limit": "181 kB",
     "gzip": true,
-    "name": "index: 179→180 kB — Wave 1 form primitive (414 B over)"
+    "name": "index: 180\u2192181 kB \u2014 case register #1320 (+191 B over 180)"
   },
   {
     "path": "dist/assets/vendor-*.js",
