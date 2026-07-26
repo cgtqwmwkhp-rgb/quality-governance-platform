@@ -328,6 +328,27 @@ async def create_investigation(
     return investigation
 
 
+def _revision_event_value(value: Any) -> Any:
+    """Coerce an ORM attribute into a value the JSON revision-event columns accept."""
+    if value is None or isinstance(value, (bool, int, float, str, list, dict)):
+        return value
+    if hasattr(value, "value"):
+        return value.value
+    return str(value)
+
+
+async def _actor_names_for_events(
+    db: AsyncSession,
+    events: "list[InvestigationRevisionEvent]",
+) -> dict[int, str]:
+    """Resolve actor_id -> display name for a page of revision events."""
+    actor_ids = {e.actor_id for e in events if e.actor_id is not None}
+    if not actor_ids:
+        return {}
+    result = await db.execute(select(User).where(User.id.in_(actor_ids)))
+    return {user.id: (user.full_name.strip() or user.email) for user in result.scalars().all()}
+
+
 @router.get("/{investigation_id:int}/timeline", response_model=InvestigationTimelineResponse)
 async def get_investigation_timeline(
     investigation_id: int,
@@ -354,6 +375,7 @@ async def get_investigation_timeline(
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     events = result.scalars().all()
+    actor_names = await _actor_names_for_events(db, list(events))
 
     return {
         "items": [
@@ -372,6 +394,7 @@ async def get_investigation_timeline(
                     else (str(e.new_value) if e.new_value is not None else None)
                 ),
                 "actor_id": e.actor_id,
+                "actor_name": actor_names.get(e.actor_id) if e.actor_id is not None else None,
                 "event_metadata": e.event_metadata,
                 "version": e.version,
                 "created_at": e.created_at,
@@ -836,6 +859,8 @@ async def update_investigation(
             current_user=current_user,
         )
 
+    previous_values = {field: getattr(investigation, field, None) for field in update_data}
+
     # Update fields
     for field, value in update_data.items():
         if field == "status" and value is not None:
@@ -883,6 +908,25 @@ async def update_investigation(
                 lessons_text=lessons_text,
                 overwrite=False,
             )
+
+    for field, previous in previous_values.items():
+        before = _revision_event_value(previous)
+        after = _revision_event_value(getattr(investigation, field, None))
+        if before == after:
+            continue
+        # JSON blobs (notably `data`) are recorded by field_path only: the full
+        # before/after would be stringified into the timeline body by GET /timeline.
+        structured = isinstance(before, (list, dict)) or isinstance(after, (list, dict))
+        await InvestigationService.create_revision_event(
+            db=db,
+            investigation=investigation,
+            event_type="STATUS_CHANGED" if field == "status" else "DATA_UPDATED",
+            actor_id=current_user.id,
+            field_path=field,
+            old_value=None if structured else before,
+            new_value=None if structured else after,
+            metadata={"request_id": request_id, "source": "investigation_patch"},
+        )
 
     await db.commit()
     await db.refresh(investigation)
