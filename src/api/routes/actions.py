@@ -35,20 +35,17 @@ from src.domain.models.action_owner_note import ActionOwnerNote
 from src.domain.models.assessment import AssessmentRun
 from src.domain.models.audit import AuditFinding, AuditRun
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
-from src.domain.models.incident import Incident
-from src.domain.models.investigation import InvestigationRun
-from src.domain.models.near_miss import NearMiss
-from src.domain.models.rta import RoadTrafficCollision
-from src.domain.services.capa_service import parse_roster_assignee_marker
 from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.incident import ActionStatus, Incident, IncidentAction
 from src.domain.models.induction import InductionRun
 from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus, InvestigationRun
+from src.domain.models.near_miss import NearMiss
 from src.domain.models.rca_tools import CAPAItem
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.user import User
 from src.domain.services.action_assignment_service import notify_action_assignment, record_action_assigned_audit
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.capa_service import parse_roster_assignee_marker
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
