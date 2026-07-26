@@ -20,6 +20,7 @@ import type {
 } from '../api/auditsClient'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
+import { NOT_MEASURED, formatPercent } from '../utils/percentage'
 
 type TimeRange = '30d' | '90d' | '180d' | '365d'
 
@@ -36,10 +37,6 @@ const GROUP_BY_OPTIONS: { value: AuditAnalyticsGroupBy; label: string }[] = [
   { value: 'week', label: 'Week' },
 ]
 
-function formatPercent(value: number | null | undefined): string {
-  return value == null ? '—' : `${value.toFixed(1)}%`
-}
-
 /** Queue title uses the uncapped KPI total; list may still be capped (e.g. 200). */
 export function formatCriticalQueueHeading(
   totalCount: number | null | undefined,
@@ -53,7 +50,8 @@ export function formatCriticalQueueHeading(
 }
 
 /** Heatmap-style cell shading: green for healthy, amber/red as fail rate climbs. */
-function failRateClass(failRate: number): string {
+function failRateClass(failRate: number | null | undefined): string {
+  if (failRate == null) return 'text-muted-foreground'
   if (failRate >= 25) return 'bg-destructive/15 text-destructive'
   if (failRate >= 10) return 'bg-warning/15 text-warning'
   if (failRate > 0) return 'bg-success/10 text-success'
@@ -65,6 +63,12 @@ function essentialComplianceClass(pct: number | null | undefined): string {
   if (pct < 80) return 'bg-destructive/15 text-destructive'
   if (pct < 95) return 'bg-warning/15 text-warning'
   return 'bg-success/10 text-success'
+}
+
+/** Unmeasured essential compliance is neither a pass nor a breach — stay neutral. */
+export function essentialComplianceAccent(pct: number | null | undefined): string {
+  if (pct == null) return 'text-muted-foreground'
+  return pct < 95 ? 'text-destructive' : 'text-success'
 }
 
 export default function AuditAnalytics() {
@@ -124,32 +128,31 @@ export default function AuditAnalytics() {
   const kpiCards = [
     {
       label: 'Total runs',
-      value: summary ? String(summary.totals) : '—',
+      value: summary ? String(summary.totals) : NOT_MEASURED,
       icon: ListChecks,
       accent: 'text-primary',
     },
     {
       label: 'Completed',
-      value: summary ? String(summary.completed) : '—',
+      value: summary ? String(summary.completed) : NOT_MEASURED,
       icon: CheckCircle2,
       accent: 'text-success',
     },
     {
       label: 'Pass rate',
-      value: summary ? formatPercent(summary.pass_rate) : '—',
+      value: formatPercent(summary?.pass_rate),
       icon: TrendingUp,
       accent: 'text-primary',
     },
     {
       label: 'Essential compliance',
-      value: summary ? formatPercent(summary.essential_compliance_pct) : '—',
+      value: formatPercent(summary?.essential_compliance_pct),
       icon: ShieldAlert,
-      accent:
-        summary && summary.essential_compliance_pct < 95 ? 'text-destructive' : 'text-success',
+      accent: essentialComplianceAccent(summary?.essential_compliance_pct),
     },
     {
       label: 'Incomplete critical items',
-      value: summary ? String(summary.incomplete_critical_count) : '—',
+      value: summary ? String(summary.incomplete_critical_count) : NOT_MEASURED,
       icon: AlertTriangle,
       accent: summary && summary.incomplete_critical_count > 0 ? 'text-warning' : 'text-success',
     },
@@ -272,12 +275,12 @@ export default function AuditAnalytics() {
                         <td className="py-2 pr-3 font-medium text-foreground">{item.label}</td>
                         <td className="py-2 pr-3">{item.run_count}</td>
                         <td className="py-2 pr-3">{item.completed_count}</td>
-                        <td className="py-2 pr-3">{item.avg_score.toFixed(1)}%</td>
+                        <td className="py-2 pr-3">{formatPercent(item.avg_score)}</td>
                         <td className="py-2 pr-3">
                           <span
                             className={`px-2 py-0.5 rounded-full text-xs font-medium ${failRateClass(item.fail_rate)}`}
                           >
-                            {item.fail_rate.toFixed(1)}%
+                            {formatPercent(item.fail_rate)}
                           </span>
                         </td>
                         <td className="py-2 pr-3">

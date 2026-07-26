@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, cast
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.metrics import percentage_or_none
 from src.domain.models.asset import Asset, AssetStatus, AssetType
 from src.domain.models.audit import AuditRun, AuditStatus
 from src.domain.models.complaint import Complaint, ComplaintStatus
@@ -47,7 +48,7 @@ _EMPTY_COMPLAINT_SUMMARY: Dict[str, Any] = {
     "total_in_period": 0,
     "open": 0,
     "closed_in_period": 0,
-    "resolution_rate": 100.0,
+    "resolution_rate": None,
 }
 _EMPTY_RTA_SUMMARY: Dict[str, Any] = {"total_in_period": 0}
 _EMPTY_RISK_SUMMARY: Dict[str, Any] = {
@@ -66,13 +67,13 @@ _EMPTY_COMPLIANCE_SUMMARY: Dict[str, Any] = {
     "total_assigned": 0,
     "completed": 0,
     "overdue": 0,
-    "completion_rate": 100.0,
+    "completion_rate": None,
 }
 _EMPTY_SLA_SUMMARY: Dict[str, Any] = {
     "total_tracked": 0,
     "met": 0,
     "breached": 0,
-    "compliance_rate": 100.0,
+    "compliance_rate": None,
 }
 _EMPTY_AUDIT_SUMMARY: Dict[str, Any] = {
     "totals": 0,
@@ -356,7 +357,7 @@ class ExecutiveDashboardService:
             "total_in_period": total,
             "open": open_count,
             "closed_in_period": closed_count,
-            "resolution_rate": (round((closed_count / total * 100), 1) if total > 0 else 100),
+            "resolution_rate": percentage_or_none(closed_count, total, digits=1),
         }
 
     async def _get_rta_summary(self, cutoff: datetime) -> Dict[str, Any]:
@@ -459,7 +460,7 @@ class ExecutiveDashboardService:
             "total_assigned": total,
             "completed": completed,
             "overdue": overdue,
-            "completion_rate": (round((completed / total * 100), 1) if total > 0 else 100),
+            "completion_rate": percentage_or_none(completed, total, digits=1),
         }
 
     async def _get_sla_summary(self) -> Dict[str, Any]:
@@ -483,7 +484,7 @@ class ExecutiveDashboardService:
             "total_tracked": total,
             "met": met,
             "breached": breached,
-            "compliance_rate": round((met / total * 100), 1) if total > 0 else 100,
+            "compliance_rate": percentage_or_none(met, total, digits=1),
         }
 
     async def _get_audit_summary(self, period_days: int) -> Dict[str, Any]:
@@ -730,64 +731,63 @@ class ExecutiveDashboardService:
         compliance: Dict,
         sla: Dict,
     ) -> Dict[str, Any]:
-        """Calculate overall organizational health score (0-100)."""
-        scores = []
-        weights = []
+        """Calculate overall organizational health score (0-100).
 
-        incident_score = 100
+        Components with nothing to measure score ``None`` and are dropped from the
+        weighted average rather than contributing a free 100 (PX-216). If no
+        component was measurable the overall score is ``None``/``not_measured``.
+        """
+        # Absolute counts, not ratios: zero critical incidents is genuinely 100,
+        # and near-miss reporting culture is scored on volume reported.
+        incident_score: Optional[float] = 100.0
         if incidents["critical_high"] > 0:
-            incident_score = max(0, 100 - (incidents["critical_high"] * 10))
-        scores.append(incident_score)
-        weights.append(20)
+            incident_score = float(max(0, 100 - (incidents["critical_high"] * 10)))
+        nm_score: Optional[float] = float(min(100, near_misses["total_in_period"] * 5))
 
-        nm_score = min(100, near_misses["total_in_period"] * 5)
-        scores.append(nm_score)
-        weights.append(10)
-
-        risk_score = 100
-        high_risk_ratio = risks["high_critical"] / max(1, risks["total_active"])
-        risk_score = max(0, 100 - (high_risk_ratio * 100))
-        scores.append(risk_score)
-        weights.append(20)
-
-        kri_score = 100
-        if kris["total_active"] > 0:
-            green_ratio = kris["by_status"]["green"] / kris["total_active"]
-            kri_score = green_ratio * 100
-        scores.append(kri_score)
-        weights.append(20)
-
+        # Ratio-based: an empty register is unmeasured, not risk-free.
+        risk_score = percentage_or_none(
+            max(0, risks["total_active"] - risks["high_critical"]),
+            risks["total_active"],
+        )
+        kri_score = percentage_or_none(kris["by_status"]["green"], kris["total_active"])
         compliance_score = compliance["completion_rate"]
-        scores.append(compliance_score)
-        weights.append(15)
-
         sla_score = sla["compliance_rate"]
-        scores.append(sla_score)
-        weights.append(15)
 
-        total_weight = sum(weights)
-        weighted_score = sum(s * w for s, w in zip(scores, weights)) / total_weight
+        components: Dict[str, Optional[float]] = {
+            "incidents": incident_score,
+            "near_miss_culture": nm_score,
+            "risk_management": risk_score,
+            "kri_performance": kri_score,
+            "compliance": compliance_score,
+            "sla_performance": sla_score,
+        }
+        weights = {
+            "incidents": 20,
+            "near_miss_culture": 10,
+            "risk_management": 20,
+            "kri_performance": 20,
+            "compliance": 15,
+            "sla_performance": 15,
+        }
 
-        if weighted_score >= 80:
-            status = "healthy"
-            color = "green"
+        measured = [(components[name], weights[name]) for name in weights if components[name] is not None]
+        total_weight = sum(w for _, w in measured)
+        weighted_score = sum(cast(float, s) * w for s, w in measured) / total_weight if total_weight else None
+
+        if weighted_score is None:
+            status, color = "not_measured", "grey"
+        elif weighted_score >= 80:
+            status, color = "healthy", "green"
         elif weighted_score >= 60:
-            status = "attention_needed"
-            color = "amber"
+            status, color = "attention_needed", "amber"
         else:
-            status = "at_risk"
-            color = "red"
+            status, color = "at_risk", "red"
 
         return {
-            "score": round(weighted_score, 1),
+            "score": round(weighted_score, 1) if weighted_score is not None else None,
             "status": status,
             "color": color,
             "components": {
-                "incidents": round(incident_score, 1),
-                "near_miss_culture": round(nm_score, 1),
-                "risk_management": round(risk_score, 1),
-                "kri_performance": round(kri_score, 1),
-                "compliance": round(compliance_score, 1),
-                "sla_performance": round(sla_score, 1),
+                name: (round(value, 1) if value is not None else None) for name, value in components.items()
             },
         }
