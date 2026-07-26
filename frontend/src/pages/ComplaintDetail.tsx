@@ -48,6 +48,9 @@ import {
 } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { FormNotice } from '../components/ui/form'
+import {
+  caseBreadcrumbLabel,
+} from '../components/register/caseRegisterHonesty'
 import { formatCodedValue } from '../helpers/displayLabels'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -694,7 +697,12 @@ export default function ComplaintDetail() {
       <Breadcrumbs
         items={[
           { label: t('complaints.title', 'Complaints'), href: '/complaints' },
-          { label: complaint?.reference_number || `#${id}` },
+          {
+            label: caseBreadcrumbLabel(
+              complaint?.reference_number,
+              t('complaints.detail.breadcrumb_fallback', 'Complaint'),
+            ),
+          },
         ]}
       />
 
@@ -731,6 +739,22 @@ export default function ComplaintDetail() {
           </div>
         </div>
       ) : null}
+
+      <div
+        className="rounded-xl border border-border bg-muted/40 p-4 text-foreground"
+        role="status"
+        data-testid="complaint-detail-sla-not-configured"
+      >
+        <p className="font-semibold">
+          {t('complaints.detail.sla_not_configured_title', 'No response SLA on this record')}
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {t(
+            'complaints.detail.sla_not_configured_body',
+            'This complaints module does not store a response-due date or SLA deadline yet. Empty complainant contact fields mean no contact was captured — not that a deadline exists elsewhere.',
+          )}
+        </p>
+      </div>
 
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -962,7 +986,7 @@ export default function ComplaintDetail() {
                             htmlFor="complaintdetail-field-3"
                             className="text-sm font-medium text-muted-foreground"
                           >
-                            {t('common.priority')}
+                            {t('complaints.form.priority', 'Severity')}
                           </label>
                           <Select
                             value={editForm.priority}
@@ -1046,7 +1070,7 @@ export default function ComplaintDetail() {
                         </div>
                         <div>
                           <span className="text-sm font-medium text-muted-foreground">
-                            {t('common.priority')}
+                            {t('complaints.form.priority', 'Severity')}
                           </span>
                           <p className="mt-1 text-foreground capitalize">{complaint.priority}</p>
                         </div>

@@ -444,4 +444,15 @@ describe('ComplaintDetail', () => {
       expect(screen.getByTestId('complaint-evidence-panel')).toBeInTheDocument()
     })
   })
+
+  it('PX-210: states that response SLA / response-due is not configured on this module', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('complaint-detail-sla-not-configured')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('complaint-detail-sla-not-configured')).toHaveTextContent(
+      'No response SLA on this record',
+    )
+  })
 })

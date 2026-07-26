@@ -7,6 +7,10 @@ import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel
 import { resolveRtaDetailTab } from './rtaStandardsTab'
 import { formatCodedValue } from '../helpers/displayLabels'
 import { formatDisplayDate } from '../helpers/formatters'
+import {
+  caseBreadcrumbLabel,
+  linkedAssetDisplayLabel,
+} from '../components/register/caseRegisterHonesty'
 import { trackError } from '../utils/errorTracker'
 import {
   ArrowLeft,
@@ -588,7 +592,12 @@ export default function RTADetail() {
       <Breadcrumbs
         items={[
           { label: t('rtas.title', 'Road Traffic Collisions'), href: '/rtas' },
-          { label: rta?.reference_number || `#${id}` },
+          {
+            label: caseBreadcrumbLabel(
+              rta?.reference_number,
+              t('rtas.detail.breadcrumb_fallback', 'Collision'),
+            ),
+          },
         ]}
       />
 
@@ -1080,7 +1089,7 @@ export default function RTADetail() {
                   <Field label="RIDDOR reportable" value={rta.is_riddor_reportable == null ? undefined : rta.is_riddor_reportable ? 'Yes' : 'No'} />
                   {rta.asset_id != null && (
                     <div className="col-span-2">
-                      <Field label="Linked asset" value={`Asset #${rta.asset_id}`} />
+                      <Field label="Linked asset" value={linkedAssetDisplayLabel(rta.asset_id) ?? undefined} />
                     </div>
                   )}
                   <div className="col-span-2">

@@ -95,6 +95,12 @@ import {
 import { cn } from '../helpers/utils'
 import { formatDisplayDate } from '../helpers/formatters'
 import { formatCodedValue } from '../helpers/displayLabels'
+import {
+  caseBreadcrumbLabel,
+  linkedAssetDisplayLabel,
+  linkedContractDisplayLabel,
+  linkedRiskDisplayLabel,
+} from '../components/register/caseRegisterHonesty'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import { AssetPicker } from '../components/AssetPicker'
 import { getCapaLink } from '../components/investigations/handoffLinks'
@@ -851,14 +857,12 @@ export default function IncidentDetail() {
     incident.people_involved ||
     'Not provided'
   const contractFromList = contractOptions.find((c) => c.id === incident.contract_id)
-  const contractLabel =
+  const contractLabel = linkedContractDisplayLabel(
     contractFromList?.name ||
-    incident.department ||
-    (typeof incidentSubmission?.contract === 'string'
-      ? incidentSubmission.contract
-      : incident.contract_id
-        ? `Contract #${incident.contract_id}`
-        : 'Not provided')
+      incident.department ||
+      (typeof incidentSubmission?.contract === 'string' ? incidentSubmission.contract : null),
+    incident.contract_id,
+  )
   const personRole =
     (typeof incidentSubmission?.person_role === 'string' && incidentSubmission.person_role) ||
     'Not provided'
@@ -914,7 +918,12 @@ export default function IncidentDetail() {
       <Breadcrumbs
         items={[
           { label: t('incidents.title', 'Incidents'), href: '/incidents' },
-          { label: incident?.reference_number || `#${id}` },
+          {
+            label: caseBreadcrumbLabel(
+              incident?.reference_number,
+              t('incidents.detail.breadcrumb_fallback', 'Incident'),
+            ),
+          },
         ]}
       />
 
@@ -1601,7 +1610,9 @@ export default function IncidentDetail() {
                           <span className="text-sm font-medium text-muted-foreground">
                             Linked asset
                           </span>
-                          <p className="mt-1 text-foreground">Asset #{incident.asset_id}</p>
+                          <p className="mt-1 text-foreground">
+                            {linkedAssetDisplayLabel(incident.asset_id)}
+                          </p>
                         </div>
                       )}
                       <div className="grid grid-cols-2 gap-4">
@@ -1905,7 +1916,9 @@ export default function IncidentDetail() {
                           }
                           data-testid={`incident-linked-risk-${riskId}`}
                         >
-                          <div className="font-medium text-foreground">Risk #{riskId}</div>
+                          <div className="font-medium text-foreground">
+                            {linkedRiskDisplayLabel(riskId)}
+                          </div>
                           <div className="text-sm text-muted-foreground">Open in risk register</div>
                         </button>
                       ))}

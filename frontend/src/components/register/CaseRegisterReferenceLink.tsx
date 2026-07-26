@@ -15,17 +15,20 @@ export function CaseRegisterReferenceLink({
   to,
   children,
   className,
+  title,
   'aria-label': ariaLabel,
 }: {
   to: string
   children: React.ReactNode
   className?: string
+  title?: string
   'aria-label'?: string
 }) {
   return (
     <Link
       to={to}
       className={cn('font-mono text-sm text-primary hover:underline focus-visible:underline', className)}
+      title={title}
       aria-label={ariaLabel}
       onClick={(event) => event.stopPropagation()}
     >

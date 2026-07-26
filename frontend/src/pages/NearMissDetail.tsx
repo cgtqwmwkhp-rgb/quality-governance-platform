@@ -8,6 +8,11 @@ import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
 import { trackError } from '../utils/errorTracker'
 import {
+  caseBreadcrumbLabel,
+  linkedAssetDisplayLabel,
+  linkedRiskDisplayLabel,
+} from '../components/register/caseRegisterHonesty'
+import {
   Action,
   actionsApi,
   contractsApi,
@@ -467,7 +472,12 @@ export default function NearMissDetail() {
       <Breadcrumbs
         items={[
           { label: t('near_misses.title', 'Near Misses'), href: '/near-misses' },
-          { label: nearMiss.reference_number || `#${id}` },
+          {
+            label: caseBreadcrumbLabel(
+              nearMiss.reference_number,
+              t('near_misses.detail.breadcrumb_fallback', 'Near miss'),
+            ),
+          },
         ]}
       />
 
@@ -754,12 +764,11 @@ export default function NearMissDetail() {
                         <div>
                           <h3 className="text-sm font-medium text-muted-foreground mb-2">Linked asset</h3>
                           <p className="text-foreground">
-                            {nearMiss.asset_id != null ? `Asset #${nearMiss.asset_id}` : null}
                             {nearMiss.asset_number
-                              ? `${nearMiss.asset_id != null ? ' · ' : ''}${nearMiss.asset_number}${
+                              ? `${nearMiss.asset_number}${
                                   nearMiss.asset_type ? ` (${nearMiss.asset_type})` : ''
                                 }`
-                              : ''}
+                              : linkedAssetDisplayLabel(nearMiss.asset_id)}
                           </p>
                         </div>
                       )}
@@ -909,7 +918,9 @@ export default function NearMissDetail() {
                           }
                           data-testid={`near-miss-linked-risk-${riskId}`}
                         >
-                          <div className="font-medium text-foreground">Risk #{riskId}</div>
+                          <div className="font-medium text-foreground">
+                            {linkedRiskDisplayLabel(riskId)}
+                          </div>
                           <div className="text-sm text-muted-foreground">Open in risk register</div>
                         </button>
                       ))}

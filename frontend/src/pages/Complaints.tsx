@@ -32,6 +32,7 @@ import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
 import { CaseRegisterTable } from '../components/register/CaseRegisterTable'
 import { useCaseRegisterLabels } from '../components/register/useCaseRegisterLabels'
+import { sortByOccurredDesc } from '../components/register/caseRegisterHonesty'
 import {
   Dialog,
   DialogContent,
@@ -616,16 +617,21 @@ export default function Complaints() {
   const deferredSearch = useDeferredValue(searchTerm)
   const needle = deferredSearch.trim().toLowerCase()
   // Null-safe client filter — never throw on missing complainant/title fields from API.
-  const filteredComplaints = complaints.filter((c) => {
-    if (statusFilter !== ALL_FILTER && c.status !== statusFilter) return false
-    if (priorityFilter !== ALL_FILTER && c.priority !== priorityFilter) return false
-    if (!needle) return true
-    const haystack = [c.title, c.reference_number, c.complainant_name]
-      .filter((v): v is string => typeof v === 'string' && v.length > 0)
-      .join(' ')
-      .toLowerCase()
-    return haystack.includes(needle)
-  })
+  // Sort by Received (the column controllers read) so the page is chronological.
+  const filteredComplaints = sortByOccurredDesc(
+    complaints.filter((c) => {
+      if (statusFilter !== ALL_FILTER && c.status !== statusFilter) return false
+      if (priorityFilter !== ALL_FILTER && c.priority !== priorityFilter) return false
+      if (!needle) return true
+      const haystack = [c.title, c.reference_number, c.complainant_name]
+        .filter((v): v is string => typeof v === 'string' && v.length > 0)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(needle)
+    }),
+    (complaint) => complaint.received_date,
+    (complaint) => complaint.id,
+  )
   const isLive = !loading && !listUnavailable && !loadError
 
   if (loading) {
@@ -842,7 +848,8 @@ export default function Complaints() {
               },
               {
                 key: 'priority',
-                header: registerLabels.priority,
+                // PX-209 / PX-153: same concept as Severity on incidents and RTAs.
+                header: registerLabels.severity,
                 width: 'badge',
                 render: (complaint) => (
                   <Badge variant={getPriorityVariant(complaint.priority)}>

@@ -32,6 +32,11 @@ import { Badge } from '../components/ui/Badge'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import { CaseRegisterTable } from '../components/register/CaseRegisterTable'
 import { useCaseRegisterLabels } from '../components/register/useCaseRegisterLabels'
+import {
+  hasMixedCaseReferenceFormats,
+  isHexStyleCaseReference,
+  sortByOccurredDesc,
+} from '../components/register/caseRegisterHonesty'
 import { formatDisplayDate, formatReference } from '../helpers/formatters'
 import { formatCodedValue } from '../helpers/displayLabels'
 import {
@@ -555,11 +560,18 @@ export default function Incidents() {
     }
   }
 
-  const filteredIncidents = incidents.filter((i) => {
-    if (statusFilter !== ALL_FILTER && i.status !== statusFilter) return false
-    if (severityFilter !== ALL_FILTER && i.severity !== severityFilter) return false
-    return true
-  })
+  const filteredIncidents = sortByOccurredDesc(
+    incidents.filter((i) => {
+      if (statusFilter !== ALL_FILTER && i.status !== statusFilter) return false
+      if (severityFilter !== ALL_FILTER && i.severity !== severityFilter) return false
+      return true
+    }),
+    (incident) => incident.incident_date,
+    (incident) => incident.id,
+  )
+  const mixedReferenceFormats = hasMixedCaseReferenceFormats(
+    filteredIncidents.map((incident) => incident.reference_number),
+  )
 
   const showingFrom = listTotal === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const showingTo =
@@ -599,6 +611,24 @@ export default function Incidents() {
           {t('incidents.new')}
         </Button>
       </div>
+
+      {mixedReferenceFormats ? (
+        <div
+          className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+          role="status"
+          data-testid="incidents-mixed-reference-formats"
+        >
+          <p className="font-semibold">
+            {t('incidents.register.mixed_references_title', 'Two reference formats on this page')}
+          </p>
+          <p className="mt-1 text-sm">
+            {t(
+              'incidents.register.mixed_references_body',
+              'This page mixes sequential references (INC-2026-0057) with older hex-style ones (INC-2026-CACDA723). Sorting and lookup by reference can look unreliable until legacy records are reminted — the formats themselves are unchanged.',
+            )}
+          </p>
+        </div>
+      ) : null}
 
       {emailConfigured === false ? (
         <div
@@ -729,11 +759,25 @@ export default function Incidents() {
                 key: 'reference',
                 header: registerLabels.reference,
                 width: 'reference',
-                render: (incident) => (
-                  <CaseRegisterReferenceLink to={`/incidents/${incident.id}`}>
-                    {formatReference(incident.reference_number)}
-                  </CaseRegisterReferenceLink>
-                ),
+                render: (incident) => {
+                  const reference = formatReference(incident.reference_number)
+                  const legacyHex = isHexStyleCaseReference(incident.reference_number)
+                  return (
+                    <CaseRegisterReferenceLink
+                      to={`/incidents/${incident.id}`}
+                      title={
+                        legacyHex
+                          ? t(
+                              'incidents.register.legacy_hex_reference',
+                              'Legacy hex-style reference',
+                            )
+                          : undefined
+                      }
+                    >
+                      {reference}
+                    </CaseRegisterReferenceLink>
+                  )
+                },
               },
               {
                 key: 'title',
