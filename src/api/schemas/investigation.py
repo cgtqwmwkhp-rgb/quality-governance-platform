@@ -141,6 +141,16 @@ class InvestigationRunUpdate(BaseModel):
     data: Optional[Dict[str, Any]] = None
     assigned_to_user_id: Optional[int] = None
     reviewer_user_id: Optional[int] = None
+    closure_override: Optional[bool] = Field(
+        default=None,
+        description="Supervisor override to complete/close with open CAPA/actions (requires reason).",
+    )
+    closure_override_reason: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=2000,
+        description="Mandatory reason when closure_override is true and open work remains.",
+    )
 
     @field_validator("status")
     @classmethod
@@ -372,7 +382,9 @@ class InvestigationClosureValidationResponse(BaseModel):
     """Closure-validation result for an investigation."""
 
     can_close: bool
+    can_complete: bool = False
     reasons: List[str]
+    completion_reasons: List[str] = Field(default_factory=list)
     open_work: List[InvestigationClosureBlockingItem] = Field(default_factory=list)
     open_work_count: int = 0
     # Named counterpart to ``reasons``: which section/field, not just which code.

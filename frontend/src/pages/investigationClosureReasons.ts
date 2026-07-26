@@ -31,6 +31,10 @@ const NAMEABLE_CODES = new Set([
   'MISSING_REQUIRED_SECTION',
   'MISSING_REQUIRED_FIELD',
   'INVALID_ARRAY_EMPTY',
+  'LEAD_INVESTIGATOR_NOT_ASSIGNED',
+  'INVESTIGATION_NOT_STARTED',
+  'MISSING_FINDINGS',
+  'MISSING_CONCLUSION',
 ])
 
 function describeItem(item: ClosureMissingItem, t: ClosureTranslate): string {
@@ -74,6 +78,26 @@ function describeCode(code: string, t: ClosureTranslate): string {
       return t(
         'investigations.closure.status_not_complete',
         'Move the investigation to Completed before closing.',
+      )
+    case 'LEAD_INVESTIGATOR_NOT_ASSIGNED':
+      return t(
+        'investigations.closure.lead_not_assigned',
+        'Assign a lead investigator on the Summary tab before completing.',
+      )
+    case 'INVESTIGATION_NOT_STARTED':
+      return t(
+        'investigations.closure.not_started',
+        'Move the investigation to In progress before completing.',
+      )
+    case 'MISSING_FINDINGS':
+      return t(
+        'investigations.closure.missing_findings',
+        'Record investigation findings on the Summary tab before completing.',
+      )
+    case 'MISSING_CONCLUSION':
+      return t(
+        'investigations.closure.missing_conclusion',
+        'Record a conclusion on the Summary tab before completing.',
       )
     case 'TEMPLATE_NOT_FOUND':
       return t(
@@ -139,4 +163,22 @@ export function describeClosureBlockers(
   }
 
   return lines
+}
+
+export function describeCompletionBlockers(
+  validation: Pick<ClosureValidation, 'completion_reasons' | 'missing_items'>,
+  t: ClosureTranslate,
+): ClosureBlockerLine[] {
+  return describeClosureBlockers(
+    {
+      reasons: validation.completion_reasons ?? [],
+      missing_items: validation.missing_items,
+    },
+    t,
+  )
+}
+
+export function isOnlyOpenActionsBlocking(reasons: string[] | undefined): boolean {
+  const list = reasons ?? []
+  return list.length === 1 && list[0] === 'OPEN_ACTIONS_REMAIN'
 }
