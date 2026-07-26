@@ -9,7 +9,7 @@ compatibility re-export at ``src.services.executive_dashboard``.
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Awaitable, Callable, Dict, List, Optional, cast
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -606,6 +606,135 @@ class ExecutiveDashboardService:
             "incomplete_critical_count": stats["incomplete_critical_count"],
         }
 
+    async def _trend_series(
+        self,
+        name: str,
+        unavailable: List[str],
+        build: Callable[[], Awaitable[List[Dict[str, Any]]]],
+    ) -> List[Dict[str, Any]]:
+        """Run one trend builder; on failure record the series and return []."""
+        try:
+            return await build()
+        except Exception:
+            logger.exception("%s trend failed", name)
+            unavailable.append(name)
+            return []
+
+    async def _trend_count_in_window(
+        self,
+        week_windows: List[tuple[datetime, datetime, str]],
+        model: Any,
+        date_col: Any,
+    ) -> List[Dict[str, Any]]:
+        tf = self._tenant_filter(model)
+        out: List[Dict[str, Any]] = []
+        for week_start, week_end, label in week_windows:
+            result = await self.db.execute(
+                select(func.count(model.id)).where(and_(tf, date_col >= week_start, date_col < week_end))
+            )
+            out.append({"week_start": label, "count": result.scalar() or 0})
+        return out
+
+    async def _trend_audits_weekly(self, week_windows: List[tuple[datetime, datetime, str]]) -> List[Dict[str, Any]]:
+        audits_weekly: List[Dict[str, Any]] = []
+        tf_audit = self._tenant_filter(AuditRun)
+        for week_start, week_end, label in week_windows:
+            result = await self.db.execute(
+                select(func.avg(AuditRun.score_percentage)).where(
+                    and_(
+                        tf_audit,
+                        AuditRun.status == AuditStatus.COMPLETED,
+                        AuditRun.score_percentage.is_not(None),
+                        AuditRun.completed_at >= week_start,
+                        AuditRun.completed_at < week_end,
+                    )
+                )
+            )
+            avg = result.scalar()
+            if avg is None:
+                audits_weekly.append({"week_start": label, "count": 0, "value": None})
+            else:
+                pct = round(float(avg), 1)
+                audits_weekly.append({"week_start": label, "count": int(pct), "value": pct})
+        return audits_weekly
+
+    async def _trend_tool_compliance_weekly(
+        self, week_windows: List[tuple[datetime, datetime, str]]
+    ) -> List[Dict[str, Any]]:
+        tool_compliance_weekly: List[Dict[str, Any]] = []
+        asset_q = select(AssetType.name, Asset.status, Asset.expiry_date, Asset.created_at)
+        asset_q = asset_q.outerjoin(AssetType, Asset.asset_type_id == AssetType.id)
+        if self.tenant_id is not None:
+            asset_q = asset_q.where(or_(Asset.tenant_id == self.tenant_id, Asset.tenant_id.is_(None)))
+        asset_result = await self.db.execute(asset_q)
+        asset_rows_raw = [
+            (
+                asset_type,
+                status.value if hasattr(status, "value") else str(status),
+                expiry_date,
+                created_at,
+            )
+            for asset_type, status, expiry_date, created_at in asset_result.all()
+        ]
+        for _ws, week_end, label in week_windows:
+            rows_as_of = [
+                AssetHealthRow(asset_type=at, status=st, expiry_date=exp)
+                for at, st, exp, created_at in asset_rows_raw
+                if created_at is None or created_at <= week_end
+            ]
+            summary_map = cast(Dict[str, Any], aggregate_asset_health_kpis(rows_as_of, as_of=week_end))
+            bands = cast(Dict[str, Any], summary_map.get("expiry_bands") or {})
+            by_status = cast(Dict[str, Any], summary_map.get("by_status") or {})
+            in_service = int(summary_map.get("total") or 0) - int(bands.get("removed", 0) or 0)
+            if in_service <= 0:
+                pct = 100.0
+            else:
+                overdue = int(bands.get("overdue", 0) or 0)
+                quarantined = int(by_status.get(AssetStatus.QUARANTINED.value, 0) or 0)
+                pct = round(100.0 * (in_service - overdue - quarantined) / in_service, 1)
+            tool_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
+        return tool_compliance_weekly
+
+    async def _trend_training_compliance_weekly(
+        self, week_windows: List[tuple[datetime, datetime, str]]
+    ) -> List[Dict[str, Any]]:
+        training_compliance_weekly: List[Dict[str, Any]] = []
+        if self.tenant_id is None:
+            return training_compliance_weekly
+        latest_imp = await self.db.execute(
+            select(TrainingMatrixImport.id)
+            .where(TrainingMatrixImport.tenant_id == self.tenant_id)
+            .order_by(TrainingMatrixImport.id.desc())
+            .limit(1)
+        )
+        import_id = latest_imp.scalar_one_or_none()
+        cells: List[TrainingMatrixCell] = []
+        if import_id is not None:
+            cell_result = await self.db.execute(
+                select(TrainingMatrixCell).where(
+                    and_(
+                        TrainingMatrixCell.tenant_id == self.tenant_id,
+                        TrainingMatrixCell.import_id == import_id,
+                    )
+                )
+            )
+            cells = list(cell_result.scalars().all())
+        scored = [c for c in cells if c.passed_on is not None or c.expires_on is not None]
+        for _ws, week_end, label in week_windows:
+            as_of = week_end.date()
+            if not scored:
+                training_compliance_weekly.append({"week_start": label, "count": 0, "value": None})
+                continue
+            ok = 0
+            for cell in scored:
+                if cell.passed_on is None:
+                    continue
+                if cell.expires_on is None or cell.expires_on >= as_of:
+                    ok += 1
+            pct = round(100.0 * ok / len(scored), 1)
+            training_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
+        return training_compliance_weekly
+
     async def _get_trends(self, period_days: int) -> Dict[str, Any]:
         """Weekly series for pulse sparklines (counts + compliance/score %).
 
@@ -620,133 +749,38 @@ class ExecutiveDashboardService:
             week_windows.append((week_start, week_end, week_start.strftime("%Y-%m-%d")))
 
         unavailable: List[str] = []
-
-        async def _series(name: str, build):
-            try:
-                return await build()
-            except Exception:
-                logger.exception("%s trend failed", name)
-                unavailable.append(name)
-                return []
-
-        async def _count_in_window(model: Any, date_col: Any) -> List[Dict[str, Any]]:
-            tf = self._tenant_filter(model)
-            out: List[Dict[str, Any]] = []
-            for week_start, week_end, label in week_windows:
-                result = await self.db.execute(
-                    select(func.count(model.id)).where(and_(tf, date_col >= week_start, date_col < week_end))
-                )
-                out.append({"week_start": label, "count": result.scalar() or 0})
-            return out
-
-        async def _audits_weekly() -> List[Dict[str, Any]]:
-            audits_weekly: List[Dict[str, Any]] = []
-            tf_audit = self._tenant_filter(AuditRun)
-            for week_start, week_end, label in week_windows:
-                result = await self.db.execute(
-                    select(func.avg(AuditRun.score_percentage)).where(
-                        and_(
-                            tf_audit,
-                            AuditRun.status == AuditStatus.COMPLETED,
-                            AuditRun.score_percentage.is_not(None),
-                            AuditRun.completed_at >= week_start,
-                            AuditRun.completed_at < week_end,
-                        )
-                    )
-                )
-                avg = result.scalar()
-                if avg is None:
-                    audits_weekly.append({"week_start": label, "count": 0, "value": None})
-                else:
-                    pct = round(float(avg), 1)
-                    audits_weekly.append({"week_start": label, "count": int(pct), "value": pct})
-            return audits_weekly
-
-        async def _tool_compliance_weekly() -> List[Dict[str, Any]]:
-            tool_compliance_weekly: List[Dict[str, Any]] = []
-            asset_q = select(AssetType.name, Asset.status, Asset.expiry_date, Asset.created_at)
-            asset_q = asset_q.outerjoin(AssetType, Asset.asset_type_id == AssetType.id)
-            if self.tenant_id is not None:
-                asset_q = asset_q.where(or_(Asset.tenant_id == self.tenant_id, Asset.tenant_id.is_(None)))
-            asset_result = await self.db.execute(asset_q)
-            asset_rows_raw = [
-                (
-                    asset_type,
-                    status.value if hasattr(status, "value") else str(status),
-                    expiry_date,
-                    created_at,
-                )
-                for asset_type, status, expiry_date, created_at in asset_result.all()
-            ]
-            for _ws, week_end, label in week_windows:
-                rows_as_of = [
-                    AssetHealthRow(asset_type=at, status=st, expiry_date=exp)
-                    for at, st, exp, created_at in asset_rows_raw
-                    if created_at is None or created_at <= week_end
-                ]
-                summary_map = cast(Dict[str, Any], aggregate_asset_health_kpis(rows_as_of, as_of=week_end))
-                bands = cast(Dict[str, Any], summary_map.get("expiry_bands") or {})
-                by_status = cast(Dict[str, Any], summary_map.get("by_status") or {})
-                in_service = int(summary_map.get("total") or 0) - int(bands.get("removed", 0) or 0)
-                if in_service <= 0:
-                    pct = 100.0
-                else:
-                    overdue = int(bands.get("overdue", 0) or 0)
-                    quarantined = int(by_status.get(AssetStatus.QUARANTINED.value, 0) or 0)
-                    pct = round(100.0 * (in_service - overdue - quarantined) / in_service, 1)
-                tool_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
-            return tool_compliance_weekly
-
-        async def _training_compliance_weekly() -> List[Dict[str, Any]]:
-            training_compliance_weekly: List[Dict[str, Any]] = []
-            if self.tenant_id is None:
-                return training_compliance_weekly
-            latest_imp = await self.db.execute(
-                select(TrainingMatrixImport.id)
-                .where(TrainingMatrixImport.tenant_id == self.tenant_id)
-                .order_by(TrainingMatrixImport.id.desc())
-                .limit(1)
-            )
-            import_id = latest_imp.scalar_one_or_none()
-            cells: List[TrainingMatrixCell] = []
-            if import_id is not None:
-                cell_result = await self.db.execute(
-                    select(TrainingMatrixCell).where(
-                        and_(
-                            TrainingMatrixCell.tenant_id == self.tenant_id,
-                            TrainingMatrixCell.import_id == import_id,
-                        )
-                    )
-                )
-                cells = list(cell_result.scalars().all())
-            scored = [c for c in cells if c.passed_on is not None or c.expires_on is not None]
-            for _ws, week_end, label in week_windows:
-                as_of = week_end.date()
-                if not scored:
-                    training_compliance_weekly.append({"week_start": label, "count": 0, "value": None})
-                    continue
-                ok = 0
-                for cell in scored:
-                    if cell.passed_on is None:
-                        continue
-                    if cell.expires_on is None or cell.expires_on >= as_of:
-                        ok += 1
-                pct = round(100.0 * ok / len(scored), 1)
-                training_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
-            return training_compliance_weekly
-
-        incidents_weekly = await _series("incidents_weekly", lambda: _count_in_window(Incident, Incident.incident_date))
-        complaints_weekly = await _series(
+        incidents_weekly = await self._trend_series(
+            "incidents_weekly",
+            unavailable,
+            lambda: self._trend_count_in_window(week_windows, Incident, Incident.incident_date),
+        )
+        complaints_weekly = await self._trend_series(
             "complaints_weekly",
-            lambda: _count_in_window(Complaint, func.coalesce(Complaint.received_date, Complaint.created_at)),
+            unavailable,
+            lambda: self._trend_count_in_window(
+                week_windows, Complaint, func.coalesce(Complaint.received_date, Complaint.created_at)
+            ),
         )
-        near_misses_weekly = await _series(
+        near_misses_weekly = await self._trend_series(
             "near_misses_weekly",
-            lambda: _count_in_window(NearMiss, func.coalesce(NearMiss.event_date, NearMiss.created_at)),
+            unavailable,
+            lambda: self._trend_count_in_window(
+                week_windows, NearMiss, func.coalesce(NearMiss.event_date, NearMiss.created_at)
+            ),
         )
-        audits_weekly = await _series("audits_weekly", _audits_weekly)
-        tool_compliance_weekly = await _series("tool_compliance_weekly", _tool_compliance_weekly)
-        training_compliance_weekly = await _series("training_compliance_weekly", _training_compliance_weekly)
+        audits_weekly = await self._trend_series(
+            "audits_weekly", unavailable, lambda: self._trend_audits_weekly(week_windows)
+        )
+        tool_compliance_weekly = await self._trend_series(
+            "tool_compliance_weekly",
+            unavailable,
+            lambda: self._trend_tool_compliance_weekly(week_windows),
+        )
+        training_compliance_weekly = await self._trend_series(
+            "training_compliance_weekly",
+            unavailable,
+            lambda: self._trend_training_compliance_weekly(week_windows),
+        )
 
         return {
             "incidents_weekly": incidents_weekly,

@@ -1,11 +1,6 @@
 """PX-226 / PX-225 honesty helpers for executive dashboard empty summaries."""
 
-from src.api.schemas.executive_dashboard import (
-    ComplaintSummary,
-    ExecutiveDashboardResponse,
-    IncidentSummary,
-    TrendData,
-)
+from src.api.schemas.executive_dashboard import ComplaintSummary, ExecutiveDashboardResponse, IncidentSummary, TrendData
 from src.domain.services.executive_dashboard import (
     _EMPTY_COMPLAINT_SUMMARY,
     _EMPTY_INCIDENT_SUMMARY,
