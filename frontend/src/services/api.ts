@@ -5,6 +5,7 @@
 
 import { API_BASE_URL } from '../config/apiBase'
 import { getPlatformToken } from '../utils/auth'
+import { reportConnectivityProof } from '../lib/syncService'
 
 // Use centralized API base URL
 const API_BASE = API_BASE_URL
@@ -56,6 +57,10 @@ async function apiRequest<T>(endpoint: string, options: ApiOptions = {}): Promis
     },
     body: body ? JSON.stringify(body) : undefined,
   })
+
+  // Any HTTP response — including a 4xx — proves the network is reachable, so
+  // the offline write queue should stop backing off (PX-128).
+  reportConnectivityProof()
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}))

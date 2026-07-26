@@ -175,7 +175,11 @@ describe('syncService', () => {
     expect(removeSpy).toHaveBeenCalledWith('online', expect.any(Function))
   })
 
-  it('skips flush while offline and retries on online event', async () => {
+  // PX-128: `navigator.onLine` reports false on captive portals and VPN flaps
+  // while requests actually succeed, and never fires `online` to correct
+  // itself. The previous behaviour — asserted by the test this replaces — was
+  // to skip the flush entirely, so queued writes were stranded indefinitely.
+  it('drains queued writes even while navigator.onLine reports false', async () => {
     records.set('r2', {
       id: 'r2',
       url: '/api/v1/incidents',
@@ -192,16 +196,6 @@ describe('syncService', () => {
 
     const { startAutoSync } = await import('./syncService')
     const stop = startAutoSync(60_000)
-    await flushMicrotasks(10)
-
-    expect(apiRequest).not.toHaveBeenCalled()
-    expect(records.has('r2')).toBe(true)
-
-    Object.defineProperty(navigator, 'onLine', {
-      configurable: true,
-      value: true,
-    })
-    window.dispatchEvent(new Event('online'))
     await flushMicrotasks(20)
 
     expect(apiRequest).toHaveBeenCalledWith({
@@ -214,7 +208,28 @@ describe('syncService', () => {
     stop()
   })
 
-  it('increments retries when API flush fails', async () => {
+  it('still flushes on the online event when the browser does fire one', async () => {
+    const { startAutoSync } = await import('./syncService')
+    const stop = startAutoSync(60_000)
+    await flushMicrotasks(10)
+
+    records.set('r2b', {
+      id: 'r2b',
+      url: '/api/v1/incidents',
+      method: 'PUT',
+      body: { id: 22 },
+      retries: 0,
+      createdAt: '2026-07-13T00:00:00.000Z',
+    })
+
+    window.dispatchEvent(new Event('online'))
+    await flushMicrotasks(20)
+
+    expect(records.has('r2b')).toBe(false)
+    stop()
+  })
+
+  it('increments retries when the server rejects the queued write', async () => {
     records.set('r3', {
       id: 'r3',
       url: '/api/v1/complaints',
@@ -223,7 +238,8 @@ describe('syncService', () => {
       retries: 0,
       createdAt: '2026-07-13T00:00:00.000Z',
     })
-    apiRequest.mockRejectedValueOnce(new Error('network down'))
+    // An HTTP response means the server saw the request and refused it.
+    apiRequest.mockRejectedValueOnce({ response: { status: 422 } })
 
     const { startAutoSync } = await import('./syncService')
     const stop = startAutoSync(60_000)
@@ -231,6 +247,71 @@ describe('syncService', () => {
 
     expect(records.get('r3')?.retries).toBe(1)
     stop()
+  })
+
+  // Without this, fixing the offline gate above would make things worse: an
+  // genuinely offline device would burn all five retries in a few ticks and
+  // silently delete the user's queued writes.
+  it('does not spend the retry budget on a network-layer failure', async () => {
+    records.set('r3b', {
+      id: 'r3b',
+      url: '/api/v1/complaints',
+      method: 'POST',
+      body: { subject: 'Keep me' },
+      retries: 0,
+      createdAt: '2026-07-13T00:00:00.000Z',
+    })
+    // No `response` property: the request never reached the server.
+    apiRequest.mockRejectedValue(new Error('network down'))
+
+    const { startAutoSync } = await import('./syncService')
+    const stop = startAutoSync(60_000)
+    await flushMicrotasks(20)
+
+    expect(records.get('r3b')?.retries).toBe(0)
+    expect(records.has('r3b')).toBe(true)
+    stop()
+  })
+
+  it('backs off after a network failure, and resumes on proof of connectivity', async () => {
+    vi.useFakeTimers()
+    try {
+      records.set('r5', {
+        id: 'r5',
+        url: '/api/v1/incidents',
+        method: 'POST',
+        body: { title: 'Backoff' },
+        retries: 0,
+        createdAt: '2026-07-13T00:00:00.000Z',
+      })
+      apiRequest.mockRejectedValueOnce(new Error('network down'))
+
+      const { startAutoSync, reportConnectivityProof } = await import('./syncService')
+      const stop = startAutoSync(1_000)
+      await flushMicrotasks(20)
+
+      expect(apiRequest).toHaveBeenCalledTimes(1)
+      expect(records.has('r5')).toBe(true)
+
+      // Well inside the 30s backoff window: the next tick must be a no-op, so
+      // an offline device is not hammering the radio every second.
+      apiRequest.mockResolvedValue({ data: { ok: true } })
+      vi.advanceTimersByTime(1_000)
+      await flushMicrotasks(20)
+      expect(apiRequest).toHaveBeenCalledTimes(1)
+
+      // A successful response elsewhere in the app is proof we are reachable
+      // again — no `online` event required.
+      reportConnectivityProof()
+      vi.advanceTimersByTime(1_000)
+      await flushMicrotasks(20)
+
+      expect(apiRequest).toHaveBeenCalledTimes(2)
+      expect(records.has('r5')).toBe(false)
+      stop()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('drops records that exceeded MAX_RETRIES without calling the API', async () => {

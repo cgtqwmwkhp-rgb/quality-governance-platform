@@ -153,3 +153,85 @@ describe('Layout accessibility', () => {
     expect(unnamed.map((element) => element.outerHTML)).toEqual([])
   })
 })
+
+/**
+ * PX-162 — modal background inertness. The mobile drawer covers the page with
+ * a dimming overlay, but the header and main content stayed in the
+ * accessibility tree and the tab order behind it, so a keyboard or
+ * screen-reader user could walk straight out of the open menu into content
+ * they cannot see.
+ *
+ * The `matchMedia` stub in test/setup.ts reports `matches: false`, i.e. below
+ * the `lg` breakpoint, which is exactly the drawer case.
+ */
+describe('Layout mobile drawer inertness', () => {
+  beforeEach(() => {
+    window.history.pushState({}, '', '/dashboard')
+    getUnreadCount.mockReset()
+    getUnreadCount.mockResolvedValue({ data: { unread_count: 0 } })
+  })
+
+  async function openDrawer() {
+    const { default: userEvent } = await import('@testing-library/user-event')
+    const user = userEvent.setup()
+    const result = await renderLayout()
+    await user.click(screen.getByRole('button', { name: 'a11y.open_menu' }))
+    return { user, ...result }
+  }
+
+  it('leaves the page behind reachable while the drawer is closed', async () => {
+    const { container } = await renderLayout()
+
+    expect(container.querySelector('main')).not.toHaveAttribute('aria-hidden')
+    expect(container.querySelector('header')).not.toHaveAttribute('aria-hidden')
+    // Permanent desktop navigation must not masquerade as a dialog.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('hides the header and main content from assistive tech while the drawer is open', async () => {
+    const { container } = await openDrawer()
+
+    expect(container.querySelector('main')).toHaveAttribute('aria-hidden', 'true')
+    expect(container.querySelector('header')).toHaveAttribute('aria-hidden', 'true')
+    // `inert` is what actually blocks focus and pointer events in the browser;
+    // aria-hidden alone only removes it from the accessibility tree.
+    expect(container.querySelector('main')).toHaveAttribute('inert')
+    expect(container.querySelector('header')).toHaveAttribute('inert')
+  })
+
+  it('makes the open drawer a named modal dialog and moves focus into it', async () => {
+    await openDrawer()
+
+    const drawer = screen.getByRole('dialog', { name: 'a11y.navigation_menu' })
+    expect(drawer).toHaveAttribute('aria-modal', 'true')
+    await waitFor(() => expect(drawer).toHaveFocus())
+  })
+
+  it('takes the header search out of the background tab order while the drawer is open', async () => {
+    await openDrawer()
+
+    // Named earlier by the closed-drawer suite; now it must be gone from the
+    // accessibility tree entirely.
+    expect(screen.queryByRole('button', { name: 'Open search' })).not.toBeInTheDocument()
+  })
+
+  it('closes on Escape and hands focus back to the menu button', async () => {
+    const { user, container } = await openDrawer()
+
+    await user.keyboard('{Escape}')
+
+    expect(container.querySelector('main')).not.toHaveAttribute('aria-hidden')
+    const menuButton = screen.getByRole('button', { name: 'a11y.open_menu' })
+    await waitFor(() => expect(menuButton).toHaveFocus())
+  })
+
+  it('restores the background when the drawer is closed again by the menu button', async () => {
+    const { user, container } = await openDrawer()
+
+    await user.click(screen.getByRole('button', { name: 'a11y.close_menu' }))
+
+    expect(container.querySelector('main')).not.toHaveAttribute('aria-hidden')
+    expect(container.querySelector('main')).not.toHaveAttribute('inert')
+    expect(screen.getByRole('button', { name: 'Open search' })).toBeInTheDocument()
+  })
+})

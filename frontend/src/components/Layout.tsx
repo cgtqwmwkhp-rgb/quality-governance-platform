@@ -39,11 +39,13 @@ import {
   Megaphone,
 } from 'lucide-react'
 import { BrandMarkTile } from './BrandMark'
-import { useState, useEffect, useCallback, lazy, Suspense, Fragment } from 'react'
+import { useState, useEffect, useCallback, useRef, lazy, Suspense, Fragment } from 'react'
+import type { HTMLAttributes } from 'react'
 import { useTranslation } from 'react-i18next'
 import { notificationsApi } from '../api/client'
 import { safetyAssetsApi } from '../api/safetyAssetsClient'
 import OfflineIndicator from './OfflineIndicator'
+import SessionExpiryWarning from './SessionExpiryWarning'
 import KeyboardShortcutHelp from './KeyboardShortcutHelp'
 import { ThemeToggle } from './ui/ThemeToggle'
 import { Button } from './ui/Button'
@@ -61,12 +63,36 @@ const GlobalSearchPalette = lazy(() => import('./search/GlobalSearchPalette'))
 
 interface LayoutProps {
   onLogout: () => void
+  /**
+   * Session countdown state from `useSessionKeepalive`, owned by App so the
+   * keepalive scheduler stays a singleton. Optional so tests and any future
+   * caller can mount the shell without it (PX-179).
+   */
+  sessionExpiryImminent?: boolean
+  sessionExtending?: boolean
+  onExtendSession?: () => void
 }
 
 /** Referenced by the mobile menu button's aria-controls. */
 const SIDEBAR_ID = 'app-sidebar'
 
-export default function Layout({ onLogout }: LayoutProps) {
+/** Tailwind's `lg` breakpoint — above this the sidebar is permanent, not a drawer. */
+const DESKTOP_MEDIA_QUERY = '(min-width: 1024px)'
+
+/**
+ * React 18 does not accept `inert` as a boolean JSX prop, so it has to be
+ * spread as an empty-string attribute. `aria-hidden` alone removes the
+ * background from the accessibility tree; `inert` additionally stops focus and
+ * pointer events reaching it in browsers that support it (PX-162).
+ */
+const INERT_PROPS = { inert: '' } as unknown as HTMLAttributes<HTMLElement>
+
+export default function Layout({
+  onLogout,
+  sessionExpiryImminent = false,
+  sessionExtending = false,
+  onExtendSession,
+}: LayoutProps) {
   const { t } = useTranslation()
   const [searchOpen, setSearchOpen] = useState(false)
   const canAccessWorkforce = hasRole('admin', 'supervisor')
@@ -285,6 +311,49 @@ export default function Layout({ onLogout }: LayoutProps) {
   }, [activeHubId])
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const sidebarRef = useRef<HTMLElement>(null)
+
+  // Above `lg` the sidebar is permanent chrome, not a drawer. Force it closed
+  // so a stale `sidebarOpen` left over from a narrow viewport (rotation, window
+  // resize) can never mark the desktop page inert.
+  useEffect(() => {
+    const mql = window.matchMedia(DESKTOP_MEDIA_QUERY)
+    const sync = () => {
+      if (mql.matches) setSidebarOpen(false)
+    }
+    sync()
+    mql.addEventListener('change', sync)
+    return () => mql.removeEventListener('change', sync)
+  }, [])
+
+  // The open drawer is a modal: Escape dismisses it and focus moves inside so
+  // a keyboard or screen-reader user is not left behind the dimmed overlay
+  // (PX-162).
+  useEffect(() => {
+    if (!sidebarOpen) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSidebarOpen(false)
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+
+    // Captured now rather than in cleanup: the menu button renders on every
+    // pass, so this is the same node either way, and reading a ref during
+    // teardown is the pattern react-hooks warns about.
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    const restoreFocusTo = menuButtonRef.current ?? previouslyFocused
+    sidebarRef.current?.focus()
+
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      // Hand focus back to the control that opened the drawer so keyboard
+      // users are not dumped at the top of the document.
+      restoreFocusTo?.focus()
+    }
+  }, [sidebarOpen])
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [pendingSafetyLookups, setPendingSafetyLookups] = useState(0)
   const [copilotOpen, setCopilotOpen] = useState(false)
@@ -355,7 +424,11 @@ export default function Layout({ onLogout }: LayoutProps) {
         <GlobalSearchPalette open={searchOpen} onOpenChange={setSearchOpen} />
       </Suspense>
       {/* Top Bar */}
-      <header className="fixed top-0 right-0 left-0 lg:left-72 h-16 bg-card/95 backdrop-blur-lg border-b border-border z-30 flex items-center justify-between px-4 sm:px-6">
+      <header
+        aria-hidden={sidebarOpen || undefined}
+        {...(sidebarOpen ? INERT_PROPS : {})}
+        className="fixed top-0 right-0 left-0 lg:left-72 h-16 bg-card/95 backdrop-blur-lg border-b border-border z-30 flex items-center justify-between px-4 sm:px-6"
+      >
         {/* Search Bar — opens overlay palette; does not navigate away */}
         <button
           type="button"
@@ -406,9 +479,9 @@ export default function Layout({ onLogout }: LayoutProps) {
           <NavLink
             to={canManageUsers && adminUserManagementEnabled ? '/admin' : '/dashboard'}
             className="p-2 text-muted-foreground hover:text-foreground hover:bg-surface rounded-lg transition-colors"
-            aria-label={t('nav.settings')}
+            {...iconOnlyControlProps(t('nav.settings'))}
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="w-5 h-5" aria-hidden="true" />
           </NavLink>
 
           {/* AI Copilot Toggle — demo only, hidden unless explicitly enabled (PX-248) */}
@@ -428,6 +501,7 @@ export default function Layout({ onLogout }: LayoutProps) {
 
       {/* Mobile menu button */}
       <IconButton
+        ref={menuButtonRef}
         label={sidebarOpen ? t('a11y.close_menu') : t('a11y.open_menu')}
         aria-expanded={sidebarOpen}
         aria-controls={SIDEBAR_ID}
@@ -440,6 +514,13 @@ export default function Layout({ onLogout }: LayoutProps) {
       {/* Sidebar */}
       <aside
         id={SIDEBAR_ID}
+        ref={sidebarRef}
+        // Only a dialog while it is the mobile drawer. On desktop it is
+        // permanent navigation and must stay an ordinary complementary region.
+        role={sidebarOpen ? 'dialog' : undefined}
+        aria-modal={sidebarOpen ? true : undefined}
+        aria-label={sidebarOpen ? t('a11y.navigation_menu') : undefined}
+        tabIndex={sidebarOpen ? -1 : undefined}
         className={cn(
           'fixed inset-y-0 left-0 z-40 w-72 bg-card/95 backdrop-blur-xl border-r border-border',
           'transform transition-transform duration-300 ease-in-out',
@@ -678,7 +759,12 @@ export default function Layout({ onLogout }: LayoutProps) {
       </aside>
 
       {/* Main content */}
-      <main id="main-content" className="lg:pl-72 pt-16">
+      <main
+        id="main-content"
+        aria-hidden={sidebarOpen || undefined}
+        {...(sidebarOpen ? INERT_PROPS : {})}
+        className="lg:pl-72 pt-16"
+      >
         <div className="p-4 sm:p-6 lg:p-8 min-h-screen">
           <Outlet />
         </div>
@@ -709,6 +795,13 @@ export default function Layout({ onLogout }: LayoutProps) {
 
       {/* Offline status indicator */}
       <OfflineIndicator />
+
+      {/* Session about to end — warn before the 401 interceptor redirects */}
+      <SessionExpiryWarning
+        open={sessionExpiryImminent && Boolean(onExtendSession)}
+        extending={sessionExtending}
+        onExtend={() => onExtendSession?.()}
+      />
     </div>
   )
 }

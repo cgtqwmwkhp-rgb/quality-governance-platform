@@ -13,10 +13,17 @@ vi.mock('../../api/client', () => ({
 
 vi.mock('../../utils/auth', () => ({
   TOKEN_REFRESH_LEAD_SECONDS: 300,
+  SESSION_WARNING_LEAD_SECONDS: 120,
   getPlatformToken: (...args: unknown[]) => getPlatformToken(...args),
   getPlatformRefreshToken: (...args: unknown[]) => getPlatformRefreshToken(...args),
   getTokenExpirySeconds: (...args: unknown[]) => getTokenExpirySeconds(...(args as [string])),
   shouldRefreshToken: (...args: unknown[]) => shouldRefreshToken(...(args as [string])),
+  // Mirrors the real helper so the expiry-warning poll sees the same clock as
+  // the refresh scheduler these tests already drive via getTokenExpirySeconds.
+  getSecondsUntilExpiry: (token: string) => {
+    const exp = getTokenExpirySeconds(token)
+    return exp === null ? null : exp - Math.floor(Date.now() / 1000)
+  },
 }))
 
 import { useSessionKeepalive } from '../useSessionKeepalive'
@@ -126,6 +133,39 @@ describe('useSessionKeepalive', () => {
 
     expect(shouldRefreshToken).toHaveBeenCalled()
     expect(refreshSession).not.toHaveBeenCalled()
+    unmount()
+  })
+
+  // PX-179: the shell needs to know the session is ending so it can say so.
+  it('does not flag expiry while the token is outside the warning window', () => {
+    getPlatformToken.mockReturnValue('access')
+    getPlatformRefreshToken.mockReturnValue('refresh')
+    getTokenExpirySeconds.mockReturnValue(Math.floor(Date.now() / 1000) + 3600)
+
+    const { result, unmount } = renderHook(() => useSessionKeepalive())
+
+    expect(result.current.expiryImminent).toBe(false)
+    unmount()
+  })
+
+  it('flags expiry once inside the warning window', () => {
+    getPlatformToken.mockReturnValue('access')
+    getPlatformRefreshToken.mockReturnValue('refresh')
+    getTokenExpirySeconds.mockReturnValue(Math.floor(Date.now() / 1000) + 60)
+
+    const { result, unmount } = renderHook(() => useSessionKeepalive())
+
+    expect(result.current.expiryImminent).toBe(true)
+    unmount()
+  })
+
+  it('does not flag expiry once signed out', () => {
+    getPlatformToken.mockReturnValue(null)
+    getPlatformRefreshToken.mockReturnValue(null)
+
+    const { result, unmount } = renderHook(() => useSessionKeepalive())
+
+    expect(result.current.expiryImminent).toBe(false)
     unmount()
   })
 })
