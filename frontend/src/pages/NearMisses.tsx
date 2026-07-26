@@ -43,6 +43,7 @@ import {
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
 import { CaseRegisterTable } from '../components/register/CaseRegisterTable'
 import { useCaseRegisterLabels } from '../components/register/useCaseRegisterLabels'
+import { sortByOccurredDesc } from '../components/register/caseRegisterHonesty'
 import { CUSTOMERS_LOOKUP_CATEGORY, toCustomerSelectOptions } from './admin/customersCatalog'
 import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
 
@@ -330,19 +331,23 @@ export default function NearMisses() {
   }
 
   const deferredSearch = useDeferredValue(searchTerm)
-  const filteredNearMisses = nearMisses.filter((item) => {
-    if (statusFilter !== ALL_FILTER && item.status !== statusFilter) return false
-    if (severityFilter !== ALL_FILTER && (item.potential_severity || 'medium') !== severityFilter) {
-      return false
-    }
-    const needle = deferredSearch.trim().toLowerCase()
-    if (!needle) return true
-    return (
-      item.reference_number.toLowerCase().includes(needle) ||
-      item.location.toLowerCase().includes(needle) ||
-      item.contract.toLowerCase().includes(needle)
-    )
-  })
+  const filteredNearMisses = sortByOccurredDesc(
+    nearMisses.filter((item) => {
+      if (statusFilter !== ALL_FILTER && item.status !== statusFilter) return false
+      if (severityFilter !== ALL_FILTER && (item.potential_severity || 'medium') !== severityFilter) {
+        return false
+      }
+      const needle = deferredSearch.trim().toLowerCase()
+      if (!needle) return true
+      return (
+        item.reference_number.toLowerCase().includes(needle) ||
+        item.location.toLowerCase().includes(needle) ||
+        item.contract.toLowerCase().includes(needle)
+      )
+    }),
+    (item) => item.event_date,
+    (item) => item.id,
+  )
 
   if (loading) {
     return (

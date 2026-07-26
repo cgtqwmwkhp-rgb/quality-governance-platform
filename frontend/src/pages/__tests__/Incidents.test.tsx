@@ -34,7 +34,17 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, fallbackOrOptions?: string | Record<string, unknown>) => {
+      if (typeof fallbackOrOptions === 'string') return fallbackOrOptions
+      if (
+        fallbackOrOptions &&
+        typeof fallbackOrOptions === 'object' &&
+        'defaultValue' in fallbackOrOptions
+      ) {
+        return String(fallbackOrOptions.defaultValue)
+      }
+      return key
+    },
     i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
@@ -440,9 +450,9 @@ describe('Incidents', () => {
     await waitFor(() => {
       expect(screen.getByTestId('incidents-pagination')).toBeInTheDocument()
     })
-    expect(screen.getByText('common.previous')).toBeInTheDocument()
-    expect(screen.getByText('common.next')).toBeInTheDocument()
-    expect(screen.getByText('a11y.page_of')).toBeInTheDocument()
+    expect(screen.getByText(/previous/i)).toBeInTheDocument()
+    expect(screen.getByText(/next/i)).toBeInTheDocument()
+    expect(screen.getByText(/page/i)).toBeInTheDocument()
   })
 
   it('hydrates q/status/severity filters from shareable URL', async () => {
@@ -526,6 +536,113 @@ describe('Incidents', () => {
         screen.getByText(/Incident list returned an unexpected shape/i),
       ).toBeInTheDocument()
     })
-    expect(screen.getByText('incidents.empty.title')).toBeInTheDocument()
+    expect(screen.getAllByText(/no incidents found/i).length).toBeGreaterThan(0)
+  })
+
+  it('PX-124: orders the visible page by Occurred date newest first', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 22,
+            reference_number: 'INC-2026-0022',
+            title: 'Old occurrence, recent report',
+            description: 'x',
+            incident_type: 'injury',
+            severity: 'low',
+            status: 'reported',
+            incident_date: '2024-10-11T10:00:00Z',
+            reported_date: '2026-07-23T10:00:00Z',
+            created_at: '2026-07-23T10:00:00Z',
+          },
+          {
+            id: 57,
+            reference_number: 'INC-2026-0057',
+            title: 'Newest occurrence',
+            description: 'x',
+            incident_type: 'injury',
+            severity: 'medium',
+            status: 'reported',
+            incident_date: '2026-07-23T10:00:00Z',
+            reported_date: '2026-07-24T10:00:00Z',
+            created_at: '2026-07-24T10:00:00Z',
+          },
+          {
+            id: 50,
+            reference_number: 'INC-2026-0050',
+            title: 'Mid occurrence',
+            description: 'x',
+            incident_type: 'injury',
+            severity: 'low',
+            status: 'reported',
+            incident_date: '2026-07-21T10:00:00Z',
+            reported_date: '2026-07-22T10:00:00Z',
+            created_at: '2026-07-22T10:00:00Z',
+          },
+        ],
+        total: 3,
+        page: 1,
+        page_size: 50,
+        pages: 1,
+      },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/incidents']}>
+        <Routes>
+          <Route path="/incidents" element={<Incidents />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('INC-2026-0057')).toBeInTheDocument()
+    })
+    const refs = screen.getAllByRole('link').map((el) => el.textContent)
+    const idx57 = refs.indexOf('INC-2026-0057')
+    const idx50 = refs.indexOf('INC-2026-0050')
+    const idx22 = refs.indexOf('INC-2026-0022')
+    expect(idx57).toBeGreaterThanOrEqual(0)
+    expect(idx50).toBeGreaterThan(idx57)
+    expect(idx22).toBeGreaterThan(idx50)
+  })
+
+  it('PX-126: surfaces a mixed-reference honesty banner when hex and sequential refs share a page', async () => {
+    mockList.mockResolvedValue({
+      data: {
+        items: [
+          {
+            ...sampleIncidents[0],
+            id: 57,
+            reference_number: 'INC-2026-0057',
+          },
+          {
+            ...sampleIncidents[1],
+            id: 99,
+            reference_number: 'INC-2026-CACDA723',
+          },
+        ],
+        total: 2,
+        page: 1,
+        page_size: 50,
+        pages: 1,
+      },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/incidents']}>
+        <Routes>
+          <Route path="/incidents" element={<Incidents />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('incidents-mixed-reference-formats')).toBeInTheDocument()
+    })
+    expect(screen.getByRole('link', { name: 'INC-2026-CACDA723' })).toHaveAttribute(
+      'title',
+      'Legacy hex-style reference',
+    )
   })
 })

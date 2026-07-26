@@ -24,6 +24,7 @@ import { Badge } from '../components/ui/Badge'
 import { Switch } from '../components/ui/Switch'
 import { CaseRegisterTable } from '../components/register/CaseRegisterTable'
 import { useCaseRegisterLabels } from '../components/register/useCaseRegisterLabels'
+import { sortByOccurredDesc } from '../components/register/caseRegisterHonesty'
 import { formatDisplayDate, formatReference } from '../helpers/formatters'
 import {
   Dialog,
@@ -303,11 +304,15 @@ export default function RTAs() {
     }
   }
 
-  const filteredRtas = rtas.filter(
-    (r) =>
-      r.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.reference_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.location.toLowerCase().includes(searchTerm.toLowerCase()),
+  const filteredRtas = sortByOccurredDesc(
+    rtas.filter(
+      (r) =>
+        r.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.reference_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.location.toLowerCase().includes(searchTerm.toLowerCase()),
+    ),
+    (rta) => rta.collision_date,
+    (rta) => rta.id,
   )
 
   if (loading) {

@@ -40,7 +40,17 @@ vi.mock('../../contexts/ToastContext', () => ({
 }))
 
 vi.mock('../../components/ui/Breadcrumbs', () => ({
-  Breadcrumbs: () => <div data-testid="breadcrumbs" />,
+  Breadcrumbs: ({
+    items,
+  }: {
+    items: Array<{ label: string; href?: string }>
+  }) => (
+    <nav data-testid="breadcrumbs">
+      {items.map((item) => (
+        <span key={item.label}>{item.label}</span>
+      ))}
+    </nav>
+  ),
 }))
 
 vi.mock('../../components/EngineerPeoplePicker', () => ({
@@ -461,5 +471,34 @@ describe('IncidentDetail', () => {
       expect(screen.getByText('incidents.detail.not_found')).toBeInTheDocument()
     })
     expect(screen.queryByTestId('incident-detail-async-error')).not.toBeInTheDocument()
+  })
+
+  it('PX-174: breadcrumb and linked asset hide surrogate #ids', async () => {
+    client.incidentsApi.get.mockResolvedValue({
+      data: {
+        ...incidentRecord,
+        asset_id: 40,
+        linked_risk_ids: '204',
+        contract_id: 12,
+        department: null,
+        reporter_submission: { ...(incidentRecord.reporter_submission as object), contract: null },
+      },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Loader slip' })).toBeInTheDocument()
+    })
+
+    const crumbs = screen.getByTestId('breadcrumbs')
+    expect(crumbs).toHaveTextContent('INC-11')
+    expect(crumbs).not.toHaveTextContent('#11')
+    expect(screen.getAllByText('Linked asset').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Asset #40')).not.toBeInTheDocument()
+    expect(screen.getByText('Linked risk')).toBeInTheDocument()
+    expect(screen.queryByText('Risk #204')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Contract on record').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Contract #12')).not.toBeInTheDocument()
   })
 })
