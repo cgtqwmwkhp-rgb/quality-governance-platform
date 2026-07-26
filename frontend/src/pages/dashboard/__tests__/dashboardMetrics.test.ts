@@ -207,6 +207,17 @@ describe('buildHighlightChips (Live Highlight Rail, fail-honest)', () => {
     expect(chips).toHaveLength(7)
   })
 
+  it('labels the personal overdue chip as personal, not as a global total', () => {
+    // PX-149/PX-151: this chip is view-counts.my_overdue, a strict subset of the
+    // /actions Overdue chip. Labelled "4 actions overdue" it reads as an org-wide
+    // figure and appears to contradict the register showing 10.
+    const chips = buildHighlightChips({ myDay: { myOverdueActions: metricOk(4) } })
+
+    const chip = chips.find((c) => c.id === 'my-overdue-actions')
+    expect(chip?.label).toBe('4 of my actions overdue')
+    expect(chip?.href).toBe('/actions?view=my_overdue')
+  })
+
   it('does not double-emit a chip when one signal failed but a sibling signal is fine', () => {
     const chips = buildHighlightChips({
       org: {

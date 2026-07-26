@@ -55,14 +55,22 @@ export interface WorkflowDelegationRecord {
   workflow_types?: string[]
 }
 
+/**
+ * Workflow Center KPIs. Every figure except `pending_approvals` is nullable because
+ * the workflow engine persists no instances and therefore cannot measure them; null
+ * means "unmeasured" and must render as such, never as zero.
+ */
 export interface WorkflowStatsResponse {
-  active_workflows: number
+  /** Count of the caller's own pending approvals — the same queue the panel lists. */
   pending_approvals: number
-  overdue: number
-  completed_today: number
-  completed_this_week?: number
-  average_completion_time_hours?: number
-  sla_compliance_rate?: number
+  /** Scope marker for `pending_approvals` so the UI can label it truthfully. */
+  pending_approvals_scope?: 'assigned_to_me' | 'organisation'
+  active_workflows: number | null
+  overdue: number | null
+  completed_today: number | null
+  completed_this_week?: number | null
+  average_completion_time_hours?: number | null
+  sla_compliance_rate?: number | null
   by_template?: Record<string, { active: number; completed: number; avg_hours: number }>
   by_priority?: Record<string, number>
 }

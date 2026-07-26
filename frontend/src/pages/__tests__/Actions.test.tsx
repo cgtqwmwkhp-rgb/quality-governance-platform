@@ -264,6 +264,11 @@ describe('Actions My Work / Overdue server filters', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSummary.mockResolvedValue({ data: { total: 1, by_display_status: { open: 1 } } })
+    // vi.clearAllMocks() clears calls but keeps implementations, so without this the
+    // suite inherits whatever view-counts the previously executed test happened to set.
+    mockViewCounts.mockResolvedValue({
+      data: { all: 10, my: 3, overdue: 2, my_overdue: 1 },
+    })
     mockGetDeliveryStatus.mockResolvedValue({ data: { email_configured: true } })
     mockList.mockResolvedValue({ data: { items: [action({})] } })
   })
@@ -379,6 +384,51 @@ describe('Actions My Work / Overdue server filters', () => {
     expect(await screen.findByTestId('actions-filter-error')).toHaveTextContent(
       'Server filter failed',
     )
+  })
+
+  it('shows the same Overdue figure in the KPI tile and the view chip', async () => {
+    // PX-149: the tile used to read by_display_status.overdue — a key only CAPA rows
+    // with a literal 'overdue' status ever populate — while the chip read view-counts,
+    // which applies the due-date predicate. One screen, two numbers.
+    mockSummary.mockResolvedValue({
+      data: {
+        total: 12,
+        // Deliberately absent from the histogram, exactly as production data looks.
+        by_display_status: { open: 8, in_progress: 4 },
+        overdue: 10,
+      },
+    })
+    mockViewCounts.mockResolvedValue({
+      data: { all: 12, my: 3, overdue: 10, my_overdue: 2 },
+    })
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('actions-view-badge-overdue')).toHaveTextContent('10')
+    expect(screen.getByTestId('actions-hero-overdue')).toHaveTextContent('10')
+  })
+
+  it('withholds the Overdue tile when the server omits the aggregate', async () => {
+    // A server that predates the field is unmeasured, not zero — showing 0 beside a
+    // chip reading 10 is the exact contradiction PX-149 reported.
+    mockSummary.mockResolvedValue({
+      data: { total: 12, by_display_status: { open: 8, in_progress: 4 } },
+    })
+    mockViewCounts.mockResolvedValue({
+      data: { all: 12, my: 3, overdue: 10, my_overdue: 2 },
+    })
+
+    render(
+      <MemoryRouter>
+        <Actions />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('actions-hero-overdue')).toHaveTextContent('—')
   })
 
   it('shows Mine/Overdue badge counts that match view-counts API', async () => {

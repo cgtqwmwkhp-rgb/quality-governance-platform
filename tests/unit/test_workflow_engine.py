@@ -351,7 +351,7 @@ class TestRoutingRules:
 
 class TestWorkflowStats:
     def test_get_workflow_stats(self, engine):
-        stats = engine.get_workflow_stats()
+        stats = engine.get_workflow_stats(user_id=1)
 
         assert "active_workflows" in stats
         assert "pending_approvals" in stats
@@ -361,10 +361,30 @@ class TestWorkflowStats:
         assert "by_template" in stats
         assert "by_priority" in stats
 
-    def test_stats_by_template_keys(self, engine):
-        stats = engine.get_workflow_stats()
-        assert "RIDDOR" in stats["by_template"]
-        assert "CAPA" in stats["by_template"]
+    def test_pending_approvals_matches_the_queue_it_summarises(self, engine):
+        """PX-286: the tile counts the very list the Workflow Center renders."""
+        user_id = 7
+        stats = engine.get_workflow_stats(user_id=user_id)
+
+        assert stats["pending_approvals"] == len(engine.get_pending_approvals(user_id))
+        assert stats["pending_approvals_scope"] == "assigned_to_me"
+
+    def test_unmeasurable_stats_are_null_not_invented(self, engine):
+        """PX-286: the engine persists no instances, so it must not report counts.
+
+        Replaces the former `test_stats_by_template_keys`, which asserted that
+        `by_template` contained hardcoded RIDDOR/CAPA demo rows. That assertion pinned
+        the defect in place: those numbers were fabricated constants served to the
+        Workflow Center as live KPIs.
+        """
+        stats = engine.get_workflow_stats(user_id=1)
+
+        assert stats["active_workflows"] is None
+        assert stats["overdue"] is None
+        assert stats["completed_today"] is None
+        assert stats["sla_compliance_rate"] is None
+        assert stats["by_template"] == {}
+        assert stats["by_priority"] == {}
 
 
 class TestDefaultTemplates:

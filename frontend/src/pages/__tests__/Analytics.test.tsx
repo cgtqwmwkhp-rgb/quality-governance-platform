@@ -41,43 +41,50 @@ vi.mock('../../contexts/ToastContext', () => ({
   toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }))
 
+/** Base executive-dashboard payload. `rtas` is overridden per test for PX-223 cases. */
+function dashboardFixture(rtas: Record<string, number> = { total_in_period: 2, total: 3, open: 1, closed: 2 }) {
+  return {
+    data: {
+      generated_at: '2026-07-16T00:00:00Z',
+      period_days: 30,
+      health_score: { score: 72, status: 'ok', color: 'green', components: {} },
+      incidents: {
+        total_in_period: 5,
+        open: 2,
+        by_severity: {},
+        sif_count: 0,
+        psif_count: 0,
+        critical_high: 1,
+      },
+      near_misses: {
+        total_in_period: 1,
+        previous_period: 0,
+        trend_percent: 0,
+        reporting_rate: 'stable',
+      },
+      complaints: {
+        total_in_period: 3,
+        open: 1,
+        closed_in_period: 2,
+        resolution_rate: 66.7,
+      },
+      rtas,
+      risks: { total_active: 4, by_level: {}, high_critical: 1, average_score: 10 },
+      kris: { total_active: 0, by_status: {}, at_risk: 0, pending_alerts: 0 },
+      compliance: { total_assigned: 0, completed: 0, overdue: 0, completion_rate: 100 },
+      sla_performance: { total_tracked: 0, met: 0, breached: 0, compliance_rate: 100 },
+      trends: { incidents_weekly: [{ week_start: '2026-07-01', count: 2 }] },
+      alerts: [],
+    },
+  }
+}
+
 describe('Analytics', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockGetDashboard.mockResolvedValue({
-      data: {
-        generated_at: '2026-07-16T00:00:00Z',
-        period_days: 30,
-        health_score: { score: 72, status: 'ok', color: 'green', components: {} },
-        incidents: {
-          total_in_period: 5,
-          open: 2,
-          by_severity: {},
-          sif_count: 0,
-          psif_count: 0,
-          critical_high: 1,
-        },
-        near_misses: {
-          total_in_period: 1,
-          previous_period: 0,
-          trend_percent: 0,
-          reporting_rate: 'stable',
-        },
-        complaints: {
-          total_in_period: 3,
-          open: 1,
-          closed_in_period: 2,
-          resolution_rate: 66.7,
-        },
-        rtas: { total_in_period: 2 },
-        risks: { total_active: 4, by_level: {}, high_critical: 1, average_score: 10 },
-        kris: { total_active: 0, by_status: {}, at_risk: 0, pending_alerts: 0 },
-        compliance: { total_assigned: 0, completed: 0, overdue: 0, completion_rate: 100 },
-        sla_performance: { total_tracked: 0, met: 0, breached: 0, compliance_rate: 100 },
-        trends: { incidents_weekly: [{ week_start: '2026-07-01', count: 2 }] },
-        alerts: [],
-      },
-    })
+    // Register-wide total/open/closed alongside the windowed figure. The register holds
+    // more than the 30-day window saw — the shape that used to render as Open > Total.
+    mockGetDashboard.mockResolvedValue(dashboardFixture())
     mockActionsSummary.mockResolvedValue({
       data: { total: 10, by_display_status: { open: 4, completed: 6 } },
     })
@@ -189,7 +196,10 @@ describe('Analytics', () => {
   })
 
   describe('module metric honesty', () => {
-    it('shows RTA open/closed from list API instead of fake zeros', async () => {
+    // Replaces 'shows RTA open/closed from list API instead of fake zeros'. That test
+    // pinned the design behind PX-223: open/closed counted from one page of the register
+    // while total came from the dashboard, so the two could never be made to reconcile.
+    it('takes RTA total/open/closed from the dashboard aggregate so they reconcile', async () => {
       const Analytics = (await import('../Analytics')).default
       render(
         <MemoryRouter initialEntries={['/analytics?section=rtas']}>
@@ -199,12 +209,54 @@ describe('Analytics', () => {
         </MemoryRouter>,
       )
 
+      const summary = await screen.findByTestId('analytics-rta-summary')
+      expect(summary).toHaveTextContent(/Total[\s\S]*3/)
+      expect(summary).toHaveTextContent(/Open[\s\S]*1/)
+      expect(summary).toHaveTextContent(/Closed[\s\S]*2/)
+      // Avg resolution stays page-scoped; the register page is fetched for that alone.
+      expect(summary).toHaveTextContent('3.0d')
+      expect(mockListRtas).toHaveBeenCalledWith(1, 100)
+
       const table = await screen.findByTestId('analytics-module-table')
       const rtaRow = within(table).getByRole('row', { name: /RTAs/i })
-      expect(within(rtaRow).getAllByText('1')).toHaveLength(2)
-      expect(mockListRtas).toHaveBeenCalledWith(1, 100)
-      expect(await screen.findByTestId('analytics-rta-summary')).toHaveTextContent('Open')
-      expect(screen.getByTestId('analytics-rta-summary')).toHaveTextContent('3.0d')
+      expect(within(rtaRow).getByText('3')).toBeInTheDocument()
+    })
+
+    it('never lets RTA open exceed total, even when the window under-counts', async () => {
+      // The reported numbers: a 30-day window holding 31 while the register holds 32.
+      mockGetDashboard.mockResolvedValue(
+        dashboardFixture({ total_in_period: 31, total: 32, open: 32, closed: 0 }),
+      )
+      const Analytics = (await import('../Analytics')).default
+      render(
+        <MemoryRouter initialEntries={['/analytics?section=rtas']}>
+          <Routes>
+            <Route path="/analytics" element={<Analytics />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+
+      const summary = await screen.findByTestId('analytics-rta-summary')
+      expect(summary).toHaveTextContent(/Total[\s\S]*32/)
+      expect(summary).toHaveTextContent(/Open[\s\S]*32/)
+      expect(summary).not.toHaveTextContent('31')
+    })
+
+    it('withholds RTA open/closed when the server omits the split', async () => {
+      // A backend that predates the aggregate: the summary is present but has no split.
+      mockGetDashboard.mockResolvedValue(dashboardFixture({ total_in_period: 2 }))
+      const Analytics = (await import('../Analytics')).default
+      render(
+        <MemoryRouter initialEntries={['/analytics?section=rtas']}>
+          <Routes>
+            <Route path="/analytics" element={<Analytics />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+
+      const summary = await screen.findByTestId('analytics-rta-summary')
+      expect(summary).toHaveTextContent(/RTA open\/closed unavailable/i)
+      expect(summary).not.toHaveTextContent('0')
     })
 
     it('shows dedicated audit summary with avg resolution when completion timestamps exist', async () => {
@@ -248,8 +300,11 @@ describe('Analytics', () => {
       expect(within(auditsRow).getAllByText('—').length).toBeGreaterThanOrEqual(3)
     })
 
-    it('marks RTA open/closed unavailable without inventing zero counts', async () => {
-      mockListRtas.mockRejectedValue(new Error('rtas down'))
+    // Was 'marks RTA open/closed unavailable without inventing zero counts', driven by a
+    // failing rtasApi.list. Open/closed no longer come from that call, so the dashboard is
+    // now the dependency whose failure must withhold them.
+    it('marks RTA open/closed unavailable when the aggregate cannot be loaded', async () => {
+      mockGetDashboard.mockRejectedValue(new Error('dashboard down'))
       const Analytics = (await import('../Analytics')).default
       render(
         <MemoryRouter initialEntries={['/analytics?section=rtas']}>
@@ -266,6 +321,25 @@ describe('Analytics', () => {
       const table = screen.getByTestId('analytics-module-table')
       const rtaRow = within(table).getByRole('row', { name: /RTAs/i })
       expect(within(rtaRow).getAllByText('—').length).toBeGreaterThanOrEqual(2)
+    })
+
+    it('still shows average resolution when only the register page fails', async () => {
+      mockListRtas.mockRejectedValue(new Error('rtas down'))
+      const Analytics = (await import('../Analytics')).default
+      render(
+        <MemoryRouter initialEntries={['/analytics?section=rtas']}>
+          <Routes>
+            <Route path="/analytics" element={<Analytics />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+
+      const summary = await screen.findByTestId('analytics-rta-summary')
+      expect(summary).toHaveTextContent(/Open[\s\S]*1/)
+      expect(summary).toHaveTextContent(/Closed[\s\S]*2/)
+      expect(await screen.findByTestId('analytics-partial')).toHaveTextContent(
+        /average resolution not shown/i,
+      )
     })
   })
 })

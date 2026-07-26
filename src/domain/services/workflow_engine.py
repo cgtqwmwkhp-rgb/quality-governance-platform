@@ -1542,28 +1542,30 @@ class WorkflowTemplateEngine:
 
     # ==================== Statistics ====================
 
-    def get_workflow_stats(self) -> Dict[str, Any]:
-        """Get workflow statistics."""
+    def get_workflow_stats(self, user_id: int) -> Dict[str, Any]:
+        """Get workflow statistics for the signed-in user's approval queue.
+
+        `pending_approvals` is counted from `get_pending_approvals` — the exact list the
+        Workflow Center renders — so the tile and the panel beneath it cannot disagree.
+        It is a personal figure, not an organisation-wide one, and callers must label it
+        that way.
+
+        This engine holds no workflow state (`start_workflow` returns an unsaved dict and
+        `list_workflow_instances` returns an empty page), so active / overdue /
+        completed-today have no source to count. They are reported as ``None`` — an
+        honest "unmeasured" — rather than as fabricated constants or as zero.
+        """
         return {
-            "active_workflows": 23,
-            "pending_approvals": 12,
-            "overdue": 3,
-            "completed_today": 8,
-            "completed_this_week": 45,
-            "average_completion_time_hours": 18.5,
-            "sla_compliance_rate": 94.2,
-            "by_template": {
-                "RIDDOR": {"active": 2, "completed": 15, "avg_hours": 22},
-                "CAPA": {"active": 8, "completed": 42, "avg_hours": 120},
-                "NCR": {"active": 5, "completed": 28, "avg_hours": 48},
-                "DOCUMENT_APPROVAL": {"active": 8, "completed": 156, "avg_hours": 24},
-            },
-            "by_priority": {
-                "critical": 2,
-                "high": 5,
-                "normal": 14,
-                "low": 2,
-            },
+            "pending_approvals": len(self.get_pending_approvals(user_id)),
+            "pending_approvals_scope": "assigned_to_me",
+            "active_workflows": None,
+            "overdue": None,
+            "completed_today": None,
+            "completed_this_week": None,
+            "average_completion_time_hours": None,
+            "sla_compliance_rate": None,
+            "by_template": {},
+            "by_priority": {},
         }
 
 
