@@ -90,11 +90,22 @@ def test_copilot_paths_are_published_when_enabled(app, copilot_enabled):
     assert _referenced_components(schema) - set(schema["components"]["schemas"]) == set()
 
 
-def test_published_action_routes_require_a_bearer_token(app, copilot_enabled):
-    paths = app.openapi()["paths"]
+def test_no_published_copilot_operation_is_anonymous(app, copilot_enabled):
+    """GET /actions and GET /actions/suggest shipped with no authentication dependency.
 
-    for path in (f"{COPILOT_PATH_PREFIX}/actions", f"{COPILOT_PATH_PREFIX}/actions/suggest"):
-        assert paths[path]["get"]["security"] == [{"HTTPBearer": []}]
+    Asserted over every copilot operation rather than those two, so a route added later
+    cannot repeat the omission. ``tests/unit/test_copilot_feature_flag.py`` holds the
+    tripwire that keeps the mounted surface and the published surface in step.
+    """
+    anonymous = [
+        f"{method.upper()} {path}"
+        for path, operations in app.openapi()["paths"].items()
+        if path.startswith(COPILOT_PATH_PREFIX)
+        for method, operation in operations.items()
+        if operation.get("security") != [{"HTTPBearer": []}]
+    ]
+
+    assert anonymous == []
 
 
 @pytest.mark.parametrize("artifact", [BASELINE, CONTRACT])

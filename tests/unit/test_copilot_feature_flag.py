@@ -8,7 +8,6 @@ so every endpoint has to refuse before it can serve a fabricated payload.
 from types import SimpleNamespace
 
 import pytest
-from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
@@ -17,6 +16,45 @@ from src.api.routes import copilot as copilot_routes
 from src.core.config import settings
 
 COPILOT_PREFIX = "/api/v1/copilot"
+
+# Every copilot HTTP route currently mounted, as (method, path). Routes are identified by
+# their published method and path rather than by FastAPI's route classes: the repo floats
+# on ``fastapi>=0.109,<1.0``, and the internal route objects are not stable across that
+# range, whereas method and path are the contract.
+EXPECTED_HTTP_ROUTES = {
+    ("DELETE", f"{COPILOT_PREFIX}/sessions/{{session_id}}"),
+    ("GET", f"{COPILOT_PREFIX}/actions"),
+    ("GET", f"{COPILOT_PREFIX}/actions/suggest"),
+    ("GET", f"{COPILOT_PREFIX}/knowledge/search"),
+    ("GET", f"{COPILOT_PREFIX}/sessions"),
+    ("GET", f"{COPILOT_PREFIX}/sessions/active"),
+    ("GET", f"{COPILOT_PREFIX}/sessions/{{session_id}}"),
+    ("GET", f"{COPILOT_PREFIX}/sessions/{{session_id}}/messages"),
+    ("POST", f"{COPILOT_PREFIX}/actions/execute"),
+    ("POST", f"{COPILOT_PREFIX}/knowledge"),
+    ("POST", f"{COPILOT_PREFIX}/messages/{{message_id}}/feedback"),
+    ("POST", f"{COPILOT_PREFIX}/sessions"),
+    ("POST", f"{COPILOT_PREFIX}/sessions/{{session_id}}/messages"),
+}
+
+
+def mounted_copilot_http_routes() -> set[tuple[str, str]]:
+    """The copilot HTTP surface actually mounted on the app, as (method, path).
+
+    HEAD is excluded because the framework derives it from GET, and the WebSocket route
+    is excluded because it carries no ``methods`` and authenticates its own token.
+    """
+    from src.main import app
+
+    return {
+        (method, path)
+        for route in app.routes
+        for path in [getattr(route, "path", "")]
+        if path.startswith(COPILOT_PREFIX)
+        for method in (getattr(route, "methods", None) or ())
+        if method != "HEAD"
+    }
+
 
 # One representative request per copilot HTTP route. None of these send credentials:
 # the guard has to fire ahead of authentication so a disabled feature is never
@@ -135,22 +173,14 @@ def test_action_routes_reject_invalid_tokens_when_enabled(client: TestClient, co
     assert "create_incident" not in response.text
 
 
-def _dependency_calls(dependant):
-    for sub_dependant in dependant.dependencies:
-        yield sub_dependant.call
-        yield from _dependency_calls(sub_dependant)
+def test_the_mounted_copilot_surface_is_exactly_the_matrix_above():
+    """Tripwire: a route added later must be added to COPILOT_REQUESTS, not silently skipped.
 
-
-def test_every_copilot_http_route_is_authenticated_and_flag_guarded():
-    """Guard the whole module, not just the two routes that were found unauthenticated."""
-    http_routes = [route for route in copilot_routes.router.routes if isinstance(route, APIRoute)]
-
-    assert http_routes, "copilot router exposed no HTTP routes to check"
-
-    for route in http_routes:
-        calls = set(_dependency_calls(route.dependant))
-        assert get_current_user in calls, f"{sorted(route.methods)} {route.path} has no authentication dependency"
-        assert copilot_routes.require_copilot_enabled in calls, f"{route.path} is not behind the feature flag"
+    COPILOT_REQUESTS and the authentication contract in
+    tests/unit/test_copilot_openapi_exclusion.py are both driven from that list, so an
+    unlisted route would be checked by neither.
+    """
+    assert mounted_copilot_http_routes() == EXPECTED_HTTP_ROUTES
 
 
 def test_authenticated_routes_reach_auth_when_enabled(client: TestClient, copilot_enabled):
