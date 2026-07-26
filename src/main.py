@@ -244,8 +244,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     if _os.environ.get("TESTING") != "1":
         try:
-            from src.infrastructure.database import async_session_maker
             from src.domain.services.lookup_defaults_seed import seed_lookup_defaults
+            from src.infrastructure.database import async_session_maker
 
             async with async_session_maker() as session:
                 seed_result = await seed_lookup_defaults(session)

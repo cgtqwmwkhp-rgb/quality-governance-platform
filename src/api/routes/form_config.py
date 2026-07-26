@@ -12,7 +12,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.services.form_config_service import FormConfigService
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.form_config import (
     ContractCreate,
@@ -42,6 +41,7 @@ from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundErr
 from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.form_config_service import FormConfigService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
