@@ -105,6 +105,26 @@ vi.mock('../investigation/investigationReportHelpers', () => ({
   triggerPackDownload: vi.fn(),
 }))
 
+vi.mock('../../components/EngineerPeoplePicker', () => ({
+  EngineerPeoplePicker: ({
+    value,
+    onChange,
+    testId,
+  }: {
+    value?: { label?: string } | null
+    onChange?: (next: { label: string } | null) => void
+    testId?: string
+  }) => (
+    <button
+      type="button"
+      data-testid={testId || 'mock-engineer-people-picker'}
+      onClick={() => onChange?.({ label: 'Roster Engineer' })}
+    >
+      {value?.label || 'Pick engineer'}
+    </button>
+  ),
+}))
+
 vi.mock('../../api/client', () => ({
   investigationsApi: {
     get: vi.fn(),
@@ -126,6 +146,9 @@ vi.mock('../../api/client', () => ({
     list: vi.fn(),
     upload: vi.fn(),
     delete: vi.fn(),
+  },
+  workforceApi: {
+    listEngineers: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
   },
   checkPackCapability: vi.fn(),
   getApiErrorMessage: (err: Error) => err.message,
