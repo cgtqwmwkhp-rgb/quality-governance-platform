@@ -1,14 +1,19 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildPortalPhotoMetadataSummary,
   isAllowedPortalPhoto,
   isPortalPhotoMetadataOnly,
   MAX_PORTAL_PHOTO_COUNT,
   portalPhotoEvidenceHonestyCopy,
+  portalPhotoPreviewUrl,
   validatePortalPhotos,
 } from '../portalPhotoEvidenceHonesty'
 
 describe('portalPhotoEvidenceHonesty', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('builds metadata-only photo summary with evidence_spine flag', () => {
     const file = new File(['x'], 'scene.jpg', { type: 'image/jpeg' })
     const summary = buildPortalPhotoMetadataSummary([file])
@@ -25,6 +30,18 @@ describe('portalPhotoEvidenceHonesty', () => {
     expect(portalPhotoEvidenceHonestyCopy(0)).toMatch(/No photos selected/i)
     expect(portalPhotoEvidenceHonestyCopy(2)).toMatch(/not uploaded to the shared evidence store/i)
     expect(portalPhotoEvidenceHonestyCopy(2)).toMatch(/2 photo filename/)
+  })
+
+  it('builds preview URLs from a Blob copy of the file', () => {
+    const createObjectURL = vi.fn(() => 'blob:portal-preview')
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() })
+    const file = new File(['x'], 'scene.jpg', { type: 'image/jpeg' })
+    expect(portalPhotoPreviewUrl(file)).toBe('blob:portal-preview')
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    const arg = createObjectURL.mock.calls[0]?.[0]
+    expect(arg).toBeInstanceOf(Blob)
+    expect(arg).not.toBe(file)
+    expect((arg as Blob).type).toBe('image/jpeg')
   })
 
   it('detects metadata-only reporter_submission photos', () => {

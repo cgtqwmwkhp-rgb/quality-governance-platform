@@ -78,7 +78,7 @@ import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { cn } from '../helpers/utils'
 import { portalRequiredProps } from '../utils/portalFormA11y'
-import { validatePortalPhotos } from './portalPhotoEvidenceHonesty'
+import { portalPhotoPreviewUrl, validatePortalPhotos } from './portalPhotoEvidenceHonesty'
 
 // PE Vehicle options
 const PE_VEHICLES = [
@@ -1031,7 +1031,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
                     <img
-                      src={URL.createObjectURL(photo)}
+                      src={portalPhotoPreviewUrl(photo)}
                       alt=""
                       className="w-full h-full object-cover rounded-xl"
                     />

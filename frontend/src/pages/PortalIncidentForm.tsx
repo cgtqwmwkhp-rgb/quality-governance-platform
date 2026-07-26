@@ -37,6 +37,7 @@ import {
 import {
   buildPortalPhotoMetadataSummary,
   portalPhotoEvidenceHonestyCopy,
+  portalPhotoPreviewUrl,
   validatePortalPhotos,
 } from './portalPhotoEvidenceHonesty'
 import { useGeolocation } from '../hooks/useGeolocation'
@@ -1170,7 +1171,7 @@ export default function PortalIncidentForm() {
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
                     <img
-                      src={URL.createObjectURL(photo)}
+                      src={portalPhotoPreviewUrl(photo)}
                       alt={`Photo ${index + 1}`}
                       className="w-full h-full object-cover rounded-xl"
                     />

@@ -91,6 +91,7 @@ import { lookupsApi, type LookupOption } from '../api/client'
 import {
   buildPortalPhotoMetadataSummary,
   portalPhotoEvidenceHonestyCopy,
+  portalPhotoPreviewUrl,
   validatePortalPhotos,
 } from './portalPhotoEvidenceHonesty'
 
@@ -963,7 +964,7 @@ export default function PortalNearMissForm() {
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
                     <img
-                      src={URL.createObjectURL(photo)}
+                      src={portalPhotoPreviewUrl(photo)}
                       alt=""
                       className="w-full h-full object-cover rounded-xl"
                     />

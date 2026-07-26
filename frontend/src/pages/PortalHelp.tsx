@@ -62,7 +62,6 @@ const CategoryCard = ({
   icon: Icon,
   title,
   description,
-  count,
   countLabel,
   colorClass,
   onClick,
@@ -70,7 +69,6 @@ const CategoryCard = ({
   icon: React.ComponentType<{ className?: string }>
   title: string
   description: string
-  count: number
   countLabel: string
   colorClass: string
   onClick: () => void
@@ -267,8 +265,11 @@ export default function PortalHelp() {
               {categories.map((cat) => (
                 <CategoryCard
                   key={cat.id}
-                  {...cat}
+                  icon={cat.icon}
+                  title={cat.title}
+                  description={cat.description}
                   countLabel={t('portal.faq_count', { count: cat.count })}
+                  colorClass={cat.colorClass}
                   onClick={() => setSelectedCategory(cat.id)}
                 />
               ))}

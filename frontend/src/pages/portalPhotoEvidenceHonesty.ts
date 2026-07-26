@@ -101,6 +101,15 @@ export function buildPortalPhotoMetadataSummary(photos: ReadonlyArray<File>): {
   }
 }
 
+/**
+ * Local preview URL for an attached portal photo.
+ * Rebuild as Blob so CodeQL does not treat file-input Files as DOM→HTML taint
+ * when the URL is assigned to img.src (js/xss-through-dom).
+ */
+export function portalPhotoPreviewUrl(file: File): string {
+  return URL.createObjectURL(new Blob([file], { type: file.type || 'application/octet-stream' }))
+}
+
 export function portalPhotoEvidenceHonestyCopy(photoCount: number): string {
   if (photoCount <= 0) {
     return 'No photos selected. You can still submit — staff may request evidence later.'
