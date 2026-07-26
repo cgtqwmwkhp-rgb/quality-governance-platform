@@ -135,7 +135,25 @@ const paginatedResponse = {
 describe('Incidents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockList.mockResolvedValue(paginatedResponse)
+    mockList.mockImplementation((_page, _pageSize, options?: { search?: string; owner?: string }) => {
+      const needle = options?.search?.trim().toLowerCase()
+      const items = needle
+        ? sampleIncidents.filter(
+            (incident) =>
+              incident.title.toLowerCase().includes(needle) ||
+              incident.reference_number.toLowerCase().includes(needle),
+          )
+        : sampleIncidents
+      return Promise.resolve({
+        data: {
+          items,
+          total: items.length,
+          page: 1,
+          page_size: 50,
+          total_pages: 1,
+        },
+      })
+    })
     mockResolveReporter.mockResolvedValue({
       reporter_name: 'Alex Engineer',
       reporter_email: 'alex@example.com',
@@ -174,7 +192,7 @@ describe('Incidents', () => {
     expect(screen.getByText('Slip in warehouse')).toBeInTheDocument()
     expect(screen.getByText('INC-002')).toBeInTheDocument()
     expect(screen.getByText('Chemical spill in lab')).toBeInTheDocument()
-    expect(mockList).toHaveBeenCalledWith(1, 50, undefined)
+    expect(mockList).toHaveBeenCalledWith(1, 50, { owner: undefined, search: undefined })
   })
 
   it('PX-164: register severity and status render as title case labels, not raw codes', async () => {
@@ -324,7 +342,7 @@ describe('Incidents', () => {
     })
   })
 
-  it('filters incidents via search', async () => {
+  it('filters incidents via server-side search (PX-130)', async () => {
     render(<Incidents />, { wrapper: Wrapper })
 
     await waitFor(() => {
@@ -336,8 +354,13 @@ describe('Incidents', () => {
     const searchInput = screen.getByPlaceholderText('incidents.search_placeholder')
     fireEvent.change(searchInput, { target: { value: 'warehouse' } })
 
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalledWith(1, 50, { owner: undefined, search: 'warehouse' })
+    })
     expect(screen.getByText('Slip in warehouse')).toBeInTheDocument()
     expect(screen.queryByText('Chemical spill in lab')).not.toBeInTheDocument()
+    expect(screen.getByTestId('incidents-search-active')).toBeInTheDocument()
+    expect(screen.queryByTestId('incidents-search-scope-honesty')).not.toBeInTheDocument()
   })
 
   it('navigates to incident detail when a row is clicked', async () => {
@@ -387,20 +410,6 @@ describe('Incidents', () => {
     expect(screen.getByText('a11y.page_of')).toBeInTheDocument()
   })
 
-  it('shows search scope honesty when filtering current page (PX-004)', async () => {
-    render(<Incidents />, { wrapper: Wrapper })
-
-    await waitFor(() => {
-      expect(screen.getByText('INC-001')).toBeInTheDocument()
-    })
-
-    fireEvent.change(screen.getByPlaceholderText('incidents.search_placeholder'), {
-      target: { value: 'warehouse' },
-    })
-
-    expect(screen.getByTestId('incidents-search-scope-honesty')).toBeInTheDocument()
-  })
-
   it('hydrates q/status/severity filters from shareable URL', async () => {
     render(
       <MemoryRouter initialEntries={['/incidents?q=warehouse&status=reported&severity=high']}>
@@ -415,8 +424,10 @@ describe('Incidents', () => {
     })
 
     expect(screen.getByPlaceholderText('incidents.search_placeholder')).toHaveValue('warehouse')
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalledWith(1, 50, { owner: undefined, search: 'warehouse' })
+    })
     expect(screen.queryByText('Chemical spill in lab')).not.toBeInTheDocument()
-    expect(mockList).toHaveBeenCalledWith(1, 50, undefined)
   })
 
   it('renders rows with null type/status/date without crashing (ErrorBoundary honesty)', async () => {
