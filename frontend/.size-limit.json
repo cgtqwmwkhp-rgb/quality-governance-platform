@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "181 kB",
+    "limit": "182 kB",
     "gzip": true,
-    "name": "index: 180\u2192181 kB \u2014 case register #1320 (+191 B over 180)"
+    "name": "index: 181\u2192182 kB \u2014 Wave 2 investigations/incidents (+386 B headroom)"
   },
   {
     "path": "dist/assets/vendor-*.js",
