@@ -954,7 +954,7 @@ async def create_capa_for_investigation(
 
 
 @router.patch("/{investigation_id:int}", response_model=InvestigationRunResponse)
-async def update_investigation(
+async def update_investigation(  # noqa: C901 - completion/close gates + revision events
     request: Request,
     investigation_id: int,
     investigation_data: InvestigationRunUpdate,
