@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   Search,
   ArrowLeft,
@@ -27,10 +27,14 @@ import ReportChat from '../components/ReportChat'
 import { API_BASE_URL } from '../config/apiBase'
 
 // Types
+type ReportType = 'incident' | 'near_miss' | 'complaint' | 'rta'
+
 interface ReportSummary {
   reference_number: string
-  report_type: 'incident' | 'near_miss' | 'complaint' | 'rta'
+  /** Canonical snake_case, produced by the boundary mappers below (PX-316). */
+  report_type: ReportType
   title: string
+  /** Canonical lowercase, produced by the boundary mappers below (PX-316). */
   status: string
   status_label: string
   submitted_at: string
@@ -43,6 +47,64 @@ interface ReportDetail extends ReportSummary {
   next_steps: string
   assigned_to: string
 }
+
+const CLOSED_STATUSES = new Set(['resolved', 'closed'])
+
+// PX-316: the portal reads span four tables with different casing conventions,
+// and the detail endpoint labels report_type for display ("Road Traffic
+// Collision") while the list endpoint uses the canonical "rta". Both are
+// normalised here, once, so nothing downstream needs to re-case anything.
+const normalizeStatus = (raw: unknown): string =>
+  String(raw ?? '')
+    .trim()
+    .toLowerCase()
+
+const REPORT_TYPE_ALIASES: Record<string, ReportType> = {
+  incident: 'incident',
+  near_miss: 'near_miss',
+  'near miss': 'near_miss',
+  complaint: 'complaint',
+  rta: 'rta',
+  'road traffic collision': 'rta',
+}
+
+const normalizeReportType = (raw: unknown): ReportType =>
+  REPORT_TYPE_ALIASES[normalizeStatus(raw).replace(/-/g, '_')] ?? 'incident'
+
+const STATUS_LABELS: Record<string, string> = {
+  open: '📋 Open',
+  reported: '📋 Reported',
+  received: '📋 Received',
+  under_investigation: '🔍 Under Investigation',
+  in_progress: '⚙️ In Progress',
+  actions_in_progress: '⚙️ In Progress',
+  pending_review: '⏳ Pending Review',
+  resolved: '✅ Resolved',
+  closed: '✅ Closed',
+}
+
+const getStatusLabel = (status: string): string => STATUS_LABELS[status] || status || 'Unknown'
+
+const toReportSummary = (item: Record<string, unknown>): ReportSummary => {
+  const status = normalizeStatus(item.status)
+  return {
+    reference_number: String(item.reference_number ?? ''),
+    report_type: normalizeReportType(item.report_type),
+    title: String(item.title ?? ''),
+    status,
+    status_label: (item.status_label as string) || getStatusLabel(status),
+    submitted_at: String(item.submitted_at ?? ''),
+    updated_at: String(item.updated_at ?? ''),
+  }
+}
+
+const toReportDetail = (item: Record<string, unknown>): ReportDetail => ({
+  ...toReportSummary(item),
+  priority: String(item.priority ?? ''),
+  timeline: Array.isArray(item.timeline) ? (item.timeline as ReportDetail['timeline']) : [],
+  next_steps: String(item.next_steps ?? ''),
+  assigned_to: String(item.assigned_to ?? ''),
+})
 
 // Report type config
 const REPORT_TYPE_CONFIG = {
@@ -80,18 +142,20 @@ const REPORT_TYPE_CONFIG = {
 const StatusBadge = ({ status, label }: { status: string; label: string }) => {
   const getStatusStyles = () => {
     switch (status) {
-      case 'REPORTED':
-      case 'OPEN':
+      case 'reported':
+      case 'received':
+      case 'open':
         return 'bg-info/10 text-info border-info/20'
-      case 'UNDER_INVESTIGATION':
-      case 'IN_PROGRESS':
+      case 'under_investigation':
+      case 'in_progress':
+      case 'actions_in_progress':
         return 'bg-warning/10 text-warning border-warning/20'
-      case 'PENDING_REVIEW':
+      case 'pending_review':
         return 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800'
-      case 'RESOLVED':
-      case 'CLOSED':
+      case 'resolved':
+      case 'closed':
         return 'bg-success/10 text-success border-success/20'
-      case 'REJECTED':
+      case 'rejected':
         return 'bg-destructive/10 text-destructive border-destructive/20'
       default:
         return 'bg-muted text-muted-foreground border-border'
@@ -143,19 +207,21 @@ const TimelineEvent = ({
 // Progress indicator component
 const ProgressIndicator = ({ status }: { status: string }) => {
   const stages = [
-    { key: 'REPORTED', label: 'Submitted', icon: '📋' },
-    { key: 'UNDER_INVESTIGATION', label: 'Under Review', icon: '🔍' },
-    { key: 'IN_PROGRESS', label: 'In Progress', icon: '⚙️' },
-    { key: 'RESOLVED', label: 'Resolved', icon: '✅' },
+    { key: 'reported', label: 'Submitted', icon: '📋' },
+    { key: 'under_investigation', label: 'Under Review', icon: '🔍' },
+    { key: 'in_progress', label: 'In Progress', icon: '⚙️' },
+    { key: 'resolved', label: 'Resolved', icon: '✅' },
   ]
 
-  const currentIndex = stages.findIndex(
-    (s) =>
-      s.key === status ||
-      (status === 'OPEN' && s.key === 'REPORTED') ||
-      (status === 'PENDING_REVIEW' && s.key === 'IN_PROGRESS') ||
-      (status === 'CLOSED' && s.key === 'RESOLVED'),
-  )
+  const STAGE_ALIASES: Record<string, string> = {
+    open: 'reported',
+    received: 'reported',
+    actions_in_progress: 'in_progress',
+    pending_review: 'in_progress',
+    closed: 'resolved',
+  }
+  const stageKey = STAGE_ALIASES[status] ?? status
+  const currentIndex = stages.findIndex((s) => s.key === stageKey)
 
   return (
     <div className="flex items-center justify-between mb-6">
@@ -235,17 +301,49 @@ const ReportListItem = ({ report, onClick }: { report: ReportSummary; onClick: (
   )
 }
 
+/**
+ * The submit flows stash the HMAC tracking code the API issued, keyed by
+ * reference number (see PortalDynamicForm and the four static portal forms).
+ * PX-315: this page never read it back, so the detail request arrived with no
+ * credential at all and the anonymous gate rejected it.
+ */
+const trackingCodeStorageKey = (ref: string) => `tracking_${ref}`
+
+const readStoredTrackingCode = (ref: string): string | null => {
+  try {
+    return sessionStorage.getItem(trackingCodeStorageKey(ref))
+  } catch {
+    return null
+  }
+}
+
+const storeTrackingCode = (ref: string, code: string) => {
+  try {
+    sessionStorage.setItem(trackingCodeStorageKey(ref), code)
+  } catch {
+    // Private-browsing or storage-full: tracking still works for this request.
+  }
+}
+
 export default function PortalTrack() {
   const navigate = useNavigate()
   const { referenceNumber: urlRef } = useParams()
+  const [searchParams] = useSearchParams()
   const { user, isAuthenticated, platformToken } = usePortalAuth()
 
+  // QR codes and shared links carry ?tracking_code=... (see the backend
+  // /portal/qr/{ref} endpoint), which is the only credential an anonymous
+  // reporter arriving on a new device has.
+  const urlTrackingCode = searchParams.get('tracking_code')
+
   const [searchRef, setSearchRef] = useState(urlRef || '')
+  const [trackingCodeInput, setTrackingCodeInput] = useState(urlTrackingCode || '')
   const [isSearching, setIsSearching] = useState(false)
   const [isLoadingMyReports, setIsLoadingMyReports] = useState(false)
   const [myReports, setMyReports] = useState<ReportSummary[]>([])
   const [selectedReport, setSelectedReport] = useState<ReportDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [needsTrackingCode, setNeedsTrackingCode] = useState(false)
   const [typeFilter, setTypeFilter] = useState('all')
 
   const loadMyReports = useCallback(async () => {
@@ -281,15 +379,7 @@ export default function PortalTrack() {
 
       if (response.ok) {
         const data = await response.json()
-        const reports: ReportSummary[] = (data.items || []).map((item: any) => ({
-          reference_number: item.reference_number,
-          report_type: item.report_type,
-          title: item.title,
-          status: item.status?.toUpperCase() || 'OPEN',
-          status_label: item.status_label || getStatusLabel(item.status),
-          submitted_at: item.submitted_at,
-          updated_at: item.updated_at,
-        }))
+        const reports: ReportSummary[] = (data.items || []).map(toReportSummary)
 
         // Sort by most recent
         reports.sort(
@@ -319,57 +409,88 @@ export default function PortalTrack() {
     }
   }, [isAuthenticated, user, platformToken, loadMyReports])
 
-  // Load specific report from URL
+  // `typedCode` is passed in rather than read from state so that typing in the
+  // tracking-code box does not invalidate this callback on every keystroke.
+  const searchReport = useCallback(
+    async (ref: string, typedCode?: string) => {
+      const reference = ref.trim()
+      if (!reference) return
+
+      setIsSearching(true)
+      setError(null)
+      setNeedsTrackingCode(false)
+      setSelectedReport(null)
+
+      // PX-315: send whatever credential we actually hold. The tracking code
+      // proves possession for anonymous reporters; the platform token lets a
+      // signed-in user open a report they submitted themselves.
+      const trackingCode =
+        (typedCode || '').trim() ||
+        urlTrackingCode?.trim() ||
+        readStoredTrackingCode(reference) ||
+        ''
+
+      const token = platformToken || sessionStorage.getItem('platform_access_token')
+
+      const url = new URL(`${API_BASE_URL}/api/v1/portal/reports/${encodeURIComponent(reference)}/`)
+      if (trackingCode) {
+        url.searchParams.set('tracking_code', trackingCode)
+      }
+
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+
+      try {
+        const response = await fetch(url.toString(), { headers })
+        if (response.ok) {
+          const data = await response.json()
+          setSelectedReport(toReportDetail(data))
+          if (trackingCode) {
+            storeTrackingCode(reference, trackingCode)
+          }
+          return
+        }
+
+        if (response.status === 400) {
+          setError(
+            `"${reference}" is not a valid reference number. It should look like INC-2026-0001.`,
+          )
+        } else if (response.status === 401 || response.status === 403) {
+          // Distinct from 404 since PX-315: the report may well exist, we just
+          // could not prove the caller is entitled to see it.
+          setNeedsTrackingCode(true)
+          setError(
+            trackingCode
+              ? 'That tracking code does not match this reference number. Check the code from your confirmation message.'
+              : 'Enter the tracking code from your confirmation message, or sign in with the account that submitted this report.',
+          )
+        } else if (response.status === 404) {
+          setError('Report not found. Please check your reference number.')
+        } else {
+          setError('Unable to fetch report. Please try again.')
+        }
+      } catch {
+        setError('Unable to connect to the server. Please try again later.')
+      } finally {
+        setIsSearching(false)
+      }
+    },
+    [platformToken, urlTrackingCode],
+  )
+
+  // Load specific report from URL. `searchReport` changes when the platform
+  // token lands, so a deep link opened before auth settles is retried rather
+  // than left showing a credential error.
   useEffect(() => {
     if (urlRef) {
       searchReport(urlRef)
     }
-  }, [urlRef])
-
-  const getStatusLabel = (status: string): string => {
-    const labels: Record<string, string> = {
-      open: '📋 Open',
-      reported: '📋 Reported',
-      under_investigation: '🔍 Under Investigation',
-      in_progress: '⚙️ In Progress',
-      pending_review: '⏳ Pending Review',
-      resolved: '✅ Resolved',
-      closed: '✅ Closed',
-    }
-    return labels[status?.toLowerCase()] || status || 'Unknown'
-  }
-
-  const searchReport = async (ref: string) => {
-    if (!ref.trim()) return
-
-    setIsSearching(true)
-    setError(null)
-    setSelectedReport(null)
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/portal/reports/${encodeURIComponent(ref.trim())}/`,
-      )
-      if (response.ok) {
-        const data = await response.json()
-        setSelectedReport(data)
-      } else if (response.status === 404) {
-        setError('Report not found. Please check your reference number.')
-      } else {
-        setError('Unable to fetch report. Please try again.')
-      }
-    } catch {
-      setError('Unable to connect to the server. Please try again later.')
-    } finally {
-      setIsSearching(false)
-    }
-  }
+  }, [urlRef, searchReport])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (searchRef.trim()) {
       navigate(`/portal/track/${searchRef.trim()}`)
-      searchReport(searchRef.trim())
+      searchReport(searchRef.trim(), trackingCodeInput)
     }
   }
 
@@ -509,7 +630,7 @@ export default function PortalTrack() {
             reporterName={user?.name || 'Reporter'}
             officerName={selectedReport.assigned_to || 'Safety Team'}
             isReporter={true}
-            isClosed={selectedReport.status === 'RESOLVED' || selectedReport.status === 'CLOSED'}
+            isClosed={CLOSED_STATUSES.has(selectedReport.status)}
           />
 
           {/* Actions */}
@@ -588,28 +709,41 @@ export default function PortalTrack() {
             <option value="complaint">Complaint</option>
             <option value="rta">Road Traffic Collision</option>
           </select>
-          <form onSubmit={handleSearch} className="flex gap-3">
-            <Input
-              type="search"
-              placeholder="Enter reference number (e.g., INC-2026-0001)"
-              aria-label="Search report by reference"
-              value={searchRef}
-              onChange={(e) => setSearchRef(e.target.value.toUpperCase())}
-              className="font-mono text-base"
-              data-testid="portal-track-search"
-            />
-            <Button
-              type="submit"
-              disabled={isSearching || !searchRef.trim()}
-              data-testid="portal-track-search-submit"
-              aria-label="Search"
-            >
-              {isSearching ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Search className="w-5 h-5" />
-              )}
-            </Button>
+          <form onSubmit={handleSearch} className="space-y-3">
+            <div className="flex gap-3">
+              <Input
+                type="search"
+                placeholder="Enter reference number (e.g., INC-2026-0001)"
+                aria-label="Search report by reference"
+                value={searchRef}
+                onChange={(e) => setSearchRef(e.target.value.toUpperCase())}
+                className="font-mono text-base"
+                data-testid="portal-track-search"
+              />
+              <Button
+                type="submit"
+                disabled={isSearching || !searchRef.trim()}
+                data-testid="portal-track-search-submit"
+                aria-label="Search"
+              >
+                {isSearching ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Search className="w-5 h-5" />
+                )}
+              </Button>
+            </div>
+            {(!isAuthenticated || needsTrackingCode) && (
+              <Input
+                type="text"
+                placeholder="Tracking code from your confirmation message"
+                aria-label="Tracking code"
+                value={trackingCodeInput}
+                onChange={(e) => setTrackingCodeInput(e.target.value.trim())}
+                className="font-mono text-sm"
+                data-testid="portal-track-code"
+              />
+            )}
           </form>
         </div>
 
@@ -651,8 +785,12 @@ export default function PortalTrack() {
                 </div>
               ) : (
                 <Card className="p-8 text-center">
-                  <h3 className="text-lg font-semibold text-foreground mb-2">No matching reports</h3>
-                  <p className="text-muted-foreground">Clear or change the type filter to see your reports.</p>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">
+                    No matching reports
+                  </h3>
+                  <p className="text-muted-foreground">
+                    Clear or change the type filter to see your reports.
+                  </p>
                 </Card>
               )
             ) : !platformToken ? (
@@ -688,9 +826,14 @@ export default function PortalTrack() {
         )}
 
         {error && !selectedReport && (
-          <Card className="p-6 text-center border-destructive/20 mb-6">
+          <Card
+            className="p-6 text-center border-destructive/20 mb-6"
+            data-testid="portal-track-error"
+          >
             <XCircle className="w-12 h-12 text-destructive mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-foreground mb-2">Not Found</h3>
+            <h3 className="text-lg font-bold text-foreground mb-2">
+              {needsTrackingCode ? 'Tracking code needed' : 'Not Found'}
+            </h3>
             <p className="text-muted-foreground">{error}</p>
           </Card>
         )}

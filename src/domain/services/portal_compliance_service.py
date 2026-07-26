@@ -15,7 +15,7 @@ from src.domain.models.vehicle_defect import VehicleDefect
 from src.domain.models.vehicle_registry import VehicleRegistry
 from src.domain.services.allocation_gate import OPEN_STATUSES, load_vehicle_kit_assets
 
-ClearState = Literal["clear", "attention", "blocked"]
+ClearState = Literal["clear", "attention", "blocked", "no_data"]
 ToolBand = Literal["overdue", "due_30", "due_60", "due_90", "in_date", "none", "quarantined", "decommissioned"]
 
 
@@ -61,12 +61,23 @@ def derive_clear_state(
     due_30: int,
     open_p1: int,
     open_other_defects: int,
+    has_tool_data: bool,
+    has_van_data: bool,
     van_assignment_issue: bool = False,
 ) -> ClearState:
+    """Clear-to-work state for one person.
+
+    PX-320: all-zero counts used to mean "clear", which reads to the user as
+    "you are compliant" even when the real situation is that we hold no assets
+    and no van for them. ``has_tool_data`` / ``has_van_data`` are required so a
+    caller cannot fall into the reassuring answer by omission.
+    """
     if quarantined > 0 or open_p1 > 0:
         return "blocked"
     if overdue > 0 or due_30 > 0 or open_other_defects > 0 or van_assignment_issue:
         return "attention"
+    if not has_tool_data and not has_van_data:
+        return "no_data"
     return "clear"
 
 
@@ -348,6 +359,8 @@ class PortalComplianceService:
             due_30=summary["due_30"],
             open_p1=counts["p1"],
             open_other_defects=counts["p2"] + counts["p3"],
+            has_tool_data=summary["total"] > 0,
+            has_van_data=van["vehicle_reg"] is not None,
             van_assignment_issue=van_assignment_issue,
         )
         tool_badge = summary["overdue"] + summary["quarantined"] + summary["due_30"]

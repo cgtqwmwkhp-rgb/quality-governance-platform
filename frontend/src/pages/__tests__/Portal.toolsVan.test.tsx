@@ -94,6 +94,50 @@ describe('Portal tools + van landing', () => {
     expect(tools.compareDocumentPosition(report) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
+  it('says nothing is recorded rather than "clear to work" when there is no data', async () => {
+    // PX-320: an empty tool list and no van used to arrive as clear_state
+    // 'clear', which told the engineer they were compliant on the strength of
+    // data we do not hold.
+    mockMyCompliance.mockResolvedValue({
+      clear_state: 'no_data',
+      tool_summary: {
+        total: 0,
+        overdue: 0,
+        due_30: 0,
+        due_60: 0,
+        due_90: 0,
+        in_date: 0,
+        quarantined: 0,
+        mine: 0,
+        on_van: 0,
+      },
+      tool_badge: 0,
+      van_summary: {
+        vehicle_reg: null,
+        daily_last_at: null,
+        daily_pass: null,
+        monthly_last_at: null,
+        defect_counts: { p1: 0, p2: 0, p3: 0, total: 0 },
+        empty_reason: 'no_van',
+        assignment_conflict: false,
+      },
+      van_badge: 0,
+      tools_empty_reason: 'no_tools',
+    })
+
+    render(
+      <MemoryRouter>
+        <Portal />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('portal-clear-to-work')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Nothing to report yet')).toBeInTheDocument()
+    expect(screen.queryByText('Clear to work')).toBeNull()
+  })
+
   it('shows honest fetch-failed state instead of fake zeros', async () => {
     mockMyCompliance.mockRejectedValue(new Error('offline'))
 

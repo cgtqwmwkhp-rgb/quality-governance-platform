@@ -11,10 +11,10 @@ import hmac
 import logging
 import secrets
 from datetime import datetime, timezone
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Literal, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import String, cast, func, literal, select, union_all
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
@@ -82,6 +82,11 @@ _PORTAL_SUCCESS_COPY = {
 # ============================================================================
 # Schemas for Employee Portal
 # ============================================================================
+
+
+def _normalized_status(value: str) -> str:
+    """Field validator body: emit one status casing on every portal read (PX-316)."""
+    return normalize_portal_status(value)
 
 
 class QuickReportCreate(BaseModel):
@@ -206,6 +211,8 @@ class ReportStatusResponse(BaseModel):
     assigned_to: Optional[str] = None
     resolution: Optional[str] = None
 
+    _normalize_status = field_validator("status")(_normalized_status)
+
 
 class PortalStatsResponse(BaseModel):
     """Portal statistics for transparency."""
@@ -226,6 +233,8 @@ class MyReportSummary(BaseModel):
     status_label: str
     submitted_at: datetime
     updated_at: datetime
+
+    _normalize_status = field_validator("status")(_normalized_status)
 
 
 class MyReportsResponse(BaseModel):
@@ -266,6 +275,78 @@ def validate_tracking_code(reference_number: str, provided_code: Optional[str]) 
         return False
     expected_code = generate_tracking_code(reference_number)
     return hmac.compare_digest(expected_code, provided_code)
+
+
+_PORTAL_REFERENCE_PREFIXES = ("INC-", "COMP-", "RTA-", "NM-")
+
+# How the caller earned the right to read a report. ``tracking_code`` is the
+# anonymous grant; ``session`` additionally requires ownership of the record.
+PortalReadGrant = Literal["tracking_code", "session"]
+
+
+def authorize_portal_report_read(
+    reference_number: str,
+    tracking_code: Optional[str],
+    current_user: Optional[Any],
+) -> PortalReadGrant:
+    """Decide whether a caller may read a report, or raise a specific error.
+
+    PX-315: this gate previously collapsed "you sent no credentials", "your code
+    is wrong" and "no such reference" into one 404, so a client that simply
+    forgot to send the tracking code looked identical to missing data. Each
+    condition now has its own status code.
+    """
+    if validate_tracking_code(reference_number, tracking_code):
+        return "tracking_code"
+
+    if tracking_code:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=api_error(
+                ErrorCode.PERMISSION_DENIED.value,
+                "That tracking code does not match this reference number.",
+                details={"reference_number": reference_number},
+            ),
+        )
+
+    if current_user is not None:
+        return "session"
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=api_error(
+            ErrorCode.AUTHENTICATION_REQUIRED.value,
+            "Tracking a report requires the tracking code issued when it was "
+            "submitted, or a signed-in account that submitted it.",
+            details={"reference_number": reference_number},
+        ),
+    )
+
+
+def assert_session_owns_report(
+    grant: PortalReadGrant,
+    current_user: Optional[Any],
+    *,
+    owner_email: Optional[str],
+    tenant_id: Optional[int],
+) -> None:
+    """Reject a session-authorised read of somebody else's report.
+
+    A valid tracking code is proof of possession and stands on its own. A
+    session only unlocks the caller's own reports, and a mismatch is reported
+    as "not found" so the endpoint cannot be used to probe which references
+    exist. Anonymous submissions have no owner email, so they stay
+    code-only — which is the point of submitting anonymously.
+    """
+    if grant != "session":
+        return
+
+    user_email = (getattr(current_user, "email", None) or "").strip().lower()
+    record_email = (owner_email or "").strip().lower()
+    user_tenant = getattr(current_user, "tenant_id", None)
+
+    if not record_email or record_email != user_email or (tenant_id is not None and tenant_id != user_tenant):
+        raise NotFoundError("Report not found. Please check your reference details.")
 
 
 _STAFF_HREF_BY_TYPE = {
@@ -321,30 +402,47 @@ def map_severity(severity: str) -> tuple:
     return severity_map.get(severity.lower(), (IncidentSeverity.MEDIUM, ComplaintPriority.MEDIUM))
 
 
-def get_status_label(status: str) -> str:
-    """Get human-readable status label."""
-    labels = {
-        "REPORTED": "📋 Submitted",
-        "OPEN": "📋 Open",
-        "UNDER_INVESTIGATION": "🔍 Under Investigation",
-        "IN_PROGRESS": "⚙️ In Progress",
-        "PENDING_REVIEW": "👀 Pending Review",
-        "RESOLVED": "✅ Resolved",
-        "CLOSED": "🏁 Closed",
-        "REJECTED": "❌ Rejected",
-    }
-    return labels.get(status, status)
+_STATUS_LABELS = {
+    "reported": "📋 Submitted",
+    "open": "📋 Open",
+    "under_investigation": "🔍 Under Investigation",
+    "in_progress": "⚙️ In Progress",
+    "pending_review": "👀 Pending Review",
+    "resolved": "✅ Resolved",
+    "closed": "🏁 Closed",
+    "rejected": "❌ Rejected",
+}
+
+_PRIORITY_LABELS = {
+    "low": "🟢 Low",
+    "medium": "🟡 Medium",
+    "high": "🟠 High",
+    "critical": "🔴 Critical",
+}
 
 
-def get_priority_label(priority: str) -> str:
-    """Get priority with visual indicator."""
-    labels = {
-        "LOW": "🟢 Low",
-        "MEDIUM": "🟡 Medium",
-        "HIGH": "🟠 High",
-        "CRITICAL": "🔴 Critical",
-    }
-    return labels.get(priority, priority)
+def normalize_portal_status(value: Any) -> str:
+    """Canonical wire form for portal status/priority values (PX-316).
+
+    Portal reads span four models with three different storage conventions:
+    ``Incident``/``Complaint``/``RoadTrafficCollision`` persist lowercase enum
+    values, while ``NearMiss`` persists an uppercase plain string. Callers get
+    one casing regardless of which table the reference resolves to.
+    """
+    raw = getattr(value, "value", value)
+    return str(raw or "").strip().lower()
+
+
+def get_status_label(status: Any) -> str:
+    """Get human-readable status label from any supported status casing."""
+    key = normalize_portal_status(status)
+    return _STATUS_LABELS.get(key, key)
+
+
+def get_priority_label(priority: Any) -> str:
+    """Get priority with visual indicator from any supported casing."""
+    key = normalize_portal_status(priority)
+    return _PRIORITY_LABELS.get(key, key)
 
 
 def parse_portal_datetime(date_value: Any, time_value: Any | None = None) -> datetime | None:
@@ -1107,15 +1205,23 @@ async def submit_quick_report(
 async def track_report(
     reference_number: str,
     db: DbSession,
-    tracking_code: Optional[str] = Query(None, description="Required for anonymous reports"),
+    current_user: OptionalCurrentUser = None,
+    tracking_code: Optional[str] = Query(
+        None,
+        description="Tracking code issued at submission. Required unless the caller "
+        "is signed in as the account that submitted the report.",
+    ),
 ):
     """
     Track a report's status by reference number.
 
-    Portal tracking requires the reference-specific tracking code.
+    Readable with either the reference-specific tracking code (anonymous
+    submitters) or a session belonging to the submitter.
     """
-    if not validate_tracking_code(reference_number, tracking_code):
-        raise NotFoundError("Report not found. Please check your reference details.")
+    if not reference_number.startswith(_PORTAL_REFERENCE_PREFIXES):
+        raise BadRequestError("Invalid reference number format.")
+
+    grant = authorize_portal_report_read(reference_number, tracking_code, current_user)
 
     # Determine report type from reference number prefix
     if reference_number.startswith("INC-"):
@@ -1125,6 +1231,13 @@ async def track_report(
 
         if not incident:
             raise NotFoundError("Report not found. Please check your reference number.")
+
+        assert_session_owns_report(
+            grant,
+            current_user,
+            owner_email=incident.reporter_email,
+            tenant_id=incident.tenant_id,
+        )
 
         # Build timeline
         timeline = [
@@ -1165,6 +1278,13 @@ async def track_report(
         if not complaint:
             raise NotFoundError("Report not found. Please check your reference number.")
 
+        assert_session_owns_report(
+            grant,
+            current_user,
+            owner_email=complaint.complainant_email,
+            tenant_id=complaint.tenant_id,
+        )
+
         timeline = [
             {
                 "date": complaint.created_at.isoformat(),
@@ -1204,6 +1324,13 @@ async def track_report(
         if not rta:
             raise NotFoundError("Report not found. Please check your reference number.")
 
+        assert_session_owns_report(
+            grant,
+            current_user,
+            owner_email=rta.reporter_email,
+            tenant_id=rta.tenant_id,
+        )
+
         timeline = [
             {
                 "date": rta.created_at.isoformat(),
@@ -1229,7 +1356,7 @@ async def track_report(
             status_label=get_status_label(rta.status.value),
             submitted_at=rta.created_at,
             updated_at=rta.updated_at,
-            priority=get_priority_label(rta.severity.value.upper()),
+            priority=get_priority_label(rta.severity),
             timeline=timeline,
             next_steps="A fleet manager will review your report.",
         )
@@ -1242,6 +1369,13 @@ async def track_report(
         if not near_miss:
             raise NotFoundError("Report not found. Please check your reference number.")
 
+        assert_session_owns_report(
+            grant,
+            current_user,
+            owner_email=near_miss.reporter_email,
+            tenant_id=near_miss.tenant_id,
+        )
+
         timeline = [
             {
                 "date": near_miss.created_at.isoformat(),
@@ -1250,7 +1384,7 @@ async def track_report(
             },
         ]
 
-        if near_miss.status != "REPORTED":
+        if normalize_portal_status(near_miss.status) != "reported":
             timeline.append(
                 {
                     "date": near_miss.updated_at.isoformat(),
