@@ -453,8 +453,7 @@ def create_application() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_origin_regex=(
-            r"^https://purple-water-03205fa03(-[a-z0-9-]+)?"
-            r"(\.[a-z0-9-]+)?\.[0-9]+\.azurestaticapps\.net$"
+            r"^https://purple-water-03205fa03(-[a-z0-9-]+)?" r"(\.[a-z0-9-]+)?\.[0-9]+\.azurestaticapps\.net$"
         ),
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
