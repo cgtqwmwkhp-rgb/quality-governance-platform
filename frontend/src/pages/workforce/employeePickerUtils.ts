@@ -18,6 +18,17 @@ export function employeePrimaryLabel(
   )
 }
 
+/** Skills matrix row label — prefer display name over employee number / raw id (PX-238). */
+export function matrixEngineerLabel(
+  eng: Pick<{ engineer_id: number; display_name?: string | null; employee_number?: string | null }, 'engineer_id' | 'display_name' | 'employee_number'>,
+): string {
+  return (
+    eng.display_name?.trim() ||
+    eng.employee_number?.trim() ||
+    `Employee #${eng.engineer_id}`
+  )
+}
+
 /** Role-aware picker label: primary name with job title / department when available. */
 export function employeePickerOptionLabel(
   eng: Pick<

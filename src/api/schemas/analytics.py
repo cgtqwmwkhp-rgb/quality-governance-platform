@@ -317,6 +317,7 @@ class WDPEngineerMatrixRow(BaseModel):
     # PAMS-synced engineers often have no linked login yet (nullable FK).
     user_id: Optional[int] = None
     employee_number: Optional[str] = None
+    display_name: Optional[str] = None
     competencies: dict[int, str]  # asset_type_id -> state
 
 

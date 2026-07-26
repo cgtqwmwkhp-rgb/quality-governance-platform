@@ -56,12 +56,14 @@ describe('CompetencyDashboard', () => {
             engineer_id: 10,
             user_id: 42,
             employee_number: 'E001',
+            display_name: 'Alex Technician',
             competencies: { 7: 'active', 8: 'due' },
           },
           {
             engineer_id: 11,
             user_id: 43,
             employee_number: 'E002',
+            display_name: 'Sam Operator',
             competencies: { 7: 'not_assessed', 8: 'expired' },
           },
         ],
@@ -78,6 +80,10 @@ describe('CompetencyDashboard', () => {
 
     expect(await screen.findByTestId('competency-matrix-grid')).toBeInTheDocument()
     expect(screen.getByTestId('competency-skills-matrix-honesty')).toBeInTheDocument()
+    expect(screen.getByTestId('competency-skills-matrix-honesty')).not.toHaveTextContent('role_key')
+    expect(screen.getByText('Alex Technician')).toBeInTheDocument()
+    expect(screen.getByText('Sam Operator')).toBeInTheDocument()
+    expect(screen.queryByText('E001')).not.toBeInTheDocument()
     expect(screen.getByText('Transformer')).toBeInTheDocument()
     expect(screen.getByText('Switchgear')).toBeInTheDocument()
     expect(screen.getByTestId('competency-cell-10-7')).toHaveAttribute('data-status', 'active')
@@ -165,6 +171,42 @@ describe('CompetencyDashboard', () => {
     })
     expect(screen.getByTestId('competency-kpi-engineers')).toHaveTextContent('1')
     expect(screen.queryByTestId('competency-dashboard-load-error')).not.toBeInTheDocument()
+  })
+
+  it('falls back to employee number when display_name is absent', async () => {
+    getSummary.mockResolvedValue({
+      data: {
+        engineers: { total: 1 },
+        competencies: { active: 1, due: 0, expired: 0, failed: 0, not_assessed: 0 },
+        assessments: { total: 0, completed: 0 },
+        inductions: { total: 0, completed: 0 },
+      },
+    })
+    getEngineerMatrix.mockResolvedValue({
+      data: {
+        asset_types: [{ id: 1, name: 'Pole', category: 'network' }],
+        engineers: [
+          {
+            engineer_id: 900,
+            user_id: 9,
+            employee_number: 'E900',
+            display_name: null,
+            competencies: { 1: 'active' },
+          },
+        ],
+      },
+    })
+
+    const CompetencyDashboard = (await import('../CompetencyDashboard')).default
+
+    render(
+      <MemoryRouter>
+        <CompetencyDashboard />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('competency-engineer-900')).toHaveTextContent('E900')
+    expect(screen.queryByText('#900')).not.toBeInTheDocument()
   })
 
   it('navigates to engineer profile on cell click', async () => {
