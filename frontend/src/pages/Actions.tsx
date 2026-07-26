@@ -70,6 +70,7 @@ import {
 } from './actionsViewScope'
 import { getActionSourceLink } from '../components/investigations/handoffLinks'
 import { buildActionDetailPath } from './actionLinks'
+import { isSafeReturnTo } from '../helpers/knowledgeExceptionsLinks'
 
 function startOfDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
@@ -203,14 +204,6 @@ const INITIAL_FORM: CreateActionForm = {
   source_id: '',
 }
 
-function isSafeActionsReturnTo(path: string | null | undefined): path is string {
-  if (!path) return false
-  if (!path.startsWith('/')) return false
-  if (path.startsWith('//')) return false
-  if (path.includes('://')) return false
-  return true
-}
-
 const FILTER_STATUS_VALUES: FilterStatus[] = [
   'all',
   'open',
@@ -272,7 +265,7 @@ export default function Actions() {
   const [serverFilterError, setServerFilterError] = useState<string | null>(null)
   const createReturnTo = useMemo(() => {
     const raw = searchParams.get('returnTo')
-    return isSafeActionsReturnTo(raw) ? raw : null
+    return isSafeReturnTo(raw) ? raw : null
   }, [searchParams])
 
   const parentLockedFromContext = useMemo(() => {
