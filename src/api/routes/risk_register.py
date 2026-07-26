@@ -301,7 +301,7 @@ async def list_risks(
                 "is_escalated": r.is_escalated,
                 "escalation_reason": r.escalation_reason,
                 "risk_owner_name": r.risk_owner_name,
-                "last_review_date": (r.last_review_date.isoformat() if getattr(r, "last_review_date", None) else None),
+                "last_review_date": (r.last_review_date.isoformat() if r.last_review_date else None),
                 "next_review_date": (r.next_review_date.isoformat() if r.next_review_date else None),
                 "updated_at": (r.updated_at.isoformat() if getattr(r, "updated_at", None) else None),
                 "created_at": (r.created_at.isoformat() if getattr(r, "created_at", None) else None),
