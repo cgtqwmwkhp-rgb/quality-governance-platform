@@ -793,6 +793,8 @@ export default function DynamicFormRenderer({
   const [maxStepReached, setMaxStepReached] = useState(0)
   const [formData, setFormData] = useState<DynamicFormData>(initialData)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  /** Field errors surface only after Continue/Submit on that step (PX-283). */
+  const [showFieldErrors, setShowFieldErrors] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submittedRef, setSubmittedRef] = useState<string | null>(null)
   const [showDraftPrompt, setShowDraftPrompt] = useState(false)
@@ -938,8 +940,10 @@ export default function DynamicFormRenderer({
 
   const validateStep = useCallback((): boolean => {
     const stepErrors = collectStepErrors(currentStepData)
+    const valid = Object.keys(stepErrors).length === 0
     setErrors(stepErrors)
-    return Object.keys(stepErrors).length === 0
+    setShowFieldErrors(!valid)
+    return valid
   }, [collectStepErrors, currentStepData])
 
   const validateAllSteps = useCallback((): boolean => {
@@ -958,6 +962,7 @@ export default function DynamicFormRenderer({
     setErrors(allErrors)
     if (Object.keys(allErrors).length === 0) return true
 
+    setShowFieldErrors(true)
     const offendingStep = steps.findIndex((step) =>
       step.fields.some((field) => allErrors[field.name]),
     )
@@ -974,6 +979,8 @@ export default function DynamicFormRenderer({
 
     const target = Math.min(activeStep + 1, stepCount - 1)
     if (target === activeStep) return
+    setErrors({})
+    setShowFieldErrors(false)
     // Guard against a second click landing before the re-render: without this
     // both calls apply `prev + 1` and the user skips a step (and its validation).
     setCurrentStep((prev) => (prev === activeStep ? target : prev))
@@ -984,6 +991,7 @@ export default function DynamicFormRenderer({
     // Errors belong to the step being left; carrying them back highlights
     // same-named fields on the previous step.
     setErrors({})
+    setShowFieldErrors(false)
     setCurrentStep((prev) => Math.max(prev - 1, 0))
   }, [])
 
@@ -991,6 +999,7 @@ export default function DynamicFormRenderer({
     (index: number) => {
       if (index === activeStep || index < 0 || index > maxStepReached) return
       setErrors({})
+      setShowFieldErrors(false)
       setCurrentStep(index)
     },
     [activeStep, maxStepReached],
@@ -1133,8 +1142,9 @@ export default function DynamicFormRenderer({
         </div>
       </div>
 
-      {/* Step Content */}
-      <AnimatePresence mode="wait">
+      {/* Step Content — no mode="wait": it kept the previous step body visible while
+          the stepper, progress bar and button label already advanced (PX-282). */}
+      <AnimatePresence initial={false}>
         <motion.div
           key={activeStep}
           initial={{ opacity: 0, x: 20 }}
@@ -1159,7 +1169,7 @@ export default function DynamicFormRenderer({
                       field={field}
                       value={formData[field.name]}
                       onChange={(value) => updateField(field.name, value)}
-                      error={errors[field.name]}
+                      error={showFieldErrors ? errors[field.name] : undefined}
                       contractOptions={contractOptions}
                       roleOptions={roleOptions}
                       medicalAssistanceOptions={medicalAssistanceOptions}

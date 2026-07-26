@@ -255,6 +255,31 @@ describe('PX-282 stepper navigation', () => {
 
     expect(screen.getByText(/no steps configured/i)).toBeInTheDocument()
   })
+
+  it('PX-283: does not greet the user with required errors when a step first renders', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await user.type(fieldInput('alpha'), 'first answer')
+    await user.click(continueButton())
+
+    expect(await screen.findByRole('heading', { name: 'Step Two' })).toBeInTheDocument()
+    expect(screen.queryByText('Bravo is required')).not.toBeInTheDocument()
+  })
+
+  it('PX-283: shows required errors only after Continue is pressed on that step', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await user.type(fieldInput('alpha'), 'first answer')
+    await user.click(continueButton())
+    await screen.findByRole('heading', { name: 'Step Two' })
+
+    await user.click(continueButton())
+
+    expect(await screen.findByText('Bravo is required')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Step Two' })).toBeInTheDocument()
+  })
 })
 
 // ==================== PX-329: step indicator state ====================
