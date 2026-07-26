@@ -49,16 +49,22 @@ def validate_complaint_transition(current: str, target: str) -> None:
     """Validate a status transition for a complaint.
 
     Raises StateTransitionError if the transition is not allowed.
+
+    Callers pass either the raw string or the enum member; the message must carry the
+    value either way, because an f-string on a str-mixin enum renders its repr
+    ("ComplaintStatus.ACKNOWLEDGED") from Python 3.11 onwards.
     """
+    current_raw = getattr(current, "value", current)
+    target_raw = getattr(target, "value", target)
     try:
-        current_status = ComplaintStatus(current)
-        target_status = ComplaintStatus(target)
+        current_status = ComplaintStatus(current_raw)
+        target_status = ComplaintStatus(target_raw)
     except ValueError:
         return
     allowed = COMPLAINT_TRANSITIONS.get(current_status, set())
     if target_status not in allowed:
         raise StateTransitionError(
-            f"Cannot transition from '{current}' to '{target}'",
+            f"Cannot transition from '{current_status.value}' to '{target_status.value}'",
             details={"allowed": sorted(s.value for s in allowed)},
         )
 

@@ -203,6 +203,21 @@ describe('RTADetail', () => {
     expect(screen.getByLabelText('Statement')).toBeInTheDocument()
   })
 
+  it('reads out the collision type instead of the stored code (PX-199)', async () => {
+    client.rtasApi.get.mockResolvedValue({
+      data: { ...mockRta, collision_type: 'object_strike' },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Fleet collision' })).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('Struck a stationary object')).toBeInTheDocument()
+    expect(screen.queryByText('object_strike')).not.toBeInTheDocument()
+  })
+
   it('surfaces reporter submission and investigation briefing fields', async () => {
     renderPage()
 
