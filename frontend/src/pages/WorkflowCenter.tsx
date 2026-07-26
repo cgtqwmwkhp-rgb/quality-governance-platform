@@ -127,8 +127,11 @@ export default function WorkflowCenter() {
       usersApi.list(1, 50),
     ])
 
-    if (approvalsResult.status === 'fulfilled') {
-      setApprovals(approvalsResult.value.data.approvals)
+    const loadedApprovals =
+      approvalsResult.status === 'fulfilled' ? approvalsResult.value.data.approvals : null
+
+    if (loadedApprovals) {
+      setApprovals(loadedApprovals)
     } else {
       setApprovals([])
     }
@@ -146,11 +149,24 @@ export default function WorkflowCenter() {
     }
 
     if (statsResult.status === 'fulfilled') {
+      const remote = statsResult.value.data
       setStats({
-        pending_approvals: statsResult.value.data.pending_approvals ?? null,
-        active_workflows: statsResult.value.data.active_workflows ?? null,
-        overdue: statsResult.value.data.overdue ?? null,
-        completed_today: statsResult.value.data.completed_today ?? null,
+        // PX-286 residual: when the pending list loaded, the tile must count that
+        // exact list — never a divergent stats payload sitting above an empty panel.
+        pending_approvals:
+          loadedApprovals != null
+            ? loadedApprovals.length
+            : (remote.pending_approvals ?? null),
+        active_workflows: remote.active_workflows ?? null,
+        overdue: remote.overdue ?? null,
+        completed_today: remote.completed_today ?? null,
+      })
+    } else if (loadedApprovals != null) {
+      setStats({
+        pending_approvals: loadedApprovals.length,
+        active_workflows: null,
+        overdue: null,
+        completed_today: null,
       })
     } else {
       setStats({

@@ -28,6 +28,8 @@ import api, {
   type HeatmapEntry,
 } from '../api/client'
 import { toast } from '../contexts/ToastContext'
+import { formatFieldName } from '../helpers/displayLabels'
+import { formatDisplayDate } from '../helpers/formatters'
 import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
@@ -256,6 +258,128 @@ export function formatChecklistLoadError(message: string): string {
     return 'PAMS unavailable — van checklist data cannot be loaded right now.'
   }
   return trimmed
+}
+
+/**
+ * PAMS dumps camelCase / spaced column names straight into the register.
+ * Map the ones operators see every day to plain English; fall back to
+ * formatFieldName for anything else (PX-231).
+ */
+const CHECKLIST_COLUMN_LABELS: Record<string, string> = {
+  bodyworkdamage: 'Bodywork damage',
+  checkfluids: 'Fluids',
+  checkwheels: 'Wheels',
+  defects: 'Defects noted',
+  endtimedate: 'Ended',
+  id: 'Record ID',
+  incid: 'Record ID',
+  mileage: 'Mileage',
+  starttimedate: 'Started',
+  uploaded: 'Uploaded',
+  userid: 'Technician ID',
+  username: 'Technician',
+  vanid: 'Vehicle',
+  vanreg: 'Vehicle',
+}
+
+export function formatChecklistColumnLabel(key: string): string {
+  const normalized = normalizeKey(key)
+  const override = CHECKLIST_COLUMN_LABELS[normalized]
+  if (override) return override
+  const spacedAsSnake = key.trim().replace(/\s+/g, '_')
+  return formatFieldName(spacedAsSnake) || formatFieldName(key) || key
+}
+
+const CHECKLIST_DATE_KEYS = new Set([
+  'starttimedate',
+  'endtimedate',
+  'date',
+  'checkdate',
+  'createdat',
+  'submittedat',
+  'created_at',
+  'updated_at',
+])
+
+function isChecklistDateKey(key: string): boolean {
+  const normalized = normalizeKey(key)
+  return CHECKLIST_DATE_KEYS.has(normalized) || /date|time/.test(normalized)
+}
+
+/**
+ * Render a cell value for operators: UK dates, Pass/Fail instead of true/false,
+ * and leave free text alone (PX-231 / PX-232).
+ */
+export function formatChecklistCellValue(key: string, value: unknown): string {
+  if (value == null || value === '') return '—'
+
+  if (typeof value === 'boolean') {
+    if (normalizeKey(key) === 'uploaded') return value ? 'Yes' : 'No'
+    return value ? 'Pass' : 'Fail'
+  }
+
+  const strVal = String(value).trim()
+  if (!strVal) return '—'
+
+  if (isChecklistDateKey(key)) {
+    const formatted = formatDisplayDate(strVal)
+    if (formatted !== '—') return formatted
+  }
+
+  const lower = strVal.toLowerCase()
+  if (['true', 'pass', 'yes', 'ok', '1'].includes(lower)) {
+    return normalizeKey(key) === 'uploaded' ? 'Yes' : 'Pass'
+  }
+  if (['false', 'fail', 'no', '0'].includes(lower)) {
+    return normalizeKey(key) === 'uploaded' ? 'No' : 'Fail'
+  }
+
+  return strVal
+}
+
+/** Failed check fields as human labels — used in the curated register row. */
+export function getFailedCheckLabels(record: Record<string, unknown>): string[] {
+  const labels: string[] = []
+  for (const [key, value] of Object.entries(record)) {
+    if (key.startsWith('_')) continue
+    if (isChecklistDateKey(key)) continue
+    const normalizedKey = normalizeKey(key)
+    if (TECHNICIAN_NAME_KEYS.some((hint) => normalizedKey.includes(hint))) continue
+    if (TECHNICIAN_ID_KEYS.some((hint) => normalizedKey.includes(hint))) continue
+    if (VEHICLE_KEYS.some((hint) => normalizedKey.includes(hint))) continue
+    if (['id', 'incid', 'mileage', 'uploaded'].includes(normalizedKey)) continue
+
+    const normalized = normalizeValue(value).toLowerCase()
+    if (!normalized) continue
+
+    // Free-text defects notes (e.g. "SERVICE LIGHT ON") are operator-visible faults
+    // even when neighbouring boolean columns still say pass.
+    if (normalizedKey === 'defects') {
+      if (!['false', '0', 'no', 'none', 'n/a', 'null', '-', 'pass', 'ok'].includes(normalized)) {
+        labels.push(normalizeValue(value))
+      }
+      continue
+    }
+
+    if (['fail', 'no', '0', 'false'].includes(normalized)) {
+      labels.push(formatChecklistColumnLabel(key))
+    }
+  }
+  return labels
+}
+
+function getMileage(record: Record<string, unknown>): string {
+  for (const [key, value] of Object.entries(record)) {
+    if (normalizeKey(key) === 'mileage') {
+      const normalized = normalizeValue(value)
+      if (normalized) return normalized
+    }
+  }
+  return ''
+}
+
+function getEndTimeRaw(record: Record<string, unknown>): string {
+  return getRecordValue(record, ['endtimedate', 'enddate', 'finishedat'])
 }
 
 export default function VehicleChecklists() {
@@ -547,10 +671,6 @@ export default function VehicleChecklists() {
     { key: 'monthly', label: 'Monthly Checklists', icon: Calendar },
     { key: 'defects', label: 'Flagged Defects', icon: Flag },
   ]
-
-  const checklistColumns = checklistItems.length > 0
-    ? Object.keys(checklistItems[0]).filter((k) => !k.startsWith('_'))
-    : []
 
   const filteredChecklistItems = useMemo(() => {
     return checklistItems.filter((record) => {
@@ -913,7 +1033,7 @@ export default function VehicleChecklists() {
                       }}
                       className="rounded-lg border border-border bg-secondary px-3 py-1.5 text-sm text-foreground hover:border-primary"
                     >
-                      {new Date(date).toLocaleDateString()}
+                      {formatDisplayDate(date)}
                     </button>
                   ))}
                 </div>
@@ -954,7 +1074,7 @@ export default function VehicleChecklists() {
                         <div className="mt-1 flex items-center gap-2">
                           <p className="text-sm font-medium text-foreground">
                             {kitCompliance.fire_extinguisher_expiry
-                              ? new Date(kitCompliance.fire_extinguisher_expiry).toLocaleDateString()
+                              ? formatDisplayDate(kitCompliance.fire_extinguisher_expiry)
                               : 'Not recorded'}
                           </p>
                           <Badge variant={kitExpiryBadgeVariant(kitCompliance.fire_extinguisher_expiry_status)}>
@@ -978,7 +1098,7 @@ export default function VehicleChecklists() {
                         <div className="mt-1 flex items-center gap-2">
                           <p className="text-sm font-medium text-foreground">
                             {kitCompliance.tooling_calibration_expiry
-                              ? new Date(kitCompliance.tooling_calibration_expiry).toLocaleDateString()
+                              ? formatDisplayDate(kitCompliance.tooling_calibration_expiry)
                               : 'Not recorded'}
                           </p>
                           <Badge variant={kitExpiryBadgeVariant(kitCompliance.tooling_calibration_expiry_status)}>
@@ -1025,7 +1145,7 @@ export default function VehicleChecklists() {
                                 <p className="text-xs text-muted-foreground">
                                   {asset.asset_number}
                                   {asset.expiry_date
-                                    ? ` · Expires ${new Date(asset.expiry_date).toLocaleDateString()}`
+                                    ? ` · Expires ${formatDisplayDate(asset.expiry_date)}`
                                     : ''}
                                   {` · ${asset.status}`}
                                 </p>
@@ -1173,9 +1293,7 @@ export default function VehicleChecklists() {
                         </td>
                         <td className="p-3 text-muted-foreground capitalize">{defect.pams_table}</td>
                         <td className="p-3 text-muted-foreground">
-                          {defect.created_at
-                            ? new Date(defect.created_at).toLocaleDateString()
-                            : '—'}
+                          {defect.created_at ? formatDisplayDate(defect.created_at) : '—'}
                         </td>
                         <td className="p-3 text-right">
                           <Button
@@ -1282,7 +1400,7 @@ export default function VehicleChecklists() {
                     {groupedByDay.map((group) => (
                       <tr key={group.date} className="border-b border-border/50">
                         <td className="p-3 font-medium text-foreground">
-                          {group.date === 'Unknown date' ? group.date : new Date(group.date).toLocaleDateString()}
+                          {group.date === 'Unknown date' ? group.date : formatDisplayDate(group.date)}
                         </td>
                         <td className="p-3 text-foreground">{group.records}</td>
                         <td className="p-3 text-foreground">{group.flagged}</td>
@@ -1304,7 +1422,7 @@ export default function VehicleChecklists() {
                         {row.technicianId || 'No technician ID'} • {row.vehicle}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {row.date ? row.date.toLocaleDateString() : 'Unknown date'}
+                        {row.date ? formatDisplayDate(row.date) : 'Unknown date'}
                       </p>
                     </div>
                     <div className="w-full md:w-72">
@@ -1326,66 +1444,133 @@ export default function VehicleChecklists() {
                 ))}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
+              <div className="w-full overflow-x-auto" data-testid="vehicle-checklist-records-table">
+                {/*
+                  Curated columns with Flag first so the defect-raise control stays
+                  reachable without horizontal scrolling (PX-230). Stacked cards below
+                  xl keep every field readable on tablet/phone (PX-288 vehicle slice).
+                */}
+                <table
+                  className="block w-full text-sm xl:table xl:table-fixed"
+                  aria-label="Van checklist records"
+                >
+                  <thead className="hidden xl:table-header-group">
                     <tr className="border-b border-border bg-muted/50">
-                      {checklistColumns.slice(0, 12).map((col) => (
-                        <th
-                          key={col}
-                          className="text-left p-3 font-medium text-muted-foreground whitespace-nowrap"
-                        >
-                          {col.replace(/_/g, ' ')}
-                        </th>
-                      ))}
-                      <th className="text-right p-3 font-medium text-muted-foreground">Actions</th>
+                      <th className="text-left p-3 font-medium text-muted-foreground xl:w-28">
+                        Flag
+                      </th>
+                      <th className="text-left p-3 font-medium text-muted-foreground xl:w-32">
+                        Vehicle
+                      </th>
+                      <th className="text-left p-3 font-medium text-muted-foreground">
+                        Technician
+                      </th>
+                      <th className="text-left p-3 font-medium text-muted-foreground xl:w-28">
+                        Started
+                      </th>
+                      <th className="text-left p-3 font-medium text-muted-foreground xl:w-28">
+                        Ended
+                      </th>
+                      <th className="text-left p-3 font-medium text-muted-foreground">
+                        Failed checks
+                      </th>
+                      <th className="text-left p-3 font-medium text-muted-foreground xl:w-24">
+                        Mileage
+                      </th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {filteredChecklistItems.map((item, idx) => (
-                      <tr
-                        key={idx}
-                        className="border-b border-border/50 hover:bg-muted/30 cursor-pointer"
-                        onClick={() => viewRecordDetail(item)}
-                      >
-                        {checklistColumns.slice(0, 12).map((col) => {
-                          const val = item[col]
-                          const strVal = val == null ? '' : String(val)
-                          const isFailure =
-                            strVal.toLowerCase() === 'fail' ||
-                            strVal.toLowerCase() === 'no' ||
-                            strVal === '0'
-                          const isPass =
-                            strVal.toLowerCase() === 'pass' ||
-                            strVal.toLowerCase() === 'yes' ||
-                            strVal === '1'
-                          return (
-                            <td
-                              key={col}
-                              className={`p-3 whitespace-nowrap ${
-                                isFailure
-                                  ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 font-medium'
-                                  : isPass
-                                    ? 'text-success'
-                                    : 'text-foreground'
+                  <tbody className="block xl:table-row-group">
+                    {filteredChecklistItems.map((item, idx) => {
+                      const vehicle = getVehicleIdentifier(item) || '—'
+                      const technician = getTechnicianName(item) || '—'
+                      const started = getChecklistDate(item)
+                      const endedRaw = getEndTimeRaw(item)
+                      const failedLabels = getFailedCheckLabels(item)
+                      const mileage = getMileage(item)
+                      const rowKey = String(
+                        item['_pams_id'] ?? item['id'] ?? item['ID'] ?? idx,
+                      )
+                      return (
+                        <tr
+                          key={rowKey}
+                          data-testid="vehicle-checklist-record-row"
+                          className="block cursor-pointer border-b border-border/50 py-2 transition-colors hover:bg-muted/30 last:border-b-0 xl:table-row xl:py-0"
+                          onClick={() => viewRecordDetail(item)}
+                        >
+                          <td
+                            className="flex items-baseline gap-3 px-3 py-1.5 xl:table-cell xl:p-3 xl:align-middle"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <span className="w-28 shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground xl:hidden">
+                              Flag
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              data-testid="vehicle-checklist-flag-button"
+                              onClick={() => handleFlagDefect(item)}
+                            >
+                              <Flag className="h-3.5 w-3.5 mr-1" />
+                              Flag
+                            </Button>
+                          </td>
+                          <td className="flex items-baseline gap-3 px-3 py-1.5 xl:table-cell xl:p-3 xl:align-middle">
+                            <span className="w-28 shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground xl:hidden">
+                              Vehicle
+                            </span>
+                            <span className="min-w-0 flex-1 break-words font-medium text-foreground">
+                              {vehicle}
+                            </span>
+                          </td>
+                          <td className="flex items-baseline gap-3 px-3 py-1.5 xl:table-cell xl:p-3 xl:align-middle">
+                            <span className="w-28 shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground xl:hidden">
+                              Technician
+                            </span>
+                            <span className="min-w-0 flex-1 break-words text-foreground">
+                              {technician}
+                            </span>
+                          </td>
+                          <td className="flex items-baseline gap-3 px-3 py-1.5 xl:table-cell xl:p-3 xl:align-middle">
+                            <span className="w-28 shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground xl:hidden">
+                              Started
+                            </span>
+                            <span className="min-w-0 flex-1 whitespace-nowrap text-foreground">
+                              {started ? formatDisplayDate(started) : '—'}
+                            </span>
+                          </td>
+                          <td className="flex items-baseline gap-3 px-3 py-1.5 xl:table-cell xl:p-3 xl:align-middle">
+                            <span className="w-28 shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground xl:hidden">
+                              Ended
+                            </span>
+                            <span className="min-w-0 flex-1 whitespace-nowrap text-foreground">
+                              {endedRaw ? formatDisplayDate(endedRaw) : '—'}
+                            </span>
+                          </td>
+                          <td className="flex items-baseline gap-3 px-3 py-1.5 xl:table-cell xl:p-3 xl:align-middle">
+                            <span className="w-28 shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground xl:hidden">
+                              Failed checks
+                            </span>
+                            <span
+                              className={`min-w-0 flex-1 break-words ${
+                                failedLabels.length > 0
+                                  ? 'font-medium text-red-700 dark:text-red-400'
+                                  : 'text-muted-foreground'
                               }`}
                             >
-                              {strVal || '—'}
-                            </td>
-                          )
-                        })}
-                        <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleFlagDefect(item)}
-                          >
-                            <Flag className="h-3.5 w-3.5 mr-1" />
-                            Flag
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
+                              {failedLabels.length > 0 ? failedLabels.join(', ') : 'None'}
+                            </span>
+                          </td>
+                          <td className="flex items-baseline gap-3 px-3 py-1.5 xl:table-cell xl:p-3 xl:align-middle">
+                            <span className="w-28 shrink-0 text-xs font-semibold uppercase tracking-wider text-muted-foreground xl:hidden">
+                              Mileage
+                            </span>
+                            <span className="min-w-0 flex-1 text-foreground">
+                              {mileage || '—'}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1432,11 +1617,10 @@ export default function VehicleChecklists() {
               {Object.entries(selectedRecord)
                 .filter(([k]) => !k.startsWith('_'))
                 .map(([key, value]) => {
-                  const strVal = value == null ? '' : String(value)
+                  const display = formatChecklistCellValue(key, value)
+                  const raw = normalizeValue(value).toLowerCase()
                   const isFailure =
-                    strVal.toLowerCase() === 'fail' ||
-                    strVal.toLowerCase() === 'no' ||
-                    strVal === '0'
+                    value === false || ['fail', 'no', '0', 'false'].includes(raw)
                   return (
                     <div
                       key={key}
@@ -1445,11 +1629,11 @@ export default function VehicleChecklists() {
                       }`}
                     >
                       <span className="text-sm font-medium text-muted-foreground min-w-[140px]">
-                        {key.replace(/_/g, ' ')}
+                        {formatChecklistColumnLabel(key)}
                       </span>
                       <div className="flex items-center gap-2">
                         <span className={`text-sm ${isFailure ? 'text-red-700 dark:text-red-400 font-semibold' : 'text-foreground'}`}>
-                          {strVal || '—'}
+                          {display}
                         </span>
                         {isFailure && (
                           <Button
@@ -1643,7 +1827,7 @@ export default function VehicleChecklists() {
       {summary?.last_sync && (
         <p className="text-xs text-muted-foreground text-right flex items-center justify-end gap-1">
           <Clock className="h-3 w-3" />
-          Last synced: {new Date(summary.last_sync).toLocaleString()}
+          Last synced: {formatDisplayDate(summary.last_sync)}
         </p>
       )}
     </div>
