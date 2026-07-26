@@ -50,6 +50,11 @@ import {
   DialogDescription,
 } from '../components/ui/Dialog'
 import { cn } from '../helpers/utils'
+import {
+  formatDisplayDate,
+  formatReference,
+  formatReferenceWithFallback,
+} from '../helpers/formatters'
 import { UserEmailSearch } from '../components/UserEmailSearch'
 import {
   getEnabledFilterOptions,
@@ -301,7 +306,11 @@ function CreateInvestigationModal({
       // Already investigated - show link to existing
       setExistingInvestigation({
         id: record.investigation_id,
-        reference: record.investigation_reference || `INV-${record.investigation_id}`,
+        reference: formatReferenceWithFallback(
+          record.investigation_reference,
+          'INV',
+          record.investigation_id,
+        ),
       })
       setSelectedRecord(null)
       return
@@ -342,9 +351,11 @@ function CreateInvestigationModal({
         ) {
           setExistingInvestigation({
             id: errorData.details.existing_investigation_id,
-            reference:
-              errorData.details.existing_reference_number ||
-              `INV-${errorData.details.existing_investigation_id}`,
+            reference: formatReferenceWithFallback(
+              errorData.details.existing_reference_number,
+              'INV',
+              errorData.details.existing_investigation_id,
+            ),
           })
           setError('An investigation already exists for this record.')
           return
@@ -479,7 +490,7 @@ function CreateInvestigationModal({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-xs text-primary">
-                              {record.reference_number}
+                              {formatReference(record.reference_number)}
                             </span>
                             <span
                               className={cn(
@@ -496,7 +507,7 @@ function CreateInvestigationModal({
                             {record.display_label}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Created: {new Date(record.created_at).toLocaleDateString()}
+                            Created: {formatDisplayDate(record.created_at)}
                           </p>
                         </div>
                         {isAlreadyInvestigated && (
@@ -516,7 +527,7 @@ function CreateInvestigationModal({
 
               {selectedRecord && (
                 <p className="text-xs text-primary mt-1">
-                  Selected: {selectedRecord.reference_number}
+                  Selected: {formatReference(selectedRecord.reference_number)}
                 </p>
               )}
             </div>
@@ -1147,7 +1158,7 @@ export default function Investigations() {
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-0.5">
                       <span className="font-mono text-xs text-primary">
-                        {investigation.reference_number}
+                        {formatReference(investigation.reference_number)}
                       </span>
                       <span className="px-1.5 py-0.5 text-[11px] font-medium rounded bg-surface text-muted-foreground capitalize">
                         {investigation.assigned_entity_type.replace(/_/g, ' ')}
@@ -1196,7 +1207,7 @@ export default function Investigations() {
             <>
               <DialogHeader>
                 <span className="font-mono text-sm text-primary">
-                  {selectedInvestigation.reference_number}
+                  {formatReference(selectedInvestigation.reference_number)}
                 </span>
                 <DialogTitle>{selectedInvestigation.title}</DialogTitle>
                 <DialogDescription>
@@ -1329,7 +1340,7 @@ export default function Investigations() {
                               </span>
                               {action.due_date && (
                                 <span className="text-xs text-muted-foreground">
-                                  Due: {new Date(action.due_date).toLocaleDateString()}
+                                  Due: {formatDisplayDate(action.due_date)}
                                 </span>
                               )}
                             </div>
@@ -1479,7 +1490,11 @@ export default function Investigations() {
           <DialogHeader>
             <DialogTitle>Action Details</DialogTitle>
             <DialogDescription>
-              {selectedAction?.reference_number || `Action #${selectedAction?.id}`}
+              {formatReferenceWithFallback(
+                selectedAction?.reference_number,
+                'ACT',
+                selectedAction?.id,
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -1546,7 +1561,7 @@ export default function Investigations() {
                       Due Date
                     </span>
                     <span className="text-sm text-foreground">
-                      {new Date(selectedAction.due_date).toLocaleDateString()}
+                      {formatDisplayDate(selectedAction.due_date)}
                     </span>
                   </div>
                 )}

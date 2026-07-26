@@ -60,6 +60,25 @@ class ClosureReasonCode:
     OPEN_ACTIONS_REMAIN = "OPEN_ACTIONS_REMAIN"
 
 
+def _missing_items_to_payload(validation: Any) -> list[dict]:
+    """Serialize named closure blockers, tolerating older result shapes."""
+    payload: list[dict] = []
+    for item in getattr(validation, "missing_items", None) or []:
+        section_key = str(getattr(item, "section_key", "") or "")
+        field_key = getattr(item, "field_key", None)
+        payload.append(
+            {
+                "code": str(getattr(item, "code", "") or ""),
+                "section_key": section_key,
+                "section_label": str(getattr(item, "section_label", "") or section_key),
+                "field_key": field_key,
+                "field_label": getattr(item, "field_label", None),
+                "path": f"{section_key}.{field_key}" if field_key else section_key,
+            }
+        )
+    return payload
+
+
 def _user_can_access_investigation(user: Any, investigation: InvestigationRun) -> bool:
     """Authorization helper for investigation-scoped read endpoints."""
     if getattr(user, "is_superuser", False):
@@ -675,6 +694,7 @@ async def get_closure_validation(
     # Emit MISSING_REQUIRED_FIELD / MISSING_REQUIRED_SECTION from template validation.
     from src.domain.services.investigation_service import InvestigationService
 
+    missing_items: list[dict] = []
     try:
         template_validation = await InvestigationService.validate_closure(
             db,
@@ -685,6 +705,7 @@ async def get_closure_validation(
             code_str = code.value if hasattr(code, "value") else str(code)
             if code_str not in reasons:
                 reasons.append(code_str)
+        missing_items = _missing_items_to_payload(template_validation)
     except Exception:  # noqa: BLE001 — never turn template parse errors into HTTP 500
         logger.exception(
             "closure_validation_template_failed",
@@ -698,6 +719,7 @@ async def get_closure_validation(
         "reasons": reasons,
         "open_work": open_work_to_payload(open_work),
         "open_work_count": len(open_work),
+        "missing_items": missing_items,
     }
 
 

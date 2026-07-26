@@ -357,6 +357,17 @@ class InvestigationClosureBlockingItem(BaseModel):
     unblock_hint: str = "Complete or cancel this action on the Actions tab."
 
 
+class InvestigationClosureMissingItem(BaseModel):
+    """A named template section/field that is blocking closure."""
+
+    code: str
+    section_key: str
+    section_label: str
+    field_key: Optional[str] = None
+    field_label: Optional[str] = None
+    path: str
+
+
 class InvestigationClosureValidationResponse(BaseModel):
     """Closure-validation result for an investigation."""
 
@@ -364,6 +375,8 @@ class InvestigationClosureValidationResponse(BaseModel):
     reasons: List[str]
     open_work: List[InvestigationClosureBlockingItem] = Field(default_factory=list)
     open_work_count: int = 0
+    # Named counterpart to ``reasons``: which section/field, not just which code.
+    missing_items: List[InvestigationClosureMissingItem] = Field(default_factory=list)
 
 
 class CreateInvestigationCapaRequest(BaseModel):
