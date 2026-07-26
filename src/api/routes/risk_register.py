@@ -301,8 +301,10 @@ async def list_risks(
                 "is_escalated": r.is_escalated,
                 "escalation_reason": r.escalation_reason,
                 "risk_owner_name": r.risk_owner_name,
+                "last_review_date": (r.last_review_date.isoformat() if r.last_review_date else None),
                 "next_review_date": (r.next_review_date.isoformat() if r.next_review_date else None),
                 "updated_at": (r.updated_at.isoformat() if getattr(r, "updated_at", None) else None),
+                "created_at": (r.created_at.isoformat() if getattr(r, "created_at", None) else None),
                 # Tag-persisted net trend only — no history N+1; null when unknown (FE honesty).
                 "trend": read_score_trend_from_tags(getattr(r, "tags", None)),
                 "linked_audits": r.linked_audits or [],
@@ -819,6 +821,16 @@ async def get_risk_summary(
     )
     overdue_review = overdue_result.scalar_one()
 
+    # Never reviewed = no last_review_date (PX-157 honesty). Scores may still exist from
+    # import/defaults; they must not be mistaken for a completed assessment cycle.
+    never_reviewed_result = await db.execute(
+        select(func.count(EnterpriseRisk.id)).where(
+            EnterpriseRisk.last_review_date.is_(None),
+            *base,
+        )
+    )
+    never_reviewed = never_reviewed_result.scalar_one()
+
     escalated_result = await db.execute(
         select(func.count(EnterpriseRisk.id)).where(
             EnterpriseRisk.is_escalated == True,  # noqa: E712
@@ -842,6 +854,7 @@ async def get_risk_summary(
         },
         "outside_appetite": outside_appetite,
         "overdue_review": overdue_review,
+        "never_reviewed": never_reviewed,
         "escalated": escalated,
         "by_category": {cat: count for cat, count in categories},
         "filters_applied": {"category": category, "department": department, "status": status},
@@ -869,6 +882,10 @@ async def resolve_suggestion_triage(
         raise BadRequestError("Risk is not awaiting import triage")
 
     if body.decision == "accept":
+        # PX-264: accept must land an owned risk — unassigned backlog is not triage complete.
+        owner_name = (risk.risk_owner_name or "").strip()
+        if risk.risk_owner_id is None and not owner_name:
+            raise BadRequestError("Assign an owner before accepting this import-sourced risk into the live register")
         risk.suggestion_triage_status = "accepted"
         risk.is_escalated = True
         base_reason = "Accepted from import triage."

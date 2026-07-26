@@ -41,6 +41,7 @@ import type { RiskRegisterImportReport } from '../api/riskRegisterClient'
 import { toast } from '../contexts/ToastContext'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
 import { cn } from '../helpers/utils'
+import { formatDisplayDate, NOT_PROVIDED } from '../helpers/formatters'
 import {
   RiskHeatMap,
   type HeatMapData as InteractiveHeatMapData,
@@ -50,6 +51,11 @@ import {
   type TopMover,
   type TrendPoint,
 } from '../components/risk/RiskHeatMap'
+import {
+  buildImportTriageHonesty,
+  buildNeverReviewedHonesty,
+  canAcceptImportTriage,
+} from '../components/risk/riskRegisterHonesty'
 
 type HeroFilter =
   | 'all'
@@ -88,9 +94,9 @@ type ScoreTrend = 'increasing' | 'stable' | 'decreasing'
 
 function formatListDate(value: string | null | undefined): string | null {
   if (!value) return null
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return null
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+  const formatted = formatDisplayDate(value)
+  if (!formatted || formatted === NOT_PROVIDED) return null
+  return formatted
 }
 
 function TrendCell({ trend }: { trend?: ScoreTrend | null }) {
@@ -127,6 +133,7 @@ interface RegisterSummary {
   }
   outside_appetite: MetricValue
   overdue_review: MetricValue
+  never_reviewed: MetricValue
   escalated: MetricValue
 }
 
@@ -135,6 +142,7 @@ const EMPTY_SUMMARY: RegisterSummary = {
   by_level: { critical: null, high: null, medium: null, low: null },
   outside_appetite: null,
   overdue_review: null,
+  never_reviewed: null,
   escalated: null,
 }
 
@@ -298,6 +306,9 @@ export default function RiskRegister() {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
   const [rejectTargetId, setRejectTargetId] = useState<number | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
+  const [acceptDialogOpen, setAcceptDialogOpen] = useState(false)
+  const [acceptTargetId, setAcceptTargetId] = useState<number | null>(null)
+  const [acceptOwnerDraft, setAcceptOwnerDraft] = useState('')
   const [triageSubmitting, setTriageSubmitting] = useState(false)
   const [linkedAuditTargets, setLinkedAuditTargets] = useState<Record<string, LinkedAuditTarget>>({})
   const [filterSearch, setFilterSearch] = useState(searchParams.get('q') || '')
@@ -505,6 +516,7 @@ export default function RiskRegister() {
               by_level?: { critical?: number; high?: number; medium?: number; low?: number }
               outside_appetite?: number
               overdue_review?: number
+              never_reviewed?: number
               escalated?: number
             }
           | undefined
@@ -549,6 +561,7 @@ export default function RiskRegister() {
               : mappedRisks.filter((risk) => risk.is_within_appetite === false).length,
           // Never invent overdue_review — API supplies it; null means unavailable.
           overdue_review: typeof s?.overdue_review === 'number' ? s.overdue_review : null,
+          never_reviewed: typeof s?.never_reviewed === 'number' ? s.never_reviewed : null,
           escalated:
             typeof s?.escalated === 'number'
               ? s.escalated
@@ -721,7 +734,50 @@ export default function RiskRegister() {
       )
     } catch (err) {
       console.error('Import triage resolution failed:', err)
-      toast.error(t('risk_register.import_triage_toast_error'))
+      toast.error(getApiErrorMessage(err) || t('risk_register.import_triage_toast_error'))
+    } finally {
+      setTriageSubmitting(false)
+    }
+  }
+
+  const openAcceptDialog = (riskId: number) => {
+    const risk = risks.find((r) => r.id === riskId)
+    setAcceptTargetId(riskId)
+    setAcceptOwnerDraft(risk?.risk_owner_name?.trim() || '')
+    setAcceptDialogOpen(true)
+  }
+
+  const closeAcceptDialog = () => {
+    setAcceptDialogOpen(false)
+    setAcceptTargetId(null)
+    setAcceptOwnerDraft('')
+  }
+
+  const requestAcceptImportTriage = (risk: Risk) => {
+    if (canAcceptImportTriage(risk)) {
+      void resolveImportTriage(risk.id, 'accept')
+      return
+    }
+    openAcceptDialog(risk.id)
+  }
+
+  const confirmAcceptWithOwner = async () => {
+    if (acceptTargetId == null) return
+    const ownerName = acceptOwnerDraft.trim()
+    if (!ownerName) {
+      toast.error('Assign an owner before accepting this import-sourced risk.')
+      return
+    }
+    try {
+      setTriageSubmitting(true)
+      await riskRegisterApi.updateOwner(acceptTargetId, { risk_owner_name: ownerName })
+      await riskRegisterApi.resolveSuggestionTriage(acceptTargetId, { decision: 'accept' })
+      closeAcceptDialog()
+      await loadRisks()
+      toast.success(t('risk_register.import_triage_toast_accept'))
+    } catch (err) {
+      console.error('Import triage accept with owner failed:', err)
+      toast.error(getApiErrorMessage(err) || t('risk_register.import_triage_toast_error'))
     } finally {
       setTriageSubmitting(false)
     }
@@ -955,6 +1011,20 @@ export default function RiskRegister() {
     [risks],
   )
 
+  const neverReviewedHonesty = useMemo(
+    () => buildNeverReviewedHonesty(summary.never_reviewed, summary.total_risks),
+    [summary.never_reviewed, summary.total_risks],
+  )
+
+  const importTriageHonesty = useMemo(
+    () =>
+      buildImportTriageHonesty({
+        pendingTotal: pendingTriageCount,
+        risks,
+      }),
+    [pendingTriageCount, risks],
+  )
+
   const getRiskLevelBadge = (level: string) => {
     const variants: Record<string, 'destructive' | 'warning' | 'info' | 'resolved'> = {
       critical: 'destructive',
@@ -1093,6 +1163,15 @@ export default function RiskRegister() {
               Risks raised from external audit import appear here until you accept them into the live register
               or reject them (closed, auditable). Corrective actions (CAPA) linked from the same findings stay in
               CAPA as usual—only register suggestions are triaged here.
+            </p>
+          ) : null}
+          {registerMode === 'import_triage' && importTriageHonesty.show ? (
+            <p
+              className="mt-2 max-w-3xl rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground"
+              data-testid="risk-import-triage-honesty"
+              role="status"
+            >
+              {importTriageHonesty.message}
             </p>
           ) : null}
         </div>
@@ -1260,6 +1339,15 @@ export default function RiskRegister() {
       )}
 
       {/* Summary Cards — clickable filters (Active + Import triage) */}
+      {registerMode === 'active' && neverReviewedHonesty.show ? (
+        <div
+          className="rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground"
+          data-testid="risk-never-reviewed-honesty"
+          role="status"
+        >
+          {neverReviewedHonesty.message}
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4" data-testid="risk-summary-cards">
         {(
           [
@@ -1776,7 +1864,7 @@ export default function RiskRegister() {
                             data-testid={`risk-accept-${risk.id}`}
                             onClick={(e) => {
                               e.stopPropagation()
-                              void resolveImportTriage(risk.id, 'accept')
+                              requestAcceptImportTriage(risk)
                             }}
                           >
                             Accept
@@ -2058,6 +2146,50 @@ export default function RiskRegister() {
               data-testid="risk-detail-save"
             >
               {detailSaving ? 'Saving…' : 'Create risk'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={acceptDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !triageSubmitting) closeAcceptDialog()
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-md"
+          data-testid="risk-import-accept-dialog"
+          onEscapeKeyDown={(e) => triageSubmitting && e.preventDefault()}
+          onPointerDownOutside={(e) => triageSubmitting && e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Assign owner to accept</DialogTitle>
+            <DialogDescription>
+              Import-sourced risks cannot enter the live register unassigned. Name an owner, then accept.
+            </DialogDescription>
+          </DialogHeader>
+          <Label htmlFor="import-triage-accept-owner">Owner</Label>
+          <Input
+            id="import-triage-accept-owner"
+            value={acceptOwnerDraft}
+            onChange={(e) => setAcceptOwnerDraft(e.target.value)}
+            maxLength={255}
+            placeholder="Owner name"
+            disabled={triageSubmitting}
+            data-testid="risk-import-accept-owner"
+          />
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="secondary" onClick={closeAcceptDialog} disabled={triageSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void confirmAcceptWithOwner()}
+              disabled={triageSubmitting || !acceptOwnerDraft.trim()}
+              data-testid="risk-import-accept-confirm"
+            >
+              {triageSubmitting ? 'Accepting…' : 'Assign & accept'}
             </Button>
           </DialogFooter>
         </DialogContent>
