@@ -433,13 +433,28 @@ def create_application() -> FastAPI:
     # Add Audit Logging Middleware (logs POST/PUT/PATCH/DELETE with PII masking)
     app.add_middleware(AuditLoggingMiddleware)
 
-    # Configure CORS - explicit allowlist + regex for staging/preview
-    # Production origins are explicit in cors_origins for security
-    # Regex pattern for staging/preview Azure SWA deployments
+    # Configure CORS - explicit allowlist + regex for our own SWA environments.
+    #
+    # The regex is pinned to this Static Web App by name. The previous pattern,
+    # ^https://[a-z0-9-]+\.[0-9]+\.azurestaticapps\.net$, matched *any* Azure
+    # Static Web App in the world, and this middleware sets allow_credentials,
+    # so anyone could have stood up their own SWA and made credentialed
+    # cross-origin calls against this API.
+    #
+    # The optional groups cover named environments and the regional hostname
+    # form Azure hands out for them:
+    #   purple-water-03205fa03.6.azurestaticapps.net                      (production)
+    #   purple-water-03205fa03-staging.6.azurestaticapps.net              (named env)
+    #   purple-water-03205fa03-staging.westeurope.6.azurestaticapps.net   (regional)
+    # Missing the third form is what blocked every frontend deploy on 26 Jul:
+    # the staging bake could not call the staging API, so the E2E gate failed
+    # and production promotion never ran.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_origin_regex=r"^https://[a-z0-9-]+\.[0-9]+\.azurestaticapps\.net$",
+        allow_origin_regex=(
+            r"^https://purple-water-03205fa03(-[a-z0-9-]+)?" r"(\.[a-z0-9-]+)?\.[0-9]+\.azurestaticapps\.net$"
+        ),
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=[
