@@ -32,6 +32,7 @@ import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import { CaseRegisterTable } from '../components/register/CaseRegisterTable'
 import { useCaseRegisterLabels } from '../components/register/useCaseRegisterLabels'
 import { formatDisplayDate, formatReference } from '../helpers/formatters'
+import { formatCodedValue } from '../helpers/displayLabels'
 import {
   Dialog,
   DialogContent,
@@ -81,9 +82,9 @@ const ALL_FILTER = 'all'
 const PAGE_SIZE = 50
 
 /** Display helper — never throw on null/undefined API fields (ErrorBoundary killers). */
-function humanizeToken(value: unknown): string {
+function displayCodedValue(value: unknown): string {
   if (value == null || value === '') return '—'
-  return String(value).replace(/_/g, ' ')
+  return formatCodedValue(String(value)) || '—'
 }
 
 /** Coerce list payloads so a shape mismatch cannot crash `.filter` / `.map`. */
@@ -758,7 +759,7 @@ export default function Incidents() {
                 render: (incident) => (
                   <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
                     <span>{getTypeIcon(incident.incident_type)}</span>
-                    {humanizeToken(incident.incident_type)}
+                    {displayCodedValue(incident.incident_type)}
                   </span>
                 ),
               },
@@ -768,7 +769,7 @@ export default function Incidents() {
                 width: 'badge',
                 render: (incident) => (
                   <Badge variant={getSeverityVariant(incident.severity) as any}>
-                    {humanizeToken(incident.severity)}
+                    {displayCodedValue(incident.severity)}
                   </Badge>
                 ),
               },
@@ -778,7 +779,7 @@ export default function Incidents() {
                 width: 'badge',
                 render: (incident) => (
                   <Badge variant={getStatusVariant(incident.status) as any}>
-                    {humanizeToken(incident.status)}
+                    {displayCodedValue(incident.status)}
                   </Badge>
                 ),
               },
