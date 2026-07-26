@@ -996,4 +996,32 @@ describe('UVDBAudits', () => {
     expect(screen.getByText('uvdb.error_auth')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'uvdb.try_again' })).toBeInTheDocument()
   })
+
+  it('PX-257: renders audit history dates in en-GB format', async () => {
+    mockListAudits.mockResolvedValue({
+      data: {
+        total: 1,
+        audits: [
+          {
+            id: 5,
+            audit_reference: 'UVDB-2026-0001',
+            company_name: 'Plantexpand Limited',
+            audit_type: 'B2',
+            audit_date: '2026-02-20T00:00:00',
+            status: 'completed',
+            percentage_score: 92,
+            lead_auditor: 'Jane Smith',
+          },
+        ],
+      },
+    })
+
+    const UVDBAudits = (await import('../UVDBAudits')).default
+    renderPage(<UVDBAudits />)
+
+    fireEvent.click(await screen.findByTestId('uvdb-section-tab-audits'))
+
+    expect(await screen.findByText('20/02/2026')).toBeInTheDocument()
+    expect(screen.queryByText('2026-02-20T00:00:00')).not.toBeInTheDocument()
+  })
 })

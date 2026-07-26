@@ -13,6 +13,32 @@ const mockCreateImportJob = vi.fn()
 const mockQueueImportJob = vi.fn()
 let mockSearchParams = new URLSearchParams()
 
+function stubFindingsApi(payload: { items?: unknown[]; total?: number } = {}) {
+  const items = payload.items ?? []
+  const total = payload.total ?? items.length
+  mockListFindings.mockImplementation(
+    (_page: number, pageSize: number, _runId?: number, status?: string) => {
+      if (status === 'open') {
+        const openTotal = items.filter(
+          (finding) => (finding as { status?: string }).status === 'open',
+        ).length
+        return Promise.resolve({
+          data: { items: [], total: openTotal, page: 1, page_size: 1, pages: 1 },
+        })
+      }
+      return Promise.resolve({
+        data: {
+          items,
+          total,
+          page: 1,
+          page_size: pageSize,
+          pages: Math.max(1, Math.ceil(total / Math.max(pageSize, 1))),
+        },
+      })
+    },
+  )
+}
+
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return {
@@ -91,9 +117,7 @@ describe('Audits external import flow', () => {
     mockListRuns.mockResolvedValue({
       data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
     })
-    mockListFindings.mockResolvedValue({
-      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
-    })
+    stubFindingsApi()
     mockListTemplates.mockResolvedValue({
       data: {
         items: [
@@ -502,9 +526,7 @@ describe('Audits board work lanes (AUD-W-W1)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSearchParams = new URLSearchParams()
-    mockListFindings.mockResolvedValue({
-      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
-    })
+    stubFindingsApi()
     mockListTemplates.mockResolvedValue({
       data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
     })
@@ -642,9 +664,7 @@ describe('Audits board AUD-W-01 Round 3 verify', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSearchParams = new URLSearchParams()
-    mockListFindings.mockResolvedValue({
-      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
-    })
+    stubFindingsApi()
     mockListTemplates.mockResolvedValue({
       data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
     })
@@ -777,9 +797,7 @@ describe('Audits board empty-state honesty', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSearchParams = new URLSearchParams()
-    mockListFindings.mockResolvedValue({
-      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
-    })
+    stubFindingsApi()
     mockListTemplates.mockResolvedValue({
       data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
     })
@@ -901,42 +919,35 @@ describe('Audits findings CUJ deep-links', () => {
     mockListTemplates.mockResolvedValue({
       data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
     })
-    mockListFindings.mockResolvedValue({
-      data: {
-        items: [
-          {
-            id: 501,
-            reference_number: 'AF-00501',
-            run_id: 41,
-            title: 'Missing PPE at gate',
-            description: 'Operator without gloves',
-            severity: 'high',
-            finding_type: 'nonconformity',
-            status: 'open',
-            corrective_action_required: true,
-            risk_ids: [88],
-            created_at: '2026-07-12T10:00:00Z',
-          },
-          {
-            id: 502,
-            reference_number: 'AF-00502',
-            run_id: 41,
-            title: 'Good housekeeping',
-            description: 'Positive practice observed',
-            severity: 'observation',
-            finding_type: 'positive',
-            status: 'open',
-            corrective_action_required: false,
-            risk_ids: [],
-            created_at: '2026-07-12T10:01:00Z',
-          },
-        ],
-        total: 2,
-        page: 1,
-        page_size: 100,
-        pages: 1,
+    const findingFixtures = [
+      {
+        id: 501,
+        reference_number: 'AF-00501',
+        run_id: 41,
+        title: 'Missing PPE at gate',
+        description: 'Operator without gloves',
+        severity: 'high',
+        finding_type: 'nonconformity',
+        status: 'open',
+        corrective_action_required: true,
+        risk_ids: [88],
+        created_at: '2026-07-12T10:00:00Z',
       },
-    })
+      {
+        id: 502,
+        reference_number: 'AF-00502',
+        run_id: 41,
+        title: 'Good housekeeping',
+        description: 'Positive practice observed',
+        severity: 'observation',
+        finding_type: 'positive',
+        status: 'open',
+        corrective_action_required: false,
+        risk_ids: [],
+        created_at: '2026-07-12T10:01:00Z',
+      },
+    ]
+    stubFindingsApi({ items: findingFixtures, total: 2 })
   })
 
   it('navigates to Actions and Risk Register from finding cards', async () => {
@@ -971,9 +982,7 @@ describe('Audits findings CUJ deep-links', () => {
   })
 
   it('shows an actionable empty state for audits without findings', async () => {
-    mockListFindings.mockResolvedValueOnce({
-      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
-    })
+    stubFindingsApi({ items: [], total: 0 })
     mockListRuns.mockResolvedValueOnce({
       data: {
         items: [
@@ -1063,9 +1072,7 @@ describe('Audits customer assurance filter (IA-W3)', () => {
         pages: 1,
       },
     })
-    mockListFindings.mockResolvedValue({
-      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
-    })
+    stubFindingsApi()
     mockListTemplates.mockResolvedValue({
       data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
     })
@@ -1078,5 +1085,140 @@ describe('Audits customer assurance filter (IA-W3)', () => {
     expect(screen.getByText('Customer Site Audit')).toBeInTheDocument()
     expect(screen.queryByText('Internal Safety Audit')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'View all audits' })).toBeInTheDocument()
+  })
+})
+
+describe('Audits open findings KPI honesty (PX-262)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams()
+    mockListRuns.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+    mockListTemplates.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+  })
+
+  it('uses the server open total when the loaded findings page is truncated', async () => {
+    stubFindingsApi({
+      items: [
+        {
+          id: 1,
+          reference_number: 'AF-00001',
+          run_id: 1,
+          title: 'Loaded open finding',
+          description: 'd',
+          severity: 'medium',
+          finding_type: 'nonconformity',
+          status: 'open',
+          corrective_action_required: true,
+          created_at: '2026-07-12T10:00:00Z',
+        },
+        {
+          id: 2,
+          reference_number: 'AF-00002',
+          run_id: 1,
+          title: 'In progress finding',
+          description: 'd',
+          severity: 'medium',
+          finding_type: 'nonconformity',
+          status: 'in_progress',
+          corrective_action_required: true,
+          created_at: '2026-07-12T10:01:00Z',
+        },
+      ],
+      total: 101,
+    })
+    mockListFindings.mockImplementation((_page, pageSize, _runId, status?: string) => {
+      if (status === 'open') {
+        return Promise.resolve({
+          data: { items: [], total: 100, page: 1, page_size: 1, pages: 1 },
+        })
+      }
+      return Promise.resolve({
+        data: {
+          items: [
+            {
+              id: 1,
+              reference_number: 'AF-00001',
+              run_id: 1,
+              title: 'Loaded open finding',
+              description: 'd',
+              severity: 'medium',
+              finding_type: 'nonconformity',
+              status: 'open',
+              corrective_action_required: true,
+              created_at: '2026-07-12T10:00:00Z',
+            },
+            {
+              id: 2,
+              reference_number: 'AF-00002',
+              run_id: 1,
+              title: 'In progress finding',
+              description: 'd',
+              severity: 'medium',
+              finding_type: 'nonconformity',
+              status: 'in_progress',
+              corrective_action_required: true,
+              created_at: '2026-07-12T10:01:00Z',
+            },
+          ],
+          total: 101,
+          page: 1,
+          page_size: pageSize,
+          pages: 1,
+        },
+      })
+    })
+
+    render(<Audits />)
+
+    const toolbar = await screen.findByRole('toolbar', { name: 'Audit filters' })
+    expect(toolbar).toHaveTextContent('100')
+    fireEvent.click(screen.getByRole('button', { name: 'Findings' }))
+    expect(await screen.findByTestId('audits-findings-truncated-banner')).toBeInTheDocument()
+  })
+})
+
+describe('Audits import modal deep-link (PX-260)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams = new URLSearchParams('modal=import')
+    mockListRuns.mockResolvedValue({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+    stubFindingsApi()
+    mockListTemplates.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 11,
+            reference_number: 'TPL-0001',
+            name: 'External intake',
+            description: 'd',
+            category: 'System',
+            audit_type: 'external_import',
+            tags: ['external_audit_intake'],
+            version: 1,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-03-24T10:00:00Z',
+            updated_at: '2026-03-24T10:00:00Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+  })
+
+  it('opens the external import dialog when modal=import is present', async () => {
+    render(<Audits />)
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText('Create External Audit Intake')).toBeInTheDocument()
   })
 })

@@ -98,6 +98,8 @@ describe('createAuditsApi', () => {
     audits.updateFinding(5, { status: 'closed' })
     expect(api.get).toHaveBeenCalledWith('/api/v1/audits/findings?page=1&page_size=10&run_id=9')
     expect(api.get).toHaveBeenCalledWith('/api/v1/audits/findings?page=1&page_size=10')
+    audits.listFindings(1, 1, undefined, 'open')
+    expect(api.get).toHaveBeenCalledWith('/api/v1/audits/findings?page=1&page_size=1&status=open')
     expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/9/responses', { question_id: 1 })
     expect(api.patch).toHaveBeenCalledWith('/api/v1/audits/responses/2', { notes: 'n' })
     expect(api.post).toHaveBeenCalledWith('/api/v1/audits/runs/9/findings', {

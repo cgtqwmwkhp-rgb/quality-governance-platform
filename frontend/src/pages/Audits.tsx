@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Plus,
@@ -60,6 +60,10 @@ import {
   type FieldSpecs,
 } from '../components/ui/form'
 import { cn, decodeHtmlEntities } from '../helpers/utils'
+import {
+  isOpenAuditFinding,
+  resolveOpenFindingsKpi,
+} from './auditsFindingsModel'
 import {
   ASSURANCE_SOURCE_CUSTOMER,
   filterAuditsByAssuranceSource,
@@ -170,6 +174,7 @@ const ISO_STANDARD_IMPORT_PRESETS: Array<{ value: string; label: string }> = [
 ]
 
 const INTAKE_TEMPLATE_TAG = 'external_audit_intake'
+const FINDINGS_PAGE_SIZE = 500
 
 function hasTemplateTag(template: AuditTemplate, tag: string): boolean {
   return (template.tags || []).some((candidate) => candidate?.trim().toLowerCase() === tag)
@@ -268,15 +273,18 @@ const INITIAL_FORM_STATE: CreateAuditForm = {
 export default function Audits() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [audits, setAudits] = useState<AuditRun[]>([])
   const [findings, setFindings] = useState<AuditFinding[]>([])
+  const [findingsTotal, setFindingsTotal] = useState<number | null>(null)
+  const [openFindingsTotal, setOpenFindingsTotal] = useState<number | null>(null)
   const [templates, setTemplates] = useState<AuditTemplate[]>([])
   const [loading, setLoading] = useState(true)
   // Deep-link: ?view=findings&findingId=N navigates to findings tab and highlights the card
   const urlView = searchParams.get('view') as ViewMode | null
   const urlFindingId = searchParams.get('findingId')
   const urlAssuranceSource = searchParams.get('source')
+  const urlModal = searchParams.get('modal')
   const customerAssuranceView = urlAssuranceSource === ASSURANCE_SOURCE_CUSTOMER
   const [viewMode, setViewMode] = useState<ViewMode>(
     urlView === 'findings' || urlView === 'list' || urlView === 'kanban' ? urlView : 'kanban',
@@ -304,6 +312,7 @@ export default function Audits() {
   const [capaLoopLoadState, setCapaLoopLoadState] = useState<CapaLoopLoadState>('loading')
   const [loopBusyFindingId, setLoopBusyFindingId] = useState<number | null>(null)
   const [loopAssigningFindingId, setLoopAssigningFindingId] = useState<number | null>(null)
+  const importModalOpenedRef = useRef(false)
 
   const scopedAudits = useMemo(
     () => filterAuditsByAssuranceSource(audits, urlAssuranceSource),
@@ -316,35 +325,63 @@ export default function Audits() {
     return findings.filter((finding) => scopedIds.has(finding.run_id))
   }, [findings, scopedAudits, customerAssuranceView])
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoadError(null)
     try {
-      const [auditsRes, findingsRes, templatesRes] = await Promise.allSettled([
+      const [auditsRes, findingsRes, openFindingsRes, templatesRes] = await Promise.allSettled([
         auditsApi.listRuns(1, 100),
-        auditsApi.listFindings(1, 100),
+        auditsApi.listFindings(1, FINDINGS_PAGE_SIZE),
+        auditsApi.listFindings(1, 1, undefined, 'open'),
         auditsApi.listTemplates(1, 100, { is_published: true }),
       ])
       setAudits(auditsRes.status === 'fulfilled' ? auditsRes.value.data.items || [] : [])
-      setFindings(findingsRes.status === 'fulfilled' ? findingsRes.value.data.items || [] : [])
+      if (findingsRes.status === 'fulfilled') {
+        setFindings(findingsRes.value.data.items || [])
+        setFindingsTotal(findingsRes.value.data.total ?? null)
+      } else {
+        setFindings([])
+        setFindingsTotal(null)
+      }
+      setOpenFindingsTotal(
+        openFindingsRes.status === 'fulfilled' ? openFindingsRes.value.data.total ?? null : null,
+      )
       setTemplates(templatesRes.status === 'fulfilled' ? templatesRes.value.data.items || [] : [])
-      const failures = [auditsRes, findingsRes, templatesRes].filter((r) => r.status === 'rejected')
+      const failures = [auditsRes, findingsRes, openFindingsRes, templatesRes].filter(
+        (r) => r.status === 'rejected',
+      )
       if (failures.length > 0) {
-        setLoadError(`Failed to load some data. ${failures.length} of 3 requests failed.`)
+        setLoadError(`Failed to load some data. ${failures.length} of 4 requests failed.`)
       }
     } catch (err) {
       if (import.meta.env.DEV) console.error('Failed to load audits:', err)
       setLoadError('Failed to load audit data. Please try again.')
       setAudits([])
       setFindings([])
+      setFindingsTotal(null)
+      setOpenFindingsTotal(null)
       setTemplates([])
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
-    loadData()
-  }, [])
+    void loadData()
+  }, [loadData])
+
+  useEffect(() => {
+    const refreshOnFocus = () => {
+      if (document.visibilityState === 'visible') {
+        void loadData()
+      }
+    }
+    window.addEventListener('focus', refreshOnFocus)
+    document.addEventListener('visibilitychange', refreshOnFocus)
+    return () => {
+      window.removeEventListener('focus', refreshOnFocus)
+      document.removeEventListener('visibilitychange', refreshOnFocus)
+    }
+  }, [loadData])
 
   // After findings load, a findingId deep-link always opens Findings. If the
   // target exists, scroll its highlighted card into view.
@@ -616,6 +653,17 @@ export default function Audits() {
     setShowVersionSelector(false)
     setReportFile(null)
   }
+
+  useEffect(() => {
+    if (loading || urlModal !== 'import' || importModalOpenedRef.current) return
+    importModalOpenedRef.current = true
+    handleOpenModal('import')
+    const next = new URLSearchParams(searchParams)
+    next.delete('modal')
+    setSearchParams(next, { replace: true })
+    // PX-260: one-shot deep-link open; exclude handleOpenModal to avoid re-open loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, urlModal, searchParams, setSearchParams])
 
   const selectedExternalAuditType = useMemo(
     () =>
@@ -982,12 +1030,18 @@ export default function Audits() {
         .filter((a) => a.score_percentage != null)
         .reduce((acc, a) => acc + (a.score_percentage ?? 0), 0) /
       (programFilteredAudits.filter((a) => a.score_percentage != null).length || 1),
-    openFindings: scopedFindings.filter((f) => f.status === 'open').length,
+    openFindings: resolveOpenFindingsKpi(scopedFindings, openFindingsTotal, findingsTotal),
   }
+  const openFindingsInScope = useMemo(
+    () => scopedFindings.filter((finding) => isOpenAuditFinding(finding.status)),
+    [scopedFindings],
+  )
   const findingsForView =
     heroFilter === 'open_findings'
-      ? scopedFindings.filter((f) => f.status === 'open')
+      ? openFindingsInScope
       : scopedFindings
+  const findingsListTruncated =
+    findingsTotal != null && findingsTotal > scopedFindings.length
   const linkedFindingExists =
     !urlFindingId || scopedFindings.some((finding) => String(finding.id) === String(urlFindingId))
   const executableAudit = scopedAudits.find(
@@ -1600,6 +1654,17 @@ export default function Audits() {
       {/* Findings View */}
       {viewMode === 'findings' && (
         <div className="space-y-4">
+          {findingsListTruncated ? (
+            <div
+              className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
+              role="status"
+              data-testid="audits-findings-truncated-banner"
+            >
+              Showing {scopedFindings.length} of {findingsTotal} findings loaded — Open Findings KPI
+              uses the server total ({stats.openFindings}) so counts stay honest after new findings
+              are created.
+            </div>
+          ) : null}
           {urlFindingId && !linkedFindingExists && (
             <div
               role="alert"
