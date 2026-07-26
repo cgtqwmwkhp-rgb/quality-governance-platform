@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   Clock,
   BarChart3,
-  Loader2,
   FileText,
   Play,
 } from 'lucide-react'
@@ -51,6 +50,15 @@ import {
   type CapaLoopLoadState,
   type LoopCapaSnapshot,
 } from '../components/audit/FindingLoopStatusRibbon'
+import {
+  FormField,
+  FormNotice,
+  SubmitButton,
+  UnsavedChangesDialog,
+  useFormController,
+  useUnsavedChangesGuard,
+  type FieldSpecs,
+} from '../components/ui/form'
 import { cn, decodeHtmlEntities } from '../helpers/utils'
 import {
   ASSURANCE_SOURCE_CUSTOMER,
@@ -66,6 +74,22 @@ import {
 
 type ViewMode = 'kanban' | 'list' | 'findings'
 type AuditModalMode = 'schedule' | 'import'
+
+type AuditFormField =
+  | 'template_id'
+  | 'external_audit_type'
+  | 'iso_standard'
+  | 'report_file'
+  | 'assurance_scheme'
+
+/** Stable control ids — also used by the "scroll to first invalid field" behaviour. */
+const AUDIT_CONTROL_IDS: Record<AuditFormField, string> = {
+  template_id: 'audit-template',
+  external_audit_type: 'audit-import-type',
+  iso_standard: 'audit-iso-preset',
+  report_file: 'audit-report-file',
+  assurance_scheme: 'audit-scheme',
+}
 
 // Form state for creating a new audit
 interface CreateAuditForm {
@@ -268,8 +292,7 @@ export default function Audits() {
 
   // Form state
   const [formData, setFormData] = useState<CreateAuditForm>(INITIAL_FORM_STATE)
-  const [formError, setFormError] = useState<string | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const pristineFormRef = useRef<string>(JSON.stringify(INITIAL_FORM_STATE))
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [successTone, setSuccessTone] = useState<'success' | 'warning'>('success')
   const [showVersionSelector, setShowVersionSelector] = useState(false)
@@ -568,23 +591,26 @@ export default function Audits() {
   }
 
   const handleOpenModal = (mode: AuditModalMode) => {
+    const pristine = buildDefaultForm(mode)
+    pristineFormRef.current = JSON.stringify(pristine)
     setModalMode(mode)
-    setFormData(buildDefaultForm(mode))
+    setFormData(pristine)
     setIsoSchemePreset('')
-    setFormError(null)
     setSuccessMessage(null)
     setSuccessTone('success')
     setShowVersionSelector(false)
     setReportFile(null)
+    auditForm.resetFeedback()
     setShowModal(true)
   }
 
   const handleCloseModal = () => {
     setShowModal(false)
     setModalMode('schedule')
-    setFormData(buildDefaultForm('schedule'))
+    const pristine = buildDefaultForm('schedule')
+    pristineFormRef.current = JSON.stringify(pristine)
+    setFormData(pristine)
     setIsoSchemePreset('')
-    setFormError(null)
     setSuccessMessage(null)
     setSuccessTone('success')
     setShowVersionSelector(false)
@@ -615,43 +641,69 @@ export default function Audits() {
     }))
   }
 
-  const handleSubmitAudit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setFormError(null)
+  const isIsoImport = modalMode === 'import' && formData.external_audit_type === 'iso'
 
-    if (modalMode === 'import') {
-      if (!formData.external_audit_type) {
-        setFormError('Please choose the external audit type')
-        return
-      }
-      if (formData.external_audit_type === 'iso') {
-        if (!isoSchemePreset) {
-          setFormError('Please select which ISO standard applies')
-          return
+  /**
+   * Declared in on-screen order: the controller scrolls and focuses the first
+   * failing control, which is what fixes a message stranded at the foot of a
+   * scrolling dialog (PX-261).
+   */
+  const auditFields: FieldSpecs<AuditFormField> =
+    modalMode === 'import'
+      ? {
+          external_audit_type: {
+            label: 'External Audit Program',
+            required: true,
+            requiredMessage: 'Please choose the external audit type',
+          },
+          iso_standard: {
+            label: 'ISO Standard',
+            required: isIsoImport,
+            requiredMessage: 'Please select which ISO standard applies',
+          },
+          report_file: {
+            label: 'Source Audit Report',
+            required: true,
+            requiredMessage: 'Please upload the external audit report',
+          },
+          assurance_scheme: {
+            label: 'Audit Scheme / Standard',
+            required: true,
+            requiredMessage:
+              isIsoImport && isoSchemePreset === '__custom__'
+                ? 'Please enter the ISO standard (for example ISO 50001:2018)'
+                : 'Please enter the audit scheme or standard',
+          },
+          // Last: resolved by the server, so it has no control to focus.
+          template_id: {
+            label: 'Internal processing template',
+            required: true,
+            requiredMessage:
+              'No published intake template is configured for external audit imports',
+          },
         }
-        if (isoSchemePreset === '__custom__' && !formData.assurance_scheme.trim()) {
-          setFormError('Please enter the ISO standard (for example ISO 50001:2018)')
-          return
+      : {
+          template_id: {
+            label: 'Audit Template',
+            required: true,
+            requiredMessage: 'Please select an audit template',
+          },
+          external_audit_type: { label: 'External Audit Program' },
+          iso_standard: { label: 'ISO Standard' },
+          report_file: { label: 'Source Audit Report' },
+          assurance_scheme: { label: 'Audit Scheme / Standard' },
         }
-      } else if (!formData.assurance_scheme.trim()) {
-        setFormError('Please enter the audit scheme or standard')
-        return
-      }
-      if (!reportFile) {
-        setFormError('Please upload the external audit report')
-        return
-      }
-      if (!formData.template_id) {
-        setFormError('No published intake template is configured for external audit imports')
-        return
-      }
-    } else if (!formData.template_id) {
-      setFormError('Please select an audit template')
-      return
-    }
 
-    setIsSubmitting(true)
-    try {
+  const auditFormValues: Record<string, unknown> = {
+    template_id: formData.template_id,
+    external_audit_type: formData.external_audit_type,
+    iso_standard: isoSchemePreset,
+    report_file: reportFile,
+    assurance_scheme: formData.assurance_scheme,
+  }
+
+  const submitAudit = async () => {
+    {
       const payload: AuditRunCreate = {
         template_id: formData.template_id as number,
         title:
@@ -750,18 +802,37 @@ export default function Audits() {
         handleCloseModal()
         setSuccessMessage(null)
       }, 2000)
-    } catch (err: unknown) {
+    }
+  }
+
+  const auditForm = useFormController<AuditFormField>({
+    fields: auditFields,
+    values: auditFormValues,
+    controlId: (name) => AUDIT_CONTROL_IDS[name],
+    toErrorMessage: (err) => {
       if (import.meta.env.DEV) console.error('Failed to create audit:', err)
-      const errorMessage =
+      return (
         getStructuredErrorMessage(err) ||
         (modalMode === 'import'
           ? 'Failed to create external audit intake. Please try again.'
           : 'Failed to schedule audit. Please try again.')
-      setFormError(errorMessage)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
+      )
+    },
+    onSubmit: submitAudit,
+  })
+
+  // Compared against the pristine form for this mode, so "dirty" means the user
+  // actually typed or chose something rather than the dialog simply being open.
+  const auditFormDirty =
+    !successMessage &&
+    (reportFile !== null ||
+      isoSchemePreset !== '' ||
+      JSON.stringify(formData) !== pristineFormRef.current)
+
+  const auditGuard = useUnsavedChangesGuard({
+    dirty: auditFormDirty,
+    onDiscard: handleCloseModal,
+  })
 
   const searchFilteredAudits = useMemo(() => {
     if (!searchTerm.trim()) return scopedAudits
@@ -1778,7 +1849,7 @@ export default function Audits() {
       )}
 
       {/* Create Audit Modal */}
-      <Dialog open={showModal} onOpenChange={handleCloseModal}>
+      <Dialog open={showModal} onOpenChange={auditGuard.handleOpenChange}>
         <DialogContent className={modalMode === 'import' ? 'sm:max-w-3xl' : 'sm:max-w-lg'}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1823,52 +1894,59 @@ export default function Audits() {
               <p className="text-muted-foreground">{successMessage}</p>
             </div>
           ) : (
-            <form onSubmit={handleSubmitAudit} className="space-y-5">
+            <form {...auditForm.formProps} className="space-y-5">
               {modalMode === 'schedule' ? (
                 <div className="space-y-2">
-                  <span className="text-sm font-medium text-foreground">
-                    Audit Template <span className="text-destructive">*</span>
-                  </span>
                   {latestPublishedTemplates.length === 0 ? (
-                    <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
-                      <p className="text-sm text-warning">
-                        No published templates available. Please create and publish a template first
-                        using the Audit Template Builder.
-                      </p>
-                    </div>
+                    <>
+                      <span className="text-sm font-medium text-foreground">
+                        Audit Template <span className="text-destructive">*</span>
+                      </span>
+                      <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
+                        <p className="text-sm text-warning">
+                          No published templates available. Please create and publish a template
+                          first using the Audit Template Builder.
+                        </p>
+                      </div>
+                    </>
                   ) : (
                     <div className="space-y-2">
-                      <select
-                        value={formData.template_id ?? ''}
-                        onChange={(e) => {
-                          const templateId = Number(e.target.value)
-                          const template = latestPublishedTemplates.find(
-                            (item) => item.id === templateId,
-                          )
-                          setFormData((prev) => ({
-                            ...prev,
-                            template_id: Number.isNaN(templateId) ? null : templateId,
-                            title:
-                              prev.title ||
-                              (template?.name ? decodeHtmlEntities(template.name) : ''),
-                          }))
-                          setShowVersionSelector(false)
-                        }}
-                        className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      <FormField
+                        {...auditForm.fieldProps('template_id')}
+                        hint={`Showing ${latestPublishedTemplates.length} published ${
+                          latestPublishedTemplates.length === 1 ? 'template' : 'templates'
+                        }. Only published templates appear here — publish via the Template Builder.`}
                       >
-                        <option value="">Select a published template...</option>
-                        {latestPublishedTemplates.map((template) => (
-                          <option key={template.id} value={template.id}>
-                            {decodeHtmlEntities(template.name)} (v{template.version}) -{' '}
-                            {template.reference_number}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-muted-foreground">
-                        Showing {latestPublishedTemplates.length} published{' '}
-                        {latestPublishedTemplates.length === 1 ? 'template' : 'templates'}. Only
-                        published templates appear here &mdash; publish via the Template Builder.
-                      </p>
+                        {(control) => (
+                          <select
+                            {...control}
+                            value={formData.template_id ?? ''}
+                            onChange={(e) => {
+                              const templateId = Number(e.target.value)
+                              const template = latestPublishedTemplates.find(
+                                (item) => item.id === templateId,
+                              )
+                              setFormData((prev) => ({
+                                ...prev,
+                                template_id: Number.isNaN(templateId) ? null : templateId,
+                                title:
+                                  prev.title ||
+                                  (template?.name ? decodeHtmlEntities(template.name) : ''),
+                              }))
+                              setShowVersionSelector(false)
+                            }}
+                            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          >
+                            <option value="">Select a published template...</option>
+                            {latestPublishedTemplates.map((template) => (
+                              <option key={template.id} value={template.id}>
+                                {decodeHtmlEntities(template.name)} (v{template.version}) -{' '}
+                                {template.reference_number}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </FormField>
                       {selectedTemplateFamily && selectedTemplateFamily.versions.length > 1 && (
                         <div className="rounded-xl border border-border bg-surface p-3 space-y-2">
                           <button
@@ -1981,89 +2059,82 @@ export default function Audits() {
                         resolve the internal intake checklist automatically.
                       </p>
                     </div>
-                    <div className="space-y-2">
-                      <label
-                        htmlFor="audit-import-type"
-                        className="text-sm font-medium text-foreground"
-                      >
-                        External Audit Program <span className="text-destructive">*</span>
-                      </label>
-                      <select
-                        id="audit-import-type"
-                        value={formData.external_audit_type}
-                        onChange={(e) => handleExternalAuditTypeChange(e.target.value)}
-                        className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      >
-                        <option value="">Select external audit type...</option>
-                        {EXTERNAL_AUDIT_TYPE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedExternalAuditType?.description ||
-                          'This drives the source metadata, searchability, and internal processing path for the import.'}
-                      </p>
-                    </div>
-
-                    {formData.external_audit_type === 'iso' && (
-                      <div className="space-y-2">
-                        <label
-                          htmlFor="audit-iso-preset"
-                          className="text-sm font-medium text-foreground"
-                        >
-                          ISO Standard <span className="text-destructive">*</span>
-                        </label>
+                    <FormField
+                      {...auditForm.fieldProps('external_audit_type')}
+                      hint={
+                        selectedExternalAuditType?.description ||
+                        'This drives the source metadata, searchability, and internal processing path for the import.'
+                      }
+                    >
+                      {(control) => (
                         <select
-                          id="audit-iso-preset"
-                          value={isoSchemePreset}
-                          onChange={(e) => {
-                            const v = e.target.value
-                            setIsoSchemePreset(v)
-                            if (v && v !== '__custom__') {
-                              setFormData((prev) => ({ ...prev, assurance_scheme: v }))
-                            } else if (v === '__custom__') {
-                              setFormData((prev) => ({ ...prev, assurance_scheme: '' }))
-                            }
-                          }}
+                          {...control}
+                          value={formData.external_audit_type}
+                          onChange={(e) => handleExternalAuditTypeChange(e.target.value)}
                           className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                         >
-                          <option value="">Select ISO standard…</option>
-                          {ISO_STANDARD_IMPORT_PRESETS.map((preset) => (
-                            <option key={preset.value} value={preset.value}>
-                              {preset.label}
+                          <option value="">Select external audit type...</option>
+                          {EXTERNAL_AUDIT_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
                             </option>
                           ))}
                         </select>
-                        <p className="text-xs text-muted-foreground">
-                          This pre-fills the scheme field so extraction and ISO cross-mapping use
-                          the correct standard family.
-                        </p>
-                      </div>
+                      )}
+                    </FormField>
+
+                    {formData.external_audit_type === 'iso' && (
+                      <FormField
+                        {...auditForm.fieldProps('iso_standard')}
+                        hint="This pre-fills the scheme field so extraction and ISO cross-mapping use the correct standard family."
+                      >
+                        {(control) => (
+                          <select
+                            {...control}
+                            value={isoSchemePreset}
+                            onChange={(e) => {
+                              const v = e.target.value
+                              setIsoSchemePreset(v)
+                              if (v && v !== '__custom__') {
+                                setFormData((prev) => ({ ...prev, assurance_scheme: v }))
+                              } else if (v === '__custom__') {
+                                setFormData((prev) => ({ ...prev, assurance_scheme: '' }))
+                              }
+                            }}
+                            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          >
+                            <option value="">Select ISO standard…</option>
+                            {ISO_STANDARD_IMPORT_PRESETS.map((preset) => (
+                              <option key={preset.value} value={preset.value}>
+                                {preset.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </FormField>
                     )}
 
-                    <div className="space-y-2">
-                      <label
-                        htmlFor="audit-report-file"
-                        className="text-sm font-medium text-foreground"
-                      >
-                        Source Audit Report <span className="text-destructive">*</span>
-                      </label>
-                      <Input
-                        id="audit-report-file"
-                        type="file"
-                        accept=".pdf,.doc,.docx,.xls,.xlsx"
-                        onChange={(e) => setReportFile(e.target.files?.[0] ?? null)}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Upload the source report so the imported audit is linked into the shared
-                        evidence layer from day one.
-                      </p>
-                      {reportFile && (
-                        <p className="text-xs text-primary">Selected file: {reportFile.name}</p>
+                    <FormField
+                      {...auditForm.fieldProps('report_file')}
+                      hint="Upload the source report so the imported audit is linked into the shared evidence layer from day one."
+                    >
+                      {(control) => (
+                        <>
+                          <Input
+                            {...control}
+                            type="file"
+                            accept=".pdf,.doc,.docx,.xls,.xlsx"
+                            onChange={(e) => setReportFile(e.target.files?.[0] ?? null)}
+                            error={Boolean(auditForm.errors.report_file)}
+                          />
+                          {reportFile && (
+                            <p className="mt-1 text-xs text-primary">
+                              Selected file: {reportFile.name}
+                            </p>
+                          )}
+                        </>
                       )}
-                    </div>
+                    </FormField>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -2080,24 +2151,21 @@ export default function Audits() {
                           readOnly
                         />
                       </div>
-                      <div className="space-y-2">
-                        <label
-                          htmlFor="audit-scheme"
-                          className="text-sm font-medium text-foreground"
-                        >
-                          Audit Scheme / Standard <span className="text-destructive">*</span>
-                        </label>
-                        <Input
-                          id="audit-scheme"
-                          type="text"
-                          placeholder="e.g., ISO 9001 Surveillance, Planet Mark, Achilles UVDB"
-                          value={formData.assurance_scheme}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, assurance_scheme: e.target.value }))
-                          }
-                          maxLength={100}
-                        />
-                      </div>
+                      <FormField {...auditForm.fieldProps('assurance_scheme')}>
+                        {(control) => (
+                          <Input
+                            {...control}
+                            type="text"
+                            placeholder="e.g., ISO 9001 Surveillance, Planet Mark, Achilles UVDB"
+                            value={formData.assurance_scheme}
+                            onChange={(e) =>
+                              setFormData((prev) => ({ ...prev, assurance_scheme: e.target.value }))
+                            }
+                            maxLength={100}
+                            error={Boolean(auditForm.errors.assurance_scheme)}
+                          />
+                        )}
+                      </FormField>
                     </div>
                   </div>
 
@@ -2180,6 +2248,15 @@ export default function Audits() {
                         The resolved template and version are shown after creation in the review
                         workspace.
                       </p>
+                      {auditForm.errors.template_id ? (
+                        <p
+                          role="alert"
+                          data-testid="audit-template-resolution-error"
+                          className="mt-2 text-sm text-destructive"
+                        >
+                          {auditForm.errors.template_id}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 </>
@@ -2206,54 +2283,54 @@ export default function Audits() {
                 />
               </div>
 
-              {/* Error Message */}
-              {formError && (
-                <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-destructive">{formError}</p>
-                </div>
-              )}
+              {/* Persistent submit failure — survives until the next attempt. */}
+              {auditForm.submitError ? (
+                <FormNotice tone="error" data-testid="audit-form-error">
+                  {auditForm.submitError}
+                </FormNotice>
+              ) : null}
 
               {/* Footer */}
               <DialogFooter className="gap-2 sm:gap-0">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={handleCloseModal}
-                  disabled={isSubmitting}
+                  onClick={auditGuard.requestClose}
+                  disabled={auditForm.submitting}
                 >
                   {t('cancel')}
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={
-                    isSubmitting ||
-                    (modalMode === 'schedule'
-                      ? latestPublishedTemplates.length === 0 || !formData.template_id
-                      : !formData.template_id)
+                <SubmitButton
+                  submitting={auditForm.submitting}
+                  submittingLabel={
+                    modalMode === 'import' ? 'Creating intake...' : t('audits.scheduling')
                   }
+                  disabled={modalMode === 'schedule' && latestPublishedTemplates.length === 0}
+                  data-testid="audit-create-submit"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      {modalMode === 'import' ? 'Creating intake...' : t('audits.scheduling')}
-                    </>
+                  {modalMode === 'import' ? (
+                    <FileText className="w-4 h-4" />
                   ) : (
-                    <>
-                      {modalMode === 'import' ? (
-                        <FileText className="w-4 h-4" />
-                      ) : (
-                        <Calendar className="w-4 h-4" />
-                      )}
-                      {modalMode === 'import' ? 'Create Intake' : 'Schedule Audit'}
-                    </>
+                    <Calendar className="w-4 h-4" />
                   )}
-                </Button>
+                  {modalMode === 'import' ? 'Create Intake' : 'Schedule Audit'}
+                </SubmitButton>
               </DialogFooter>
             </form>
           )}
         </DialogContent>
       </Dialog>
+      <UnsavedChangesDialog
+        guard={auditGuard}
+        title={t('form.unsaved.title', 'Discard unsaved changes?')}
+        description={t(
+          'form.unsaved.description',
+          'This form has changes that have not been saved. Closing it now will lose them.',
+        )}
+        keepEditingLabel={t('form.unsaved.keep_editing', 'Keep editing')}
+        discardLabel={t('form.unsaved.discard', 'Discard changes')}
+        data-testid="audit-unsaved-changes"
+      />
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )

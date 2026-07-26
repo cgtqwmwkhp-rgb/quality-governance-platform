@@ -44,8 +44,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import {
+  FormField,
+  FormNotice,
+  SubmitButton,
+  UnsavedChangesDialog,
+  useFormController,
+  useUnsavedChangesGuard,
+  type FieldSpecs,
+} from '../components/ui/form'
 
 type OwnerFilter = 'all' | 'unassigned'
+
+type IncidentFormField =
+  | 'title'
+  | 'description'
+  | 'incident_type'
+  | 'severity'
+  | 'contract_id'
+  | 'incident_date'
+
+/** Stable control ids — also used by the "scroll to first invalid field" behaviour. */
+const INCIDENT_CONTROL_IDS: Record<IncidentFormField, string> = {
+  title: 'incidents-field-0',
+  description: 'incidents-field-1',
+  incident_type: 'incidents-field-2',
+  severity: 'incidents-field-3',
+  contract_id: 'incidents-field-customer',
+  incident_date: 'incidents-field-4',
+}
 
 const ALL_FILTER = 'all'
 const PAGE_SIZE = 50
@@ -103,6 +130,19 @@ function buildIncidentsListSearch(params: {
   return next.toString()
 }
 
+function buildInitialIncidentForm(): IncidentCreate {
+  const now = new Date().toISOString().slice(0, 16)
+  return {
+    title: '',
+    description: '',
+    incident_type: 'other',
+    severity: 'medium',
+    incident_date: now,
+    reported_date: now,
+    contract_id: null,
+  }
+}
+
 export default function Incidents() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -110,8 +150,6 @@ export default function Incidents() {
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [createError, setCreateError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '')
   const [statusFilter, setStatusFilter] = useState(() => parseListFilter(searchParams.get('status')))
@@ -130,15 +168,9 @@ export default function Incidents() {
   const [assigneeById, setAssigneeById] = useState<
     Record<number, { email: string; user?: UserSearchResult }>
   >({})
-  const [formData, setFormData] = useState<IncidentCreate>({
-    title: '',
-    description: '',
-    incident_type: 'other',
-    severity: 'medium',
-    incident_date: new Date().toISOString().slice(0, 16),
-    reported_date: new Date().toISOString().slice(0, 16),
-    contract_id: null,
-  })
+  const [formData, setFormData] = useState<IncidentCreate>(buildInitialIncidentForm)
+  const [formDirty, setFormDirty] = useState(false)
+  const [offlineQueued, setOfflineQueued] = useState(false)
   const [contractOptions, setContractOptions] = useState<Array<{ id: number; name: string }>>([])
   const [customersLoaded, setCustomersLoaded] = useState(false)
   const [sessionReporterLabel, setSessionReporterLabel] = useState<string | null>(null)
@@ -395,18 +427,44 @@ export default function Incidents() {
     }
   }
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setCreating(true)
-    setCreateError(null)
+  /** Any edit marks the form dirty so closing it cannot silently bin typed work. */
+  const updateForm = (patch: Partial<IncidentCreate>) => {
+    setFormDirty(true)
+    setFormData((prev) => ({ ...prev, ...patch }))
+  }
 
-    if (formData.contract_id == null) {
-      setCreateError(t('incidents.form.customer_required', 'Select a customer / contract'))
-      setCreating(false)
-      return
-    }
+  const closeCreateModal = () => {
+    setShowModal(false)
+    setFormDirty(false)
+    setOfflineQueued(false)
+    setFormData(buildInitialIncidentForm())
+  }
 
-    if (!navigator.onLine) {
+  const incidentFields: FieldSpecs<IncidentFormField> = {
+    title: { label: t('incidents.form.title'), required: true },
+    description: { label: t('incidents.form.description'), required: true },
+    incident_type: { label: t('incidents.form.type') },
+    severity: { label: t('incidents.form.severity') },
+    contract_id: {
+      label: t('incidents.form.customer', 'Customer / contract'),
+      required: true,
+      requiredMessage: t(
+        'incidents.form.customer_required',
+        'Customer / contract is required — choose the customer this incident belongs to.',
+      ),
+    },
+    incident_date: { label: t('incidents.form.incident_date'), required: true },
+  }
+
+  const createForm = useFormController<IncidentFormField>({
+    fields: incidentFields,
+    values: formData as unknown as Record<string, unknown>,
+    controlId: (name) => INCIDENT_CONTROL_IDS[name],
+    toErrorMessage: (err) => {
+      trackError(err, { component: 'Incidents', action: 'create' })
+      return getApiErrorMessage(err)
+    },
+    onSubmit: async () => {
       const reporter = await resolvePlatformReporterIdentity()
       const payload = {
         ...formData,
@@ -415,41 +473,34 @@ export default function Incidents() {
         incident_date: new Date(formData.incident_date).toISOString(),
         reported_date: new Date(formData.reported_date).toISOString(),
       }
-      await queueForSync('/api/v1/incidents', 'POST', payload)
-      toast.success(t('incidents.saved_offline', 'Saved for sync when back online'))
-      setShowModal(false)
-      setCreating(false)
-      return
-    }
 
-    try {
-      const reporter = await resolvePlatformReporterIdentity()
-      const response = await incidentsApi.create({
-        ...formData,
-        reporter_name: formData.reporter_name || reporter.reporter_name,
-        reporter_email: formData.reporter_email || reporter.reporter_email,
-        incident_date: new Date(formData.incident_date).toISOString(),
-        reported_date: new Date(formData.reported_date).toISOString(),
-      })
+      if (!navigator.onLine) {
+        await queueForSync('/api/v1/incidents', 'POST', payload)
+        toast.success(t('incidents.saved_offline', 'Saved for sync when back online'))
+        // Keep the dialog open with a persistent notice: closing here would look
+        // exactly like a successful save, and the register has not changed (PX-127).
+        setOfflineQueued(true)
+        setFormDirty(false)
+        return
+      }
+
+      const response = await incidentsApi.create(payload)
       if (response.data) {
         setIncidents((prev) => [response.data, ...prev])
       }
-      setShowModal(false)
-      setFormData({
-        title: '',
-        description: '',
-        incident_type: 'other',
-        severity: 'medium',
-        incident_date: new Date().toISOString().slice(0, 16),
-        reported_date: new Date().toISOString().slice(0, 16),
-        contract_id: null,
-      })
-    } catch (err) {
-      trackError(err, { component: 'Incidents', action: 'create' })
-      setCreateError(getApiErrorMessage(err))
-    } finally {
-      setCreating(false)
-    }
+      closeCreateModal()
+    },
+  })
+
+  const createGuard = useUnsavedChangesGuard({
+    dirty: formDirty && !offlineQueued,
+    onDiscard: closeCreateModal,
+  })
+
+  const openCreateModal = () => {
+    createForm.resetFeedback()
+    setOfflineQueued(false)
+    setShowModal(true)
   }
 
   const getTypeIcon = (type: unknown) => {
@@ -547,7 +598,7 @@ export default function Incidents() {
           <h1 className="text-2xl font-bold text-foreground">{t('incidents.title')}</h1>
           <p className="text-muted-foreground mt-1">{t('incidents.subtitle')}</p>
         </div>
-        <Button onClick={() => setShowModal(true)}>
+        <Button onClick={openCreateModal}>
           <Plus size={20} />
           {t('incidents.new')}
         </Button>
@@ -697,7 +748,7 @@ export default function Incidents() {
                         }
                         action={
                           !searchNeedle ? (
-                            <Button variant="outline" size="sm" onClick={() => setShowModal(true)}>
+                            <Button variant="outline" size="sm" onClick={openCreateModal}>
                               <Plus size={16} /> {t('incidents.new', 'Report Incident')}
                             </Button>
                           ) : undefined
@@ -846,140 +897,132 @@ export default function Incidents() {
       </Card>
 
       {/* Create Modal */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
+      <Dialog open={showModal} onOpenChange={createGuard.handleOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('incidents.dialog.title')}</DialogTitle>
             <DialogDescription>{t('incidents.subtitle')}</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-5">
-            {createError && (
-              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">
-                {createError}
-              </div>
-            )}
-            <div>
-              <label
-                htmlFor="incidents-field-0"
-                className="block text-sm font-medium text-foreground mb-2"
+          <form {...createForm.formProps} className="space-y-5">
+            {createForm.submitError ? (
+              <FormNotice tone="error" data-testid="incident-create-error">
+                {createForm.submitError}
+              </FormNotice>
+            ) : null}
+            {offlineQueued ? (
+              <FormNotice
+                tone="warning"
+                data-testid="incident-offline-queued"
+                title={t('incidents.offline.queued_title', 'Saved offline — not in the register yet')}
               >
-                {t('incidents.form.title')} <span className="text-destructive">*</span>
-              </label>
-              <Input
-                id="incidents-field-0"
-                type="text"
-                required
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder={t('incidents.form.title_placeholder')}
-                aria-required="true"
-              />
-            </div>
+                {t(
+                  'incidents.offline.queued_body',
+                  'This report is stored on this device and will be sent automatically when you are back online. It will not appear in the register, and has no reference number, until then.',
+                )}
+              </FormNotice>
+            ) : null}
 
-            <div>
-              <label
-                htmlFor="incidents-field-1"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('incidents.form.description')} <span className="text-destructive">*</span>
-              </label>
-              <Textarea
-                id="incidents-field-1"
-                required
-                rows={3}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder={t('incidents.form.description_placeholder')}
-                aria-required="true"
-              />
-            </div>
+            <FormField {...createForm.fieldProps('title')}>
+              {(control) => (
+                <Input
+                  {...control}
+                  type="text"
+                  value={formData.title}
+                  onChange={(e) => updateForm({ title: e.target.value })}
+                  placeholder={t('incidents.form.title_placeholder')}
+                  error={Boolean(createForm.errors.title)}
+                />
+              )}
+            </FormField>
+
+            <FormField {...createForm.fieldProps('description')}>
+              {(control) => (
+                <Textarea
+                  {...control}
+                  rows={3}
+                  value={formData.description}
+                  onChange={(e) => updateForm({ description: e.target.value })}
+                  placeholder={t('incidents.form.description_placeholder')}
+                />
+              )}
+            </FormField>
 
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label
-                  htmlFor="incidents-field-2"
-                  className="block text-sm font-medium text-foreground mb-2"
-                >
-                  {t('incidents.form.type')}
-                </label>
+              <FormField {...createForm.fieldProps('incident_type')} nativeControl={false}>
+                {(control) => (
+                  <Select
+                    value={formData.incident_type}
+                    onValueChange={(value) => updateForm({ incident_type: value })}
+                  >
+                    <SelectTrigger {...control}>
+                      <SelectValue placeholder={t('incidents.form.select_type')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {typeOptions.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </FormField>
+
+              <FormField {...createForm.fieldProps('severity')} nativeControl={false}>
+                {(control) => (
+                  <Select
+                    value={formData.severity}
+                    onValueChange={(value) => updateForm({ severity: value })}
+                  >
+                    <SelectTrigger {...control}>
+                      <SelectValue placeholder={t('incidents.form.select_severity')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {severityOptions.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </FormField>
+            </div>
+
+            <FormField
+              {...createForm.fieldProps('contract_id')}
+              nativeControl={false}
+              hint={
+                customersLoaded && contractOptions.length === 0
+                  ? t(
+                      'incidents.form.customer_empty',
+                      'No customers available — add them in Admin → Lookups → Customers.',
+                    )
+                  : undefined
+              }
+            >
+              {(control) => (
                 <Select
-                  value={formData.incident_type}
-                  onValueChange={(value) => setFormData({ ...formData, incident_type: value })}
+                  value={formData.contract_id != null ? String(formData.contract_id) : ''}
+                  onValueChange={(value) =>
+                    updateForm({ contract_id: value ? Number(value) : null })
+                  }
                 >
-                  <SelectTrigger id="incidents-field-2">
-                    <SelectValue placeholder={t('incidents.form.select_type')} />
+                  <SelectTrigger {...control}>
+                    <SelectValue
+                      placeholder={t('incidents.form.select_customer', 'Select customer')}
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {typeOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
+                    {contractOptions.map((contract) => (
+                      <SelectItem key={contract.id} value={String(contract.id)}>
+                        {contract.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="incidents-field-3"
-                  className="block text-sm font-medium text-foreground mb-2"
-                >
-                  {t('incidents.form.severity')}
-                </label>
-                <Select
-                  value={formData.severity}
-                  onValueChange={(value) => setFormData({ ...formData, severity: value })}
-                >
-                  <SelectTrigger id="incidents-field-3">
-                    <SelectValue placeholder={t('incidents.form.select_severity')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {severityOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="incidents-field-customer"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('incidents.form.customer', 'Customer / contract')}{' '}
-                <span className="text-destructive">*</span>
-              </label>
-              <Select
-                value={formData.contract_id != null ? String(formData.contract_id) : ''}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, contract_id: value ? Number(value) : null })
-                }
-              >
-                <SelectTrigger id="incidents-field-customer">
-                  <SelectValue
-                    placeholder={t('incidents.form.select_customer', 'Select customer')}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {contractOptions.map((contract) => (
-                    <SelectItem key={contract.id} value={String(contract.id)}>
-                      {contract.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {customersLoaded && contractOptions.length === 0 ? (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t(
-                    'incidents.form.customer_empty',
-                    'No customers available — add them in Admin → Lookups → Customers.',
-                  )}
-                </p>
-              ) : null}
-            </div>
+              )}
+            </FormField>
 
             {sessionReporterLabel ? (
               <div
@@ -999,41 +1042,50 @@ export default function Incidents() {
               </div>
             ) : null}
 
-            <div>
-              <label
-                htmlFor="incidents-field-4"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('incidents.form.incident_date')} <span className="text-destructive">*</span>
-              </label>
-              <Input
-                id="incidents-field-4"
-                type="datetime-local"
-                required
-                aria-required="true"
-                value={formData.incident_date}
-                onChange={(e) => setFormData({ ...formData, incident_date: e.target.value })}
-              />
-            </div>
+            <FormField {...createForm.fieldProps('incident_date')}>
+              {(control) => (
+                <Input
+                  {...control}
+                  type="datetime-local"
+                  value={formData.incident_date}
+                  onChange={(e) => updateForm({ incident_date: e.target.value })}
+                  error={Boolean(createForm.errors.incident_date)}
+                />
+              )}
+            </FormField>
 
             <DialogFooter className="gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
-                {t('cancel')}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={offlineQueued ? closeCreateModal : createGuard.requestClose}
+              >
+                {offlineQueued ? t('close', 'Close') : t('cancel')}
               </Button>
-              <Button type="submit" disabled={creating}>
-                {creating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {t('incidents.creating')}
-                  </>
-                ) : (
-                  t('incidents.create')
-                )}
-              </Button>
+              {offlineQueued ? null : (
+                <SubmitButton
+                  submitting={createForm.submitting}
+                  submittingLabel={t('incidents.creating')}
+                  data-testid="incident-create-submit"
+                >
+                  {t('incidents.create')}
+                </SubmitButton>
+              )}
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+      <UnsavedChangesDialog
+        guard={createGuard}
+        title={t('form.unsaved.title', 'Discard unsaved changes?')}
+        description={t(
+          'form.unsaved.description',
+          'This form has changes that have not been saved. Closing it now will lose them.',
+        )}
+        keepEditingLabel={t('form.unsaved.keep_editing', 'Keep editing')}
+        discardLabel={t('form.unsaved.discard', 'Discard changes')}
+        data-testid="incident-unsaved-changes"
+      />
     </div>
   )
 }

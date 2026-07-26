@@ -34,6 +34,7 @@ import type { RTA } from '../api/rtasClient'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { cn } from '../helpers/utils'
+import { formatTrend, type Trend } from '../helpers/formatters'
 import { toast } from '../contexts/ToastContext'
 import { CampaignCommandKpis } from './CampaignCommandKpis'
 
@@ -84,11 +85,18 @@ interface ModuleRow {
   open: MetricValue
   closed: MetricValue
   avgResolutionDays: number | null
-  trend: number | null
+  trend: Trend
   href: string
   hrefOpen: string
   loadState?: ModuleLoadState
 }
+
+/**
+ * No module in this table has a trend the API can substantiate: the exec-dashboard
+ * payload exposes `trend_percent` for near misses only, and there is no near-misses
+ * row here. Rendering "No data" states that plainly instead of implying stability.
+ */
+const NO_TREND_DATA: Trend = { kind: 'unknown' }
 
 function formatMetric(value: MetricValue): string {
   return value == null ? '—' : String(value)
@@ -140,22 +148,26 @@ function periodLabel(range: TimeRange) {
   return ({ '7d': '7 days', '30d': '30 days', '90d': '90 days', '1y': '12 months' } as const)[range]
 }
 
-function TrendIndicator({
-  change,
-  invertGood,
-}: {
-  change: number | null
-  invertGood?: boolean
-}) {
-  if (change == null || Number.isNaN(change) || change === 0) {
+/**
+ * A module never reports "No change" unless the numbers actually held steady.
+ * "No data" (the API exposes no trend for this module) and "No baseline" (the
+ * previous period was empty, so the change cannot be a percentage) are distinct
+ * states — collapsing them into "No change" asserted a stability the platform
+ * had no evidence for (PX-224).
+ */
+function TrendIndicator({ change, invertGood }: { change: Trend; invertGood?: boolean }) {
+  const label = formatTrend(change)
+
+  if (change.kind !== 'change' || change.percent === 0) {
     return (
       <span className="flex items-center gap-1 text-muted-foreground text-sm">
         <Minus className="w-4 h-4" />
-        No change
+        {label}
       </span>
     )
   }
-  const up = change > 0
+
+  const up = change.percent > 0
   const good = invertGood ? !up : up
   const Icon = up ? ArrowUpRight : ArrowDownRight
   return (
@@ -163,7 +175,7 @@ function TrendIndicator({
       className={cn('flex items-center gap-1 text-sm', good ? 'text-success' : 'text-destructive')}
     >
       <Icon className="w-4 h-4" />
-      {Math.abs(change).toFixed(1)}%
+      {label}
     </span>
   )
 }
@@ -387,7 +399,6 @@ export default function Analytics() {
     const actionsTotal = actionsSummary?.total ?? null
     const actionsOpen = actionsSummary ? openFromActions(actionsSummary) : null
     const actionsClosed = actionsSummary ? completedFromActions(actionsSummary) : null
-    const nearMissTrend = dash?.near_misses.trend_percent ?? null
     const incidentsClosed =
       incidentsTotal != null && incidentsOpen != null
         ? Math.max(0, incidentsTotal - Math.min(incidentsOpen, incidentsTotal))
@@ -401,7 +412,11 @@ export default function Analytics() {
         open: incidentsOpen,
         closed: incidentsClosed,
         avgResolutionDays: null,
-        trend: nearMissTrend,
+        // PX-224: this was bound to `near_misses.trend_percent`, so the Incidents row
+        // reported the near-miss trend (500.0% off a baseline of one) while the incident
+        // chart beside it was empty. The exec-dashboard payload carries no incident
+        // trend at all, so the honest answer is that we do not have one.
+        trend: NO_TREND_DATA,
         href: '/incidents',
         hrefOpen: '/incidents?status=open',
         loadState: dash ? 'live' : 'unavailable',
@@ -413,7 +428,7 @@ export default function Analytics() {
         open: rtasOpen,
         closed: rtasClosed,
         avgResolutionDays: rtasAvgResolutionDays,
-        trend: null,
+        trend: NO_TREND_DATA,
         href: '/rtas',
         hrefOpen: '/rtas',
         loadState: rtasLoadState,
@@ -425,7 +440,7 @@ export default function Analytics() {
         open: complaintsOpen,
         closed: complaintsClosed,
         avgResolutionDays: null,
-        trend: dash?.complaints.resolution_rate != null ? null : null,
+        trend: NO_TREND_DATA,
         href: '/complaints',
         hrefOpen: '/complaints?status=open',
         loadState: dash ? 'live' : 'unavailable',
@@ -437,7 +452,7 @@ export default function Analytics() {
         open: riskTotal,
         closed: riskClosed,
         avgResolutionDays: null,
-        trend: null,
+        trend: NO_TREND_DATA,
         href: '/risk-register',
         hrefOpen: '/risk-register?status=active',
         loadState: 'live',
@@ -449,7 +464,7 @@ export default function Analytics() {
         open: auditsOpen,
         closed: auditsClosed,
         avgResolutionDays: auditsAvgResolutionDays,
-        trend: null,
+        trend: NO_TREND_DATA,
         href: '/audits',
         hrefOpen: '/audits?view=board',
         loadState: auditsLoadState,
@@ -461,7 +476,7 @@ export default function Analytics() {
         open: actionsOpen,
         closed: actionsClosed,
         avgResolutionDays: null,
-        trend: null,
+        trend: NO_TREND_DATA,
         href: '/actions',
         hrefOpen: '/actions?view=overdue',
         loadState: actionsSummary ? 'live' : 'unavailable',
