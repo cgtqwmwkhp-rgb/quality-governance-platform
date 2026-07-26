@@ -15,6 +15,7 @@ import {
   ArrowUp,
 } from 'lucide-react'
 import { CardSkeleton } from '../../components/ui/SkeletonLoader'
+import { AsyncState, ErrorState, resolveAsyncStatus } from '../../components/ui/async'
 import { useNavigate } from 'react-router-dom'
 import {
   workforceApi,
@@ -125,6 +126,7 @@ export default function Engineers() {
   const [engineers, setEngineers] = useState<EngineerProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   // Best-in-class default: active engineers only (roster for assignment / reporting).
@@ -157,7 +159,7 @@ export default function Engineers() {
 
   const loadEngineers = useCallback(async () => {
     setLoading(true)
-    setError(null)
+    setLoadError(null)
     try {
       const params: Record<string, string> = { page: '1', page_size: '50' }
       if (debouncedSearch) params.search = debouncedSearch
@@ -173,7 +175,9 @@ export default function Engineers() {
     } catch (err) {
       setEngineers([])
       setLinkCoverage(null)
-      setError(getApiErrorMessage(err))
+      // Tracked apart from `error`, which carries PAMS sync failures. An empty
+      // roster and an unreachable roster are different claims about the workforce.
+      setLoadError(getApiErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -318,6 +322,12 @@ export default function Engineers() {
   const rosterEmpty =
     !loading && engineers.length === 0 && !debouncedSearch && activeFilter === 'true'
 
+  const rosterStatus = resolveAsyncStatus({
+    loading,
+    error: loadError,
+    isEmpty: engineers.length === 0,
+  })
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -446,9 +456,27 @@ export default function Engineers() {
         </CardContent>
       </Card>
 
-      {loading ? (
-        <CardSkeleton count={6} />
-      ) : engineers.length === 0 ? (
+      {rosterStatus === 'loading' ? (
+        <AsyncState
+          loading
+          onRetry={() => void loadEngineers()}
+          retryLabel={t('common.retry', 'Try again')}
+          loadingFallback={<CardSkeleton count={6} />}
+          data-testid="engineers-loading"
+        />
+      ) : rosterStatus === 'error' ? (
+        <ErrorState
+          title={t('workforce.engineers.load_failed', 'Employee roster unavailable')}
+          description={t(
+            'workforce.engineers.load_failed_hint',
+            'The roster could not be read, so this is not a statement that no employees are on it.',
+          )}
+          message={loadError ?? undefined}
+          onRetry={() => void loadEngineers()}
+          retryLabel={t('common.retry', 'Try again')}
+          data-testid="engineers-load-error"
+        />
+      ) : rosterStatus === 'empty' ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground space-y-4">
             <p>{rosterEmpty ? t('workforce.engineers.empty') : t('common.no_results')}</p>

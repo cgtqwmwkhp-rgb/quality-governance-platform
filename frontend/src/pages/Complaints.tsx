@@ -28,6 +28,8 @@ import { Card, CardContent } from '../components/ui/Card'
 import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
+import { CaseRegisterTable } from '../components/register/CaseRegisterTable'
+import { useCaseRegisterLabels } from '../components/register/useCaseRegisterLabels'
 import {
   Dialog,
   DialogContent,
@@ -149,6 +151,7 @@ export default function Complaints() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useTranslation()
+  const registerLabels = useCaseRegisterLabels()
   const [complaints, setComplaints] = useState<Complaint[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -746,189 +749,170 @@ export default function Complaints() {
       {/* Complaints Table */}
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    {t('complaints.table.reference')}
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    {t('complaints.table.title')}
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    {t('complaints.table.type')}
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    {t('complaints.table.complainant')}
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    {t('complaints.table.priority')}
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    {t('complaints.table.status')}
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    {t('complaints.table.received')}
-                  </th>
-                  {ownerFilter === 'unassigned' ? (
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      {t('complaints.triage.assign_owner', 'Assign owner')}
-                    </th>
-                  ) : null}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {listUnavailable ? (
-                  <tr>
-                    <td colSpan={7}>
-                      <div data-testid="complaints-list-unavailable">
-                        <EmptyState
-                          icon={<MessageSquare className="w-6 h-6 text-muted-foreground" />}
-                          title="Complaints unavailable"
-                          description="The complaints list could not be loaded. This is not an empty register — retry when the service recovers."
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                ) : filteredComplaints.length === 0 ? (
-                  <tr>
-                    <td colSpan={ownerFilter === 'unassigned' ? 8 : 7}>
-                      <EmptyState
-                        icon={<MessageSquare className="w-6 h-6 text-muted-foreground" />}
-                        title={
-                          needle
-                            ? 'No matching complaints'
-                            : t('complaints.empty.title', 'No complaints found')
-                        }
-                        description={
-                          needle
-                            ? 'Try a different search term. Tenant-scoped results only — other tenants are never shown.'
-                            : t(
-                                'complaints.empty.subtitle',
-                                'Create your first complaint to get started.',
-                              )
-                        }
-                        action={
-                          !needle ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowModal(true)}
-                              data-testid="complaints-empty-create"
-                            >
-                              <Plus size={16} /> {t('complaints.new', 'New Complaint')}
-                            </Button>
-                          ) : undefined
-                        }
-                      />
-                    </td>
-                  </tr>
-                ) : (
-                  filteredComplaints.map((complaint, index) => (
-                    <tr
-                      key={complaint.id}
-                      className="hover:bg-surface transition-colors"
-                      style={{ animationDelay: `${index * 30}ms` }}
-                      onClick={() => navigate(`/complaints/${complaint.id}`)}
-                      role="button"
-                      tabIndex={0}
-                      data-testid="complaint-row-link"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          navigate(`/complaints/${complaint.id}`)
-                        }
-                      }}
-                    >
-                      <td
-                        className="px-6 py-4 cursor-pointer"
-                        onClick={() => navigate(`/complaints/${complaint.id}`)}
+          <CaseRegisterTable
+            label={t('complaints.title')}
+            rows={listUnavailable ? [] : filteredComplaints}
+            rowKey={(complaint) => complaint.id}
+            rowTestId="complaint-row-link"
+            onOpenRow={(complaint) => navigate(`/complaints/${complaint.id}`)}
+            rowLabel={(complaint) =>
+              t('complaints.row.open', 'View complaint: {{reference}}', {
+                reference: formatReference(complaint.reference_number),
+              })
+            }
+            empty={
+              listUnavailable ? (
+                <div data-testid="complaints-list-unavailable">
+                  <EmptyState
+                    icon={<MessageSquare className="w-6 h-6 text-muted-foreground" />}
+                    title="Complaints unavailable"
+                    description="The complaints list could not be loaded. This is not an empty register — retry when the service recovers."
+                  />
+                </div>
+              ) : (
+                <EmptyState
+                  icon={<MessageSquare className="w-6 h-6 text-muted-foreground" />}
+                  title={
+                    needle
+                      ? 'No matching complaints'
+                      : t('complaints.empty.title', 'No complaints found')
+                  }
+                  description={
+                    needle
+                      ? 'Try a different search term. Tenant-scoped results only — other tenants are never shown.'
+                      : t('complaints.empty.subtitle', 'Create your first complaint to get started.')
+                  }
+                  action={
+                    !needle ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowModal(true)}
+                        data-testid="complaints-empty-create"
                       >
-                        <span className="font-mono text-sm text-primary">
-                          {formatReference(complaint.reference_number)}
-                        </span>
-                      </td>
-                      <td
-                        className="px-6 py-4 cursor-pointer"
-                        onClick={() => navigate(`/complaints/${complaint.id}`)}
-                      >
-                        <p className="text-sm font-medium text-foreground truncate max-w-xs">
-                          {complaint.title}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
-                          <span>{getTypeIcon(complaint.complaint_type)}</span>
-                          {complaint.complaint_type}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm text-foreground">
-                          {complaint.complainant_name || '—'}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge variant={getPriorityVariant(complaint.priority)}>
-                          {complaint.priority}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge variant={getStatusVariant(complaint.status)}>
-                          {complaint.status.replace('_', ' ')}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">
-                        {formatDisplayDate(complaint.received_date)}
-                      </td>
-                      {ownerFilter === 'unassigned' ? (
-                        <td
-                          className="px-6 py-4"
-                          onClick={(e) => e.stopPropagation()}
-                          data-testid={`complaint-assign-${complaint.id}`}
-                        >
-                          <div className="flex flex-col gap-2 min-w-[220px]">
-                            <EngineerPeoplePicker
-                              valueLabel={assigneeById[complaint.id]?.email || ''}
-                              requireLogin
-                              onChange={(selection) =>
-                                setAssigneeById((prev) => ({
-                                  ...prev,
-                                  [complaint.id]: selection?.user
-                                    ? {
-                                        email: selection.user.email || selection.label,
-                                        user: selection.user,
-                                      }
-                                    : { email: '' },
-                                }))
-                              }
-                              placeholder={t(
-                                'complaints.triage.search_owner',
-                                'Search active employees…',
-                              )}
-                              testId={`complaint-owner-picker-${complaint.id}`}
-                            />
-                            <Button
-                              type="button"
-                              size="sm"
-                              disabled={assigningId === complaint.id}
-                              onClick={() => handleAssignOwner(complaint.id)}
-                            >
-                              {assigningId === complaint.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                t('complaints.triage.assign', 'Assign')
-                              )}
-                            </Button>
-                          </div>
-                        </td>
-                      ) : null}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                        <Plus size={16} /> {t('complaints.new', 'New Complaint')}
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              )
+            }
+            columns={[
+              {
+                key: 'reference',
+                header: registerLabels.reference,
+                width: 'reference',
+                render: (complaint) => (
+                  <span className="font-mono text-sm text-primary">
+                    {formatReference(complaint.reference_number)}
+                  </span>
+                ),
+              },
+              {
+                key: 'title',
+                header: registerLabels.title,
+                render: (complaint) => (
+                  <span className="text-sm font-medium text-foreground">{complaint.title}</span>
+                ),
+              },
+              {
+                key: 'type',
+                header: registerLabels.type,
+                render: (complaint) => (
+                  <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
+                    <span>{getTypeIcon(complaint.complaint_type)}</span>
+                    {complaint.complaint_type}
+                  </span>
+                ),
+              },
+              {
+                key: 'complainant',
+                header: registerLabels.complainant,
+                render: (complaint) => (
+                  <span className="text-sm text-foreground">
+                    {complaint.complainant_name || '—'}
+                  </span>
+                ),
+              },
+              {
+                key: 'priority',
+                header: registerLabels.priority,
+                width: 'badge',
+                render: (complaint) => (
+                  <Badge variant={getPriorityVariant(complaint.priority)}>
+                    {complaint.priority}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'status',
+                header: registerLabels.status,
+                width: 'badge',
+                render: (complaint) => (
+                  <Badge variant={getStatusVariant(complaint.status)}>
+                    {complaint.status.replace('_', ' ')}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'received',
+                header: registerLabels.received,
+                width: 'date',
+                render: (complaint) => (
+                  <span className="text-sm text-muted-foreground">
+                    {formatDisplayDate(complaint.received_date)}
+                  </span>
+                ),
+              },
+              ...(ownerFilter === 'unassigned'
+                ? [
+                    {
+                      key: 'owner',
+                      header: registerLabels.owner,
+                      width: 'action' as const,
+                      isolateClicks: true,
+                      cellTestId: (complaint: Complaint) => `complaint-assign-${complaint.id}`,
+                      render: (complaint: Complaint) => (
+                        <div className="flex flex-col gap-2">
+                          <EngineerPeoplePicker
+                            valueLabel={assigneeById[complaint.id]?.email || ''}
+                            requireLogin
+                            onChange={(selection) =>
+                              setAssigneeById((prev) => ({
+                                ...prev,
+                                [complaint.id]: selection?.user
+                                  ? {
+                                      email: selection.user.email || selection.label,
+                                      user: selection.user,
+                                    }
+                                  : { email: '' },
+                              }))
+                            }
+                            placeholder={t(
+                              'complaints.triage.search_owner',
+                              'Search active employees…',
+                            )}
+                            testId={`complaint-owner-picker-${complaint.id}`}
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={assigningId === complaint.id}
+                            onClick={() => handleAssignOwner(complaint.id)}
+                          >
+                            {assigningId === complaint.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              t('complaints.triage.assign', 'Assign')
+                            )}
+                          </Button>
+                        </div>
+                      ),
+                    },
+                  ]
+                : []),
+            ]}
+          />
         </CardContent>
       </Card>
 
