@@ -48,18 +48,18 @@ async def list_categories(
 ) -> list[dict[str, Any]]:
     """Return distinct categories with template counts for the current tenant."""
     tenant_id = _tid(user)
+    category_label = func.coalesce(AuditTemplate.category, "Uncategorised").label("category")
     query = (
         select(
-            AuditTemplate.category,
+            category_label,
             func.count(AuditTemplate.id).label("count"),
         )
         .where(
             AuditTemplate.is_active == True,  # noqa: E712
             AuditTemplate.archived_at.is_(None),
-            AuditTemplate.category.isnot(None),
         )
-        .group_by(AuditTemplate.category)
-        .order_by(AuditTemplate.category)
+        .group_by(category_label)
+        .order_by(category_label)
     )
     query = apply_tenant_filter(query, AuditTemplate, tenant_id)
     rows = (await db.execute(query)).all()

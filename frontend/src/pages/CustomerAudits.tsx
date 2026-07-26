@@ -41,6 +41,7 @@ import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
 import { cn } from '../helpers/utils'
 import {
   CUSTOMER_AUDITS_SECTIONS,
+  AUDITS_IMPORT_MODAL_PATH,
   buildCustomerAuditsSummary,
   filterCustomerAssuranceRuns,
   getCustomerAuditWorkspacePath,
@@ -277,7 +278,7 @@ export default function CustomerAudits() {
               <ClipboardList className="h-4 w-4" />
               Open Audits board
             </Button>
-            <Button onClick={() => navigate('/audits')}>
+            <Button onClick={() => navigate(AUDITS_IMPORT_MODAL_PATH)}>
               <Plus className="h-4 w-4" />
               Import external audit
             </Button>
@@ -406,7 +407,7 @@ export default function CustomerAudits() {
                       <Button variant="outline" onClick={() => navigate(CUSTOMER_AUDITS_AUDITS_PATH)}>
                         Open Audits board
                       </Button>
-                      <Button onClick={() => navigate('/audits')}>
+                      <Button onClick={() => navigate(AUDITS_IMPORT_MODAL_PATH)}>
                         <Plus className="h-4 w-4" />
                         Schedule or import
                       </Button>
@@ -619,7 +620,7 @@ export default function CustomerAudits() {
                     'Upload the customer audit report when creating an external audit intake — it links to Evidence Assets automatically.',
                   )}
                   action={
-                    <Button variant="outline" onClick={() => navigate('/audits')}>
+                    <Button variant="outline" onClick={() => navigate(AUDITS_IMPORT_MODAL_PATH)}>
                       Import external audit
                     </Button>
                   }
