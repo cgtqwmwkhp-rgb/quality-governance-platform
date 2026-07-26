@@ -345,5 +345,9 @@ async def route_entity(
 
 @router.get("/stats")
 async def get_workflow_stats(current_user: CurrentUser):
-    """Get workflow statistics."""
-    return workflow_engine.get_workflow_stats()
+    """Get workflow statistics.
+
+    Scoped to the caller: `pending_approvals` counts the same queue returned by
+    `GET /approvals/pending`. Metrics the engine cannot measure are returned as null.
+    """
+    return workflow_engine.get_workflow_stats(current_user.id)

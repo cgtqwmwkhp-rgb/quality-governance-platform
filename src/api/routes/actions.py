@@ -170,6 +170,15 @@ class ActionsSummaryResponse(BaseModel):
 
     total: int
     by_display_status: dict[str, int]
+    overdue: int = Field(
+        0,
+        description=(
+            "Open actions past their due date. Derived from the same predicate as the "
+            "list `overdue=true` filter and /view-counts, so a KPI tile cannot contradict "
+            "the filter chip beside it. This is an overlay, not a display status: it "
+            "intersects open / in_progress rather than partitioning by_display_status."
+        ),
+    )
 
 
 class ActionsViewCountsResponse(BaseModel):
@@ -1496,7 +1505,13 @@ def _valid_unified_source_type(src_type: str) -> bool:
 
 
 async def _compute_actions_summary(db: "DbSession", tenant_id: Optional[int]) -> ActionsSummaryResponse:
-    """Aggregate counts by display_status across all action stores."""
+    """Aggregate counts by display_status across all action stores.
+
+    `total` and `overdue` are delegated to `_count_for_source` — the same aggregation
+    that backs the list endpoint and /view-counts — rather than recomputed here. The
+    status histogram alone cannot answer "overdue": only CAPA persists a literal
+    `overdue` status, while every surface means "open and past due_date".
+    """
     by_display: dict[str, int] = {}
 
     def _merge(raw: str, n: int, *, capa: bool) -> None:
@@ -1557,8 +1572,17 @@ async def _compute_actions_summary(db: "DbSession", tenant_id: Optional[int]) ->
     except Exception:
         logger.warning("actions.summary: capa aggregate failed", exc_info=True)
 
-    total = sum(by_display.values())
-    return ActionsSummaryResponse(total=total, by_display_status=by_display)
+    try:
+        q = select(CAPAItem.status, func.count()).where(CAPAItem.tenant_id == tenant_id).group_by(CAPAItem.status)
+        for st, cnt in (await db.execute(q)).all():
+            raw = st.value if hasattr(st, "value") else str(st)
+            _merge(raw, int(cnt), capa=False)
+    except Exception:
+        logger.warning("actions.summary: capa_item aggregate failed", exc_info=True)
+
+    total = await _count_for_source(db, None, None, None, None, tenant_id=tenant_id)
+    overdue = await _count_for_source(db, None, None, None, None, tenant_id=tenant_id, overdue=True)
+    return ActionsSummaryResponse(total=total, by_display_status=by_display, overdue=overdue)
 
 
 async def _hydrate_action_owner_emails(db: "DbSession", items: list[ActionResponse]) -> list[ActionResponse]:

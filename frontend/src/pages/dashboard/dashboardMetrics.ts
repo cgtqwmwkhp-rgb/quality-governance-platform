@@ -179,7 +179,10 @@ export function buildHighlightChips(inputs: HighlightInputs): HighlightChip[] {
     if (md.myOverdueActions?.status === 'ok' && md.myOverdueActions.value > 0) {
       chips.push({
         id: 'my-overdue-actions',
-        label: `${plural(md.myOverdueActions.value, 'action')} overdue`,
+        // Sourced from view-counts.my_overdue — the caller's own queue, which is a
+        // strict subset of the /actions Overdue chip. Say "my" so the two numbers
+        // read as different questions rather than as a contradiction.
+        label: `${md.myOverdueActions.value} of my actions overdue`,
         tone: 'critical',
         href: '/actions?view=my_overdue',
       })

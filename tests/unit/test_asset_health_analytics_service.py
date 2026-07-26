@@ -19,6 +19,8 @@ def test_aggregate_asset_health_kpis_groups_expiry_type_and_status():
     summary = aggregate_asset_health_kpis(rows, as_of=as_of)
 
     assert summary["total"] == 6
+    # `removed` is the band that keeps out-of-service assets out of `overdue` (PX-211).
+    # No row here is decommissioned, so it stays at zero and the other bands are unchanged.
     assert summary["expiry_bands"] == {
         "overdue": 1,
         "due_30": 1,
@@ -26,6 +28,7 @@ def test_aggregate_asset_health_kpis_groups_expiry_type_and_status():
         "due_90": 1,
         "in_date": 1,
         "no_expiry": 1,
+        "removed": 0,
     }
     assert summary["by_type"] == {
         "Fire Extinguisher": 2,
