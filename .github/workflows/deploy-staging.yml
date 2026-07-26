@@ -365,6 +365,16 @@ jobs:
           AZURE_STORAGE_CONTAINER_NAME="${STORAGE_CONTAINER_NAME:-evidence-assets}" \
             bash scripts/infra/deploy_celery_apps.sh
 
+      # Staging's API app has no provisioning script at all — nothing in the repo creates
+      # qgp-staging-plantexpand — so the deploy is the only codified place this setting
+      # can live. Idempotent, and warns rather than failing when it cannot write.
+      - name: Ensure API log sink (Log Analytics)
+        continue-on-error: true
+        run: |
+          API_WEBAPP_NAME="${{ env.AZURE_WEBAPP_NAME }}" \
+          RESOURCE_GROUP="${{ env.AZURE_RESOURCE_GROUP }}" \
+            bash scripts/infra/ensure_api_log_sink.sh
+
       - name: Run database migrations
         run: |
           echo "🗃️ Running migrations via Azure Container Instance..."
