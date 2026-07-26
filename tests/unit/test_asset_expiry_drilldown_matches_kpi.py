@@ -17,10 +17,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.domain.models.asset import Asset, AssetCategory, AssetStatus, AssetType
-from src.domain.services.asset_health_analytics_service import (
-    AssetHealthRow,
-    aggregate_asset_health_kpis,
-)
+from src.domain.services.asset_health_analytics_service import AssetHealthRow, aggregate_asset_health_kpis
 from src.domain.services.asset_service import AssetService
 
 TENANT_ID = 1
