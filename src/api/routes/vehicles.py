@@ -26,6 +26,7 @@ from src.api.schemas.vehicle_registry import (
     VehicleRegistryUpdate,
 )
 from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError, ValidationError
+from src.domain.metrics import percentage_or_none
 from src.domain.models.user import User
 from src.domain.models.vehicle_defect import VehicleDefect
 from src.domain.models.vehicle_registry import ComplianceStatus, FleetStatus, VehicleRegistry
@@ -135,7 +136,7 @@ async def fleet_health(db: DbSession, user: CurrentUser):
     comp_map = {str(r[0].value if hasattr(r[0], "value") else r[0]): r[1] for r in comp_rows}
 
     compliant_count = comp_map.get("compliant", 0)
-    compliance_rate = (compliant_count / total * 100) if total > 0 else 100.0
+    compliance_rate = percentage_or_none(compliant_count, total, digits=1)
 
     return FleetHealthResponse(
         total_vehicles=total,
@@ -147,7 +148,7 @@ async def fleet_health(db: DbSession, user: CurrentUser):
         non_compliant=comp_map.get("non_compliant", 0),
         overdue_check=comp_map.get("overdue_check", 0),
         suspended=comp_map.get("suspended", 0),
-        compliance_rate=round(compliance_rate, 1),
+        compliance_rate=compliance_rate,
     )
 
 

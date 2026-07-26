@@ -218,12 +218,17 @@ async def get_form_template_by_slug(
     current_user: CurrentUser,
 ) -> FormTemplate:
     """Get a form template by slug."""
+    # FormTemplateResponse serialises `steps` (and their fields). Without the
+    # eager load the response layer triggers a lazy load once the request
+    # session has closed, which fails on the async engine — so the endpoint
+    # returns 500 for every template that actually exists.
     result = await db.execute(
         select(FormTemplate)
         .where(FormTemplate.slug == slug)
         .where(FormTemplate.tenant_id == current_user.tenant_id)
         .where(FormTemplate.is_active == True)
         .where(FormTemplate.is_published == True)
+        .options(selectinload(FormTemplate.steps).selectinload(FormStep.fields))
     )
     template = result.scalar_one_or_none()
 

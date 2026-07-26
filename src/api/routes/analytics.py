@@ -286,7 +286,7 @@ async def get_kpi_summary(
             "total": complaints.get("total_in_period", 0),
             "open": complaints.get("open", 0),
             "closed": complaints.get("closed_in_period", 0),
-            "resolution_rate": complaints.get("resolution_rate", 0),
+            "resolution_rate": complaints.get("resolution_rate"),
         },
         "rtas": {
             "total": (dash.get("rtas") or {}).get("total_in_period", 0),
@@ -301,7 +301,7 @@ async def get_kpi_summary(
             "mitigated": 0,
         },
         "compliance": {
-            "overall_score": compliance.get("completion_rate", 0.0),
+            "overall_score": compliance.get("completion_rate"),
             "policy_overdue": compliance.get("overdue", 0),
         },
         "training": analytics_service.get_kpi_summary(time_range).get("training"),

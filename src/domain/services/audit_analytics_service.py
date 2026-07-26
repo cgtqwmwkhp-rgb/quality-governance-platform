@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from src.domain.metrics import compliance_percentage_or_none, percentage_or_none
 from src.domain.models.asset import AssetType
 from src.domain.models.audit import (
     AuditFinding,
@@ -206,10 +207,10 @@ class AuditAnalyticsService:
             )
             or 0
         )
-        pass_rate = (passed_count / decided_count * 100) if decided_count else 0.0
+        pass_rate = percentage_or_none(passed_count, decided_count)
 
         essential_total, essential_failed = await self._essential_compliance_totals(tenant_id, cutoff)
-        essential_compliance_pct = (1 - (essential_failed / essential_total)) * 100 if essential_total else 100.0
+        essential_compliance_pct = compliance_percentage_or_none(essential_failed, essential_total)
 
         incomplete_critical_count = await self.get_critical_count(tenant_id)
 
@@ -218,9 +219,9 @@ class AuditAnalyticsService:
             "totals": totals,
             "completed": completed,
             "in_progress": in_progress,
-            "avg_score": round(float(avg_score), 2) if avg_score is not None else 0.0,
-            "pass_rate": round(pass_rate, 2),
-            "essential_compliance_pct": round(essential_compliance_pct, 2),
+            "avg_score": round(float(avg_score), 2) if avg_score is not None else None,
+            "pass_rate": pass_rate,
+            "essential_compliance_pct": essential_compliance_pct,
             "incomplete_critical_count": incomplete_critical_count,
         }
 
@@ -307,17 +308,20 @@ class AuditAnalyticsService:
 
         results: list[dict[str, Any]] = []
         for crit_value, bucket in buckets.items():
-            fail_rate = (bucket["failed"] / bucket["total"] * 100) if bucket["total"] else 0.0
+            fail_rate = percentage_or_none(bucket["failed"], bucket["total"])
+            is_essential = crit_value == QuestionCriticality.ESSENTIAL.value
             results.append(
                 {
                     "key": crit_value,
                     "label": crit_value.replace("_", " ").title(),
                     "run_count": len(bucket["runs"]),
                     "completed_count": len(bucket["completed_runs"]),
-                    "avg_score": 0.0,
-                    "fail_rate": round(fail_rate, 2),
+                    # This breakdown groups responses, not scored runs, so it has no
+                    # run-level score to average.
+                    "avg_score": None,
+                    "fail_rate": fail_rate,
                     "essential_compliance_pct": (
-                        round(100 - fail_rate, 2) if crit_value == QuestionCriticality.ESSENTIAL.value else None
+                        compliance_percentage_or_none(bucket["failed"], bucket["total"]) if is_essential else None
                     ),
                 }
             )
@@ -386,20 +390,19 @@ class AuditAnalyticsService:
 
         results = []
         for bucket in buckets.values():
-            avg_score = sum(bucket["_scores"]) / len(bucket["_scores"]) if bucket["_scores"] else 0.0
-            fail_rate = (bucket["_failed_runs"] / bucket["completed_count"] * 100) if bucket["completed_count"] else 0.0
-            essential_compliance_pct = (
-                (1 - (bucket["_ess_failed"] / bucket["_ess_total"])) * 100 if bucket["_ess_total"] else 100.0
-            )
+            scores = bucket["_scores"]
+            avg_score = round(sum(scores) / len(scores), 2) if scores else None
             results.append(
                 {
                     "key": bucket["key"],
                     "label": bucket["label"],
                     "run_count": bucket["run_count"],
                     "completed_count": bucket["completed_count"],
-                    "avg_score": round(avg_score, 2),
-                    "fail_rate": round(fail_rate, 2),
-                    "essential_compliance_pct": round(essential_compliance_pct, 2),
+                    "avg_score": avg_score,
+                    "fail_rate": percentage_or_none(bucket["_failed_runs"], bucket["completed_count"]),
+                    "essential_compliance_pct": compliance_percentage_or_none(
+                        bucket["_ess_failed"], bucket["_ess_total"]
+                    ),
                 }
             )
         results.sort(key=lambda item: item["run_count"], reverse=True)

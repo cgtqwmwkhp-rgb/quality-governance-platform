@@ -10,6 +10,10 @@ outcomes feed an independent availability signal.
 
 All counters survive process restarts when Redis is available (best-effort
 persistence; falls back to in-memory-only gracefully).
+
+Before any traffic has been observed there is no SLI to report, so every derived
+percentage and latency percentile is ``None`` rather than a flattering 100%/0 ms
+(PX-216) — an unobserved service is not a perfectly available one.
 """
 
 import asyncio
@@ -25,6 +29,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from src.api.dependencies import OptionalCurrentUser
+from src.domain.metrics import percentage_or_none
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -95,29 +100,28 @@ class _MetricsCollector:
             status_snapshot = dict(self._status_counts)
 
         successful = total - failed
-        availability = (successful / total * 100) if total > 0 else 100.0
+        availability = percentage_or_none(successful, total, digits=4)
 
         budget_target = 99.9
         error_budget_total = (100.0 - budget_target) / 100.0 * total if total else 0
-        budget_remaining_pct = (
-            ((error_budget_total - failed) / error_budget_total * 100) if error_budget_total > 0 else 100.0
-        )
+        budget_remaining_pct = percentage_or_none(error_budget_total - failed, error_budget_total)
 
+        has_samples = bool(sorted_latencies)
         p50 = _percentile(sorted_latencies, 0.50)
         p95 = _percentile(sorted_latencies, 0.95)
         p99 = _percentile(sorted_latencies, 0.99)
-        error_rate = (failed / total * 100) if total > 0 else 0.0
+        error_rate = percentage_or_none(failed, total, digits=4)
 
         return {
             "total_requests": total,
             "successful_requests": successful,
             "failed_requests": failed,
-            "availability_pct": round(availability, 4),
-            "budget_remaining_pct": round(budget_remaining_pct, 2),
-            "latency_p50_ms": round(p50 * 1000, 2),
-            "latency_p95_ms": round(p95 * 1000, 2),
-            "latency_p99_ms": round(p99 * 1000, 2),
-            "error_rate_pct": round(error_rate, 4),
+            "availability_pct": availability,
+            "budget_remaining_pct": budget_remaining_pct,
+            "latency_p50_ms": round(p50 * 1000, 2) if has_samples else None,
+            "latency_p95_ms": round(p95 * 1000, 2) if has_samples else None,
+            "latency_p99_ms": round(p99 * 1000, 2) if has_samples else None,
+            "error_rate_pct": error_rate,
             "status_code_counts": status_snapshot,
             "window_seconds": window_seconds,
         }
@@ -186,12 +190,11 @@ class _HealthCheckTracker:
             total = len(self._checks)
             healthy_count = sum(1 for _, h in self._checks if h)
 
-        pct = (healthy_count / total * 100) if total > 0 else 100.0
         return {
             "total_checks": total,
             "healthy_checks": healthy_count,
             "unhealthy_checks": total - healthy_count,
-            "availability_pct": round(pct, 4),
+            "availability_pct": percentage_or_none(healthy_count, total, digits=4),
         }
 
 
@@ -234,6 +237,8 @@ async def get_slo_metrics():
     """Get current SLO compliance metrics computed from live request data."""
     snap = metrics_collector.snapshot()
     hc = health_tracker.availability()
+    p99 = snap["latency_p99_ms"]
+    error_rate = snap["error_rate_pct"]
     return {
         "slos": [
             {
@@ -252,14 +257,14 @@ async def get_slo_metrics():
                 "p95_ms": snap["latency_p95_ms"],
                 "p50_ms": snap["latency_p50_ms"],
                 "window": "30d",
-                "within_budget": snap["latency_p99_ms"] <= 500,
+                "within_budget": (p99 <= 500) if p99 is not None else None,
             },
             {
                 "name": "Error Rate",
                 "target_pct": 0.1,
                 "current_pct": snap["error_rate_pct"],
                 "window": "30d",
-                "within_budget": snap["error_rate_pct"] <= 0.1,
+                "within_budget": (error_rate <= 0.1) if error_rate is not None else None,
                 "status_code_counts": snap["status_code_counts"],
             },
             {
