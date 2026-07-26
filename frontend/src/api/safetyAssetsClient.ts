@@ -328,8 +328,12 @@ export const safetyAssetsApi = {
   mergeSafetyLookup: (kind: string, id: number, targetId: number) =>
     api.post(`${BASE}/safety-lookups/${kind}/${id}/merge`, { target_id: targetId }),
 
-  rejectSafetyLookup: (kind: string, id: number, targetId: number) =>
-    api.post(`${BASE}/safety-lookups/${kind}/${id}/reject`, { target_id: targetId }),
+  /** Discard a pending lookup. Optional targetId remaps referencing assets (merge). */
+  rejectSafetyLookup: (kind: string, id: number, targetId?: number) =>
+    api.post(
+      `${BASE}/safety-lookups/${kind}/${id}/reject`,
+      targetId != null ? { target_id: targetId } : {},
+    ),
 
   createAssetType: (data: {
     category: string

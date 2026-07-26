@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Save,
   Settings,
@@ -19,21 +19,22 @@ import { Label } from '../../components/ui/Label'
 import { Switch } from '../../components/ui/Switch'
 import { cn } from '../../helpers/utils'
 import { formatFieldName } from '../../helpers/displayLabels'
+import { settingsApi, getApiErrorMessage } from '../../api/client'
+import {
+  brandingLooksUnset,
+  buildSettingDefinitions,
+  colorInputDisplayValue,
+  isColorUnset,
+  mergeSettingsFromApi,
+  supportContactUnset,
+  type SettingDefinition,
+} from './systemSettingsHelpers'
 
 interface SettingCategory {
   id: string
   name: string
   icon: React.ReactNode
   description: string
-}
-
-interface Setting {
-  key: string
-  value: string
-  category: string
-  description: string
-  value_type: 'string' | 'number' | 'boolean' | 'json' | 'email' | 'color'
-  is_editable: boolean
 }
 
 const SETTING_CATEGORIES: SettingCategory[] = [
@@ -75,234 +76,98 @@ const SETTING_CATEGORIES: SettingCategory[] = [
   },
 ]
 
-const INITIAL_SETTINGS: Setting[] = [
-  // Branding
-  {
-    key: 'company_name',
-    value: '',
-    category: 'branding',
-    description: 'Company name displayed throughout the system',
-    value_type: 'string',
-    is_editable: true,
-  },
-  {
-    key: 'company_logo_url',
-    value: '',
-    category: 'branding',
-    description: 'URL to company logo image',
-    value_type: 'string',
-    is_editable: true,
-  },
-  {
-    key: 'primary_color',
-    value: '#000000',
-    category: 'branding',
-    description: 'Primary brand color',
-    value_type: 'color',
-    is_editable: true,
-  },
-  {
-    key: 'accent_color',
-    value: '#000000',
-    category: 'branding',
-    description: 'Accent/hover color',
-    value_type: 'color',
-    is_editable: true,
-  },
-
-  // Contact
-  {
-    key: 'support_email',
-    value: '',
-    category: 'contact',
-    description: 'Support email address',
-    value_type: 'email',
-    is_editable: true,
-  },
-  {
-    key: 'support_phone',
-    value: '',
-    category: 'contact',
-    description: 'Support phone number',
-    value_type: 'string',
-    is_editable: true,
-  },
-  {
-    key: 'emergency_phone',
-    value: '',
-    category: 'contact',
-    description: 'Emergency contact number',
-    value_type: 'string',
-    is_editable: true,
-  },
-
-  // Notifications
-  {
-    key: 'incident_notification_emails',
-    value: '',
-    category: 'notifications',
-    description: 'Emails notified on incident submission',
-    value_type: 'string',
-    is_editable: true,
-  },
-  {
-    key: 'complaint_notification_emails',
-    value: '',
-    category: 'notifications',
-    description: 'Emails notified on complaint submission',
-    value_type: 'string',
-    is_editable: true,
-  },
-  {
-    key: 'rta_notification_emails',
-    value: '',
-    category: 'notifications',
-    description: 'Emails notified on RTA submission',
-    value_type: 'string',
-    is_editable: true,
-  },
-  {
-    key: 'enable_email_notifications',
-    value: 'true',
-    category: 'notifications',
-    description: 'Enable email notifications',
-    value_type: 'boolean',
-    is_editable: true,
-  },
-  {
-    key: 'enable_push_notifications',
-    value: 'true',
-    category: 'notifications',
-    description: 'Enable push notifications',
-    value_type: 'boolean',
-    is_editable: true,
-  },
-
-  // Workflow
-  {
-    key: 'auto_assign_incidents',
-    value: 'true',
-    category: 'workflow',
-    description: 'Auto-assign incidents to safety team',
-    value_type: 'boolean',
-    is_editable: true,
-  },
-  {
-    key: 'require_investigation',
-    value: 'true',
-    category: 'workflow',
-    description: 'Require investigation for all incidents',
-    value_type: 'boolean',
-    is_editable: true,
-  },
-  {
-    key: 'incident_sla_hours',
-    value: '24',
-    category: 'workflow',
-    description: 'Hours to acknowledge an incident',
-    value_type: 'number',
-    is_editable: true,
-  },
-  {
-    key: 'complaint_sla_hours',
-    value: '48',
-    category: 'workflow',
-    description: 'Hours to respond to a complaint',
-    value_type: 'number',
-    is_editable: true,
-  },
-
-  // Security
-  {
-    key: 'session_timeout_minutes',
-    value: '60',
-    category: 'security',
-    description: 'Session timeout in minutes',
-    value_type: 'number',
-    is_editable: true,
-  },
-  {
-    key: 'require_mfa',
-    value: 'false',
-    category: 'security',
-    description: 'Require multi-factor authentication',
-    value_type: 'boolean',
-    is_editable: true,
-  },
-  {
-    key: 'allow_portal_anonymous',
-    value: 'false',
-    category: 'security',
-    description: 'Allow anonymous portal submissions',
-    value_type: 'boolean',
-    is_editable: true,
-  },
-
-  // Regional
-  {
-    key: 'date_format',
-    value: 'DD/MM/YYYY',
-    category: 'regional',
-    description: 'Date display format',
-    value_type: 'string',
-    is_editable: true,
-  },
-  {
-    key: 'timezone',
-    value: 'Europe/London',
-    category: 'regional',
-    description: 'Default timezone',
-    value_type: 'string',
-    is_editable: true,
-  },
-  {
-    key: 'language',
-    value: 'en-GB',
-    category: 'regional',
-    description: 'Default language',
-    value_type: 'string',
-    is_editable: true,
-  },
-]
+type LoadState = 'loading' | 'ready' | 'error'
 
 export default function SystemSettings() {
-  const [settings, setSettings] = useState<Setting[]>(INITIAL_SETTINGS)
+  const [settings, setSettings] = useState<SettingDefinition[]>(() => buildSettingDefinitions())
   const [activeCategory, setActiveCategory] = useState('branding')
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [hasChanges, setHasChanges] = useState(false)
+  const [loadState, setLoadState] = useState<LoadState>('loading')
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [baselineJson, setBaselineJson] = useState('')
+
+  const loadSettings = useCallback(async () => {
+    setLoadState('loading')
+    setLoadError(null)
+    try {
+      const data = await settingsApi.list()
+      const merged = mergeSettingsFromApi(buildSettingDefinitions(), data.items ?? [])
+      setSettings(merged)
+      setBaselineJson(JSON.stringify(merged.map((s) => ({ key: s.key, value: s.value }))))
+      setHasChanges(false)
+      setLoadState('ready')
+    } catch (err) {
+      setLoadError(
+        getApiErrorMessage(
+          err,
+          'System settings could not be loaded. Values shown are templates only — not live configuration.',
+        ),
+      )
+      setLoadState('error')
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadSettings()
+  }, [loadSettings])
 
   const categorySettings = settings.filter((s) => s.category === activeCategory)
+
+  const showBrandingHonesty =
+    loadState === 'ready' && activeCategory === 'branding' && brandingLooksUnset(settings)
+  const showContactHonesty =
+    loadState === 'ready' && activeCategory === 'contact' && supportContactUnset(settings)
 
   const updateSetting = (key: string, value: string) => {
     setSettings((prev) => prev.map((s) => (s.key === key ? { ...s, value } : s)))
     setHasChanges(true)
   }
 
+  const dirtyKeys = useMemo(() => {
+    if (!baselineJson) return [] as string[]
+    try {
+      const baseline = new Map(
+        (JSON.parse(baselineJson) as { key: string; value: string }[]).map((row) => [
+          row.key,
+          row.value,
+        ]),
+      )
+      return settings.filter((s) => baseline.get(s.key) !== s.value).map((s) => s.key)
+    } catch {
+      return settings.map((s) => s.key)
+    }
+  }, [baselineJson, settings])
+
   const handleSave = async () => {
+    if (loadState !== 'ready') {
+      setSaveError('Settings have not finished loading — save is blocked to protect live branding.')
+      return
+    }
     setIsSaving(true)
     setSaveError(null)
     try {
-      // In real implementation, save to API
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      for (const key of dirtyKeys) {
+        const setting = settings.find((s) => s.key === key)
+        if (!setting || !setting.is_editable) continue
+        await settingsApi.update(key, setting.value)
+      }
+      setBaselineJson(JSON.stringify(settings.map((s) => ({ key: s.key, value: s.value }))))
       setSaveSuccess(true)
       setHasChanges(false)
       setTimeout(() => setSaveSuccess(false), 3000)
-    } catch {
-      console.error('Failed to save settings')
-      setSaveError('Failed to save settings. Please try again.')
+    } catch (err) {
+      setSaveError(getApiErrorMessage(err, 'Failed to save settings. Please try again.'))
     } finally {
       setIsSaving(false)
     }
   }
 
-  // The storage key doubles as the control id. Raw snake_case is never shown;
-  // formatFieldName() may render a humanized helper under the description.
-  const settingFieldId = (setting: Setting) => `setting-${setting.key}`
+  const settingFieldId = (setting: SettingDefinition) => `setting-${setting.key}`
 
-  /** Humanized key helper — omit when it only repeats the description. */
-  const fieldNameHelper = (setting: Setting) => {
+  const fieldNameHelper = (setting: SettingDefinition) => {
     const label = formatFieldName(setting.key)
     if (label.trim().toLowerCase() === setting.description.trim().toLowerCase()) {
       return null
@@ -310,7 +175,7 @@ export default function SystemSettings() {
     return <p className="text-xs text-muted-foreground mt-1">{label}</p>
   }
 
-  const renderSettingInput = (setting: Setting) => {
+  const renderSettingInput = (setting: SettingDefinition) => {
     const fieldId = settingFieldId(setting)
 
     switch (setting.value_type) {
@@ -327,6 +192,7 @@ export default function SystemSettings() {
               id={fieldId}
               checked={setting.value === 'true'}
               onCheckedChange={(checked) => updateSetting(setting.key, checked ? 'true' : 'false')}
+              disabled={loadState !== 'ready' || !setting.is_editable}
             />
           </div>
         )
@@ -343,6 +209,7 @@ export default function SystemSettings() {
               value={setting.value}
               onChange={(e) => updateSetting(setting.key, e.target.value)}
               className="max-w-[150px]"
+              disabled={loadState !== 'ready' || !setting.is_editable}
             />
             {fieldNameHelper(setting)}
           </div>
@@ -358,18 +225,25 @@ export default function SystemSettings() {
               <input
                 id={fieldId}
                 type="color"
-                value={setting.value}
+                value={colorInputDisplayValue(setting.value)}
                 onChange={(e) => updateSetting(setting.key, e.target.value)}
                 className="w-10 h-10 rounded-lg border border-border cursor-pointer"
+                disabled={loadState !== 'ready' || !setting.is_editable}
               />
               <Input
                 value={setting.value}
                 onChange={(e) => updateSetting(setting.key, e.target.value)}
-                placeholder="#000000"
+                placeholder="Unset"
                 aria-label={`${setting.description} (hex value)`}
                 className="max-w-[150px] font-mono"
+                disabled={loadState !== 'ready' || !setting.is_editable}
               />
             </div>
+            {isColorUnset(setting.value) && (
+              <p className="text-xs text-warning mt-1" data-testid={`setting-${setting.key}-unset`}>
+                Unset in system settings — the live chrome theme is not shown here.
+              </p>
+            )}
             {fieldNameHelper(setting)}
           </div>
         )
@@ -386,7 +260,32 @@ export default function SystemSettings() {
               value={setting.value}
               onChange={(e) => updateSetting(setting.key, e.target.value)}
               placeholder="email@example.com"
+              disabled={loadState !== 'ready' || !setting.is_editable}
             />
+            {fieldNameHelper(setting)}
+          </div>
+        )
+
+      case 'select':
+        return (
+          <div>
+            <Label htmlFor={fieldId} className="block mb-1 text-foreground">
+              {setting.description}
+            </Label>
+            <select
+              id={fieldId}
+              value={setting.value}
+              onChange={(e) => updateSetting(setting.key, e.target.value)}
+              className="flex h-10 w-full max-w-md rounded-md border border-input bg-background px-3 py-2 text-sm"
+              disabled={loadState !== 'ready' || !setting.is_editable}
+              data-testid={`setting-select-${setting.key}`}
+            >
+              {(setting.select_options ?? []).map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
             {fieldNameHelper(setting)}
           </div>
         )
@@ -401,6 +300,7 @@ export default function SystemSettings() {
               id={fieldId}
               value={setting.value}
               onChange={(e) => updateSetting(setting.key, e.target.value)}
+              disabled={loadState !== 'ready' || !setting.is_editable}
             />
             {fieldNameHelper(setting)}
           </div>
@@ -410,7 +310,6 @@ export default function SystemSettings() {
 
   return (
     <div className="min-h-screen bg-surface">
-      {/* Header */}
       <header className="bg-card border-b border-border sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
           <div className="flex items-center justify-between">
@@ -421,7 +320,10 @@ export default function SystemSettings() {
               </p>
             </div>
             <div className="flex flex-col items-end">
-              <Button onClick={handleSave} disabled={isSaving || !hasChanges}>
+              <Button
+                onClick={() => void handleSave()}
+                disabled={isSaving || !hasChanges || loadState !== 'ready'}
+              >
                 {isSaving ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : saveSuccess ? (
@@ -441,8 +343,30 @@ export default function SystemSettings() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+        {loadState === 'loading' && (
+          <div
+            className="mb-6 flex items-center gap-2 text-sm text-muted-foreground"
+            data-testid="system-settings-loading"
+          >
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Loading live system settings…
+          </div>
+        )}
+        {loadState === 'error' && loadError && (
+          <Card className="mb-6 p-4 border-warning/40 bg-warning/5" data-testid="system-settings-load-error">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
+              <div className="space-y-2">
+                <p className="text-sm text-foreground">{loadError}</p>
+                <Button variant="outline" size="sm" onClick={() => void loadSettings()}>
+                  Retry
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Category Navigation */}
           <div className="lg:col-span-1">
             <nav className="space-y-1">
               {SETTING_CATEGORIES.map((category) => (
@@ -490,7 +414,6 @@ export default function SystemSettings() {
             </nav>
           </div>
 
-          {/* Settings Panel */}
           <div className="lg:col-span-3">
             <Card className="p-6">
               <div className="flex items-center gap-3 mb-6">
@@ -506,6 +429,27 @@ export default function SystemSettings() {
                   </p>
                 </div>
               </div>
+
+              {showBrandingHonesty && (
+                <div
+                  className="mb-6 rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm"
+                  data-testid="branding-unset-honesty"
+                >
+                  Branding fields are empty in system settings. The live application chrome may still
+                  show deployed theme branding — these blanks are not the colours currently in force.
+                  Saving empty values will not update the deployed theme.
+                </div>
+              )}
+
+              {showContactHonesty && (
+                <div
+                  className="mb-6 rounded-lg border border-warning/40 bg-warning/5 p-4 text-sm"
+                  data-testid="support-contact-unset-honesty"
+                >
+                  No support email or phone is configured. Staff and engineers have no platform
+                  contact details to use.
+                </div>
+              )}
 
               <div className="space-y-6">
                 {categorySettings.map((setting) => (

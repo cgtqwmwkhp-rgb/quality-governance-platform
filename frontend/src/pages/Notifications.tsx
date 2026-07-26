@@ -30,6 +30,10 @@ import {
   type NotificationPreferences,
   type NotificationCategoryChannels,
 } from '../api/client'
+import {
+  formatNotificationListDate,
+  rewriteIsoDatesInNotificationText,
+} from './notificationDateHonesty'
 
 type UiNotificationType = 'alert' | 'info' | 'success' | 'warning' | 'reminder'
 
@@ -85,7 +89,7 @@ function formatRelativeTime(iso: string): string {
   if (h < 48) return `${h}h ago`
   const d = Math.round(h / 24)
   if (d < 14) return `${d}d ago`
-  return new Date(iso).toLocaleDateString()
+  return formatNotificationListDate(iso)
 }
 
 function mapApiType(entry: NotificationEntry): UiNotificationType {
@@ -118,8 +122,8 @@ function mapEntry(entry: NotificationEntry): Notification {
   return {
     id: entry.id,
     type: mapApiType(entry),
-    title: entry.title,
-    message: entry.message,
+    title: rewriteIsoDatesInNotificationText(entry.title || ''),
+    message: rewriteIsoDatesInNotificationText(entry.message || ''),
     timestamp: entry.created_at ? formatRelativeTime(entry.created_at) : '',
     read: Boolean(entry.is_read),
     module: humanizeModule(entry.entity_type),

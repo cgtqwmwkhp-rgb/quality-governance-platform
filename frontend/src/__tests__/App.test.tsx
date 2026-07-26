@@ -146,6 +146,7 @@ vi.mock('../pages/admin/FormBuilder', () => ({ default: () => <div>FormBuilder</
 vi.mock('../pages/admin/ContractsManagement', () => ({
   default: () => <div>ContractsManagement</div>,
 }))
+vi.mock('../pages/StaffHelp', () => ({ default: () => <div>StaffHelp</div> }))
 vi.mock('../pages/admin/SystemSettings', () => ({ default: () => <div>SystemSettings</div> }))
 vi.mock('../pages/admin/PartnerWebhooks', () => ({ default: () => <div>PartnerWebhooks</div> }))
 

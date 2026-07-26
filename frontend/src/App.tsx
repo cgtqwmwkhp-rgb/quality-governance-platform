@@ -108,6 +108,7 @@ const NotFound = lazy(() => import('./pages/NotFound'))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const FormsList = lazy(() => import('./pages/admin/FormsList'))
 const FormBuilder = lazy(() => import('./pages/admin/FormBuilder'))
+const ContractsManagement = lazy(() => import('./pages/admin/ContractsManagement'))
 const SystemSettings = lazy(() => import('./pages/admin/SystemSettings'))
 const AdminUserManagement = lazy(() => import('./pages/admin/UserManagement'))
 const LookupTables = lazy(() => import('./pages/admin/LookupTables'))
@@ -118,6 +119,7 @@ const PartnerWebhooks = lazy(() => import('./pages/admin/PartnerWebhooks'))
 const LibraryRoles = lazy(() => import('./pages/admin/LibraryRoles'))
 const EngineerGroups = lazy(() => import('./pages/admin/EngineerGroups'))
 const HsReportingHours = lazy(() => import('./pages/admin/HsReportingHours'))
+const StaffHelp = lazy(() => import('./pages/StaffHelp'))
 const RequireRole = lazy(() => import('./components/RequireRole'))
 
 function PageLoader() {
@@ -361,6 +363,7 @@ function App() {
                 <Route path="search" element={<GlobalSearch />} />
                 <Route path="calendar" element={<CalendarView />} />
                 <Route path="notifications" element={<Notifications />} />
+                <Route path="help" element={<StaffHelp />} />
                 <Route path="exports" element={<ExportCenter />} />
                 <Route path="documents" element={<Documents />} />
                 <Route
@@ -518,7 +521,11 @@ function App() {
                 />
                 <Route
                   path="admin/contracts"
-                  element={<Navigate to="/admin/lookups?category=customers" replace />}
+                  element={
+                    <RequireRole allowed={['admin', 'manager']}>
+                      <ContractsManagement />
+                    </RequireRole>
+                  }
                 />
                 <Route
                   path="admin/settings"
@@ -561,12 +568,16 @@ function App() {
                   element={<Navigate to="/documents/campaigns" replace />}
                 />
                 <Route
-                  path="admin/hsec-inbox"
+                  path="admin/hseq-inbox"
                   element={
                     <RequireRole allowed={['admin', 'manager']}>
                       <HsecQuestionInbox />
                     </RequireRole>
                   }
+                />
+                <Route
+                  path="admin/hsec-inbox"
+                  element={<Navigate to="/admin/hseq-inbox" replace />}
                 />
                 <Route
                   path="admin/library-roles"

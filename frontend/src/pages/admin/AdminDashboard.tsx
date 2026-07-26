@@ -27,6 +27,7 @@ import { formConfigApi } from '../../api/formConfigClient'
 import { Card } from '../../components/ui/Card'
 import { cn } from '../../helpers/utils'
 import { AdminLoadUnavailable, captureAdminLoadError } from './adminLoadHelpers'
+import { buildActiveFormsStatHonesty } from './formBuilderHonesty'
 
 interface QuickAction {
   title: string
@@ -99,8 +100,15 @@ const QUICK_ACTIONS: QuickAction[] = [
     title: 'HSEQ Inbox',
     description: 'Answer engineer questions on assigned reads',
     icon: <MessageSquare className="w-6 h-6" />,
-    href: '/admin/hsec-inbox',
+    href: '/admin/hseq-inbox',
     color: 'bg-indigo-100 text-indigo-600',
+  },
+  {
+    title: 'Contracts',
+    description: 'Manage contracts used on intake forms',
+    icon: <Building className="w-6 h-6" />,
+    href: '/admin/contracts',
+    color: 'bg-sky-100 text-sky-700',
   },
   {
     title: 'Library roles',
@@ -210,15 +218,16 @@ export default function AdminDashboard() {
         )
       }
 
+      const formsHonesty = buildActiveFormsStatHonesty(formsTotal)
+
       setStats([
         {
-          label: t('admin.dashboard.stat_active_forms', 'Active Forms'),
+          // Honesty copy is dynamic (PX-186/PX-272) — do not wrap in fixed i18n keys
+          // or en.json would override "Form Builder templates" / zero-builder messaging.
+          label: formsHonesty.label,
           value: formsTotal === null ? '—' : String(formsTotal),
-          change:
-            formsTotal === null
-              ? t('admin.dashboard.stat_unavailable', 'Count unavailable')
-              : t('admin.dashboard.stat_live', 'Live from API'),
-          trend: 'neutral',
+          change: formsHonesty.change,
+          trend: formsHonesty.zeroIsNotAbsenceOfLiveForms ? 'down' : 'neutral',
           icon: <FileText className="w-5 h-5" />,
           unavailable: formsTotal === null,
         },

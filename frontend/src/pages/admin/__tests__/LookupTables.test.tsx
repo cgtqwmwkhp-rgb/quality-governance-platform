@@ -10,6 +10,7 @@ const mockDelete = vi.fn()
 const mockListPendingSafetyLookups = vi.fn()
 const mockApproveSafetyLookup = vi.fn()
 const mockMergeSafetyLookup = vi.fn()
+const mockRejectSafetyLookup = vi.fn()
 const mockListAssetTypes = vi.fn()
 
 vi.mock('../../../api/client', () => ({
@@ -27,6 +28,7 @@ vi.mock('../../../api/safetyAssetsClient', () => ({
     listPendingSafetyLookups: (...args: unknown[]) => mockListPendingSafetyLookups(...args),
     approveSafetyLookup: (...args: unknown[]) => mockApproveSafetyLookup(...args),
     mergeSafetyLookup: (...args: unknown[]) => mockMergeSafetyLookup(...args),
+    rejectSafetyLookup: (...args: unknown[]) => mockRejectSafetyLookup(...args),
     listAssetTypes: (...args: unknown[]) => mockListAssetTypes(...args),
     listAllAssetTypes: async () => {
       const res = await mockListAssetTypes({ page: 1, page_size: 500 })
@@ -64,7 +66,9 @@ describe('LookupTables configure CTA', () => {
     mockListPendingSafetyLookups.mockReset()
     mockApproveSafetyLookup.mockReset()
     mockMergeSafetyLookup.mockReset()
+    mockRejectSafetyLookup.mockReset()
     mockListPendingSafetyLookups.mockResolvedValue({ data: { items: [], total: 0 } })
+    mockRejectSafetyLookup.mockResolvedValue({ data: { approval_status: 'rejected' } })
     mockList.mockImplementation(async (category: string) => {
       if (
         category === 'workforce_roles' ||
@@ -265,6 +269,34 @@ describe('LookupTables configure CTA', () => {
     await user.click(screen.getByTestId('safety-pending-approve-asset_type-42'))
     await waitFor(() => {
       expect(mockApproveSafetyLookup).toHaveBeenCalledWith('asset_type', 42)
+    })
+  })
+
+  it('exposes Reject for pending Safety lookups (PX-196)', async () => {
+    const user = userEvent.setup()
+    mockListPendingSafetyLookups.mockResolvedValue({
+      data: {
+        items: [
+          {
+            kind: 'location',
+            id: 8,
+            name: 'SPARE',
+            source: 'ces_import',
+            is_active: false,
+            approval_status: 'pending',
+            similar_matches: [],
+          },
+        ],
+        total: 1,
+      },
+    })
+
+    renderLookups(<LookupTables />, '/admin/lookups?pending=safety')
+
+    expect(await screen.findByTestId('safety-pending-reject-location-8')).toBeInTheDocument()
+    await user.click(screen.getByTestId('safety-pending-reject-location-8'))
+    await waitFor(() => {
+      expect(mockRejectSafetyLookup).toHaveBeenCalledWith('location', 8)
     })
   })
 })

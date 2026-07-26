@@ -325,6 +325,25 @@ export default function LookupTables() {
     }
   }
 
+  const handleRejectPending = async (item: SafetyLookupPendingItem) => {
+    const key = `${item.kind}:${item.id}`
+    setPendingBusyId(key)
+    try {
+      await safetyAssetsApi.rejectSafetyLookup(item.kind, item.id)
+      toast.success(`Rejected “${item.name}”`)
+      await refreshPendingSafety()
+    } catch (err) {
+      toast.error(
+        getApiErrorMessage(
+          err,
+          'Could not reject lookup. If assets already reference it, merge into an approved lookup instead.',
+        ),
+      )
+    } finally {
+      setPendingBusyId(null)
+    }
+  }
+
   const handleMergePending = async (item: SafetyLookupPendingItem, targetId: number) => {
     const key = `${item.kind}:${item.id}`
     setPendingBusyId(key)
@@ -477,6 +496,16 @@ export default function LookupTables() {
                         onClick={() => void handleApprovePending(item)}
                       >
                         Approve
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={pendingBusyId === busyKey}
+                        data-testid={`safety-pending-reject-${item.kind}-${item.id}`}
+                        onClick={() => void handleRejectPending(item)}
+                      >
+                        Reject
                       </Button>
                       {top ? (
                         <Button

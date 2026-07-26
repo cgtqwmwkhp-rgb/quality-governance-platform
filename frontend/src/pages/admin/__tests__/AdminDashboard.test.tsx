@@ -87,4 +87,18 @@ describe('AdminDashboard soft-fail honesty', () => {
     expect(screen.getAllByText('2').length).toBeGreaterThanOrEqual(2)
     expect(mockLibrarySummary).toHaveBeenCalled()
   })
+
+  it('does not present zero Form Builder templates as healthy live forms (PX-186)', async () => {
+    mockListTemplates.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 1 })
+
+    render(<AdminDashboard />)
+
+    expect(await screen.findByText('Form Builder templates')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Builder has 0 templates — live portal intake forms are not managed here',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('0')).toBeInTheDocument()
+  })
 })
