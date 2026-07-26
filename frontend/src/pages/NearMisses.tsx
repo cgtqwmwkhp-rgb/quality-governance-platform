@@ -38,6 +38,8 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
+import { CaseRegisterTable } from '../components/register/CaseRegisterTable'
+import { useCaseRegisterLabels } from '../components/register/useCaseRegisterLabels'
 import { CUSTOMERS_LOOKUP_CATEGORY, toCustomerSelectOptions } from './admin/customersCatalog'
 import { mergeLookupSelectOptions } from './admin/lookupSelectOptions'
 
@@ -76,6 +78,7 @@ export default function NearMisses() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useTranslation()
+  const registerLabels = useCaseRegisterLabels()
   const [nearMisses, setNearMisses] = useState<NearMiss[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -391,63 +394,74 @@ export default function NearMisses() {
         />
       ) : (
         <Card>
-          <CardContent className="p-0 overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
-                    {t('near_misses.table.reference')}
-                  </th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
-                    {t('near_misses.table.details', 'Details')}
-                  </th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
-                    {t('near_misses.table.date')}
-                  </th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
-                    {t('near_misses.table.severity')}
-                  </th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
-                    {t('near_misses.table.status')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredNearMisses.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="border-t border-border hover:bg-muted/30 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/near-misses/${item.id}`)}
-                  >
-                    <td className="p-4 font-medium text-foreground">
+          <CardContent className="p-0">
+            <CaseRegisterTable
+              label={t('near_misses.title')}
+              rows={filteredNearMisses}
+              rowKey={(item) => item.id}
+              onOpenRow={(item) => navigate(`/near-misses/${item.id}`)}
+              rowLabel={(item) =>
+                t('near_misses.row.open', 'View near miss: {{reference}}', {
+                  reference: formatReference(item.reference_number),
+                })
+              }
+              empty={null}
+              columns={[
+                {
+                  key: 'reference',
+                  header: registerLabels.reference,
+                  width: 'reference',
+                  render: (item) => (
+                    <span className="font-mono text-sm text-primary">
                       {formatReference(item.reference_number)}
-                    </td>
-                    <td className="p-4">
-                      <div className="font-medium text-foreground">{item.contract}</div>
-                      <div className="text-sm text-muted-foreground line-clamp-1">
-                        {item.location}
-                      </div>
-                    </td>
-                    <td className="p-4 text-sm text-muted-foreground">
+                    </span>
+                  ),
+                },
+                {
+                  key: 'customer',
+                  header: registerLabels.customer,
+                  render: (item) => (
+                    <span className="text-sm font-medium text-foreground">{item.contract}</span>
+                  ),
+                },
+                {
+                  key: 'location',
+                  header: registerLabels.location,
+                  render: (item) => (
+                    <span className="text-sm text-muted-foreground">{item.location}</span>
+                  ),
+                },
+                {
+                  key: 'occurred',
+                  header: registerLabels.occurred,
+                  width: 'date',
+                  render: (item) => (
+                    <span className="text-sm text-muted-foreground">
                       {formatDisplayDate(item.event_date)}
-                    </td>
-                    <td className="p-4">
-                      <div className="flex flex-wrap gap-1">
-                        <Badge variant="secondary">{item.potential_severity || 'medium'}</Badge>
-                        {item.is_hipo ? (
-                          <Badge variant="destructive">
-                            {t('near_misses.badge.hipo', 'HiPo')}
-                          </Badge>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <Badge variant="outline">{item.status}</Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </span>
+                  ),
+                },
+                {
+                  key: 'severity',
+                  header: registerLabels.severity,
+                  width: 'badge',
+                  render: (item) => (
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant="secondary">{item.potential_severity || 'medium'}</Badge>
+                      {item.is_hipo ? (
+                        <Badge variant="destructive">{t('near_misses.badge.hipo', 'HiPo')}</Badge>
+                      ) : null}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'status',
+                  header: registerLabels.status,
+                  width: 'badge',
+                  render: (item) => <Badge variant="outline">{item.status}</Badge>,
+                },
+              ]}
+            />
           </CardContent>
         </Card>
       )}

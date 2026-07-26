@@ -29,6 +29,9 @@ import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { EngineerPeoplePicker } from '../components/EngineerPeoplePicker'
+import { CaseRegisterTable } from '../components/register/CaseRegisterTable'
+import { useCaseRegisterLabels } from '../components/register/useCaseRegisterLabels'
+import { formatDisplayDate, formatReference } from '../helpers/formatters'
 import {
   Dialog,
   DialogContent,
@@ -81,12 +84,6 @@ const PAGE_SIZE = 50
 function humanizeToken(value: unknown): string {
   if (value == null || value === '') return '—'
   return String(value).replace(/_/g, ' ')
-}
-
-function formatIncidentDate(value: unknown): string {
-  if (value == null || value === '') return '—'
-  const d = new Date(String(value))
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
 }
 
 /** Coerce list payloads so a shape mismatch cannot crash `.filter` / `.map`. */
@@ -147,6 +144,7 @@ export default function Incidents() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { t } = useTranslation()
+  const registerLabels = useCaseRegisterLabels()
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -695,164 +693,154 @@ export default function Incidents() {
       {/* Incidents Table */}
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    {t('incidents.table.reference')}
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    {t('incidents.table.title')}
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    {t('incidents.table.type')}
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    {t('incidents.table.severity')}
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    {t('incidents.table.status')}
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    {t('incidents.table.date')}
-                  </th>
-                  {ownerFilter === 'unassigned' ? (
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      {t('incidents.triage.assign_owner', 'Assign owner')}
-                    </th>
-                  ) : null}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredIncidents.length === 0 ? (
-                  <tr>
-                    <td colSpan={ownerFilter === 'unassigned' ? 7 : 6}>
-                      <EmptyState
-                        icon={<AlertTriangle className="w-6 h-6 text-muted-foreground" />}
-                        title={
-                          searchNeedle
-                            ? t('incidents.empty.no_match', 'No matching incidents on this page')
-                            : t('incidents.empty.title', 'No incidents found')
-                        }
-                        description={
-                          searchNeedle
-                            ? t(
-                                'incidents.empty.no_match_hint',
-                                'Try another term or move to another page — search does not scan the full register yet.',
-                              )
-                            : t(
-                                'incidents.empty.subtitle',
-                                'Create your first incident report to get started.',
-                              )
-                        }
-                        action={
-                          !searchNeedle ? (
-                            <Button variant="outline" size="sm" onClick={openCreateModal}>
-                              <Plus size={16} /> {t('incidents.new', 'Report Incident')}
-                            </Button>
-                          ) : undefined
-                        }
-                      />
-                    </td>
-                  </tr>
-                ) : (
-                  filteredIncidents.map((incident, index) => (
-                    <tr
-                      key={incident.id}
-                      data-testid="incident-row-link"
-                      className="hover:bg-surface transition-colors cursor-pointer"
-                      style={{ animationDelay: `${index * 30}ms` }}
-                      onClick={() => navigate(`/incidents/${incident.id}`)}
-                      role="button"
-                      tabIndex={0}
-                      aria-label={t('incidents.row.open', 'View incident: {{title}}', {
-                        title: incident.title || incident.reference_number,
-                      })}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          navigate(`/incidents/${incident.id}`)
-                        }
-                      }}
-                    >
-                      <td className="px-6 py-4">
-                        <span className="font-mono text-sm text-primary">
-                          {incident.reference_number}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm font-medium text-foreground truncate max-w-xs">
-                          {displayIncidentText(incident.title)}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
-                          <span>{getTypeIcon(incident.incident_type)}</span>
-                          {humanizeToken(incident.incident_type)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge variant={getSeverityVariant(incident.severity) as any}>
-                          {humanizeToken(incident.severity)}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge variant={getStatusVariant(incident.status) as any}>
-                          {humanizeToken(incident.status)}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">
-                        {formatIncidentDate(incident.incident_date)}
-                      </td>
-                      {ownerFilter === 'unassigned' ? (
-                        <td
-                          className="px-6 py-4"
-                          onClick={(e) => e.stopPropagation()}
-                          data-testid={`incident-assign-${incident.id}`}
-                        >
-                          <div className="flex flex-col gap-2 min-w-[220px]">
-                            <EngineerPeoplePicker
-                              valueLabel={assigneeById[incident.id]?.email || ''}
-                              requireLogin
-                              onChange={(selection) =>
-                                setAssigneeById((prev) => ({
-                                  ...prev,
-                                  [incident.id]: selection?.user
-                                    ? {
-                                        email: selection.user.email || selection.label,
-                                        user: selection.user,
-                                      }
-                                    : { email: '' },
-                                }))
-                              }
-                              placeholder={t(
-                                'incidents.triage.search_owner',
-                                'Search active employees…',
-                              )}
-                              testId={`incident-owner-picker-${incident.id}`}
-                            />
-                            <Button
-                              type="button"
-                              size="sm"
-                              disabled={assigningId === incident.id}
-                              onClick={() => handleAssignOwner(incident.id)}
-                            >
-                              {assigningId === incident.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                t('incidents.triage.assign', 'Assign')
-                              )}
-                            </Button>
-                          </div>
-                        </td>
-                      ) : null}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <CaseRegisterTable
+            label={t('incidents.title')}
+            rows={filteredIncidents}
+            rowKey={(incident) => incident.id}
+            rowTestId="incident-row-link"
+            onOpenRow={(incident) => navigate(`/incidents/${incident.id}`)}
+            rowLabel={(incident) =>
+              t('incidents.row.open', 'View incident: {{title}}', {
+                title: incident.title || incident.reference_number,
+              })
+            }
+            empty={
+              <EmptyState
+                icon={<AlertTriangle className="w-6 h-6 text-muted-foreground" />}
+                title={
+                  searchNeedle
+                    ? t('incidents.empty.no_match', 'No matching incidents on this page')
+                    : t('incidents.empty.title', 'No incidents found')
+                }
+                description={
+                  searchNeedle
+                    ? t(
+                        'incidents.empty.no_match_hint',
+                        'Try another term or move to another page — search does not scan the full register yet.',
+                      )
+                    : t(
+                        'incidents.empty.subtitle',
+                        'Create your first incident report to get started.',
+                      )
+                }
+                action={
+                  !searchNeedle ? (
+                    <Button variant="outline" size="sm" onClick={openCreateModal}>
+                      <Plus size={16} /> {t('incidents.new', 'Report Incident')}
+                    </Button>
+                  ) : undefined
+                }
+              />
+            }
+            columns={[
+              {
+                key: 'reference',
+                header: registerLabels.reference,
+                width: 'reference',
+                render: (incident) => (
+                  <span className="font-mono text-sm text-primary">
+                    {formatReference(incident.reference_number)}
+                  </span>
+                ),
+              },
+              {
+                key: 'title',
+                header: registerLabels.title,
+                render: (incident) => (
+                  <span className="text-sm font-medium text-foreground">
+                    {displayIncidentText(incident.title)}
+                  </span>
+                ),
+              },
+              {
+                key: 'type',
+                header: registerLabels.type,
+                render: (incident) => (
+                  <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
+                    <span>{getTypeIcon(incident.incident_type)}</span>
+                    {humanizeToken(incident.incident_type)}
+                  </span>
+                ),
+              },
+              {
+                key: 'severity',
+                header: registerLabels.severity,
+                width: 'badge',
+                render: (incident) => (
+                  <Badge variant={getSeverityVariant(incident.severity) as any}>
+                    {humanizeToken(incident.severity)}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'status',
+                header: registerLabels.status,
+                width: 'badge',
+                render: (incident) => (
+                  <Badge variant={getStatusVariant(incident.status) as any}>
+                    {humanizeToken(incident.status)}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'occurred',
+                header: registerLabels.occurred,
+                width: 'date',
+                render: (incident) => (
+                  <span className="text-sm text-muted-foreground">
+                    {formatDisplayDate(incident.incident_date)}
+                  </span>
+                ),
+              },
+              ...(ownerFilter === 'unassigned'
+                ? [
+                    {
+                      key: 'owner',
+                      header: registerLabels.owner,
+                      width: 'action' as const,
+                      isolateClicks: true,
+                      cellTestId: (incident: Incident) => `incident-assign-${incident.id}`,
+                      render: (incident: Incident) => (
+                        <div className="flex flex-col gap-2">
+                          <EngineerPeoplePicker
+                            valueLabel={assigneeById[incident.id]?.email || ''}
+                            requireLogin
+                            onChange={(selection) =>
+                              setAssigneeById((prev) => ({
+                                ...prev,
+                                [incident.id]: selection?.user
+                                  ? {
+                                      email: selection.user.email || selection.label,
+                                      user: selection.user,
+                                    }
+                                  : { email: '' },
+                              }))
+                            }
+                            placeholder={t(
+                              'incidents.triage.search_owner',
+                              'Search active employees…',
+                            )}
+                            testId={`incident-owner-picker-${incident.id}`}
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={assigningId === incident.id}
+                            onClick={() => handleAssignOwner(incident.id)}
+                          >
+                            {assigningId === incident.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              t('incidents.triage.assign', 'Assign')
+                            )}
+                          </Button>
+                        </div>
+                      ),
+                    },
+                  ]
+                : []),
+            ]}
+          />
           {listPages > 1 ? (
             <div
               className="flex items-center justify-between gap-2 border-t border-border px-4 py-3"
