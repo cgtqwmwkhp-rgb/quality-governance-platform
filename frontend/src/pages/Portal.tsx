@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   ShieldAlert,
+  Info,
 } from 'lucide-react'
 import { BrandMarkTile } from '../components/BrandMark'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
@@ -45,6 +46,12 @@ function clearStateCopy(state: PortalMyCompliance['clear_state']): {
     return {
       title: 'Needs attention',
       detail: 'Overdue tools, due-soon kit, or open faults on your van.',
+    }
+  }
+  if (state === 'no_data') {
+    return {
+      title: 'Nothing to report yet',
+      detail: 'No assets or van are recorded against you, so there is nothing to check.',
     }
   }
   return {
@@ -199,6 +206,7 @@ export default function Portal() {
               compliance.clear_state === 'blocked' && 'border-destructive/40 bg-destructive/5',
               compliance.clear_state === 'attention' && 'border-amber-500/40 bg-amber-500/5',
               compliance.clear_state === 'clear' && 'border-emerald-500/30 bg-emerald-500/5',
+              compliance.clear_state === 'no_data' && 'border-border bg-muted/40',
             )}
           >
             <div className="flex items-start gap-3">
@@ -206,6 +214,8 @@ export default function Portal() {
                 <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
               ) : compliance.clear_state === 'blocked' ? (
                 <ShieldAlert className="w-6 h-6 text-destructive shrink-0" />
+              ) : compliance.clear_state === 'no_data' ? (
+                <Info className="w-6 h-6 text-muted-foreground shrink-0" />
               ) : (
                 <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0" />
               )}

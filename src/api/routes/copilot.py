@@ -279,8 +279,11 @@ async def submit_feedback(
 # ============================================================================
 
 
+# The action catalogue and the context suggestions below are static constants with no
+# tenant-scoped content, so neither handler reads current_user. It is declared anyway:
+# without it these two routes are the only anonymous surface in the application.
 @_enabled_router.get("/actions", response_model=list[dict])
-async def list_actions(category: Optional[str] = None):
+async def list_actions(current_user: CurrentUser, category: Optional[str] = None):
     """List available copilot actions."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS
 
@@ -317,6 +320,7 @@ async def execute_action(
 
 @_enabled_router.get("/actions/suggest", response_model=list[SuggestedAction])
 async def suggest_actions(
+    current_user: CurrentUser,
     page: Optional[str] = None,
     context_type: Optional[str] = None,
     context_id: Optional[str] = None,

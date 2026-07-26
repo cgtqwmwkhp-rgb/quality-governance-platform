@@ -452,9 +452,10 @@ export interface AuditAnalyticsSummary {
   totals: number
   completed: number
   in_progress: number
-  avg_score: number
-  pass_rate: number
-  essential_compliance_pct: number
+  // null == nothing measured in the period; render as "not measured", never 0/100.
+  avg_score: number | null
+  pass_rate: number | null
+  essential_compliance_pct: number | null
   incomplete_critical_count: number
 }
 
@@ -473,8 +474,8 @@ export interface AuditAnalyticsDimensionItem {
   label: string
   run_count: number
   completed_count: number
-  avg_score: number
-  fail_rate: number
+  avg_score?: number | null
+  fail_rate?: number | null
   essential_compliance_pct?: number | null
 }
 

@@ -164,6 +164,58 @@ async def test_get_summary_reports_essential_compliance_and_pass_rate(db: AsyncS
 
 
 @pytest.mark.asyncio
+async def test_get_summary_reports_no_data_rather_than_100_percent_when_empty(db: AsyncSession):
+    """PX-216: a tenant with no audit data must not read as fully compliant."""
+    service = AuditAnalyticsService(db)
+    summary = await service.get_summary(TENANT_ID, days=365)
+
+    assert summary["totals"] == 0
+    assert summary["essential_compliance_pct"] is None
+    assert summary["essential_compliance_pct"] != 100
+    assert summary["pass_rate"] is None
+    assert summary["avg_score"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_summary_essential_compliance_is_none_when_no_essential_responses(db: AsyncSession):
+    """Runs exist but nothing essential was answered — that is unmeasured, not clean."""
+    template = await _seed_template_with_essential_question(db)
+    await _make_run(db, template, status=AuditStatus.IN_PROGRESS)
+    await db.commit()
+
+    service = AuditAnalyticsService(db)
+    summary = await service.get_summary(TENANT_ID, days=365)
+
+    assert summary["totals"] == 1
+    assert summary["essential_compliance_pct"] is None
+    assert summary["essential_compliance_pct"] != 100
+
+
+@pytest.mark.asyncio
+async def test_get_dimensions_reports_no_data_rather_than_100_percent_when_unmeasured(db: AsyncSession):
+    """A dimension bucket with no completed runs and no essential responses is
+    unmeasured on every rate, not a perfect green row (PX-216).
+    """
+    template = await _seed_template_with_essential_question(db)
+    asset_type = AssetType(category="lifting", name="Forklift", tenant_id=TENANT_ID)
+    db.add(asset_type)
+    await db.flush()
+    await _make_run(db, template, status=AuditStatus.IN_PROGRESS, asset_type_id=asset_type.id)
+    await db.commit()
+
+    service = AuditAnalyticsService(db)
+    dims = await service.get_dimensions(TENANT_ID, group_by="asset_type", days=365)
+
+    assert len(dims) == 1
+    assert dims[0]["run_count"] == 1
+    assert dims[0]["completed_count"] == 0
+    assert dims[0]["essential_compliance_pct"] is None
+    assert dims[0]["essential_compliance_pct"] != 100
+    assert dims[0]["fail_rate"] is None
+    assert dims[0]["avg_score"] is None
+
+
+@pytest.mark.asyncio
 async def test_get_summary_ignores_closed_findings_for_essential_compliance(db: AsyncSession):
     """A finding that has since been closed/deferred must not keep counting
     against essential compliance — only still-open findings should fail an

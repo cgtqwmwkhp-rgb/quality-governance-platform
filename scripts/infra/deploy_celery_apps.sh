@@ -19,6 +19,9 @@ BEAT_WEBAPP_NAME="${BEAT_WEBAPP_NAME:-${API_WEBAPP_NAME}-beat}"
 APP_ENV="${APP_ENV:-staging}"
 BUILD_SHA="${BUILD_SHA:-unknown}"
 
+# shellcheck source=scripts/infra/ensure_log_sink.sh
+. "$(dirname "${BASH_SOURCE[0]}")/ensure_log_sink.sh"
+
 REDIS_URL_VAL="${REDIS_URL:-${CELERY_BROKER_URL:-}}"
 if [ -z "$REDIS_URL_VAL" ]; then
   echo "❌ REDIS_URL / CELERY_BROKER_URL required for Celery apps"
@@ -118,13 +121,8 @@ deploy_one() {
   # die and stay dead, so warn if this app has no diagnostic setting to fall back on. Only
   # a warning: an unobservable worker is still a working worker, and provisioning owns the
   # fix (provision-celery-workers.sh). Read-only, so it cannot fail the deploy.
-  if ! az monitor diagnostic-settings list \
-      --resource "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Web/sites/$name" \
-      --query "[?contains(to_string(logs[?enabled].category), 'AppServiceConsoleLogs')] | [0].name" \
-      -o tsv 2>/dev/null | grep -q .; then
-    echo "⚠️  $name has no AppServiceConsoleLogs diagnostic setting — its Celery output may"
-    echo "   be unreadable after this restart. Re-run scripts/infra/provision-celery-workers.sh."
-  fi
+  warn_if_no_log_sink "$name" "$RESOURCE_GROUP" AppServiceConsoleLogs \
+    "Its Celery output may be unreadable after this restart. Re-run scripts/infra/provision-celery-workers.sh."
 }
 
 deploy_one "$WORKER_WEBAPP_NAME" worker "bash scripts/celery/start_worker.sh"

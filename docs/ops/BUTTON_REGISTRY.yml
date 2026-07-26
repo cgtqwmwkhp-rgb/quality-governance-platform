@@ -3,7 +3,7 @@
 # Uses data-testid selectors for stability
 
 version: "1.0"
-last_updated: "2026-07-09"
+last_updated: "2026-07-26"
 
 # ==============================================================================
 # PORTAL ACTIONS (P0 Critical - Employee Self-Service)
@@ -118,31 +118,44 @@ admin_actions:
     description: "Submit login form"
 
   # Dashboard Navigation
+  #
+  # Sidebar navigation is organised into collapsible hubs. Incidents and RTAs both
+  # live in the "Safety & Cases" hub, which is collapsed on /dashboard, so the links
+  # are not in the DOM until the hub is opened. `requires_hub` makes the audit open
+  # the hub first — the same first step a real user takes.
+  #
+  # Selectors are scoped to the hub container on purpose. An unscoped
+  # `a[href='/incidents']` is also satisfied by the dashboard "New Incident" quick
+  # action (frontend/src/pages/Dashboard.tsx) and the "Incidents (7d)" pulse tile
+  # (frontend/src/pages/dashboard/PulseTrendsStrip.tsx), which would report a pass
+  # for a navigation link that was never rendered.
   - pageId: dashboard
     actionId: nav-to-incidents
-    selector: "[data-testid='nav-incidents']"
-    fallback_selector: "a[href='/incidents']"
+    selector: "[data-testid='nav-hub-safety-cases'] a[href='/incidents']"
+    requires_hub: safety-cases
     criticality: P0
     expected_outcome: navigation
     expected_route: /incidents
     disabled_reason: null
-    description: "Navigate to incidents"
+    description: "Navigate to incidents from the Safety & Cases sidebar hub"
 
   - pageId: dashboard
     actionId: nav-to-rtas
-    selector: "[data-testid='nav-rtas']"
-    fallback_selector: "a[href='/rtas']"
+    selector: "[data-testid='nav-hub-safety-cases'] a[href='/rtas']"
+    requires_hub: safety-cases
     criticality: P0
     expected_outcome: navigation
     expected_route: /rtas
     disabled_reason: null
-    description: "Navigate to RTAs"
+    description: "Navigate to RTAs from the Safety & Cases sidebar hub"
 
   # Incident List Actions
   - pageId: incidents-list
     actionId: create-new-incident
     selector: "[data-testid='create-incident-btn']"
-    fallback_selector: "button:has-text('New Incident'), button:has-text('Create')"
+    # "Create" alone also matched the modal's "Create Incident" submit and any other
+    # button whose label contains "Create"; the page CTA is labelled "New Incident".
+    fallback_selector: "button:has-text('New Incident')"
     criticality: P0
     expected_outcome: ui_state
     expected_state: "Modal or form appears"
@@ -152,7 +165,8 @@ admin_actions:
   - pageId: incidents-list
     actionId: view-incident-detail
     selector: "[data-testid='incident-row-link']"
-    fallback_selector: "tr[data-testid*='incident'] a, table tbody tr:first-child a"
+    # `table tbody tr:first-child a` matched the first link of any table on the page.
+    fallback_selector: "tr[data-testid*='incident'] a"
     criticality: P1
     expected_outcome: navigation
     expected_route: /incidents/:id
@@ -163,7 +177,9 @@ admin_actions:
   - pageId: rtas-list
     actionId: create-new-rta
     selector: "[data-testid='create-rta-btn']"
-    fallback_selector: "button:has-text('New RTA'), button:has-text('Create')"
+    # Actual label is "Report RTA" (i18n key rtas.report); "New RTA" never matched and
+    # "Create" matched any button containing "Create".
+    fallback_selector: "button:has-text('Report RTA')"
     criticality: P0
     expected_outcome: ui_state
     expected_state: "Modal or form appears"
@@ -174,7 +190,9 @@ admin_actions:
   - pageId: audits
     actionId: create-new-audit
     selector: "[data-testid='create-audit-btn']"
-    fallback_selector: "button:has-text('New Audit'), button:has-text('Create')"
+    # Neither "New Audit" nor "Create" matches anything on /audits — the CTA is
+    # "Schedule Audit" — so this entry was silently skipping instead of asserting.
+    fallback_selector: "button:has-text('Schedule Audit')"
     criticality: P1
     expected_outcome: ui_state
     expected_state: "Modal or form appears"
