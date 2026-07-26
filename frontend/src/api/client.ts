@@ -1348,21 +1348,30 @@ export interface SoAControl {
   clause_id: string
   title: string
   description: string
-  applicable: boolean
+  applicable: boolean | null
+  applicability_decision?: string
   implementation_status: 'Implemented' | 'Partially Implemented' | 'Not Implemented'
   evidence_count: number
   evidence: { entity_type: string; entity_id: string; title: string; linked_by: string; confidence?: number }[]
-  justification: string
+  justification: string | null
+  justification_source?: string
 }
 
 export interface StatementOfApplicability {
   document_type: string
   standard: string
-  organization: string
+  organization: string | null
   generated_at: string
   version: string
   total_controls: number
-  statistics: { applicable: number; implemented: number; partial: number; not_implemented: number; excluded: number }
+  statistics: {
+    applicable: number
+    implemented: number
+    partial: number
+    not_implemented: number
+    excluded: number
+    assessed?: number
+  }
   controls: SoAControl[]
   summary: string
   persisted_evidence_links: number
@@ -1453,6 +1462,8 @@ export interface ComplianceStandardRecord {
   has_canonical_standard: boolean
   canonical_data_degraded?: boolean
   canonical_data_message?: string | null
+  /** ISO 27001: management vs Annex A counts (PX-254). */
+  clause_count_breakdown?: Record<string, number>
 }
 
 export interface CrossStandardMappingRecord {
@@ -2296,6 +2307,11 @@ export interface ExecutiveDashboardData {
     sif_count: number
     psif_count: number
     critical_high: number
+    /** Register-wide triple; open + closed === total when present (PX-226). */
+    register_total?: number | null
+    register_open?: number | null
+    register_closed?: number | null
+    avg_resolution_days?: number | null
   }
   near_misses: {
     total_in_period: number
@@ -2308,6 +2324,11 @@ export interface ExecutiveDashboardData {
     open: number
     closed_in_period: number
     resolution_rate: number | null
+    register_total?: number | null
+    register_open?: number | null
+    register_closed?: number | null
+    received_in_period_closed?: number | null
+    avg_resolution_days?: number | null
   }
   /**
    * `total_in_period` is windowed by the dashboard period; `total`/`open`/`closed`
@@ -2361,6 +2382,8 @@ export interface ExecutiveDashboardData {
     audits_weekly?: { week_start: string; count: number; value?: number | null }[]
     training_compliance_weekly?: { week_start: string; count: number; value?: number | null }[]
     tool_compliance_weekly?: { week_start: string; count: number; value?: number | null }[]
+    /** Series whose queries failed — empty list ≠ empty period (PX-193). */
+    unavailable?: string[]
   }
   alerts: {
     type: string

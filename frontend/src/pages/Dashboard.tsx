@@ -102,7 +102,7 @@ export default function Dashboard() {
           )}
           <PulseTrendsStrip data={pulse} />
           {orgCompact && (
-            <p className="text-xs text-muted-foreground">Compact org view — dual role detected.</p>
+            <p className="text-xs text-muted-foreground">Showing personal and organisation views together.</p>
           )}
           <OrgCommandStrip data={org} compact={orgCompact} />
         </div>

@@ -37,6 +37,11 @@ _EMPTY_INCIDENT_SUMMARY: Dict[str, Any] = {
     "sif_count": 0,
     "psif_count": 0,
     "critical_high": 0,
+    # None (not 0): a failed summary must not look like an empty register (PX-226).
+    "register_total": None,
+    "register_open": None,
+    "register_closed": None,
+    "avg_resolution_days": None,
 }
 _EMPTY_NEAR_MISS_SUMMARY: Dict[str, Any] = {
     "total_in_period": 0,
@@ -49,6 +54,11 @@ _EMPTY_COMPLAINT_SUMMARY: Dict[str, Any] = {
     "open": 0,
     "closed_in_period": 0,
     "resolution_rate": None,
+    "register_total": None,
+    "register_open": None,
+    "register_closed": None,
+    "received_in_period_closed": None,
+    "avg_resolution_days": None,
 }
 _EMPTY_RTA_SUMMARY: Dict[str, Any] = {
     "total_in_period": 0,
@@ -89,13 +99,18 @@ _EMPTY_AUDIT_SUMMARY: Dict[str, Any] = {
     "essential_compliance_pct": None,
     "incomplete_critical_count": 0,
 }
+_TREND_SERIES = (
+    "incidents_weekly",
+    "complaints_weekly",
+    "near_misses_weekly",
+    "audits_weekly",
+    "training_compliance_weekly",
+    "tool_compliance_weekly",
+)
 _EMPTY_TRENDS: Dict[str, Any] = {
-    "incidents_weekly": [],
-    "complaints_weekly": [],
-    "near_misses_weekly": [],
-    "audits_weekly": [],
-    "training_compliance_weekly": [],
-    "tool_compliance_weekly": [],
+    **{name: [] for name in _TREND_SERIES},
+    # A wholesale failure is six failures, not six empty weeks (PX-193).
+    "unavailable": list(_TREND_SERIES),
 }
 
 
@@ -119,6 +134,21 @@ class ExecutiveDashboardService:
         except Exception as e:
             logger.warning("Dashboard query failed: %s", e)
             return default
+
+    async def _avg_resolution_days(self, start_col: Any, end_col: Any, tf: Any) -> Optional[float]:
+        """Mean days from event to closure over closed records with both timestamps.
+
+        Averaged in Python: date subtraction is dialect-specific and this path
+        must stay correct on SQLite and Postgres. Returns None when no usable
+        closed pair exists (PX-225).
+        """
+        rows = (
+            await self.db.execute(
+                select(start_col, end_col).where(and_(tf, start_col.is_not(None), end_col.is_not(None)))
+            )
+        ).all()
+        spans = [(end - start).total_seconds() / 86400 for start, end in rows if end >= start]
+        return round(sum(spans) / len(spans), 1) if spans else None
 
     async def get_full_dashboard(
         self,
@@ -273,6 +303,16 @@ class ExecutiveDashboardService:
         )
         psif_count = psif_result.scalar() or 0
 
+        register_total = (await self.db.execute(select(func.count(Incident.id)).where(tf))).scalar() or 0
+        register_closed = (
+            await self.db.execute(
+                select(func.count(Incident.id)).where(and_(tf, Incident.status == IncidentStatus.CLOSED))
+            )
+        ).scalar() or 0
+        avg_resolution_days = await self._avg_resolution_days(
+            Incident.incident_date, Incident.closed_at, and_(tf, Incident.status == IncidentStatus.CLOSED)
+        )
+
         return {
             "total_in_period": total,
             "open": open_count,
@@ -280,6 +320,12 @@ class ExecutiveDashboardService:
             "sif_count": sif_count,
             "psif_count": psif_count,
             "critical_high": severity_counts.get("critical", 0) + severity_counts.get("high", 0),
+            # Register-scoped triple that reconciles exactly (PX-226). `open` above is
+            # the narrower "actively worked" subset and is left for existing callers.
+            "register_total": register_total,
+            "register_closed": register_closed,
+            "register_open": max(0, register_total - register_closed),
+            "avg_resolution_days": avg_resolution_days,
         }
 
     async def _get_near_miss_summary(self, cutoff: datetime) -> Dict[str, Any]:
@@ -358,11 +404,39 @@ class ExecutiveDashboardService:
         )
         closed_count = closed_result.scalar() or 0
 
+        register_total = (await self.db.execute(select(func.count(Complaint.id)).where(tf))).scalar() or 0
+        register_closed = (
+            await self.db.execute(
+                select(func.count(Complaint.id)).where(and_(tf, Complaint.status == ComplaintStatus.CLOSED))
+            )
+        ).scalar() or 0
+        received_in_period_closed = (
+            await self.db.execute(
+                select(func.count(Complaint.id)).where(
+                    and_(
+                        tf,
+                        complaint_when >= cutoff,
+                        Complaint.status == ComplaintStatus.CLOSED,
+                    )
+                )
+            )
+        ).scalar() or 0
+        avg_resolution_days = await self._avg_resolution_days(
+            complaint_when, Complaint.closed_at, and_(tf, Complaint.status == ComplaintStatus.CLOSED)
+        )
+
         return {
             "total_in_period": total,
             "open": open_count,
             "closed_in_period": closed_count,
-            "resolution_rate": percentage_or_none(closed_count, total, digits=1),
+            # Same cohort top and bottom (PX-226). The old numerator counted complaints
+            # closed in the window regardless of when received, so the rate could exceed 100%.
+            "resolution_rate": percentage_or_none(received_in_period_closed, total, digits=1),
+            "register_total": register_total,
+            "register_closed": register_closed,
+            "register_open": max(0, register_total - register_closed),
+            "received_in_period_closed": received_in_period_closed,
+            "avg_resolution_days": avg_resolution_days,
         }
 
     async def _get_rta_summary(self, cutoff: datetime) -> Dict[str, Any]:
@@ -533,7 +607,10 @@ class ExecutiveDashboardService:
         }
 
     async def _get_trends(self, period_days: int) -> Dict[str, Any]:
-        """Weekly series for pulse sparklines (counts + compliance/score %)."""
+        """Weekly series for pulse sparklines (counts + compliance/score %).
+
+        Each series is isolated: one failing branch must not empty the others (PX-193).
+        """
         weeks = max(period_days // 7, 1)
         now = datetime.now(timezone.utc)
         week_windows: List[tuple[datetime, datetime, str]] = []
@@ -541,6 +618,16 @@ class ExecutiveDashboardService:
             week_end = now - timedelta(days=(i - 1) * 7)
             week_start = week_end - timedelta(days=7)
             week_windows.append((week_start, week_end, week_start.strftime("%Y-%m-%d")))
+
+        unavailable: List[str] = []
+
+        async def _series(name: str, build):
+            try:
+                return await build()
+            except Exception:
+                logger.exception("%s trend failed", name)
+                unavailable.append(name)
+                return []
 
         async def _count_in_window(model: Any, date_col: Any) -> List[Dict[str, Any]]:
             tf = self._tenant_filter(model)
@@ -552,39 +639,31 @@ class ExecutiveDashboardService:
                 out.append({"week_start": label, "count": result.scalar() or 0})
             return out
 
-        incidents_weekly = await _count_in_window(Incident, Incident.incident_date)
-        # Same date semantics as pulse headlines (event/received, not logged-at).
-        complaints_weekly = await _count_in_window(
-            Complaint, func.coalesce(Complaint.received_date, Complaint.created_at)
-        )
-        near_misses_weekly = await _count_in_window(NearMiss, func.coalesce(NearMiss.event_date, NearMiss.created_at))
-
-        # Audit score: average completed-run score_percentage per week.
-        audits_weekly: List[Dict[str, Any]] = []
-        tf_audit = self._tenant_filter(AuditRun)
-        for week_start, week_end, label in week_windows:
-            result = await self.db.execute(
-                select(func.avg(AuditRun.score_percentage)).where(
-                    and_(
-                        tf_audit,
-                        AuditRun.status == AuditStatus.COMPLETED,
-                        AuditRun.score_percentage.is_not(None),
-                        AuditRun.completed_at >= week_start,
-                        AuditRun.completed_at < week_end,
+        async def _audits_weekly() -> List[Dict[str, Any]]:
+            audits_weekly: List[Dict[str, Any]] = []
+            tf_audit = self._tenant_filter(AuditRun)
+            for week_start, week_end, label in week_windows:
+                result = await self.db.execute(
+                    select(func.avg(AuditRun.score_percentage)).where(
+                        and_(
+                            tf_audit,
+                            AuditRun.status == AuditStatus.COMPLETED,
+                            AuditRun.score_percentage.is_not(None),
+                            AuditRun.completed_at >= week_start,
+                            AuditRun.completed_at < week_end,
+                        )
                     )
                 )
-            )
-            avg = result.scalar()
-            if avg is None:
-                audits_weekly.append({"week_start": label, "count": 0, "value": None})
-            else:
-                pct = round(float(avg), 1)
-                audits_weekly.append({"week_start": label, "count": int(pct), "value": pct})
+                avg = result.scalar()
+                if avg is None:
+                    audits_weekly.append({"week_start": label, "count": 0, "value": None})
+                else:
+                    pct = round(float(avg), 1)
+                    audits_weekly.append({"week_start": label, "count": int(pct), "value": pct})
+            return audits_weekly
 
-        # Tool compliance backcast: assets that existed by week_end, scored as_of week_end.
-        # Quarantine uses current status (no historical status table) — expiry banding is as_of.
-        tool_compliance_weekly: List[Dict[str, Any]] = []
-        try:
+        async def _tool_compliance_weekly() -> List[Dict[str, Any]]:
+            tool_compliance_weekly: List[Dict[str, Any]] = []
             asset_q = select(AssetType.name, Asset.status, Asset.expiry_date, Asset.created_at)
             asset_q = asset_q.outerjoin(AssetType, Asset.asset_type_id == AssetType.id)
             if self.tenant_id is not None:
@@ -608,9 +687,6 @@ class ExecutiveDashboardService:
                 summary_map = cast(Dict[str, Any], aggregate_asset_health_kpis(rows_as_of, as_of=week_end))
                 bands = cast(Dict[str, Any], summary_map.get("expiry_bands") or {})
                 by_status = cast(Dict[str, Any], summary_map.get("by_status") or {})
-                # Removed assets are outside the compliance question entirely: they are no
-                # longer overdue (they cannot be re-certified) so they must also leave the
-                # denominator, or retiring expired kit would appear to improve compliance.
                 in_service = int(summary_map.get("total") or 0) - int(bands.get("removed", 0) or 0)
                 if in_service <= 0:
                     pct = 100.0
@@ -619,49 +695,66 @@ class ExecutiveDashboardService:
                     quarantined = int(by_status.get(AssetStatus.QUARANTINED.value, 0) or 0)
                     pct = round(100.0 * (in_service - overdue - quarantined) / in_service, 1)
                 tool_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
-        except Exception:
-            logger.exception("tool_compliance_weekly trend failed")
-            tool_compliance_weekly = []
+            return tool_compliance_weekly
 
-        # Training compliance backcast from latest-import cells (expiry-driven).
-        training_compliance_weekly: List[Dict[str, Any]] = []
-        try:
-            if self.tenant_id is not None:
-                latest_imp = await self.db.execute(
-                    select(TrainingMatrixImport.id)
-                    .where(TrainingMatrixImport.tenant_id == self.tenant_id)
-                    .order_by(TrainingMatrixImport.id.desc())
-                    .limit(1)
-                )
-                import_id = latest_imp.scalar_one_or_none()
-                cells: List[TrainingMatrixCell] = []
-                if import_id is not None:
-                    cell_result = await self.db.execute(
-                        select(TrainingMatrixCell).where(
-                            and_(
-                                TrainingMatrixCell.tenant_id == self.tenant_id,
-                                TrainingMatrixCell.import_id == import_id,
-                            )
+        async def _training_compliance_weekly() -> List[Dict[str, Any]]:
+            training_compliance_weekly: List[Dict[str, Any]] = []
+            if self.tenant_id is None:
+                return training_compliance_weekly
+            latest_imp = await self.db.execute(
+                select(TrainingMatrixImport.id)
+                .where(TrainingMatrixImport.tenant_id == self.tenant_id)
+                .order_by(TrainingMatrixImport.id.desc())
+                .limit(1)
+            )
+            import_id = latest_imp.scalar_one_or_none()
+            cells: List[TrainingMatrixCell] = []
+            if import_id is not None:
+                cell_result = await self.db.execute(
+                    select(TrainingMatrixCell).where(
+                        and_(
+                            TrainingMatrixCell.tenant_id == self.tenant_id,
+                            TrainingMatrixCell.import_id == import_id,
                         )
                     )
-                    cells = list(cell_result.scalars().all())
-                scored = [c for c in cells if c.passed_on is not None or c.expires_on is not None]
-                for _ws, week_end, label in week_windows:
-                    as_of = week_end.date()
-                    if not scored:
-                        training_compliance_weekly.append({"week_start": label, "count": 0, "value": None})
+                )
+                cells = list(cell_result.scalars().all())
+            scored = [c for c in cells if c.passed_on is not None or c.expires_on is not None]
+            for _ws, week_end, label in week_windows:
+                as_of = week_end.date()
+                if not scored:
+                    training_compliance_weekly.append({"week_start": label, "count": 0, "value": None})
+                    continue
+                ok = 0
+                for cell in scored:
+                    if cell.passed_on is None:
                         continue
-                    ok = 0
-                    for cell in scored:
-                        if cell.passed_on is None:
-                            continue
-                        if cell.expires_on is None or cell.expires_on >= as_of:
-                            ok += 1
-                    pct = round(100.0 * ok / len(scored), 1)
-                    training_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
-        except Exception:
-            logger.exception("training_compliance_weekly trend failed")
-            training_compliance_weekly = []
+                    if cell.expires_on is None or cell.expires_on >= as_of:
+                        ok += 1
+                pct = round(100.0 * ok / len(scored), 1)
+                training_compliance_weekly.append({"week_start": label, "count": int(pct), "value": pct})
+            return training_compliance_weekly
+
+        incidents_weekly = await _series(
+            "incidents_weekly", lambda: _count_in_window(Incident, Incident.incident_date)
+        )
+        complaints_weekly = await _series(
+            "complaints_weekly",
+            lambda: _count_in_window(
+                Complaint, func.coalesce(Complaint.received_date, Complaint.created_at)
+            ),
+        )
+        near_misses_weekly = await _series(
+            "near_misses_weekly",
+            lambda: _count_in_window(
+                NearMiss, func.coalesce(NearMiss.event_date, NearMiss.created_at)
+            ),
+        )
+        audits_weekly = await _series("audits_weekly", _audits_weekly)
+        tool_compliance_weekly = await _series("tool_compliance_weekly", _tool_compliance_weekly)
+        training_compliance_weekly = await _series(
+            "training_compliance_weekly", _training_compliance_weekly
+        )
 
         return {
             "incidents_weekly": incidents_weekly,
@@ -670,6 +763,7 @@ class ExecutiveDashboardService:
             "audits_weekly": audits_weekly,
             "training_compliance_weekly": training_compliance_weekly,
             "tool_compliance_weekly": tool_compliance_weekly,
+            "unavailable": unavailable,
         }
 
     async def _get_active_alerts(self) -> List[Dict[str, Any]]:

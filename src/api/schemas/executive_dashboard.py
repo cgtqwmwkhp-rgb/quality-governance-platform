@@ -36,7 +36,12 @@ class HealthScore(BaseModel):
 
 
 class IncidentSummary(BaseModel):
-    """Incident module summary."""
+    """Incident module summary.
+
+    `total_in_period` is windowed. `register_*` describe the whole register and
+    reconcile: register_open + register_closed == register_total. `open` remains
+    the narrower actively-worked subset (excludes some terminal-adjacent statuses).
+    """
 
     total_in_period: int
     open: int
@@ -44,6 +49,10 @@ class IncidentSummary(BaseModel):
     sif_count: int
     psif_count: int
     critical_high: int
+    register_total: Optional[int] = None
+    register_open: Optional[int] = None
+    register_closed: Optional[int] = None
+    avg_resolution_days: Optional[float] = None
 
 
 class NearMissSummary(BaseModel):
@@ -56,12 +65,22 @@ class NearMissSummary(BaseModel):
 
 
 class ComplaintSummary(BaseModel):
-    """Complaint module summary."""
+    """Complaint module summary.
+
+    `total_in_period` / `closed_in_period` are windowed (different date columns).
+    `register_*` reconcile on the whole register. `received_in_period_closed` is
+    the cohort-coherent numerator for resolution_rate (received in window AND closed).
+    """
 
     total_in_period: int
     open: int
     closed_in_period: int
     resolution_rate: Optional[float] = None
+    register_total: Optional[int] = None
+    register_open: Optional[int] = None
+    register_closed: Optional[int] = None
+    received_in_period_closed: Optional[int] = None
+    avg_resolution_days: Optional[float] = None
 
 
 class RTASummary(BaseModel):
@@ -139,7 +158,11 @@ class TrendDataPoint(BaseModel):
 
 
 class TrendData(BaseModel):
-    """Trend data for charts — weekly buckets for pulse sparklines."""
+    """Trend data for charts — weekly buckets for pulse sparklines.
+
+    ``unavailable`` lists series names whose queries failed. An empty series that
+    is *not* listed means a genuine empty window, not a failed fetch (PX-193).
+    """
 
     incidents_weekly: List[TrendDataPoint] = Field(default_factory=list)
     complaints_weekly: List[TrendDataPoint] = Field(default_factory=list)
@@ -147,6 +170,7 @@ class TrendData(BaseModel):
     audits_weekly: List[TrendDataPoint] = Field(default_factory=list)
     training_compliance_weekly: List[TrendDataPoint] = Field(default_factory=list)
     tool_compliance_weekly: List[TrendDataPoint] = Field(default_factory=list)
+    unavailable: List[str] = Field(default_factory=list)
 
 
 class ActiveAlert(BaseModel):

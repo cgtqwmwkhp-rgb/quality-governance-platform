@@ -55,6 +55,10 @@ function dashboardFixture(rtas: Record<string, number> = { total_in_period: 2, t
         sif_count: 0,
         psif_count: 0,
         critical_high: 1,
+        register_total: 40,
+        register_open: 15,
+        register_closed: 25,
+        avg_resolution_days: 4.5,
       },
       near_misses: {
         total_in_period: 1,
@@ -67,6 +71,11 @@ function dashboardFixture(rtas: Record<string, number> = { total_in_period: 2, t
         open: 1,
         closed_in_period: 2,
         resolution_rate: 66.7,
+        register_total: 10,
+        register_open: 4,
+        register_closed: 6,
+        received_in_period_closed: 2,
+        avg_resolution_days: null,
       },
       rtas,
       risks: { total_active: 4, by_level: {}, high_critical: 1, average_score: 10 },
@@ -334,7 +343,48 @@ describe('Analytics', () => {
       expect(within(distribution).getByText('Audits')).toBeInTheDocument()
       expect(within(distribution).queryByText('Risks')).not.toBeInTheDocument()
       expect(within(distribution).queryByText('Actions')).not.toBeInTheDocument()
-      expect(screen.getByTestId('analytics-hero-compliance')).toHaveTextContent('Evidence coverage')
+      expect(screen.getByTestId('analytics-hero-compliance')).toHaveTextContent('Clause evidence coverage')
+    })
+
+    it('uses register-wide open/closed for incidents and does not invent Closed=0 (PX-226)', async () => {
+      const Analytics = (await import('../Analytics')).default
+      render(
+        <MemoryRouter initialEntries={['/analytics']}>
+          <Routes>
+            <Route path="/analytics" element={<Analytics />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+
+      const table = await screen.findByTestId('analytics-module-table')
+      const incidentsRow = within(table).getByRole('row', { name: /Incidents/i })
+      expect(within(incidentsRow).getByText('25')).toBeInTheDocument()
+      expect(within(incidentsRow).getByText('15')).toBeInTheDocument()
+      expect(within(incidentsRow).getByText('40')).toBeInTheDocument()
+      expect(within(incidentsRow).getByText('4.5d')).toBeInTheDocument()
+      expect(within(table).getByRole('row', { name: /Complaints/i })).toHaveTextContent('No closures')
+      expect(within(table).getByRole('row', { name: /Risks/i })).toHaveTextContent('Not measured')
+    })
+
+    it('states trend query failure honestly when unavailable lists the series (PX-193)', async () => {
+      mockGetDashboard.mockResolvedValue({
+        ...dashboardFixture(),
+        data: {
+          ...dashboardFixture().data,
+          trends: { incidents_weekly: [], unavailable: ['incidents_weekly'] },
+        },
+      })
+      const Analytics = (await import('../Analytics')).default
+      render(
+        <MemoryRouter initialEntries={['/analytics']}>
+          <Routes>
+            <Route path="/analytics" element={<Analytics />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+      expect(await screen.findByTestId('analytics-trends-unavailable')).toHaveTextContent(
+        /trend query failed/i,
+      )
     })
 
     // Was 'marks RTA open/closed unavailable without inventing zero counts', driven by a
@@ -399,6 +449,10 @@ describe('Analytics', () => {
             sif_count: 0,
             psif_count: 0,
             critical_high: 0,
+            register_total: 0,
+            register_open: 0,
+            register_closed: 0,
+            avg_resolution_days: null,
           },
           near_misses: {
             total_in_period: 6,
@@ -411,8 +465,12 @@ describe('Analytics', () => {
             open: 0,
             closed_in_period: 0,
             resolution_rate: null,
+            register_total: 0,
+            register_open: 0,
+            register_closed: 0,
+            avg_resolution_days: null,
           },
-          rtas: { total_in_period: 0 },
+          rtas: { total_in_period: 0, total: 0, open: 0, closed: 0 },
           risks: { total_active: 0, by_level: {}, high_critical: 0, average_score: 0 },
           kris: { total_active: 0, by_status: {}, at_risk: 0, pending_alerts: 0 },
           compliance: { total_assigned: 0, completed: 0, overdue: 0, completion_rate: 100 },

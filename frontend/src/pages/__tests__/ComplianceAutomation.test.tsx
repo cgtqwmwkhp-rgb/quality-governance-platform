@@ -340,13 +340,15 @@ describe('ComplianceAutomation monitoring honesty', () => {
     )
   })
 
-  it('retires Score tab and hands off KPI chip to IMS / Compliance Evidence (CA-W1b)', async () => {
+  it('retires Score tab and hands off KPI chip to IMS / Compliance Evidence (CA-W1b / PX-237)', async () => {
     render(<ComplianceAutomation />, { wrapper: Wrapper })
     await screen.findByRole('heading', { name: 'Monitoring' })
 
     expect(screen.queryByRole('button', { name: /Compliance Score/i })).not.toBeInTheDocument()
     expect(screen.queryByTestId('monitoring-scoring-tab')).not.toBeInTheDocument()
-    expect(screen.getByTestId('monitoring-score-tab-retired')).toBeInTheDocument()
+    // PX-237: no release-note copy about a removed tab; definition + handoffs remain.
+    expect(screen.queryByText(/Score breakdown tab removed/i)).not.toBeInTheDocument()
+    expect(screen.getByTestId('monitoring-score-definition')).toHaveTextContent(/Clause evidence coverage|evidence link/i)
     expect(screen.getByTestId('monitoring-score-handoff-ims')).toHaveAttribute('href', '/ims')
     expect(screen.getByTestId('monitoring-score-handoff-evidence')).toHaveAttribute(
       'href',
