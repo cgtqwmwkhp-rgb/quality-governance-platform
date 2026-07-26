@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { portalAriaRequired, portalFieldId, portalRequiredProps } from '../portalFormA11y'
+import {
+  portalAriaRequired,
+  portalFieldId,
+  portalRequiredProps,
+  portalStripRequiredMarker,
+} from '../portalFormA11y'
 
 describe('portalFormA11y', () => {
   it('portalFieldId namespaces portal controls', () => {
@@ -14,5 +19,11 @@ describe('portalFormA11y', () => {
   it('portalAriaRequired omits DOM required for custom controls', () => {
     expect(portalAriaRequired(true)).toEqual({ 'aria-required': 'true' })
     expect(portalAriaRequired(false)).toEqual({})
+  })
+
+  it('portalStripRequiredMarker removes trailing asterisks (PX-159)', () => {
+    expect(portalStripRequiredMarker('Customer / Site *')).toBe('Customer / Site')
+    expect(portalStripRequiredMarker('Customer / Site **')).toBe('Customer / Site')
+    expect(portalStripRequiredMarker('Customer / Site')).toBe('Customer / Site')
   })
 })

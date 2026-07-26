@@ -115,6 +115,9 @@ export function useFormAutosave<T extends Record<string, unknown>>(
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const storageAvailable = useRef(isLocalStorageAvailable())
+  // PX-300: blank-form autosave must not run while the recovery prompt is open,
+  // otherwise the in-memory initial state overwrites the draft being offered.
+  const recoveryOpenRef = useRef(false)
 
   // Load existing draft on mount
   useEffect(() => {
@@ -140,7 +143,8 @@ export function useFormAutosave<T extends Record<string, unknown>>(
           return
         }
 
-        // Valid draft found
+        // Valid draft found — pause saves before any parent effect can overwrite.
+        recoveryOpenRef.current = true
         setHasDraft(true)
         setDraftData(draft)
         setIsRecoveryPromptOpen(true)
@@ -153,6 +157,10 @@ export function useFormAutosave<T extends Record<string, unknown>>(
       console.warn('[useFormAutosave] Failed to load draft:', error)
     }
   }, [formType, enabled, onDraftFound])
+
+  useEffect(() => {
+    recoveryOpenRef.current = isRecoveryPromptOpen
+  }, [isRecoveryPromptOpen])
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -169,6 +177,7 @@ export function useFormAutosave<T extends Record<string, unknown>>(
   const saveNow = useCallback(
     (data: T, step: number) => {
       if (!enabled || !storageAvailable.current) return
+      if (recoveryOpenRef.current) return
 
       try {
         const now = new Date()
@@ -203,6 +212,7 @@ export function useFormAutosave<T extends Record<string, unknown>>(
   const saveDraft = useCallback(
     (data: T, step: number) => {
       if (!enabled || !storageAvailable.current) return
+      if (recoveryOpenRef.current) return
 
       // Clear existing timeout
       if (saveTimeoutRef.current) {
@@ -222,6 +232,7 @@ export function useFormAutosave<T extends Record<string, unknown>>(
    */
   const recoverDraft = useCallback((): T | null => {
     if (draftData) {
+      recoveryOpenRef.current = false
       setIsRecoveryPromptOpen(false)
 
       // Calculate draft age for telemetry (EXP-001)
@@ -254,6 +265,7 @@ export function useFormAutosave<T extends Record<string, unknown>>(
       localStorage.removeItem(key)
       setHasDraft(false)
       setDraftData(null)
+      recoveryOpenRef.current = false
       setIsRecoveryPromptOpen(false)
       setLastSavedAt(null)
     } catch (error) {

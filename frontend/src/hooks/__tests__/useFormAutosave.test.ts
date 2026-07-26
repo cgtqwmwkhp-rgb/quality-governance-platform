@@ -189,6 +189,28 @@ describe('useFormAutosave', () => {
     )
   })
 
+  it('does not overwrite a stored draft while the recovery prompt is open (PX-300)', async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(makeStoredDraft()))
+
+    const { result } = renderHook(() =>
+      useFormAutosave<DraftShape>({ formType: FORM_TYPE }),
+    )
+
+    await waitFor(() => {
+      expect(result.current.isRecoveryPromptOpen).toBe(true)
+    })
+
+    act(() => {
+      result.current.saveDraft({ name: 'blank-overwrite' }, 1)
+    })
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).data).toEqual({ name: 'Ada' })
+    expect(telemetry.trackExp001DraftSaved).not.toHaveBeenCalled()
+  })
+
   it('recoverDraft returns null when no draft is loaded', () => {
     const { result } = renderHook(() =>
       useFormAutosave<DraftShape>({ formType: FORM_TYPE }),

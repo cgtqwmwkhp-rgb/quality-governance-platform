@@ -37,6 +37,8 @@ import {
 import {
   buildPortalPhotoMetadataSummary,
   portalPhotoEvidenceHonestyCopy,
+  portalPhotoPreviewUrl,
+  validatePortalPhotos,
 } from './portalPhotoEvidenceHonesty'
 import { useGeolocation } from '../hooks/useGeolocation'
 import { useVoiceToText } from '../hooks/useVoiceToText'
@@ -325,9 +327,9 @@ export default function PortalIncidentForm() {
     }
   }, [recoverDraft])
 
-  // Autosave on form data changes
+  // Autosave on form data changes (paused while recovery prompt is open — PX-300)
   useEffect(() => {
-    if (autosaveEnabled && !isSubmitting && !submittedRef) {
+    if (autosaveEnabled && !isSubmitting && !submittedRef && !isRecoveryPromptOpen) {
       // Create autosave data (exclude photos, include step)
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { photos, ...dataWithoutPhotos } = formData
@@ -337,7 +339,7 @@ export default function PortalIncidentForm() {
       }
       saveDraft(autosaveData, step)
     }
-  }, [formData, step, autosaveEnabled, isSubmitting, submittedRef, saveDraft])
+  }, [formData, step, autosaveEnabled, isSubmitting, submittedRef, isRecoveryPromptOpen, saveDraft])
 
   // Pre-fill user details from SSO
   useEffect(() => {
@@ -385,11 +387,19 @@ export default function PortalIncidentForm() {
     }
   }
 
-  // Photo handling
+  // Photo handling (PX-325: type/size/count validation before append)
+  const [photoErrors, setPhotoErrors] = useState<string[]>([])
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newPhotos = Array.from(e.target.files)
-      setFormData((prev) => ({ ...prev, photos: [...prev.photos, ...newPhotos] }))
+      const { accepted, errors } = validatePortalPhotos(
+        Array.from(e.target.files),
+        formData.photos,
+      )
+      setPhotoErrors(errors)
+      if (accepted.length > 0) {
+        setFormData((prev) => ({ ...prev, photos: [...prev.photos, ...accepted] }))
+      }
+      e.target.value = ''
     }
   }
 
@@ -1144,11 +1154,24 @@ export default function PortalIncidentForm() {
                   portalPhotoEvidenceHonestyCopy(formData.photos.length),
                 )}
               </p>
+              {photoErrors.length > 0 ? (
+                <ul
+                  role="alert"
+                  data-testid="portal-photo-errors"
+                  className="mb-3 space-y-1 rounded-lg bg-destructive/10 p-3"
+                >
+                  {photoErrors.map((message) => (
+                    <li key={message} className="text-xs text-destructive">
+                      {message}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               <div className="grid grid-cols-4 gap-2">
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
                     <img
-                      src={URL.createObjectURL(photo)}
+                      src={portalPhotoPreviewUrl(photo)}
                       alt={`Photo ${index + 1}`}
                       className="w-full h-full object-cover rounded-xl"
                     />

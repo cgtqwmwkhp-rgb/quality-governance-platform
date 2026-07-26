@@ -18,6 +18,7 @@ import { Button } from '../components/ui/Button'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import { cn } from '../helpers/utils'
 import { buildPortalCatalogWarnings, formatCatalogWarning } from '../helpers/formLookupFields'
+import { PORTAL_TEMPLATE_FALLBACK_BANNER } from './portalTemplateHonesty'
 import { API_BASE_URL } from '../config/apiBase'
 import { formTemplatesApi, getApiErrorMessage, lookupsApi } from '../api/client'
 import type { LookupOption } from '../api/lookupsClient'
@@ -1110,6 +1111,8 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [catalogWarning, setCatalogWarning] = useState<string | null>(null)
+  /** True when API returned no published template and we fell back (PX-306). */
+  const [usingFallbackTemplate, setUsingFallbackTemplate] = useState(false)
 
   // Load template structure + live Admin Lookups catalogs (never silent fake catalogs).
   useEffect(() => {
@@ -1119,6 +1122,7 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       setIsLoading(true)
       setError(null)
       setCatalogWarning(null)
+      setUsingFallbackTemplate(false)
 
       try {
         let loadedTemplate: FormTemplate | null = null
@@ -1126,6 +1130,9 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
           loadedTemplate = await formTemplatesApi.getBySlug(formType)
         } catch {
           loadedTemplate = null
+        }
+        if (!cancelled) {
+          setUsingFallbackTemplate(!loadedTemplate)
         }
         const customersResult = await Promise.allSettled([lookupsApi.list('customers', true)])
         if (cancelled) return
@@ -1184,6 +1191,7 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       } catch (err) {
         if (cancelled) return
         console.error('Failed to load form configuration:', err)
+        setUsingFallbackTemplate(true)
         setTemplate(FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident)
         setCustomers([])
         setRoles([])
@@ -1331,6 +1339,15 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
 
       {/* Form Content */}
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 pb-24">
+        {usingFallbackTemplate ? (
+          <div
+            className="mb-4 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground"
+            role="status"
+            data-testid="portal-template-fallback-banner"
+          >
+            {PORTAL_TEMPLATE_FALLBACK_BANNER}
+          </div>
+        ) : null}
         {catalogWarning ? (
           <div
             className="mb-4 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-foreground"

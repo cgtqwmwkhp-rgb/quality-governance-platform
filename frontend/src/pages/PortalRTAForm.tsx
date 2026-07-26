@@ -78,6 +78,7 @@ import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { cn } from '../helpers/utils'
 import { portalRequiredProps } from '../utils/portalFormA11y'
+import { portalPhotoPreviewUrl, validatePortalPhotos } from './portalPhotoEvidenceHonesty'
 
 // PE Vehicle options
 const PE_VEHICLES = [
@@ -292,10 +293,19 @@ export default function PortalRTAForm() {
   // Voice recording toggle
   const toggleVoiceRecording = () => setIsRecording(!isRecording)
 
-  // Photo handling
+  // Photo handling (PX-325)
+  const [photoErrors, setPhotoErrors] = useState<string[]>([])
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setFormData((prev) => ({ ...prev, photos: [...prev.photos, ...Array.from(e.target.files!)] }))
+      const { accepted, errors } = validatePortalPhotos(
+        Array.from(e.target.files),
+        formData.photos,
+      )
+      setPhotoErrors(errors)
+      if (accepted.length > 0) {
+        setFormData((prev) => ({ ...prev, photos: [...prev.photos, ...accepted] }))
+      }
+      e.target.value = ''
     }
   }
 
@@ -379,7 +389,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
       // Build portal report payload - RTA goes to RTA dashboard
       const payload: PortalReportPayload = {
         report_type: 'rta', // Routes to RTA dashboard, not Incidents
-        title: `RTA - ${formData.accidentType} - ${formData.location}`,
+        title: `Road Traffic Collision - ${formData.accidentType} - ${formData.location}`,
         description: fullDescription,
         location: formData.location,
         severity: formData.isDrivable === false ? 'critical' : 'high',
@@ -1004,11 +1014,24 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
               <span className="block text-sm font-medium text-foreground mb-2">
                 {t('portal.photos')}
               </span>
+              {photoErrors.length > 0 ? (
+                <ul
+                  role="alert"
+                  data-testid="portal-photo-errors"
+                  className="mb-3 space-y-1 rounded-lg bg-destructive/10 p-3"
+                >
+                  {photoErrors.map((message) => (
+                    <li key={message} className="text-xs text-destructive">
+                      {message}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               <div className="grid grid-cols-4 gap-2">
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
                     <img
-                      src={URL.createObjectURL(photo)}
+                      src={portalPhotoPreviewUrl(photo)}
                       alt=""
                       className="w-full h-full object-cover rounded-xl"
                     />

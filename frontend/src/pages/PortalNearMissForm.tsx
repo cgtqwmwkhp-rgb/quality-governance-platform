@@ -84,12 +84,15 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { cn } from '../helpers/utils'
+import { portalStripRequiredMarker } from '../utils/portalFormA11y'
 import { useGeolocation } from '../hooks/useGeolocation'
 import { useVoiceToText } from '../hooks/useVoiceToText'
 import { lookupsApi, type LookupOption } from '../api/client'
 import {
   buildPortalPhotoMetadataSummary,
   portalPhotoEvidenceHonestyCopy,
+  portalPhotoPreviewUrl,
+  validatePortalPhotos,
 } from './portalPhotoEvidenceHonesty'
 
 // Risk categories
@@ -278,10 +281,19 @@ export default function PortalNearMissForm() {
     }
   }
 
-  // Photo handling
+  // Photo handling (PX-325)
+  const [photoErrors, setPhotoErrors] = useState<string[]>([])
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setFormData((prev) => ({ ...prev, photos: [...prev.photos, ...Array.from(e.target.files!)] }))
+      const { accepted, errors } = validatePortalPhotos(
+        Array.from(e.target.files),
+        formData.photos,
+      )
+      setPhotoErrors(errors)
+      if (accepted.length > 0) {
+        setFormData((prev) => ({ ...prev, photos: [...prev.photos, ...accepted] }))
+      }
+      e.target.value = ''
     }
   }
 
@@ -528,7 +540,7 @@ export default function PortalNearMissForm() {
             </div>
 
             <FuzzySearchDropdown
-              label={t('portal.contract_site')}
+              label={portalStripRequiredMarker(t('portal.contract_site'))}
               options={customers.map((customer) => ({
                 value: customer.code,
                 label: customer.label,
@@ -935,11 +947,24 @@ export default function PortalNearMissForm() {
                   portalPhotoEvidenceHonestyCopy(formData.photos.length),
                 )}
               </p>
+              {photoErrors.length > 0 ? (
+                <ul
+                  role="alert"
+                  data-testid="portal-photo-errors"
+                  className="mb-3 space-y-1 rounded-lg bg-destructive/10 p-3"
+                >
+                  {photoErrors.map((message) => (
+                    <li key={message} className="text-xs text-destructive">
+                      {message}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               <div className="grid grid-cols-4 gap-2">
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
                     <img
-                      src={URL.createObjectURL(photo)}
+                      src={portalPhotoPreviewUrl(photo)}
                       alt=""
                       className="w-full h-full object-cover rounded-xl"
                     />
