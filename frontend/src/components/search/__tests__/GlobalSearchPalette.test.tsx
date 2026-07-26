@@ -121,4 +121,27 @@ describe('GlobalSearchPalette', () => {
       )
     })
   })
+
+  it('shows a search failure instead of "No results found" when the API errors (PX-181)', async () => {
+    mockSearch.mockRejectedValue(new Error('503 Service Unavailable'))
+    const user = userEvent.setup()
+    const GlobalSearchPalette = (await import('../GlobalSearchPalette')).default
+
+    render(
+      <MemoryRouter>
+        <GlobalSearchPalette open onOpenChange={vi.fn()} />
+      </MemoryRouter>,
+    )
+
+    fireEvent.change(screen.getByPlaceholderText(/Search incidents/i), {
+      target: { value: 'Cut Wrist' },
+    })
+    await user.click(screen.getByRole('button', { name: /^Search$/ }))
+
+    expect(await screen.findByTestId('global-search-error')).toHaveTextContent(
+      'Search is unavailable',
+    )
+    expect(screen.getByText('503 Service Unavailable')).toBeInTheDocument()
+    expect(screen.queryByText('No results found')).not.toBeInTheDocument()
+  })
 })

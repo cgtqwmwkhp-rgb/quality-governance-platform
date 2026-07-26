@@ -111,6 +111,9 @@ vi.mock('../../api/client', () => ({
     prepareRiddor: vi.fn(),
   },
   getApiErrorMessage: (err: Error, fallback?: string) => err.message || fallback || 'error',
+  ErrorClass: { NOT_FOUND: 'NOT_FOUND', SERVER_ERROR: 'SERVER_ERROR' },
+  classifyError: (err: unknown) =>
+    (err as { status?: number })?.status === 404 ? 'NOT_FOUND' : 'SERVER_ERROR',
 }))
 
 const incidentRecord = {
@@ -341,5 +344,38 @@ describe('IncidentDetail', () => {
       source_id: 11,
       page_size: 50,
     })
+  })
+
+  it('reports a failed detail fetch as a failure with retry, not as "not found" (PX-170)', async () => {
+    client.incidentsApi.get.mockRejectedValue(new Error('503 Service Unavailable'))
+
+    renderPage()
+
+    const failure = await screen.findByTestId('incident-detail-async-error')
+    expect(failure).toHaveTextContent('incidents.detail.failed_to_load')
+    expect(failure).toHaveTextContent('503 Service Unavailable')
+    // A degraded API must not be reported as the case not existing.
+    expect(screen.queryByText('incidents.detail.not_found')).not.toBeInTheDocument()
+    // The skeleton must not be left on screen either.
+    expect(screen.queryByTestId('incident-detail-async')).not.toBeInTheDocument()
+
+    client.incidentsApi.get.mockResolvedValue({ data: incidentRecord })
+    fireEvent.click(screen.getByTestId('incident-detail-async-error-retry'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Loader slip')).toBeInTheDocument()
+    })
+  })
+
+  it('still reports a genuine 404 as not found rather than a retryable failure', async () => {
+    const notFound = Object.assign(new Error('Not Found'), { status: 404 })
+    client.incidentsApi.get.mockRejectedValue(notFound)
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByText('incidents.detail.not_found')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('incident-detail-async-error')).not.toBeInTheDocument()
   })
 })

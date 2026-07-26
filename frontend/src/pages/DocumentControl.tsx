@@ -21,6 +21,7 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { EmptyState } from '../components/ui/EmptyState'
+import { AsyncState } from '../components/ui/async'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import {
@@ -325,12 +326,6 @@ export default function DocumentControl() {
         </Button>
       </div>
 
-      {error && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
       {showCreate && (
         <Card className="p-4 space-y-4">
           <h2 className="font-medium text-foreground">Create draft shell</h2>
@@ -373,55 +368,64 @@ export default function DocumentControl() {
         </Card>
       )}
 
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        </div>
-      ) : (
+      <AsyncState
+        loading={loading}
+        error={error}
+        isEmpty={documents.length === 0}
+        onRetry={() => void loadDocuments()}
+        loadingFallback={
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        }
+        errorTitle="Controlled documents unavailable"
+        errorDescription="The library could not be loaded. This does not mean there are no documents."
+        retryLabel="Try again"
+        data-testid="document-control-async"
+        empty={
+          <EmptyState
+            icon={<FileText className="w-8 h-8 text-muted-foreground" />}
+            title="No controlled documents"
+            description="Create a draft shell to start the controlled document workflow."
+            action={
+              <Button
+                onClick={() => setShowCreate(true)}
+                data-testid="document-control-empty-new-draft"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                New draft
+              </Button>
+            }
+          />
+        }
+      >
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <div className="xl:col-span-1 space-y-2">
-            {documents.length === 0 ? (
-              <EmptyState
-                icon={<FileText className="w-8 h-8 text-muted-foreground" />}
-                title="No controlled documents"
-                description="Create a draft shell to start the controlled document workflow."
-                action={
-                  <Button
-                    onClick={() => setShowCreate(true)}
-                    data-testid="document-control-empty-new-draft"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    New draft
-                  </Button>
-                }
-              />
-            ) : (
-              documents.map((doc) => (
-                <Card
-                  key={doc.id}
-                  hoverable
-                  onClick={() => setSelectedId(doc.id)}
-                  className={cn(
-                    'p-4 cursor-pointer',
-                    selectedId === doc.id && 'border-primary shadow-md',
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-mono text-xs text-primary">{doc.document_number}</p>
-                      <p className="font-medium text-foreground truncate">{doc.title}</p>
-                      <p className="text-xs text-muted-foreground capitalize mt-1">
-                        {doc.document_type} · v{doc.current_version}
-                      </p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+            {documents.map((doc) => (
+              <Card
+                key={doc.id}
+                hoverable
+                onClick={() => setSelectedId(doc.id)}
+                className={cn(
+                  'p-4 cursor-pointer',
+                  selectedId === doc.id && 'border-primary shadow-md',
+                )}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-mono text-xs text-primary">{doc.document_number}</p>
+                    <p className="font-medium text-foreground truncate">{doc.title}</p>
+                    <p className="text-xs text-muted-foreground capitalize mt-1">
+                      {doc.document_type} · v{doc.current_version}
+                    </p>
                   </div>
-                  <div className="mt-2">
-                    <Badge variant={statusVariant(doc.status) as 'success'}>{doc.status}</Badge>
-                  </div>
-                </Card>
-              ))
-            )}
+                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                </div>
+                <div className="mt-2">
+                  <Badge variant={statusVariant(doc.status) as 'success'}>{doc.status}</Badge>
+                </div>
+              </Card>
+            ))}
           </div>
 
           <div className="xl:col-span-2">
@@ -624,7 +628,7 @@ export default function DocumentControl() {
             )}
           </div>
         </div>
-      )}
+      </AsyncState>
     </div>
   )
 }

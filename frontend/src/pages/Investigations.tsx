@@ -34,6 +34,7 @@ import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
+import { AsyncState } from '../components/ui/async'
 import {
   Select,
   SelectContent,
@@ -615,8 +616,9 @@ export default function Investigations() {
   const [investigations, setInvestigations] = useState<Investigation[]>([])
   /** Unfiltered catalog for hero KPI counts (not narrowed by status/q). */
   const [catalog, setCatalog] = useState<Investigation[]>([])
+  const [catalogUnavailable, setCatalogUnavailable] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [initialLoading, setInitialLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState(() =>
     parseStatusFilterParam(searchParams.get('status')),
   )
@@ -709,14 +711,17 @@ export default function Investigations() {
     try {
       const response = await investigationsApi.list(1, 100)
       setCatalog(response.data.items || [])
+      setCatalogUnavailable(false)
     } catch (err) {
       trackError(err, { component: 'Investigations', action: 'loadCatalog' })
       setCatalog([])
+      setCatalogUnavailable(true)
     }
   }, [])
 
   const loadInvestigations = useCallback(async () => {
     setLoading(true)
+    setLoadError(null)
     try {
       const apiStatus = apiStatusForFilter(statusFilter)
       const response = await investigationsApi.list(1, 100, {
@@ -727,10 +732,13 @@ export default function Investigations() {
       setInvestigations(response.data.items || [])
     } catch (err) {
       trackError(err, { component: 'Investigations', action: 'load' })
+      // Clearing to [] on its own renders "No investigations yet", which
+      // states that no investigation exists. The register cannot make that
+      // claim when the request failed.
       setInvestigations([])
+      setLoadError(getApiErrorMessage(err))
     } finally {
       setLoading(false)
-      setInitialLoading(false)
     }
   }, [statusFilter, entityTypeFilter, debouncedQ])
 
@@ -932,20 +940,36 @@ export default function Investigations() {
     loading,
   ])
 
-  const stats = useMemo(() => {
+  const stats = useMemo((): Record<
+    'total' | 'inProgress' | 'underReview' | 'completed',
+    number | string
+  > => {
+    // A tile reading 0 because the fetch failed is a claim the page cannot
+    // support. Show it as not known, the way the CAPA counts already do.
+    if (catalogUnavailable) {
+      return { total: '—', inProgress: '—', underReview: '—', completed: '—' }
+    }
     return {
       total: catalog.length,
       inProgress: catalog.filter((i) => i.status === 'in_progress').length,
       underReview: catalog.filter((i) => i.status === 'under_review').length,
       completed: catalog.filter((i) => i.status === 'completed').length,
     }
-  }, [catalog])
+  }, [catalog, catalogUnavailable])
 
-  if (initialLoading) {
+  if (loading && investigations.length === 0 && loadError === null) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
+      <AsyncState
+        loading
+        onRetry={() => void loadInvestigations()}
+        retryLabel={t('common.retry', 'Try again')}
+        loadingFallback={
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        }
+        data-testid="investigations-initial-async"
+      />
     )
   }
 
@@ -1113,19 +1137,37 @@ export default function Investigations() {
       </div>
 
       {/* Compact investigation work queue — report opens on the detail route */}
-      <div
-        className="space-y-2"
-        data-testid="investigations-list"
-        aria-busy={loading}
-      >
-        {filteredInvestigations.length === 0 ? (
+      <AsyncState
+        loading={loading && investigations.length === 0 && loadError === null}
+        error={loadError}
+        isEmpty={loadError === null && !loading && filteredInvestigations.length === 0}
+        onRetry={() => void loadInvestigations()}
+        loadingFallback={
+          <div className="flex items-center justify-center h-32">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        }
+        errorTitle={t('investigations.load_failed', 'Investigations unavailable')}
+        errorDescription={t(
+          'investigations.load_failed_hint',
+          'The register could not be read, so this is not a statement that no investigation exists.',
+        )}
+        retryLabel={t('common.retry', 'Try again')}
+        data-testid="investigations-async"
+        empty={
           <EmptyState
             icon={<FlaskConical className="w-8 h-8 text-muted-foreground" />}
             title={t('investigations.empty.title')}
             description="Start an investigation report from an incident, RTA, near miss, or complaint."
           />
-        ) : (
-          filteredInvestigations.map((investigation) => {
+        }
+      >
+        <div
+          className="space-y-2"
+          data-testid="investigations-list"
+          aria-busy={loading}
+        >
+          {filteredInvestigations.map((investigation) => {
             const EntityIcon = getEntityIcon(investigation.assigned_entity_type)
             const levelKey = String(investigation.level || '').toLowerCase()
             const levelBadge = LEVEL_BADGES[levelKey]
@@ -1196,9 +1238,9 @@ export default function Investigations() {
                 </div>
               </Card>
             )
-          })
-        )}
-      </div>
+          })}
+        </div>
+      </AsyncState>
 
       {/* Detail Modal */}
       <Dialog open={!!selectedInvestigation} onOpenChange={() => setSelectedInvestigation(null)}>
