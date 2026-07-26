@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "179 kB",
+    "limit": "180 kB",
     "gzip": true,
-    "name": "index: 177→179 kB — H&S rich reporting + Check & Challenge coach"
+    "name": "index: 179→180 kB — Wave 1 form primitive (414 B over)"
   },
   {
     "path": "dist/assets/vendor-*.js",
