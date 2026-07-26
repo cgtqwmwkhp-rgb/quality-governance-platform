@@ -60,7 +60,11 @@ class AuditListItem(BaseModel):
     audit_date: Optional[str] = None
     status: Optional[str] = None
     percentage_score: Optional[float] = None
+    # "imported" | "calculated" | "unknown"; None when the audit has no score.
+    score_source: Optional[str] = None
     lead_auditor: Optional[str] = None
+    audit_run_id: Optional[int] = None
+    import_job_id: Optional[int] = None
 
 
 class ListAuditsResponse(BaseModel):
@@ -96,8 +100,16 @@ class GetAuditResponse(BaseModel):
     status: Optional[str] = None
     lead_auditor: Optional[str] = None
     total_score: Optional[float] = None
+    max_possible_score: Optional[float] = None
     percentage_score: Optional[float] = None
+    # "imported" | "calculated" | "unknown"; None when the audit has no score.
+    score_source: Optional[str] = None
     section_scores: Any = None
+    score_breakdown: List[Any] = []
+    source_document_asset_id: Optional[int] = None
+    source_filename: Optional[str] = None
+    audit_run_id: Optional[int] = None
+    import_job_id: Optional[int] = None
     findings_count: Optional[int] = None
     major_findings: Optional[int] = None
     minor_findings: Optional[int] = None
@@ -209,7 +221,10 @@ class DashboardSummary(BaseModel):
     total_audits: int = 0
     active_audits: int = 0
     completed_audits: int = 0
-    average_score: float = 0.0
+    # None when no completed audit carries a score. Zero would misreport
+    # "nothing scored yet" as "everything scored zero".
+    average_score: Optional[float] = None
+    scored_audits: int = 0
 
 
 class DashboardProtocol(BaseModel):

@@ -15,6 +15,7 @@ from src.api.schemas.executive_dashboard import (
     ExecutiveDashboardResponse,
     VehicleGovernanceSummary,
 )
+from src.domain.metrics import percentage_or_none
 from src.domain.models.user import User
 from src.services.executive_dashboard import ExecutiveDashboardService
 
@@ -194,7 +195,7 @@ async def get_vehicle_governance(
     )
     non_compliant = (await db.execute(non_compliant_q)).scalar() or 0
 
-    compliance_rate = (compliant / total * 100) if total > 0 else 100.0
+    compliance_rate = percentage_or_none(compliant, total, digits=1)
 
     open_statuses = ["open", "auto_detected", "acknowledged", "action_assigned"]
     open_defects_q = select(func.count(VehicleDefect.id)).where(
@@ -247,7 +248,7 @@ async def get_vehicle_governance(
         active_vehicles=active,
         compliant_vehicles=compliant,
         non_compliant_vehicles=non_compliant,
-        compliance_rate=round(compliance_rate, 1),
+        compliance_rate=compliance_rate,
         open_defects=open_defects,
         open_p1_defects=open_p1,
         open_p2_defects=open_p2,

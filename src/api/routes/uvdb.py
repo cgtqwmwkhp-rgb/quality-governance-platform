@@ -10,8 +10,7 @@ Provides endpoints for:
 """
 
 import logging
-import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -35,6 +34,13 @@ from src.domain.models.uvdb_achilles import (
     UVDBSection,
 )
 from src.domain.services.uvdb_protocol_export_service import build_protocol_export, build_protocol_structure_payload
+from src.domain.services.uvdb_service import (
+    build_section_title_index,
+    match_protocol_section,
+    normalise_section_score,
+    resolve_provenance,
+    resolve_score_source,
+)
 from src.domain.uvdb.protocol_b2_v118 import PROTOCOL_VERSION, UVDB_B2_SECTIONS, build_content_coverage
 
 router = APIRouter()
@@ -91,6 +97,61 @@ class KPICreate(BaseModel):
     env_minor_incidents: int = Field(default=0)
     env_reportable_incidents: int = Field(default=0)
     env_enforcement_actions: int = Field(default=0)
+
+
+# ============ Score Provenance ============
+
+
+ImportLinks = dict[str, tuple[Optional[int], Optional[int]]]
+
+
+async def _resolve_import_links(
+    db: Any,
+    references: list[str],
+    *,
+    tenant_id: Optional[int] = None,
+) -> tuple[ImportLinks, bool]:
+    """Map audit reference -> (audit_run_id, latest import_job_id).
+
+    A UVDB audit carries an imported score when an external audit import job
+    was promoted against its reference. Resolved in one query for the whole
+    page rather than per row, and scoped to the caller's tenant so the run and
+    job identifiers returned to the client cannot come from another tenant.
+
+    Returns (links, resolved). *resolved* is False when the linkage tables are
+    unreadable, which callers must surface as unknown provenance rather than
+    silently reporting the score as calculated in-app.
+    """
+    wanted = [reference for reference in references if reference]
+    if not wanted:
+        return {}, True
+
+    tenant_filter = [AuditRun.tenant_id == tenant_id] if tenant_id is not None else []
+
+    try:
+        result = await db.execute(
+            select(
+                AuditRun.reference_number,
+                AuditRun.id,
+                func.max(ExternalAuditImportJob.id),
+            )
+            .outerjoin(ExternalAuditImportJob, ExternalAuditImportJob.audit_run_id == AuditRun.id)
+            .where(AuditRun.reference_number.in_(wanted), *tenant_filter)
+            .group_by(AuditRun.reference_number, AuditRun.id)
+        )
+        rows = result.all()
+    except (ProgrammingError, OperationalError) as e:
+        logger.warning("UVDB import-link lookup failed: %s", str(e)[:200])
+        return {}, False
+
+    links: ImportLinks = {}
+    for reference, run_id, job_id in rows:
+        # Defensive: one reference should map to one run, but keep the row that
+        # actually carries an import job if duplicates ever exist.
+        existing = links.get(reference)
+        if existing is None or (existing[1] is None and job_id is not None):
+            links[reference] = (run_id, job_id)
+    return links, True
 
 
 # ============ Protocol Structure Endpoints ============
@@ -240,9 +301,12 @@ async def list_audits(
             next_action="Apply the latest UVDB database migrations before using live audits.",
         )
 
-    return {
-        "total": total,
-        "audits": [
+    links, links_resolved = await _resolve_import_links(db, [a.audit_reference for a in audits], tenant_id=tenant_id)
+
+    items = []
+    for a in audits:
+        run_id, job_id = links.get(a.audit_reference, (None, None))
+        items.append(
             {
                 "id": a.id,
                 "audit_reference": a.audit_reference,
@@ -251,11 +315,18 @@ async def list_audits(
                 "audit_date": a.audit_date.isoformat() if a.audit_date else None,
                 "status": a.status,
                 "percentage_score": a.percentage_score,
+                "score_source": resolve_score_source(
+                    a.percentage_score,
+                    import_job_id=job_id,
+                    provenance_resolved=links_resolved,
+                ),
                 "lead_auditor": a.lead_auditor,
+                "audit_run_id": run_id,
+                "import_job_id": job_id,
             }
-            for a in audits
-        ],
-    }
+        )
+
+    return {"total": total, "audits": items}
 
 
 @router.post("/audits", response_model=dict, status_code=201)
@@ -299,11 +370,20 @@ async def get_audit(
 
     source_asset_id: int | None = None
     source_filename: str | None = None
+    audit_run_id: int | None = None
+    import_job_id: int | None = None
+    provenance_resolved = True
+
+    tenant_id = getattr(current_user, "tenant_id", None) if current_user else None
+    run_tenant_filter = [AuditRun.tenant_id == tenant_id] if tenant_id is not None else []
 
     try:
-        run_result = await db.execute(select(AuditRun).where(AuditRun.reference_number == audit.audit_reference))
+        run_result = await db.execute(
+            select(AuditRun).where(AuditRun.reference_number == audit.audit_reference, *run_tenant_filter)
+        )
         run = run_result.scalar_one_or_none()
         if run:
+            audit_run_id = run.id
             job_result = await db.execute(
                 select(ExternalAuditImportJob)
                 .where(ExternalAuditImportJob.audit_run_id == run.id)
@@ -312,6 +392,7 @@ async def get_audit(
             )
             job = job_result.scalar_one_or_none()
             if job:
+                import_job_id = job.id
                 source_asset_id = job.source_document_asset_id
                 source_filename = job.source_filename
             elif run.source_document_asset_id:
@@ -319,9 +400,22 @@ async def get_audit(
                 source_filename = run.source_document_label
     except (ProgrammingError, OperationalError):
         logger.debug("Could not resolve source document for audit %s", audit_id)
+        provenance_resolved = False
+
+    score_source = resolve_score_source(
+        audit.percentage_score,
+        import_job_id=import_job_id,
+        provenance_resolved=provenance_resolved,
+    )
+    entry_source = resolve_provenance(import_job_id=import_job_id, provenance_resolved=provenance_resolved)
 
     scores = audit.section_scores or {}
-    score_breakdown = scores.get("sections", []) if isinstance(scores, dict) else []
+    raw_breakdown = scores.get("sections", []) if isinstance(scores, dict) else []
+    score_breakdown = [
+        normalise_section_score(entry, audit_reference=audit.audit_reference, score_source=entry_source)
+        for entry in raw_breakdown
+        if isinstance(entry, dict)
+    ]
 
     return {
         "id": audit.id,
@@ -336,10 +430,13 @@ async def get_audit(
         "total_score": audit.total_score,
         "max_possible_score": audit.max_possible_score,
         "percentage_score": audit.percentage_score,
+        "score_source": score_source,
         "section_scores": audit.section_scores,
         "score_breakdown": score_breakdown,
         "source_document_asset_id": source_asset_id,
         "source_filename": source_filename,
+        "audit_run_id": audit_run_id,
+        "import_job_id": import_job_id,
         "findings_count": audit.findings_count,
         "major_findings": audit.major_findings,
         "minor_findings": audit.minor_findings,
@@ -551,10 +648,13 @@ async def get_iso_cross_mapping(current_user: CurrentUser) -> dict[str, Any]:
 # ============ Section Scores ============
 
 
-def _extract_section_number(label: str) -> str | None:
-    """Extract a UVDB section number from an OCR-generated label string."""
-    m = re.search(r"(?:Section\s+)?(\d{1,2})", label, re.IGNORECASE)
-    return m.group(1) if m else None
+def _empty_section_scores() -> dict[str, Any]:
+    return {
+        "sections": {},
+        "unmapped_sections": [],
+        "audit_reference": None,
+        "score_source": None,
+    }
 
 
 @router.get("/sections/scores", response_model=dict)
@@ -562,7 +662,14 @@ async def get_section_scores(
     db: DbSession,
     current_user: CurrentUser,
 ) -> dict[str, Any]:
-    """Return per-section scores from the most recent completed UVDB audit."""
+    """Return per-section scores from the most recent completed UVDB audit.
+
+    Section scores on an imported audit are lifted from the source report, not
+    computed from protocol responses, so every entry is tagged with its
+    provenance. Entries whose label cannot be matched to a protocol section
+    with certainty are returned under ``unmapped_sections`` so the score stays
+    visible instead of being dropped or pinned to the wrong section.
+    """
     tenant_id = getattr(current_user, "tenant_id", None) if current_user else None
     tenant_filter = [UVDBAudit.tenant_id == tenant_id] if tenant_id is not None else []
 
@@ -579,30 +686,49 @@ async def get_section_scores(
         )
         latest = result.scalar_one_or_none()
     except (ProgrammingError, OperationalError):
-        return {"sections": {}}
+        return _empty_section_scores()
 
     if not latest or not latest.section_scores:
-        return {"sections": {}}
+        return _empty_section_scores()
 
     raw = latest.section_scores
-    entries: list[dict[str, object]] = raw.get("sections", []) if isinstance(raw, dict) else []
+    entries = raw.get("sections", []) if isinstance(raw, dict) else []
+    if not isinstance(entries, list):
+        entries = []
 
-    sections_map: dict[str, dict[str, object]] = {}
-    for idx, entry in enumerate(entries):
-        label = str(entry.get("label", f"Section {idx + 1}"))
-        sec_num = _extract_section_number(label)
-        if sec_num is None:
-            sec_num = str(idx + 1)
+    links, links_resolved = await _resolve_import_links(db, [latest.audit_reference], tenant_id=tenant_id)
+    _, import_job_id = links.get(latest.audit_reference, (None, None))
+    score_source = resolve_provenance(import_job_id=import_job_id, provenance_resolved=links_resolved)
 
-        sections_map[sec_num] = {
-            "label": label,
-            "score": entry.get("score", 0),
-            "max_score": entry.get("max_score", 0),
-            "percentage": entry.get("percentage", 0),
-            "audit_reference": latest.audit_reference,
-        }
+    valid_section_numbers = [str(section["number"]) for section in UVDB_B2_SECTIONS]
+    title_index = build_section_title_index(UVDB_B2_SECTIONS)
 
-    return {"sections": sections_map}
+    sections_map: dict[str, dict[str, Any]] = {}
+    unmapped: list[dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        normalised = normalise_section_score(
+            entry,
+            audit_reference=latest.audit_reference,
+            score_source=score_source,
+        )
+        number = match_protocol_section(
+            normalised["label"],
+            valid_section_numbers=valid_section_numbers,
+            title_index=title_index,
+        )
+        if number is None or number in sections_map:
+            unmapped.append(normalised)
+            continue
+        sections_map[number] = normalised
+
+    return {
+        "sections": sections_map,
+        "unmapped_sections": unmapped,
+        "audit_reference": latest.audit_reference,
+        "score_source": score_source,
+    }
 
 
 # ============ Dashboard ============
@@ -632,14 +758,16 @@ async def get_uvdb_dashboard(
     )
     completed_audits = completed_result.scalar()
 
-    avg_result = await db.execute(
-        select(func.avg(UVDBAudit.percentage_score)).where(
-            UVDBAudit.status == "completed",
-            UVDBAudit.percentage_score.isnot(None),
-            *tenant_filter,
-        )
-    )
-    avg_score = avg_result.scalar() or 0
+    score_filters = [
+        UVDBAudit.status == "completed",
+        UVDBAudit.percentage_score.isnot(None),
+        *tenant_filter,
+    ]
+    avg_result = await db.execute(select(func.avg(UVDBAudit.percentage_score)).where(*score_filters))
+    avg_score = avg_result.scalar()
+
+    scored_result = await db.execute(select(func.count()).select_from(UVDBAudit).where(*score_filters))
+    scored_audits = scored_result.scalar() or 0
 
     coverage = build_content_coverage()
 
@@ -648,7 +776,10 @@ async def get_uvdb_dashboard(
             "total_audits": total_audits,
             "active_audits": active_audits,
             "completed_audits": completed_audits,
-            "average_score": round(avg_score, 1),
+            # None, not 0.0 — completed audits with no recorded score are not
+            # an average of zero, and an empty population is not 100%.
+            "average_score": round(float(avg_score), 1) if avg_score is not None else None,
+            "scored_audits": scored_audits,
         },
         "protocol": {
             "name": "UVDB Verify B2",

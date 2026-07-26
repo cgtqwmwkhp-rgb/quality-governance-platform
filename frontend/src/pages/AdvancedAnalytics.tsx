@@ -35,6 +35,7 @@ import {
 import { cn } from '../helpers/utils'
 import { Button } from '../components/ui/Button'
 import { analyticsApi } from '../api/client'
+import { formatPercent } from '../utils/percentage'
 
 interface KPIData {
   incidents: {
@@ -55,7 +56,8 @@ interface KPIData {
     total: number
     completed: number
     in_progress: number
-    avg_score: number
+    /** null when no completed run in the period carried a score. */
+    avg_score: number | null
     trend: number
   }
   risks: { total: number; high: number; medium: number; low: number; mitigated: number }
@@ -131,7 +133,7 @@ export default function AdvancedAnalytics() {
       total: 0,
       completed: 0,
       in_progress: 0,
-      avg_score: 0,
+      avg_score: null,
       trend: 0,
     }
     try {
@@ -143,7 +145,7 @@ export default function AdvancedAnalytics() {
           total: Number(audits.total ?? 0),
           completed: Number(audits.completed ?? 0),
           in_progress: Number(audits.in_progress ?? 0),
-          avg_score: Number(audits.avg_score ?? 0),
+          avg_score: audits.avg_score == null ? null : Number(audits.avg_score),
           trend: Number(audits.trend ?? 0),
         }
       }
@@ -462,7 +464,7 @@ export default function AdvancedAnalytics() {
             />
             <KPICard
               title="Audit Score"
-              value={`${kpis.audits.avg_score}%`}
+              value={formatPercent(kpis.audits.avg_score)}
               subtitle={`${kpis.audits.completed} completed`}
               trend={kpis.audits.trend}
               icon={Shield}
@@ -672,7 +674,9 @@ export default function AdvancedAnalytics() {
                 available as a live data source.
               </p>
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-foreground">{kpis.audits.avg_score}%</span>
+                <span className="text-3xl font-bold text-foreground">
+                  {formatPercent(kpis.audits.avg_score)}
+                </span>
                 <span className="text-sm text-muted-foreground">
                   avg score · {kpis.audits.completed} completed
                 </span>
