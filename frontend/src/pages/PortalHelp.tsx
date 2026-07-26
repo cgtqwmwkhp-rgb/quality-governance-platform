@@ -108,77 +108,48 @@ export default function PortalHelp() {
   const [feedbackGiven, setFeedbackGiven] = useState<{ [key: number]: 'up' | 'down' | null }>({})
   const contacts = getPortalHelpContacts()
 
-  const categories = [
-    {
-      id: 'reporting',
-      icon: FileText,
-      title: 'Reporting Issues',
-      description: 'How to submit reports',
-      count: 8,
-      colorClass: 'bg-info/10 text-info',
-    },
-    {
-      id: 'anonymous',
-      icon: Shield,
-      title: 'Anonymous Reports',
-      description: 'Privacy & confidentiality',
-      count: 5,
-      colorClass: 'bg-purple-100 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400',
-    },
-    {
-      id: 'tracking',
-      icon: Clock,
-      title: 'Tracking Status',
-      description: 'Follow up on reports',
-      count: 6,
-      colorClass: 'bg-success/10 text-success',
-    },
-    {
-      id: 'emergency',
-      icon: AlertTriangle,
-      title: 'Emergencies',
-      description: 'Urgent situations',
-      count: 4,
-      colorClass: 'bg-destructive/10 text-destructive',
-    },
-  ]
-
   const faqs = [
     {
       category: 'reporting',
       question: 'How do I submit a report?',
       answer:
-        'From the Portal home page, select "Submit a Report" and choose the type. Fill in the required fields (title and description), optionally add your location and contact details, then click Submit. You\'ll receive a reference number immediately.',
+        'From the Portal home page, select "Submit a Report" and choose the type. Each type opens a short guided form that asks for the customer, who was involved, the location, the date and time, and a description of what happened. Required fields must be completed before you can move to the next step. Your reference number is shown as soon as the report is submitted.',
     },
     {
       category: 'reporting',
       question: 'What types of incidents should I report?',
       answer:
-        'You should report any safety hazards, accidents, near-misses, equipment failures, workplace injuries, environmental concerns, or any situation that could harm employees or visitors. When in doubt, report it!',
+        'The portal covers four types: Incident (an injury or accident), Near Miss (a close call where nobody was hurt), Customer Complaint, and Road Traffic Collision involving a company vehicle. If you have seen a hazard that does not fit one of those, report it as a near miss and explain it in the description. When in doubt, report it!',
     },
     {
-      category: 'anonymous',
-      question: 'Is my identity really protected when I report anonymously?',
+      category: 'privacy',
+      question: 'Can I submit a report anonymously?',
       answer:
-        "Yes, 100%. When you enable the anonymous toggle, no personal information is recorded. We don't track IP addresses or device information for anonymous reports. Only the report content is stored.",
+        'No. Reports submitted through the portal are attributable: your name and contact details are recorded with the report and are visible to the team who review it. If you do not feel able to put your name to a concern, use the contact options at the bottom of this page to speak to the safety team before you submit.',
     },
     {
-      category: 'anonymous',
-      question: 'Can I still track my anonymous report?',
+      category: 'privacy',
+      question: 'What information is recorded when I submit a report?',
       answer:
-        "Yes! When you submit an anonymous report, you'll receive a secret tracking code along with your reference number. Save this code - it's the only way to check your report's status.",
+        'The details you enter on the form are stored with your report, along with your name, the contact details you provide, and the date and time of submission. Your report can be traced back to you, so please treat anything you submit as attributable.',
     },
     {
       category: 'tracking',
       question: 'What do the different status labels mean?',
       answer:
-        'Submitted = We received your report. Under Investigation = A team member is reviewing it. In Progress = Actions are being taken. Resolved = The issue has been addressed. Closed = Case is complete.',
+        'Reported (or Open) = we have received your report. Under Investigation = someone is reviewing it. In Progress = actions are being taken. Pending Review = the actions taken are waiting to be signed off. Resolved and Closed = the issue has been dealt with and the case is complete.',
+    },
+    {
+      category: 'tracking',
+      question: 'How do I check the status of my report?',
+      answer:
+        'Select "Track my report" and enter the reference number you were given when you submitted. If you are signed in to the portal, your recent reports are also listed there, so you can open one without typing a reference number.',
     },
     {
       category: 'tracking',
       question: 'How long does it take to resolve a report?',
       answer:
-        'Most reports are acknowledged within 24 hours and resolved within 3-5 business days. Critical safety issues are addressed immediately. You can always check your status using your reference number.',
+        'Timescales depend on the type and severity of what you report, and critical safety issues are prioritised. The portal does not set a fixed response time, so use "Track my report" to see the current status and the latest updates on your case.',
     },
     {
       category: 'emergency',
@@ -191,6 +162,43 @@ export default function PortalHelp() {
       question: 'Should I call 999 or use the portal for emergencies?',
       answer:
         'For life-threatening emergencies, ALWAYS call 999 first. Use the portal to document the incident after the immediate danger has been addressed.',
+    },
+  ]
+
+  const countFor = (categoryId: string) => faqs.filter((faq) => faq.category === categoryId).length
+
+  const categories = [
+    {
+      id: 'reporting',
+      icon: FileText,
+      title: 'Reporting Issues',
+      description: 'How to submit reports',
+      count: countFor('reporting'),
+      colorClass: 'bg-info/10 text-info',
+    },
+    {
+      id: 'privacy',
+      icon: Shield,
+      title: 'Privacy',
+      description: 'What we record about you',
+      count: countFor('privacy'),
+      colorClass: 'bg-purple-100 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400',
+    },
+    {
+      id: 'tracking',
+      icon: Clock,
+      title: 'Tracking Status',
+      description: 'Follow up on reports',
+      count: countFor('tracking'),
+      colorClass: 'bg-success/10 text-success',
+    },
+    {
+      id: 'emergency',
+      icon: AlertTriangle,
+      title: 'Emergencies',
+      description: 'Urgent situations',
+      count: countFor('emergency'),
+      colorClass: 'bg-destructive/10 text-destructive',
     },
   ]
 
