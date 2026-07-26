@@ -77,6 +77,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { cn } from '../helpers/utils'
+import { portalRequiredProps } from '../utils/portalFormA11y'
 
 // PE Vehicle options
 const PE_VEHICLES = [
@@ -170,6 +171,24 @@ interface FormData {
 }
 
 type Step = 1 | 2 | 3 | 4 | 5
+
+/** Pure step gate used by Continue/Submit — exported for regression tests (PX-277). */
+export function portalRtaCanProceed(step: Step, formData: FormData): boolean {
+  switch (step) {
+    case 1:
+      return !!formData.employeeName && !!formData.peVehicle && formData.hasPassengers !== null
+    case 2:
+      return !!formData.location && !!formData.accidentType
+    case 3:
+      return true
+    case 4:
+      return !!formData.damageDescription
+    case 5:
+      return !!formData.fullDescription.trim()
+    default:
+      return false
+  }
+}
 
 export default function PortalRTAForm() {
   const { t } = useTranslation()
@@ -286,6 +305,8 @@ export default function PortalRTAForm() {
 
   // Submit - uses public portal endpoint (no auth required)
   const handleSubmit = async () => {
+    if (!portalRtaCanProceed(step, formData)) return
+
     setIsSubmitting(true)
     setError(null)
 
@@ -387,22 +408,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
   }
 
   // Validation
-  const canProceed = (): boolean => {
-    switch (step) {
-      case 1:
-        return !!formData.employeeName && !!formData.peVehicle && formData.hasPassengers !== null
-      case 2:
-        return !!formData.location && !!formData.accidentType
-      case 3:
-        return true
-      case 4:
-        return !!formData.damageDescription
-      case 5:
-        return !!formData.fullDescription
-      default:
-        return false
-    }
-  }
+  const canProceed = (): boolean => portalRtaCanProceed(step, formData)
 
   // Success screen
   if (submittedRef) {
@@ -496,11 +502,13 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
                   }
                   placeholder={t('portal.full_name_placeholder')}
                   className="pl-10"
+                  {...portalRequiredProps(true)}
                 />
               </div>
             </div>
 
             <FuzzySearchDropdown
+              id="portalrtaform-field-pe-vehicle"
               label={t('portal.pe_vehicle_reg')}
               options={PE_VEHICLES}
               value={formData.peVehicle}
@@ -589,6 +597,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
                   onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
                   placeholder={t('portal.road_placeholder')}
                   className="pl-10 pr-16"
+                  {...portalRequiredProps(true)}
                 />
                 <button
                   type="button"
@@ -906,6 +915,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
                 }
                 placeholder={t('portal.describe_damage')}
                 rows={3}
+                {...portalRequiredProps(true)}
               />
             </div>
 
@@ -1053,6 +1063,8 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
                   }
                   placeholder={t('portal.describe_exactly')}
                   rows={6}
+                  data-testid="rta-full-description"
+                  {...portalRequiredProps(true)}
                 />
                 <button
                   type="button"
@@ -1210,7 +1222,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
             <Button
               data-testid="submit-rta-btn"
               onClick={handleSubmit}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !canProceed()}
               className="flex-1 bg-success hover:bg-success/90"
             >
               {isSubmitting ? (

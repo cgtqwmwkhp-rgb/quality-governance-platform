@@ -15,6 +15,8 @@ interface FuzzySearchDropdownProps {
   onChange: (value: string) => void
   placeholder?: string
   label?: string
+  /** DOM id for the trigger control; also wires the label `htmlFor`. */
+  id?: string
   required?: boolean
   allowCustom?: boolean
   disabled?: boolean
@@ -26,6 +28,7 @@ export default function FuzzySearchDropdown({
   onChange,
   placeholder = 'Search or select...',
   label,
+  id,
   required,
   allowCustom = false,
   disabled = false,
@@ -91,7 +94,7 @@ export default function FuzzySearchDropdown({
   return (
     <div className="w-full" ref={containerRef}>
       {label && (
-        <label className="block text-sm font-medium text-foreground mb-2">
+        <label htmlFor={id} className="block text-sm font-medium text-foreground mb-2">
           {label}
           {required && <span className="text-destructive ml-1">*</span>}
         </label>
@@ -100,9 +103,11 @@ export default function FuzzySearchDropdown({
       <div className="relative">
         {/* Selected value display / Trigger */}
         <button
+          id={id}
           type="button"
           onClick={() => !disabled && setIsOpen(!isOpen)}
           disabled={disabled}
+          aria-required={required ? 'true' : undefined}
           className={cn(
             'w-full flex items-center justify-between gap-2 px-4 py-3',
             'bg-card border border-border rounded-xl text-left',
