@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { cn } from '../helpers/utils'
+import { formatDisplayDate } from '../helpers/formatters'
 import {
   Shield,
   Leaf,
@@ -2022,7 +2023,7 @@ export default function UVDBAudits() {
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-foreground">
-                                {audit.audit_date || 'TBD'}
+                                {audit.audit_date ? formatDisplayDate(audit.audit_date) : 'TBD'}
                               </td>
                               <td className="px-4 py-3 text-foreground">{audit.lead_auditor}</td>
                               <td className="px-4 py-3 text-center">

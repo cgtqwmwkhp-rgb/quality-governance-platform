@@ -30,6 +30,9 @@ export function parseCustomerAuditsSection(value: string | null): CustomerAudits
   return 'runs'
 }
 
+/** Deep-link to the shared Audits import dialog (PX-260). */
+export const AUDITS_IMPORT_MODAL_PATH = '/audits?modal=import'
+
 export function filterCustomerAssuranceRuns(audits: AuditRun[]): AuditRun[] {
   return audits.filter(isCustomerAssuranceAudit)
 }

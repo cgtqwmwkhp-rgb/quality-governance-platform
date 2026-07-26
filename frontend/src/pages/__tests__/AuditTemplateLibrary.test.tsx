@@ -180,6 +180,26 @@ describe('AuditTemplateLibrary', () => {
     })
   })
 
+  it('PX-265: All category pill matches the loaded template total', async () => {
+    auditsApi.listTemplates.mockResolvedValue({
+      data: { items: MOCK_TEMPLATES, total: 23 },
+    })
+    auditsApi.listCategories.mockResolvedValue({
+      data: [
+        { category: 'Vehicles', count: 8 },
+        { category: 'Plant & Machinery', count: 6 },
+      ],
+    })
+
+    setup()
+
+    await waitFor(() => {
+      expect(screen.getByText(/Showing 2 of 23 templates/i)).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('tab', { name: 'All Categories' })).toHaveTextContent('23')
+  })
+
   it('filters templates when typing in search input', async () => {
     setup()
 
