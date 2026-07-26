@@ -9,6 +9,14 @@ export function portalFieldId(fieldName: string): string {
   return `portal-field-${fieldName}`
 }
 
+/**
+ * Strip a trailing required marker from a label when the control already
+ * renders its own asterisk (PX-159 — "Customer / Site **").
+ */
+export function portalStripRequiredMarker(label: string): string {
+  return label.replace(/\s*\*+\s*$/u, '').trimEnd()
+}
+
 /** Props for native input/select/textarea controls. */
 export function portalRequiredProps(required: boolean): {
   required?: true
