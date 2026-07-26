@@ -3,7 +3,7 @@
 # P0 workflows must complete successfully for production readiness
 
 version: "1.0"
-last_updated: "2026-07-09"
+last_updated: "2026-07-26"
 
 # ==============================================================================
 # P0 CRITICAL WORKFLOWS - Must Pass for Production
@@ -31,6 +31,23 @@ p0_workflows:
         selector: "[data-testid='report-incident-card']"
         exit_criteria: "Incident form loads with required fields"
         
+      # OPEN — needs a live staging database to close. The expected field name is
+      # correct against everything the repository defines: the incident template's
+      # first step declares a field named `contract`
+      # (frontend/src/pages/PortalDynamicForm.tsx, FALLBACK_TEMPLATES.incident) and
+      # DynamicFormRenderer emits `data-testid="field-${field.name}"`. There is no
+      # form-template seed in the repo — the live template is authored through the
+      # admin form builder and stored in the database — so a rename made there
+      # cannot be detected from source.
+      #
+      # The 2026-07-25 gate failure was NOT a rename. The workflow artifact shows
+      # the page requested the template and `lookup/customers` and then stopped,
+      # never requesting `workforce_roles` or `medical_assistance` — the
+      # early-return branch PortalDynamicForm takes when the customers lookup
+      # rejects, in which case no template renders and no field of any name exists.
+      # The page-audit artifact from the same run shows the API host returning 503
+      # to the frontend throughout. Fix the environment first; only then is a
+      # remaining failure here evidence about the field itself.
       - stepId: 4
         action: "Fill first form step (contract)"
         form_fields:

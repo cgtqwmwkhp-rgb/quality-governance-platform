@@ -259,7 +259,9 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
             
           } catch (error: any) {
             stepResult.result = 'FAIL';
-            stepResult.error = error.message?.slice(0, 100);
+            // 100 chars truncated mid-selector, so the artifact could not say which
+            // element was missing. Keep it bounded but long enough to be actionable.
+            stepResult.error = error.message?.slice(0, 500);
           }
           
           stepResult.duration_ms = Date.now() - stepStartTime;
