@@ -230,7 +230,6 @@ interface Risk {
   is_within_appetite: boolean
   risk_owner_name: string
   next_review_date: string | null
-  last_review_date?: string | null
   updated_at?: string | null
   trend?: ScoreTrend | null
   is_escalated?: boolean
@@ -483,7 +482,6 @@ export default function RiskRegister() {
           is_within_appetite: r.is_within_appetite ?? true,
           risk_owner_name: r.risk_owner_name ?? r.risk_owner ?? '',
           next_review_date: r.next_review_date ?? r.review_date ?? null,
-          last_review_date: r.last_review_date ?? null,
           updated_at: r.updated_at ?? null,
           trend:
             r.trend === 'increasing' || r.trend === 'stable' || r.trend === 'decreasing'
