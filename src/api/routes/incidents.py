@@ -451,6 +451,10 @@ async def list_incidents(
         None,
         description="Comma-separated incident ids (Safety Insights theme deep-link)",
     ),
+    search: Optional[str] = Query(
+        None,
+        description="Match reference, title, or description (ilike)",
+    ),
 ) -> IncidentListResponse:
     """
     List all incidents with deterministic ordering.
@@ -509,6 +513,7 @@ async def list_incidents(
             owner=owner,
             asset_id=asset_id,
             ids=id_list,
+            search=search if isinstance(search, str) else None,
             skip_tenant_check=current_user.is_superuser,
         )
         items: list[IncidentResponse] = []
