@@ -67,7 +67,7 @@ describe('classifyContactValue', () => {
   })
 })
 
-describe('PX-281 regression: complaint contact never violates the 20-char phone limit', () => {
+describe('PX-281 regression: complaint contact never violates the API phone limit', () => {
   const CONTACT_VALUES = [
     'sam.complainant@averylongcompanyname.co.uk',
     'a.very.long.email.address.indeed@subdomain.example-company.org',
@@ -92,7 +92,7 @@ describe('PX-281 regression: complaint contact never violates the 20-char phone 
 
   it('does not put an email address into reporter_phone', () => {
     const email = 'sam.complainant@averylongcompanyname.co.uk'
-    expect(email.length).toBeGreaterThan(REPORTER_PHONE_MAX_LENGTH)
+    expect(classifyContactValue(email).kind).toBe('email')
 
     const payload = buildComplaint(complaintForm({ complainant_contact: email }))
 
@@ -141,7 +141,7 @@ describe('buildPortalReportPayload contact routing', () => {
   })
 
   it('routes an over-long phone number into the details rather than reporter_phone', () => {
-    const longPhone = '0044 (0) 1234 567 890'
+    const longPhone = '+44 (0) ' + '1234 567 '.repeat(8).trim()
     expect(classifyContactValue(longPhone).kind).toBe('phone')
     expect(longPhone.length).toBeGreaterThan(REPORTER_PHONE_MAX_LENGTH)
 
@@ -208,7 +208,7 @@ describe('buildPortalReportPayload behaviour preserved for other form types', ()
 describe('validatePortalFormData', () => {
   it('blocks a phone number longer than the API allows, with an actionable message', () => {
     const errors = validatePortalFormData({
-      complainant_contact: '0044 (0) 1234 567 890',
+      complainant_contact: '+44 (0) ' + '1234 567 '.repeat(8).trim(),
     })
 
     expect(errors.complainant_contact).toBeDefined()

@@ -9,13 +9,14 @@ Provides simplified, mobile-first endpoints for:
 import hashlib
 import hmac
 import logging
+import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Literal, Optional
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile, status
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from sqlalchemy import String, cast, func, literal, select, union_all
 from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 
@@ -90,6 +91,53 @@ _PORTAL_SUCCESS_COPY = {
 # Schemas for Employee Portal
 # ============================================================================
 
+# Aligned to the narrowest DB column each field maps into (PX-281 backend half).
+PORTAL_REPORTER_NAME_MAX_LENGTH = 200  # complaints.complainant_name, near_misses.reporter_name
+PORTAL_REPORTER_PHONE_MAX_LENGTH = 50  # near_misses.reporter_phone
+PORTAL_COMPLAINANT_PHONE_DB_LENGTH = 30  # complaints.complainant_phone
+PORTAL_LOCATION_MAX_LENGTH = 500  # rtas.location
+PORTAL_INCIDENT_LOCATION_DB_LENGTH = 300  # incidents.location
+
+_EMAIL_LIKE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def looks_like_email(value: str) -> bool:
+    """True when a free-text contact value is almost certainly an email address."""
+    return bool(_EMAIL_LIKE.match(value.strip()))
+
+
+def normalize_portal_contact(
+    reporter_email: Optional[str],
+    reporter_phone: Optional[str],
+) -> tuple[Optional[str], Optional[str]]:
+    """Route email-shaped ``reporter_phone`` values to ``reporter_email``.
+
+    Non-portal callers (legacy static forms, integrations) may still map a contact
+    field straight into ``reporter_phone``. Accept the payload and normalise rather
+    than returning HTTP 422 for a realistic work email (PX-281).
+    """
+    phone = reporter_phone.strip() if isinstance(reporter_phone, str) and reporter_phone.strip() else None
+    email = reporter_email
+    if phone and looks_like_email(phone):
+        if not email:
+            email = phone
+        phone = None
+    return email, phone
+
+
+def clip_portal_phone_for_complaint(phone: Optional[str]) -> Optional[str]:
+    """Fit a normalised phone value into complaints.complainant_phone (varchar 30)."""
+    if not phone:
+        return None
+    return phone[:PORTAL_COMPLAINANT_PHONE_DB_LENGTH]
+
+
+def clip_portal_location_for_incident(location: Optional[str]) -> Optional[str]:
+    """Fit a portal location into incidents.location (varchar 300)."""
+    if not location:
+        return None
+    return location[:PORTAL_INCIDENT_LOCATION_DB_LENGTH]
+
 
 def _normalized_status(value: str) -> str:
     """Field validator body: emit one status casing on every portal read (PX-316)."""
@@ -102,19 +150,19 @@ class QuickReportCreate(BaseModel):
     report_type: str = Field(..., description="Type: 'incident' or 'complaint'")
     title: str = Field(..., min_length=5, max_length=200, description="Brief title")
     description: str = Field(..., min_length=10, description="What happened?")
-    location: Optional[str] = Field(None, max_length=200, description="Where did it occur?")
+    location: Optional[str] = Field(None, max_length=PORTAL_LOCATION_MAX_LENGTH, description="Where did it occur?")
     severity: str = Field(default="medium", description="Severity: low, medium, high, critical")
 
     # Reporter info (optional for anonymous). complainant_name is accepted as an alias
     # for complaint intake clients that use the staff-schema field name.
-    reporter_name: Optional[str] = Field(None, max_length=100)
+    reporter_name: Optional[str] = Field(None, max_length=PORTAL_REPORTER_NAME_MAX_LENGTH)
     complainant_name: Optional[str] = Field(
         None,
-        max_length=200,
+        max_length=PORTAL_REPORTER_NAME_MAX_LENGTH,
         description="Alias for reporter_name on complaint submissions",
     )
     reporter_email: Optional[EmailStr] = None
-    reporter_phone: Optional[str] = Field(None, max_length=20)
+    reporter_phone: Optional[str] = Field(None, max_length=PORTAL_REPORTER_PHONE_MAX_LENGTH)
     department: Optional[str] = Field(None, max_length=100)
 
     # Anonymous flag
@@ -135,6 +183,13 @@ class QuickReportCreate(BaseModel):
         description="Optional idempotency key; retried submissions with the same key "
         "return the original result instead of creating a duplicate case.",
     )
+
+    @model_validator(mode="after")
+    def normalize_contact_fields(self) -> "QuickReportCreate":
+        email, phone = normalize_portal_contact(self.reporter_email, self.reporter_phone)
+        self.reporter_email = email
+        self.reporter_phone = phone
+        return self
 
 
 def resolve_portal_display_name(
@@ -534,7 +589,7 @@ def build_incident_portal_fields(
         "incident_type": IncidentType.OTHER,
         "severity": incident_severity,
         "status": IncidentStatus.REPORTED,
-        "location": report.location,
+        "location": clip_portal_location_for_incident(report.location),
         "department": report.department,
         "incident_date": incident_occurred_at,
         "reported_date": datetime.now(timezone.utc),
@@ -570,7 +625,9 @@ def build_complaint_portal_fields(
         "received_date": datetime.now(timezone.utc),
         "complainant_name": display_name,
         "complainant_email": (report.reporter_email if not report.is_anonymous else None),
-        "complainant_phone": (report.reporter_phone if not report.is_anonymous else None),
+        "complainant_phone": (
+            clip_portal_phone_for_complaint(report.reporter_phone) if not report.is_anonymous else None
+        ),
         "department": report.department,
         "source_form_id": "portal_complaint_v1",
         "source_type": "portal",

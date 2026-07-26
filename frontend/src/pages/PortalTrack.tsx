@@ -21,7 +21,7 @@ import {
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import { cn } from '../helpers/utils'
+import { cn, decodeHtmlEntities } from '../helpers/utils'
 import { usePortalAuth } from '../contexts/PortalAuthContext'
 import ReportChat from '../components/ReportChat'
 import { API_BASE_URL } from '../config/apiBase'
@@ -85,14 +85,19 @@ const STATUS_LABELS: Record<string, string> = {
 
 const getStatusLabel = (status: string): string => STATUS_LABELS[status] || status || 'Unknown'
 
+const displayPortalText = (value: unknown): string => {
+  if (value == null || value === '') return ''
+  return decodeHtmlEntities(String(value))
+}
+
 const toReportSummary = (item: Record<string, unknown>): ReportSummary => {
   const status = normalizeStatus(item.status)
   return {
     reference_number: String(item.reference_number ?? ''),
     report_type: normalizeReportType(item.report_type),
-    title: String(item.title ?? ''),
+    title: displayPortalText(item.title),
     status,
-    status_label: (item.status_label as string) || getStatusLabel(status),
+    status_label: displayPortalText(item.status_label) || getStatusLabel(status),
     submitted_at: String(item.submitted_at ?? ''),
     updated_at: String(item.updated_at ?? ''),
   }
@@ -100,10 +105,15 @@ const toReportSummary = (item: Record<string, unknown>): ReportSummary => {
 
 const toReportDetail = (item: Record<string, unknown>): ReportDetail => ({
   ...toReportSummary(item),
-  priority: String(item.priority ?? ''),
-  timeline: Array.isArray(item.timeline) ? (item.timeline as ReportDetail['timeline']) : [],
-  next_steps: String(item.next_steps ?? ''),
-  assigned_to: String(item.assigned_to ?? ''),
+  priority: displayPortalText(item.priority),
+  timeline: Array.isArray(item.timeline)
+    ? (item.timeline as ReportDetail['timeline']).map((entry) => ({
+        ...entry,
+        event: displayPortalText(entry.event),
+      }))
+    : [],
+  next_steps: displayPortalText(item.next_steps),
+  assigned_to: displayPortalText(item.assigned_to),
 })
 
 // Report type config
