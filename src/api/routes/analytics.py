@@ -307,8 +307,19 @@ async def get_kpi_summary(
             "mitigated": 0,
         },
         "compliance": {
+            "policy_acknowledgment_rate": compliance.get("completion_rate"),
             "overall_score": compliance.get("completion_rate"),
             "policy_overdue": compliance.get("overdue", 0),
+        },
+        "score_definitions": {
+            "health_score": (
+                "Weighted composite of incidents, near misses, risks, KRIs, "
+                "policy acknowledgments, and SLA performance for the selected period."
+            ),
+            "policy_acknowledgment_rate": (
+                "Share of assigned policy-reading campaigns completed — not ISO evidence coverage."
+            ),
+            "audit_avg_score": ("Mean score_percentage of completed audit runs created in the selected period."),
         },
         "training": analytics_service.get_kpi_summary(time_range).get("training"),
         "source": "executive_dashboard",

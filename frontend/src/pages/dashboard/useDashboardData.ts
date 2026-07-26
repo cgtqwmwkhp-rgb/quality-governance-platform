@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   actionsApi,
-  auditsApi,
   complaintsApi,
   engineersApi,
   executiveDashboardApi,
@@ -35,6 +34,7 @@ import type { PortalMyCompliance } from '../../api/portalComplianceClient'
 import type { ActionsViewCounts } from '../../api/actionsClient'
 import { weeklyToSparkPoints, type SparkPoint } from './PulseSparkline'
 import type { RecentCaseRow, RecentCasesData } from './RecentCasesPanel'
+import { auditScoreMetricFromDashboard } from './auditPulseMetrics'
 
 /** Org role tiers used across the app ('manager' on most governance routes, 'supervisor' on workforce routes). */
 const ORG_ROLE_NAMES = ['admin', 'manager', 'supervisor'] as const
@@ -89,14 +89,6 @@ export interface DashboardData {
   refresh: () => void
 }
 
-function auditAverageScore(runs: { status: string; score_percentage?: number | null }[]): number {
-  const completed = runs.filter((r) => r.status === 'completed' && r.score_percentage != null)
-  if (completed.length === 0) return 0
-  return Math.round(
-    completed.reduce((sum, r) => sum + (r.score_percentage ?? 0), 0) / completed.length,
-  )
-}
-
 function seriesMetric(
   trendsOk: boolean,
   series: { week_start: string; count?: number; value?: number | null }[] | undefined,
@@ -104,32 +96,6 @@ function seriesMetric(
   if (!trendsOk) return metricUnavailable()
   const points = weeklyToSparkPoints(series)
   return points.length >= 2 ? metricOk(points) : metricUnavailable()
-}
-
-/** Weekly avg score from the same completed runs used for the audit headline %. */
-function auditSeriesFromRuns(
-  runs: { status: string; score_percentage?: number | null; completed_at?: string | null }[],
-): SparkPoint[] {
-  const buckets = new Map<string, number[]>()
-  for (const run of runs) {
-    if (run.status !== 'completed' || run.score_percentage == null || !run.completed_at) continue
-    const d = new Date(run.completed_at)
-    if (Number.isNaN(d.getTime())) continue
-    // Monday-start week key (UTC) — enough for a directional sparkline.
-    const day = d.getUTCDay()
-    const mondayOffset = day === 0 ? -6 : 1 - day
-    const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + mondayOffset))
-    const key = monday.toISOString().slice(0, 10)
-    const list = buckets.get(key) ?? []
-    list.push(run.score_percentage)
-    buckets.set(key, list)
-  }
-  return [...buckets.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([t, scores]) => ({
-      t,
-      v: Math.round(scores.reduce((s, n) => s + n, 0) / scores.length),
-    }))
 }
 
 function emptyPulse(): PulseData {
@@ -228,7 +194,6 @@ export function useDashboardData(): DashboardData {
         incidentsRes,
         execDash7Res,
         execDash56Res,
-        auditRunsRes,
         trainingSummaryRes,
         assetHealthRes,
         riskSummaryRes,
@@ -248,7 +213,6 @@ export function useDashboardData(): DashboardData {
         wantOrg ? executiveDashboardApi.getDashboard(7) : Promise.reject(new Error('skip')),
         // Weekly sparkline series (8 weeks).
         wantOrg ? executiveDashboardApi.getDashboard(56) : Promise.reject(new Error('skip')),
-        wantOrg ? auditsApi.listRuns(1, 100) : Promise.reject(new Error('skip')),
         wantOrg ? trainingMatrixApi.getSummary() : Promise.reject(new Error('skip')),
         wantOrg ? assetHealthAnalyticsApi.getSummary() : Promise.reject(new Error('skip')),
         wantOrg ? riskRegisterApi.getSummary() : Promise.reject(new Error('skip')),
@@ -289,7 +253,6 @@ export function useDashboardData(): DashboardData {
       const incidentsMetric = metricFromSettled(incidentsRes, (r) => r.data.items as Incident[])
       const execDash7Metric = metricFromSettled(execDash7Res, (r) => r.data)
       const execDash56Metric = metricFromSettled(execDash56Res, (r) => r.data)
-      const auditRunsMetric = metricFromSettled(auditRunsRes, (r) => r.data.items)
       const trainingSummaryMetric = metricFromSettled(trainingSummaryRes)
       const assetHealthMetric = metricFromSettled(assetHealthRes, (r) => r.data)
       const riskSummaryMetric = metricFromSettled(riskSummaryRes, (r) => r.data)
@@ -334,8 +297,8 @@ export function useDashboardData(): DashboardData {
             ? metricOk(execDash7Metric.value.near_misses?.total_in_period ?? 0)
             : metricUnavailable(),
         auditScorePct:
-          auditRunsMetric.status === 'ok'
-            ? { status: 'ok', value: auditAverageScore(auditRunsMetric.value) }
+          execDash7Metric.status === 'ok'
+            ? auditScoreMetricFromDashboard(execDash7Metric.value.audits)
             : metricUnavailable(),
         // Training headline is Atlas module_ok %; cell expiry backcast is a different
         // metric — omit sparkline until we have honest historical module_ok snapshots.
@@ -344,14 +307,7 @@ export function useDashboardData(): DashboardData {
         incidentsSeries: seriesMetric(trendsOk, trends?.incidents_weekly),
         complaintsSeries: seriesMetric(trendsOk, trends?.complaints_weekly),
         nearMissesSeries: seriesMetric(trendsOk, trends?.near_misses_weekly),
-        // Same completed-run set as the headline % (not exec-dashboard weekly avg).
-        auditSeries:
-          auditRunsMetric.status === 'ok'
-            ? (() => {
-                const points = auditSeriesFromRuns(auditRunsMetric.value)
-                return points.length >= 2 ? metricOk(points) : metricUnavailable()
-              })()
-            : metricUnavailable(),
+        auditSeries: seriesMetric(trendsOk, trends?.audits_weekly),
       })
 
       // ---- Org Command + recent cases ----

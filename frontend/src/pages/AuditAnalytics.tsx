@@ -81,6 +81,8 @@ export default function AuditAnalytics() {
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const days = useMemo(() => PERIOD_DAYS[range], [range])
+  const showAssetTypeFootnote =
+    groupBy === 'asset_type' && dimensions.some((item) => item.key === 'unassigned')
 
   const loadAll = async () => {
     setLoading(true)
@@ -173,8 +175,8 @@ export default function AuditAnalytics() {
             <div>
               <h1 className="text-xl font-bold text-foreground">Audit Analytics</h1>
               <p className="text-sm text-muted-foreground">
-                Reporting pack — composition-aware pass rates, essential compliance, and the
-                critical-items queue.
+                Reporting pack — last {days} days by run created date. The Audits board shows
+                all-time register totals; compare like with like.
               </p>
             </div>
           </div>
@@ -296,10 +298,17 @@ export default function AuditAnalytics() {
                 </table>
               </div>
             )}
+            {showAssetTypeFootnote && (
+              <p
+                className="text-xs text-muted-foreground mt-4"
+                data-testid="audit-analytics-asset-type-footnote"
+              >
+                Runs without an asset type (common for external or UVDB imports) appear under
+                &quot;No asset type (general/external)&quot; — not a data error.
+              </p>
+            )}
           </CardContent>
         </Card>
-
-        {/* Critical queue */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

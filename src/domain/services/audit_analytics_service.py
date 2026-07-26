@@ -233,7 +233,10 @@ class AuditAnalyticsService:
     def _dimension_key_label(run: AuditRun, group_by: str) -> tuple[str, str]:
         if group_by == "asset_type":
             if run.asset_type_id is None:
-                return "unassigned", "Unassigned"
+                return (
+                    "unassigned",
+                    "No asset type (general/external)",
+                )
             asset_type = run.__dict__.get("asset_type")
             label = asset_type.name if asset_type is not None else f"Asset type {run.asset_type_id}"
             return str(run.asset_type_id), label

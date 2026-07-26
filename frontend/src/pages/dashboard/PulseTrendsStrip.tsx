@@ -152,7 +152,7 @@ export function PulseTrendsStrip({ data }: { data: PulseData }) {
       />
       <PulseTile
         testId="pulse-audit-score"
-        label="Audit score"
+        label="Audit score (7d avg)"
         icon={ClipboardCheck}
         href="/audits"
         metric={data.auditScorePct}

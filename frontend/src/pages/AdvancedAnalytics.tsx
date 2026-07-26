@@ -61,7 +61,13 @@ interface KPIData {
     trend: number
   }
   risks: { total: number; high: number; medium: number; low: number; mitigated: number }
-  compliance: { overall_score: number; iso_9001: number; iso_14001: number; iso_45001: number }
+  compliance: {
+    overall_score: number | null
+    policy_acknowledgment_rate?: number | null
+    iso_9001: number | null
+    iso_14001: number | null
+    iso_45001: number | null
+  }
   training: { completion_rate: number; expiring_soon: number; overdue: number }
 }
 
@@ -126,41 +132,85 @@ export default function AdvancedAnalytics() {
   const loadData = async () => {
     setLoading(true)
 
-    // Audits KPIs come from the live /analytics/kpis endpoint (wired to
-    // AuditAnalyticsService). Remaining modules stay on placeholder data until
-    // their live reporting packs land.
-    let liveAudits: KPIData['audits'] = {
-      total: 0,
-      completed: 0,
-      in_progress: 0,
-      avg_score: null,
-      trend: 0,
-    }
-    try {
-      const { data } = await analyticsApi.getKPIs(timeRange)
-      const payload = data as { audits?: Partial<KPIData['audits']> } | null
-      const audits = payload?.audits
-      if (audits) {
-        liveAudits = {
-          total: Number(audits.total ?? 0),
-          completed: Number(audits.completed ?? 0),
-          in_progress: Number(audits.in_progress ?? 0),
-          avg_score: audits.avg_score == null ? null : Number(audits.avg_score),
-          trend: Number(audits.trend ?? 0),
-        }
-      }
-    } catch {
-      // Keep zeroed audits rather than inventing mock numbers.
+    const emptyKpis: KPIData = {
+      incidents: { total: 0, open: 0, closed: 0, trend: 0, avg_resolution_days: 0 },
+      actions: { total: 0, open: 0, overdue: 0, completed_on_time_rate: 0, trend: 0 },
+      audits: { total: 0, completed: 0, in_progress: 0, avg_score: null, trend: 0 },
+      risks: { total: 0, high: 0, medium: 0, low: 0, mitigated: 0 },
+      compliance: {
+        overall_score: null,
+        policy_acknowledgment_rate: null,
+        iso_9001: null,
+        iso_14001: null,
+        iso_45001: null,
+      },
+      training: { completion_rate: 0, expiring_soon: 0, overdue: 0 },
     }
 
-    setKpis({
-      incidents: { total: 47, open: 12, closed: 35, trend: -8.5, avg_resolution_days: 4.2 },
-      actions: { total: 156, open: 34, overdue: 8, completed_on_time_rate: 87.5, trend: 12.3 },
-      audits: liveAudits,
-      risks: { total: 89, high: 12, medium: 34, low: 43, mitigated: 67 },
-      compliance: { overall_score: 94.2, iso_9001: 96.1, iso_14001: 92.8, iso_45001: 93.7 },
-      training: { completion_rate: 91.2, expiring_soon: 14, overdue: 3 },
-    })
+    try {
+      const { data } = await analyticsApi.getKPIs(timeRange)
+      const payload = data as {
+        period_days?: number
+        incidents?: Partial<KPIData['incidents']>
+        actions?: Partial<KPIData['actions']>
+        audits?: Partial<KPIData['audits']>
+        risks?: Partial<KPIData['risks']>
+        compliance?: {
+          policy_acknowledgment_rate?: number | null
+          overall_score?: number | null
+        }
+        training?: Partial<KPIData['training']>
+      } | null
+
+      const policyAck =
+        payload?.compliance?.policy_acknowledgment_rate ?? payload?.compliance?.overall_score
+
+      setKpis({
+        incidents: {
+          total: Number(payload?.incidents?.total ?? 0),
+          open: Number(payload?.incidents?.open ?? 0),
+          closed: Number(payload?.incidents?.closed ?? 0),
+          trend: Number(payload?.incidents?.trend ?? 0),
+          avg_resolution_days: Number(payload?.incidents?.avg_resolution_days ?? 0),
+        },
+        actions: {
+          total: Number(payload?.actions?.total ?? 0),
+          open: Number(payload?.actions?.open ?? 0),
+          overdue: Number(payload?.actions?.overdue ?? 0),
+          completed_on_time_rate: Number(payload?.actions?.completed_on_time_rate ?? 0),
+          trend: Number(payload?.actions?.trend ?? 0),
+        },
+        audits: {
+          total: Number(payload?.audits?.total ?? 0),
+          completed: Number(payload?.audits?.completed ?? 0),
+          in_progress: Number(payload?.audits?.in_progress ?? 0),
+          avg_score:
+            payload?.audits?.avg_score == null ? null : Number(payload.audits.avg_score),
+          trend: Number(payload?.audits?.trend ?? 0),
+        },
+        risks: {
+          total: Number(payload?.risks?.total ?? 0),
+          high: Number(payload?.risks?.high ?? 0),
+          medium: Number(payload?.risks?.medium ?? 0),
+          low: Number(payload?.risks?.low ?? 0),
+          mitigated: Number(payload?.risks?.mitigated ?? 0),
+        },
+        compliance: {
+          overall_score: policyAck == null ? null : Number(policyAck),
+          policy_acknowledgment_rate: policyAck == null ? null : Number(policyAck),
+          iso_9001: null,
+          iso_14001: null,
+          iso_45001: null,
+        },
+        training: {
+          completion_rate: Number(payload?.training?.completion_rate ?? 0),
+          expiring_soon: Number(payload?.training?.expiring_soon ?? 0),
+          overdue: Number(payload?.training?.overdue ?? 0),
+        },
+      })
+    } catch {
+      setKpis(emptyKpis)
+    }
 
     setCosts({
       total_cost: 127500,
@@ -472,9 +522,13 @@ export default function AdvancedAnalytics() {
               onClick={() => navigate('/audits/analytics')}
             />
             <KPICard
-              title="Compliance"
-              value={`${kpis.compliance.overall_score}%`}
-              subtitle="Overall score"
+              title="Policy acknowledgment"
+              value={
+                kpis.compliance.overall_score == null
+                  ? '—'
+                  : `${kpis.compliance.overall_score}%`
+              }
+              subtitle="Campaign reading completion (not ISO evidence)"
               icon={Award}
               color="emerald"
               onClick={() => handleDrillDown('compliance', 'standard', 'all')}
