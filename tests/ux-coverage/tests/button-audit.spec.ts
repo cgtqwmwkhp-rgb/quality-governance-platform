@@ -24,6 +24,7 @@ interface ButtonEntry {
   actionId: string;
   selector: string;
   fallback_selector?: string;
+  requires_hub?: string;
   criticality: string;
   expected_outcome: string;
   expected_route?: string;
@@ -37,6 +38,12 @@ interface ButtonAuditResult {
   pageId: string;
   actionId: string;
   selector: string;
+  /**
+   * The selector that actually resolved the element. Without this a pass looks
+   * like it came from the named data-testid even when a broad fallback matched
+   * some unrelated element, which is how a false pass hides in the artifact.
+   */
+  matched_selector?: string;
   criticality: string;
   result: 'PASS' | 'FAIL' | 'SKIP';
   found: boolean;
@@ -80,6 +87,36 @@ function loadPageRoute(pageId: string): string | null {
 
 // Test storage
 const buttonAuditResults: ButtonAuditResult[] = [];
+
+/**
+ * Admin sidebar navigation is organised into collapsible hubs. A hub's links are
+ * unmounted while the hub is collapsed, and every hub starts collapsed on a page
+ * that is not itself inside one (e.g. /dashboard). Registry entries that target a
+ * sidebar link therefore declare `requires_hub`, and we perform the same first
+ * step a real user does: open the hub, then click the link.
+ *
+ * Throws if the hub is absent or refuses to open — an unreachable navigation hub
+ * is a genuine failure, not a reason to skip the assertion.
+ */
+async function expandNavHub(page: Page, hubId: string): Promise<void> {
+  const toggle = page.locator(`[data-testid='nav-hub-btn-${hubId}']`);
+  try {
+    await toggle.waitFor({ state: 'visible', timeout: 10000 });
+  } catch {
+    throw new Error(`Navigation hub '${hubId}' not present in sidebar`);
+  }
+
+  if ((await toggle.getAttribute('aria-expanded')) === 'true') return;
+
+  await toggle.click({ timeout: 5000 });
+  try {
+    await page
+      .locator(`[data-testid='nav-hub-btn-${hubId}'][aria-expanded='true']`)
+      .waitFor({ state: 'visible', timeout: 5000 });
+  } catch {
+    throw new Error(`Navigation hub '${hubId}' did not expand when clicked`);
+  }
+}
 
 // Auth helper — uses addInitScript to inject token before any page JS runs,
 // avoiding SSO redirects that break the navigate-then-evaluate approach.
@@ -177,14 +214,25 @@ test.describe('Button Wiring Audit', () => {
         await page.goto(route, { waitUntil: 'networkidle', timeout: 30000 });
         await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
         
+        // Open the containing sidebar hub for nav links (10-hub IA)
+        if (buttonEntry.requires_hub) {
+          await expandNavHub(page, buttonEntry.requires_hub);
+        }
+        
         // Try to find button with primary selector
         let button = page.locator(buttonEntry.selector).first();
         let buttonVisible = await button.isVisible().catch(() => false);
+        if (buttonVisible) {
+          result.matched_selector = buttonEntry.selector;
+        }
         
         // Try fallback selector if primary not found
         if (!buttonVisible && buttonEntry.fallback_selector) {
           button = page.locator(buttonEntry.fallback_selector).first();
           buttonVisible = await button.isVisible().catch(() => false);
+          if (buttonVisible) {
+            result.matched_selector = buttonEntry.fallback_selector;
+          }
         }
         
         if (!buttonVisible) {
