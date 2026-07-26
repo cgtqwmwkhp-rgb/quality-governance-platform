@@ -17,10 +17,11 @@ from src.core.config import settings
 
 COPILOT_PREFIX = "/api/v1/copilot"
 
-# Every copilot HTTP route currently mounted, as (method, path). Routes are identified by
-# their published method and path rather than by FastAPI's route classes: the repo floats
-# on ``fastapi>=0.109,<1.0``, and the internal route objects are not stable across that
-# range, whereas method and path are the contract.
+# Every copilot HTTP operation, as (method, path), read back from the published schema.
+# The repo floats on ``fastapi>=0.109,<1.0`` and neither the route classes nor the
+# attributes of app.routes are stable across that range, so the OpenAPI document is the
+# only durable description of the surface. A route registered with
+# include_in_schema=False would therefore escape this check; none is today.
 EXPECTED_HTTP_ROUTES = {
     ("DELETE", f"{COPILOT_PREFIX}/sessions/{{session_id}}"),
     ("GET", f"{COPILOT_PREFIX}/actions"),
@@ -38,21 +39,21 @@ EXPECTED_HTTP_ROUTES = {
 }
 
 
-def mounted_copilot_http_routes() -> set[tuple[str, str]]:
-    """The copilot HTTP surface actually mounted on the app, as (method, path).
+HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 
-    HEAD is excluded because the framework derives it from GET, and the WebSocket route
-    is excluded because it carries no ``methods`` and authenticates its own token.
+
+def published_copilot_operations(app) -> set[tuple[str, str]]:
+    """The copilot HTTP surface as the published contract describes it.
+
+    A path item may legally carry non-operation keys such as ``parameters``, so only
+    method keys are collected.
     """
-    from src.main import app
-
     return {
-        (method, path)
-        for route in app.routes
-        for path in [getattr(route, "path", "")]
+        (method.upper(), path)
+        for path, operations in app.openapi()["paths"].items()
         if path.startswith(COPILOT_PREFIX)
-        for method in (getattr(route, "methods", None) or ())
-        if method != "HEAD"
+        for method in operations
+        if method.lower() in HTTP_METHODS
     }
 
 
@@ -173,14 +174,14 @@ def test_action_routes_reject_invalid_tokens_when_enabled(client: TestClient, co
     assert "create_incident" not in response.text
 
 
-def test_the_mounted_copilot_surface_is_exactly_the_matrix_above():
+def test_the_copilot_surface_is_exactly_the_matrix_above(app, copilot_enabled):
     """Tripwire: a route added later must be added to COPILOT_REQUESTS, not silently skipped.
 
-    COPILOT_REQUESTS and the authentication contract in
-    tests/unit/test_copilot_openapi_exclusion.py are both driven from that list, so an
-    unlisted route would be checked by neither.
+    COPILOT_REQUESTS drives the refusal checks here, and
+    tests/unit/test_copilot_openapi_exclusion.py asserts the authentication contract over
+    the same surface. Failing here is the prompt to update both.
     """
-    assert mounted_copilot_http_routes() == EXPECTED_HTTP_ROUTES
+    assert published_copilot_operations(app) == EXPECTED_HTTP_ROUTES
 
 
 def test_authenticated_routes_reach_auth_when_enabled(client: TestClient, copilot_enabled):
