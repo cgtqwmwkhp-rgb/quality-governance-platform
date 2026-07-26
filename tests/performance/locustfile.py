@@ -269,9 +269,24 @@ class QGPUser(HttpUser):
             name="/api/v1/portal/reports/",
         )
 
+    # PX-315 gave the track endpoint one status per failure mode. This task
+    # sends a junk 12-character code, and a valid code is a 24-hex-character
+    # HMAC of the reference, so the code can never be right: 403 is the only
+    # correct answer, and it is the same answer whether or not the reference
+    # exists, which is what stops this endpoint confirming a report was filed.
+    # 429 is allowed because rate limiting is a property of the environment
+    # rather than of the endpoint's contract — CI runs with TESTING=1 and never
+    # sees it, but a run against a rate-limited host legitimately can.
+    #
+    # Nothing else is accepted, and 404 in particular is not: it is unreachable
+    # with a wrong code, and it is the signature of the collapsed-404 contract
+    # that PX-315 removed, so accepting it would blind this guard to exactly
+    # the regression it exists to catch.
+    TRACK_EXPECTED_STATUSES = frozenset({403, 429})
+
     @task(3)
     def track_report(self):
-        """Track a report status."""
+        """Track a synthetic reference with a tracking code that cannot be right."""
         ref = f"INC-{datetime.now().year}-{random.randint(1, 9999):04d}"
         tracking_code = random_string(12)
         with self.client.get(
@@ -279,8 +294,13 @@ class QGPUser(HttpUser):
             name="/api/v1/portal/reports/[ref]/",
             catch_response=True,
         ) as response:
-            if response.status_code == 404:
-                response.success()  # Expected for non-existent
+            if response.status_code in self.TRACK_EXPECTED_STATUSES:
+                response.success()
+            else:
+                response.failure(
+                    f"wrong tracking code should be refused with 403 "
+                    f"(or 429 when rate limited), got {response.status_code}"
+                )
 
     # ========================================================================
     # Search & Analytics

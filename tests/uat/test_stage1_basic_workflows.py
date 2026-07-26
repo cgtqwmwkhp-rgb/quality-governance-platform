@@ -19,6 +19,8 @@ Note: Fixtures (client, valid_incident_report, etc.) are defined in conftest.py
 import pytest
 from httpx import AsyncClient
 
+from src.api.routes.employee_portal import generate_tracking_code
+
 # ============================================================================
 # UAT-001 to UAT-010: Employee Portal (Anonymous Reporting)
 # ============================================================================
@@ -152,11 +154,39 @@ class TestEmployeePortalWorkflows:
         assert "message" in data or ("error" in data and isinstance(data["error"], dict))
 
     @pytest.mark.asyncio
-    async def test_uat_010_track_nonexistent_report(self, client):
-        """UAT-010: Tracking non-existent report returns 404."""
+    async def test_uat_010_track_without_a_credential_is_401(self, client):
+        """UAT-010: Tracking with no tracking code and no session returns 401.
+
+        PX-315: this used to answer 404, so a user holding a genuine reference
+        who simply had not supplied their code was told the report did not
+        exist. The endpoint cannot say whether a report is there until the
+        caller has proved they may see it, so the honest answer is 401.
+        """
         response = await client.get("/api/v1/portal/reports/INC-9999-9999/")
 
-        assert response.status_code == 404
+        assert response.status_code == 401, f"Expected 401, got {response.status_code}: {response.text}"
+        assert response.json()["error"]["code"] == "AUTHENTICATION_REQUIRED"
+
+    @pytest.mark.asyncio
+    async def test_uat_010b_track_unknown_reference_with_a_valid_code_is_404(self, client):
+        """UAT-010b: A credentialled read of a reference with no report is 404.
+
+        The other half of the PX-315 contract, and the case worth protecting:
+        once the caller has proved they may see this reference, "there is no
+        such report" is the truthful answer rather than a permission error.
+        Tracking codes are a deterministic HMAC of the reference, so a valid
+        one can be computed here without seeding a row. Portal references are
+        ``INC-<year>-<8 hex>``, so this one can never collide with a real
+        report.
+        """
+        reference = "INC-9999-9999"
+        response = await client.get(
+            f"/api/v1/portal/reports/{reference}/",
+            params={"tracking_code": generate_tracking_code(reference)},
+        )
+
+        assert response.status_code == 404, f"Expected 404, got {response.status_code}: {response.text}"
+        assert response.json()["error"]["code"] == "ENTITY_NOT_FOUND"
 
 
 # ============================================================================
