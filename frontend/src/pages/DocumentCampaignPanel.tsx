@@ -27,7 +27,9 @@ import {
   CAMPAIGN_REMINDER_PRESETS,
   canLaunchCampaign,
   defaultRequireQuiz,
+  formatCampaignListLabel,
   formatCampaignReminderHours,
+  isUatCampaignArtefact,
   presetKeysFromReminderHours,
   type CampaignAudienceFormState,
   type CampaignReminderPresetKey,
@@ -459,10 +461,18 @@ export function DocumentCampaignPanel({ documentId, hasApprovedQuiz }: DocumentC
               >
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-foreground">
-                      {t('documents.detail.campaign_row_label', { id: campaign.id })}
+                    <span
+                      className="font-medium text-foreground"
+                      data-testid={`campaign-ref-${campaign.id}`}
+                    >
+                      {formatCampaignListLabel(campaign)}
                     </span>
                     <Badge variant="secondary">{campaign.status}</Badge>
+                    {isUatCampaignArtefact(campaign) ? (
+                      <Badge variant="outline" data-testid={`campaign-uat-badge-${campaign.id}`}>
+                        UAT artefact
+                      </Badge>
+                    ) : null}
                   </div>
                   {campaign.reminder_hours.length > 0 ? (
                     <span className="text-xs text-muted-foreground">
