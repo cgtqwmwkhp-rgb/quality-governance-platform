@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useDeferredValue } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
@@ -212,6 +212,7 @@ export default function Documents() {
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '')
+  const deferredSearch = useDeferredValue(searchTerm)
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
@@ -246,7 +247,13 @@ export default function Documents() {
     Map<number, CampaignComplianceRow>
   >(() => new Map())
 
-  const loadData = useCallback(async (docType?: string, status?: string, listPage = 1, categoryId?: string) => {
+  const loadData = useCallback(async (
+    docType?: string,
+    status?: string,
+    listPage = 1,
+    categoryId?: string,
+    search?: string,
+  ) => {
     setLoadError(null)
     setPartialLoadWarning(null)
     setDocsUnavailable(false)
@@ -256,6 +263,8 @@ export default function Documents() {
         page: String(listPage),
         page_size: String(PAGE_SIZE),
       })
+      const trimmedSearch = search?.trim()
+      if (trimmedSearch) params.set('search', trimmedSearch)
       if (docType) params.set('document_type', docType)
       if (status) params.set('status', status)
       if (categoryId) params.set('category_id', categoryId)
@@ -340,10 +349,6 @@ export default function Documents() {
     }
   }, [searchTerm, filterStatus, filterType, filterCategory, page, searchParams, setSearchParams])
 
-  useEffect(() => {
-    loadData()
-  }, [loadData])
-
   // Governance Library taxonomy (Wave W0) — active categories only, for the filter dropdown.
   useEffect(() => {
     let cancelled = false
@@ -390,8 +395,9 @@ export default function Documents() {
       filterStatus === ALL_STATUS_VALUE ? undefined : filterStatus,
       page,
       filterCategory === ALL_CATEGORIES_VALUE ? undefined : filterCategory,
+      deferredSearch,
     )
-  }, [filterType, filterStatus, filterCategory, page, loadData])
+  }, [filterType, filterStatus, filterCategory, page, deferredSearch, loadData])
 
   const handleSemanticSearch = useCallback(async (query: string) => {
     if (query.length < 3) {
@@ -576,24 +582,7 @@ export default function Documents() {
     return !Number.isNaN(parsed.getTime()) && parsed.getTime() < Date.now()
   }
 
-  const matchesLibrarySearch = (doc: { title?: string | null; reference_number?: string | null }) => {
-    const q = searchTerm.trim().toLowerCase()
-    if (!q) return true
-    const title = (doc.title ?? '').toLowerCase()
-    const ref = (doc.reference_number ?? '').toLowerCase()
-    return title.includes(q) || ref.includes(q)
-  }
-
-  const filteredDocuments = documents.filter((doc) => {
-    if (searchTerm && !searchResults) {
-      return matchesLibrarySearch(doc)
-    }
-    return true
-  })
-
-  const keywordMatchCount = searchTerm.trim()
-    ? documents.filter((doc) => matchesLibrarySearch(doc)).length
-    : null
+  const filteredDocuments = documents
 
   if (loading) {
     return (
@@ -771,7 +760,10 @@ export default function Documents() {
               aria-label="Search document library"
               placeholder="Search by title or reference… (AI semantic from 3 characters)"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value)
+                setPage(1)
+              }}
               className="pl-10 pr-10"
             />
           </div>
@@ -784,13 +776,7 @@ export default function Documents() {
                 <span>
                   Showing{' '}
                   <strong className="text-foreground">{filteredDocuments.length}</strong>
-                  {' '}in list
-                  {keywordMatchCount != null ? (
-                    <>
-                      {' '}· keyword matches:{' '}
-                      <strong className="text-foreground">{keywordMatchCount}</strong>
-                    </>
-                  ) : null}
+                  {' '}matching on this page (server filter)
                 </span>
                 {searchTerm.length >= 3 && searchUnavailable ? (
                   <span className="text-warning" data-testid="documents-search-count-unavailable">

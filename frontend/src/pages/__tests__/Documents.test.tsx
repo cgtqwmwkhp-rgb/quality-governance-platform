@@ -205,6 +205,50 @@ describe('Documents', () => {
     })
   })
 
+  it('issues a server search request and shows empty for nonsense queries (PX-220)', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/api/v1/documents/?') && url.includes('search=zzzqqxwv')) {
+        return Promise.resolve({ data: { items: [] } })
+      }
+      if (url.startsWith('/api/v1/documents/?')) {
+        return Promise.resolve({ data: { items: [sampleDoc] } })
+      }
+      if (url === '/api/v1/documents/stats/overview') {
+        return Promise.resolve({
+          data: {
+            total_documents: 1,
+            indexed_documents: 0,
+            total_chunks: 0,
+            by_status: { approved: 1 },
+            by_type: { policy: 1 },
+          },
+        })
+      }
+      if (url.includes('/documents/search/semantic')) {
+        return Promise.resolve({ data: { results: [] } })
+      }
+      return Promise.resolve({ data: { results: [] } })
+    })
+
+    const Documents = (await import('../Documents')).default
+    render(
+      <MemoryRouter initialEntries={['/documents']}>
+        <Documents />
+      </MemoryRouter>,
+    )
+
+    await screen.findByText('Safety Policy')
+    fireEvent.change(screen.getByTestId('documents-library-search'), {
+      target: { value: 'zzzqqxwv' },
+    })
+
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalledWith(expect.stringContaining('search=zzzqqxwv'))
+    })
+    expect(screen.queryByText('Safety Policy')).not.toBeInTheDocument()
+    expect(screen.getByTestId('documents-empty')).toBeInTheDocument()
+  })
+
   it('toasts semantic search failure without pretending zero matches', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url.startsWith('/api/v1/documents/?')) {
@@ -383,6 +427,7 @@ describe('Documents', () => {
         expect(url).toContain('document_type=policy')
         expect(url).toContain('status=approved')
         expect(url).toContain('page=2')
+        expect(url).toContain('search=Safety')
         return Promise.resolve({ data: { items: [sampleDoc] } })
       }
       if (url === '/api/v1/documents/stats/overview') {

@@ -126,8 +126,12 @@ function emptyTrainingCopy(reason?: string | null, atlasName?: string | null): {
   }
 }
 
-function trainingBadgeVariant(status: string): BadgeVariant {
+function trainingBadgeVariant(
+  status: string,
+  qgpDueOn?: string | null,
+): BadgeVariant {
   if (status === 'compliant') return 'success'
+  if ((status === 'missing' || status === 'pending') && !qgpDueOn) return 'submitted'
   if (status === 'overdue' || status === 'failed' || status === 'missing') return 'destructive'
   if (status === 'due_soon') return 'warning'
   return 'submitted'
@@ -595,7 +599,7 @@ export default function PortalWork() {
                     <Card key={`${row.course_key}-${row.atlas_name}`} className="p-4">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant={trainingBadgeVariant(row.status)}>
+                          <Badge variant={trainingBadgeVariant(row.status, row.qgp_due_on)}>
                             {statusLabel(row)}
                           </Badge>
                           {row.expires_on ? (

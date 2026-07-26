@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom'
 import { getApiErrorMessage, workforceApi, type WdpEngineerMatrix } from '../../api/client'
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
+import { matrixEngineerLabel } from './employeePickerUtils'
 import {
   Select,
   SelectContent,
@@ -442,7 +443,9 @@ export default function CompetencyDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredEngineers.map((eng) => (
+                  {filteredEngineers.map((eng) => {
+                    const engineerLabel = matrixEngineerLabel(eng)
+                    return (
                     <tr key={eng.engineer_id} className="hover:bg-muted/20">
                       <th
                         scope="row"
@@ -454,7 +457,7 @@ export default function CompetencyDashboard() {
                           onClick={() => navigate(`/workforce/engineers/${eng.engineer_id}`)}
                           data-testid={`competency-engineer-${eng.engineer_id}`}
                         >
-                          {eng.employee_number || `#${eng.engineer_id}`}
+                          {engineerLabel}
                         </button>
                       </th>
                       {matrix!.asset_types.map((at) => {
@@ -468,8 +471,8 @@ export default function CompetencyDashboard() {
                           >
                             <button
                               type="button"
-                              title={`${eng.employee_number || eng.engineer_id} · ${at.name}: ${status}`}
-                              aria-label={`${eng.employee_number || eng.engineer_id} ${at.name} ${status}`}
+                              title={`${engineerLabel} · ${at.name}: ${status}`}
+                              aria-label={`${engineerLabel} ${at.name} ${status}`}
                               className={cn(
                                 'mx-auto block h-6 w-6 rounded-sm transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                                 STATUS_COLORS[status] ?? 'bg-muted',
@@ -485,7 +488,8 @@ export default function CompetencyDashboard() {
                         )
                       })}
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
               <div className="mt-4 flex flex-wrap gap-4 text-sm">
