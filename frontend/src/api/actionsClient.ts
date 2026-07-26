@@ -58,6 +58,12 @@ export interface Action {
 export interface ActionsSummary {
   total: number
   by_display_status: Record<string, number>
+  /**
+   * Open actions past their due date — same server predicate as the list
+   * `overdue=true` filter and view-counts. Not a key of by_display_status:
+   * only CAPA rows persist a literal `overdue` status.
+   */
+  overdue?: number
 }
 
 /** Badge counts for All / Mine / Overdue / My overdue — match list filters. */

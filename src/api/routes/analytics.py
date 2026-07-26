@@ -246,6 +246,7 @@ async def get_kpi_summary(
     dash = await service.get_full_dashboard(days)
     incidents = dash.get("incidents") or {}
     complaints = dash.get("complaints") or {}
+    rtas = dash.get("rtas") or {}
     risks = dash.get("risks") or {}
     compliance = dash.get("compliance") or {}
 
@@ -288,8 +289,13 @@ async def get_kpi_summary(
             "closed": complaints.get("closed_in_period", 0),
             "resolution_rate": complaints.get("resolution_rate"),
         },
+        # total/open/closed all describe the register, so open can never exceed total.
+        # total_in_period stays available separately for period-scoped reporting.
         "rtas": {
-            "total": (dash.get("rtas") or {}).get("total_in_period", 0),
+            "total": rtas.get("total", 0),
+            "total_in_period": rtas.get("total_in_period", 0),
+            "open": rtas.get("open", 0),
+            "closed": rtas.get("closed", 0),
         },
         "actions": analytics_service.get_kpi_summary(time_range).get("actions"),
         "audits": audits_summary,

@@ -67,6 +67,11 @@ const slaColors: Record<string, string> = {
   breached: 'text-destructive',
 }
 
+/** Render an unmeasured KPI as an em dash rather than a misleading zero. */
+function formatStat(value: number | null): string {
+  return value == null ? '—' : String(value)
+}
+
 export default function WorkflowCenter() {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<
@@ -80,11 +85,20 @@ export default function WorkflowCenter() {
   const [selectedApprovals, setSelectedApprovals] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [stats, setStats] = useState({
-    pending_approvals: 0,
-    active_workflows: 0,
-    overdue: 0,
-    completed_today: 0,
+  /**
+   * null means the backend could not measure the figure (or the request failed).
+   * It is rendered as an em dash — never as 0, which would read as "all clear".
+   */
+  const [stats, setStats] = useState<{
+    pending_approvals: number | null
+    active_workflows: number | null
+    overdue: number | null
+    completed_today: number | null
+  }>({
+    pending_approvals: null,
+    active_workflows: null,
+    overdue: null,
+    completed_today: null,
   })
   const [delegationForm, setDelegationForm] = useState({
     delegate_id: '',
@@ -133,17 +147,17 @@ export default function WorkflowCenter() {
 
     if (statsResult.status === 'fulfilled') {
       setStats({
-        pending_approvals: statsResult.value.data.pending_approvals,
-        active_workflows: statsResult.value.data.active_workflows,
-        overdue: statsResult.value.data.overdue,
-        completed_today: statsResult.value.data.completed_today,
+        pending_approvals: statsResult.value.data.pending_approvals ?? null,
+        active_workflows: statsResult.value.data.active_workflows ?? null,
+        overdue: statsResult.value.data.overdue ?? null,
+        completed_today: statsResult.value.data.completed_today ?? null,
       })
     } else {
       setStats({
-        pending_approvals: 0,
-        active_workflows: 0,
-        overdue: 0,
-        completed_today: 0,
+        pending_approvals: null,
+        active_workflows: null,
+        overdue: null,
+        completed_today: null,
       })
     }
 
@@ -308,13 +322,13 @@ export default function WorkflowCenter() {
       id: 'approvals',
       label: t('workflows.pending_approvals'),
       icon: CheckCircle,
-      count: stats.pending_approvals,
+      count: stats.pending_approvals ?? undefined,
     },
     {
       id: 'workflows',
       label: t('workflows.active_workflows'),
       icon: GitBranch,
-      count: stats.active_workflows,
+      count: stats.active_workflows ?? undefined,
     },
     { id: 'templates', label: 'Templates', icon: FileText },
     { id: 'delegation', label: 'Delegation', icon: UserPlus },
@@ -351,9 +365,13 @@ export default function WorkflowCenter() {
                 <Clock className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-foreground">{stats.pending_approvals}</div>
+                <div className="text-2xl font-bold text-foreground" data-testid="workflow-stat-pending">
+                  {formatStat(stats.pending_approvals)}
+                </div>
+                {/* Counts the caller's own queue, so the label has to say so — this tile
+                    sits directly above the list of the same approvals. */}
                 <div className="text-sm text-muted-foreground">
-                  {t('workflows.pending_approvals')}
+                  {t('workflows.pending_approvals_mine', 'Pending approvals assigned to me')}
                 </div>
               </div>
             </div>
@@ -366,7 +384,9 @@ export default function WorkflowCenter() {
                 <GitBranch className="w-5 h-5 text-info" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-foreground">{stats.active_workflows}</div>
+                <div className="text-2xl font-bold text-foreground" data-testid="workflow-stat-active">
+                  {formatStat(stats.active_workflows)}
+                </div>
                 <div className="text-sm text-muted-foreground">
                   {t('workflows.active_workflows')}
                 </div>
@@ -381,7 +401,9 @@ export default function WorkflowCenter() {
                 <AlertTriangle className="w-5 h-5 text-destructive" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-foreground">{stats.overdue}</div>
+                <div className="text-2xl font-bold text-foreground" data-testid="workflow-stat-overdue">
+                  {formatStat(stats.overdue)}
+                </div>
                 <div className="text-sm text-muted-foreground">Overdue</div>
               </div>
             </div>
@@ -394,7 +416,9 @@ export default function WorkflowCenter() {
                 <CheckCircle className="w-5 h-5 text-success" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-foreground">{stats.completed_today}</div>
+                <div className="text-2xl font-bold text-foreground" data-testid="workflow-stat-completed-today">
+                  {formatStat(stats.completed_today)}
+                </div>
                 <div className="text-sm text-muted-foreground">
                   {t('workflows.completed_today')}
                 </div>
@@ -403,6 +427,17 @@ export default function WorkflowCenter() {
           </CardContent>
         </Card>
       </div>
+
+      {(stats.active_workflows == null ||
+        stats.overdue == null ||
+        stats.completed_today == null) && (
+        <p className="text-xs text-muted-foreground" data-testid="workflow-stats-unmeasured">
+          {t(
+            'workflows.stats_unmeasured',
+            'Figures shown as — are not currently measured by the workflow engine and are withheld rather than reported as zero.',
+          )}
+        </p>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-muted/50 p-1 rounded-xl">
