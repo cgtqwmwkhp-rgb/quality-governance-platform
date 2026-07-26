@@ -64,6 +64,7 @@ import {
   isOpenAuditFinding,
   resolveOpenFindingsKpi,
 } from './auditsFindingsModel'
+import { partitionAutomationTemplates } from './auditTemplateHonesty'
 import {
   ASSURANCE_SOURCE_CUSTOMER,
   filterAuditsByAssuranceSource,
@@ -552,10 +553,15 @@ export default function Audits() {
     }
   }, [formData.external_audit_type, formData.assurance_scheme])
 
-  const scheduleTemplates = useMemo(
-    () => templates.filter((template) => !isSystemIntakeTemplate(template)),
-    [templates],
-  )
+  const scheduleTemplates = useMemo(() => {
+    const nonIntake = templates.filter((template) => !isSystemIntakeTemplate(template))
+    return partitionAutomationTemplates(nonIntake).operational
+  }, [templates])
+
+  const hiddenAutomationTemplateCount = useMemo(() => {
+    const nonIntake = templates.filter((template) => !isSystemIntakeTemplate(template))
+    return partitionAutomationTemplates(nonIntake).automation.length
+  }, [templates])
 
   const templateFamilies = useMemo(() => {
     const families = new Map<string, { key: string; label: string; versions: AuditTemplate[] }>()
@@ -1980,7 +1986,13 @@ export default function Audits() {
                         {...auditForm.fieldProps('template_id')}
                         hint={`Showing ${latestPublishedTemplates.length} published ${
                           latestPublishedTemplates.length === 1 ? 'template' : 'templates'
-                        }. Only published templates appear here — publish via the Template Builder.`}
+                        }. Only published templates appear here — publish via the Template Builder.${
+                          modalMode === 'schedule' && hiddenAutomationTemplateCount > 0
+                            ? ` ${hiddenAutomationTemplateCount} Playwright / CUJ / UAT fixture${
+                                hiddenAutomationTemplateCount === 1 ? '' : 's'
+                              } hidden from scheduling.`
+                            : ''
+                        }`}
                       >
                         {(control) => (
                           <select

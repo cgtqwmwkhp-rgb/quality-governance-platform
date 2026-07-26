@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AuditRun } from '../../api/client'
 import {
   buildCustomerAuditsSummary,
+  buildCustomerCrossProgrammeHonesty,
   filterCustomerAssuranceRuns,
   getCustomerAuditWorkspacePath,
   isExternalAuditImportRun,
@@ -63,5 +64,18 @@ describe('customerAuditsHelpers', () => {
   it('isExternalAuditImportRun detects intake flags', () => {
     expect(isExternalAuditImportRun(baseRun())).toBe(false)
     expect(isExternalAuditImportRun(baseRun({ is_external_import_intake: true }))).toBe(true)
+  })
+
+  it('PX-259 / PX-245: surfaces sibling external programmes when customer is empty', () => {
+    const honesty = buildCustomerCrossProgrammeHonesty([
+      baseRun({ id: 1, assurance_scheme: 'Achilles UVDB Verify B2' }),
+      baseRun({ id: 2, external_audit_type: 'planet_mark' }),
+      baseRun({ id: 3, source_origin: 'internal' }),
+    ])
+    expect(honesty.customer).toBe(0)
+    expect(honesty.uvdb).toBe(1)
+    expect(honesty.planet_mark).toBe(1)
+    expect(honesty.otherExternalOnBoard).toBe(2)
+    expect(honesty.showEmptyHonesty).toBe(true)
   })
 })

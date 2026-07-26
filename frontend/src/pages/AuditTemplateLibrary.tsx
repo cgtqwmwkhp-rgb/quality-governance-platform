@@ -55,6 +55,7 @@ import {
 import { auditsApi, AuditTemplate, CategoryCount } from '../api/client'
 import { ToastContainer, useToast } from '../components/ui/Toast'
 import { cn } from '../helpers/utils'
+import { isAutomationTestTemplate, partitionAutomationTemplates } from './auditTemplateHonesty'
 
 // ============================================================================
 // HELPERS
@@ -124,6 +125,8 @@ export default function AuditTemplateLibrary() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [sortBy, setSortBy] = useState<'name' | 'updated'>('updated')
   const [showArchive, setShowArchive] = useState(false)
+  /** PX-266: hide Playwright / CUJ fixtures from the operational library by default. */
+  const [hideAutomationFixtures, setHideAutomationFixtures] = useState(true)
 
   // Two-stage delete state
   const [archiveTarget, setArchiveTarget] = useState<AuditTemplate | null>(null)
@@ -321,14 +324,17 @@ export default function AuditTemplateLibrary() {
   const stats = useMemo(() => {
     const published = templates.filter((t) => t.is_published).length
     const draft = templates.filter((t) => !t.is_published).length
-    return { total: published + draft, published, draft }
+    const automation = partitionAutomationTemplates(templates).automation.length
+    return { total: published + draft, published, draft, automation }
   }, [templates])
 
   const publishFilteredTemplates = useMemo(() => {
-    if (publishFilter === 'published') return sortedTemplates.filter((t) => t.is_published)
-    if (publishFilter === 'draft') return sortedTemplates.filter((t) => !t.is_published)
-    return sortedTemplates
-  }, [sortedTemplates, publishFilter])
+    let list = sortedTemplates
+    if (publishFilter === 'published') list = list.filter((t) => t.is_published)
+    if (publishFilter === 'draft') list = list.filter((t) => !t.is_published)
+    if (hideAutomationFixtures) list = list.filter((t) => !isAutomationTestTemplate(t))
+    return list
+  }, [sortedTemplates, publishFilter, hideAutomationFixtures])
 
   const recentTemplates = useMemo(() => {
     return [...publishFilteredTemplates]
@@ -347,6 +353,8 @@ export default function AuditTemplateLibrary() {
     recentTemplates.length > 4
 
   const categoryTotal = useMemo(() => categories.reduce((acc, c) => acc + c.count, 0), [categories])
+  // PX-265: All pill must match the list total ("Showing X of Y"), not a
+  // categorised-only sum. Fixture hiding is called out separately in the toggle.
   const allCategoryCount = totalCount > 0 ? totalCount : categoryTotal
 
   const groupedTemplates = useMemo(() => {
@@ -414,6 +422,11 @@ export default function AuditTemplateLibrary() {
                 <Badge variant={template.is_published ? 'success' : 'warning'}>
                   {template.is_published ? 'published' : 'draft'}
                 </Badge>
+                {isAutomationTestTemplate(template) ? (
+                  <Badge variant="outline" className="text-[10px]" data-testid="audit-template-fixture-badge">
+                    automation fixture
+                  </Badge>
+                ) : null}
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -763,6 +776,24 @@ export default function AuditTemplateLibrary() {
           />
         </div>
 
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setHideAutomationFixtures((prev) => !prev)}
+            className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors min-h-[44px] ${
+              hideAutomationFixtures
+                ? 'bg-primary/10 border-primary/30 text-primary'
+                : 'bg-secondary border-border text-muted-foreground'
+            }`}
+            data-testid="audit-templates-hide-automation"
+            aria-pressed={hideAutomationFixtures}
+          >
+            {hideAutomationFixtures
+              ? `Hiding ${stats.automation} fixture${stats.automation === 1 ? '' : 's'}`
+              : `Show fixtures (${stats.automation})`}
+          </button>
+        </div>
+
         <div
           className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0"
           role="tablist"
@@ -1027,6 +1058,15 @@ export default function AuditTemplateLibrary() {
                         <Badge variant={template.is_published ? 'success' : 'warning'}>
                           {template.is_published ? 'published' : 'draft'}
                         </Badge>
+                        {isAutomationTestTemplate(template) ? (
+                          <Badge
+                            variant="outline"
+                            className="ml-2 text-[10px]"
+                            data-testid="audit-template-fixture-badge"
+                          >
+                            automation fixture
+                          </Badge>
+                        ) : null}
                       </td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">
                         {estimateMinutes(template.question_count)}

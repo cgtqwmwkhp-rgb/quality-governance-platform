@@ -97,5 +97,42 @@ describe('AssuranceCertShelf', () => {
     await waitFor(() => {
       expect(screen.getByTestId('assurance-cert-shelf-empty')).toBeInTheDocument()
     })
+    expect(screen.getByTestId('assurance-cert-shelf-empty')).toHaveAttribute(
+      'data-empty-kind',
+      'unpopulated',
+    )
+    expect(screen.getByText(/not a filter result/i)).toBeInTheDocument()
+  })
+
+  it('PX-243: filtered empty shelf uses distinct copy', async () => {
+    mockGetAssuranceCertShelf.mockResolvedValue({
+      data: {
+        items: [],
+        total: 0,
+        summary: { valid: 0, due_soon: 0, expired: 0, unknown: 0, by_scheme: {} },
+        due_soon_days: 30,
+      },
+    })
+
+    const { fireEvent } = await import('@testing-library/react')
+    render(
+      <MemoryRouter>
+        <AssuranceCertShelf />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('assurance-cert-shelf-page')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByText('UVDB Achilles'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('assurance-cert-shelf-empty')).toHaveAttribute(
+        'data-empty-kind',
+        'filtered',
+      )
+    })
+    expect(screen.getByText(/No certificates match these filters/i)).toBeInTheDocument()
   })
 })
