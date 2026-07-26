@@ -6,6 +6,7 @@ import { BrowserRouter, MemoryRouter } from 'react-router-dom'
 const hasRoleMock = vi.fn(() => true)
 const isSuperuserMock = vi.fn(() => true)
 const useFeatureFlagMock = vi.fn(() => true)
+const isAICopilotDemoEnabledMock = vi.fn(() => false)
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -47,6 +48,10 @@ vi.mock('../../hooks/useFeatureFlag', () => ({
   useFeatureFlag: (flagName: string) => useFeatureFlagMock(flagName),
 }))
 
+vi.mock('../../config/aiCopilotDemo', () => ({
+  isAICopilotDemoEnabled: () => isAICopilotDemoEnabledMock(),
+}))
+
 vi.mock('../copilot/AICopilot', () => ({
   default: () => <div data-testid="ai-copilot" />,
 }))
@@ -73,6 +78,8 @@ describe('Layout', () => {
     isSuperuserMock.mockReturnValue(true)
     useFeatureFlagMock.mockReset()
     useFeatureFlagMock.mockReturnValue(true)
+    isAICopilotDemoEnabledMock.mockReset()
+    isAICopilotDemoEnabledMock.mockReturnValue(false)
   })
 
   it('renders the requested first-level hub structure', async () => {
@@ -384,7 +391,22 @@ describe('Layout', () => {
     expect(screen.getByTestId('theme-toggle')).toBeInTheDocument()
   })
 
+  it('hides every AI Copilot entry point when the demo flag is off', async () => {
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    expect(screen.queryByRole('button', { name: /nav\.copilot/i })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('ai-copilot')).not.toBeInTheDocument()
+    expect(navLink('/copilot')).not.toBeInTheDocument()
+  })
+
   it('lazy-mounts AI Copilot only after the header control is opened', async () => {
+    isAICopilotDemoEnabledMock.mockReturnValue(true)
     const user = userEvent.setup()
     const Layout = (await import('../Layout')).default
 

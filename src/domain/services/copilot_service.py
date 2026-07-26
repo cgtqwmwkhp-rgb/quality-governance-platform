@@ -19,6 +19,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.config import settings
 from src.domain.models.ai_copilot import (
     CopilotAction,
     CopilotFeedback,
@@ -26,6 +27,20 @@ from src.domain.models.ai_copilot import (
     CopilotMessage,
     CopilotSession,
 )
+
+
+class CopilotDisabledError(RuntimeError):
+    """Raised when a simulated copilot reply is requested while the feature flag is off."""
+
+
+def copilot_is_enabled() -> bool:
+    """Single source of truth for whether simulated copilot output may be served (PX-248).
+
+    Fails closed like the frontend gate: production is never eligible, and every other
+    environment needs an explicit opt-in.
+    """
+    return settings.ai_copilot_enabled and not settings.is_production
+
 
 # ============================================================================
 # Action Definitions
@@ -284,6 +299,11 @@ class CopilotService:
         """
         Send a message and get AI response.
         """
+        # PX-248: the reply is fabricated, so refuse before anything is persisted.
+        # The API layer already returns 404, but this closes non-HTTP callers too.
+        if not copilot_is_enabled():
+            raise CopilotDisabledError("AI Copilot is disabled; simulated responses must not be served.")
+
         session = await self.get_session(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
@@ -317,7 +337,7 @@ class CopilotService:
             action_type=action_data.get("action") if action_data else None,
             action_data=action_data.get("parameters") if action_data else None,
             action_status="pending" if action_data else None,
-            model_used="gpt-4-turbo",
+            model_used="simulated-keyword-match",
             latency_ms=latency_ms,
         )
         self.db.add(assistant_message)

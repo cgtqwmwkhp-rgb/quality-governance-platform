@@ -327,6 +327,8 @@ class Settings(BaseSettings):
     # OpenAI (tertiary AI provider)
     openai_api_key: str = ""
 
+    ai_copilot_enabled: bool = False  # PX-248: copilot replies are simulated — closed until real inference exists
+
     # Governance Library Wave W3 — horizon scan provider (stub|anthropic|openai|perplexity)
     library_horizon_provider: str = "stub"
     perplexity_api_key: str = ""
