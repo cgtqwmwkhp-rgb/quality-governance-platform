@@ -1983,7 +1983,10 @@ export default function InvestigationDetail() {
         <DialogContent data-testid="investigation-complete-override-dialog">
           <DialogHeader>
             <DialogTitle>
-              {t('investigations.closure.complete_with_override', 'Complete with supervisor override')}
+              {t(
+                'investigations.closure.complete_override_title',
+                'Complete with supervisor override',
+              )}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
