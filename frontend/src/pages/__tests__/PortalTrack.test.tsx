@@ -188,4 +188,25 @@ describe('PortalTrack report lookup', () => {
     expect(screen.queryByTestId('portal-track-filters')).toBeNull()
     expect(screen.getAllByText('Road Traffic Collision').length).toBeGreaterThan(0)
   })
+
+  // PX-294 -------------------------------------------------------------
+
+  it('decodes double-escaped ampersands in report titles and timeline events', async () => {
+    sessionStorage.setItem(`tracking_${REFERENCE}`, TRACKING_CODE)
+    fetchMock.mockResolvedValue(
+      okResponse(
+        reportDetail({
+          title: 'Health &amp; Safety near Bay 4',
+          timeline: [{ date: '2026-07-20T09:00:00Z', event: 'Reviewed by M&amp;E team', icon: '📋' }],
+          next_steps: 'Contact Health &amp; Safety if urgent.',
+        }),
+      ),
+    )
+
+    renderTrack(`/portal/track/${REFERENCE}`)
+
+    expect(await screen.findByText('Health & Safety near Bay 4')).toBeInTheDocument()
+    expect(screen.getByText('Reviewed by M&E team')).toBeInTheDocument()
+    expect(screen.getByText('Contact Health & Safety if urgent.')).toBeInTheDocument()
+  })
 })
