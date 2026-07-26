@@ -180,6 +180,41 @@ async def test_create_capa_for_investigation_not_found():
 
 
 @pytest.mark.asyncio
+async def test_create_capa_for_investigation_roster_assignee_without_login():
+    investigation = _investigation()
+    inv_result = MagicMock()
+    inv_result.scalar_one_or_none.return_value = investigation
+    prior_result = MagicMock()
+    prior_result.scalar_one_or_none.return_value = None
+
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=[inv_result, prior_result])
+    db.add = MagicMock()
+    db.flush = AsyncMock()
+
+    svc = CAPAService(db)
+    with (
+        patch(
+            "src.domain.services.capa_service.ReferenceNumberService.generate",
+            AsyncMock(return_value="CAPA-2026-0099"),
+        ),
+        patch("src.domain.services.capa_service.record_audit_event", new=AsyncMock()),
+        patch("src.domain.services.capa_service.invalidate_tenant_cache", new=AsyncMock()),
+        patch("src.domain.services.capa_service.track_metric"),
+    ):
+        capa = await svc.create_capa_for_investigation(
+            investigation.id,
+            user_id=2,
+            tenant_id=1,
+            title="Train staff",
+            assignee_name="PAMS Only Tech",
+        )
+
+    assert capa.assigned_to_id is None
+    assert "[Roster assignee: PAMS Only Tech]" in (capa.description or "")
+
+
+@pytest.mark.asyncio
 async def test_create_capa_for_investigation_unknown_assignee_email():
     investigation = _investigation()
     inv_result = MagicMock()

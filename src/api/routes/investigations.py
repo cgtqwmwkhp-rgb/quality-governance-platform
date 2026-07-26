@@ -112,6 +112,34 @@ async def _get_investigation_or_404(
     return investigation
 
 
+async def _investigation_to_response(
+    db: AsyncSession,
+    investigation: InvestigationRun,
+    *,
+    tenant_id: int | None,
+) -> InvestigationRunResponse:
+    """Serialize investigation with hydrated source reference (PX-139)."""
+    from src.domain.services.investigation_service import resolve_assigned_entity_reference
+
+    entity_type = (
+        investigation.assigned_entity_type.value
+        if hasattr(investigation.assigned_entity_type, "value")
+        else str(investigation.assigned_entity_type)
+    )
+    entity_ref: str | None = None
+    entity_id = getattr(investigation, "assigned_entity_id", None)
+    if entity_id is not None:
+        entity_ref = await resolve_assigned_entity_reference(
+            db,
+            entity_type,
+            int(entity_id),
+            tenant_id,
+        )
+    payload = InvestigationRunResponse.model_validate(investigation).model_dump()
+    payload["assigned_entity_reference"] = entity_ref
+    return InvestigationRunResponse.model_validate(payload)
+
+
 async def _collect_readiness_reasons(
     db: AsyncSession,
     *,
@@ -918,7 +946,8 @@ async def get_investigation(
     if not investigation:
         raise NotFoundError(f"Investigation with ID {investigation_id} not found")
 
-    return investigation
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    return await _investigation_to_response(db, investigation, tenant_id=tenant_id)
 
 
 @router.post("/{investigation_id:int}/capa", response_model=CAPAResponse, status_code=201)
@@ -943,6 +972,7 @@ async def create_capa_for_investigation(
             description=payload.description,
             assignee_id=payload.assignee_id,
             assignee_email=payload.assignee_email,
+            assignee_name=payload.assignee_name,
             due_date=payload.due_date,
             priority=payload.priority,
         )
@@ -1013,9 +1043,10 @@ async def update_investigation(  # noqa: C901 - completion/close gates + revisio
 
     # Update status timestamps (naive UTC — completed_at/closed_at columns are TIMESTAMP WITHOUT TIME ZONE)
     if investigation_data.status:
-        if investigation_data.status == "in_progress" and not investigation.started_at:
+        active_statuses = {"in_progress", "under_review", "completed", "closed"}
+        if investigation_data.status in active_statuses and not investigation.started_at:
             setattr(investigation, "started_at", datetime.utcnow())
-        elif investigation_data.status == "completed" and not investigation.completed_at:
+        if investigation_data.status == "completed" and not investigation.completed_at:
             setattr(investigation, "completed_at", datetime.utcnow())
         elif investigation_data.status == "closed" and not investigation.closed_at:
             setattr(investigation, "closed_at", datetime.utcnow())
@@ -1082,7 +1113,8 @@ async def update_investigation(  # noqa: C901 - completion/close gates + revisio
     await db.commit()
     await db.refresh(investigation)
 
-    return investigation
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    return await _investigation_to_response(db, investigation, tenant_id=tenant_id)
 
 
 # === Stage 2 Endpoints ===

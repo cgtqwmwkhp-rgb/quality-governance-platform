@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -15,11 +16,12 @@ from src.api.routes.investigations import (
 )
 from src.api.schemas.investigation import InvestigationRunUpdate
 from src.domain.exceptions import BadRequestError
-from src.domain.models.investigation import InvestigationStatus
+from src.domain.models.investigation import AssignedEntityType, InvestigationStatus
 from src.domain.services.investigation_service import InvestigationService
 
 
 def _investigation(**overrides):
+    now = datetime.now(timezone.utc)
     base = dict(
         id=7,
         tenant_id=1,
@@ -30,8 +32,12 @@ def _investigation(**overrides):
         assigned_to_user_id=42,
         completed_at=None,
         closed_at=None,
-        assigned_entity_type=None,
-        assigned_entity_id=None,
+        assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
+        assigned_entity_id=20,
+        title="Warehouse slip investigation",
+        reference_number="REF-2026-0007",
+        created_at=now,
+        updated_at=now,
         updated_by_id=1,
         data={
             "findings": "Slip on wet floor",
@@ -167,6 +173,14 @@ async def test_patch_completed_allows_supervisor_override_for_open_work():
             "create_revision_event",
             new=AsyncMock(),
         ) as revision_spy,
+        patch(
+            "src.domain.services.investigation_service.resolve_assigned_entity_reference",
+            AsyncMock(return_value="INC-2026-0020"),
+        ),
+        patch(
+            "src.domain.services.lessons_learnt_promote.promote_lessons_to_case",
+            AsyncMock(),
+        ),
     ):
         await update_investigation(
             request=MagicMock(headers={"X-Request-ID": "req-2"}),

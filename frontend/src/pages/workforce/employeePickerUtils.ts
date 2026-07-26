@@ -59,3 +59,30 @@ export function sortEmployeesForPicker(engineers: EngineerProfile[]): EngineerPr
     employeePickerOptionLabel(a).localeCompare(employeePickerOptionLabel(b)),
   )
 }
+
+/** Payload for investigation lead / CAPA assignee pickers (PX-168). */
+export type InvestigationAssigneePayload = {
+  assignee_id?: number
+  assignee_email?: string
+  assignee_name?: string
+}
+
+/**
+ * Resolve EngineerPeoplePicker selection for investigations/actions.
+ * Roster-only employees (no portal login) are assignable by display name;
+ * linked employees resolve to user id + email for notifications.
+ */
+export function resolveInvestigationAssigneeSelection(selection: {
+  label: string
+  user?: { id: number; email: string }
+} | null): InvestigationAssigneePayload {
+  if (!selection) return {}
+  if (selection.user?.id != null) {
+    return {
+      assignee_id: selection.user.id,
+      assignee_email: selection.user.email,
+    }
+  }
+  const name = selection.label.trim()
+  return name ? { assignee_name: name } : {}
+}

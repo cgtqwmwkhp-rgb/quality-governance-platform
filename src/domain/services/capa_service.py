@@ -5,6 +5,7 @@ Raises domain exceptions instead of HTTPException.
 """
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional, cast
 
@@ -29,6 +30,29 @@ from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
+
+_ROSTER_ASSIGNEE_PATTERN = re.compile(r"\n?\n?\[Roster assignee: ([^\]]+)\]")
+
+
+def append_roster_assignee_marker(description: str | None, name: str) -> str:
+    """Persist roster-only assignee on CAPA description (no users.id FK)."""
+    trimmed_name = name.strip()
+    base = (description or "").strip()
+    marker = f"[Roster assignee: {trimmed_name}]"
+    return f"{base}\n\n{marker}" if base else marker
+
+
+def parse_roster_assignee_marker(description: str | None) -> tuple[str, str | None]:
+    """Split roster assignee marker from user-visible CAPA description."""
+    if not description:
+        return "", None
+    match = _ROSTER_ASSIGNEE_PATTERN.search(description)
+    if not match:
+        return description, None
+    name = match.group(1).strip()
+    clean = _ROSTER_ASSIGNEE_PATTERN.sub("", description).strip()
+    return clean, name or None
+
 
 # Golden-thread CAPA sources that require a resolvable integer source_id (R47).
 _GT_SOURCE_MODELS: dict[CAPASource, type[Any]] = {
@@ -352,6 +376,7 @@ class CAPAService:
         description: str | None = None,
         assignee_id: int | None = None,
         assignee_email: str | None = None,
+        assignee_name: str | None = None,
         due_date: str | datetime | None = None,
         priority: str | None = None,
     ) -> CAPAAction:
@@ -384,13 +409,18 @@ class CAPAService:
                 return existing_capa
 
         resolved_assignee = assignee_id
+        roster_assignee_name = (assignee_name or "").strip() or None
         if resolved_assignee is None and assignee_email:
-            user_result = await self.db.execute(select(User).where(User.email == assignee_email))
-            user = user_result.scalar_one_or_none()
-            if user is None:
-                raise LookupError(f"User not found for email: {assignee_email}")
-            resolved_assignee = user.id
-        if resolved_assignee is None:
+            email = assignee_email.strip()
+            if "@" in email:
+                user_result = await self.db.execute(select(User).where(User.email == email))
+                user = user_result.scalar_one_or_none()
+                if user is None:
+                    raise LookupError(f"User not found for email: {assignee_email}")
+                resolved_assignee = user.id
+            elif not roster_assignee_name:
+                roster_assignee_name = email
+        if resolved_assignee is None and not roster_assignee_name:
             inv_assignee = cast(int | None, investigation.assigned_to_user_id)
             resolved_assignee = inv_assignee if inv_assignee is not None else user_id
 
@@ -416,6 +446,11 @@ class CAPAService:
 
         action_title = (title or f"Action plan: {investigation.title}")[:255]
         action_desc = description if description is not None else investigation.description
+        if roster_assignee_name and resolved_assignee is None:
+            action_desc = append_roster_assignee_marker(
+                action_desc if isinstance(action_desc, str) else None,
+                roster_assignee_name,
+            )
 
         ref = await ReferenceNumberService.generate(self.db, "capa", CAPAAction)
         capa = CAPAAction(

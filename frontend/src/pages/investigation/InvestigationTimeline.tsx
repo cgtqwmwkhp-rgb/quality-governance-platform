@@ -174,7 +174,7 @@ export default function InvestigationTimeline({
             ) : (
               <PenLine className="w-4 h-4 mr-2" />
             )}
-            {t('investigations.timeline.add_manual', 'Add to timeline')}
+            {t('investigations.timeline.save_manual', 'Save entry')}
           </Button>
         </div>
       </Card>

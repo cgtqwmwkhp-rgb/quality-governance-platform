@@ -3921,5 +3921,7 @@
   "rtas.detail.no_reporter_contact": "No reporter contact captured",
   "rtas.detail.reporter_independent_hint": "Reporter is separate from the driver — add a reporter name when editing or creating the record.",
   "rtas.form.reporter_name": "Reporter name",
-  "rtas.form.placeholder.reporter_name": "Who is reporting this collision…"
+  "rtas.form.placeholder.reporter_name": "Who is reporting this collision…",
+  "investigations.closure.invalid_completed": "This investigation is marked completed but still fails the closure checklist. Fix the blockers below before treating it as closed.",
+  "investigations.timeline.save_manual": "Save entry"
 }

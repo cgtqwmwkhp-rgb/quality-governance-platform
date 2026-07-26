@@ -23,6 +23,7 @@ export interface Investigation {
   template_id: number
   assigned_entity_type: 'road_traffic_collision' | 'reporting_incident' | 'complaint' | 'near_miss'
   assigned_entity_id: number
+  assigned_entity_reference?: string | null
   status: 'draft' | 'in_progress' | 'under_review' | 'completed' | 'closed'
   /** HSG245-aligned investigation depth from source severity. */
   level?: 'minimal' | 'low' | 'medium' | 'high' | null
@@ -390,6 +391,7 @@ export function createInvestigationsApi(api: AxiosInstance) {
       description?: string
       assignee_id?: number
       assignee_email?: string
+      assignee_name?: string
       due_date?: string
       priority?: string
     },

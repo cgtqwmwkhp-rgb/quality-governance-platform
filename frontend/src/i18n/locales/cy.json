@@ -3747,5 +3747,7 @@
   "rtas.detail.no_reporter_contact": "Dim manylion cyswllt adroddwr wedi'u cofnodi",
   "rtas.detail.reporter_independent_hint": "Mae'r adroddwr ar wahân i'r gyrrwr — ychwanegwch enw adroddwr wrth olygu neu greu'r cofnod.",
   "rtas.form.reporter_name": "Enw'r adroddwr",
-  "rtas.form.placeholder.reporter_name": "Pwy sy'n adrodd y gwrthdrawiad hwn…"
+  "rtas.form.placeholder.reporter_name": "Pwy sy'n adrodd y gwrthdrawiad hwn…",
+  "investigations.closure.invalid_completed": "Mae'r ymchwiliad hwn wedi'i farcio'n gyflawn ond mae'n dal i fethu rhestr wirio'r cau. Trwsiwch y rhwystrau isod cyn ei drin fel un wedi'i gau.",
+  "investigations.timeline.save_manual": "Cadw cofnod"
 }

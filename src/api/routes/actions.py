@@ -39,11 +39,13 @@ from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.incident import ActionStatus, Incident, IncidentAction
 from src.domain.models.induction import InductionRun
 from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus, InvestigationRun
+from src.domain.models.near_miss import NearMiss
 from src.domain.models.rca_tools import CAPAItem
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.user import User
 from src.domain.services.action_assignment_service import notify_action_assignment, record_action_assigned_audit
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.capa_service import parse_roster_assignee_marker
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
@@ -332,6 +334,30 @@ async def _build_capa_provenance(
                 source_scheme = getattr(run, "assurance_scheme", None)
                 if clause_reference is None:
                     clause_reference = getattr(run, "external_reference", None)
+    elif capa.source_type == CAPASource.INVESTIGATION and capa.source_id:
+        result = await db.execute(select(InvestigationRun).where(InvestigationRun.id == capa.source_id))
+        inv = result.scalar_one_or_none()
+        if inv is not None:
+            source_reference = getattr(inv, "reference_number", None) or source_reference
+            source_title = getattr(inv, "title", None)
+    elif capa.source_type == CAPASource.INCIDENT and capa.source_id:
+        result = await db.execute(select(Incident).where(Incident.id == capa.source_id))
+        incident = result.scalar_one_or_none()
+        if incident is not None:
+            source_reference = getattr(incident, "reference_number", None) or source_reference
+            source_title = getattr(incident, "title", None)
+    elif capa.source_type == CAPASource.NEAR_MISS and capa.source_id:
+        result = await db.execute(select(NearMiss).where(NearMiss.id == capa.source_id))
+        near_miss = result.scalar_one_or_none()
+        if near_miss is not None:
+            source_reference = getattr(near_miss, "reference_number", None) or source_reference
+            source_title = getattr(near_miss, "title", None)
+    elif capa.source_type == CAPASource.RTA and capa.source_id:
+        result = await db.execute(select(RoadTrafficCollision).where(RoadTrafficCollision.id == capa.source_id))
+        rta = result.scalar_one_or_none()
+        if rta is not None:
+            source_reference = getattr(rta, "reference_number", None) or source_reference
+            source_title = getattr(rta, "title", None)
 
     return {
         "source_reference": source_reference,
@@ -349,11 +375,12 @@ async def _capa_to_response(db: "DbSession", capa: CAPAAction) -> ActionResponse
     provenance = await _build_capa_provenance(db, capa)
     arid = provenance.get("audit_run_id")
     audit_run_id = int(arid) if isinstance(arid, int) else None
+    clean_description, roster_assignee = parse_roster_assignee_marker(capa.description)
     return ActionResponse(
         id=capa.id,
         reference_number=capa.reference_number,
         title=capa.title,
-        description=capa.description or "",
+        description=clean_description or "",
         action_type=(capa.capa_type.value if hasattr(capa.capa_type, "value") else "corrective"),
         priority=(capa.priority.value if hasattr(capa.priority, "value") else str(capa.priority)),
         status=capa_status,
@@ -370,7 +397,7 @@ async def _capa_to_response(db: "DbSession", capa: CAPAAction) -> ActionResponse
         clause_reference=cast(Optional[str], provenance["clause_reference"]),
         audit_run_id=audit_run_id,
         owner_id=capa.assigned_to_id,
-        owner_email=None,
+        owner_email=roster_assignee if capa.assigned_to_id is None and roster_assignee else None,
         created_at=capa.created_at.isoformat() if capa.created_at else "",
     )
 
@@ -745,6 +772,18 @@ async def _count_for_source(
             overdue=overdue,
             asset_id=asset_id,
         )
+    elif st == "capa":
+        total += await _count_capa_slice(
+            db,
+            tenant_id=tenant_id,
+            status_filter=status_filter,
+            capa_source=None,
+            source_id=source_id,
+            source_reference=source_reference,
+            assigned_to_id=assigned_to_id,
+            overdue=overdue,
+            asset_id=asset_id,
+        )
     elif st in CAPA_ONLY_API_SOURCE_TYPES:
         ce = capa_enum_from_api_filter(st)
         if ce is not None:
@@ -1011,6 +1050,22 @@ async def list_actions(
                 capa_source=None,
                 source_id=None,
                 source_reference=None,
+                source_type_param=source_type,
+                offset=offset,
+                page_size=page_size,
+                cross_source_cap=_cross_source_cap,
+                assigned_to_id=assigned_to_id,
+                overdue=overdue,
+                asset_id=asset_id,
+            )
+        elif stl == "capa":
+            _pending_capa = await _fetch_capa_rows_for_list(
+                db,
+                tenant_id=current_user.tenant_id,
+                status_filter=status_filter,
+                capa_source=None,
+                source_id=source_id,
+                source_reference=source_reference,
                 source_type_param=source_type,
                 offset=offset,
                 page_size=page_size,
