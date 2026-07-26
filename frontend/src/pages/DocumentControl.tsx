@@ -369,9 +369,9 @@ export default function DocumentControl() {
       )}
 
       <AsyncState
-        loading={loading && error === null}
+        loading={loading}
         error={error}
-        isEmpty={error === null && !loading && documents.length === 0}
+        isEmpty={documents.length === 0}
         onRetry={() => void loadDocuments()}
         loadingFallback={
           <div className="flex items-center justify-center h-64">
