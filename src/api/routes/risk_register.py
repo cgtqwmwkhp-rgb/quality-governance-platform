@@ -301,11 +301,7 @@ async def list_risks(
                 "is_escalated": r.is_escalated,
                 "escalation_reason": r.escalation_reason,
                 "risk_owner_name": r.risk_owner_name,
-                "last_review_date": (
-                    r.last_review_date.isoformat()
-                    if getattr(r, "last_review_date", None)
-                    else None
-                ),
+                "last_review_date": (r.last_review_date.isoformat() if getattr(r, "last_review_date", None) else None),
                 "next_review_date": (r.next_review_date.isoformat() if r.next_review_date else None),
                 "updated_at": (r.updated_at.isoformat() if getattr(r, "updated_at", None) else None),
                 "created_at": (r.created_at.isoformat() if getattr(r, "created_at", None) else None),
@@ -889,9 +885,7 @@ async def resolve_suggestion_triage(
         # PX-264: accept must land an owned risk — unassigned backlog is not triage complete.
         owner_name = (risk.risk_owner_name or "").strip()
         if risk.risk_owner_id is None and not owner_name:
-            raise BadRequestError(
-                "Assign an owner before accepting this import-sourced risk into the live register"
-            )
+            raise BadRequestError("Assign an owner before accepting this import-sourced risk into the live register")
         risk.suggestion_triage_status = "accepted"
         risk.is_escalated = True
         base_reason = "Accepted from import triage."
