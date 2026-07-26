@@ -393,42 +393,33 @@ class CopilotService:
         user_message: str,
         context: dict,
     ) -> tuple[str, Optional[dict]]:
-        """Simulate AI response for demo purposes."""
+        """Demo keyword replies — refuse live-data fabrication and false writes (PX-248/250)."""
         message_lower = user_message.lower()
+        live_data_refusal = (
+            "I cannot answer from live organisation data. This demo is not connected to "
+            "your registers, so I will not invent counts, percentages, named risks, or "
+            "reference numbers. Open the relevant module for real figures."
+        )
+        write_refusal = (
+            "I cannot create or update records from this demo. Nothing was written. "
+            "Use the Incidents register (New) to log a real safety event."
+        )
 
-        # Create incident
-        if any(
-            word in message_lower
-            for word in [
-                "create incident",
-                "log incident",
-                "report incident",
-                "new incident",
-            ]
-        ):
-            # Extract title from message
-            title = user_message
-            if ":" in user_message:
-                title = user_message.split(":", 1)[1].strip()
-            elif "for" in message_lower:
-                title = user_message.split("for", 1)[1].strip()
-
+        # Create incident — honest refusal, never "Shall I proceed?" + false success (PX-250).
+        if "incident" in message_lower and any(word in message_lower for word in ("create", "log", "report", "new")):
             return (
-                f"I'll create an incident report for you. Here are the details I've extracted:\n\n"
-                f"**Title:** {title}\n"
-                f"**Severity:** Medium (you can adjust this)\n\n"
-                f"Shall I proceed with creating this incident?",
+                write_refusal,
                 {
                     "action": "create_incident",
-                    "parameters": {
-                        "title": title,
-                        "severity": "medium",
-                    },
+                    "parameters": {"title": user_message},
+                    "honesty": "not_performed",
                 },
             )
 
-        # Compliance status
-        if "compliance" in message_lower or "iso" in message_lower:
+        # Compliance / ISO live status — refuse fabricated percentages (PX-248).
+        if ("compliance" in message_lower or "iso" in message_lower) and not (
+            message_lower.startswith("what is") or message_lower.startswith("explain")
+        ):
             standard = "iso9001"
             if "14001" in message_lower:
                 standard = "iso14001"
@@ -436,36 +427,29 @@ class CopilotService:
                 standard = "iso45001"
             elif "27001" in message_lower:
                 standard = "iso27001"
-
             return (
-                f"Here's your current {standard.upper()} compliance status:\n\n"
-                f"📊 **Overall Compliance:** 92%\n"
-                f"✅ **Clauses Compliant:** 45/49\n"
-                f"⚠️ **Minor Gaps:** 3\n"
-                f"❌ **Major Gaps:** 1\n\n"
-                f"The major gap is in Clause 8.5.1 (Control of production). "
-                f"Would you like me to show you the detailed gap analysis or create actions to address these gaps?",
+                f"{live_data_refusal}\n\nFor ISO clause scores, open Compliance in the main navigation.",
                 {
                     "action": "get_compliance_status",
                     "parameters": {"standard": standard},
+                    "honesty": "not_performed",
                 },
             )
 
-        # Risk summary
-        if "risk" in message_lower:
+        # Risk summaries — refuse invented named risks / counts (PX-248).
+        if re.search(r"\brisks?\b", message_lower) and not (
+            message_lower.startswith("what is") or message_lower.startswith("explain")
+        ):
             return (
-                f"Here's your current risk summary:\n\n"
-                f"🔴 **Critical Risks:** 2\n"
-                f"🟠 **High Risks:** 8\n"
-                f"🟡 **Medium Risks:** 15\n"
-                f"🟢 **Low Risks:** 23\n\n"
-                f"**Top Risk:** Supply chain disruption (Score: 20)\n"
-                f"**Most Recent:** Cybersecurity threat (Added today)\n\n"
-                f"Would you like to see the risk heat map or create a treatment plan?",
-                None,
+                f"{live_data_refusal}\n\nOpen the Risk Register for the live register.",
+                {
+                    "action": "get_risk_summary",
+                    "parameters": {},
+                    "honesty": "not_performed",
+                },
             )
 
-        # Explain something
+        # Explain something — general guidance only (not tenant data).
         if message_lower.startswith("what is") or message_lower.startswith("explain"):
             topic = user_message.split(" ", 2)[-1].strip("?")
 
@@ -473,14 +457,16 @@ class CopilotService:
                 "capa": "**CAPA (Corrective and Preventive Action)** is a systematic approach to:\n\n"
                 "1. **Corrective Action:** Fix the immediate problem and its root cause\n"
                 "2. **Preventive Action:** Prevent similar problems from occurring\n\n"
-                "CAPAs are required by ISO 9001 (Clause 10.2) and are essential for continuous improvement.",
+                "CAPAs are required by ISO 9001 (Clause 10.2). "
+                "_General guidance only — not your organisation's CAPA register._",
                 "riddor": "**RIDDOR (Reporting of Injuries, Diseases and Dangerous Occurrences Regulations)** "
                 "is UK legislation requiring employers to report:\n\n"
                 "• Deaths and specified injuries\n"
                 "• Over-7-day incapacitation\n"
                 "• Occupational diseases\n"
                 "• Dangerous occurrences\n\n"
-                "Reports must be made to the HSE within 10-15 days depending on severity.",
+                "Reports must be made to the HSE within 10-15 days depending on severity. "
+                "_General guidance only._",
                 "iso 45001": "**ISO 45001** is the international standard for Occupational Health & Safety Management Systems.\n\n"
                 "Key elements:\n"
                 "• Leadership commitment\n"
@@ -488,18 +474,18 @@ class CopilotService:
                 "• Hazard identification\n"
                 "• Legal compliance\n"
                 "• Continual improvement\n\n"
-                "It replaced OHSAS 18001 in 2018.",
+                "_General guidance only — not your compliance score._",
             }
 
             explanation = explanations.get(
                 topic.lower(),
                 f"**{topic}** is a term used in quality and safety management. "
-                f"Would you like me to search our knowledge base for more specific information?",
+                f"This demo cannot look up your organisation's records.",
             )
 
             return (explanation, None)
 
-        # Navigation
+        # Navigation hint only — client may navigate; no fabricated write.
         if any(word in message_lower for word in ["go to", "open", "show me", "navigate"]):
             destinations = {
                 "dashboard": "/",
@@ -513,22 +499,19 @@ class CopilotService:
             for dest, path in destinations.items():
                 if dest in message_lower:
                     return (
-                        f"Taking you to the {dest} page.",
+                        f"Open {path} in the application navigation for the {dest} page. "
+                        f"This demo does not perform navigation for you.",
                         {
                             "action": "navigate",
                             "parameters": {"destination": path},
+                            "honesty": "not_performed",
                         },
                     )
 
-        # Default response
         return (
             f'I understand you\'re asking about: "{user_message}"\n\n'
-            f"I can help you with:\n"
-            f"• 📝 Creating and managing incidents\n"
-            f"• 📋 Scheduling and tracking audits\n"
-            f"• ⚠️ Risk assessment and management\n"
-            f"• ✅ Compliance tracking\n"
-            f"• 📊 Generating reports\n\n"
+            f"In this demo I can explain QHSE concepts and will refuse live-data "
+            f"questions and writes. I will not invent register data.\n\n"
             f"What would you like to do?",
             None,
         )
@@ -538,42 +521,37 @@ class CopilotService:
         message: CopilotMessage,
         action_data: dict,
     ) -> None:
-        """Execute a copilot action."""
+        """Record honesty outcome for a proposed action — never fake a successful write."""
         action_name = action_data.get("action")
         parameters = action_data.get("parameters", {})
+        honesty = action_data.get("honesty")
 
         try:
-            result = None
-
-            if action_name == "navigate":
-                # Navigation is handled client-side
-                result = {
-                    "navigated": True,
-                    "destination": parameters.get("destination"),
+            # PX-250 / PX-248: simulated paths must not claim completion or fabricate IDs.
+            if honesty == "not_performed" or action_name in {
+                "create_incident",
+                "get_compliance_status",
+                "get_risk_summary",
+                "navigate",
+            }:
+                message.action_result = {
+                    "performed": False,
+                    "action": action_name,
+                    "parameters": parameters,
+                    "reason": "demo_cannot_read_or_write_live_data",
                 }
-
-            elif action_name == "create_incident":
-                # Would create actual incident
-                result = {
-                    "created": True,
-                    "incident_id": "INC-2026-0100",
-                    "title": parameters.get("title"),
+                message.action_status = "not_performed"
+            else:
+                message.action_result = {
+                    "performed": False,
+                    "action": action_name,
+                    "reason": "unsupported_action",
                 }
-
-            elif action_name == "get_compliance_status":
-                result = {
-                    "standard": parameters.get("standard"),
-                    "compliance_percentage": 92,
-                    "gaps": 4,
-                }
-
-            # Update message with result
-            message.action_result = result
-            message.action_status = "completed"
+                message.action_status = "not_performed"
 
         except Exception as e:
             message.action_status = "failed"
-            message.action_result = {"error": str(e)}
+            message.action_result = {"error": str(e), "performed": False}
 
         await self.db.commit()
 

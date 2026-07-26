@@ -1,12 +1,11 @@
 /**
  * AI Copilot Component
  *
- * Interactive conversational AI assistant with:
- * - Natural language chat interface
- * - Context-aware suggestions
- * - Action execution
- * - Voice input support
- * - Feedback mechanism
+ * Demo-only conversational shell. Default-off via isAICopilotDemoEnabled().
+ * Honesty rules (Run021 residual):
+ * - Never invent tenant compliance / risk figures or named records (PX-248)
+ * - Never claim a write completed when nothing was written (PX-250)
+ * - Render markdown in replies instead of raw markers (PX-249)
  */
 
 import React, { useState, useRef, useEffect } from 'react'
@@ -20,13 +19,13 @@ import {
   ThumbsUp,
   ThumbsDown,
   Sparkles,
-  Loader2,
   ChevronRight,
   History,
 } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { cn } from '../../helpers/utils'
 import { isAICopilotDemoEnabled } from '../../config/aiCopilotDemo'
+import { CopilotMarkdown } from './CopilotMarkdown'
 
 interface Message {
   id: number
@@ -36,7 +35,8 @@ interface Message {
   actionType?: string
   actionData?: Record<string, unknown>
   actionResult?: Record<string, unknown>
-  actionStatus?: 'pending' | 'completed' | 'failed'
+  /** completed only when a real client-side navigation happened; never for writes */
+  actionStatus?: 'pending' | 'completed' | 'not_performed' | 'failed'
   createdAt: Date
   feedbackRating?: number
 }
@@ -56,6 +56,12 @@ interface AICopilotProps {
   contextId?: string
   contextData?: Record<string, unknown>
 }
+
+const LIVE_DATA_REFUSAL =
+  'I cannot answer from live organisation data. This demo is not connected to your registers, so I will not invent counts, percentages, named risks, or reference numbers. Open the relevant module for real figures.'
+
+const WRITE_REFUSAL =
+  'I cannot create or update records from this demo. Nothing was written. Use the Incidents register (New) to log a real safety event.'
 
 const AICopilot: React.FC<AICopilotProps> = ({
   isOpen,
@@ -82,24 +88,21 @@ const AICopilot: React.FC<AICopilotProps> = ({
       const welcomeMessage: Message = {
         id: Date.now(),
         role: 'assistant',
-        content: `This is a demonstration of a planned AI assistant. It is not connected to any AI model or to your organisation's records.\n\nReplies are fixed sample text chosen by keyword, so any counts, percentages or reference numbers you see are invented illustrations.\n\nTry a phrase such as "compliance status" or "risk summary" to preview the intended experience.`,
+        content: `This is a demonstration of a planned AI assistant. It is not connected to any AI model or to your organisation's records.\n\nI will **refuse** live-data questions (compliance status, risk summaries) and will **not** claim to create incidents or actions. Concept explanations (for example CAPA or RIDDOR) are general guidance only.\n\nTry "what is CAPA" for a concept preview, or open Compliance / Risk Register for real figures.`,
         contentType: 'text',
         createdAt: new Date(),
       }
       setMessages([welcomeMessage])
 
-      // Get context-aware suggestions
       fetchSuggestions()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Focus input when opened
   useEffect(() => {
     if (isOpen && !isMinimized) {
       inputRef.current?.focus()
@@ -107,41 +110,33 @@ const AICopilot: React.FC<AICopilotProps> = ({
   }, [isOpen, isMinimized])
 
   const fetchSuggestions = async () => {
-    // Simulated suggestions based on context
     const contextSuggestions: SuggestedAction[] = []
 
     if (contextType === 'incident') {
-      contextSuggestions.push(
-        {
-          action: 'create_action',
-          displayName: 'Create CAPA',
-          description: 'Create corrective action for this incident',
-        },
-        {
-          action: 'search_incidents',
-          displayName: 'Find Similar',
-          description: 'Search for related incidents',
-        },
-      )
+      contextSuggestions.push({
+        action: 'explain_capa',
+        displayName: 'What is CAPA?',
+        description: 'what is CAPA',
+      })
     } else if (currentPage?.includes('audit')) {
       contextSuggestions.push({
-        action: 'schedule_audit',
-        displayName: 'Schedule Audit',
-        description: 'Plan a new audit',
+        action: 'explain_iso',
+        displayName: 'Explain ISO 45001',
+        description: 'explain ISO 45001',
       })
     }
 
-    // Default suggestions
+    // Suggestions must not steer users into fabricated live-data answers (PX-248).
     contextSuggestions.push(
       {
-        action: 'get_compliance_status',
-        displayName: 'Compliance Status',
-        description: 'Check ISO compliance',
+        action: 'explain_capa',
+        displayName: 'What is CAPA?',
+        description: 'what is CAPA',
       },
       {
-        action: 'get_risk_summary',
-        displayName: 'Risk Summary',
-        description: 'View current risks',
+        action: 'explain_riddor',
+        displayName: 'What is RIDDOR?',
+        description: 'what is RIDDOR',
       },
     )
 
@@ -160,15 +155,14 @@ const AICopilot: React.FC<AICopilotProps> = ({
     }
 
     setMessages((prev) => [...prev, userMessage])
+    const prompt = input.trim()
     setInput('')
     setIsLoading(true)
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await new Promise((resolve) => setTimeout(resolve, 300))
 
-      // Generate response based on input
-      const response = generateResponse(input.trim())
+      const response = generateResponse(prompt)
 
       const assistantMessage: Message = {
         id: Date.now() + 1,
@@ -177,17 +171,13 @@ const AICopilot: React.FC<AICopilotProps> = ({
         contentType: response.actionType ? 'action' : 'text',
         actionType: response.actionType,
         actionData: response.actionData,
-        actionStatus: response.actionType ? 'pending' : undefined,
+        actionStatus: response.actionStatus,
+        actionResult: response.actionResult,
         createdAt: new Date(),
       }
 
       setMessages((prev) => [...prev, assistantMessage])
-
-      // Execute action if present
-      if (response.actionType) {
-        await executeAction(assistantMessage.id, response.actionType, response.actionData)
-      }
-    } catch (error) {
+    } catch {
       const errorMessage: Message = {
         id: Date.now() + 1,
         role: 'assistant',
@@ -202,90 +192,101 @@ const AICopilot: React.FC<AICopilotProps> = ({
   }
 
   const generateResponse = (
-    input: string,
-  ): { content: string; actionType?: string; actionData?: Record<string, unknown> } => {
-    const inputLower = input.toLowerCase()
+    rawInput: string,
+  ): {
+    content: string
+    actionType?: string
+    actionData?: Record<string, unknown>
+    actionStatus?: Message['actionStatus']
+    actionResult?: Record<string, unknown>
+  } => {
+    const inputLower = rawInput.toLowerCase()
 
+    // PX-250: never ask "Shall I proceed?" and then claim completion. Refuse writes.
     if (inputLower.includes('create') && inputLower.includes('incident')) {
       return {
-        content: `I'll help you create an incident report.\n\n**New Incident**\n• Title: ${input.replace(/create (an? )?incident (for )?/i, '')}\n• Severity: Medium\n\nShall I proceed with creating this incident?`,
+        content: WRITE_REFUSAL,
         actionType: 'create_incident',
-        actionData: {
-          title: input.replace(/create (an? )?incident (for )?/i, ''),
-          severity: 'medium',
-        },
+        actionData: { title: rawInput },
+        actionStatus: 'not_performed',
+        actionResult: { performed: false, reason: 'demo_cannot_write' },
       }
     }
 
+    // PX-248: refuse fabricated compliance / risk tenant data.
     if (inputLower.includes('compliance') || inputLower.includes('iso')) {
-      let standard = 'ISO 9001'
-      if (inputLower.includes('14001')) standard = 'ISO 14001'
-      else if (inputLower.includes('45001')) standard = 'ISO 45001'
-      else if (inputLower.includes('27001')) standard = 'ISO 27001'
-
-      return {
-        content: `**${standard} Compliance Status**\n\nOverall Compliance: **92%**\n\n| Category | Status | Score |\n|----------|--------|-------|\n| Leadership | Compliant | 95% |\n| Planning | Compliant | 90% |\n| Support | Minor Gap | 85% |\n| Operation | Compliant | 94% |\n| Evaluation | Compliant | 93% |\n| Improvement | Minor Gap | 88% |\n\n**3 minor gaps** identified. Would you like me to show details or create actions to address them?`,
-        actionType: 'get_compliance_status',
-        actionData: { standard },
+      const mentionsIsoStandard =
+        /iso\s*(9001|14001|45001|27001)/i.test(rawInput) ||
+        inputLower.includes('compliance')
+      if (mentionsIsoStandard && !inputLower.startsWith('what is') && !inputLower.startsWith('explain')) {
+        return {
+          content: `${LIVE_DATA_REFUSAL}\n\nFor ISO clause scores, open **Compliance** in the main navigation.`,
+          actionType: 'get_compliance_status',
+          actionStatus: 'not_performed',
+          actionResult: { performed: false, reason: 'no_live_data' },
+        }
       }
     }
 
-    if (inputLower.includes('risk')) {
+    if (
+      inputLower.includes('risk summary') ||
+      inputLower.includes('risk register') ||
+      (inputLower.includes('risk') &&
+        (inputLower.includes('summary') ||
+          inputLower.includes('status') ||
+          inputLower.includes('how many') ||
+          inputLower.includes('critical')))
+    ) {
       return {
-        content: `**Risk Summary**\n\n| Level | Count | Trend |\n|-------|-------|-------|\n| Critical | 2 | Down |\n| High | 8 | Stable |\n| Medium | 15 | Up |\n| Low | 23 | Stable |\n\n**Top Risk:** Supply Chain Disruption (Score: 20)\n**New This Week:** Cybersecurity Threat\n\nWould you like to see the risk heat map or create a treatment plan?`,
+        content: `${LIVE_DATA_REFUSAL}\n\nOpen the **Risk Register** for the live register.`,
+        actionType: 'get_risk_summary',
+        actionStatus: 'not_performed',
+        actionResult: { performed: false, reason: 'no_live_data' },
+      }
+    }
+
+    // Generic "risk" still refused — any invented named risk is the PX-248 failure mode.
+    if (/\brisks?\b/.test(inputLower) && !inputLower.startsWith('what is') && !inputLower.startsWith('explain')) {
+      return {
+        content: `${LIVE_DATA_REFUSAL}\n\nOpen the **Risk Register** for the live register.`,
+        actionType: 'get_risk_summary',
+        actionStatus: 'not_performed',
+        actionResult: { performed: false, reason: 'no_live_data' },
       }
     }
 
     if (inputLower.includes('what is') || inputLower.includes('explain')) {
-      const topic = input.replace(/what is|explain/gi, '').trim()
+      const topic = rawInput.replace(/what is|explain/gi, '').trim()
 
       const explanations: Record<string, string> = {
-        capa: `**CAPA (Corrective and Preventive Action)**\n\nA systematic approach to:\n1. **Corrective Action** - Fix immediate problems and root causes\n2. **Preventive Action** - Prevent similar issues from occurring\n\nRequired by ISO 9001 (Clause 10.2)\nEssential for continuous improvement\nMust be documented and verified`,
-        riddor: `**RIDDOR**\n\n**Reporting of Injuries, Diseases and Dangerous Occurrences Regulations 2013**\n\nUK employers must report:\n• Deaths and specified injuries\n• Over-7-day incapacitation\n• Occupational diseases\n• Dangerous occurrences\n\nReport within 10-15 days to HSE`,
+        capa: `**CAPA (Corrective and Preventive Action)**\n\nA systematic approach to:\n1. **Corrective Action** - Fix immediate problems and root causes\n2. **Preventive Action** - Prevent similar issues from occurring\n\nRequired by ISO 9001 (Clause 10.2)\nEssential for continuous improvement\nMust be documented and verified\n\n_General guidance only — not your organisation's CAPA register._`,
+        riddor: `**RIDDOR**\n\n**Reporting of Injuries, Diseases and Dangerous Occurrences Regulations 2013**\n\nUK employers must report:\n• Deaths and specified injuries\n• Over-7-day incapacitation\n• Occupational diseases\n• Dangerous occurrences\n\nReport within 10-15 days to HSE\n\n_General guidance only — not a filing status for your cases._`,
+        'iso 45001': `**ISO 45001** is the international standard for Occupational Health & Safety Management Systems.\n\nKey elements:\n• Leadership commitment\n• Worker participation\n• Hazard identification\n• Legal compliance\n• Continual improvement\n\n_General guidance only — not your compliance score._`,
       }
 
+      const key = topic.toLowerCase()
       return {
         content:
-          explanations[topic.toLowerCase()] ||
-          `**${topic}**\n\nI'd be happy to explain this. Could you provide more context about what aspect you'd like to understand?`,
+          explanations[key] ||
+          `**${topic}**\n\nI can only offer general QHSE definitions in this demo. I cannot look up your organisation's records.`,
       }
     }
 
     return {
-      content: `I understand you're asking about: "${input}"\n\nI can help you with:\n• Creating incidents or actions\n• Checking compliance status\n• Viewing risk summaries\n• Explaining QHSE concepts\n• Searching records\n\nCould you be more specific about what you'd like to do?`,
+      content: `I understand you're asking about: "${rawInput}"\n\nIn this demo I can:\n• Explain QHSE concepts (try "what is CAPA")\n• Honestly refuse live-data questions (compliance / risk figures)\n• Honestly refuse writes (creating incidents)\n\nI will not invent register data. Open the relevant module for real figures.`,
     }
-  }
-
-  const executeAction = async (
-    messageId: number,
-    _actionType: string,
-    _actionData?: Record<string, unknown>,
-  ) => {
-    // Simulate action execution
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === messageId
-          ? { ...m, actionStatus: 'completed', actionResult: { success: true } }
-          : m,
-      ),
-    )
   }
 
   const submitFeedback = async (messageId: number, rating: number) => {
     setMessages((prev) =>
       prev.map((m) => (m.id === messageId ? { ...m, feedbackRating: rating } : m)),
     )
-
-    // Would send to API
-    console.log('Feedback submitted:', { messageId, rating })
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      sendMessage()
+      void sendMessage()
     }
   }
 
@@ -297,10 +298,8 @@ const AICopilot: React.FC<AICopilotProps> = ({
   const toggleVoiceInput = () => {
     if (isListening) {
       setIsListening(false)
-      // Stop speech recognition
     } else {
       setIsListening(true)
-      // Start speech recognition
       if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
         const SpeechRecognition =
           (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -352,7 +351,6 @@ const AICopilot: React.FC<AICopilotProps> = ({
 
   return (
     <div className="fixed bottom-4 right-4 w-[420px] h-[600px] bg-card rounded-2xl shadow-lg border border-border flex flex-col z-50 overflow-hidden">
-      {/* Header */}
       <div className="gradient-brand px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-primary-foreground/20 flex items-center justify-center">
@@ -393,12 +391,10 @@ const AICopilot: React.FC<AICopilotProps> = ({
         data-testid="ai-copilot-demo-banner"
         className="px-4 py-2 bg-warning/15 border-b border-warning/40 text-xs text-foreground"
       >
-        <strong>Demonstration only.</strong> Every figure and answer below is scripted sample
-        content. Nothing here is read from your organisation&apos;s records — do not rely on it or
-        quote it.
+        <strong>Demonstration only.</strong> Live-data questions are refused. Writes are never
+        performed. Do not quote this surface as organisational truth.
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message) => (
           <div
@@ -415,23 +411,27 @@ const AICopilot: React.FC<AICopilotProps> = ({
                     : 'bg-surface text-foreground border border-border',
               )}
             >
-              {/* Message content */}
-              <div className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</div>
+              {message.role === 'assistant' ? (
+                <CopilotMarkdown
+                  content={message.content}
+                  className="text-sm leading-relaxed"
+                />
+              ) : (
+                <div className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</div>
+              )}
 
-              {/* Action indicator */}
               {message.actionType && (
                 <div className="mt-2 pt-2 border-t border-border flex items-center gap-2 text-xs">
-                  {message.actionStatus === 'pending' && (
-                    <>
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      <span>Processing...</span>
-                    </>
-                  )}
                   {message.actionStatus === 'completed' && (
                     <>
                       <Sparkles className="w-3 h-3 text-success" />
                       <span className="text-success">Action completed</span>
                     </>
+                  )}
+                  {message.actionStatus === 'not_performed' && (
+                    <span className="text-muted-foreground" data-testid="copilot-action-not-performed">
+                      Not performed — demo cannot write or read live registers
+                    </span>
                   )}
                   {message.actionStatus === 'failed' && (
                     <>
@@ -442,12 +442,11 @@ const AICopilot: React.FC<AICopilotProps> = ({
                 </div>
               )}
 
-              {/* Feedback buttons for assistant messages */}
               {message.role === 'assistant' && message.contentType !== 'error' && (
                 <div className="mt-2 pt-2 border-t border-border flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Was this helpful?</span>
                   <button
-                    onClick={() => submitFeedback(message.id, 5)}
+                    onClick={() => void submitFeedback(message.id, 5)}
                     className={cn(
                       'p-1 rounded hover:bg-surface transition-colors',
                       message.feedbackRating === 5
@@ -458,7 +457,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
                     <ThumbsUp className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => submitFeedback(message.id, 1)}
+                    onClick={() => void submitFeedback(message.id, 1)}
                     className={cn(
                       'p-1 rounded hover:bg-surface transition-colors',
                       message.feedbackRating === 1
@@ -501,7 +500,6 @@ const AICopilot: React.FC<AICopilotProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Suggestions */}
       {suggestions.length > 0 && messages.length <= 2 && (
         <div className="px-4 pb-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
@@ -523,7 +521,6 @@ const AICopilot: React.FC<AICopilotProps> = ({
         </div>
       )}
 
-      {/* Input */}
       <div className="p-4 border-t border-border">
         <div className="flex items-end gap-2">
           <div className="flex-1 relative">
@@ -553,7 +550,12 @@ const AICopilot: React.FC<AICopilotProps> = ({
               {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             </button>
           </div>
-          <Button onClick={sendMessage} disabled={!input.trim() || isLoading} size="icon">
+          <Button
+            onClick={() => void sendMessage()}
+            disabled={!input.trim() || isLoading}
+            size="icon"
+            aria-label="Send"
+          >
             <Send className="w-5 h-5" />
           </Button>
         </div>

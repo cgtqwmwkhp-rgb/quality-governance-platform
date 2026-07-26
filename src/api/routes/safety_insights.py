@@ -30,6 +30,9 @@ class DeepRunCreate(BaseModel):
     min_cluster_size: int = Field(default=2, ge=2, le=20)
     include_synthesis: bool = True
     include_benchmark: bool = False
+    # PX-285 / PX-165: case narratives may leave the estate (Gemini / Claude / Perplexity).
+    # Require an explicit operator acknowledgment before any transmission is queued.
+    external_processing_acknowledged: bool = False
 
 
 class ExportRequest(BaseModel):
@@ -65,6 +68,12 @@ def _dispatch_run(
     background_tasks.add_task(process_safety_insight_run_inline, run_id, tenant_id, user_id)
 
 
+EXTERNAL_PROCESSING_ACK_REQUIRED = (
+    "Acknowledge external AI processing (Gemini / Claude / optional Perplexity) "
+    "before starting a deep analysis run. Case narratives may include personal data."
+)
+
+
 @router.post("/runs")
 async def start_deep_run(
     payload: DeepRunCreate,
@@ -73,6 +82,8 @@ async def start_deep_run(
     current_user: Annotated[User, Depends(require_permission("analytics:create"))],
 ):
     assert current_user.tenant_id is not None
+    if not payload.external_processing_acknowledged:
+        raise HTTPException(status_code=400, detail=EXTERNAL_PROCESSING_ACK_REQUIRED)
     service = SafetyInsightsAnalystService(db)
     try:
         run = await service.create_run(
