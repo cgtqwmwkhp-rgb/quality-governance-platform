@@ -24,6 +24,7 @@ import {
   ASSURANCE_CERT_READINESS_COLORS,
   ASSURANCE_CERT_READINESS_LABELS,
   ASSURANCE_CERT_SCHEME_LABELS,
+  buildCertShelfEmptyCopy,
   formatAssuranceCertExpiry,
   type AssuranceCertReadinessStatus,
   type AssuranceCertShelfItem,
@@ -91,6 +92,14 @@ export default function AssuranceCertShelf() {
   }, [shelf])
 
   const items = shelf?.items ?? []
+  const emptyCopy = useMemo(
+    () =>
+      buildCertShelfEmptyCopy({
+        schemeFilter,
+        statusFilter,
+      }),
+    [schemeFilter, statusFilter],
+  )
 
   return (
     <div className="space-y-6" data-testid="assurance-cert-shelf-page">
@@ -175,13 +184,13 @@ export default function AssuranceCertShelf() {
           {loading ? (
             <p className="p-6 text-sm text-muted-foreground">{t('common.loading', 'Loading…')}</p>
           ) : items.length === 0 ? (
-            <div data-testid="assurance-cert-shelf-empty">
+            <div data-testid="assurance-cert-shelf-empty" data-empty-kind={emptyCopy.kind}>
               <EmptyState
                 icon={<Award className="w-8 h-8 text-muted-foreground" />}
-                title={t('assurance.cert_shelf.empty.title', 'No certificates on the shelf yet')}
+                title={t(`assurance.cert_shelf.empty.${emptyCopy.kind}.title`, emptyCopy.title)}
                 description={t(
-                  'assurance.cert_shelf.empty.description',
-                  'Add register certificates in Monitoring, record Planet Mark / UVDB expiry dates in their modules, or file statutory masters in the Governance Library with an expiry date.',
+                  `assurance.cert_shelf.empty.${emptyCopy.kind}.description`,
+                  emptyCopy.description,
                 )}
               />
             </div>
