@@ -137,6 +137,39 @@ describe('SafetyAssetDetail competency panel', () => {
     expect(mockListRequirements).toHaveBeenCalledWith({ asset_type_id: 10, page_size: 500 })
   })
 
+  it('hides the external reference when it is a generated surrogate key (PX-215)', async () => {
+    mockGetAsset.mockResolvedValue({
+      data: { ...asset, external_id: '6a03cef1-7e69-45e0-b745-f675b942f57f' },
+    })
+
+    renderDetail()
+
+    await waitFor(() => {
+      expect(screen.getByText('Identity')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('6a03cef1-7e69-45e0-b745-f675b942f57f')).not.toBeInTheDocument()
+    expect(screen.queryByText('External reference')).not.toBeInTheDocument()
+  })
+
+  it('still shows an external reference that means something to a user', async () => {
+    renderDetail()
+
+    await waitFor(() => {
+      expect(screen.getByText('asset-55')).toBeInTheDocument()
+    })
+    expect(screen.getByText('External reference')).toBeInTheDocument()
+  })
+
+  it('describes unbuilt linkage without naming an internal work package (PX-213)', async () => {
+    renderDetail()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('safety-asset-linked-cases')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('safety-asset-linked-cases')).not.toHaveTextContent('AM-THREAD')
+    expect(screen.getByTestId('safety-asset-open-actions')).not.toHaveTextContent('AM-THREAD')
+  })
+
   it('uses unavailable states instead of implying zero data', async () => {
     mockListRequirements.mockRejectedValue(new Error('requirements unavailable'))
     mockGetEngineerMatrix.mockRejectedValue(new Error('matrix unavailable'))

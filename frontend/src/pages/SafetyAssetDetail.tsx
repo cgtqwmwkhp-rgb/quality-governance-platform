@@ -16,6 +16,7 @@ import {
   type WdpEngineerMatrix,
 } from '../api/client'
 import { toast } from '../contexts/ToastContext'
+import { isOpaqueIdentifier } from '../helpers/displayLabels'
 import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import { Card, CardContent } from '../components/ui/Card'
 import {
@@ -322,10 +323,16 @@ export default function SafetyAssetDetail() {
                 {t('safetyAssets.detail.field_serial', 'Serial')}
               </dt>
               <dd className="text-foreground">{asset.serial_number || '—'}</dd>
-              <dt className="text-muted-foreground">
-                {t('safetyAssets.detail.field_external', 'External ID')}
-              </dt>
-              <dd className="font-mono text-xs text-foreground">{asset.external_id}</dd>
+              {!isOpaqueIdentifier(asset.external_id) && (
+                <>
+                  <dt className="text-muted-foreground">
+                    {t('safetyAssets.detail.field_external', 'External reference')}
+                  </dt>
+                  <dd className="font-mono text-xs text-foreground">
+                    {asset.external_id || '—'}
+                  </dd>
+                </>
+              )}
             </dl>
           </CardContent>
         </Card>
@@ -581,7 +588,7 @@ export default function SafetyAssetDetail() {
         </Card>
       </div>
 
-      {/* Placeholders for AM-THREAD — honest empty, not fabricated links */}
+      {/* Honest empty states, not fabricated links */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardContent className="p-5" data-testid="safety-asset-linked-cases">
@@ -591,7 +598,7 @@ export default function SafetyAssetDetail() {
             <p className="mt-2 text-sm text-muted-foreground">
               {t(
                 'safetyAssets.detail.linked_cases_placeholder',
-                'No linked cases yet — case linkage will be wired by AM-THREAD.',
+                'No linked cases yet. Linking incidents and near misses to an asset is not available yet.',
               )}
             </p>
           </CardContent>
@@ -604,7 +611,7 @@ export default function SafetyAssetDetail() {
             <p className="mt-2 text-sm text-muted-foreground">
               {t(
                 'safetyAssets.detail.open_actions_placeholder',
-                'No open actions shown — CAPA/actions wiring lands with AM-THREAD.',
+                'No open actions shown. Linking corrective actions to an asset is not available yet.',
               )}
             </p>
           </CardContent>

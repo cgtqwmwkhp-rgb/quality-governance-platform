@@ -74,6 +74,19 @@ class TestValidateComplaintTransition:
     def test_under_investigation_to_pending_response_passes(self):
         validate_complaint_transition("under_investigation", "pending_response")
 
+    def test_enum_members_are_accepted(self):
+        validate_complaint_transition(ComplaintStatus.RECEIVED, ComplaintStatus.ACKNOWLEDGED)
+
+    def test_message_carries_values_not_enum_reprs(self):
+        # complaint.status is loaded as a ComplaintStatus member, so the message is built
+        # from enum members in production; f-strings on a str-mixin enum render the repr.
+        with pytest.raises(StateTransitionError) as exc_info:
+            validate_complaint_transition(ComplaintStatus.ACKNOWLEDGED, ComplaintStatus.RESOLVED)
+        message = str(exc_info.value)
+        assert "ComplaintStatus." not in message
+        assert "'acknowledged'" in message
+        assert "'resolved'" in message
+
 
 # ---------------------------------------------------------------------------
 # ComplaintService

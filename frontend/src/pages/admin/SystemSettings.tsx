@@ -18,6 +18,7 @@ import { Input } from '../../components/ui/Input'
 import { Label } from '../../components/ui/Label'
 import { Switch } from '../../components/ui/Switch'
 import { cn } from '../../helpers/utils'
+import { formatFieldName } from '../../helpers/displayLabels'
 
 interface SettingCategory {
   id: string
@@ -296,10 +297,8 @@ export default function SystemSettings() {
     }
   }
 
-  // The storage key doubles as the control id, so every visible label is also
-  // the programmatic label. It is deliberately not rendered as visible copy —
-  // "company_name" is an internal field name, not something an admin needs to
-  // read (PX-198).
+  // The storage key doubles as the control id. Raw snake_case is never shown;
+  // formatFieldName() may render a humanized helper under the description.
   const settingFieldId = (setting: Setting) => `setting-${setting.key}`
 
   const renderSettingInput = (setting: Setting) => {
@@ -309,9 +308,12 @@ export default function SystemSettings() {
       case 'boolean':
         return (
           <div className="flex items-center justify-between gap-4">
-            <Label htmlFor={fieldId} className="text-foreground">
-              {setting.description}
-            </Label>
+            <div>
+              <Label htmlFor={fieldId} className="text-foreground">
+                {setting.description}
+              </Label>
+              <p className="text-xs text-muted-foreground">{formatFieldName(setting.key)}</p>
+            </div>
             <Switch
               id={fieldId}
               checked={setting.value === 'true'}
@@ -333,6 +335,7 @@ export default function SystemSettings() {
               onChange={(e) => updateSetting(setting.key, e.target.value)}
               className="max-w-[150px]"
             />
+            <p className="text-xs text-muted-foreground mt-1">{formatFieldName(setting.key)}</p>
           </div>
         )
 
@@ -358,6 +361,7 @@ export default function SystemSettings() {
                 className="max-w-[150px] font-mono"
               />
             </div>
+            <p className="text-xs text-muted-foreground mt-1">{formatFieldName(setting.key)}</p>
           </div>
         )
 
@@ -374,6 +378,7 @@ export default function SystemSettings() {
               onChange={(e) => updateSetting(setting.key, e.target.value)}
               placeholder="email@example.com"
             />
+            <p className="text-xs text-muted-foreground mt-1">{formatFieldName(setting.key)}</p>
           </div>
         )
 
@@ -388,6 +393,7 @@ export default function SystemSettings() {
               value={setting.value}
               onChange={(e) => updateSetting(setting.key, e.target.value)}
             />
+            <p className="text-xs text-muted-foreground mt-1">{formatFieldName(setting.key)}</p>
           </div>
         )
     }
