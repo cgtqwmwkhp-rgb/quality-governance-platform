@@ -61,16 +61,12 @@ def test_call_site_matches_the_signature(path: Path, call: ast.Call) -> None:
         name
         for name, p in sig.parameters.items()
         if p.default is inspect.Parameter.empty
-        and p.kind
-        in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+        and p.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
     }
-    supplied = kwargs | {
-        name for name, _ in zip(sig.parameters, call.args, strict=False)
-    }
+    supplied = kwargs | {name for name, _ in zip(sig.parameters, call.args, strict=False)}
     missing = required - supplied
     assert not missing, (
-        f"{path.relative_to(SRC)}:{call.lineno} omits required {sorted(missing)}. "
-        f"This raises TypeError at runtime."
+        f"{path.relative_to(SRC)}:{call.lineno} omits required {sorted(missing)}. " f"This raises TypeError at runtime."
     )
 
 
