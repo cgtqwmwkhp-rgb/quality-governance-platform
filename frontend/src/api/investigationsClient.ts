@@ -187,11 +187,22 @@ export interface ClosureBlockingItem {
   unblock_hint: string
 }
 
+export interface ClosureMissingItem {
+  code: string
+  section_key: string
+  section_label: string
+  field_key?: string | null
+  field_label?: string | null
+  path: string
+}
+
 export interface ClosureValidation {
   can_close: boolean
   reasons: string[]
   open_work?: ClosureBlockingItem[]
   open_work_count?: number
+  /** Named section/field blockers behind the MISSING_REQUIRED_* reason codes. */
+  missing_items?: ClosureMissingItem[]
 }
 
 // ============ Investigation Template Types ============

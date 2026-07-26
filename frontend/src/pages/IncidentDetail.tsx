@@ -1,5 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useEscapeToGoBack } from '../hooks/useEscapeToGoBack'
+import {
+  SubmitButton,
+  UnsavedChangesDialog,
+  useUnsavedChangesGuard,
+} from '../components/ui/form'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
@@ -305,13 +311,8 @@ export default function IncidentDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only catalog load
   }, [])
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isEditing) navigate('/incidents')
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [navigate, isEditing])
+  const goBackToIncidents = useCallback(() => navigate('/incidents'), [navigate])
+  useEscapeToGoBack(!isEditing, goBackToIncidents)
 
   useEffect(() => {
     if (!isEditing) return
@@ -608,6 +609,23 @@ export default function IncidentDetail() {
     id: number
     reference: string
   } | null>(null)
+
+  const closeInvestigationModal = useCallback(() => {
+    setShowInvestigationModal(false)
+    setInvestigationError('')
+    setExistingInvestigation(null)
+  }, [])
+
+  const investigationFormDirty =
+    investigationForm.title.trim() !== '' ||
+    investigationForm.description.trim() !== '' ||
+    investigationForm.lead_investigator.trim() !== '' ||
+    investigationForm.investigation_type !== 'root_cause_analysis'
+
+  const investigationGuard = useUnsavedChangesGuard({
+    dirty: investigationFormDirty,
+    onDiscard: closeInvestigationModal,
+  })
 
   const handleCreateInvestigation = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1940,16 +1958,7 @@ export default function IncidentDetail() {
       </Tabs>
 
       {/* Create Investigation Modal */}
-      <Dialog
-        open={showInvestigationModal}
-        onOpenChange={(open) => {
-          setShowInvestigationModal(open)
-          if (!open) {
-            setInvestigationError('')
-            setExistingInvestigation(null)
-          }
-        }}
-      >
+      <Dialog open={showInvestigationModal} onOpenChange={investigationGuard.handleOpenChange}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2072,24 +2081,31 @@ export default function IncidentDetail() {
             )}
 
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowInvestigationModal(false)}
-              >
+              <Button type="button" variant="outline" onClick={investigationGuard.requestClose}>
                 {t('cancel')}
               </Button>
-              <Button type="submit" disabled={creating}>
-                {creating ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  t('incidents.detail.create_investigation')
-                )}
-              </Button>
+              <SubmitButton
+                submitting={creating}
+                submittingLabel={t('incidents.detail.create_investigation')}
+                data-testid="incident-create-investigation-submit"
+              >
+                {t('incidents.detail.create_investigation')}
+              </SubmitButton>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+      <UnsavedChangesDialog
+        guard={investigationGuard}
+        title={t('form.unsaved.title', 'Discard unsaved changes?')}
+        description={t(
+          'form.unsaved.description',
+          'This form has changes that have not been saved. Closing it now will lose them.',
+        )}
+        keepEditingLabel={t('form.unsaved.keep_editing', 'Keep editing')}
+        discardLabel={t('form.unsaved.discard', 'Discard changes')}
+        data-testid="incident-investigation-unsaved-changes"
+      />
 
       {/* Create Action Modal */}
       <Dialog open={showActionModal} onOpenChange={setShowActionModal}>

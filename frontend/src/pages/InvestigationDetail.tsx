@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { describeClosureBlockers } from './investigationClosureReasons'
 import { useParams, useNavigate } from 'react-router-dom'
 import { trackError } from '../utils/errorTracker'
 import { toast } from '../contexts/ToastContext'
@@ -691,6 +692,12 @@ export default function InvestigationDetail() {
     if (activeTab === 'actions') loadActions()
   }, [actionStatusFilter, activeTab, loadActions])
 
+  // PX-134: name each blocker rather than echoing the raw reason code.
+  const closureBlockers = useMemo(
+    () => (closureValidation ? describeClosureBlockers(closureValidation, t) : []),
+    [closureValidation, t],
+  )
+
   // ── Render ───────────────────────────────────────────────
 
   if (loading) {
@@ -1285,20 +1292,22 @@ export default function InvestigationDetail() {
                         {t('investigations.closure.already_closed', 'This investigation is closed.')}
                       </p>
                     ) : null}
-                    {closureValidation.reasons.length > 0 && (
+                    {closureBlockers.length > 0 && (
                       <div className="space-y-1">
-                        <p className="text-xs font-medium text-muted-foreground">Issues:</p>
-                        {closureValidation.reasons.map((reason: string, i: number) => (
-                          <p key={i} className="text-xs text-destructive">
-                            •{' '}
-                            {reason === 'OPEN_ACTIONS_REMAIN'
-                              ? t(
-                                  'investigations.closure.open_actions_remain',
-                                  'Open CAPA/actions must be completed or cancelled before closure.',
-                                )
-                              : reason.replace(/_/g, ' ')}
-                          </p>
-                        ))}
+                        <p className="text-xs font-medium text-muted-foreground">
+                          {t('investigations.closure.issues_label', 'Issues:')}
+                        </p>
+                        <ul className="space-y-1">
+                          {closureBlockers.map((blocker) => (
+                            <li
+                              key={blocker.id}
+                              className="text-xs text-destructive"
+                              data-testid={`closure-reason-${blocker.code}`}
+                            >
+                              • {blocker.text}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     )}
                     {(closureValidation.open_work_count ?? 0) > 0 && (

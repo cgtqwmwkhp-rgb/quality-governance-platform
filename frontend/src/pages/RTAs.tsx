@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { trackError } from '../utils/errorTracker'
-import { Plus, Car, Search, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
+import { Plus, Car, Search, AlertCircle, RefreshCw } from 'lucide-react'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { EmptyState } from '../components/ui/EmptyState'
 import api, {
@@ -34,6 +34,51 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import {
+  FormField,
+  FormNotice,
+  SubmitButton,
+  UnsavedChangesDialog,
+  useFormController,
+  useUnsavedChangesGuard,
+  type FieldSpecs,
+} from '../components/ui/form'
+
+type RtaFormField =
+  | 'title'
+  | 'description'
+  | 'location'
+  | 'severity'
+  | 'company_vehicle_registration'
+  | 'driver_name'
+  | 'collision_date'
+
+/** Stable control ids — also used by the "scroll to first invalid field" behaviour. */
+const RTA_CONTROL_IDS: Record<RtaFormField, string> = {
+  title: 'rtas-field-0',
+  description: 'rtas-field-1',
+  location: 'rtas-field-2',
+  severity: 'rtas-field-3',
+  company_vehicle_registration: 'rtas-field-4',
+  driver_name: 'rtas-field-5',
+  collision_date: 'rtas-field-6',
+}
+
+function buildInitialRtaForm(): RTACreate {
+  const now = new Date().toISOString().slice(0, 16)
+  return {
+    title: '',
+    description: '',
+    severity: 'damage_only',
+    collision_date: now,
+    reported_date: now,
+    location: '',
+    driver_name: '',
+    company_vehicle_registration: '',
+    police_attended: false,
+    driver_injured: false,
+  }
+}
 
 function buildRtasListSearch(params: { ids: string }): string {
   const next = new URLSearchParams()
@@ -52,8 +97,7 @@ export default function RTAs() {
     null,
   )
   const [showModal, setShowModal] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [createError, setCreateError] = useState<string | null>(null)
+  const [formDirty, setFormDirty] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [idsFilter, setIdsFilter] = useState(() => searchParams.get('ids') || '')
   const emptyThirdParty: ThirdParty = {
@@ -66,18 +110,7 @@ export default function RTAs() {
     injured: false,
     damage: '',
   }
-  const [formData, setFormData] = useState<RTACreate>({
-    title: '',
-    description: '',
-    severity: 'damage_only',
-    collision_date: new Date().toISOString().slice(0, 16),
-    reported_date: new Date().toISOString().slice(0, 16),
-    location: '',
-    driver_name: '',
-    company_vehicle_registration: '',
-    police_attended: false,
-    driver_injured: false,
-  })
+  const [formData, setFormData] = useState<RTACreate>(buildInitialRtaForm)
   const [thirdParties, setThirdParties] = useState<ThirdParty[]>([{ ...emptyThirdParty }])
 
   // Hydrate ids deep-link from shareable URL (back/forward + Safety Insights).
@@ -161,42 +194,60 @@ export default function RTAs() {
     }
   }
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setCreating(true)
-    setCreateError(null)
-    try {
-      const nonEmptyParties = thirdParties.filter(
-        (p) => p.name || p.vehicle_reg || p.phone,
-      )
+  /** Any edit marks the form dirty so closing it cannot silently bin typed work. */
+  const updateForm = (patch: Partial<RTACreate>) => {
+    setFormDirty(true)
+    setFormData((prev) => ({ ...prev, ...patch }))
+  }
+
+  const updateThirdParties = (next: ThirdParty[]) => {
+    setFormDirty(true)
+    setThirdParties(next)
+  }
+
+  const closeCreateModal = () => {
+    setShowModal(false)
+    setFormDirty(false)
+    setFormData(buildInitialRtaForm())
+    setThirdParties([{ ...emptyThirdParty }])
+  }
+
+  const rtaFields: FieldSpecs<RtaFormField> = {
+    title: { label: t('common.title'), required: true },
+    description: { label: t('common.description'), required: true },
+    location: { label: t('rtas.table.location'), required: true },
+    severity: { label: t('rtas.table.severity') },
+    company_vehicle_registration: { label: t('rtas.form.vehicle_reg') },
+    driver_name: { label: t('rtas.form.driver_name') },
+    collision_date: { label: t('rtas.form.collision_date'), required: true },
+  }
+
+  const createForm = useFormController<RtaFormField>({
+    fields: rtaFields,
+    values: formData as unknown as Record<string, unknown>,
+    controlId: (name) => RTA_CONTROL_IDS[name],
+    toErrorMessage: (err) => {
+      trackError(err, { component: 'RTAs', action: 'create' })
+      return getApiErrorMessage(err)
+    },
+    onSubmit: async () => {
+      const nonEmptyParties = thirdParties.filter((p) => p.name || p.vehicle_reg || p.phone)
       await rtasApi.create({
         ...formData,
         collision_date: new Date(formData.collision_date).toISOString(),
         reported_date: new Date(formData.reported_date).toISOString(),
-        third_parties:
-          nonEmptyParties.length > 0 ? { parties: nonEmptyParties } : undefined,
+        third_parties: nonEmptyParties.length > 0 ? { parties: nonEmptyParties } : undefined,
       })
-      setShowModal(false)
-      setFormData({
-        title: '',
-        description: '',
-        severity: 'damage_only',
-        collision_date: new Date().toISOString().slice(0, 16),
-        reported_date: new Date().toISOString().slice(0, 16),
-        location: '',
-        driver_name: '',
-        company_vehicle_registration: '',
-        police_attended: false,
-        driver_injured: false,
-      })
-      setThirdParties([{ ...emptyThirdParty }])
+      closeCreateModal()
       loadRtas()
-    } catch (err) {
-      trackError(err, { component: 'RTAs', action: 'create' })
-      setCreateError(getApiErrorMessage(err))
-    } finally {
-      setCreating(false)
-    }
+    },
+  })
+
+  const createGuard = useUnsavedChangesGuard({ dirty: formDirty, onDiscard: closeCreateModal })
+
+  const openCreateModal = () => {
+    createForm.resetFeedback()
+    setShowModal(true)
   }
 
   const getSeverityVariant = (severity: string) => {
@@ -252,7 +303,7 @@ export default function RTAs() {
           <h1 className="text-2xl font-bold text-foreground">{t('rtas.title')}</h1>
           <p className="text-muted-foreground mt-1">{t('rtas.subtitle')}</p>
         </div>
-        <Button data-testid="create-rta-btn" onClick={() => setShowModal(true)}>
+        <Button data-testid="create-rta-btn" onClick={openCreateModal}>
           <Plus size={20} />
           {t('rtas.report')}
         </Button>
@@ -391,163 +442,131 @@ export default function RTAs() {
       )}
 
       {/* Create Modal */}
-      <Dialog open={showModal} onOpenChange={setShowModal}>
+      <Dialog open={showModal} onOpenChange={createGuard.handleOpenChange}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('rtas.dialog.title')}</DialogTitle>
             <DialogDescription>{t('rtas.dialog.description')}</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-5">
-            {createError && (
-              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">
-                {createError}
-              </div>
-            )}
-            <div>
-              <label
-                htmlFor="rtas-field-0"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('common.title')}
-              </label>
-              <Input
-                id="rtas-field-0"
-                type="text"
-                required
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder={t('rtas.form.placeholder.title')}
-              />
-            </div>
+          <form {...createForm.formProps} className="space-y-5">
+            {createForm.submitError ? (
+              <FormNotice tone="error" data-testid="rta-create-error">
+                {createForm.submitError}
+              </FormNotice>
+            ) : null}
 
-            <div>
-              <label
-                htmlFor="rtas-field-1"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('common.description')}
-              </label>
-              <Textarea
-                id="rtas-field-1"
-                required
-                rows={3}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder={t('rtas.form.placeholder.description')}
-              />
-            </div>
+            <FormField {...createForm.fieldProps('title')}>
+              {(control) => (
+                <Input
+                  {...control}
+                  type="text"
+                  value={formData.title}
+                  onChange={(e) => updateForm({ title: e.target.value })}
+                  placeholder={t('rtas.form.placeholder.title')}
+                  error={Boolean(createForm.errors.title)}
+                />
+              )}
+            </FormField>
 
-            <div>
-              <label
-                htmlFor="rtas-field-2"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('rtas.table.location')}
-              </label>
-              <Input
-                id="rtas-field-2"
-                type="text"
-                required
-                value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                placeholder={t('rtas.form.placeholder.location')}
-              />
-            </div>
+            <FormField {...createForm.fieldProps('description')}>
+              {(control) => (
+                <Textarea
+                  {...control}
+                  rows={3}
+                  value={formData.description}
+                  onChange={(e) => updateForm({ description: e.target.value })}
+                  placeholder={t('rtas.form.placeholder.description')}
+                />
+              )}
+            </FormField>
+
+            <FormField {...createForm.fieldProps('location')}>
+              {(control) => (
+                <Input
+                  {...control}
+                  type="text"
+                  value={formData.location}
+                  onChange={(e) => updateForm({ location: e.target.value })}
+                  placeholder={t('rtas.form.placeholder.location')}
+                  error={Boolean(createForm.errors.location)}
+                />
+              )}
+            </FormField>
 
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label
-                  htmlFor="rtas-field-3"
-                  className="block text-sm font-medium text-foreground mb-2"
-                >
-                  {t('rtas.table.severity')}
-                </label>
-                <Select
-                  value={formData.severity}
-                  onValueChange={(value) => setFormData({ ...formData, severity: value })}
-                >
-                  <SelectTrigger id="rtas-field-3">
-                    <SelectValue placeholder={t('rtas.form.placeholder.severity')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="near_miss">{t('rtas.severity.near_miss')}</SelectItem>
-                    <SelectItem value="damage_only">{t('rtas.severity.damage_only')}</SelectItem>
-                    <SelectItem value="minor_injury">{t('rtas.severity.minor_injury')}</SelectItem>
-                    <SelectItem value="serious_injury">
-                      {t('rtas.severity.serious_injury')}
-                    </SelectItem>
-                    <SelectItem value="fatal">{t('rtas.severity.fatal')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <FormField {...createForm.fieldProps('severity')} nativeControl={false}>
+                {(control) => (
+                  <Select
+                    value={formData.severity}
+                    onValueChange={(value) => updateForm({ severity: value })}
+                  >
+                    <SelectTrigger {...control}>
+                      <SelectValue placeholder={t('rtas.form.placeholder.severity')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="near_miss">{t('rtas.severity.near_miss')}</SelectItem>
+                      <SelectItem value="damage_only">{t('rtas.severity.damage_only')}</SelectItem>
+                      <SelectItem value="minor_injury">
+                        {t('rtas.severity.minor_injury')}
+                      </SelectItem>
+                      <SelectItem value="serious_injury">
+                        {t('rtas.severity.serious_injury')}
+                      </SelectItem>
+                      <SelectItem value="fatal">{t('rtas.severity.fatal')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              </FormField>
 
-              <div>
-                <label
-                  htmlFor="rtas-field-4"
-                  className="block text-sm font-medium text-foreground mb-2"
-                >
-                  {t('rtas.form.vehicle_reg')}
-                </label>
+              <FormField {...createForm.fieldProps('company_vehicle_registration')}>
+                {(control) => (
+                  <Input
+                    {...control}
+                    type="text"
+                    value={formData.company_vehicle_registration || ''}
+                    onChange={(e) => updateForm({ company_vehicle_registration: e.target.value })}
+                    placeholder={t('rtas.form.placeholder.vehicle_reg')}
+                  />
+                )}
+              </FormField>
+            </div>
+
+            <FormField {...createForm.fieldProps('driver_name')}>
+              {(control) => (
                 <Input
-                  id="rtas-field-4"
+                  {...control}
                   type="text"
-                  value={formData.company_vehicle_registration || ''}
-                  onChange={(e) =>
-                    setFormData({ ...formData, company_vehicle_registration: e.target.value })
-                  }
-                  placeholder={t('rtas.form.placeholder.vehicle_reg')}
+                  value={formData.driver_name || ''}
+                  onChange={(e) => updateForm({ driver_name: e.target.value })}
+                  placeholder={t('rtas.form.placeholder.driver_name')}
                 />
-              </div>
-            </div>
+              )}
+            </FormField>
 
-            <div>
-              <label
-                htmlFor="rtas-field-5"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('rtas.form.driver_name')}
-              </label>
-              <Input
-                id="rtas-field-5"
-                type="text"
-                value={formData.driver_name || ''}
-                onChange={(e) => setFormData({ ...formData, driver_name: e.target.value })}
-                placeholder={t('rtas.form.placeholder.driver_name')}
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="rtas-field-6"
-                className="block text-sm font-medium text-foreground mb-2"
-              >
-                {t('rtas.form.collision_date')}
-              </label>
-              <Input
-                id="rtas-field-6"
-                type="datetime-local"
-                required
-                value={formData.collision_date}
-                onChange={(e) => setFormData({ ...formData, collision_date: e.target.value })}
-              />
-            </div>
+            <FormField {...createForm.fieldProps('collision_date')}>
+              {(control) => (
+                <Input
+                  {...control}
+                  type="datetime-local"
+                  value={formData.collision_date}
+                  onChange={(e) => updateForm({ collision_date: e.target.value })}
+                  error={Boolean(createForm.errors.collision_date)}
+                />
+              )}
+            </FormField>
 
             <div className="flex gap-6">
               <div className="flex items-center gap-2">
                 <Switch
                   checked={formData.police_attended || false}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, police_attended: checked })
-                  }
+                  onCheckedChange={(checked) => updateForm({ police_attended: checked })}
                 />
                 <span className="text-sm text-foreground">{t('rtas.form.police_attended')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Switch
                   checked={formData.driver_injured || false}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, driver_injured: checked })
-                  }
+                  onCheckedChange={(checked) => updateForm({ driver_injured: checked })}
                 />
                 <span className="text-sm text-foreground">{t('rtas.form.driver_injured')}</span>
               </div>
@@ -564,7 +583,7 @@ export default function RTAs() {
                   variant="outline"
                   size="sm"
                   onClick={() =>
-                    setThirdParties([...thirdParties, { ...emptyThirdParty }])
+                    updateThirdParties([...thirdParties, { ...emptyThirdParty }])
                   }
                 >
                   <Plus className="w-3 h-3 mr-1" />
@@ -588,7 +607,7 @@ export default function RTAs() {
                         size="sm"
                         className="text-destructive h-6 px-2 text-xs"
                         onClick={() =>
-                          setThirdParties(thirdParties.filter((_, i) => i !== idx))
+                          updateThirdParties(thirdParties.filter((_, i) => i !== idx))
                         }
                       >
                         Remove
@@ -608,7 +627,7 @@ export default function RTAs() {
                         onChange={(e) => {
                           const updated = [...thirdParties]
                           updated[idx] = { ...updated[idx], name: e.target.value }
-                          setThirdParties(updated)
+                          updateThirdParties(updated)
                         }}
                         placeholder="Full name"
                       />
@@ -624,7 +643,7 @@ export default function RTAs() {
                         onChange={(e) => {
                           const updated = [...thirdParties]
                           updated[idx] = { ...updated[idx], phone: e.target.value }
-                          setThirdParties(updated)
+                          updateThirdParties(updated)
                         }}
                         placeholder="07xxx xxxxxx"
                       />
@@ -643,7 +662,7 @@ export default function RTAs() {
                         onChange={(e) => {
                           const updated = [...thirdParties]
                           updated[idx] = { ...updated[idx], vehicle_reg: e.target.value }
-                          setThirdParties(updated)
+                          updateThirdParties(updated)
                         }}
                         placeholder="AB12 CDE"
                       />
@@ -662,7 +681,7 @@ export default function RTAs() {
                             ...updated[idx],
                             vehicle_make_model: e.target.value,
                           }
-                          setThirdParties(updated)
+                          updateThirdParties(updated)
                         }}
                         placeholder="e.g. Ford Transit"
                       />
@@ -680,7 +699,7 @@ export default function RTAs() {
                       onChange={(e) => {
                         const updated = [...thirdParties]
                         updated[idx] = { ...updated[idx], damage: e.target.value }
-                        setThirdParties(updated)
+                        updateThirdParties(updated)
                       }}
                       placeholder="Describe damage to other vehicle"
                     />
@@ -698,7 +717,7 @@ export default function RTAs() {
                         onChange={(e) => {
                           const updated = [...thirdParties]
                           updated[idx] = { ...updated[idx], insurer: e.target.value }
-                          setThirdParties(updated)
+                          updateThirdParties(updated)
                         }}
                         placeholder="Insurance company"
                       />
@@ -717,7 +736,7 @@ export default function RTAs() {
                             ...updated[idx],
                             insurer_policy_number: e.target.value,
                           }
-                          setThirdParties(updated)
+                          updateThirdParties(updated)
                         }}
                         placeholder="Policy number"
                       />
@@ -730,7 +749,7 @@ export default function RTAs() {
                       onCheckedChange={(checked) => {
                         const updated = [...thirdParties]
                         updated[idx] = { ...updated[idx], injured: checked }
-                        setThirdParties(updated)
+                        updateThirdParties(updated)
                       }}
                     />
                     <span className="text-sm text-foreground">
@@ -742,23 +761,31 @@ export default function RTAs() {
             </div>
 
             <DialogFooter className="gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
+              <Button type="button" variant="outline" onClick={createGuard.requestClose}>
                 {t('cancel')}
               </Button>
-              <Button type="submit" disabled={creating}>
-                {creating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {t('rtas.reporting')}
-                  </>
-                ) : (
-                  t('rtas.report')
-                )}
-              </Button>
+              <SubmitButton
+                submitting={createForm.submitting}
+                submittingLabel={t('rtas.reporting')}
+                data-testid="rta-create-submit"
+              >
+                {t('rtas.report')}
+              </SubmitButton>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+      <UnsavedChangesDialog
+        guard={createGuard}
+        title={t('form.unsaved.title', 'Discard unsaved changes?')}
+        description={t(
+          'form.unsaved.description',
+          'This form has changes that have not been saved. Closing it now will lose them.',
+        )}
+        keepEditingLabel={t('form.unsaved.keep_editing', 'Keep editing')}
+        discardLabel={t('form.unsaved.discard', 'Discard changes')}
+        data-testid="rta-unsaved-changes"
+      />
     </div>
   )
 }
