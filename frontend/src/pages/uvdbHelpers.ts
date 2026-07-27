@@ -129,11 +129,14 @@ export type UvdbSectionScoreLike = {
 /**
  * Display gate for protocol section cards: pending / excluded sections render
  * as not scored (no green bar), never as a fabricated compliance %.
+ *
+ * Generic so callers keep their concrete `score_source` union (e.g. ScoreSource)
+ * instead of widening to `string`.
  */
-export function gateUvdbSectionScoreForDisplay(
-  score: UvdbSectionScoreLike | null | undefined,
+export function gateUvdbSectionScoreForDisplay<T extends UvdbSectionScoreLike>(
+  score: T | null | undefined,
   contentStatus: UvdbContentStatus | undefined,
-): UvdbSectionScoreLike | null {
+): T | null {
   if (!score) return null
   const pending = contentStatus === 'pending_protocol_pdf'
   const excluded =
