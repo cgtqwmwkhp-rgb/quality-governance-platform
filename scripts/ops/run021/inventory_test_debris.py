@@ -31,6 +31,7 @@ from scripts.ops.run021._common import (
     add_safety_args,
     emit_report,
     enforce_apply_safety,
+    is_protected_ci_smoke_email,
     matches_test_token,
     open_session,
     summarise_counts,
@@ -93,10 +94,14 @@ async def _collect(*, tenant_id: Optional[int], limit: int) -> list[dict[str, An
                 )
 
         # PX-197 users
-        q = select(User.id, User.email, User.first_name, User.last_name, User.is_superuser, User.is_active, User.tenant_id)
+        q = select(
+            User.id, User.email, User.first_name, User.last_name, User.is_superuser, User.is_active, User.tenant_id
+        )
         if tenant_id is not None:
             q = q.where(User.tenant_id == tenant_id)
         for row in (await db.execute(q)).all():
+            if is_protected_ci_smoke_email(row.email):
+                continue
             if matches_test_token(row.email, row.first_name, row.last_name):
                 hits.append(
                     {
@@ -159,7 +164,9 @@ async def _collect(*, tenant_id: Optional[int], limit: int) -> list[dict[str, An
                         "AND table_name IN ('audit_templates', 'audit_builder_templates')"
                     )
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         }
 
         async def _scan_templates(table: str, sql: str, params: dict[str, Any]) -> None:
@@ -204,10 +211,7 @@ async def _collect(*, tenant_id: Optional[int], limit: int) -> list[dict[str, An
             await _scan_templates("audit_templates", tpl_sql, tpl_params)
 
         if "audit_builder_templates" in existing:
-            tpl_sql = (
-                "SELECT id, name, status::text AS status, tenant_id "
-                "FROM audit_builder_templates"
-            )
+            tpl_sql = "SELECT id, name, status::text AS status, tenant_id " "FROM audit_builder_templates"
             tpl_params = {}
             if tenant_id is not None:
                 tpl_sql += " WHERE tenant_id = :tenant_id"
@@ -220,9 +224,8 @@ async def _collect(*, tenant_id: Optional[int], limit: int) -> list[dict[str, An
             .group_by(EngineerGroupMember.group_id)
             .subquery()
         )
-        q = (
-            select(EngineerGroup.id, EngineerGroup.name, EngineerGroup.tenant_id, member_count.c.n)
-            .outerjoin(member_count, member_count.c.group_id == EngineerGroup.id)
+        q = select(EngineerGroup.id, EngineerGroup.name, EngineerGroup.tenant_id, member_count.c.n).outerjoin(
+            member_count, member_count.c.group_id == EngineerGroup.id
         )
         if tenant_id is not None:
             q = q.where(EngineerGroup.tenant_id == tenant_id)

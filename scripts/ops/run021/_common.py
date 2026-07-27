@@ -36,6 +36,17 @@ TEST_TOKEN_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Dedicated CI / smoke-runner accounts — never inventory or soft-purge as PX-197.
+# Staging deploy smoke uses UX_TEST_USER_EMAIL; prod audit E2E uses PROD_E2E_EMAIL.
+# Deactivating these yields ACCOUNT_LOCKED and blocks staging→prod promotion.
+CI_SMOKE_USER_EMAILS = frozenset(
+    {
+        "ux-test@example.com",
+        "ux-test-runner@staging.local",
+        "smoke-runner@plantexpand.com",
+    }
+)
+
 # Portal hex refs: PREFIX-YYYY-XXXXXXXX (8 hex) vs sequential PREFIX-YYYY-####.
 HEX_REF_RE = re.compile(r"^(INC|COMP|RTA|NM)-(\d{4})-([0-9A-F]{8})$")
 SEQ_REF_RE = re.compile(r"^(INC|COMP|RTA|NM)-(\d{4})-(\d{4,})$")
@@ -124,6 +135,13 @@ def enforce_apply_safety(*, apply: bool, i_understand_prod: bool) -> str:
 def matches_test_token(*parts: Optional[str]) -> bool:
     blob = " ".join(p for p in parts if p)
     return bool(blob and TEST_TOKEN_RE.search(blob))
+
+
+def is_protected_ci_smoke_email(email: Optional[str]) -> bool:
+    """Return True when email is a dedicated CI/smoke runner that must stay active."""
+    if not email:
+        return False
+    return email.strip().lower() in CI_SMOKE_USER_EMAILS
 
 
 def is_hex_reference(ref: Optional[str]) -> bool:
