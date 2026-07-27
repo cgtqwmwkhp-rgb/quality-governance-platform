@@ -39,6 +39,7 @@ from src.domain.models.rta import RoadTrafficCollision, RTASeverity, RTAStatus
 from src.domain.services.api_idempotency_service import begin_idempotent_create, complete_idempotent_create
 from src.domain.services.audit_log_service import AuditLogService
 from src.domain.services.portal_triage_service import assign_and_notify_portal_intake
+from src.domain.services.reference_number import ReferenceNumberService
 
 logger = logging.getLogger(__name__)
 
@@ -336,6 +337,43 @@ def generate_portal_reference(prefix: str) -> str:
     """Generate a collision-resistant portal reference number."""
     year = datetime.now(timezone.utc).year
     return f"{prefix}-{year}-{secrets.token_hex(4).upper()}"
+
+
+# PX-126: which register each portal prefix writes into, so the portal can draw
+# from the same sequence staff intake already uses instead of its own hex space.
+_PORTAL_REFERENCE_REGISTERS: dict[str, tuple[str, Any]] = {
+    "INC": ("incident", Incident),
+    "COMP": ("complaint", Complaint),
+    "RTA": ("rta", RoadTrafficCollision),
+    "NM": ("near_miss", NearMiss),
+}
+
+
+async def mint_portal_reference(db: DbSession, prefix: str) -> str:
+    """Mint a portal reference from the shared sequential register (PX-126).
+
+    Portal intake used to mint ``COMP-2026-9F3A21C4`` while staff intake minted
+    ``COMP-2026-0007`` for the same register, so a single case list showed two
+    incompatible reference formats and neither operators nor complainants could
+    tell which was "real".
+
+    If the sequence cannot be read the legacy hex form is used rather than
+    refusing the submission: an employee filing a near miss must never lose it to
+    a reference-minting problem.
+    """
+    register = _PORTAL_REFERENCE_REGISTERS.get(prefix)
+    if register is None:
+        return generate_portal_reference(prefix)
+    record_type, model_class = register
+    try:
+        return await ReferenceNumberService.generate(db, record_type, model_class)
+    except Exception:
+        logger.warning(
+            "Sequential portal reference unavailable for %s; falling back to the legacy form",
+            prefix,
+            exc_info=True,
+        )
+        return generate_portal_reference(prefix)
 
 
 _CUSTOMER_DISPLAY_LABELS = {
@@ -1366,7 +1404,7 @@ async def submit_quick_report(
     )
 
     if report_type == "incident":
-        ref_number = generate_portal_reference("INC")
+        ref_number = await mint_portal_reference(db, "INC")
         tracking_code = generate_tracking_code(ref_number)
 
         from src.domain.services.contract_resolve import resolve_contract_id_by_code
@@ -1420,7 +1458,7 @@ async def submit_quick_report(
         )
 
     elif report_type == "complaint":
-        ref_number = generate_portal_reference("COMP")
+        ref_number = await mint_portal_reference(db, "COMP")
         tracking_code = generate_tracking_code(ref_number)
 
         complaint = Complaint(
@@ -1464,7 +1502,7 @@ async def submit_quick_report(
         )
 
     elif report_type == "rta":
-        ref_number = generate_portal_reference("RTA")
+        ref_number = await mint_portal_reference(db, "RTA")
         tracking_code = generate_tracking_code(ref_number)
 
         # Map severity
@@ -1517,7 +1555,7 @@ async def submit_quick_report(
         )
 
     elif report_type == "near_miss":
-        ref_number = generate_portal_reference("NM")
+        ref_number = await mint_portal_reference(db, "NM")
         tracking_code = generate_tracking_code(ref_number)
 
         # Map severity to priority

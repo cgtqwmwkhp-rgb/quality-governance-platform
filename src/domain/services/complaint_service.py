@@ -5,6 +5,7 @@ Raises domain exceptions instead of HTTPException.
 """
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from pydantic import BaseModel
@@ -43,6 +44,49 @@ COMPLAINT_TRANSITIONS: dict[ComplaintStatus, set[ComplaintStatus]] = {
     ComplaintStatus.ESCALATED: {ComplaintStatus.UNDER_INVESTIGATION, ComplaintStatus.CLOSED},
     ComplaintStatus.CLOSED: set(),
 }
+
+
+# PX-210: statuses that can only be reached after the complainant has actually
+# been responded to, so entering one for the first time stamps first_response_at.
+# "pending_response" is deliberately absent — it means a response is still owed.
+RESPONDED_STATUSES: frozenset[ComplaintStatus] = frozenset(
+    {
+        ComplaintStatus.AWAITING_CUSTOMER,
+        ComplaintStatus.RESOLVED,
+        ComplaintStatus.CLOSED,
+    }
+)
+
+
+def _as_status(value) -> Optional[ComplaintStatus]:
+    """Coerce a status column value to its enum member, tolerating raw strings."""
+    if isinstance(value, ComplaintStatus):
+        return value
+    try:
+        return ComplaintStatus(getattr(value, "value", value))
+    except (ValueError, TypeError):
+        return None
+
+
+def resolve_response_due_at(
+    received_date: Optional[datetime],
+    response_sla_hours: Optional[int],
+    explicit_due_at: Optional[datetime],
+) -> Optional[datetime]:
+    """Work out the response deadline for a complaint.
+
+    An explicitly supplied date always wins; otherwise the deadline is the agreed
+    SLA measured from when the complaint was received. With no SLA and no explicit
+    date there is no deadline — the caller must keep saying so rather than
+    inventing one.
+    """
+    if explicit_due_at is not None:
+        return explicit_due_at
+    if response_sla_hours is None or received_date is None:
+        return None
+    if response_sla_hours <= 0:
+        return None
+    return received_date + timedelta(hours=response_sla_hours)
 
 
 def validate_complaint_transition(current: str, target: str) -> None:
@@ -88,6 +132,29 @@ class ComplaintService:
         if user is None or not user.is_active or user.tenant_id != tenant_id:
             raise ValueError(f"User with ID {subject_user_id} not found")
 
+    @staticmethod
+    def _apply_response_sla(complaint: Complaint, *, old_status, raw_update: dict) -> None:
+        """Keep the response deadline and first-response stamp consistent (PX-210).
+
+        Changing the agreed SLA re-derives the deadline from ``received_date``
+        unless the same request also supplies an explicit ``response_due_at`` —
+        including when the SLA is cleared, because a deadline derived from an SLA
+        that no longer exists is a deadline nobody agreed to.
+
+        ``first_response_at`` is stamped once, the first time the complaint reaches
+        a status that cannot be reached without having answered the complainant.
+        An explicit value in the request always wins.
+        """
+        if "response_sla_hours" in raw_update and "response_due_at" not in raw_update:
+            complaint.response_due_at = resolve_response_due_at(
+                complaint.received_date, complaint.response_sla_hours, None
+            )
+
+        if complaint.first_response_at is not None or "first_response_at" in raw_update:
+            return
+        if _as_status(complaint.status) in RESPONDED_STATUSES and _as_status(old_status) not in RESPONDED_STATUSES:
+            complaint.first_response_at = datetime.now(timezone.utc)
+
     async def create_complaint(
         self,
         *,
@@ -117,6 +184,12 @@ class ComplaintService:
             subject_user_id = data.get("subject_user_id")
             if subject_user_id is not None:
                 await self._assert_tenant_subject_user(int(subject_user_id), tenant_id)
+
+        data["response_due_at"] = resolve_response_due_at(
+            data.get("received_date"),
+            data.get("response_sla_hours"),
+            data.get("response_due_at"),
+        )
 
         ref_num = await ReferenceNumberService.generate(self.db, "complaint", Complaint)
 
@@ -209,7 +282,14 @@ class ComplaintService:
         if "status" in raw_update:
             validate_complaint_transition(old_status, raw_update["status"])
 
-        update_data = apply_updates(complaint, complaint_data, set_updated_at=False)
+        apply_updates(complaint, complaint_data, set_updated_at=False)
+        self._apply_response_sla(complaint, old_status=old_status, raw_update=raw_update)
+
+        # The audit entry lands in a JSON column, so the payload has to be
+        # JSON-native. apply_updates returns Python objects, which meant patching
+        # any date field on a complaint blew up on insert; create_complaint has
+        # always dumped in json mode for the same reason.
+        update_data = complaint_data.model_dump(exclude_unset=True, mode="json")
 
         await self.db.flush()
         await self.db.refresh(complaint)

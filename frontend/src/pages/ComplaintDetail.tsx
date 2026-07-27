@@ -30,6 +30,7 @@ import {
   Users,
   ShieldAlert,
 } from 'lucide-react'
+import type { ComplaintResponseSlaState } from '../api/complaintsClient'
 import {
   complaintsApi,
   Complaint,
@@ -52,6 +53,7 @@ import {
   caseBreadcrumbLabel,
 } from '../components/register/caseRegisterHonesty'
 import { formatCodedValue } from '../helpers/displayLabels'
+import { formatDisplayDateTime } from '../helpers/formatters'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Textarea } from '../components/ui/Textarea'
@@ -97,6 +99,104 @@ import {
 } from '../components/case/CaseCapaActionsPanel'
 import { CaseEvidencePanel } from '../components/case/CaseEvidencePanel'
 import { CaseWitnessesPanel, type CaseWitnessesValue } from '../components/case/CaseWitnessesPanel'
+
+type ComplaintSlaFields = Pick<
+  Complaint,
+  'response_sla_hours' | 'response_due_at' | 'first_response_at' | 'response_sla_state'
+>
+
+export interface ComplaintResponseSlaView {
+  configured: boolean
+  tone: 'muted' | 'warning' | 'destructive' | 'success'
+  headline: string
+  detail: string
+}
+
+/**
+ * Trust the state the API derived; only fall back when the field is absent
+ * because the caller is talking to a build that predates PX-210.
+ */
+function resolveResponseSlaState(complaint: ComplaintSlaFields): ComplaintResponseSlaState {
+  if (complaint.response_sla_state) return complaint.response_sla_state
+  if (complaint.first_response_at || complaint.response_due_at || complaint.response_sla_hours != null) {
+    return 'pending'
+  }
+  return 'not_configured'
+}
+
+/**
+ * Describe a complaint's response SLA for the detail page (PX-210).
+ *
+ * Whether an unanswered deadline has already passed is the one judgement made
+ * here rather than server-side, because it depends on the reader's clock.
+ */
+export function describeComplaintResponseSla(
+  complaint: ComplaintSlaFields,
+  now: Date = new Date(),
+): ComplaintResponseSlaView {
+  const state = resolveResponseSlaState(complaint)
+  const dueLabel = formatDisplayDateTime(complaint.response_due_at)
+  const respondedLabel = formatDisplayDateTime(complaint.first_response_at)
+  const slaLabel =
+    complaint.response_sla_hours != null
+      ? `${complaint.response_sla_hours}-hour response SLA`
+      : 'No response SLA agreed'
+
+  if (state === 'met') {
+    return {
+      configured: true,
+      tone: 'success',
+      headline: 'Responded within the response SLA',
+      detail: complaint.response_due_at
+        ? `Responded ${respondedLabel} · was due ${dueLabel}`
+        : `Responded ${respondedLabel} · no deadline was stored`,
+    }
+  }
+
+  if (state === 'breached') {
+    return {
+      configured: true,
+      tone: 'destructive',
+      headline: 'Response missed the SLA',
+      detail: `Responded ${respondedLabel} · was due ${dueLabel}`,
+    }
+  }
+
+  if (state === 'pending') {
+    const due = complaint.response_due_at ? new Date(complaint.response_due_at) : null
+    const dueIsPast = due !== null && !Number.isNaN(due.getTime()) && due.getTime() < now.getTime()
+    if (!complaint.response_due_at) {
+      return {
+        configured: true,
+        tone: 'warning',
+        headline: slaLabel,
+        detail: 'No response deadline stored — set a received date to derive one.',
+      }
+    }
+    return {
+      configured: true,
+      tone: dueIsPast ? 'destructive' : 'warning',
+      headline: dueIsPast ? `Response overdue since ${dueLabel}` : `Response due ${dueLabel}`,
+      detail: `${slaLabel} · no response recorded yet`,
+    }
+  }
+
+  return {
+    configured: false,
+    tone: 'muted',
+    headline: 'No response SLA on this record',
+    detail: 'None stored; empty contacts ≠ deadline.',
+  }
+}
+
+const SLA_TONE_CLASSES: Record<ComplaintResponseSlaView['tone'], string> = {
+  muted: 'border-border bg-muted/40 text-foreground',
+  warning:
+    'border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100',
+  destructive: 'border-destructive/30 bg-destructive/10 text-foreground',
+  success:
+    'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-100',
+}
 
 const COMPLAINT_TYPE_VALUES = [
   'product',
@@ -230,6 +330,7 @@ export default function ComplaintDetail() {
         complainant_phone: response.data.complainant_phone,
         resolution_summary: response.data.resolution_summary,
         lessons_learnt: response.data.lessons_learnt ?? '',
+        response_sla_hours: response.data.response_sla_hours ?? null,
       })
       loadActions()
       loadInvestigations(complaintId)
@@ -313,6 +414,11 @@ export default function ComplaintDetail() {
       if (payload.status === complaint.status) {
         delete payload.status
       }
+      // Sending an unchanged SLA would re-derive response_due_at and discard a
+      // deadline set directly against the API (PX-210).
+      if ((payload.response_sla_hours ?? null) === (complaint.response_sla_hours ?? null)) {
+        delete payload.response_sla_hours
+      }
       const response = await complaintsApi.update(complaint.id, payload)
       setComplaint(response.data)
       setIsEditing(false)
@@ -339,6 +445,7 @@ export default function ComplaintDetail() {
         complainant_phone: complaint.complainant_phone,
         resolution_summary: complaint.resolution_summary,
         lessons_learnt: complaint.lessons_learnt ?? '',
+        response_sla_hours: complaint.response_sla_hours ?? null,
       })
     }
     setSaveError(null)
@@ -691,6 +798,7 @@ export default function ComplaintDetail() {
   )
   const investigationHonesty = complaintDownstreamInvestigationHonesty(Boolean(latestInvestigation))
   const actionsHonesty = complaintDownstreamActionsHonesty(openActions.length)
+  const responseSla = describeComplaintResponseSla(complaint)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -738,13 +846,43 @@ export default function ComplaintDetail() {
       ) : null}
 
       <div
-        className="rounded-xl border border-border bg-muted/40 p-4 text-foreground"
+        className={cn('rounded-xl border p-4', SLA_TONE_CLASSES[responseSla.tone])}
         role="status"
-        data-testid="complaint-detail-sla-not-configured"
+        data-testid={
+          responseSla.configured
+            ? 'complaint-detail-response-sla'
+            : 'complaint-detail-sla-not-configured'
+        }
       >
-        <p className="text-sm text-muted-foreground">
-          No response SLA on this record — none stored; empty contacts ≠ deadline.
-        </p>
+        <p className="text-sm font-semibold">{responseSla.headline}</p>
+        <p className="mt-1 text-sm">{responseSla.detail}</p>
+        {isEditing ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label className="text-sm font-medium" htmlFor="complaint-response-sla-hours">
+              Response SLA (hours)
+            </label>
+            <Input
+              id="complaint-response-sla-hours"
+              data-testid="complaint-response-sla-hours"
+              type="number"
+              min={1}
+              max={8760}
+              className="w-32"
+              value={editForm.response_sla_hours ?? ''}
+              onChange={(e) => {
+                const parsed = Number.parseInt(e.target.value, 10)
+                setEditForm({
+                  ...editForm,
+                  response_sla_hours: Number.isFinite(parsed) ? parsed : null,
+                })
+              }}
+            />
+            <span className="text-xs text-muted-foreground">
+              Leave blank for no agreed response SLA. The deadline is derived from the received
+              date.
+            </span>
+          </div>
+        ) : null}
       </div>
 
       {/* Header */}

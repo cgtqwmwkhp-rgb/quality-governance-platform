@@ -18,6 +18,13 @@ export interface PaginatedResponse<T> {
   total_pages?: number
 }
 
+/**
+ * Response-SLA state derived by the API from stored timestamps only (PX-210).
+ * `pending` says a deadline exists and no response is recorded yet — whether it
+ * has already gone past is decided against the reader's clock, on the surface.
+ */
+export type ComplaintResponseSlaState = 'not_configured' | 'pending' | 'met' | 'breached'
+
 export type ComplaintSourceType =
   | 'manual'
   | 'email'
@@ -48,6 +55,10 @@ export interface Complaint {
   subject_name?: string | null
   alleged_event_at?: string | null
   target_resolution_date?: string
+  response_sla_hours?: number | null
+  response_due_at?: string | null
+  first_response_at?: string | null
+  response_sla_state?: ComplaintResponseSlaState
   investigation_notes?: string
   root_cause?: string
   resolution_summary?: string
@@ -104,6 +115,8 @@ export interface ComplaintCreate {
   subject_user_id?: number | null
   subject_name?: string | null
   alleged_event_at?: string | null
+  response_sla_hours?: number | null
+  response_due_at?: string | null
   reporter_submission?: Record<string, unknown>
 }
 
@@ -124,6 +137,9 @@ export interface ComplaintUpdate {
   subject_name?: string | null
   alleged_event_at?: string | null
   received_date?: string
+  response_sla_hours?: number | null
+  response_due_at?: string | null
+  first_response_at?: string | null
   investigation_notes?: string
   root_cause?: string
   customer_satisfied?: boolean

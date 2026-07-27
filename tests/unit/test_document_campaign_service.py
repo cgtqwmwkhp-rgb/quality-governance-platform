@@ -43,6 +43,18 @@ def _rows_result(rows):
     return result
 
 
+def _stub_reference_mint(service, reference="CAM-2026-0001"):
+    """Answer the campaign reference mint (PX-222) without a real database.
+
+    These cases drive the service with hand-rolled doubles that reply to one
+    query shape in a fixed order, so the mint's own MAX/COUNT round-trips would
+    consume answers meant for the query under test. The mint itself is covered by
+    TestCampaignReference.
+    """
+    service._mint_campaign_reference = AsyncMock(return_value=reference)
+    return service
+
+
 # =============================================================================
 # MCQ grading
 # =============================================================================
@@ -287,6 +299,7 @@ class TestCreateCampaign:
             refresh=AsyncMock(),
         )
         service = DocumentCampaignService(db)
+        _stub_reference_mint(service)
 
         campaign = await service.create_campaign(
             tenant_id=1,
@@ -336,6 +349,7 @@ class TestCreateCampaign:
     async def test_no_quiz_defaults_require_quiz_false(self):
         db = SimpleNamespace(add=MagicMock(), commit=AsyncMock(), refresh=AsyncMock())
         service = DocumentCampaignService(db)
+        _stub_reference_mint(service)
 
         campaign = await service.create_campaign(
             tenant_id=1,
@@ -1272,6 +1286,7 @@ class TestSpawnReackCampaign:
             refresh=AsyncMock(),
         )
         service = DocumentCampaignService(db)
+        _stub_reference_mint(service)
         service._document_title = AsyncMock(return_value="Safety Policy")
 
         result = await service.spawn_reack_campaign(document_id=5, tenant_id=1, actor_id=2)
@@ -1319,6 +1334,7 @@ class TestSpawnReackCampaign:
             refresh=AsyncMock(),
         )
         service = DocumentCampaignService(db)
+        _stub_reference_mint(service)
         service._document_title = AsyncMock(return_value="Safety Policy")
         service.launch_campaign = AsyncMock()
 
@@ -1364,6 +1380,7 @@ class TestSpawnReackCampaign:
             refresh=AsyncMock(),
         )
         service = DocumentCampaignService(db)
+        _stub_reference_mint(service)
         service._document_title = AsyncMock(return_value="Safety Policy")
         service.launch_campaign = AsyncMock(return_value={"campaign_id": 99, "status": "active"})
         service._close_superseded_campaign = AsyncMock()
@@ -1415,6 +1432,7 @@ class TestSpawnReackCampaign:
             refresh=AsyncMock(),
         )
         service = DocumentCampaignService(db)
+        _stub_reference_mint(service)
         service._document_title = AsyncMock(return_value="Safety Policy")
         service.launch_campaign = AsyncMock(return_value={"campaign_id": 99, "status": "active"})
         service._close_superseded_campaign = AsyncMock()
@@ -2132,3 +2150,98 @@ class TestListQuestionInboxIncludesSignatureContext:
 
         assert items[0]["assignment_id"] is None
         assert items[0]["signature_disposition"] is None
+
+
+# =============================================================================
+# Stored campaign reference (PX-222)
+# =============================================================================
+
+
+class TestCampaignReference:
+    """The CAM reference is minted and stored, not rebuilt by each surface."""
+
+    @staticmethod
+    def _mint_db(max_reference, existing_count):
+        """A db double that answers the mint's MAX and COUNT round-trips in order."""
+        max_result = MagicMock()
+        max_result.scalar.return_value = max_reference
+        count_result = MagicMock()
+        count_result.scalar.return_value = existing_count
+        return SimpleNamespace(
+            flush=AsyncMock(),
+            execute=AsyncMock(side_effect=[max_result, count_result]),
+            add=MagicMock(),
+            commit=AsyncMock(),
+            refresh=AsyncMock(),
+        )
+
+    @pytest.mark.asyncio
+    async def test_first_campaign_of_the_year_mints_sequence_one(self):
+        service = DocumentCampaignService(self._mint_db(None, 0))
+
+        reference = await service._mint_campaign_reference()
+
+        assert reference == f"CAM-{datetime.now().year}-0001"
+
+    @pytest.mark.asyncio
+    async def test_mint_continues_the_existing_sequence(self):
+        year = datetime.now().year
+        service = DocumentCampaignService(self._mint_db(f"CAM-{year}-0007", 7))
+
+        reference = await service._mint_campaign_reference()
+
+        assert reference == f"CAM-{year}-0008"
+
+    @pytest.mark.asyncio
+    async def test_created_campaign_stores_its_reference(self):
+        db = SimpleNamespace(add=MagicMock(), commit=AsyncMock(), refresh=AsyncMock())
+        service = DocumentCampaignService(db)
+        _stub_reference_mint(service, "CAM-2026-0042")
+
+        campaign = await service.create_campaign(
+            tenant_id=1,
+            created_by_id=7,
+            document_id=99,
+            audience={"all_users": True},
+        )
+
+        assert campaign.reference_number == "CAM-2026-0042"
+
+    @pytest.mark.asyncio
+    async def test_reacknowledgment_campaign_gets_its_own_reference(self):
+        source = SimpleNamespace(
+            id=11,
+            title="Annual read",
+            due_within_days=14,
+            require_quiz=False,
+            require_sign=True,
+            reminder_offsets_hours=[24],
+            audience_all_users=True,
+            audience_department=None,
+            audience_role=None,
+            audience_group_ids=None,
+            audience_user_ids=None,
+            quiz_draft_id=None,
+            quiz_questions=None,
+            quiz_pass_mark=None,
+            competence_asset_type_id=None,
+        )
+        db = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[
+                    SimpleNamespace(scalars=lambda: SimpleNamespace(first=lambda: source)),
+                    SimpleNamespace(scalar_one_or_none=lambda: None),
+                ]
+            ),
+            add=MagicMock(),
+            commit=AsyncMock(),
+            refresh=AsyncMock(),
+        )
+        service = DocumentCampaignService(db)
+        _stub_reference_mint(service, "CAM-2026-0043")
+        service._document_title = AsyncMock(return_value="Safety Policy")
+
+        result = await service.spawn_reack_campaign(document_id=5, tenant_id=1, actor_id=2)
+
+        assert result["spawned"] is True
+        assert db.add.call_args[0][0].reference_number == "CAM-2026-0043"
