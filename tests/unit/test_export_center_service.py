@@ -8,11 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from src.domain.exceptions import BadRequestError
-from src.domain.services.export_center_service import (
-    SYNC_ROW_LIMIT,
-    ExportCenterService,
-    _incident_row,
-)
+from src.domain.services.export_center_service import SYNC_ROW_LIMIT, ExportCenterService, _incident_row
 
 
 class _FakeScalars:
