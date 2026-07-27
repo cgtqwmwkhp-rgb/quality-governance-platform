@@ -23,6 +23,13 @@ from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
+from tests._dsn_guard import assert_test_database_is_local  # noqa: E402
+
+# Checked before the DSN is used for anything, because src.main below opens an
+# engine at import time. setdefault means an exported DATABASE_URL wins, so this
+# is the point at which a shell still pointing at a live deployment is caught.
+assert_test_database_is_local()
+
 _DEFAULT_SQLITE_DB_PATH = Path(tempfile.gettempdir()) / f"qgp-test-integration-{os.getpid()}.db"
 _DEFAULT_INTEGRATION_DATABASE_URL = f"sqlite+aiosqlite:///{_DEFAULT_SQLITE_DB_PATH}"
 

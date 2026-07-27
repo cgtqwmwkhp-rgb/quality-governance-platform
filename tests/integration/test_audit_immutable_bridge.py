@@ -117,3 +117,66 @@ async def test_complaint_create_persists_audit_log_entry(client: AsyncClient, au
     entry = result.scalar_one_or_none()
     assert entry is not None
     assert entry.entry_metadata.get("event_type") == "complaint.created"
+
+
+@pytest.mark.asyncio
+async def test_record_audit_event_denormalises_actor_identity(test_session, test_tenant, test_user):
+    """PX-142 — the trail must name the actor, not just carry an opaque user_id."""
+    await record_audit_event(
+        db=test_session,
+        event_type="capa.created",
+        entity_type="capa",
+        entity_id="2002",
+        action="create",
+        description="Actor identity proof",
+        payload={"title": "Named actor"},
+        user_id=test_user.id,
+        tenant_id=test_tenant.id,
+    )
+    await test_session.commit()
+
+    await apply_tenant_guc(test_session, test_tenant.id)
+    result = await test_session.execute(
+        select(AuditLogEntry).where(
+            AuditLogEntry.tenant_id == test_tenant.id,
+            AuditLogEntry.entity_id == "2002",
+        )
+    )
+    entry = result.scalar_one()
+    assert entry.user_email == test_user.email
+    assert entry.user_name == test_user.full_name.strip()
+
+
+@pytest.mark.asyncio
+async def test_audit_trail_names_actors_on_legacy_entries_without_rewriting_them(
+    client: AsyncClient, auth_headers, test_session
+):
+    """Entries predating denormalisation must still render a name — and stay immutable."""
+    from src.domain.models.user import User
+
+    await apply_tenant_guc(test_session, 1)
+    actor = (await test_session.execute(select(User).where(User.id == 1))).scalar_one()
+
+    legacy = await AuditLogService(test_session).log(
+        tenant_id=1,
+        entity_type="capa",
+        entity_id="3003",
+        action="update",
+        user_id=actor.id,
+    )
+    legacy_id = legacy.id
+    await test_session.commit()
+
+    response = await client.get("/api/v1/audit-trail/", params={"entity_id": "3003"}, headers=auth_headers)
+    assert response.status_code == 200
+    returned = [e for e in response.json() if e["id"] == legacy_id]
+    assert returned, "legacy entry missing from the trail"
+    assert returned[0]["user_name"] == (actor.full_name.strip() or actor.email)
+    assert returned[0]["user_email"] == actor.email
+
+    # The projection is hydrated for display only; the immutable row must be untouched.
+    test_session.expire_all()
+    await apply_tenant_guc(test_session, 1)
+    persisted = (await test_session.execute(select(AuditLogEntry).where(AuditLogEntry.id == legacy_id))).scalar_one()
+    assert persisted.user_name is None
+    assert persisted.user_email is None
