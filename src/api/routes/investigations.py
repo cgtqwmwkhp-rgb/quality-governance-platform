@@ -29,8 +29,8 @@ from src.api.schemas.investigation import (
     SourceRecordItem,
     SourceRecordsResponse,
 )
-from src.api.utils.tenant import require_tenant_id
-from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError, ValidationError
+from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
+from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError, TenantAccessError, ValidationError
 from src.domain.models.investigation import (
     AssignedEntityType,
     InvestigationComment,
@@ -84,7 +84,15 @@ def _missing_items_to_payload(validation: Any) -> list[dict]:
 
 
 def _user_can_access_investigation(user: Any, investigation: InvestigationRun) -> bool:
-    """Authorization helper for investigation-scoped read endpoints."""
+    """Named-involvement check for investigation-scoped read endpoints.
+
+    This answers "may this caller see this run *within their own tenant*". It is
+    deliberately tenant-blind: ``_assert_investigation_tenant`` establishes the
+    tenant first, so ``investigations:view_all`` here means every investigation
+    in the caller's tenant, which is what its siblings in the four case
+    registers mean (``rta:view_all`` and friends are only ever consulted after a
+    tenant-scoped fetch, to widen a reporter-email restriction).
+    """
     if getattr(user, "is_superuser", False):
         return True
     has_permission = getattr(user, "has_permission", None)
@@ -99,15 +107,86 @@ def _user_can_access_investigation(user: Any, investigation: InvestigationRun) -
     }
 
 
+def _assert_investigation_tenant(investigation: InvestigationRun, current_user: Any) -> int:
+    """Refuse any by-id access to a run outside the caller's tenant; return that tenant.
+
+    Every route that reaches an ``InvestigationRun`` by id must pass through
+    here, read or write. Before this existed the read path selected by bare id
+    and then asked only about roles, so a holder of ``investigations:view_all``
+    could read another tenant's run, and the write path checked nothing beyond
+    its permission gate.
+
+    Investigations are tenant-local, including for app superusers, so there is
+    deliberately no superuser branch:
+
+    * ``investigation_runs`` carries a FORCE RLS ``tenant_isolation`` policy
+      (20260222_add_rls_policies, 20260710_force_rls) whose USING clause is
+      ``tenant_id = current_setting('app.current_tenant_id')`` with no superuser
+      exemption. Per ``TenantContextMiddleware``, an app superuser with a tenant
+      still gets that GUC bound to *their own* tenant; cross-tenant admin is a
+      BYPASSRLS database-role capability, not an application flag.
+    * #1389's ``resolve_investigation_closure_scope`` already refuses a
+      superuser's cross-tenant closure. A read or write that crossed where the
+      close refuses would be #1382's B-2 read/write asymmetry in reverse.
+    * The investigation paths that were already scoped —
+      ``CAPAService.create_capa_for_investigation``,
+      ``link_asset_to_investigation`` (SEC-01), ``from-record``,
+      ``source-coverage`` — all scope unconditionally. Unlike the four case
+      registers there is no ``skip_tenant_check`` idiom anywhere in the
+      investigation services to honour.
+
+    A run whose ``tenant_id`` is missing is refused rather than guessed at: the
+    column is NOT NULL, so such a row is corrupt and no caller can be shown to
+    be entitled to it.
+    """
+    caller_tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    record_tenant_id = getattr(investigation, "tenant_id", None)
+    if record_tenant_id is None or int(record_tenant_id) != int(caller_tenant_id):
+        logger.warning(
+            "investigation_cross_tenant_access_refused",
+            extra={
+                "investigation_id": getattr(investigation, "id", None),
+                "reference_number": getattr(investigation, "reference_number", None),
+                "record_tenant_id": record_tenant_id,
+                "caller_tenant_id": caller_tenant_id,
+            },
+        )
+        raise TenantAccessError(
+            "This investigation belongs to another organisation.",
+            details={"investigation_id": getattr(investigation, "id", None)},
+        )
+    return caller_tenant_id
+
+
+async def _load_investigation_or_404(investigation_id: int, db: AsyncSession) -> InvestigationRun:
+    """Fetch a run by id with no authorization. Callers must gate what they get back.
+
+    Split out only so ``add_comment`` can report a corrupt (tenant-less) run
+    under its own write-specific reason before authorizing against it.
+    """
+    result = await db.execute(select(InvestigationRun).where(InvestigationRun.id == investigation_id))
+    investigation = result.scalar_one_or_none()
+    if not investigation:
+        raise NotFoundError(f"Investigation with ID {investigation_id} not found")
+    return investigation
+
+
 async def _get_investigation_or_404(
     investigation_id: int,
     db: AsyncSession,
     current_user: Any,
 ) -> InvestigationRun:
-    """Load investigation and enforce not-found semantics for unauthorized users."""
-    result = await db.execute(select(InvestigationRun).where(InvestigationRun.id == investigation_id))
-    investigation = result.scalar_one_or_none()
-    if not investigation or not _user_can_access_investigation(current_user, investigation):
+    """Load a run, refusing another tenant's outright and hiding the rest as 404.
+
+    Order matters: a cross-tenant run is refused under the shared
+    ``TENANT_ACCESS_DENIED`` code #1389 introduced, *before* roles are consulted,
+    so no permission can be mistaken for a licence to leave the tenant. Only
+    then does a run the caller is not named on become a 404, which is the
+    existing in-tenant contract these endpoints are documented and tested for.
+    """
+    investigation = await _load_investigation_or_404(investigation_id, db)
+    _assert_investigation_tenant(investigation, current_user)
+    if not _user_can_access_investigation(current_user, investigation):
         raise NotFoundError(f"Investigation with ID {investigation_id} not found")
     return investigation
 
@@ -957,8 +1036,11 @@ async def list_investigations(
     """
     request_id = request.headers.get("X-Request-ID", "N/A")
 
-    # Build query
-    query = select(InvestigationRun)
+    # Build query, scoped to the caller's tenant. Fail-closed and unconditional:
+    # the register is tenant-local (see _assert_investigation_tenant), and a
+    # caller with no tenant must match nothing rather than everything.
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    query = apply_tenant_filter(select(InvestigationRun), InvestigationRun, tenant_id)
 
     # Apply filters
     if entity_type is not None:
@@ -1017,14 +1099,8 @@ async def get_investigation(
     """Get a specific investigation run by ID."""
     request_id = request.headers.get("X-Request-ID", "N/A")
 
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise NotFoundError(f"Investigation with ID {investigation_id} not found")
-
-    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    investigation = await _load_investigation_or_404(investigation_id, db)
+    tenant_id = _assert_investigation_tenant(investigation, current_user)
     return await _investigation_to_response(db, investigation, tenant_id=tenant_id)
 
 
@@ -1076,13 +1152,10 @@ async def update_investigation(  # noqa: C901 - completion/close gates + revisio
     """
     request_id = request.headers.get("X-Request-ID", "N/A")
 
-    # Get existing investigation
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise NotFoundError(f"Investigation with ID {investigation_id} not found")
+    # Get existing investigation. The tenant gate runs before anything is read
+    # off the record or written to it, so a refused edit leaves it untouched.
+    investigation = await _load_investigation_or_404(investigation_id, db)
+    _assert_investigation_tenant(investigation, current_user)
 
     update_data = investigation_data.model_dump(exclude_unset=True)
     override_meta: dict | None = None
@@ -1613,12 +1686,8 @@ async def autosave_investigation(
     request_id = "N/A"
 
     # Get investigation with version check
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise NotFoundError(f"Investigation {investigation_id} not found")
+    investigation = await _load_investigation_or_404(investigation_id, db)
+    _assert_investigation_tenant(investigation, current_user)
 
     # Optimistic locking: check version
     if investigation.version != version:
@@ -1687,16 +1756,22 @@ async def add_comment(
 
     request_id = "N/A"
 
-    # Validate investigation exists within the caller's tenant scope.
-    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
-    investigation = await _get_investigation_or_404(investigation_id, db, current_user)
+    # Validate investigation exists within the caller's tenant scope. A caller
+    # with no tenant learns nothing about the record, so that is refused before
+    # it is even loaded. The record integrity check then keeps its own
+    # write-specific reason — this route has to copy the run's tenant onto a new
+    # row, so a run without one is a bad record rather than a bad caller — and
+    # cross-tenant refuses under the shared code, where it used to answer 404.
+    require_tenant_id(getattr(current_user, "tenant_id", None))
+    investigation = await _load_investigation_or_404(investigation_id, db)
     if investigation.tenant_id is None:
         raise ValidationError(
             "tenant_id is required to create an investigation comment",
             details={"investigation_id": investigation.id},
         )
-    if investigation.tenant_id != tenant_id:
-        raise NotFoundError(f"Investigation {investigation_id} not found")
+    _assert_investigation_tenant(investigation, current_user)
+    if not _user_can_access_investigation(current_user, investigation):
+        raise NotFoundError(f"Investigation with ID {investigation_id} not found")
 
     # Validate parent comment if provided
     if payload.parent_comment_id:
@@ -1771,12 +1846,8 @@ async def approve_investigation(
     request_id = "N/A"
 
     # Get investigation
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise NotFoundError(f"Investigation {investigation_id} not found")
+    investigation = await _load_investigation_or_404(investigation_id, db)
+    _assert_investigation_tenant(investigation, current_user)
 
     # Check status allows approval
     if investigation.status not in (
@@ -1856,13 +1927,10 @@ async def generate_customer_pack(
     except ValueError:
         raise BadRequestError(f"Invalid audience: {audience}")
 
-    # Get investigation
-    query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
-    result = await db.execute(query)
-    investigation = result.scalar_one_or_none()
-
-    if not investigation:
-        raise NotFoundError(f"Investigation {investigation_id} not found")
+    # Get investigation. A pack is the exportable copy of the record, so this is
+    # a read of it and is gated exactly as the detail read is.
+    investigation = await _load_investigation_or_404(investigation_id, db)
+    _assert_investigation_tenant(investigation, current_user)
 
     pending = InvestigationService.pending_customer_omits(investigation)
     if pending:
