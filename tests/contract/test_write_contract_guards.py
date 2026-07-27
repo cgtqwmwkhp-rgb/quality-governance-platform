@@ -28,6 +28,16 @@ schema; these check that the declared schemas agree with each other and with
 the seeded configuration. Schemathesis cannot catch PX-168, because returning
 ``owner_id: null`` conforms to ``ActionResponse`` perfectly.
 
+Known blind spot — PX-327 specifically. These guards compare *declared* schema
+fields, so they catch a field that one side declares and the other does not.
+``attachments`` is declared on neither the incident request nor the response
+model, so there is nothing for a schema-driven check to compare and this module
+does **not** detect it. Guard 1 catches the general class (a field that can be
+written with no read path); catching PX-327 itself needs a test that uploads to
+the attachment endpoint and then re-reads the incident, which is a fixture cost
+this module deliberately does not carry. It is called out here so nobody reads
+green as evidence that PX-327 is fixed.
+
 Known gaps live in ``_write_contract_baseline.py``. Each guard is therefore two
 tests: an **active** one that fails when a gap appears that is not recorded
 (the gate that keeps the backlog from growing), and an **xfail** one asserting
