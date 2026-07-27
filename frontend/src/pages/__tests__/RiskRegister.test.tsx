@@ -68,6 +68,33 @@ vi.mock('../../api/client', () => ({
     err instanceof Error ? err.message : fallback,
 }))
 
+vi.mock('../../components/UserEmailSearch', () => ({
+  UserEmailSearch: ({
+    onChange,
+    label,
+  }: {
+    onChange: (email: string, user?: { id: number; email: string; full_name: string }) => void
+    label?: string
+  }) => (
+    <div>
+      <label>{label}</label>
+      <button
+        type="button"
+        data-testid="risk-import-accept-owner-pick"
+        onClick={() =>
+          onChange('audit.owner@example.com', {
+            id: 99,
+            email: 'audit.owner@example.com',
+            full_name: 'Audit Owner',
+          })
+        }
+      >
+        Pick owner
+      </button>
+    </div>
+  ),
+}))
+
 vi.mock('../../contexts/ToastContext', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }))
@@ -832,14 +859,77 @@ describe('RiskRegister Run021 residual honesty (Lane C)', () => {
     expect(await screen.findByTestId('risk-import-accept-dialog')).toBeInTheDocument()
     expect(mockResolveSuggestionTriage).not.toHaveBeenCalled()
 
-    fireEvent.change(screen.getByTestId('risk-import-accept-owner'), {
-      target: { value: 'Audit Owner' },
-    })
+    fireEvent.click(screen.getByTestId('risk-import-accept-owner-pick'))
     fireEvent.click(screen.getByTestId('risk-import-accept-confirm'))
 
     await waitFor(() => {
-      expect(mockUpdateOwner).toHaveBeenCalledWith(44, { risk_owner_name: 'Audit Owner' })
+      expect(mockUpdateOwner).toHaveBeenCalledWith(44, {
+        risk_owner_id: 99,
+        risk_owner_name: 'Audit Owner',
+      })
       expect(mockResolveSuggestionTriage).toHaveBeenCalledWith(44, { decision: 'accept' })
     })
+  })
+
+  it('PX-264: clicking Unassigned opens assign-owner dialog without accepting', async () => {
+    const pendingItem = {
+      id: 55,
+      reference: 'RSK-IMP-055',
+      title: 'Unassigned import risk',
+      status: 'identified',
+      residual_score: 6,
+      inherent_score: 6,
+      category: 'compliance',
+      risk_owner_name: null,
+      suggestion_triage_status: 'pending',
+      created_at: '2026-04-06T10:00:00Z',
+    }
+    mockRiskList.mockImplementation(async (params?: { suggestion_triage?: string }) => {
+      if (params?.suggestion_triage === 'pending') {
+        return { data: { items: [pendingItem], total: 1 } }
+      }
+      return { data: { items: [], total: 0 } }
+    })
+    mockGetSummary.mockResolvedValue({
+      data: {
+        total_risks: 1,
+        by_level: { critical: 0, high: 0, medium: 1, low: 0 },
+        outside_appetite: 0,
+        overdue_review: 0,
+        never_reviewed: 1,
+        escalated: 0,
+      },
+    })
+    mockUpdateOwner.mockResolvedValue({
+      data: { id: 55, risk_owner_id: 99, risk_owner_name: 'Audit Owner' },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/risk-register?triage=import']}>
+        <TooltipProvider>
+          <Routes>
+            <Route path="*" element={<RiskRegister />} />
+          </Routes>
+        </TooltipProvider>
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(await screen.findByTestId('risk-owner-edit-55'))
+    expect(await screen.findByTestId('risk-import-accept-dialog')).toHaveTextContent('Assign owner')
+    expect(screen.getByTestId('risk-import-accept-dialog')).not.toHaveTextContent(
+      'Assign owner to accept',
+    )
+
+    fireEvent.click(screen.getByTestId('risk-import-accept-owner-pick'))
+    fireEvent.click(screen.getByTestId('risk-import-accept-confirm'))
+
+    await waitFor(() => {
+      expect(mockUpdateOwner).toHaveBeenCalledWith(55, {
+        risk_owner_id: 99,
+        risk_owner_name: 'Audit Owner',
+      })
+      expect(mockResolveSuggestionTriage).not.toHaveBeenCalled()
+    })
+    expect(toast.success).toHaveBeenCalledWith('Owner assigned')
   })
 })
