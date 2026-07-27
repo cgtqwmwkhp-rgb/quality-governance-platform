@@ -12,6 +12,7 @@ import logging
 import re
 import traceback
 import uuid
+from enum import Enum
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -34,8 +35,29 @@ _STATUS_TO_ERROR_CODE: dict[int, str] = {
 }
 
 
+def _code_str(code: object) -> str:
+    """Render an error code as the bare vocabulary string clients match on.
+
+    ``ErrorCode`` is a ``(str, Enum)`` and ``Enum`` overrides ``__str__``, so on
+    a member ``str()`` yields ``"ErrorCode.VALIDATION_ERROR"`` rather than
+    ``"VALIDATION_ERROR"``. ``_normalize_http_detail`` used plain ``str()``, and
+    120 of the 121 ``api_error`` call sites pass a member rather than a string,
+    so every ``HTTPException`` raised with a structured detail put a qualified
+    Python name on the wire. Observed live on staging:
+    ``{"code": "ErrorCode.CONFIGURATION_ERROR"}``. No client matching the
+    documented vocabulary could match it.
+
+    Taking ``.value`` rather than leaning on the ``str`` base is deliberate: it
+    keeps working if ``ErrorCode`` is ever migrated to ``enum.StrEnum`` or to a
+    plain ``Enum``, at which point the ``str`` subclass coincidence disappears.
+    """
+    if isinstance(code, Enum):
+        return str(code.value)
+    return str(code)
+
+
 def _build_envelope(
-    code: str,
+    code: object,
     message: str,
     request_id: str,
     details: dict | None = None,
@@ -46,11 +68,19 @@ def _build_envelope(
     value-identical compatibility alias for clients that adopted the earlier
     vocabulary. It is not emitted for successful domain payloads such as
     ``SETUP_REQUIRED`` responses.
+
+    Codes are coerced to a plain ``str`` here as well as in
+    ``_normalize_http_detail``. Two of the four callers pass an ``ErrorCode``
+    member straight in, and those were already correct on the wire because
+    ``JSONResponse`` serialises a ``(str, Enum)`` as its value. That correctness
+    is incidental to the encoder rather than to anything stated here, so the
+    envelope is normalised to hold real strings and stops depending on it.
     """
+    code_value = _code_str(code)
     return {
         "error": {
-            "code": code,
-            "error_class": code,
+            "code": code_value,
+            "error_class": code_value,
             "message": message,
             "details": details or {},
             "request_id": request_id,
@@ -76,7 +106,7 @@ def _normalize_http_detail(
     # {"error": {"code": "...", "message": "...", "details": {...}}}
     if isinstance(detail.get("error"), dict):
         error_obj = detail["error"]
-        code = str(error_obj.get("code") or default_code)
+        code = _code_str(error_obj.get("code") or default_code)
         message = str(error_obj.get("message") or default_message)
         details_obj = error_obj.get("details")
         details_dict = details_obj if isinstance(details_obj, dict) else {}
@@ -89,7 +119,7 @@ def _normalize_http_detail(
     message = detail.get("message") or default_message
     details_obj = detail.get("details")
     details_dict = details_obj if isinstance(details_obj, dict) else detail
-    return str(code), str(message), details_dict
+    return _code_str(code), str(message), details_dict
 
 
 def _add_cors_headers(request: Request, response: JSONResponse) -> JSONResponse:
