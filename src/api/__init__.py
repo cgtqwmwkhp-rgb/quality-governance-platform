@@ -34,6 +34,7 @@ from src.api.routes import (
     engineers,
     evidence_assets,
     executive_dashboard,
+    exports,
     external_audit_imports,
     external_audit_records,
     feature_flags,
@@ -118,6 +119,8 @@ router.include_router(investigations.router, prefix="/investigations", tags=["In
 router.include_router(complaints.router, prefix="/complaints", tags=["Complaints"])
 router.include_router(policies.router, prefix="/policies", tags=["Policy Library"])
 router.include_router(documents.router, prefix="/documents", tags=["Document Library"])
+# Export Center — sync CSV catalog + download (PX-160). No export_jobs this wave.
+router.include_router(exports.router, prefix="/exports", tags=["Export Center"])
 # Governance Library taxonomy (Wave W0) — category tree + tag vocabulary
 router.include_router(document_categories.router, prefix="/document-categories", tags=["Governance Library Taxonomy"])
 router.include_router(library_review.router, prefix="/library-review", tags=["Governance Library Review"])
