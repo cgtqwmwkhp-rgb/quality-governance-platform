@@ -320,8 +320,7 @@ class ExportCenterService:
         fmt = (export_format or "").strip().lower()
         if module_key not in _MODULE_SPECS:
             raise BadRequestError(
-                f"Unsupported export module '{module}'. "
-                f"Supported: {', '.join(SUPPORTED_MODULES)}."
+                f"Unsupported export module '{module}'. " f"Supported: {', '.join(SUPPORTED_MODULES)}."
             )
         if fmt not in SUPPORTED_FORMATS:
             raise BadRequestError(
@@ -331,10 +330,7 @@ class ExportCenterService:
         spec = _MODULE_SPECS[module_key]
         total = await self._count(spec.model, tenant_id)
         stmt: Select[Any] = (
-            select(spec.model)
-            .where(spec.model.tenant_id == tenant_id)
-            .order_by(spec.order_by)
-            .limit(SYNC_ROW_LIMIT)
+            select(spec.model).where(spec.model.tenant_id == tenant_id).order_by(spec.order_by).limit(SYNC_ROW_LIMIT)
         )
         result = await self._db.execute(stmt)
         rows = list(result.scalars().all())
