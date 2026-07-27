@@ -130,12 +130,29 @@ class ExecutiveDashboardService:
             return model.tenant_id == self.tenant_id
         return True  # noqa: E712  — SQLAlchemy literal
 
+    async def _recover_session(self) -> None:
+        """Roll back after a failed sub-query so later ones can still run.
+
+        PostgreSQL aborts the whole transaction on the first failing statement
+        and refuses everything after it until the transaction ends. Swallowing
+        the error without rolling back therefore turns one broken aggregate into
+        a dashboard of zeros — every later tile reports "query failed" and falls
+        back to its empty default, which is indistinguishable from real data.
+        Every caller of this service is a read-only GET, so there is nothing to
+        lose by rolling back.
+        """
+        try:
+            await self.db.rollback()
+        except Exception:  # pragma: no cover - the session is already unusable
+            logger.warning("Dashboard session rollback failed", exc_info=True)
+
     async def _safe_call(self, coro, default):
         """Run an async function, returning default on any DB error."""
         try:
             return await coro
         except Exception as e:
             logger.warning("Dashboard query failed: %s", e)
+            await self._recover_session()
             return default
 
     async def _avg_resolution_days(self, start_col: Any, end_col: Any, tf: Any) -> Optional[float]:
@@ -640,6 +657,7 @@ class ExecutiveDashboardService:
         except Exception:
             logger.exception("%s trend failed", name)
             unavailable.append(name)
+            await self._recover_session()
             return []
 
     async def _trend_count_in_window(

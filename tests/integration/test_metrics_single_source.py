@@ -5,6 +5,16 @@ server-side definition. These are deliberately reconciliation tests rather than
 per-endpoint tests: a fix to one aggregate is easy to undo, but a test asserting
 that the dashboard tile equals the register it links to prevents the whole class
 of "which number is right?" defects from coming back.
+
+Two kinds of assertion appear below and the distinction matters:
+
+* Cross-surface equality (``dashboard == register``) is asserted absolutely. It
+  is the invariant under test and must hold whatever else is in the database.
+* Counts of the rows a test seeds are asserted as deltas around the seed. The
+  integration schema is only dropped between tests on SQLite; on PostgreSQL
+  (which is what CI runs) rows from every earlier test are still present, so an
+  absolute count would be asserting the state of the whole suite rather than the
+  behaviour of the endpoint.
 """
 
 from __future__ import annotations
@@ -14,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.incident import (
@@ -25,10 +36,40 @@ from src.domain.models.incident import (
     IncidentType,
 )
 from src.domain.models.risk_register import EnterpriseRisk
+from src.domain.models.tenant import Tenant
 from src.infrastructure.database import async_session_maker
 
 TENANT = 1
-OTHER_TENANT = 2
+OTHER_TENANT_SLUG = "ssot-cross-tenant-control"
+
+# Deltas the register seed below is expected to produce for a tenant-1 caller.
+SEEDED_REGISTER_TOTAL = 4
+SEEDED_REGISTER_ACTIVE = 3
+SEEDED_REGISTER_HIGH_CRITICAL = 2
+SEEDED_REGISTER_PENDING_TRIAGE = 1
+
+
+async def _other_tenant_id() -> int:
+    """Get-or-create a second tenant to act as the cross-tenant control.
+
+    Its id is looked up rather than assumed: ``tenants`` is only truncated
+    between tests on SQLite, and PostgreSQL enforces the foreign key that a
+    hardcoded id would violate on a fresh database.
+    """
+    async with async_session_maker() as session:
+        existing = (await session.execute(select(Tenant).where(Tenant.slug == OTHER_TENANT_SLUG))).scalar_one_or_none()
+        if existing is not None:
+            return int(existing.id)
+        tenant = Tenant(
+            name="SSOT cross-tenant control",
+            slug=OTHER_TENANT_SLUG,
+            admin_email="ssot-control@test.example.com",
+            is_active=True,
+            subscription_tier="standard",
+        )
+        session.add(tenant)
+        await session.commit()
+        return int(tenant.id)
 
 
 def _aware_past(days: int) -> datetime:
@@ -59,9 +100,14 @@ def _risk(*, suffix: str, tenant_id: int, status: str, score: int, triage: str |
     )
 
 
-async def _seed_register() -> dict[str, int]:
-    """Seed a register whose visible, active and total populations all differ."""
+async def _seed_register() -> None:
+    """Seed a register whose visible, active and high-risk populations all differ.
+
+    Scores map onto the canonical 5x5 bands: 20 critical, 12 high, 6 medium,
+    3 low.
+    """
     tag = uuid.uuid4().hex[:8]
+    other = await _other_tenant_id()
     rows = [
         _risk(suffix=f"{tag}-A", tenant_id=TENANT, status="active", score=20, triage=None),
         _risk(suffix=f"{tag}-B", tenant_id=TENANT, status="active", score=12, triage="accepted"),
@@ -70,16 +116,15 @@ async def _seed_register() -> dict[str, int]:
         # Awaiting import triage: excluded from every headline view.
         _risk(suffix=f"{tag}-E", tenant_id=TENANT, status="active", score=25, triage="pending"),
         # Another tenant: must never appear in either surface.
-        _risk(suffix=f"{tag}-F", tenant_id=OTHER_TENANT, status="active", score=25, triage=None),
+        _risk(suffix=f"{tag}-F", tenant_id=other, status="active", score=25, triage=None),
     ]
     async with async_session_maker() as session:
         session.add_all(rows)
         await session.commit()
-    # visible = A B C D, active = A B C, high_or_critical(active) = A B
-    return {"register_total": 4, "total_active": 3, "high_critical": 2}
 
 
-async def _seed_incidents(*, tenant_id: int, count: int, tag: str) -> None:
+async def _seed_incidents(*, tenant_id: int, count: int) -> None:
+    tag = uuid.uuid4().hex[:6]
     async with async_session_maker() as session:
         for i in range(count):
             session.add(
@@ -101,64 +146,45 @@ async def _seed_incidents(*, tenant_id: int, count: int, tag: str) -> None:
         await session.commit()
 
 
+def _capa(*, tag: str, suffix: str, status: CAPAStatus, due_days: int | None) -> CAPAAction:
+    # MANAGEMENT_REVIEW with a null source_id: the audit-finding source carries a
+    # tenant-scoped partial unique index on (tenant_id, source_id) in PostgreSQL,
+    # so seeding several rows under it would collide.
+    return CAPAAction(
+        tenant_id=TENANT,
+        reference_number=f"CAPA-SSOT-{tag}-{suffix}",
+        title=f"CAPA {tag} {suffix}",
+        description="Seeded for metric reconciliation tests.",
+        capa_type=CAPAType.CORRECTIVE,
+        status=status,
+        priority=CAPAPriority.HIGH,
+        source_type=CAPASource.MANAGEMENT_REVIEW,
+        source_id=None,
+        due_date=None if due_days is None else _naive_past(due_days),
+        created_by_id=1,
+        assigned_to_id=1,
+    )
+
+
 async def _seed_overdue_actions(*, capa: int, incident_actions: int) -> int:
-    """Seed overdue actions across two stores; returns the expected overdue count."""
-    tag = uuid.uuid4().hex[:8]
+    """Seed overdue actions across two stores.
+
+    Also seeds two rows that are past due but must not be counted as overdue.
+    Returns the number of genuinely overdue rows added.
+    """
+    tag = uuid.uuid4().hex[:6]
     async with async_session_maker() as session:
         for i in range(capa):
-            session.add(
-                CAPAAction(
-                    tenant_id=TENANT,
-                    reference_number=f"CAPA-SSOT-{tag}-{i:03d}",
-                    title=f"Overdue CAPA {tag} {i}",
-                    description="Seeded for metric reconciliation tests.",
-                    capa_type=CAPAType.CORRECTIVE,
-                    status=CAPAStatus.IN_PROGRESS,
-                    priority=CAPAPriority.HIGH,
-                    source_type=CAPASource.AUDIT_FINDING,
-                    source_id=1,
-                    due_date=_naive_past(30),
-                    created_by_id=1,
-                    assigned_to_id=1,
-                )
-            )
+            session.add(_capa(tag=tag, suffix=f"{i:03d}", status=CAPAStatus.IN_PROGRESS, due_days=30))
         # A closed CAPA past its due date is not overdue — it is done.
-        session.add(
-            CAPAAction(
-                tenant_id=TENANT,
-                reference_number=f"CAPA-SSOT-{tag}-closed",
-                title=f"Closed CAPA {tag}",
-                description="Past due but closed; must not count as overdue.",
-                capa_type=CAPAType.CORRECTIVE,
-                status=CAPAStatus.CLOSED,
-                priority=CAPAPriority.LOW,
-                source_type=CAPASource.AUDIT_FINDING,
-                source_id=1,
-                due_date=_naive_past(30),
-                created_by_id=1,
-                assigned_to_id=1,
-            )
-        )
+        session.add(_capa(tag=tag, suffix="closed", status=CAPAStatus.CLOSED, due_days=30))
         # An open CAPA with no due date cannot be overdue.
-        session.add(
-            CAPAAction(
-                tenant_id=TENANT,
-                reference_number=f"CAPA-SSOT-{tag}-nodue",
-                title=f"Undated CAPA {tag}",
-                description="Open with no due date; must not count as overdue.",
-                capa_type=CAPAType.CORRECTIVE,
-                status=CAPAStatus.OPEN,
-                priority=CAPAPriority.LOW,
-                source_type=CAPASource.AUDIT_FINDING,
-                source_id=1,
-                created_by_id=1,
-                assigned_to_id=1,
-            )
-        )
+        session.add(_capa(tag=tag, suffix="nodue", status=CAPAStatus.OPEN, due_days=None))
 
         incident = Incident(
             tenant_id=TENANT,
-            reference_number=f"INC-SSOT-ACT-{tag}",
+            # incidents.reference_number is varchar(20) in PostgreSQL.
+            reference_number=f"INC-SSOTA-{tag}",
             title=f"Incident carrying overdue actions {tag}",
             description="Seeded for metric reconciliation tests.",
             incident_type=IncidentType.OTHER,
@@ -187,16 +213,34 @@ async def _seed_overdue_actions(*, capa: int, incident_actions: int) -> int:
     return capa + incident_actions
 
 
-async def _register_total(client: AsyncClient) -> int:
-    res = await client.get("/api/v1/risk-register/?limit=200")
-    assert res.status_code == 200, res.text
-    return int(res.json()["total"])
-
-
-async def _dashboard(client: AsyncClient) -> dict:
-    res = await client.get("/api/v1/executive-dashboard?period_days=30")
-    assert res.status_code == 200, res.text
+async def _get(client: AsyncClient, path: str) -> dict:
+    res = await client.get(path)
+    assert res.status_code == 200, f"{path} -> {res.status_code} {res.text}"
     return res.json()
+
+
+async def _register_total(client: AsyncClient) -> int:
+    return int((await _get(client, "/api/v1/risk-register/?limit=1"))["total"])
+
+
+async def _pending_triage_total(client: AsyncClient) -> int:
+    return int((await _get(client, "/api/v1/risk-register/?suggestion_triage=pending&limit=1"))["total"])
+
+
+async def _dashboard_risks(client: AsyncClient) -> dict:
+    return (await _get(client, "/api/v1/executive-dashboard?period_days=30"))["risks"]
+
+
+async def _dashboard_incident_total(client: AsyncClient) -> int:
+    return int((await _get(client, "/api/v1/executive-dashboard?period_days=30"))["incidents"]["register_total"])
+
+
+async def _incident_list_total(client: AsyncClient) -> int:
+    return int((await _get(client, "/api/v1/incidents/?page_size=1"))["total"])
+
+
+async def _operational_risk_total(client: AsyncClient) -> int:
+    return int((await _get(client, "/api/v1/risks/"))["total"])
 
 
 # ---------------------------------------------------------------------------
@@ -212,15 +256,17 @@ async def test_dashboard_risk_total_matches_risk_register(admin_client: AsyncCli
     nothing but ``POST /api/v1/risks/`` writes, so it read 0 against a populated
     register.
     """
-    expected = await _seed_register()
+    before = await _dashboard_risks(admin_client)
 
-    risks = (await _dashboard(admin_client))["risks"]
+    await _seed_register()
+
+    risks = await _dashboard_risks(admin_client)
     register_total = await _register_total(admin_client)
 
-    assert register_total == expected["register_total"]
     assert risks["register_total"] == register_total
-    assert risks["total_active"] == expected["total_active"]
-    assert risks["high_critical"] == expected["high_critical"]
+    assert risks["register_total"] - before["register_total"] == SEEDED_REGISTER_TOTAL
+    assert risks["total_active"] - before["total_active"] == SEEDED_REGISTER_ACTIVE
+    assert risks["high_critical"] - before["high_critical"] == SEEDED_REGISTER_HIGH_CRITICAL
 
 
 @pytest.mark.asyncio
@@ -228,9 +274,7 @@ async def test_analytics_kpis_risk_total_matches_risk_register(admin_client: Asy
     """`/analytics/kpis` is a projection of the dashboard, so it must agree too."""
     await _seed_register()
 
-    res = await admin_client.get("/api/v1/analytics/kpis")
-    assert res.status_code == 200, res.text
-    kpi_risks = res.json()["risks"]
+    kpi_risks = (await _get(admin_client, "/api/v1/analytics/kpis"))["risks"]
 
     assert kpi_risks["total"] == await _register_total(admin_client)
 
@@ -238,19 +282,19 @@ async def test_analytics_kpis_risk_total_matches_risk_register(admin_client: Asy
 @pytest.mark.asyncio
 async def test_dashboard_risk_total_excludes_pending_and_other_tenants(admin_client: AsyncClient) -> None:
     """Rows hidden from the register must be hidden from the aggregate identically."""
+    before_visible = (await _dashboard_risks(admin_client))["register_total"]
+    before_pending = await _pending_triage_total(admin_client)
+
     await _seed_register()
 
-    risks = (await _dashboard(admin_client))["risks"]
+    risks = await _dashboard_risks(admin_client)
+    pending = await _pending_triage_total(admin_client)
 
-    pending = await admin_client.get("/api/v1/risk-register/?suggestion_triage=pending&limit=200")
-    assert pending.status_code == 200, pending.text
-    pending_total = int(pending.json()["total"])
-    assert pending_total >= 1, "seed should leave at least one row awaiting triage"
-
-    all_visible = await _register_total(admin_client)
-    assert risks["register_total"] == all_visible
-    # The pending row and the other tenant's row are in neither number.
-    assert risks["register_total"] < all_visible + pending_total
+    # Six rows were inserted; only the four visible tenant-1 rows may land in
+    # the headline number, and the aggregate must agree with the list about it.
+    assert risks["register_total"] == await _register_total(admin_client)
+    assert risks["register_total"] - before_visible == SEEDED_REGISTER_TOTAL
+    assert pending - before_pending == SEEDED_REGISTER_PENDING_TRIAGE
 
 
 # ---------------------------------------------------------------------------
@@ -265,18 +309,17 @@ async def test_overdue_action_count_agrees_across_every_surface(admin_client: As
     `/analytics/kpis` previously returned a hardcoded stub, which is why UAT saw
     an overdue count of 0 on the analytics surface while the Actions page said 10.
     """
-    expected = await _seed_overdue_actions(capa=9, incident_actions=1)
+    before = (await _get(admin_client, "/api/v1/actions/summary"))["overdue"]
 
-    summary = await admin_client.get("/api/v1/actions/summary")
-    view_counts = await admin_client.get("/api/v1/actions/view-counts")
-    kpis = await admin_client.get("/api/v1/analytics/kpis")
-    assert summary.status_code == 200, summary.text
-    assert view_counts.status_code == 200, view_counts.text
-    assert kpis.status_code == 200, kpis.text
+    seeded = await _seed_overdue_actions(capa=9, incident_actions=1)
 
-    assert summary.json()["overdue"] == expected
-    assert view_counts.json()["overdue"] == summary.json()["overdue"]
-    assert kpis.json()["actions"]["overdue"] == summary.json()["overdue"]
+    summary_overdue = (await _get(admin_client, "/api/v1/actions/summary"))["overdue"]
+    view_counts_overdue = (await _get(admin_client, "/api/v1/actions/view-counts"))["overdue"]
+    kpi_overdue = (await _get(admin_client, "/api/v1/analytics/kpis"))["actions"]["overdue"]
+
+    assert summary_overdue - before == seeded
+    assert view_counts_overdue == summary_overdue
+    assert kpi_overdue == summary_overdue
 
 
 @pytest.mark.asyncio
@@ -284,28 +327,28 @@ async def test_analytics_kpis_action_total_is_not_a_stub(admin_client: AsyncClie
     """The whole analytics actions block must be live, not just `overdue`."""
     await _seed_overdue_actions(capa=2, incident_actions=1)
 
-    summary = await admin_client.get("/api/v1/actions/summary")
-    kpis = await admin_client.get("/api/v1/analytics/kpis")
-    assert summary.status_code == 200, summary.text
-    assert kpis.status_code == 200, kpis.text
+    summary = await _get(admin_client, "/api/v1/actions/summary")
+    kpi_actions = (await _get(admin_client, "/api/v1/analytics/kpis"))["actions"]
 
-    kpi_actions = kpis.json()["actions"]
-    assert kpi_actions["total"] == summary.json()["total"]
+    by_display = summary["by_display_status"]
+    assert kpi_actions["total"] == summary["total"]
+    assert kpi_actions["open"] == by_display.get("open", 0) + by_display.get("in_progress", 0)
     assert kpi_actions["total"] > 0
 
 
 @pytest.mark.asyncio
 async def test_overdue_excludes_done_and_undated_actions(admin_client: AsyncClient) -> None:
     """Overdue means open and past due — not "has a due date in the past"."""
-    expected = await _seed_overdue_actions(capa=3, incident_actions=1)
+    before = await _get(admin_client, "/api/v1/actions/summary")
 
-    summary = await admin_client.get("/api/v1/actions/summary")
-    assert summary.status_code == 200, summary.text
-    body = summary.json()
+    seeded = await _seed_overdue_actions(capa=3, incident_actions=1)
 
-    # Seed adds two extra CAPA rows (one closed past-due, one open undated).
-    assert body["total"] == expected + 2
-    assert body["overdue"] == expected
+    after = await _get(admin_client, "/api/v1/actions/summary")
+
+    # Seed adds two extra CAPA rows (one closed past-due, one open undated),
+    # both of which count towards the total but neither towards overdue.
+    assert after["total"] - before["total"] == seeded + 2
+    assert after["overdue"] - before["overdue"] == seeded
 
 
 # ---------------------------------------------------------------------------
@@ -321,14 +364,15 @@ async def test_dashboard_incident_register_total_matches_incident_register(admin
     flag: this is the guard that keeps `register_total` reconcilable with the
     list the user sees.
     """
-    await _seed_incidents(tenant_id=TENANT, count=7, tag=uuid.uuid4().hex[:6])
-    await _seed_incidents(tenant_id=OTHER_TENANT, count=2, tag=uuid.uuid4().hex[:6])
+    before = await _dashboard_incident_total(admin_client)
 
-    dash_total = (await _dashboard(admin_client))["incidents"]["register_total"]
-    listing = await admin_client.get("/api/v1/incidents/?page_size=1")
-    assert listing.status_code == 200, listing.text
+    await _seed_incidents(tenant_id=TENANT, count=7)
+    await _seed_incidents(tenant_id=await _other_tenant_id(), count=2)
 
-    assert dash_total == int(listing.json()["total"]) == 7
+    dash_total = await _dashboard_incident_total(admin_client)
+
+    assert dash_total == await _incident_list_total(admin_client)
+    assert dash_total - before == 7, "the other tenant's incidents must be in neither number"
 
 
 @pytest.mark.asyncio
@@ -348,16 +392,17 @@ async def test_superuser_incident_list_scope_differs_from_dashboard_scope(
     ``test_dashboard_incident_register_total_matches_incident_register`` above,
     rather than the divergence quietly persisting.
     """
-    await _seed_incidents(tenant_id=TENANT, count=5, tag=uuid.uuid4().hex[:6])
-    await _seed_incidents(tenant_id=OTHER_TENANT, count=1, tag=uuid.uuid4().hex[:6])
+    before_dash = await _dashboard_incident_total(superuser_client)
+    before_list = await _incident_list_total(superuser_client)
 
-    dash_total = (await _dashboard(superuser_client))["incidents"]["register_total"]
-    listing = await superuser_client.get("/api/v1/incidents/?page_size=1")
-    assert listing.status_code == 200, listing.text
-    list_total = int(listing.json()["total"])
+    await _seed_incidents(tenant_id=TENANT, count=5)
+    await _seed_incidents(tenant_id=await _other_tenant_id(), count=1)
 
-    assert dash_total == 5, "dashboard stays tenant-scoped"
-    assert list_total == 6, "register list currently spans tenants for superusers"
+    dash_total = await _dashboard_incident_total(superuser_client)
+    list_total = await _incident_list_total(superuser_client)
+
+    assert dash_total - before_dash == 5, "dashboard stays tenant-scoped"
+    assert list_total - before_list == 6, "register list currently spans tenants for superusers"
     assert list_total > dash_total, "the gap is a wider list, not a narrower aggregate"
 
 
@@ -383,13 +428,12 @@ async def test_operational_risks_endpoint_does_not_serve_the_register(admin_clie
     Documents why `/risks/` reported 0 against a populated register rather than
     leaving a future reader to assume a broken filter.
     """
+    before = await _operational_risk_total(admin_client)
+
     await _seed_register()
 
-    operational = await admin_client.get("/api/v1/risks/")
-    assert operational.status_code == 200, operational.text
-
-    assert int(operational.json()["total"]) == 0
-    assert await _register_total(admin_client) > 0
+    assert await _operational_risk_total(admin_client) == before, "register writes must not appear in /risks/"
+    assert await _register_total(admin_client) >= SEEDED_REGISTER_TOTAL
 
 
 def test_operational_risk_routes_are_deprecated_in_the_published_schema() -> None:
