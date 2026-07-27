@@ -103,11 +103,22 @@ async def _apply_plan(hits: list[dict[str, Any]], *, hard_delete_fixtures: bool)
                 campaign.status = CampaignStatus.CLOSED
                 campaign.title = _prefix(campaign.title)
                 applied[px] = applied.get(px, 0) + 1
-            elif table == "audit_builder_templates":
+            elif table in {"audit_builder_templates", "audit_templates"}:
                 # Core SQL — avoid dual ORM AuditTemplate class-name collision.
                 if hard_delete_fixtures:
                     result = await db.execute(
-                        text("DELETE FROM audit_builder_templates WHERE id = :id"),
+                        text(f"DELETE FROM {table} WHERE id = :id"),
+                        {"id": row_id},
+                    )
+                elif table == "audit_templates":
+                    result = await db.execute(
+                        text(
+                            "UPDATE audit_templates "
+                            "SET is_active = false, is_published = false, "
+                            "template_status = 'archived', "
+                            "archived_at = COALESCE(archived_at, NOW()) "
+                            "WHERE id = :id AND (archived_at IS NULL OR is_active = true)"
+                        ),
                         {"id": row_id},
                     )
                 else:
@@ -144,7 +155,7 @@ def _planned_action(hit: dict[str, Any], *, hard_delete_fixtures: bool) -> str:
         return "set is_active=false"
     if table == "document_campaigns":
         return "close + prefix title [PURGED-RUN021]"
-    if table == "audit_builder_templates":
+    if table in {"audit_builder_templates", "audit_templates"}:
         return "HARD DELETE fixture" if hard_delete_fixtures else "archive (unpublish)"
     if table == "engineer_groups":
         return "prefix name [PURGED-RUN021] (retain row)"

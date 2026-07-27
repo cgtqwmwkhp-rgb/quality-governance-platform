@@ -147,41 +147,72 @@ async def _collect(*, tenant_id: Optional[int], limit: int) -> list[dict[str, An
                     }
                 )
 
-        # PX-266 audit builder templates (Core SQL — dual ORM AuditTemplate collision)
-        tpl_sql = (
-            "SELECT id, name, status::text AS status, tenant_id "
-            "FROM audit_builder_templates"
-        )
-        tpl_params: dict[str, Any] = {}
-        if tenant_id is not None:
-            tpl_sql += " WHERE tenant_id = :tenant_id"
-            tpl_params["tenant_id"] = tenant_id
-        for row in (await db.execute(text(tpl_sql), tpl_params)).mappings().all():
-            status = (row["status"] or "").lower()
-            name = row["name"] or ""
-            if matches_test_token(name) or "Playwright" in name:
-                hits.append(
-                    {
-                        "px": "PX-266",
-                        "table": "audit_builder_templates",
-                        "id": row["id"],
-                        "tenant_id": row["tenant_id"],
-                        "name": name,
-                        "status": status,
-                        "reason": "Playwright/CUJ fixture template",
-                    }
+        # PX-266 audit templates (Core SQL — dual ORM AuditTemplate collision).
+        # Live envs use audit_templates; builder table may be absent.
+        existing = {
+            r
+            for r in (
+                await db.execute(
+                    text(
+                        "SELECT table_name FROM information_schema.tables "
+                        "WHERE table_schema = 'public' "
+                        "AND table_name IN ('audit_templates', 'audit_builder_templates')"
+                    )
                 )
-            elif status == "published" and matches_test_token(name):
-                hits.append(
-                    {
-                        "px": "PX-266",
-                        "table": "audit_builder_templates",
-                        "id": row["id"],
-                        "name": name,
-                        "status": status,
-                        "reason": "published test template",
-                    }
-                )
+            ).scalars().all()
+        }
+
+        async def _scan_templates(table: str, sql: str, params: dict[str, Any]) -> None:
+            for row in (await db.execute(text(sql), params)).mappings().all():
+                status = (row["status"] or "").lower()
+                name = row["name"] or ""
+                if matches_test_token(name) or "Playwright" in name:
+                    hits.append(
+                        {
+                            "px": "PX-266",
+                            "table": table,
+                            "id": row["id"],
+                            "tenant_id": row.get("tenant_id"),
+                            "name": name,
+                            "status": status,
+                            "reason": "Playwright/CUJ fixture template",
+                        }
+                    )
+                elif status in {"published", "true", "t", "1"} and matches_test_token(name):
+                    hits.append(
+                        {
+                            "px": "PX-266",
+                            "table": table,
+                            "id": row["id"],
+                            "name": name,
+                            "status": status,
+                            "reason": "published test template",
+                        }
+                    )
+
+        if "audit_templates" in existing:
+            tpl_sql = (
+                "SELECT id, name, "
+                "COALESCE(template_status::text, CASE WHEN is_published THEN 'published' ELSE 'draft' END) "
+                "AS status, tenant_id "
+                "FROM audit_templates"
+            )
+            tpl_params: dict[str, Any] = {}
+            if tenant_id is not None:
+                tpl_sql += " WHERE tenant_id = :tenant_id"
+                tpl_params["tenant_id"] = tenant_id
+            await _scan_templates("audit_templates", tpl_sql, tpl_params)
+
+        if "audit_builder_templates" in existing:
+            tpl_sql = (
+                "SELECT id, name, status::text AS status, tenant_id "
+                "FROM audit_builder_templates"
+            )
+            tpl_params = {}
+            if tenant_id is not None:
+                tpl_sql += " WHERE tenant_id = :tenant_id"
+                tpl_params["tenant_id"] = tenant_id
+            await _scan_templates("audit_builder_templates", tpl_sql, tpl_params)
 
         # PX-275 engineer groups (empty and/or test-named)
         member_count = (
