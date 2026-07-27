@@ -33,9 +33,10 @@ from types import ModuleType, SimpleNamespace
 from typing import Any, Callable
 
 import pytest
+import sqlalchemy as sa
 from httpx import AsyncClient
 
-from src.domain.services.lookup_defaults_seed import seed_lookup_defaults
+from src.domain.services.lookup_defaults_seed import count_active_lookup_options, seed_lookup_defaults
 from src.domain.services.lookup_defaults_seed_data import rows_for_category
 from src.domain.services.lookup_enum_contract import (
     ENUM_BACKED_CATEGORIES,
@@ -187,10 +188,50 @@ async def _rejected_by_the_api(client: AsyncClient, category: str, codes: list[s
 
 @pytest.fixture
 async def seeded_lookups(test_session):
-    """Seed the UK defaults for the test tenant, as application startup does."""
-    result = await seed_lookup_defaults(test_session, tenant_id=TENANT)
-    assert result.rows_inserted, "the fresh test schema should have had empty lookup categories to seed"
-    return result
+    """Guarantee the tenant has its lookup defaults, however it got them.
+
+    Seeding is insert-only-when-empty, so this is a no-op on a database CI has
+    already run ``alembic upgrade head`` against — there the options come from
+    the migrations instead, which is the stronger check of the two. On a fresh
+    schema (``create_all``, no migrations) it does the seeding itself. Either
+    way the postcondition is what the tests need, so that is what is asserted.
+    """
+    await seed_lookup_defaults(test_session, tenant_id=TENANT)
+
+    for lookup in ENUM_BACKED_LOOKUPS:
+        active = await count_active_lookup_options(test_session, tenant_id=TENANT, category=lookup.category)
+        assert active, (
+            f"'{lookup.category}' has no active option for tenant {TENANT}, so the "
+            f"'{lookup.request_field}' select would render empty"
+        )
+
+
+@pytest.fixture
+async def rogue_complaint_type(test_session):
+    """Add the option production actually offered, and take it away again.
+
+    The integration schema is shared on Postgres, so leaving an invalid active
+    option behind would break whichever sibling test ran next — and would be a
+    dishonest thing for a test about invalid options to do.
+    """
+    from src.domain.models.form_config import LookupOption
+
+    option = LookupOption(
+        tenant_id=TENANT,
+        category="complaint_types",
+        code="workmanship",
+        label="Workmanship / repair defect",
+        is_active=True,
+        display_order=99,
+    )
+    test_session.add(option)
+    await test_session.commit()
+    option_id = option.id
+    try:
+        yield option
+    finally:
+        await test_session.execute(sa.delete(LookupOption).where(LookupOption.id == option_id))
+        await test_session.commit()
 
 
 class TestActiveOptionsAreAcceptedByTheApi:
@@ -231,23 +272,9 @@ class TestTheContractTestHasTeeth:
         self,
         admin_client: AsyncClient,
         seeded_lookups,
-        test_session,
+        rogue_complaint_type,
     ):
         """'workmanship' is what production actually offered; the API 422s on it."""
-        from src.domain.models.form_config import LookupOption
-
-        test_session.add(
-            LookupOption(
-                tenant_id=TENANT,
-                category="complaint_types",
-                code="workmanship",
-                label="Workmanship / repair defect",
-                is_active=True,
-                display_order=99,
-            )
-        )
-        await test_session.commit()
-
         codes = await _active_codes(admin_client, "complaint_types")
         assert "workmanship" in codes
 
