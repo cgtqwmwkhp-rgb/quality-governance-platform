@@ -137,18 +137,23 @@ class RTAService:
         track_metric("rta.created", 1)
         return rta
 
-    async def get_rta(self, rta_id: int, tenant_id: int | None) -> RoadTrafficCollision:
+    async def get_rta(
+        self, rta_id: int, tenant_id: int | None, *, skip_tenant_check: bool = False
+    ) -> RoadTrafficCollision:
         """Fetch a single RTA by ID.
+
+        Args:
+            rta_id: Primary key.
+            tenant_id: Tenant scope (ignored when skip_tenant_check is True).
+            skip_tenant_check: If True, bypasses tenant isolation (superuser).
 
         Raises:
             LookupError: If not found.
         """
-        result = await self.db.execute(
-            select(RoadTrafficCollision).where(
-                RoadTrafficCollision.id == rta_id,
-                RoadTrafficCollision.tenant_id == tenant_id,
-            )
-        )
+        query = select(RoadTrafficCollision).where(RoadTrafficCollision.id == rta_id)
+        if not skip_tenant_check:
+            query = query.where(RoadTrafficCollision.tenant_id == tenant_id)
+        result = await self.db.execute(query)
         rta = result.scalar_one_or_none()
         if rta is None:
             raise LookupError(f"RTA with ID {rta_id} not found")
@@ -194,6 +199,7 @@ class RTAService:
         user_id: int,
         tenant_id: int | None,
         request_id: str | None = None,
+        skip_tenant_check: bool = False,
     ) -> RoadTrafficCollision:
         """Partially update an RTA.
 
@@ -202,7 +208,7 @@ class RTAService:
         """
         from src.domain.services.rta_injury_fields import derive_third_party_injured
 
-        rta = await self.get_rta(rta_id, tenant_id)
+        rta = await self.get_rta(rta_id, tenant_id, skip_tenant_check=skip_tenant_check)
         raw = rta_data.model_dump(exclude_unset=True)
         was_closed = is_closed_status(CASE_TYPE_RTA, rta.status)
         closing = False
@@ -216,7 +222,7 @@ class RTAService:
                 self.db,
                 case_type=CASE_TYPE_RTA,
                 case=rta,
-                tenant_id=resolve_case_tenant_id(rta, tenant_id),
+                tenant_id=resolve_case_tenant_id(rta),
                 lessons_learnt=(raw["lessons_learnt"] if "lessons_learnt" in raw else rta.lessons_learnt),
             )
 
@@ -253,8 +259,11 @@ class RTAService:
 
         await self.db.commit()
         await self.db.refresh(rta)
-        if tenant_id is not None:
-            await invalidate_tenant_cache(tenant_id, "rtas")
+        # The row's tenant, not the caller's: a cross-tenant edit has to evict the
+        # register the record actually appears in.
+        cache_tenant_id = rta.tenant_id if rta.tenant_id is not None else tenant_id
+        if cache_tenant_id is not None:
+            await invalidate_tenant_cache(cache_tenant_id, "rtas")
         track_metric("rta.mutation", 1)
         return rta
 

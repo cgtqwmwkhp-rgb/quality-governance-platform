@@ -149,15 +149,23 @@ class NearMissService:
 
         return near_miss
 
-    async def get_near_miss(self, near_miss_id: int, tenant_id: int | None) -> NearMiss:
+    async def get_near_miss(
+        self, near_miss_id: int, tenant_id: int | None, *, skip_tenant_check: bool = False
+    ) -> NearMiss:
         """Fetch a single near miss by ID.
+
+        Args:
+            near_miss_id: Primary key.
+            tenant_id: Tenant scope (ignored when skip_tenant_check is True).
+            skip_tenant_check: If True, bypasses tenant isolation (superuser).
 
         Raises:
             LookupError: If the near miss is not found.
         """
-        result = await self.db.execute(
-            select(NearMiss).where(NearMiss.id == near_miss_id, NearMiss.tenant_id == tenant_id)
-        )
+        query = select(NearMiss).where(NearMiss.id == near_miss_id)
+        if not skip_tenant_check:
+            query = query.where(NearMiss.tenant_id == tenant_id)
+        result = await self.db.execute(query)
         near_miss = result.scalar_one_or_none()
         if near_miss is None:
             raise LookupError(f"Near miss with ID {near_miss_id} not found")
@@ -208,6 +216,7 @@ class NearMissService:
         user_id: int,
         tenant_id: int | None,
         request_id: str | None = None,
+        skip_tenant_check: bool = False,
     ) -> NearMiss:
         """Partially update a near miss.
 
@@ -217,7 +226,7 @@ class NearMissService:
             LookupError: If the near miss is not found.
             ValueError: If contract_id is supplied but not owned by the tenant.
         """
-        near_miss = await self.get_near_miss(near_miss_id, tenant_id)
+        near_miss = await self.get_near_miss(near_miss_id, tenant_id, skip_tenant_check=skip_tenant_check)
         old_status = near_miss.status
         update_dict = data.model_dump(exclude_unset=True)
         new_status = update_dict.get("status")
@@ -238,17 +247,20 @@ class NearMissService:
                 self.db,
                 case_type=CASE_TYPE_NEAR_MISS,
                 case=near_miss,
-                tenant_id=resolve_case_tenant_id(near_miss, tenant_id),
+                tenant_id=resolve_case_tenant_id(near_miss),
                 lessons_learnt=(
                     update_dict["lessons_learnt"] if "lessons_learnt" in update_dict else near_miss.lessons_learnt
                 ),
             )
 
+        # Guard against the near miss's tenant (not the caller's) so a cross-tenant
+        # editor with skip_tenant_check cannot attach their own tenant's contract.
+        contract_tenant_id = near_miss.tenant_id if near_miss.tenant_id is not None else tenant_id
         resolved_contract_display: Optional[str] = None
         if "contract_id" in update_dict and update_dict["contract_id"] is not None:
             _, resolved_contract_display = await resolve_near_miss_contract(
                 self.db,
-                tenant_id=tenant_id,
+                tenant_id=contract_tenant_id,
                 contract_id=update_dict["contract_id"],
                 contract=None,
             )
@@ -287,8 +299,11 @@ class NearMissService:
 
         await self.db.commit()
         await self.db.refresh(near_miss)
-        if tenant_id is not None:
-            await invalidate_tenant_cache(tenant_id, "near_miss")
+        # The row's tenant, not the caller's: a cross-tenant edit has to evict the
+        # register the record actually appears in.
+        cache_tenant_id = near_miss.tenant_id if near_miss.tenant_id is not None else tenant_id
+        if cache_tenant_id is not None:
+            await invalidate_tenant_cache(cache_tenant_id, "near_miss")
         track_metric("near_miss.mutation", 1)
 
         return near_miss

@@ -402,7 +402,7 @@ async def get_complaint_closure_validation(
         db,
         case_type=CASE_TYPE_COMPLAINT,
         case=complaint,
-        tenant_id=resolve_case_tenant_id(complaint, current_user.tenant_id),
+        tenant_id=resolve_case_tenant_id(complaint),
     )
     return validation_to_payload(validation)
 

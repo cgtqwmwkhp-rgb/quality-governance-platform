@@ -674,7 +674,7 @@ async def get_incident_closure_validation(
         db,
         case_type=CASE_TYPE_INCIDENT,
         case=incident,
-        tenant_id=resolve_case_tenant_id(incident, current_user.tenant_id),
+        tenant_id=resolve_case_tenant_id(incident),
     )
     return validation_to_payload(validation)
 

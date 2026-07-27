@@ -291,7 +291,7 @@ class IncidentService:
                 self.db,
                 case_type=CASE_TYPE_INCIDENT,
                 case=incident,
-                tenant_id=resolve_case_tenant_id(incident, tenant_id),
+                tenant_id=resolve_case_tenant_id(incident),
                 lessons_learnt=(
                     raw_update["lessons_learnt"] if "lessons_learnt" in raw_update else incident.lessons_learnt
                 ),
