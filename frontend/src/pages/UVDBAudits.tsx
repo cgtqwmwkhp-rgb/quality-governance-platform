@@ -57,6 +57,8 @@ import {
   UVDB_SECTIONS,
   buildUvdbBoardAlignment,
   formatUvdbAverageKpi,
+  gateUvdbSectionScoreForDisplay,
+  uvdbPendingScoreExclusionCopy,
   parseUvdbSection,
   type UvdbSectionId,
 } from './uvdbHelpers'
@@ -99,6 +101,9 @@ interface ScoreBreakdownEntry {
   max_score: number | null
   percentage: number | null
   score_source?: ScoreSource | null
+  assessed?: boolean
+  excluded_from_qualification?: boolean
+  exclusion_reason?: string | null
 }
 
 interface UVDBAuditDetail {
@@ -136,6 +141,9 @@ interface SectionScoreData {
   percentage: number | null
   audit_reference: string | null
   score_source?: ScoreSource | null
+  assessed?: boolean
+  excluded_from_qualification?: boolean
+  exclusion_reason?: string | null
 }
 
 interface UVDBContentCoverage {
@@ -438,7 +446,8 @@ function AuditDetailPanel({
           {breakdown.length > 0 ? (
             <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
               {breakdown.map((item, index) => {
-                const pct = item.percentage
+                const excluded = item.excluded_from_qualification === true || item.assessed === false
+                const pct = excluded ? null : item.percentage
                 return (
                   <div key={`breakdown-${index}`} className="space-y-1">
                     <div className="flex items-center justify-between text-sm">
@@ -446,11 +455,18 @@ function AuditDetailPanel({
                         {String(item.label || `Section ${index + 1}`)}
                       </span>
                       <span className="text-muted-foreground whitespace-nowrap">
-                        {item.score ?? '—'} / {item.max_score ?? '—'}
+                        {excluded ? 'Excluded' : `${item.score ?? '—'} / ${item.max_score ?? '—'}`}
                       </span>
                     </div>
                     {pct != null ? (
                       <ScoreBar percentage={pct} />
+                    ) : excluded ? (
+                      <p
+                        className="text-xs text-muted-foreground"
+                        data-testid={`uvdb-breakdown-excluded-${index}`}
+                      >
+                        {uvdbPendingScoreExclusionCopy(item.exclusion_reason)}
+                      </p>
                     ) : (
                       <NotScored testId={`uvdb-breakdown-not-scored-${index}`} compact />
                     )}
@@ -1705,7 +1721,14 @@ export default function UVDBAudits() {
                   {sections.map((section) => {
                     const Icon = getSectionIcon(section.number)
                     const bgColor = getSectionColor(section.number)
-                    const scoreData = sectionScores[section.number]
+                    const rawScoreData = sectionScores[section.number]
+                    const scoreData = gateUvdbSectionScoreForDisplay(
+                      rawScoreData,
+                      section.content_status,
+                    )
+                    const isExcluded =
+                      Boolean(scoreData?.excluded_from_qualification) ||
+                      section.content_status === 'pending_protocol_pdf'
                     const isExpanded = expandedSection === section.number
                     const questions = sectionQuestions[section.number]
                     const isLoadingQuestions = loadingSectionQuestions === section.number
@@ -1729,7 +1752,7 @@ export default function UVDBAudits() {
                               <Icon className="w-6 h-6 text-white" />
                             </div>
                             <div className="flex flex-col items-end gap-1 text-right">
-                              {scoreData ? (
+                              {scoreData && !isExcluded ? (
                                 <>
                                   <div className="text-2xl font-bold text-success">
                                     {scoreData.score ?? '—'}
@@ -1749,6 +1772,16 @@ export default function UVDBAudits() {
                                   )}
                                   <ScoreProvenanceBadge source={scoreData.score_source} />
                                 </>
+                              ) : isExcluded ? (
+                                <>
+                                  <NotScored
+                                    testId={`uvdb-section-${section.number}-not-scored`}
+                                    compact
+                                  />
+                                  <div className="text-xs text-muted-foreground">
+                                    Excluded from qualification
+                                  </div>
+                                </>
                               ) : (
                                 <>
                                   <div className="text-2xl font-bold text-card-foreground">
@@ -1762,21 +1795,18 @@ export default function UVDBAudits() {
                             </div>
                           </div>
 
-                          {scoreData?.percentage != null && (
+                          {scoreData?.percentage != null && !isExcluded && (
                             <div className="mb-3">
                               <ScoreBar percentage={scoreData.percentage} />
                             </div>
                           )}
 
-                          {scoreData?.score_source === 'imported' &&
-                          section.content_status === 'pending_protocol_pdf' ? (
+                          {isExcluded ? (
                             <p
-                              className="mb-3 rounded border border-info/30 bg-info/10 px-2 py-1.5 text-xs text-info"
-                              data-testid={`uvdb-section-${section.number}-imported-note`}
+                              className="mb-3 rounded border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs text-warning"
+                              data-testid={`uvdb-section-${section.number}-excluded-note`}
                             >
-                              Score read from the imported report. This section&apos;s protocol
-                              questions are not loaded, so the figure has not been verified against
-                              UVDB scoring in this system.
+                              {uvdbPendingScoreExclusionCopy(scoreData?.exclusion_reason)}
                             </p>
                           ) : null}
 

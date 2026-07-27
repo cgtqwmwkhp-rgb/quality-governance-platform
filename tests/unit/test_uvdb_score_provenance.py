@@ -313,19 +313,41 @@ class TestGetAuditProvenance:
                 db,
                 reference="UVDB-2026-0001",
                 percentage_score=93.0,
-                section_scores={"sections": [{"label": "Section 3", "score": 14, "max_score": 15}]},
+                # Section 1 is loaded — keeps a qualification figure after PX-255.
+                section_scores={"sections": [{"label": "Section 1", "score": 14, "max_score": 15}]},
             )
             run, job = await _link_import_job(db, reference="UVDB-2026-0001")
 
             payload = await get_audit(audit.id, db, _user())
 
-        assert payload["percentage_score"] == 93.0
+        assert payload["percentage_score"] == 93.3
+        assert payload["report_percentage_score"] == 93.0
         assert payload["score_source"] == SCORE_SOURCE_IMPORTED
         assert payload["audit_run_id"] == run.id
         assert payload["import_job_id"] == job.id
         assert payload["source_filename"] == "achilles-b2.pdf"
         assert payload["score_breakdown"][0]["score_source"] == SCORE_SOURCE_IMPORTED
         assert payload["score_breakdown"][0]["percentage"] == 93.3
+        assert payload["score_breakdown"][0]["assessed"] is True
+
+    async def test_pending_section_breakdown_is_excluded_from_qualification(self, session_factory):
+        async with session_factory() as db:
+            audit = await _add_uvdb_audit(
+                db,
+                reference="UVDB-2026-0001",
+                percentage_score=99.0,
+                section_scores={"sections": [{"label": "Section 3", "score": 14, "max_score": 15}]},
+            )
+            await _link_import_job(db, reference="UVDB-2026-0001")
+
+            payload = await get_audit(audit.id, db, _user())
+
+        # Pending-empty section cannot fabricate a qualification %.
+        assert payload["percentage_score"] is None
+        assert payload["report_percentage_score"] == 99.0
+        assert payload["score_breakdown"][0]["percentage"] is None
+        assert payload["score_breakdown"][0]["excluded_from_qualification"] is True
+        assert payload["score_breakdown"][0]["assessed"] is False
 
     async def test_calculated_detail_is_labelled_calculated(self, session_factory):
         async with session_factory() as db:
@@ -370,8 +392,8 @@ class TestSectionScoresProvenance:
                 percentage_score=93.0,
                 section_scores={
                     "sections": [
-                        {"label": "Section 3 Health and Safety", "score": 14, "max_score": 15, "percentage": 93.3},
-                        {"label": "Health and Safety Policy and Leadership", "score": 9, "max_score": 12},
+                        {"label": "Section 1 System Assurance", "score": 14, "max_score": 15, "percentage": 93.3},
+                        {"label": "System Assurance and Compliance", "score": 9, "max_score": 12},
                     ]
                 },
             )
@@ -380,11 +402,39 @@ class TestSectionScoresProvenance:
             payload = await get_section_scores(db, _user())
 
         assert payload["score_source"] == SCORE_SOURCE_IMPORTED
-        assert payload["sections"]["3"]["percentage"] == 93.3
-        assert payload["sections"]["3"]["score_source"] == SCORE_SOURCE_IMPORTED
-        # The title-matched duplicate also resolves to section 3, so rather than
+        assert payload["sections"]["1"]["percentage"] == 93.3
+        assert payload["sections"]["1"]["score_source"] == SCORE_SOURCE_IMPORTED
+        assert payload["sections"]["1"]["assessed"] is True
+        # The title-matched duplicate also resolves to section 1, so rather than
         # overwriting it silently the second entry is surfaced as unmapped.
-        assert [entry["label"] for entry in payload["unmapped_sections"]] == ["Health and Safety Policy and Leadership"]
+        assert [entry["label"] for entry in payload["unmapped_sections"]] == ["System Assurance and Compliance"]
+
+    async def test_pending_section_scores_are_excluded_from_qualification(self, session_factory):
+        async with session_factory() as db:
+            await _add_uvdb_audit(
+                db,
+                reference="UVDB-2026-0001",
+                percentage_score=99.0,
+                section_scores={
+                    "sections": [
+                        {"label": "Section 1", "score": 18, "max_score": 21, "percentage": 85.7},
+                        {"label": "Section 3 Health and Safety", "score": 14, "max_score": 15, "percentage": 93.3},
+                        {"label": "Section 5 Workplace Safety", "score": 10, "max_score": 10, "percentage": 100.0},
+                    ]
+                },
+            )
+            await _link_import_job(db, reference="UVDB-2026-0001")
+
+            payload = await get_section_scores(db, _user())
+
+        assert payload["sections"]["1"]["percentage"] == 85.7
+        assert payload["sections"]["1"]["assessed"] is True
+        assert payload["sections"]["3"]["percentage"] is None
+        assert payload["sections"]["3"]["excluded_from_qualification"] is True
+        assert payload["sections"]["5"]["excluded_from_qualification"] is True
+        assert payload["qualification_percentage"] == 85.7
+        assert "3" in payload["excluded_section_numbers"]
+        assert "5" in payload["excluded_section_numbers"]
 
     async def test_label_that_cannot_be_matched_is_surfaced_not_dropped(self, session_factory):
         async with session_factory() as db:

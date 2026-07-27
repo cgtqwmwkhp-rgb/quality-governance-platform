@@ -54,6 +54,14 @@ export interface UVDBAuditListItem {
   audit_date: string | null
   status: string
   percentage_score: number | null
+  /** Stored import/report figure before pending-section exclusion (PX-255). */
+  report_percentage_score?: number | null
+  score_policy?: {
+    policy_applied?: boolean
+    excluded_section_numbers?: string[]
+    included_section_numbers?: string[]
+    fallback_to_stored?: boolean
+  } | null
   score_source: UVDBScoreSource | null
   lead_auditor: string | null
   audit_run_id: number | null
