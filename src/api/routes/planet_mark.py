@@ -58,6 +58,22 @@ def _to_naive_utc(v: datetime) -> datetime:
     return v
 
 
+def _naive_utc_now() -> datetime:
+    """Current UTC as a naive datetime, comparable to TIMESTAMP WITHOUT TIME ZONE."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _is_overdue(status: str | None, deadline: datetime | None, now: datetime) -> bool:
+    """True when a non-completed action's deadline has already passed.
+
+    ``deadline`` from Postgres TIMESTAMP WITHOUT TIME ZONE is naive; both sides
+    are normalised so an aware/naive comparison cannot TypeError into a 500.
+    """
+    if deadline is None or status == "completed":
+        return False
+    return _to_naive_utc(deadline) < _to_naive_utc(now)
+
+
 NaiveUtcDatetime = Annotated[datetime, AfterValidator(_to_naive_utc)]
 
 
@@ -720,10 +736,11 @@ async def list_improvement_actions(
             next_action="Apply the latest Planet Mark database migrations before using live actions.",
         )
 
-    # Summary
+    # Summary — compare deadlines in naive UTC (column is TIMESTAMP WITHOUT TIME ZONE)
+    now = _naive_utc_now()
     completed = len([a for a in actions if a.status == "completed"])
     in_progress = len([a for a in actions if a.status == "in_progress"])
-    overdue = len([a for a in actions if a.status != "completed" and a.time_bound < datetime.now(timezone.utc)])
+    overdue = len([a for a in actions if _is_overdue(a.status, a.time_bound, now)])
 
     return {
         "year_id": year_id,
@@ -746,7 +763,7 @@ async def list_improvement_actions(
                 "progress_percent": a.progress_percent,
                 "target_scope": a.target_scope,
                 "expected_reduction_pct": a.expected_reduction_pct,
-                "is_overdue": a.status != "completed" and a.time_bound < datetime.now(timezone.utc),
+                "is_overdue": _is_overdue(a.status, a.time_bound, now),
             }
             for a in actions
         ],
@@ -920,12 +937,12 @@ async def get_actions_summary(
         )
     )
     actions = result.scalars().all()
-    now = datetime.now(timezone.utc)
+    now = _naive_utc_now()
 
     total = len(actions)
     completed = [a for a in actions if a.status == "completed"]
     in_progress = [a for a in actions if a.status == "in_progress"]
-    overdue = [a for a in actions if a.status not in ("completed",) and a.time_bound < now]
+    overdue = [a for a in actions if _is_overdue(a.status, a.time_bound, now)]
     avg_progress = round(sum(a.progress_percent or 0 for a in actions) / total, 1) if total else 0
 
     return {
@@ -2475,7 +2492,8 @@ async def get_carbon_dashboard(
         .all()
     )
 
-    overdue_actions = [a for a in actions if a.status != "completed" and a.time_bound < datetime.now(timezone.utc)]
+    now = _naive_utc_now()
+    overdue_actions = [a for a in actions if _is_overdue(a.status, a.time_bound, now)]
 
     return {
         "current_year": {
