@@ -48,7 +48,8 @@ def _prefix(value: Optional[str]) -> str:
 
 
 async def _apply_plan(hits: list[dict[str, Any]], *, hard_delete_fixtures: bool) -> dict[str, int]:
-    from src.domain.models.audit_template import AuditTemplate, TemplateStatus
+    from sqlalchemy import text
+
     from src.domain.models.complaint import Complaint, ComplaintStatus
     from src.domain.models.document_campaign import CampaignStatus, DocumentCampaign, EngineerGroup
     from src.domain.models.engineer import Engineer
@@ -103,14 +104,23 @@ async def _apply_plan(hits: list[dict[str, Any]], *, hard_delete_fixtures: bool)
                 campaign.title = _prefix(campaign.title)
                 applied[px] = applied.get(px, 0) + 1
             elif table == "audit_builder_templates":
-                template = await db.get(AuditTemplate, row_id)
-                if template is None:
-                    continue
+                # Core SQL — avoid dual ORM AuditTemplate class-name collision.
                 if hard_delete_fixtures:
-                    await db.delete(template)
+                    result = await db.execute(
+                        text("DELETE FROM audit_builder_templates WHERE id = :id"),
+                        {"id": row_id},
+                    )
                 else:
-                    template.status = TemplateStatus.ARCHIVED
-                applied[px] = applied.get(px, 0) + 1
+                    result = await db.execute(
+                        text(
+                            "UPDATE audit_builder_templates "
+                            "SET status = 'archived' "
+                            "WHERE id = :id AND status::text <> 'archived'"
+                        ),
+                        {"id": row_id},
+                    )
+                if result.rowcount:
+                    applied[px] = applied.get(px, 0) + 1
             elif table == "engineer_groups":
                 group = await db.get(EngineerGroup, row_id)
                 if group is None:
