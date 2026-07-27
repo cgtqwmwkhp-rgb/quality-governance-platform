@@ -55,6 +55,7 @@ def test_near_miss_dual_mount_without_trailing_slash():
 async def test_list_campaigns_global_without_document_id(monkeypatch):
     campaign = SimpleNamespace(
         id=1,
+        reference_number="CAM-2026-0001",
         document_id=3,
         quiz_draft_id=None,
         title="Read",

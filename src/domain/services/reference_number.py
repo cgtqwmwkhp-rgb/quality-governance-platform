@@ -1,5 +1,6 @@
 """Reference number generation service."""
 
+import hashlib
 import logging
 from datetime import datetime
 from typing import Any, Optional
@@ -29,6 +30,7 @@ class ReferenceNumberService:
         "complaint_action": "CMA",
         "capa": "CAPA",
         "document": "DOC",
+        "document_campaign": "CAM",
     }
 
     @classmethod
@@ -42,6 +44,41 @@ class ReferenceNumberService:
             return col
         raise AttributeError(f"{model_class.__name__} has neither 'reference_number' nor 'reference'")
 
+    @staticmethod
+    def _advisory_lock_key(pattern: str) -> int:
+        """Stable signed 64-bit lock key for a prefix/year pattern.
+
+        Derived in Python rather than with PostgreSQL's ``hashtext`` so the value
+        does not depend on an undocumented server internal.
+        """
+        return int.from_bytes(hashlib.blake2b(pattern.encode("utf-8"), digest_size=8).digest(), "big", signed=True)
+
+    @classmethod
+    async def _serialize_minting(cls, db: AsyncSession, pattern: str) -> None:
+        """Serialise concurrent minting of one prefix/year on PostgreSQL.
+
+        The sequence is read with MAX/COUNT, so two transactions that read before
+        either commits pick the same number and the second INSERT dies on the
+        unique index — losing whoever committed last, which for portal intake is
+        a member of staff losing a report they just filed.
+
+        ``pg_advisory_xact_lock`` is held until the surrounding transaction ends,
+        so the waiter only proceeds once the first writer's row is committed and
+        therefore visible to its MAX. Other dialects (SQLite in tests) are left
+        alone; a lock that cannot be taken is logged and skipped rather than
+        allowed to block a record from being created at all.
+        """
+        try:
+            bind = db.get_bind()
+        except Exception:  # pragma: no cover - an unbound session cannot mint anyway
+            return
+        if getattr(getattr(bind, "dialect", None), "name", None) != "postgresql":
+            return
+        try:
+            await db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": cls._advisory_lock_key(pattern)})
+        except Exception:
+            logger.warning("Could not serialise reference minting for %s; continuing unlocked", pattern, exc_info=True)
+
     @classmethod
     async def _next_sequence(
         cls,
@@ -54,6 +91,8 @@ class ReferenceNumberService:
             await db.flush()
         except Exception:
             pass
+
+        await cls._serialize_minting(db, pattern)
 
         ref_col = cls._ref_column(model_class)
 

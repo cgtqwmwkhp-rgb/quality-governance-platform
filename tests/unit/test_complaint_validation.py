@@ -1,11 +1,11 @@
 """Unit tests for complaint validation and ordering contract."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 from pydantic import ValidationError
 
-from src.api.schemas.complaint import ComplaintCreate, ComplaintUpdate
+from src.api.schemas.complaint import ComplaintCreate, ComplaintResponse, ComplaintUpdate, derive_response_sla_state
 from src.domain.models.complaint import ComplaintPriority, ComplaintType
 
 
@@ -118,6 +118,92 @@ class TestComplaintUpdateValidation:
         data = {"title": "  Updated Title  "}
         update = ComplaintUpdate(**data)
         assert update.title == "Updated Title"
+
+
+class TestResponseSlaState:
+    """PX-210 — the API classifies a response SLA from stored facts only."""
+
+    RECEIVED = datetime(2026, 3, 2, 9, 0, tzinfo=timezone.utc)
+    DUE = datetime(2026, 3, 4, 9, 0, tzinfo=timezone.utc)
+
+    def test_nothing_stored_reads_as_not_configured(self):
+        assert derive_response_sla_state(None, None, None) == "not_configured"
+
+    def test_a_stored_deadline_with_no_response_is_pending(self):
+        assert derive_response_sla_state(48, self.DUE, None) == "pending"
+
+    def test_an_sla_without_a_deadline_is_still_pending_not_absent(self):
+        assert derive_response_sla_state(48, None, None) == "pending"
+
+    def test_a_response_before_the_deadline_met_the_sla(self):
+        responded = datetime(2026, 3, 3, 9, 0, tzinfo=timezone.utc)
+        assert derive_response_sla_state(48, self.DUE, responded) == "met"
+
+    def test_a_response_after_the_deadline_breached_the_sla(self):
+        responded = datetime(2026, 3, 5, 9, 0, tzinfo=timezone.utc)
+        assert derive_response_sla_state(48, self.DUE, responded) == "breached"
+
+    def test_a_response_with_no_deadline_cannot_be_a_breach(self):
+        responded = datetime(2027, 1, 1, 9, 0, tzinfo=timezone.utc)
+        assert derive_response_sla_state(None, None, responded) == "met"
+
+    def test_naive_stored_timestamps_are_compared_as_utc(self):
+        """SQLite hands back naive datetimes; comparing them must not raise."""
+        assert (
+            derive_response_sla_state(
+                48,
+                datetime(2026, 3, 4, 9, 0),
+                datetime(2026, 3, 5, 9, 0, tzinfo=timezone.utc),
+            )
+            == "breached"
+        )
+
+    def test_an_unanswered_overdue_complaint_is_still_pending(self):
+        """The API must not depend on the wall clock: only the surface knows "now"."""
+        long_past_due = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        assert derive_response_sla_state(48, long_past_due, None) == "pending"
+
+    def test_response_schema_populates_the_state_from_the_row(self):
+        response = ComplaintResponse.model_validate(
+            {
+                "id": 1,
+                "reference_number": "COMP-2026-0001",
+                "title": "Late repairs response",
+                "description": "Nobody called back.",
+                "complaint_type": ComplaintType.SERVICE,
+                "priority": ComplaintPriority.HIGH,
+                "received_date": self.RECEIVED,
+                "complainant_name": "Jo Bloggs",
+                "status": "received",
+                "response_sla_hours": 48,
+                "response_due_at": self.DUE,
+                "first_response_at": None,
+                "created_at": self.RECEIVED,
+                "updated_at": self.RECEIVED,
+            }
+        )
+
+        assert response.response_sla_state == "pending"
+
+    def test_response_schema_reports_no_sla_when_none_is_stored(self):
+        response = ComplaintResponse.model_validate(
+            {
+                "id": 2,
+                "reference_number": "COMP-2026-0002",
+                "title": "No SLA agreed",
+                "description": "Nothing stored.",
+                "complaint_type": ComplaintType.OTHER,
+                "priority": ComplaintPriority.LOW,
+                "received_date": self.RECEIVED,
+                "complainant_name": "Jo Bloggs",
+                "status": "received",
+                "created_at": self.RECEIVED,
+                "updated_at": self.RECEIVED,
+            }
+        )
+
+        assert response.response_sla_state == "not_configured"
+        assert response.response_due_at is None
 
 
 class TestDeterministicOrdering:

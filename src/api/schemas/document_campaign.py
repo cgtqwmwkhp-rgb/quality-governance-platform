@@ -131,6 +131,10 @@ class CampaignResponse(BaseModel):
     """Document campaign response."""
 
     id: int
+    reference_number: Optional[str] = Field(
+        None,
+        description="Stored CAM-YYYY-NNNN reference (PX-222). Null only on rows predating the backfill.",
+    )
     document_id: int
     quiz_draft_id: Optional[int] = None
     title: Optional[str] = None
@@ -318,6 +322,7 @@ class ReminderDefaultsUpdateRequest(BaseModel):
 
 class ComplianceSummaryItem(BaseModel):
     campaign_id: int
+    reference_number: Optional[str] = None
     document_id: int
     document_title: str
     title: Optional[str] = None

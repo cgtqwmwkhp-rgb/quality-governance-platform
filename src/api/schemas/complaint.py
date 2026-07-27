@@ -1,6 +1,6 @@
 """Pydantic schemas for Complaint API."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
@@ -9,6 +9,44 @@ from src.api.schemas.validators import sanitize_field
 from src.domain.models.complaint import ComplaintPriority, ComplaintStatus, ComplaintType
 
 ComplaintSourceType = Literal["manual", "email", "api", "phone", "portal", "in_person"]
+
+# PX-210. Deliberately clock-independent: "met" and "breached" compare two stored
+# timestamps, so the same record never flips state between two reads of the API.
+# Whether an unanswered complaint is late *right now* is a judgement about the
+# reader's own clock and is made on the surface that renders it.
+ComplaintResponseSlaState = Literal["not_configured", "pending", "met", "breached"]
+
+
+def _to_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Read a stored timestamp as UTC, whether or not the driver kept the offset."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def derive_response_sla_state(
+    response_sla_hours: Optional[int],
+    response_due_at: Optional[datetime],
+    first_response_at: Optional[datetime],
+) -> ComplaintResponseSlaState:
+    """Classify a complaint's response SLA from stored facts alone.
+
+    ``breached`` requires a recorded response that landed after a recorded
+    deadline; an unanswered complaint whose deadline has simply passed is still
+    ``pending`` here, because "has the deadline passed yet" depends on the clock
+    of whoever is asking and would otherwise make this response unstable.
+    """
+    responded = _to_utc(first_response_at)
+    if responded is not None:
+        due = _to_utc(response_due_at)
+        if due is not None and responded > due:
+            return "breached"
+        return "met"
+    if response_due_at is not None or response_sla_hours is not None:
+        return "pending"
+    return "not_configured"
 
 
 class ComplaintBase(BaseModel):
@@ -30,6 +68,16 @@ class ComplaintBase(BaseModel):
     subject_name: Optional[str] = Field(None, max_length=200, description="Free-text subject name")
     alleged_event_at: Optional[datetime] = Field(
         None, description="When the alleged event occurred (may differ from received_date)"
+    )
+    response_sla_hours: Optional[int] = Field(
+        None,
+        ge=1,
+        le=8760,
+        description="Agreed hours from received_date to respond to the complainant (PX-210)",
+    )
+    response_due_at: Optional[datetime] = Field(
+        None,
+        description="Explicit response deadline; derived from received_date + response_sla_hours when omitted",
     )
 
     @field_validator(
@@ -98,6 +146,9 @@ class ComplaintUpdate(BaseModel):
     subject_name: Optional[str] = Field(None, max_length=200)
     alleged_event_at: Optional[datetime] = None
     received_date: Optional[datetime] = None
+    response_sla_hours: Optional[int] = Field(None, ge=1, le=8760)
+    response_due_at: Optional[datetime] = None
+    first_response_at: Optional[datetime] = None
     investigation_notes: Optional[str] = None
     root_cause: Optional[str] = None
     resolution_summary: Optional[str] = None
@@ -163,6 +214,10 @@ class ComplaintResponse(BaseModel):
     alleged_event_at: Optional[datetime] = None
     status: ComplaintStatus
     target_resolution_date: Optional[datetime] = None
+    response_sla_hours: Optional[int] = None
+    response_due_at: Optional[datetime] = None
+    first_response_at: Optional[datetime] = None
+    response_sla_state: ComplaintResponseSlaState = "not_configured"
     resolution_summary: Optional[str] = None
     lessons_learnt: Optional[str] = None
     investigation_notes: Optional[str] = None
@@ -176,6 +231,16 @@ class ComplaintResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     closed_at: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def _set_response_sla_state(self) -> "ComplaintResponse":
+        """Derive the SLA state here so list and detail can never disagree."""
+        self.response_sla_state = derive_response_sla_state(
+            self.response_sla_hours,
+            self.response_due_at,
+            self.first_response_at,
+        )
+        return self
 
 
 class ComplaintListResponse(BaseModel):

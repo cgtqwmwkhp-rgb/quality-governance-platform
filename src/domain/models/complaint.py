@@ -105,6 +105,15 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     target_resolution_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Response SLA (PX-210). All three are nullable: a complaint with no agreed
+    # response SLA must read as "none stored" rather than as a met deadline.
+    # response_due_at is derived from received_date + response_sla_hours unless a
+    # caller supplies an explicit date; first_response_at records when the
+    # complainant was actually responded to.
+    response_sla_hours: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    response_due_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_response_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # Complainant details
     complainant_name: Mapped[str] = mapped_column(String(200), nullable=False)
     complainant_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

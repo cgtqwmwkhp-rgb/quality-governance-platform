@@ -1,5 +1,6 @@
 """Tests for ReferenceNumberService – parse and generate."""
 
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -153,3 +154,90 @@ async def test_generate_uses_all_prefix_types():
         with patch.object(ReferenceNumberService, "_next_sequence", new_callable=AsyncMock, return_value=1):
             ref = await ReferenceNumberService.generate(mock_db, record_type, MagicMock(), year=2026)
         assert ref.startswith(f"{prefix}-2026-")
+
+
+class TestMintSerialisation:
+    """PX-126 — concurrent minters must not both read the same MAX."""
+
+    @pytest.mark.asyncio
+    async def test_postgres_takes_a_transaction_lock_before_reading_the_sequence(self):
+        db = MagicMock()
+        db.get_bind.return_value.dialect.name = "postgresql"
+        db.execute = AsyncMock()
+
+        await ReferenceNumberService._serialize_minting(db, "COMP-2026-%")
+
+        db.execute.assert_awaited_once()
+        statement, params = db.execute.await_args.args
+        assert "pg_advisory_xact_lock" in str(statement)
+        assert params["key"] == ReferenceNumberService._advisory_lock_key("COMP-2026-%")
+
+    @pytest.mark.asyncio
+    async def test_other_dialects_are_left_alone(self):
+        db = MagicMock()
+        db.get_bind.return_value.dialect.name = "sqlite"
+        db.execute = AsyncMock()
+
+        await ReferenceNumberService._serialize_minting(db, "COMP-2026-%")
+
+        db.execute.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_lock_that_cannot_be_taken_never_blocks_the_mint(self):
+        db = MagicMock()
+        db.get_bind.return_value.dialect.name = "postgresql"
+        db.execute = AsyncMock(side_effect=RuntimeError("no lock for you"))
+
+        await ReferenceNumberService._serialize_minting(db, "COMP-2026-%")
+
+    def test_lock_keys_are_stable_and_prefix_specific(self):
+        assert ReferenceNumberService._advisory_lock_key("COMP-2026-%") == ReferenceNumberService._advisory_lock_key(
+            "COMP-2026-%"
+        )
+        assert ReferenceNumberService._advisory_lock_key("COMP-2026-%") != ReferenceNumberService._advisory_lock_key(
+            "INC-2026-%"
+        )
+
+    def test_lock_keys_fit_a_signed_64_bit_postgres_argument(self):
+        for pattern in ("COMP-2026-%", "INC-2026-%", "CAM-2026-%", "NM-1999-%"):
+            key = ReferenceNumberService._advisory_lock_key(pattern)
+            assert -(2**63) <= key < 2**63
+
+
+class TestPortalMint:
+    """PX-126 — portal intake draws from the same sequence as staff intake."""
+
+    @pytest.mark.asyncio
+    async def test_portal_complaint_reference_is_sequential(self):
+        from src.api.routes.employee_portal import mint_portal_reference
+
+        db = AsyncMock()
+        with patch.object(ReferenceNumberService, "_next_sequence", new_callable=AsyncMock, return_value=7):
+            reference = await mint_portal_reference(db, "COMP")
+
+        assert reference == f"COMP-{datetime.now().year}-0007"
+
+    @pytest.mark.asyncio
+    async def test_every_portal_prefix_maps_to_its_register(self):
+        from src.api.routes.employee_portal import mint_portal_reference
+
+        db = AsyncMock()
+        for prefix in ("INC", "COMP", "RTA", "NM"):
+            with patch.object(ReferenceNumberService, "_next_sequence", new_callable=AsyncMock, return_value=1):
+                reference = await mint_portal_reference(db, prefix)
+            assert reference == f"{prefix}-{datetime.now().year}-0001"
+
+    @pytest.mark.asyncio
+    async def test_a_submission_is_never_lost_when_the_sequence_is_unreadable(self):
+        from src.api.routes.employee_portal import mint_portal_reference
+
+        db = AsyncMock()
+        with patch.object(
+            ReferenceNumberService,
+            "generate",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("sequence unavailable"),
+        ):
+            reference = await mint_portal_reference(db, "NM")
+
+        assert reference.startswith(f"NM-{datetime.now().year}-")

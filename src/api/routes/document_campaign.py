@@ -86,6 +86,7 @@ def _campaign_to_response(campaign: DocumentCampaign, summary: dict | None = Non
     status_value = campaign.status.value if hasattr(campaign.status, "value") else campaign.status
     return CampaignResponse(
         id=campaign.id,
+        reference_number=campaign.reference_number,
         document_id=campaign.document_id,
         quiz_draft_id=campaign.quiz_draft_id,
         title=campaign.title,

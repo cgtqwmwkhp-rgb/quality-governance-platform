@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import {
   ALL_REMINDER_PRESET_KEYS,
   CAMPAIGN_REMINDER_PRESETS,
-  formatCampaignReference,
+  campaignReference,
   isUatCampaignArtefact,
   partitionUatCampaigns,
   presetKeysFromReminderHours,
@@ -262,7 +262,7 @@ export default function CampaignCompliance() {
                     const hasGroups = (row.audience_group_ids?.length ?? 0) > 0
                     const expanded = expandedCampaignId === row.campaign_id
                     const groupRows = groupRowsByCampaign[row.campaign_id] ?? []
-                    const ref = formatCampaignReference(row.campaign_id, row.launched_at)
+                    const ref = campaignReference(row.campaign_id, row)
 
                     return (
                       <Fragment key={row.campaign_id}>

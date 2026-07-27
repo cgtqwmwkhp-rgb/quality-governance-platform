@@ -52,6 +52,7 @@ from src.domain.services.document_campaign_notifications import (
 )
 from src.domain.services.feature_flag_service import FeatureFlagService
 from src.domain.services.governance_service import GovernanceService
+from src.domain.services.reference_number import ReferenceNumberService
 
 logger = logging.getLogger(__name__)
 
@@ -264,6 +265,15 @@ class DocumentCampaignService:
 
     # ==================== Campaigns ====================
 
+    async def _mint_campaign_reference(self) -> str:
+        """Mint the stored ``CAM-YYYY-NNNN`` reference for a new campaign (PX-222).
+
+        Every surface reads this column instead of rebuilding a reference from the
+        surrogate id, which is what let the campaign panel and the compliance table
+        show two different references for the same campaign.
+        """
+        return await ReferenceNumberService.generate(self.db, "document_campaign", DocumentCampaign)
+
     async def create_campaign(
         self,
         *,
@@ -315,6 +325,7 @@ class DocumentCampaignService:
 
         campaign = DocumentCampaign(
             tenant_id=tenant_id,
+            reference_number=await self._mint_campaign_reference(),
             document_id=document_id,
             quiz_draft_id=quiz_draft_id,
             title=title,
@@ -1488,6 +1499,7 @@ class DocumentCampaignService:
             items.append(
                 {
                     "campaign_id": campaign.id,
+                    "reference_number": campaign.reference_number,
                     "document_id": campaign.document_id,
                     "document_title": document_title,
                     "title": campaign.title,
@@ -2518,6 +2530,7 @@ class DocumentCampaignService:
 
         campaign = DocumentCampaign(
             tenant_id=tenant_id,
+            reference_number=await self._mint_campaign_reference(),
             document_id=document_id,
             quiz_draft_id=source.quiz_draft_id,
             title=reack_title,
