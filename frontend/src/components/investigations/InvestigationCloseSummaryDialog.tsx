@@ -99,7 +99,7 @@ export function InvestigationCloseSummaryDialog({
             <div className="mt-2 divide-y divide-border">
               {investigation.level ? (
                 <SummaryRow
-                  label={t('investigations.meta.level', 'Level')}
+                  label={t('investigations.level.label', 'Investigation level')}
                   value={formatCodedValue(investigation.level)}
                 />
               ) : null}
