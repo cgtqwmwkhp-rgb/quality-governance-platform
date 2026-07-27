@@ -1120,6 +1120,10 @@ async def update_investigation(  # noqa: C901 - completion/close gates + revisio
             setattr(investigation, "completed_at", datetime.utcnow())
         elif investigation_data.status == "closed" and not investigation.closed_at:
             setattr(investigation, "closed_at", datetime.utcnow())
+        elif investigation_data.status != "closed" and investigation.closed_at:
+            # Reopening: the closure stamp must not outlive the closed status,
+            # or a reopened run still reads as closed to every report.
+            setattr(investigation, "closed_at", None)
 
     # Promote lessons narrative onto the linked case when present and case field empty.
     raw_data = update_data.get("data") if "data" in update_data else investigation.data

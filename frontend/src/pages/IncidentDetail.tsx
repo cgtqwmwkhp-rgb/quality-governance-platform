@@ -15,7 +15,8 @@ import { AsyncState, ErrorState } from '../components/ui/async'
 import { StandardsAssessmentPanel } from '../components/StandardsAssessmentPanel'
 import { resolveIncidentDetailTab } from './incidentStandardsTab'
 import { displayIncidentText } from './incidentTextDisplay'
-import { confirmCloseWithoutLessons } from '../lib/lessonsCloseGate'
+import { CaseLifecycleControls } from '../components/case/CaseLifecycleControls'
+import { CASE_REOPEN_STATUS, isCaseClosed } from '../api/caseClosureClient'
 import {
   ArrowLeft,
   AlertTriangle,
@@ -217,6 +218,7 @@ export default function IncidentDetail() {
   const [witnessesDraft, setWitnessesDraft] = useState<CaseWitnessesValue | null>(null)
   const [savingWitnesses, setSavingWitnesses] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [showCloseDialog, setShowCloseDialog] = useState(false)
   const [witnessSaveError, setWitnessSaveError] = useState<string | null>(null)
   const [careFieldsTouched, setCareFieldsTouched] = useState({
     medical: false,
@@ -457,21 +459,16 @@ export default function IncidentDetail() {
 
   const handleSaveEdit = async () => {
     if (!incident) return
-    if (
-      !confirmCloseWithoutLessons({
-        nextStatus: editForm.status,
-        previousStatus: incident.status,
-        lessons: editForm.lessons_learnt,
-      })
-    ) {
-      return
-    }
+    // Choosing Closed in Edit routes through the one close path: save the rest
+    // of the edit, then hand the status change to the summary dialog.
+    const closingFromEdit =
+      !isCaseClosed('incident', incident.status) && isCaseClosed('incident', editForm.status)
     setSaving(true)
     setSaveError(null)
     try {
       // Omit unchanged status so no-op edits never hit transition validation.
       const payload: IncidentUpdate = { ...editForm }
-      if (payload.status === incident.status) {
+      if (payload.status === incident.status || closingFromEdit) {
         delete payload.status
       }
       // Only send care fields when the editor touched them so unrelated saves
@@ -488,6 +485,9 @@ export default function IncidentDetail() {
       setCareFieldsTouched({ medical: false, emergency: false })
       setIsEditing(false)
       toast.success(t('incidents.detail.save_success', 'Incident updated'))
+      if (closingFromEdit) {
+        setShowCloseDialog(true)
+      }
     } catch (err) {
       trackError(err, { component: 'IncidentDetail', action: 'updateIncident' })
       const message = getApiErrorMessage(
@@ -498,6 +498,32 @@ export default function IncidentDetail() {
       toast.error(message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleCloseCase = async (payload: { lessons_learnt?: string }) => {
+    if (!incident) return
+    const response = await incidentsApi.update(incident.id, {
+      status: 'closed',
+      lessons_learnt: payload.lessons_learnt,
+    })
+    setIncident(response.data)
+    setEditForm(buildIncidentEditForm(response.data))
+    toast.success(t('caseClosure.closed', 'Case closed'))
+  }
+
+  const handleReopenCase = async () => {
+    if (!incident) return
+    try {
+      const response = await incidentsApi.update(incident.id, {
+        status: CASE_REOPEN_STATUS.incident,
+      })
+      setIncident(response.data)
+      setEditForm(buildIncidentEditForm(response.data))
+      toast.success(t('caseClosure.reopened', 'Case reopened'))
+    } catch (err) {
+      trackError(err, { component: 'IncidentDetail', action: 'reopenIncident' })
+      toast.error(getApiErrorMessage(err, t('caseClosure.reopenFailed', 'Could not reopen this case')))
     }
   }
 
@@ -1005,6 +1031,17 @@ export default function IncidentDetail() {
                 <Pencil className="w-4 h-4 mr-2" />
                 {t('edit')}
               </Button>
+              <CaseLifecycleControls
+                caseType="incident"
+                caseId={incident.id}
+                status={incident.status}
+                onClose={handleCloseCase}
+                onReopen={handleReopenCase}
+                onOpenActions={() => navigate(capaHref)}
+                closeDialogOpen={showCloseDialog}
+                onCloseDialogOpenChange={setShowCloseDialog}
+                testIdPrefix="incident"
+              />
               <CaseCapaHeaderButton
                 sourceType="incident"
                 actionsCount={actionsLoadFailed ? 0 : actions.length}

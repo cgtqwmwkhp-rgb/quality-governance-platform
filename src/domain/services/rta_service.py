@@ -14,13 +14,70 @@ from sqlalchemy.orm import selectinload
 
 from src.core.pagination import PaginationInput, paginate
 from src.core.update import apply_updates
-from src.domain.models.rta import RoadTrafficCollision, RTAAction
+from src.domain.exceptions import StateTransitionError
+from src.domain.models.rta import RoadTrafficCollision, RTAAction, RTAStatus
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.case_closure import (
+    CASE_TYPE_RTA,
+    apply_close_stamps,
+    assert_case_can_close,
+    clear_close_stamps,
+    is_closed_status,
+    resolve_case_tenant_id,
+)
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
+
+# RTAs previously accepted any status via PATCH. The map below brings them into
+# line with incidents, complaints and near misses so closure is a transition
+# rather than a free-form field write.
+RTA_TRANSITIONS: dict[RTAStatus, set[RTAStatus]] = {
+    RTAStatus.REPORTED: {RTAStatus.UNDER_INVESTIGATION, RTAStatus.PENDING_INSURANCE, RTAStatus.CLOSED},
+    RTAStatus.UNDER_INVESTIGATION: {
+        RTAStatus.PENDING_INSURANCE,
+        RTAStatus.PENDING_ACTIONS,
+        RTAStatus.CLOSED,
+    },
+    RTAStatus.PENDING_INSURANCE: {
+        RTAStatus.UNDER_INVESTIGATION,
+        RTAStatus.PENDING_ACTIONS,
+        RTAStatus.CLOSED,
+    },
+    RTAStatus.PENDING_ACTIONS: {
+        RTAStatus.UNDER_INVESTIGATION,
+        RTAStatus.PENDING_INSURANCE,
+        RTAStatus.CLOSED,
+    },
+    # Reopen is a single controlled reverse edge, not a free jump back into the lifecycle.
+    RTAStatus.CLOSED: {RTAStatus.UNDER_INVESTIGATION},
+}
+
+
+def validate_rta_transition(current: str, target: str) -> None:
+    """Validate a status transition for an RTA.
+
+    Raises StateTransitionError if the transition is not allowed.
+    Same-status updates are a no-op (PATCH edit forms always re-send status).
+    Unrecognised labels are left alone so legacy rows stay editable.
+    """
+    current_raw = getattr(current, "value", current)
+    target_raw = getattr(target, "value", target)
+    try:
+        current_status = RTAStatus(current_raw)
+        target_status = RTAStatus(target_raw)
+    except ValueError:
+        return
+    if current_status == target_status:
+        return
+    allowed = RTA_TRANSITIONS.get(current_status, set())
+    if target_status not in allowed:
+        raise StateTransitionError(
+            f"Cannot transition from '{current_status.value}' to '{target_status.value}'",
+            details={"allowed": sorted(s.value for s in allowed)},
+        )
 
 
 class RTAService:
@@ -146,8 +203,24 @@ class RTAService:
         from src.domain.services.rta_injury_fields import derive_third_party_injured
 
         rta = await self.get_rta(rta_id, tenant_id)
-        update_data = apply_updates(rta, rta_data)
         raw = rta_data.model_dump(exclude_unset=True)
+        was_closed = is_closed_status(CASE_TYPE_RTA, rta.status)
+        closing = False
+        if "status" in raw:
+            validate_rta_transition(rta.status, raw["status"])
+            closing = not was_closed and is_closed_status(CASE_TYPE_RTA, raw["status"])
+
+        if closing:
+            # Gate before any mutation so a refused close leaves the session clean.
+            await assert_case_can_close(
+                self.db,
+                case_type=CASE_TYPE_RTA,
+                case=rta,
+                tenant_id=resolve_case_tenant_id(rta, tenant_id),
+                lessons_learnt=(raw["lessons_learnt"] if "lessons_learnt" in raw else rta.lessons_learnt),
+            )
+
+        update_data = apply_updates(rta, rta_data)
         if "third_parties" in raw or "third_party_injured" in raw:
             explicit = raw.get("third_party_injured") if "third_party_injured" in raw else None
             parties = rta.third_parties if "third_parties" not in raw else raw.get("third_parties")
@@ -156,15 +229,23 @@ class RTAService:
             elif explicit is not None:
                 rta.third_party_injured = bool(explicit)
             update_data["third_party_injured"] = rta.third_party_injured
+
+        reopening = was_closed and not is_closed_status(CASE_TYPE_RTA, rta.status)
+        if closing:
+            update_data.update(apply_close_stamps(rta, user_id=user_id))
+        elif reopening:
+            update_data.update(clear_close_stamps(rta))
+
         rta.updated_by_id = user_id
 
+        lifecycle = "closed" if closing else "reopened" if reopening else "updated"
         await record_audit_event(
             db=self.db,
-            event_type="rta.updated",
+            event_type=f"rta.{lifecycle}",
             entity_type="rta",
             entity_id=str(rta.id),
             action="update",
-            description=f"RTA {rta.reference_number} updated",
+            description=f"RTA {rta.reference_number} {lifecycle}",
             payload=update_data,
             user_id=user_id,
             request_id=request_id,

@@ -60,6 +60,10 @@ import { AssetPicker } from '../components/AssetPicker'
 import { parseLinkedRiskIds, riskRegisterHref } from './nearMissRiskLinks'
 import { CaseEvidencePanel } from '../components/case/CaseEvidencePanel'
 import { CaseWitnessesPanel, type CaseWitnessesValue } from '../components/case/CaseWitnessesPanel'
+import { CaseLifecycleControls } from '../components/case/CaseLifecycleControls'
+import { NEAR_MISS_STATUS_OPTIONS } from '../api/nearMissesClient'
+import { CASE_CLOSED_STATUS, CASE_REOPEN_STATUS, isCaseClosed } from '../api/caseClosureClient'
+import { formatCodedValue } from '../helpers/displayLabels'
 
 export default function NearMissDetail() {
   const { id } = useParams<{ id: string }>()
@@ -77,6 +81,7 @@ export default function NearMissDetail() {
   const [error, setError] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showCloseDialog, setShowCloseDialog] = useState(false)
   const [showInvestigationModal, setShowInvestigationModal] = useState(false)
   const [creatingInvestigation, setCreatingInvestigation] = useState(false)
   const [newEntry, setNewEntry] = useState('')
@@ -305,24 +310,50 @@ export default function NearMissDetail() {
     }
   }
 
+  const handleCloseCase = async (payload: { lessons_learnt?: string }) => {
+    if (!nearMiss) return
+    const response = await nearMissesApi.update(nearMiss.id, {
+      status: CASE_CLOSED_STATUS.near_miss,
+      lessons_learnt: payload.lessons_learnt,
+    })
+    setNearMiss(response.data)
+    toast.success(t('caseClosure.closed', 'Case closed'))
+  }
+
+  const handleReopenCase = async () => {
+    if (!nearMiss) return
+    try {
+      const response = await nearMissesApi.update(nearMiss.id, {
+        status: CASE_REOPEN_STATUS.near_miss,
+      })
+      setNearMiss(response.data)
+      toast.success(t('caseClosure.reopened', 'Case reopened'))
+    } catch (err) {
+      trackError(err, { component: 'NearMissDetail', action: 'reopenNearMiss' })
+      toast.error(getApiErrorMessage(err, t('caseClosure.reopenFailed', 'Could not reopen this case')))
+    }
+  }
+
   const handleSaveEdit = async () => {
     if (!nearMiss) return
-    const { confirmCloseWithoutLessons } = await import('../lib/lessonsCloseGate')
-    if (
-      !confirmCloseWithoutLessons({
-        nextStatus: editForm.status,
-        previousStatus: nearMiss.status,
-        lessons: editForm.lessons_learnt,
-      })
-    ) {
-      return
-    }
+    // Choosing Closed in Edit routes through the one close path: save the rest
+    // of the edit, then hand the status change to the summary dialog.
+    const closingFromEdit =
+      !isCaseClosed('near_miss', nearMiss.status) && isCaseClosed('near_miss', editForm.status)
     setSaving(true)
     try {
-      const response = await nearMissesApi.update(nearMiss.id, editForm)
+      const payload = { ...editForm }
+      // Omit unchanged status so no-op edits never hit transition validation.
+      if (payload.status === nearMiss.status || closingFromEdit) {
+        delete payload.status
+      }
+      const response = await nearMissesApi.update(nearMiss.id, payload)
       setNearMiss(response.data)
       setIsEditing(false)
       toast.success(t('near_misses.feedback.saved', 'Changes saved'))
+      if (closingFromEdit) {
+        setShowCloseDialog(true)
+      }
     } catch (err) {
       trackError(err, { component: 'NearMissDetail', action: 'saveEdit' })
       toast.error(getApiErrorMessage(err))
@@ -489,9 +520,16 @@ export default function NearMissDetail() {
               <AlertTriangle className="w-6 h-6 text-warning" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">{nearMiss.reference_number}</h1>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-3xl font-bold text-foreground">{nearMiss.reference_number}</h1>
+                <Badge
+                  variant={isCaseClosed('near_miss', nearMiss.status) ? 'closed' : 'outline'}
+                  data-testid="near-miss-status-badge"
+                >
+                  {formatCodedValue(nearMiss.status)}
+                </Badge>
+              </div>
               <p className="text-muted-foreground mt-1">{nearMiss.contract} near miss</p>
-              
             </div>
           </div>
         </div>
@@ -544,6 +582,17 @@ export default function NearMissDetail() {
                 <FlaskConical className="w-4 h-4 mr-2" />
                 {t('near_misses.actions.create_investigation', 'Create Investigation')}
               </Button>
+              <CaseLifecycleControls
+                caseType="near_miss"
+                caseId={nearMiss.id}
+                status={nearMiss.status}
+                onClose={handleCloseCase}
+                onReopen={handleReopenCase}
+                onOpenActions={() => navigate(getCapaLink('near_miss', nearMiss.id))}
+                closeDialogOpen={showCloseDialog}
+                onCloseDialogOpenChange={setShowCloseDialog}
+                testIdPrefix="near-miss"
+              />
               <Button onClick={() => setIsEditing(true)}>
                 <Pencil className="w-4 h-4 mr-2" />
                 {t('common.edit', 'Edit')}
@@ -693,12 +742,21 @@ export default function NearMissDetail() {
                         >
                           {t('common.status', 'Status')}
                         </label>
-                        <Input
-                          id="near-miss-detail-status"
+                        <Select
                           value={editForm.status || ''}
-                          onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                          className="mt-1"
-                        />
+                          onValueChange={(value) => setEditForm({ ...editForm, status: value })}
+                        >
+                          <SelectTrigger id="near-miss-detail-status" className="mt-1">
+                            <SelectValue placeholder={t('common.status', 'Status')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {NEAR_MISS_STATUS_OPTIONS.map((option) => (
+                              <SelectItem key={option} value={option}>
+                                {formatCodedValue(option)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div>
                         <label

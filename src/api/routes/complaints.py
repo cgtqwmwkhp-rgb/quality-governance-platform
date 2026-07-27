@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
+from src.api.schemas.case_closure import CaseClosureValidationResponse
 from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
@@ -20,6 +21,12 @@ from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictE
 from src.domain.models.complaint import Complaint, ComplaintRunningSheetEntry
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.case_closure import (
+    CASE_TYPE_COMPLAINT,
+    evaluate_case_closure,
+    resolve_case_tenant_id,
+    validation_to_payload,
+)
 from src.domain.services.case_risk_links import sync_case_risk_links_from_csv
 from src.domain.services.complaint_risk_links import (
     append_linked_risk_id,
@@ -372,6 +379,32 @@ async def update_complaint(
         return complaint
     except LookupError:
         raise NotFoundError(f"Complaint {complaint_id} not found")
+
+
+@router.get("/{complaint_id}/closure-validation", response_model=CaseClosureValidationResponse)
+async def get_complaint_closure_validation(
+    complaint_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("complaint:read"))],
+):
+    """Report whether this complaint can be closed, and why not if it cannot."""
+    svc = ComplaintService(db)
+    try:
+        complaint = await svc.get_complaint(
+            complaint_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise NotFoundError(f"Complaint {complaint_id} not found")
+
+    validation = await evaluate_case_closure(
+        db,
+        case_type=CASE_TYPE_COMPLAINT,
+        case=complaint,
+        tenant_id=resolve_case_tenant_id(complaint, current_user.tenant_id),
+    )
+    return validation_to_payload(validation)
 
 
 @router.get("/{complaint_id}/investigations", response_model=dict)

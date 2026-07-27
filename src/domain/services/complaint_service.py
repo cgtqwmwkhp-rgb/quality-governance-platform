@@ -20,6 +20,14 @@ from src.domain.models.complaint import Complaint, ComplaintStatus
 from src.domain.models.form_config import Contract
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.case_closure import (
+    CASE_TYPE_COMPLAINT,
+    apply_close_stamps,
+    assert_case_can_close,
+    clear_close_stamps,
+    is_closed_status,
+    resolve_case_tenant_id,
+)
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -42,7 +50,8 @@ COMPLAINT_TRANSITIONS: dict[ComplaintStatus, set[ComplaintStatus]] = {
     },
     ComplaintStatus.RESOLVED: {ComplaintStatus.CLOSED, ComplaintStatus.UNDER_INVESTIGATION},
     ComplaintStatus.ESCALATED: {ComplaintStatus.UNDER_INVESTIGATION, ComplaintStatus.CLOSED},
-    ComplaintStatus.CLOSED: set(),
+    # Reopen is a single controlled reverse edge, not a free jump back into the lifecycle.
+    ComplaintStatus.CLOSED: {ComplaintStatus.UNDER_INVESTIGATION},
 }
 
 
@@ -279,11 +288,33 @@ class ComplaintService:
         old_status = complaint.status
 
         raw_update = complaint_data.model_dump(exclude_unset=True)
+        was_closed = is_closed_status(CASE_TYPE_COMPLAINT, old_status)
+        closing = False
         if "status" in raw_update:
             validate_complaint_transition(old_status, raw_update["status"])
+            closing = not was_closed and is_closed_status(CASE_TYPE_COMPLAINT, raw_update["status"])
+
+        if closing:
+            # Gate before any mutation so a refused close leaves the session clean.
+            # "resolved" stays ungated — it is a pre-close state, not closure.
+            await assert_case_can_close(
+                self.db,
+                case_type=CASE_TYPE_COMPLAINT,
+                case=complaint,
+                tenant_id=resolve_case_tenant_id(complaint, tenant_id),
+                lessons_learnt=(
+                    raw_update["lessons_learnt"] if "lessons_learnt" in raw_update else complaint.lessons_learnt
+                ),
+            )
 
         apply_updates(complaint, complaint_data, set_updated_at=False)
         self._apply_response_sla(complaint, old_status=old_status, raw_update=raw_update)
+
+        reopening = was_closed and not is_closed_status(CASE_TYPE_COMPLAINT, complaint.status)
+        if closing:
+            apply_close_stamps(complaint, user_id=user_id)
+        elif reopening:
+            clear_close_stamps(complaint)
 
         # The audit entry lands in a JSON column, so the payload has to be
         # JSON-native. apply_updates returns Python objects, which meant patching
@@ -294,9 +325,10 @@ class ComplaintService:
         await self.db.flush()
         await self.db.refresh(complaint)
 
+        lifecycle = "closed" if closing else "reopened" if reopening else "updated"
         await record_audit_event(
             db=self.db,
-            event_type="complaint.updated",
+            event_type=f"complaint.{lifecycle}",
             entity_type="complaint",
             entity_id=str(complaint.id),
             action="update",

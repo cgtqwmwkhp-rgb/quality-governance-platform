@@ -6,6 +6,18 @@ import type { AxiosInstance } from 'axios'
 import type { Investigation } from './investigationsClient'
 import type { RunningSheetEntry } from './incidentsClient'
 
+/**
+ * Statuses a near miss can hold, matching `NearMissService.VALID_TRANSITIONS`.
+ * Stored uppercase, unlike the enum-backed sibling registers.
+ */
+export const NEAR_MISS_STATUS_OPTIONS = [
+  'REPORTED',
+  'UNDER_REVIEW',
+  'ACTION_REQUIRED',
+  'IN_PROGRESS',
+  'CLOSED',
+] as const
+
 /** Minimal paginated shape used by near-miss list responses. */
 export interface PaginatedResponse<T> {
   items: T[]

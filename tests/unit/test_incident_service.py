@@ -53,13 +53,13 @@ class TestValidateIncidentTransition:
             validate_incident_transition("closed", "reported")
         assert "allowed" in exc_info.value.details
 
-    def test_closed_has_no_transitions(self):
-        assert (
-            INCIDENT_TRANSITIONS.get(
-                __import__("src.domain.models.incident", fromlist=["IncidentStatus"]).IncidentStatus.CLOSED
-            )
-            == set()
-        )
+    def test_closed_only_allows_the_reopen_edge(self):
+        """Closed is no longer terminal: reopen goes to pending_review and nowhere else."""
+        IncidentStatus = __import__("src.domain.models.incident", fromlist=["IncidentStatus"]).IncidentStatus
+        assert INCIDENT_TRANSITIONS[IncidentStatus.CLOSED] == {IncidentStatus.PENDING_REVIEW}
+
+    def test_valid_closed_to_pending_review(self):
+        validate_incident_transition("closed", "pending_review")
 
 
 # ---------------------------------------------------------------------------

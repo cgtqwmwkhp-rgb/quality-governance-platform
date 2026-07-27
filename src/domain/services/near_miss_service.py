@@ -19,6 +19,14 @@ from src.domain.exceptions import StateTransitionError
 from src.domain.models.form_config import Contract
 from src.domain.models.near_miss import NearMiss
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.case_closure import (
+    CASE_TYPE_NEAR_MISS,
+    apply_close_stamps,
+    assert_case_can_close,
+    clear_close_stamps,
+    is_closed_status,
+    resolve_case_tenant_id,
+)
 from src.domain.services.contract_resolve import assert_tenant_contract, resolve_contract_id_by_code
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
@@ -78,7 +86,8 @@ class NearMissService:
         "UNDER_REVIEW": {"ACTION_REQUIRED", "IN_PROGRESS", "CLOSED"},
         "ACTION_REQUIRED": {"IN_PROGRESS", "CLOSED"},
         "IN_PROGRESS": {"CLOSED", "ACTION_REQUIRED"},
-        "CLOSED": set(),
+        # Reopen is a single controlled reverse edge, not a free jump back into the lifecycle.
+        "CLOSED": {"UNDER_REVIEW"},
     }
 
     async def create_near_miss(
@@ -212,6 +221,8 @@ class NearMissService:
         old_status = near_miss.status
         update_dict = data.model_dump(exclude_unset=True)
         new_status = update_dict.get("status")
+        was_closed = is_closed_status(CASE_TYPE_NEAR_MISS, old_status)
+        closing = False
         if new_status and new_status != old_status:
             allowed = self.VALID_TRANSITIONS.get(old_status, set())
             if new_status not in allowed:
@@ -219,6 +230,19 @@ class NearMissService:
                     f"Cannot transition from '{old_status}' to '{new_status}'",
                     details={"allowed": sorted(allowed)},
                 )
+            closing = not was_closed and is_closed_status(CASE_TYPE_NEAR_MISS, new_status)
+
+        if closing:
+            # Gate before any mutation so a refused close leaves the session clean.
+            await assert_case_can_close(
+                self.db,
+                case_type=CASE_TYPE_NEAR_MISS,
+                case=near_miss,
+                tenant_id=resolve_case_tenant_id(near_miss, tenant_id),
+                lessons_learnt=(
+                    update_dict["lessons_learnt"] if "lessons_learnt" in update_dict else near_miss.lessons_learnt
+                ),
+            )
 
         resolved_contract_display: Optional[str] = None
         if "contract_id" in update_dict and update_dict["contract_id"] is not None:
@@ -233,23 +257,25 @@ class NearMissService:
         if resolved_contract_display:
             near_miss.contract = resolved_contract_display
 
-        if "status" in update_data:
-            if update_data["status"] == "CLOSED" and near_miss.closed_at is None:
-                near_miss.closed_at = datetime.now(timezone.utc)
-                near_miss.closed_by_id = user_id
+        reopening = was_closed and not is_closed_status(CASE_TYPE_NEAR_MISS, near_miss.status)
+        if closing:
+            update_data.update(apply_close_stamps(near_miss, user_id=user_id))
+        elif reopening:
+            update_data.update(clear_close_stamps(near_miss))
 
         if "assigned_to_id" in update_data and near_miss.assigned_at is None:
             near_miss.assigned_at = datetime.now(timezone.utc)
 
         near_miss.updated_by_id = user_id
 
+        lifecycle = "closed" if closing else "reopened" if reopening else "updated"
         await record_audit_event(
             db=self.db,
-            event_type="near_miss.updated",
+            event_type=f"near_miss.{lifecycle}",
             entity_type="near_miss",
             entity_id=str(near_miss.id),
             action="update",
-            description=f"Near Miss {near_miss.reference_number} updated",
+            description=f"Near Miss {near_miss.reference_number} {lifecycle}",
             payload={
                 "updates": update_data,
                 "old_status": old_status,
