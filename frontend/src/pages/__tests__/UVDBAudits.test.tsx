@@ -880,20 +880,25 @@ describe('UVDBAudits', () => {
       expect(screen.queryByText('100%')).not.toBeInTheDocument()
     })
 
-    it('labels an imported section score on a protocol section with no loaded questions', async () => {
+    it('excludes an imported section score on a pending protocol section from qualification display', async () => {
       mockApiGet.mockResolvedValue({
         data: {
           audit_reference: 'UVDB-2026-0001',
           score_source: 'imported',
           unmapped_sections: [],
+          qualification_percentage: null,
+          excluded_section_numbers: ['3'],
           sections: {
             '3': {
               label: 'Section 3 Health and Safety',
-              score: 14,
+              score: null,
               max_score: 15,
-              percentage: 93.3,
+              percentage: null,
               audit_reference: 'UVDB-2026-0001',
               score_source: 'imported',
+              assessed: false,
+              excluded_from_qualification: true,
+              exclusion_reason: 'pending_protocol_pdf',
             },
           },
         },
@@ -906,11 +911,12 @@ describe('UVDBAudits', () => {
         </MemoryRouter>,
       )
 
-      expect(await screen.findByTestId('uvdb-section-3-imported-note')).toHaveTextContent(
-        /protocol questions are not loaded/i,
+      expect(await screen.findByTestId('uvdb-section-3-excluded-note')).toHaveTextContent(
+        /excluded from the qualification score/i,
       )
-      expect(screen.getAllByTestId('uvdb-score-source-imported').length).toBeGreaterThan(0)
-      expect(screen.getByText('93%')).toBeInTheDocument()
+      expect(screen.getByTestId('uvdb-section-3-not-scored')).toHaveTextContent(/not scored/i)
+      expect(screen.queryByText('93%')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('uvdb-section-3-imported-note')).not.toBeInTheDocument()
     })
 
     it('surfaces imported section scores that cannot be matched to a protocol section', async () => {

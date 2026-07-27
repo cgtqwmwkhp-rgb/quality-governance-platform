@@ -4,7 +4,9 @@ import {
   UVDB_SECTIONS,
   buildUvdbBoardAlignment,
   formatUvdbAverageKpi,
+  gateUvdbSectionScoreForDisplay,
   parseUvdbSection,
+  uvdbPendingScoreExclusionCopy,
 } from '../uvdbHelpers'
 
 describe('uvdbHelpers', () => {
@@ -41,7 +43,7 @@ describe('uvdbHelpers', () => {
     expect(formatUvdbAverageKpi(alignment).caption).toMatch(/not verified/i)
   })
 
-  it('PX-255 residual: labels mixed imported + calculated averages honestly', () => {
+    it('PX-255 residual: labels mixed imported + calculated averages honestly', () => {
     const alignment = buildUvdbBoardAlignment({
       protocolTotal: 2,
       protocolCompleted: 2,
@@ -51,5 +53,30 @@ describe('uvdbHelpers', () => {
     })
     expect(alignment.averageProvenance).toBe('mixed')
     expect(formatUvdbAverageKpi(alignment).value).toBe('80%')
+  })
+
+  it('PX-255 scoring policy: gates pending section scores out of display', () => {
+    const gated = gateUvdbSectionScoreForDisplay(
+      {
+        score: 14,
+        max_score: 15,
+        percentage: 93.3,
+        score_source: 'imported',
+      },
+      'pending_protocol_pdf',
+    )
+    expect(gated?.percentage).toBeNull()
+    expect(gated?.score).toBeNull()
+    expect(gated?.excluded_from_qualification).toBe(true)
+    expect(uvdbPendingScoreExclusionCopy(gated?.exclusion_reason)).toMatch(/excluded from the qualification/i)
+  })
+
+  it('PX-255 scoring policy: loaded sections keep their percentage', () => {
+    const gated = gateUvdbSectionScoreForDisplay(
+      { score: 18, max_score: 21, percentage: 85.7, score_source: 'calculated' },
+      'loaded',
+    )
+    expect(gated?.percentage).toBe(85.7)
+    expect(gated?.excluded_from_qualification).toBeUndefined()
   })
 })
