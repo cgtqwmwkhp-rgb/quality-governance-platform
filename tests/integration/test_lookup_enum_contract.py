@@ -1,0 +1,262 @@
+"""Every active lookup option must be a value its API field will accept (PX-281/282).
+
+A lookup category that feeds an enum-validated field is one half of a contract.
+The form loads ``lookup_options`` for the category with ``is_active=true`` and
+submits the chosen ``code`` verbatim; the API validates that string against a
+Python enum. Nothing in the schema, the ORM or CI held those two halves
+together, so they drifted: ``complaint_types`` ended up offering ``workmanship``
+and only ``workmanship``, which ``ComplaintType`` has never contained, and every
+complaint submitted through the UI came back 422. ``incident_types`` carried five
+codes with the same defect.
+
+These tests close the drift from both ends:
+
+* ``TestSeedDataIsWithinItsEnum`` and ``TestMigrationDefaultsMatchTheSeed`` are
+  pure-data checks — no database, so they run in any suite and fail the moment
+  someone adds a code the enum does not have.
+* ``TestActiveOptionsAreAcceptedByTheApi`` is the real contract: it seeds the
+  defaults, reads the dropdown back through the same endpoint and query string
+  the frontend uses, and posts a case for every code it was offered. It is the
+  test that would have caught PX-281/282 before a user saw it.
+* ``TestTheContractTestHasTeeth`` reproduces the production defect against a
+  rogue option, so a future refactor cannot leave these assertions passing
+  vacuously.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from types import ModuleType, SimpleNamespace
+from typing import Any, Callable
+
+import pytest
+from httpx import AsyncClient
+
+from src.domain.services.lookup_defaults_seed import seed_lookup_defaults
+from src.domain.services.lookup_defaults_seed_data import rows_for_category
+from src.domain.services.lookup_enum_contract import (
+    ENUM_BACKED_CATEGORIES,
+    ENUM_BACKED_LOOKUPS,
+    EnumBackedLookup,
+    rejected_codes,
+)
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+MIGRATION_PATH = REPO_ROOT / "alembic" / "versions" / "20260831_realign_enum_lookups_and_dedupe_customers.py"
+
+TENANT = 1
+LOOKUP_ENDPOINT = "/api/v1/admin/config/lookup/{category}"
+
+
+def _load_migration() -> ModuleType:
+    """Load the repair migration by path; ``alembic/versions`` is not a package.
+
+    The repo ships an empty ``alembic/__init__.py`` that shadows the installed
+    distribution once the repo root is on ``sys.path``, so ``alembic.op`` is
+    stubbed for the load. These tests only read the migration's constants.
+    """
+    import alembic
+
+    if not hasattr(alembic, "op"):
+        alembic.op = SimpleNamespace(get_bind=lambda: None)  # type: ignore[attr-defined]
+
+    spec = importlib.util.spec_from_file_location("qgp_lookup_enum_align", MIGRATION_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _recent() -> str:
+    """A timestamp in the recent past; the case schemas reject future dates."""
+    return (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+
+
+def _complaint_payload(code: str) -> dict[str, Any]:
+    return {
+        "title": f"Lookup contract probe: {code}",
+        "description": f"Submitted with the active complaint_types option '{code}'.",
+        "complaint_type": code,
+        "received_date": _recent(),
+        "complainant_name": "Contract Test",
+    }
+
+
+def _incident_payload(code: str) -> dict[str, Any]:
+    return {
+        "title": f"Lookup contract probe: {code}",
+        "description": f"Submitted with the active incident_types option '{code}'.",
+        "incident_type": code,
+        "incident_date": _recent(),
+    }
+
+
+# The case endpoint each enum-backed category feeds, and how to build a minimal
+# valid create payload for it. Keyed by category so a new entry in
+# ENUM_BACKED_LOOKUPS without a probe fails ``test_every_registered_category_is_probed``
+# rather than silently going unverified.
+CASE_PROBES: dict[str, tuple[str, Callable[[str], dict[str, Any]]]] = {
+    "complaint_types": ("/api/v1/complaints/", _complaint_payload),
+    "incident_types": ("/api/v1/incidents/", _incident_payload),
+}
+
+
+def _ids(lookups: tuple[EnumBackedLookup, ...]) -> list[str]:
+    return [lookup.category for lookup in lookups]
+
+
+@pytest.fixture(params=ENUM_BACKED_LOOKUPS, ids=_ids(ENUM_BACKED_LOOKUPS))
+def enum_lookup(request) -> EnumBackedLookup:
+    return request.param
+
+
+class TestSeedDataIsWithinItsEnum:
+    """The seeded defaults are the values the form will offer out of the box."""
+
+    def test_every_seeded_code_is_an_enum_member(self, enum_lookup: EnumBackedLookup):
+        seeded = [row.code for row in rows_for_category(enum_lookup.category)]
+        assert seeded, f"'{enum_lookup.category}' has no defaults, so the dropdown would be empty"
+
+        rejected = rejected_codes(enum_lookup.category, seeded)
+        assert rejected == (), (
+            f"{enum_lookup.ticket}: seeded '{enum_lookup.category}' codes {list(rejected)} are not members of "
+            f"{enum_lookup.enum_class.__name__}, so choosing one returns HTTP 422 on "
+            f"'{enum_lookup.request_field}'. Allowed: {list(enum_lookup.allowed_codes)}"
+        )
+
+    def test_every_enum_member_is_offered(self, enum_lookup: EnumBackedLookup):
+        """The other direction: a member with no option is a value users cannot pick."""
+        seeded = {row.code for row in rows_for_category(enum_lookup.category)}
+        missing = sorted(set(enum_lookup.allowed_codes) - seeded)
+        assert missing == [], (
+            f"{enum_lookup.enum_class.__name__} members {missing} have no '{enum_lookup.category}' option, "
+            "so no user can submit them"
+        )
+
+    def test_codes_are_unique_and_labelled(self, enum_lookup: EnumBackedLookup):
+        rows = rows_for_category(enum_lookup.category)
+        codes = [row.code for row in rows]
+        assert len(codes) == len(set(codes)), f"'{enum_lookup.category}' seeds a duplicate code: {sorted(codes)}"
+        assert all(row.label.strip() for row in rows), f"'{enum_lookup.category}' seeds an option with no label"
+
+    def test_every_registered_category_is_probed(self):
+        assert set(CASE_PROBES) == set(ENUM_BACKED_CATEGORIES), (
+            "every enum-backed lookup category needs a create-payload probe here, otherwise its "
+            "contract is registered but never exercised against the API"
+        )
+
+
+class TestMigrationDefaultsMatchTheSeed:
+    """The repair migration inlines the codes; the copy must not drift."""
+
+    def test_migration_defaults_are_identical_to_the_seed_module(self, enum_lookup: EnumBackedLookup):
+        migration = _load_migration()
+        inline = migration.ENUM_LOOKUP_DEFAULTS[enum_lookup.category]
+        seeded = tuple((row.code, row.label, row.display_order) for row in rows_for_category(enum_lookup.category))
+        assert inline == seeded, (
+            f"alembic 20260831_lookup_enum_align and lookup_defaults_seed_data disagree about "
+            f"'{enum_lookup.category}'; a migrated tenant and a freshly seeded one would offer different options"
+        )
+
+    def test_migration_covers_every_enum_backed_category(self):
+        migration = _load_migration()
+        assert set(migration.ENUM_LOOKUP_DEFAULTS) == set(ENUM_BACKED_CATEGORIES)
+
+
+async def _active_codes(client: AsyncClient, category: str) -> list[str]:
+    """Read the dropdown exactly as the frontend does: this category, active only."""
+    response = await client.get(LOOKUP_ENDPOINT.format(category=category), params={"is_active": "true"})
+    assert response.status_code == 200, response.text
+    return [item["code"] for item in response.json()["items"]]
+
+
+async def _rejected_by_the_api(client: AsyncClient, category: str, codes: list[str]) -> dict[str, str]:
+    """Post a case per code; return the codes the API refused and why."""
+    endpoint, build_payload = CASE_PROBES[category]
+    refused: dict[str, str] = {}
+    for code in codes:
+        response = await client.post(endpoint, json=build_payload(code))
+        if response.status_code != 201:
+            refused[code] = f"HTTP {response.status_code}: {response.text[:300]}"
+    return refused
+
+
+@pytest.fixture
+async def seeded_lookups(test_session):
+    """Seed the UK defaults for the test tenant, as application startup does."""
+    result = await seed_lookup_defaults(test_session, tenant_id=TENANT)
+    assert result.rows_inserted, "the fresh test schema should have had empty lookup categories to seed"
+    return result
+
+
+class TestActiveOptionsAreAcceptedByTheApi:
+    """PX-281/282 — the form may only offer values the API will take."""
+
+    async def test_every_active_option_is_accepted(
+        self,
+        admin_client: AsyncClient,
+        seeded_lookups,
+        enum_lookup: EnumBackedLookup,
+    ):
+        codes = await _active_codes(admin_client, enum_lookup.category)
+        assert codes, (
+            f"'{enum_lookup.category}' served no active options, so the "
+            f"'{enum_lookup.request_field}' select would be empty"
+        )
+
+        refused = await _rejected_by_the_api(admin_client, enum_lookup.category, codes)
+        assert refused == {}, (
+            f"{enum_lookup.ticket}: the {enum_lookup.category} dropdown offers values the API rejects on "
+            f"'{enum_lookup.request_field}' — {refused}"
+        )
+
+    async def test_the_offered_options_are_exactly_the_enum(
+        self,
+        admin_client: AsyncClient,
+        seeded_lookups,
+        enum_lookup: EnumBackedLookup,
+    ):
+        codes = await _active_codes(admin_client, enum_lookup.category)
+        assert sorted(codes) == sorted(enum_lookup.allowed_codes)
+
+
+class TestTheContractTestHasTeeth:
+    """Reproduce PX-281 so these assertions cannot pass for the wrong reason."""
+
+    async def test_a_rogue_active_option_is_detected(
+        self,
+        admin_client: AsyncClient,
+        seeded_lookups,
+        test_session,
+    ):
+        """'workmanship' is what production actually offered; the API 422s on it."""
+        from src.domain.models.form_config import LookupOption
+
+        test_session.add(
+            LookupOption(
+                tenant_id=TENANT,
+                category="complaint_types",
+                code="workmanship",
+                label="Workmanship / repair defect",
+                is_active=True,
+                display_order=99,
+            )
+        )
+        await test_session.commit()
+
+        codes = await _active_codes(admin_client, "complaint_types")
+        assert "workmanship" in codes
+
+        refused = await _rejected_by_the_api(admin_client, "complaint_types", codes)
+        assert list(refused) == ["workmanship"], refused
+        assert "422" in refused["workmanship"]
+
+        assert rejected_codes("complaint_types", codes) == ("workmanship",)
+
+    def test_a_free_form_category_constrains_nothing(self):
+        """Only registered categories are contracts; customers stays free-form."""
+        assert rejected_codes("customers", ["thames_water", "anything"]) == ()

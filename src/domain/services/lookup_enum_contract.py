@@ -1,0 +1,88 @@
+"""Lookup categories whose codes are also API enum values (PX-281/282).
+
+Most lookup categories are free-form reference data: an admin can call a
+customer whatever they like. A handful are not. When a form renders a lookup
+category into a select and submits the chosen ``lookup_options.code`` verbatim
+as an enum-validated request field, the category stops being reference data and
+becomes half of a contract — every active code has to be a member of that enum
+or whoever picks it gets an HTTP 422.
+
+PX-281/282 is that failure in its purest form. ``complaint_types`` offered
+exactly one option, ``workmanship``, which ``ComplaintType`` has never
+contained, so ``POST /api/v1/complaints/`` rejected the only value the form
+could produce and no complaint could be submitted through the UI at all.
+``incident_types`` (R22-01) carried five more codes with the same problem.
+
+Naming the pairings here gives the seed data, the repair migration and the
+contract test one definition to agree with instead of three restatements of it.
+"""
+
+from __future__ import annotations
+
+import enum
+from collections.abc import Iterable
+from dataclasses import dataclass
+
+from src.domain.models.complaint import ComplaintType
+from src.domain.models.incident import IncidentType
+
+
+@dataclass(frozen=True, slots=True)
+class EnumBackedLookup:
+    """One lookup category and the enum-validated field its codes are sent as."""
+
+    category: str
+    enum_class: type[enum.Enum]
+    request_field: str
+    ticket: str
+
+    @property
+    def allowed_codes(self) -> tuple[str, ...]:
+        """Every code this category may contain, in enum declaration order."""
+        return tuple(str(member.value) for member in self.enum_class)
+
+
+ENUM_BACKED_LOOKUPS: tuple[EnumBackedLookup, ...] = (
+    EnumBackedLookup(
+        category="complaint_types",
+        enum_class=ComplaintType,
+        request_field="complaint_type",
+        ticket="PX-281/282",
+    ),
+    EnumBackedLookup(
+        category="incident_types",
+        enum_class=IncidentType,
+        request_field="incident_type",
+        ticket="R22-01",
+    ),
+)
+
+ENUM_BACKED_CATEGORIES: tuple[str, ...] = tuple(lookup.category for lookup in ENUM_BACKED_LOOKUPS)
+
+
+def lookup_for_category(category: str) -> EnumBackedLookup | None:
+    """Return the contract for ``category``, or None if it is free-form data."""
+    for lookup in ENUM_BACKED_LOOKUPS:
+        if lookup.category == category:
+            return lookup
+    return None
+
+
+def allowed_codes(category: str) -> tuple[str, ...]:
+    """Codes accepted by the field ``category`` feeds; empty when unconstrained."""
+    lookup = lookup_for_category(category)
+    return lookup.allowed_codes if lookup is not None else ()
+
+
+def rejected_codes(category: str, codes: Iterable[str]) -> tuple[str, ...]:
+    """Which of ``codes`` the field behind ``category`` would reject, sorted.
+
+    Comparison is case-insensitive because the columns backing these fields are
+    ``CaseInsensitiveEnum``, which lowercases on the way in. A free-form
+    category constrains nothing, so nothing is rejected.
+    """
+    lookup = lookup_for_category(category)
+    if lookup is None:
+        return ()
+    permitted = {code.lower() for code in lookup.allowed_codes}
+    return tuple(sorted({code for code in codes if code.strip().lower() not in permitted}))
