@@ -77,7 +77,8 @@ Same sequence. Require:
 
 - Named human approver
 - `--apply --i-understand-prod`
-- Post-apply smoke: incidents/complaints lists, portal intake network (no template 404), Document Control drafts, admin users inactive for smoke accounts
+- Post-apply smoke: incidents/complaints lists, portal intake network (no template 404), Document Control drafts, admin users inactive for **debris** smoke accounts
+- **Do not** soft-purge dedicated CI runners listed in `CI_SMOKE_USER_EMAILS` (`ux-test@example.com`, `smoke-runner@plantexpand.com`, …). Deactivating them returns `ACCOUNT_LOCKED` and blocks staging→prod promotion.
 
 ### 4) Human-only follow-ups (scripts only inventory)
 
