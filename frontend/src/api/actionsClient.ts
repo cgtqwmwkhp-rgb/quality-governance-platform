@@ -83,6 +83,8 @@ export interface ActionCreate {
   source_type: string
   source_id?: number
   source_reference?: string
+  /** Mirrors the owner_id returned by the API. Send this or assigned_to_email; if both, they must match. */
+  owner_id?: number
   assigned_to_email?: string
 }
 
@@ -96,6 +98,8 @@ export interface ActionUpdate {
   priority?: string
   status?: string
   due_date?: string
+  /** Mirrors the owner_id returned by the API. Send this or assigned_to_email; if both, they must match. */
+  owner_id?: number
   assigned_to_email?: string
   completion_notes?: string
 }

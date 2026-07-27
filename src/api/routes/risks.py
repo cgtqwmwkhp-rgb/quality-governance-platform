@@ -1,9 +1,25 @@
-"""Risk Register API routes."""
+"""Operational Risk Register API routes — DEPRECATED.
+
+These routes read and write the ``risks`` table via the ``Risk`` model. That
+store is separate from the Enterprise Risk Register (``risks_v2`` /
+``EnterpriseRisk``) served by ``/api/v1/risk-register``, and it is the only
+risk store in the platform that nothing but ``POST /api/v1/risks/`` ever
+writes: audit-finding escalation, incident/complaint/near-miss risk links,
+``RiskService`` and the risk-register importer all write ``EnterpriseRisk``.
+
+The practical consequence is that ``GET /api/v1/risks/`` reports 0 on a
+deployment whose risk register is full, which is how two dashboards ended up
+disagreeing about the same question (PX-178). ``/risk-register`` is the single
+source; this surface is kept only so existing OpenAPI consumers do not break,
+is advertised as deprecated in the schema, and returns deprecation headers.
+
+Ids and payloads are NOT interchangeable between the two registers.
+"""
 
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import ColumnElement, and_, func, select, true
 from sqlalchemy.orm import selectinload
 
@@ -75,7 +91,21 @@ async def _get_risk_tenant_checked(db, risk_id: int, current_user) -> Risk:
     return risk
 
 
-router = APIRouter()
+SUCCESSOR_REGISTER_PATH = "/api/v1/risk-register/"
+
+
+def advertise_deprecation(response: Response) -> None:
+    """Announce the successor register on every operational-risk response.
+
+    RFC 8594 style. No ``Sunset`` header: the removal date is not agreed yet, and
+    a made-up one would be worse than none. Callers get a machine-readable
+    pointer at the register that actually holds the data.
+    """
+    response.headers["Deprecation"] = "true"
+    response.headers["Link"] = f'<{SUCCESSOR_REGISTER_PATH}>; rel="successor-version"'
+
+
+router = APIRouter(dependencies=[Depends(advertise_deprecation)])
 
 
 # ============== Risk Matrix Configuration ==============
@@ -129,8 +159,8 @@ def calculate_risk_level(likelihood: int, impact: int) -> tuple[int, str, str]:
 # ============== Risk Endpoints ==============
 
 
-@router.get("", response_model=RiskListResponse, include_in_schema=False)
-@router.get("/", response_model=RiskListResponse)
+@router.get("", response_model=RiskListResponse, include_in_schema=False, deprecated=True)
+@router.get("/", response_model=RiskListResponse, deprecated=True)
 async def list_risks(
     db: DbSession,
     current_user: CurrentUser,
@@ -186,8 +216,9 @@ async def list_risks(
     response_model=RiskResponse,
     status_code=status.HTTP_201_CREATED,
     include_in_schema=False,
+    deprecated=True,
 )
-@router.post("/", response_model=RiskResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=RiskResponse, status_code=status.HTTP_201_CREATED, deprecated=True)
 async def create_risk(
     risk_data: RiskCreate,
     db: DbSession,
@@ -240,7 +271,7 @@ async def create_risk(
     return RiskResponse.model_validate(risk)
 
 
-@router.get("/statistics", response_model=RiskStatistics)
+@router.get("/statistics", response_model=RiskStatistics, deprecated=True)
 async def get_risk_statistics(
     db: DbSession,
     current_user: CurrentUser,
@@ -315,7 +346,7 @@ async def get_risk_statistics(
     )
 
 
-@router.get("/matrix", response_model=RiskMatrixResponse)
+@router.get("/matrix", response_model=RiskMatrixResponse, deprecated=True)
 async def get_risk_matrix(
     db: DbSession,
     current_user: CurrentUser,
@@ -367,7 +398,7 @@ async def get_risk_matrix(
     )
 
 
-@router.get("/{risk_id}", response_model=RiskDetailResponse)
+@router.get("/{risk_id}", response_model=RiskDetailResponse, deprecated=True)
 async def get_risk(
     risk_id: int,
     db: DbSession,
@@ -402,7 +433,7 @@ async def get_risk(
     return response
 
 
-@router.patch("/{risk_id}", response_model=RiskResponse)
+@router.patch("/{risk_id}", response_model=RiskResponse, deprecated=True)
 async def update_risk(
     risk_id: int,
     risk_data: RiskUpdate,
@@ -456,7 +487,7 @@ async def update_risk(
     return RiskResponse.model_validate(risk)
 
 
-@router.delete("/{risk_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{risk_id}", status_code=status.HTTP_204_NO_CONTENT, deprecated=True)
 async def delete_risk(
     risk_id: int,
     db: DbSession,
@@ -484,6 +515,7 @@ async def delete_risk(
     "/{risk_id}/controls",
     response_model=RiskControlResponse,
     status_code=status.HTTP_201_CREATED,
+    deprecated=True,
 )
 async def create_control(
     risk_id: int,
@@ -514,7 +546,7 @@ async def create_control(
     return RiskControlResponse.model_validate(control)
 
 
-@router.get("/{risk_id}/controls", response_model=dict)
+@router.get("/{risk_id}/controls", response_model=dict, deprecated=True)
 async def list_controls(
     risk_id: int,
     db: DbSession,
@@ -547,7 +579,7 @@ async def list_controls(
     }
 
 
-@router.patch("/controls/{control_id}", response_model=RiskControlResponse)
+@router.patch("/controls/{control_id}", response_model=RiskControlResponse, deprecated=True)
 async def update_control(
     control_id: int,
     control_data: RiskControlUpdate,
@@ -588,7 +620,7 @@ async def update_control(
     return RiskControlResponse.model_validate(control)
 
 
-@router.delete("/controls/{control_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/controls/{control_id}", status_code=status.HTTP_204_NO_CONTENT, deprecated=True)
 async def delete_control(
     control_id: int,
     db: DbSession,
@@ -622,6 +654,7 @@ async def delete_control(
     "/{risk_id}/assessments",
     response_model=RiskAssessmentResponse,
     status_code=status.HTTP_201_CREATED,
+    deprecated=True,
 )
 async def create_assessment(
     risk_id: int,
@@ -674,7 +707,7 @@ async def create_assessment(
     return RiskAssessmentResponse.model_validate(assessment)
 
 
-@router.get("/{risk_id}/assessments", response_model=list[RiskAssessmentResponse])
+@router.get("/{risk_id}/assessments", response_model=list[RiskAssessmentResponse], deprecated=True)
 async def list_assessments(
     risk_id: int,
     db: DbSession,
@@ -690,7 +723,7 @@ async def list_assessments(
     return [RiskAssessmentResponse.model_validate(a) for a in assessments]
 
 
-@router.get("/{risk_id}/assessments/paged", response_model=RiskAssessmentListResponse)
+@router.get("/{risk_id}/assessments/paged", response_model=RiskAssessmentListResponse, deprecated=True)
 async def list_assessments_paged(
     risk_id: int,
     db: DbSession,

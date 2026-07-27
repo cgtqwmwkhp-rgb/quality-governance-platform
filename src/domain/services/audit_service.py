@@ -239,6 +239,33 @@ class RunDetail:
 # ---------------------------------------------------------------------------
 
 
+async def _resolve_actor_identity(
+    db: AsyncSession,
+    actor_user_id: int | None,
+) -> tuple[str | None, str | None]:
+    """Return the actor's (email, display name) as they stand at write time.
+
+    Identity is denormalised onto the audit row rather than resolved on read so
+    the entry still names the person after a rename, a role change or an account
+    deletion — an audit trail that loses its actor is not evidence. A lookup
+    failure must never sink the mutation being audited, so this degrades to
+    ``(None, None)`` and leaves ``user_id`` as the sole identifier.
+    """
+    if actor_user_id is None:
+        return None, None
+    try:
+        # get() consults the identity map first, so a request emitting several
+        # audit events for one actor costs at most one round trip.
+        user = await db.get(User, actor_user_id)
+    except Exception:  # noqa: BLE001 — identity is best-effort; the audit row still records user_id
+        logger.warning("audit_actor_lookup_failed actor_user_id=%s", actor_user_id, exc_info=True)
+        return None, None
+
+    if user is None:
+        return None, None
+    return user.email, (user.full_name.strip() or None)
+
+
 async def record_audit_event(
     db: AsyncSession,
     event_type: str,
@@ -311,12 +338,16 @@ async def record_audit_event(
     else:
         new_values = payload
 
+    actor_email, actor_name = await _resolve_actor_identity(db, final_actor_user_id)
+
     entry = await AuditLogService(db).log(
         tenant_id=resolved_tenant_id,
         entity_type=entity_type,
         entity_id=str(entity_id),
         action=action,
         user_id=final_actor_user_id,
+        user_email=actor_email,
+        user_name=actor_name,
         old_values=old_values,
         new_values=new_values,
         request_id=request_id,
