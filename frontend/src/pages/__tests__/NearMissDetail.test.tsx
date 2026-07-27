@@ -254,3 +254,77 @@ describe('NearMissDetail investigation → CAPA honesty', () => {
     })
   })
 })
+
+describe('NearMissDetail closure lifecycle', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    ;(client.nearMissesApi.listInvestigations as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { items: [], total: 0 },
+    })
+    ;(client.actionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { items: [], total: 0 },
+    })
+    ;(client.nearMissesApi.listRunningSheet as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [],
+    })
+  })
+
+  const renderPage = () =>
+    render(
+      <MemoryRouter initialEntries={['/near-misses/5']}>
+        <Routes>
+          <Route path="/near-misses/:id" element={<NearMissDetail />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+  it('offers Close on an open near miss and shows the status badge', async () => {
+    ;(client.nearMissesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: nearMiss })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('near-miss-close')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('near-miss-status-badge')).toHaveTextContent('Reported')
+    expect(screen.queryByTestId('near-miss-reopen')).not.toBeInTheDocument()
+  })
+
+  it('reopens a CLOSED near miss back to UNDER_REVIEW', async () => {
+    ;(client.nearMissesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { ...nearMiss, status: 'CLOSED' },
+    })
+    ;(client.nearMissesApi.update as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { ...nearMiss, status: 'UNDER_REVIEW' },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('near-miss-reopen')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('near-miss-reopen'))
+    fireEvent.click(await screen.findByTestId('near-miss-reopen-confirm'))
+
+    await waitFor(() => {
+      expect(client.nearMissesApi.update).toHaveBeenCalledWith(5, { status: 'UNDER_REVIEW' })
+    })
+  })
+
+  it('edits status through a Select, not free text', async () => {
+    ;(client.nearMissesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: nearMiss })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('near-miss-close')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Edit/i }))
+
+    const statusControl = await screen.findByRole('combobox', { name: 'Status' })
+    expect(statusControl).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Status' })).not.toBeInTheDocument()
+  })
+})

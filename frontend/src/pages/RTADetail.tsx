@@ -88,6 +88,8 @@ import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
 import { getCapaLink } from '../components/investigations/handoffLinks'
 import { CaseCapaActionsPanel } from '../components/case/CaseCapaActionsPanel'
+import { CaseLifecycleControls } from '../components/case/CaseLifecycleControls'
+import { CASE_REOPEN_STATUS, isCaseClosed } from '../api/caseClosureClient'
 
 const MAX_EVIDENCE_FILE_SIZE_BYTES = 50 * 1024 * 1024
 const SUPPORTED_EVIDENCE_MIME_PREFIXES = ['image/', 'video/']
@@ -111,6 +113,7 @@ export default function RTADetail() {
   const [creating, setCreating] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showCloseDialog, setShowCloseDialog] = useState(false)
   const [editForm, setEditForm] = useState<RTAUpdate>({})
 
   const [selectedAction, setSelectedAction] = useState<Action | null>(null)
@@ -257,18 +260,35 @@ export default function RTADetail() {
     }
   }
 
+  const handleCloseCase = async (payload: { lessons_learnt?: string }) => {
+    if (!rta) return
+    const response = await rtasApi.update(rta.id, {
+      status: 'closed',
+      lessons_learnt: payload.lessons_learnt,
+    })
+    setRta(response.data)
+    populateEditForm(response.data)
+    toast.success(t('caseClosure.closed', 'Case closed'))
+  }
+
+  const handleReopenCase = async () => {
+    if (!rta) return
+    try {
+      const response = await rtasApi.update(rta.id, { status: CASE_REOPEN_STATUS.rta })
+      setRta(response.data)
+      populateEditForm(response.data)
+      toast.success(t('caseClosure.reopened', 'Case reopened'))
+    } catch (err) {
+      trackError(err, { component: 'RTADetail', action: 'reopenRta' })
+      toast.error(getApiErrorMessage(err, t('caseClosure.reopenFailed', 'Could not reopen this case')))
+    }
+  }
+
   const handleSaveEdit = async () => {
     if (!rta) return
-    const { confirmCloseWithoutLessons } = await import('../lib/lessonsCloseGate')
-    if (
-      !confirmCloseWithoutLessons({
-        nextStatus: editForm.status,
-        previousStatus: rta.status,
-        lessons: editForm.lessons_learnt,
-      })
-    ) {
-      return
-    }
+    // Choosing Closed in Edit routes through the one close path: save the rest
+    // of the edit, then hand the status change to the summary dialog.
+    const closingFromEdit = !isCaseClosed('rta', rta.status) && isCaseClosed('rta', editForm.status)
     setSaving(true)
     try {
       const payload: RTAUpdate = {
@@ -286,10 +306,17 @@ export default function RTADetail() {
             ? { witnesses: editWitnesses }
             : undefined,
       }
+      // Omit unchanged status so no-op edits never hit transition validation.
+      if (payload.status === rta.status || closingFromEdit) {
+        delete payload.status
+      }
       const response = await rtasApi.update(rta.id, payload)
       setRta(response.data)
       setIsEditing(false)
       toast.success('Changes saved')
+      if (closingFromEdit) {
+        setShowCloseDialog(true)
+      }
     } catch (err) {
       trackError(err, { component: 'RTADetail', action: 'saveEdit' })
       toast.error(getApiErrorMessage(err))
@@ -644,6 +671,17 @@ export default function RTADetail() {
               <Button variant="outline" onClick={() => setIsEditing(true)}>
                 <Pencil className="w-4 h-4 mr-2" />{t('edit')}
               </Button>
+              <CaseLifecycleControls
+                caseType="rta"
+                caseId={rta.id}
+                status={rta.status}
+                onClose={handleCloseCase}
+                onReopen={handleReopenCase}
+                onOpenActions={() => navigate(capaHref)}
+                closeDialogOpen={showCloseDialog}
+                onCloseDialogOpenChange={setShowCloseDialog}
+                testIdPrefix="rta"
+              />
               <Button
                 variant="outline"
                 data-testid="rta-audit-this-collision"

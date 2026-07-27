@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
+from src.api.schemas.case_closure import CaseClosureValidationResponse
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.rta import (
     RTAActionCreate,
@@ -33,7 +34,14 @@ from src.domain.services.api_idempotency_service import (
     complete_idempotent_create,
 )
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.case_closure import (
+    CASE_TYPE_RTA,
+    evaluate_case_closure,
+    resolve_case_tenant_id,
+    validation_to_payload,
+)
 from src.domain.services.reference_number import ReferenceNumberService
+from src.domain.services.rta_service import RTAService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Road Traffic Collisions"])
@@ -292,34 +300,23 @@ async def update_rta(
     current_user: Annotated[User, Depends(require_permission("rta:update"))],
     request_id: str = Depends(get_request_id),
 ):
-    """Partially update an RTA."""
-    rta = await _get_rta_or_404(db, rta_id, current_user)
+    """Partially update an RTA.
 
-    update_data = rta_in.model_dump(exclude_unset=True)
-    if "status" in update_data:
-        raise HTTPException(
-            status_code=400,
-            detail="RTA status can only be changed via workflow actions, not direct PATCH.",
-        )
-    for field, value in update_data.items():
-        setattr(rta, field, value)
+    Status moves through ``RTA_TRANSITIONS`` in the service rather than being
+    rejected outright: closure is a gated transition, not a forbidden field.
+    """
+    existing = await _get_rta_or_404(db, rta_id, current_user)
 
-    rta.updated_by_id = current_user.id
-
-    await record_audit_event(
-        db=db,
-        event_type="rta.updated",
-        entity_type="rta",
-        entity_id=str(rta.id),
-        action="update",
-        description=f"RTA {rta.reference_number} updated",
-        payload=update_data,
+    # Scope the update to the RTA's own tenant so a superuser editing across
+    # tenants still passes the service's isolation check.
+    rta = await RTAService(db).update_rta(
+        rta_id,
+        rta_in,
         user_id=current_user.id,
+        tenant_id=existing.tenant_id,
         request_id=request_id,
     )
 
-    await db.commit()
-    await db.refresh(rta)
     await _trigger_operational_standards_assess(db, rta, current_user)
     return rta
 
@@ -519,6 +516,23 @@ async def delete_rta_action(
 
     await db.delete(action)
     await db.commit()
+
+
+@router.get("/{rta_id}/closure-validation", response_model=CaseClosureValidationResponse)
+async def get_rta_closure_validation(
+    rta_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("rta:read"))],
+):
+    """Report whether this RTA can be closed, and why not if it cannot."""
+    rta = await _get_rta_or_404(db, rta_id, current_user)
+    validation = await evaluate_case_closure(
+        db,
+        case_type=CASE_TYPE_RTA,
+        case=rta,
+        tenant_id=resolve_case_tenant_id(rta, current_user.tenant_id),
+    )
+    return validation_to_payload(validation)
 
 
 @router.get("/{rta_id}/investigations", response_model=dict)

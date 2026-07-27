@@ -97,6 +97,8 @@ import {
   CaseCapaActionsPanel,
   CaseCapaHeaderButton,
 } from '../components/case/CaseCapaActionsPanel'
+import { CaseLifecycleControls } from '../components/case/CaseLifecycleControls'
+import { CASE_REOPEN_STATUS, isCaseClosed } from '../api/caseClosureClient'
 import { CaseEvidencePanel } from '../components/case/CaseEvidencePanel'
 import { CaseWitnessesPanel, type CaseWitnessesValue } from '../components/case/CaseWitnessesPanel'
 
@@ -227,6 +229,7 @@ export default function ComplaintDetail() {
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [showCloseDialog, setShowCloseDialog] = useState(false)
   const [raisingRisk, setRaisingRisk] = useState(false)
   const [editForm, setEditForm] = useState<ComplaintUpdate>({})
   const [witnessesDraft, setWitnessesDraft] = useState<CaseWitnessesValue | null>(null)
@@ -395,23 +398,17 @@ export default function ComplaintDetail() {
 
   const handleSaveEdit = async () => {
     if (!complaint) return
-    const { confirmCloseWithoutLessons } = await import('../lib/lessonsCloseGate')
-    if (
-      !confirmCloseWithoutLessons({
-        nextStatus: editForm.status,
-        previousStatus: complaint.status,
-        lessons: editForm.lessons_learnt,
-      })
-    ) {
-      return
-    }
+    // Choosing Closed in Edit routes through the one close path: save the rest
+    // of the edit, then hand the status change to the summary dialog.
+    const closingFromEdit =
+      !isCaseClosed('complaint', complaint.status) && isCaseClosed('complaint', editForm.status)
     setSaving(true)
     setSaveError(null)
     try {
       // Omit unchanged status so the server does not reject a no-op transition
       // (ACKNOWLEDGED → ACKNOWLEDGED) and discard field edits (PX-206).
       const payload: ComplaintUpdate = { ...editForm }
-      if (payload.status === complaint.status) {
+      if (payload.status === complaint.status || closingFromEdit) {
         delete payload.status
       }
       // Sending an unchanged SLA would re-derive response_due_at and discard a
@@ -422,6 +419,9 @@ export default function ComplaintDetail() {
       const response = await complaintsApi.update(complaint.id, payload)
       setComplaint(response.data)
       setIsEditing(false)
+      if (closingFromEdit) {
+        setShowCloseDialog(true)
+      }
     } catch (err) {
       trackError(err, { component: 'ComplaintDetail', action: 'updateComplaint' })
       const message = getApiErrorMessage(err)
@@ -429,6 +429,30 @@ export default function ComplaintDetail() {
       toast.error(message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleCloseCase = async (payload: { lessons_learnt?: string }) => {
+    if (!complaint) return
+    const response = await complaintsApi.update(complaint.id, {
+      status: 'closed',
+      lessons_learnt: payload.lessons_learnt,
+    })
+    setComplaint(response.data)
+    toast.success(t('caseClosure.closed', 'Case closed'))
+  }
+
+  const handleReopenCase = async () => {
+    if (!complaint) return
+    try {
+      const response = await complaintsApi.update(complaint.id, {
+        status: CASE_REOPEN_STATUS.complaint,
+      })
+      setComplaint(response.data)
+      toast.success(t('caseClosure.reopened', 'Case reopened'))
+    } catch (err) {
+      trackError(err, { component: 'ComplaintDetail', action: 'reopenComplaint' })
+      toast.error(getApiErrorMessage(err, t('caseClosure.reopenFailed', 'Could not reopen this case')))
     }
   }
 
@@ -941,6 +965,17 @@ export default function ComplaintDetail() {
                 <Pencil className="w-4 h-4 mr-2" />
                 {t('edit')}
               </Button>
+              <CaseLifecycleControls
+                caseType="complaint"
+                caseId={complaint.id}
+                status={complaint.status}
+                onClose={handleCloseCase}
+                onReopen={handleReopenCase}
+                onOpenActions={() => navigate(getCapaLink('complaint', complaint.id))}
+                closeDialogOpen={showCloseDialog}
+                onCloseDialogOpenChange={setShowCloseDialog}
+                testIdPrefix="complaint"
+              />
               <Button
                 variant="outline"
                 data-testid="complaint-audit-this-risk"

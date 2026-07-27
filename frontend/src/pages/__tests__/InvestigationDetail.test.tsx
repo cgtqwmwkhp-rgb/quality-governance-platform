@@ -572,8 +572,41 @@ describe('InvestigationDetail', () => {
 
     fireEvent.click(screen.getByTestId('investigation-close-cta'))
 
+    // Close now goes through the summary dialog rather than firing immediately.
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-close-summary-dialog')).toBeInTheDocument()
+    })
+    expect(client.investigationsApi.update).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByTestId('investigation-close-summary-confirm'))
+
     await waitFor(() => {
       expect(client.investigationsApi.update).toHaveBeenCalledWith(7, { status: 'closed' })
+    })
+  })
+
+  it('offers Reopen on a closed investigation and PATCHes status=under_review', async () => {
+    client.investigationsApi.get.mockResolvedValue({
+      data: { ...mockInvestigation, status: 'closed' },
+    })
+    client.investigationsApi.getClosureValidation.mockResolvedValue({
+      data: { can_close: true, reasons: [], open_work_count: 0, open_work: [] },
+    })
+    client.investigationsApi.update.mockResolvedValue({
+      data: { ...mockInvestigation, status: 'under_review' },
+    })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('investigation-reopen')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('investigation-reopen'))
+    fireEvent.click(await screen.findByTestId('investigation-reopen-confirm'))
+
+    await waitFor(() => {
+      expect(client.investigationsApi.update).toHaveBeenCalledWith(7, { status: 'under_review' })
     })
   })
 

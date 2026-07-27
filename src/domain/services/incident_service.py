@@ -17,6 +17,14 @@ from src.core.update import apply_updates
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.incident import Incident, IncidentStatus
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.case_closure import (
+    CASE_TYPE_INCIDENT,
+    apply_close_stamps,
+    assert_case_can_close,
+    clear_close_stamps,
+    is_closed_status,
+    resolve_case_tenant_id,
+)
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_business_event
@@ -29,7 +37,8 @@ INCIDENT_TRANSITIONS: dict[IncidentStatus, set[IncidentStatus]] = {
     IncidentStatus.PENDING_ACTIONS: {IncidentStatus.ACTIONS_IN_PROGRESS, IncidentStatus.CLOSED},
     IncidentStatus.ACTIONS_IN_PROGRESS: {IncidentStatus.PENDING_REVIEW, IncidentStatus.PENDING_ACTIONS},
     IncidentStatus.PENDING_REVIEW: {IncidentStatus.CLOSED, IncidentStatus.ACTIONS_IN_PROGRESS},
-    IncidentStatus.CLOSED: set(),
+    # Reopen is a single controlled reverse edge, not a free jump back into the lifecycle.
+    IncidentStatus.CLOSED: {IncidentStatus.PENDING_REVIEW},
 }
 
 
@@ -270,8 +279,23 @@ class IncidentService:
         incident = await self.get_incident(incident_id, tenant_id, skip_tenant_check=skip_tenant_check)
 
         raw_update = incident_data.model_dump(exclude_unset=True)
+        was_closed = is_closed_status(CASE_TYPE_INCIDENT, incident.status)
+        closing = False
         if "status" in raw_update:
             validate_incident_transition(incident.status, raw_update["status"])
+            closing = not was_closed and is_closed_status(CASE_TYPE_INCIDENT, raw_update["status"])
+
+        if closing:
+            # Gate before any mutation so a refused close leaves the session clean.
+            await assert_case_can_close(
+                self.db,
+                case_type=CASE_TYPE_INCIDENT,
+                case=incident,
+                tenant_id=resolve_case_tenant_id(incident, tenant_id),
+                lessons_learnt=(
+                    raw_update["lessons_learnt"] if "lessons_learnt" in raw_update else incident.lessons_learnt
+                ),
+            )
 
         from src.domain.services.contract_resolve import assert_tenant_contract
         from src.domain.services.incident_care_fields import (
@@ -305,25 +329,32 @@ class IncidentService:
             update_dict["emergency_services"] = incident.emergency_services
             update_dict["emergency_services_called"] = incident.emergency_services_called
 
+        reopening = was_closed and not is_closed_status(CASE_TYPE_INCIDENT, incident.status)
+        if closing:
+            update_dict.update(apply_close_stamps(incident, user_id=user_id))
+        elif reopening:
+            update_dict.update(clear_close_stamps(incident))
+
         incident.updated_by_id = user_id
         incident.updated_at = datetime.now(timezone.utc)
 
         await self.db.flush()
 
+        lifecycle = "closed" if closing else "reopened" if reopening else "updated"
         await record_audit_event(
             db=self.db,
-            event_type="incident.updated",
+            event_type=f"incident.{lifecycle}",
             entity_type="incident",
             entity_id=str(incident.id),
             action="update",
-            description=f"Incident {incident.reference_number} updated",
+            description=f"Incident {incident.reference_number} {lifecycle}",
             payload=update_dict,
             user_id=user_id,
             request_id=request_id,
             tenant_id=tenant_id,
         )
 
-        if "status" in raw_update and raw_update["status"] == IncidentStatus.CLOSED.value:
+        if closing:
             from src.infrastructure.monitoring.azure_monitor import record_incident_resolved
 
             record_incident_resolved()

@@ -69,6 +69,24 @@ The following table lists **every** code defined on `ErrorCode` in `src/api/sche
 
 Domain-layer defaults for several of these codes live in `src/domain/exceptions.py` (`DomainError` subclasses).
 
+## Case closure gate codes
+
+Closing an incident, complaint, near miss or RTA is a gated transition. The gates live in `src/domain/services/case_closure.py` and run inside the case services, so every close path — detail page, edit form, API client, script — is subject to them. They fire **only** on a transition **into** the closed state; mid-lifecycle status moves (including a complaint reaching `resolved`) are unaffected.
+
+Failures are returned as `StateTransitionError` (**409**) with the specific code below in `error.code`. Every blocking reason is also listed in `error.details.reasons`, and the blocking work in `error.details.open_work`.
+
+| Code | HTTP | Rule | User-safe message (example) | Recommended client action |
+|------|------|------|-----------------------------|---------------------------|
+| `MISSING_LESSONS_LEARNT` | 409 | `lessons_learnt` must be non-empty once trimmed. | “Record what was learnt before closing this case.” | Do not retry; capture lessons in the Close dialog and resubmit. |
+| `OPEN_ACTIONS_REMAIN` | 409 | No incomplete work may remain. Native actions count as done at `completed`, `cancelled` or `verified`; CAPAs raised from the case count as done at `closed`. | “Finish or cancel the outstanding actions first.” | Do not retry; work `details.open_work` on the Actions tab, then close. |
+| `INVALID_STATE_TRANSITION` | 409 | The status move is not on the register's transition map. Reopen is the single reverse edge out of closed. | “This status change isn’t allowed from here.” | Refresh the case and follow `details.allowed`. |
+
+**Reopen edges** (the only way back out of closed): incident → `pending_review`, complaint → `under_investigation`, near miss → `UNDER_REVIEW`, RTA → `under_investigation`, investigation → `under_review`. Reopening clears `closed_at` and `closed_by_id`.
+
+Readiness can be inspected before attempting a close via `GET /api/v1/{incidents|complaints|near-misses|rtas}/{id}/closure-validation`, which returns `{ can_close, reasons[], open_work[], lessons_present, summary }` using the same codes. Investigations keep their own richer gate and return `CLOSURE_VALIDATION_FAILED` (**400**) with `details.reasons`.
+
+If every open-work probe fails (schema drift on both the action table and CAPAs), the gate raises rather than reporting a clean close, and the request surfaces as `INTERNAL_ERROR` (**500**). Refusing to close is deliberate: a silent pass would let a case close over work nobody can see.
+
 ## Retry policy (client)
 
 Apply retries **only** to safe, idempotent requests unless the product explicitly allows otherwise.

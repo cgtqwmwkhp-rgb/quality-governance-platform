@@ -32,8 +32,9 @@ class TestComplaintTransitionMap:
     def test_received_can_escalate(self):
         assert ComplaintStatus.ESCALATED in COMPLAINT_TRANSITIONS[ComplaintStatus.RECEIVED]
 
-    def test_closed_has_no_transitions(self):
-        assert COMPLAINT_TRANSITIONS[ComplaintStatus.CLOSED] == set()
+    def test_closed_only_allows_the_reopen_edge(self):
+        """Closed is no longer terminal: reopen goes to under_investigation and nowhere else."""
+        assert COMPLAINT_TRANSITIONS[ComplaintStatus.CLOSED] == {ComplaintStatus.UNDER_INVESTIGATION}
 
     def test_resolved_can_reopen_or_close(self):
         allowed = COMPLAINT_TRANSITIONS[ComplaintStatus.RESOLVED]
@@ -58,9 +59,12 @@ class TestValidateComplaintTransition:
         with pytest.raises(StateTransitionError, match="Cannot transition"):
             validate_complaint_transition("received", "closed")
 
-    def test_closed_to_anything_raises(self):
+    def test_closed_to_anything_but_reopen_raises(self):
         with pytest.raises(StateTransitionError):
             validate_complaint_transition("closed", "received")
+
+    def test_closed_to_under_investigation_passes(self):
+        validate_complaint_transition("closed", "under_investigation")
 
     def test_unknown_status_values_silently_pass(self):
         validate_complaint_transition("nonexistent", "anything")

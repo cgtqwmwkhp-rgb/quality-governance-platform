@@ -95,10 +95,59 @@ async def test_update_incident_status(client: AsyncClient, auth_headers: dict, t
     await test_session.commit()
     await test_session.refresh(incident)
 
-    update_data = {"status": IncidentStatus.CLOSED}
+    # Closing is gated: lessons learnt are mandatory at the API, not just the UI.
+    refused = await client.patch(
+        f"/api/v1/incidents/{incident.id}",
+        json={"status": IncidentStatus.CLOSED},
+        headers=auth_headers,
+    )
+    assert refused.status_code == 409
+    assert refused.json()["error"]["code"] == "MISSING_LESSONS_LEARNT"
+
+    update_data = {"status": IncidentStatus.CLOSED, "lessons_learnt": "Toolbox talk delivered"}
     response = await client.patch(f"/api/v1/incidents/{incident.id}", json=update_data, headers=auth_headers)
     assert response.status_code == 200
     assert response.json()["status"] == IncidentStatus.CLOSED
+    assert response.json()["closed_at"] is not None
+
+    # Reopen is the single reverse edge, and it clears the closure stamp.
+    reopened = await client.patch(
+        f"/api/v1/incidents/{incident.id}",
+        json={"status": IncidentStatus.PENDING_REVIEW},
+        headers=auth_headers,
+    )
+    assert reopened.status_code == 200
+    assert reopened.json()["status"] == IncidentStatus.PENDING_REVIEW
+    assert reopened.json()["closed_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_incident_closure_validation_endpoint(client: AsyncClient, auth_headers: dict, test_session):
+    """The dialog's readiness read must agree with the gate that refuses the close."""
+    incident = IncidentFactory.build(
+        title="Closure Validation Test",
+        reference_number=f"INC-2026-{uuid.uuid4().hex[:8]}",
+        status=IncidentStatus.PENDING_REVIEW,
+        lessons_learnt=None,
+    )
+    test_session.add(incident)
+    await test_session.commit()
+    await test_session.refresh(incident)
+
+    response = await client.get(f"/api/v1/incidents/{incident.id}/closure-validation", headers=auth_headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["can_close"] is False
+    assert body["reasons"] == ["MISSING_LESSONS_LEARNT"]
+    assert body["summary"]["target_status"] == IncidentStatus.CLOSED
+    assert body["summary"]["reference_number"] == incident.reference_number
+
+    incident.lessons_learnt = "Reviewed the lift plan with the crew"
+    await test_session.commit()
+
+    response = await client.get(f"/api/v1/incidents/{incident.id}/closure-validation", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json()["can_close"] is True
 
 
 @pytest.mark.asyncio

@@ -45,19 +45,54 @@ def _complaint_import_reference(tenant_id: int, key: str) -> str:
     return f"hsxl:{_tenant_import_token(tenant_id, key)}"
 
 
+def closed_row_is_importable(row: dict[str, Any]) -> bool:
+    """A row may only land already-closed if it carries lessons learnt.
+
+    The workbook's Notes column becomes ``lessons_learnt``, and the API refuses
+    to close a case without it. Letting the importer create closed rows with no
+    lessons would put records into the register that the platform itself would
+    not have allowed to get there.
+    """
+    if not row.get("closed"):
+        return True
+    return bool(str(row.get("notes") or "").strip())
+
+
+def _refusal(row: dict[str, Any], module: str) -> str:
+    return (
+        f"Refused closed {module} row '{row.get('external_key')}': "
+        "a closed record needs Notes text to import as lessons learnt."
+    )
+
+
 class HsExcelImportService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
     async def dry_run(self, content: bytes, *, tenant_id: int) -> dict[str, Any]:
         parsed = parse_hs_workbook(content)
-        counts = {"incident": 0, "near_miss": 0, "complaint": 0, "rta": 0, "skip_existing": 0}
+        counts = {
+            "incident": 0,
+            "near_miss": 0,
+            "complaint": 0,
+            "rta": 0,
+            "skip_existing": 0,
+            "refused_closed_no_lessons": 0,
+        }
+        warnings = list(parsed["warnings"])
         planned: list[dict[str, Any]] = []
         for row in parsed["incident_log"]:
             exists = await self._exists(tenant_id, row["external_key"], row["module"])
             if exists:
                 counts["skip_existing"] += 1
                 planned.append({**row, "action": "skip_existing", "event_date": row["event_date"].isoformat()})
+                continue
+            if not closed_row_is_importable(row):
+                counts["refused_closed_no_lessons"] += 1
+                warnings.append(_refusal(row, row["module"]))
+                planned.append(
+                    {**row, "action": "refused_closed_no_lessons", "event_date": row["event_date"].isoformat()}
+                )
                 continue
             counts[row["module"]] += 1
             planned.append({**row, "action": "create", "event_date": row["event_date"].isoformat()})
@@ -67,11 +102,18 @@ class HsExcelImportService:
                 counts["skip_existing"] += 1
                 planned.append({**row, "action": "skip_existing", "event_date": row["event_date"].isoformat()})
                 continue
+            if not closed_row_is_importable(row):
+                counts["refused_closed_no_lessons"] += 1
+                warnings.append(_refusal(row, "rta"))
+                planned.append(
+                    {**row, "action": "refused_closed_no_lessons", "event_date": row["event_date"].isoformat()}
+                )
+                continue
             counts["rta"] += 1
             planned.append({**row, "action": "create", "event_date": row["event_date"].isoformat()})
         return {
             "counts": counts,
-            "warnings": parsed["warnings"],
+            "warnings": warnings,
             "rows": planned[:200],
             "total_rows": len(planned),
         }
@@ -79,16 +121,29 @@ class HsExcelImportService:
     async def commit(self, content: bytes, *, tenant_id: int, user_id: Optional[int]) -> dict[str, Any]:
         report = await self.dry_run(content, tenant_id=tenant_id)
         parsed = parse_hs_workbook(content)
-        created = {"incident": 0, "near_miss": 0, "complaint": 0, "rta": 0, "skipped": 0}
+        created = {
+            "incident": 0,
+            "near_miss": 0,
+            "complaint": 0,
+            "rta": 0,
+            "skipped": 0,
+            "refused_closed_no_lessons": 0,
+        }
         for row in parsed["incident_log"]:
             if await self._exists(tenant_id, row["external_key"], row["module"]):
                 created["skipped"] += 1
+                continue
+            if not closed_row_is_importable(row):
+                created["refused_closed_no_lessons"] += 1
                 continue
             await self._create_from_incident_log(row, tenant_id=tenant_id, user_id=user_id)
             created[row["module"]] += 1
         for row in parsed["rta_log"]:
             if await self._exists(tenant_id, row["external_key"], "rta"):
                 created["skipped"] += 1
+                continue
+            if not closed_row_is_importable(row):
+                created["refused_closed_no_lessons"] += 1
                 continue
             await self._create_rta(row, tenant_id=tenant_id, user_id=user_id)
             created["rta"] += 1
@@ -143,6 +198,12 @@ class HsExcelImportService:
             return False
         return False
 
+    @staticmethod
+    def _assert_closed_row_has_lessons(row: dict[str, Any], module: str) -> None:
+        """Last line of defence at the write point, not just in the row loop."""
+        if not closed_row_is_importable(row):
+            raise ValueError(_refusal(row, module))
+
     async def _create_from_incident_log(self, row: dict[str, Any], *, tenant_id: int, user_id: Optional[int]) -> None:
         module = row["module"]
         if module == "incident":
@@ -156,6 +217,8 @@ class HsExcelImportService:
 
     async def _create_incident(self, row: dict[str, Any], *, tenant_id: int, user_id: Optional[int]) -> None:
         from src.domain.services.contract_resolve import resolve_contract_id_by_code
+
+        self._assert_closed_row_has_lessons(row, "incident")
 
         ref = await ReferenceNumberService.generate(self.db, "incident", Incident)
         body_parts = [row["body_part"]] if row.get("body_part") else None
@@ -205,6 +268,7 @@ class HsExcelImportService:
         self.db.add(incident)
 
     async def _create_near_miss(self, row: dict[str, Any], *, tenant_id: int, user_id: Optional[int]) -> None:
+        self._assert_closed_row_has_lessons(row, "near_miss")
         ref = _near_miss_import_reference(tenant_id, row["external_key"])
         near_miss = NearMiss(
             tenant_id=tenant_id,
@@ -227,6 +291,7 @@ class HsExcelImportService:
         self.db.add(near_miss)
 
     async def _create_complaint(self, row: dict[str, Any], *, tenant_id: int, user_id: Optional[int]) -> None:
+        self._assert_closed_row_has_lessons(row, "complaint")
         ref = await ReferenceNumberService.generate(self.db, "complaint", Complaint)
         complaint = Complaint(
             tenant_id=tenant_id,
@@ -278,6 +343,7 @@ class HsExcelImportService:
     async def _create_rta(self, row: dict[str, Any], *, tenant_id: int, user_id: Optional[int]) -> None:
         from src.domain.services.rta_injury_fields import derive_third_party_injured, seed_third_parties_for_injury
 
+        self._assert_closed_row_has_lessons(row, "rta")
         ref = await ReferenceNumberService.generate(self.db, "rta", RoadTrafficCollision)
         closed = bool(row.get("closed"))
         event_date = row["event_date"]

@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
+from src.api.schemas.case_closure import CaseClosureValidationResponse
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
@@ -27,6 +28,12 @@ from src.domain.services.api_idempotency_service import (
     complete_idempotent_create,
 )
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.case_closure import (
+    CASE_TYPE_INCIDENT,
+    evaluate_case_closure,
+    resolve_case_tenant_id,
+    validation_to_payload,
+)
 from src.domain.services.case_risk_links import sync_case_risk_links_from_csv
 from src.domain.services.incident_risk_links import (
     append_linked_risk_id,
@@ -644,6 +651,32 @@ async def list_incident_investigations(
         "page_size": page_size,
         "pages": total_pages,
     }
+
+
+@router.get("/{incident_id}/closure-validation", response_model=CaseClosureValidationResponse)
+async def get_incident_closure_validation(
+    incident_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("incident:read"))],
+):
+    """Report whether this incident can be closed, and why not if it cannot."""
+    svc = IncidentService(db)
+    try:
+        incident = await svc.get_incident(
+            incident_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise NotFoundError(f"Incident {incident_id} not found")
+
+    validation = await evaluate_case_closure(
+        db,
+        case_type=CASE_TYPE_INCIDENT,
+        case=incident,
+        tenant_id=resolve_case_tenant_id(incident, current_user.tenant_id),
+    )
+    return validation_to_payload(validation)
 
 
 @router.get("/{incident_id}/running-sheet", response_model=list[RunningSheetEntryResponse])

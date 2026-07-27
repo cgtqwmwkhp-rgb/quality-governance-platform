@@ -10,6 +10,7 @@ from src.domain.services.hs_excel_import_service import (
     _complaint_import_reference,
     _legacy_near_miss_import_reference,
     _near_miss_import_reference,
+    closed_row_is_importable,
 )
 
 
@@ -83,3 +84,47 @@ async def test_exists_accepts_legacy_and_tenant_scoped_references(module: str) -
         else {_complaint_import_reference(7, key), key}
     )
     assert expected <= flattened_values
+
+
+def _import_row(**overrides) -> dict:
+    row = {
+        "external_key": "excel:incident_log:99",
+        "event_date": datetime(2026, 1, 1, tzinfo=timezone.utc),
+        "reporter": "Reporter",
+        "customer": "Contract",
+        "role_location": "Depot",
+        "description": "Imported event",
+        "person_involved": "",
+        "closed": False,
+        "notes": "",
+    }
+    row.update(overrides)
+    return row
+
+
+class TestClosedRowsNeedLessons:
+    """Create-as-closed must satisfy the same lessons gate as the API."""
+
+    def test_open_row_imports_without_notes(self) -> None:
+        assert closed_row_is_importable(_import_row()) is True
+
+    def test_closed_row_without_notes_is_refused(self) -> None:
+        assert closed_row_is_importable(_import_row(closed=True)) is False
+
+    def test_closed_row_with_whitespace_notes_is_refused(self) -> None:
+        assert closed_row_is_importable(_import_row(closed=True, notes="   ")) is False
+
+    def test_closed_row_with_notes_imports(self) -> None:
+        assert closed_row_is_importable(_import_row(closed=True, notes="Toolbox talk")) is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("creator", ["_create_near_miss", "_create_complaint", "_create_rta"])
+    async def test_creators_refuse_a_closed_row_with_no_lessons(self, creator: str) -> None:
+        db = MagicMock()
+        service = HsExcelImportService(db)
+        row = _import_row(closed=True, vehicle="Van 1", third_party="None")
+
+        with pytest.raises(ValueError, match="Refused closed"):
+            await getattr(service, creator)(row, tenant_id=7, user_id=3)
+
+        db.add.assert_not_called()
