@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Optional, Union, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import and_, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
@@ -69,6 +69,57 @@ async def _resolve_assignee_id_or_raise(
     return user.id
 
 
+async def _resolve_owner_id_or_raise(
+    db: Any,
+    owner_id: int,
+    tenant_id: Optional[int],
+) -> int:
+    """Confirm an owner id belongs to a user in this tenant; fail loudly if not.
+
+    Validating rather than trusting the id keeps ``owner_id`` at parity with the
+    email spelling, and stops an id from another tenant being written straight
+    through to the row.
+    """
+    result = await db.execute(select(User).where(User.id == owner_id, User.tenant_id == tenant_id))
+    if result.scalar_one_or_none() is None:
+        raise BadRequestError(
+            f"No user with id {owner_id} in this tenant. " "Action was not left unowned — fix the owner_id and retry."
+        )
+    return owner_id
+
+
+async def _resolve_requested_owner(
+    db: Any,
+    *,
+    owner_id: Optional[int],
+    assigned_to_email: Optional[str],
+    tenant_id: Optional[int],
+) -> Optional[int]:
+    """Resolve whichever spelling of the assignee the caller used.
+
+    Both are accepted because ``ActionResponse`` returns ``owner_id`` while the
+    original write contract only understood ``assigned_to_email`` — a client that
+    echoed back the field it had just read had its assignment silently dropped
+    and got a 201 for an unowned action (PX-168). When both are supplied they
+    must agree, so a contradictory pair cannot resolve to whichever happens to be
+    inspected first.
+    """
+    resolved_from_email: Optional[int] = None
+    if assigned_to_email is not None:
+        resolved_from_email = await _resolve_assignee_id_or_raise(db, assigned_to_email, tenant_id)
+
+    if owner_id is None:
+        return resolved_from_email
+
+    resolved_from_id = await _resolve_owner_id_or_raise(db, owner_id, tenant_id)
+    if resolved_from_email is not None and resolved_from_email != resolved_from_id:
+        raise BadRequestError(
+            f"owner_id {owner_id} and assigned_to_email '{assigned_to_email}' identify different users. "
+            "Send one, or send a matching pair."
+        )
+    return resolved_from_id
+
+
 # ============== Schemas ==============
 
 
@@ -83,7 +134,14 @@ class ActionBase(BaseModel):
 
 
 class ActionCreate(ActionBase):
-    """Schema for creating an action."""
+    """Schema for creating an action.
+
+    ``extra="forbid"`` is deliberate: an unrecognised field used to be dropped
+    in silence and the action created anyway, so a wrong-shaped request looked
+    like a success (PX-168). A misspelled or unsupported field must now fail.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     source_type: str = Field(
         ...,
@@ -97,11 +155,21 @@ class ActionCreate(ActionBase):
         None,
         description="UUID reference for assessment_run_id or induction_run_id (for assessment, induction)",
     )
+    owner_id: Optional[int] = Field(
+        None,
+        description="User id to assign to. Mirrors the owner_id returned by this API; "
+        "send this or assigned_to_email, and if both, they must identify the same user.",
+    )
     assigned_to_email: Optional[str] = Field(None, description="Email of user to assign to")
 
 
 class ActionUpdate(BaseModel):
-    """Schema for updating an action. All fields are optional."""
+    """Schema for updating an action. All fields are optional.
+
+    See ``ActionCreate`` for why unknown fields are rejected rather than ignored.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     title: Optional[str] = Field(None, max_length=300)
     description: Optional[str] = None
@@ -112,6 +180,11 @@ class ActionUpdate(BaseModel):
         description="One of: open, in_progress, pending_verification, completed, cancelled",
     )
     due_date: Optional[str] = Field(None, description="Due date in ISO format (YYYY-MM-DD)")
+    owner_id: Optional[int] = Field(
+        None,
+        description="User id to assign to. Mirrors the owner_id returned by this API; "
+        "send this or assigned_to_email, and if both, they must identify the same user.",
+    )
     assigned_to_email: Optional[str] = Field(None, description="Email of user to assign to")
     completion_notes: Optional[str] = Field(None, description="Notes on completion")
 
@@ -1238,10 +1311,13 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     else:
         raise BadRequestError("Invalid source_type")
 
-    # Find owner by email if provided (scoped to tenant) — fail loudly on unknown email
-    owner_id: Optional[int] = None
-    if action_data.assigned_to_email:
-        owner_id = await _resolve_assignee_id_or_raise(db, action_data.assigned_to_email, current_user.tenant_id)
+    # Resolve the assignee (either spelling, scoped to tenant) — fail loudly on an unknown user
+    owner_id = await _resolve_requested_owner(
+        db,
+        owner_id=action_data.owner_id,
+        assigned_to_email=action_data.assigned_to_email,
+        tenant_id=current_user.tenant_id,
+    )
 
     # Generate reference number based on source type
     year = datetime.now().year
@@ -2102,9 +2178,12 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
                     action.completed_at = datetime.now(timezone.utc)
                 elif status_value not in ("completed", "closed"):
                     action.completed_at = None
-        if action_data.assigned_to_email is not None:
-            new_owner_id = await _resolve_assignee_id_or_raise(
-                db, action_data.assigned_to_email, current_user.tenant_id
+        if action_data.owner_id is not None or action_data.assigned_to_email is not None:
+            new_owner_id = await _resolve_requested_owner(
+                db,
+                owner_id=action_data.owner_id,
+                assigned_to_email=action_data.assigned_to_email,
+                tenant_id=current_user.tenant_id,
             )
             action.assigned_to_id = new_owner_id
         if action_data.completion_notes is not None:
@@ -2130,9 +2209,12 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
                 action.completed_at = datetime.now(timezone.utc)
             elif status_value != "completed":
                 action.completed_at = None
-        if action_data.assigned_to_email is not None:
-            new_owner_id = await _resolve_assignee_id_or_raise(
-                db, action_data.assigned_to_email, current_user.tenant_id
+        if action_data.owner_id is not None or action_data.assigned_to_email is not None:
+            new_owner_id = await _resolve_requested_owner(
+                db,
+                owner_id=action_data.owner_id,
+                assigned_to_email=action_data.assigned_to_email,
+                tenant_id=current_user.tenant_id,
             )
             action.owner_id = new_owner_id
         if action_data.completion_notes is not None:
