@@ -786,3 +786,163 @@ class TestActionLifecycleWorkflow:
         our_action = next((a for a in data["items"] if a["id"] == action_id), None)
         assert our_action is not None, "Action should appear in list"
         assert our_action["status"] == "pending_verification"
+
+
+class TestActionOwnerPersistence:
+    """PX-168 — assigning an owner must persist, and a bad request must not look like a success.
+
+    The response model returns ``owner_id``, but the write contract originally
+    understood only ``assigned_to_email``. A client echoing back the field it had
+    just read got a 201 for an action that was silently created unowned.
+    """
+
+    @staticmethod
+    async def _incident(test_session, label: str):
+        incident = IncidentFactory.build(
+            title=f"Incident for {label}",
+            description="Owner persistence coverage",
+            reference_number=f"INC-OWN-{uuid.uuid4().hex[:8]}",
+        )
+        test_session.add(incident)
+        await test_session.commit()
+        await test_session.refresh(incident)
+        return incident
+
+    @pytest.mark.asyncio
+    async def test_create_persists_owner_supplied_as_owner_id(
+        self, client: AsyncClient, auth_headers: dict, test_session
+    ):
+        """POST with owner_id must return and persist that owner, not null."""
+        incident = await self._incident(test_session, "owner_id create")
+
+        response = await client.post(
+            "/api/v1/actions/",
+            json={
+                "title": "Owned on create",
+                "description": "owner_id should stick",
+                "source_type": "incident",
+                "source_id": incident.id,
+                "owner_id": 1,
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 201, response.text
+        assert response.json()["owner_id"] == 1
+
+        action_id = response.json()["id"]
+        reread = await client.get(
+            f"/api/v1/actions/{action_id}?source_type=incident",
+            headers=auth_headers,
+        )
+        assert reread.status_code == 200
+        assert reread.json()["owner_id"] == 1, "owner did not survive the round trip"
+
+    @pytest.mark.asyncio
+    async def test_patch_persists_owner_supplied_as_owner_id(
+        self, client: AsyncClient, auth_headers: dict, test_session
+    ):
+        """PATCH with owner_id must assign the owner rather than ignore the field."""
+        incident = await self._incident(test_session, "owner_id patch")
+
+        created = await client.post(
+            "/api/v1/actions/",
+            json={
+                "title": "Unowned then assigned",
+                "description": "assign via patch",
+                "source_type": "incident",
+                "source_id": incident.id,
+            },
+            headers=auth_headers,
+        )
+        assert created.status_code == 201, created.text
+        assert created.json()["owner_id"] is None
+        action_id = created.json()["id"]
+
+        patched = await client.patch(
+            f"/api/v1/actions/{action_id}?source_type=incident",
+            json={"owner_id": 1},
+            headers=auth_headers,
+        )
+        assert patched.status_code == 200, patched.text
+        assert patched.json()["owner_id"] == 1
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_unknown_field_rather_than_dropping_it(
+        self, client: AsyncClient, auth_headers: dict, test_session
+    ):
+        """A misspelled assignee field must fail, not create an unowned action."""
+        incident = await self._incident(test_session, "unknown field")
+
+        response = await client.post(
+            "/api/v1/actions/",
+            json={
+                "title": "Misspelled assignee",
+                "description": "ownerId is not a field",
+                "source_type": "incident",
+                "source_id": incident.id,
+                "ownerId": 1,
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 422, (
+            f"Unknown fields must be rejected, got {response.status_code}. "
+            "Silently dropping them is what made PX-168 invisible."
+        )
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_owner_from_another_tenant(
+        self, client: AsyncClient, auth_headers: dict, test_session, test_user
+    ):
+        """owner_id must be validated against the caller's tenant, not trusted."""
+        incident = await self._incident(test_session, "cross tenant")
+
+        response = await client.post(
+            "/api/v1/actions/",
+            json={
+                "title": "Cross-tenant owner",
+                "description": "must not be accepted",
+                "source_type": "incident",
+                "source_id": incident.id,
+                "owner_id": test_user.id,
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 400, response.text
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_contradictory_owner_spellings(
+        self, client: AsyncClient, auth_headers: dict, test_session
+    ):
+        """Two valid but different assignees must be rejected, not silently picked between."""
+        from tests.factories import UserFactory
+
+        # Both users are in the caller's tenant, so each spelling resolves on its
+        # own — only the disagreement between them makes the request invalid.
+        other = UserFactory.build(
+            email=f"second-owner-{uuid.uuid4().hex[:8]}@example.com",
+            tenant_id=1,
+            is_active=True,
+        )
+        test_session.add(other)
+        await test_session.commit()
+        await test_session.refresh(other)
+
+        incident = await self._incident(test_session, "contradictory pair")
+
+        response = await client.post(
+            "/api/v1/actions/",
+            json={
+                "title": "Contradictory assignee",
+                "description": "two different users in the same tenant",
+                "source_type": "incident",
+                "source_id": incident.id,
+                "owner_id": 1,
+                "assigned_to_email": other.email,
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 400, response.text
