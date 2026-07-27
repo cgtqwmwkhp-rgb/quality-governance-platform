@@ -332,12 +332,19 @@ def probe_client() -> Iterator[Any]:
     app.dependency_overrides[get_current_user] = lambda: _ProbeUser()
     try:
         asyncio.run(_create_schema_and_seed(test_engine))
+        # Deliberately NOT used as a context manager: entering it runs the app
+        # lifespan, and ``src/main.py`` startup calls ``init_db()``, which opens
+        # a connection on the module-global ``engine`` rather than through
+        # ``async_session_maker``. Rebinding the session maker cannot redirect
+        # that, so the lifespan would reach for the configured Postgres — which
+        # is precisely what this module must never do. The other modules in
+        # ``tests/contract/`` construct their clients the same way.
+        #
         # raise_server_exceptions=False so an unhandled 500 surfaces as a status
         # code this module can report and skip on, rather than aborting the test
         # with a traceback from inside the handler. 5xx behaviour is the
         # Schemathesis job's remit, not this one's.
-        with TestClient(app, raise_server_exceptions=False) as client:
-            yield client
+        yield TestClient(app, raise_server_exceptions=False)
     finally:
         app.dependency_overrides.pop(get_current_user, None)
         async_session_maker.configure(bind=original_bind)
