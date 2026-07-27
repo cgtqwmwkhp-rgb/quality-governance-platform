@@ -25,7 +25,7 @@ import asyncio
 import sys
 from typing import Any, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from scripts.ops.run021._common import (
     add_safety_args,
@@ -39,7 +39,8 @@ from scripts.ops.run021._common import (
 
 
 async def _collect(*, tenant_id: Optional[int], limit: int) -> list[dict[str, Any]]:
-    from src.domain.models.audit_template import AuditTemplate, TemplateStatus
+    # Avoid ORM AuditTemplate: audit.py and audit_template.py both register
+    # class name "AuditTemplate" on the same Base → mapper path collision.
     from src.domain.models.complaint import Complaint
     from src.domain.models.document_campaign import DocumentCampaign, EngineerGroup, EngineerGroupMember
     from src.domain.models.engineer import Engineer
@@ -146,31 +147,37 @@ async def _collect(*, tenant_id: Optional[int], limit: int) -> list[dict[str, An
                     }
                 )
 
-        # PX-266 audit templates
-        q = select(AuditTemplate.id, AuditTemplate.name, AuditTemplate.status, AuditTemplate.tenant_id)
-        if tenant_id is not None and hasattr(AuditTemplate, "tenant_id"):
-            q = q.where(AuditTemplate.tenant_id == tenant_id)
-        for row in (await db.execute(q)).all():
-            status = row.status.value if hasattr(row.status, "value") else str(row.status)
-            if matches_test_token(row.name) or "Playwright" in (row.name or ""):
+        # PX-266 audit builder templates (Core SQL — dual ORM AuditTemplate collision)
+        tpl_sql = (
+            "SELECT id, name, status::text AS status, tenant_id "
+            "FROM audit_builder_templates"
+        )
+        tpl_params: dict[str, Any] = {}
+        if tenant_id is not None:
+            tpl_sql += " WHERE tenant_id = :tenant_id"
+            tpl_params["tenant_id"] = tenant_id
+        for row in (await db.execute(text(tpl_sql), tpl_params)).mappings().all():
+            status = (row["status"] or "").lower()
+            name = row["name"] or ""
+            if matches_test_token(name) or "Playwright" in name:
                 hits.append(
                     {
                         "px": "PX-266",
                         "table": "audit_builder_templates",
-                        "id": row.id,
-                        "tenant_id": getattr(row, "tenant_id", None),
-                        "name": row.name,
+                        "id": row["id"],
+                        "tenant_id": row["tenant_id"],
+                        "name": name,
                         "status": status,
                         "reason": "Playwright/CUJ fixture template",
                     }
                 )
-            elif status == TemplateStatus.PUBLISHED.value and matches_test_token(row.name):
+            elif status == "published" and matches_test_token(name):
                 hits.append(
                     {
                         "px": "PX-266",
                         "table": "audit_builder_templates",
-                        "id": row.id,
-                        "name": row.name,
+                        "id": row["id"],
+                        "name": name,
                         "status": status,
                         "reason": "published test template",
                     }
