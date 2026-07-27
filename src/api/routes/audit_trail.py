@@ -42,19 +42,20 @@ async def _name_legacy_actors(db: AsyncSession, entries: Sequence[AuditLogEntry]
     already-persisted state: the projection gains a name, and the immutable audit
     rows are never marked dirty and so are never rewritten on request-end commit.
     """
-    unnamed = [e for e in entries if e.user_id is not None and not e.user_name and not e.user_email]
+    unnamed: dict[int, list[AuditLogEntry]] = {}
+    for entry in entries:
+        user_id = entry.user_id
+        if user_id is None or entry.user_name or entry.user_email:
+            continue
+        unnamed.setdefault(user_id, []).append(entry)
     if not unnamed:
         return
 
-    result = await db.execute(select(User).where(User.id.in_({e.user_id for e in unnamed})))
-    users = {u.id: u for u in result.scalars().all()}
-
-    for entry in unnamed:
-        user = users.get(entry.user_id)
-        if user is None:
-            continue
-        set_committed_value(entry, "user_email", user.email)
-        set_committed_value(entry, "user_name", user.full_name.strip() or user.email)
+    result = await db.execute(select(User).where(User.id.in_(unnamed)))
+    for user in result.scalars().all():
+        for entry in unnamed.get(user.id, []):
+            set_committed_value(entry, "user_email", user.email)
+            set_committed_value(entry, "user_name", user.full_name.strip() or user.email)
 
 
 # ============================================================================
