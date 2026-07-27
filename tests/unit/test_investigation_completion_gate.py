@@ -80,7 +80,7 @@ async def test_collect_readiness_reasons_flags_empty_summary_on_complete_gate():
             db,
             investigation=inv,
             investigation_id=7,
-            tenant_id=1,
+            current_user=SimpleNamespace(id=11, tenant_id=1),
             gate="complete",
         )
 
@@ -111,7 +111,7 @@ async def test_collect_readiness_reasons_adds_status_not_complete_for_close_gate
             db,
             investigation=inv,
             investigation_id=7,
-            tenant_id=1,
+            current_user=SimpleNamespace(id=11, tenant_id=1),
             gate="close",
         )
 

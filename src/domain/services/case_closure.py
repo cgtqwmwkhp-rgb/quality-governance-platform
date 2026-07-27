@@ -14,9 +14,9 @@ the two read the same way.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from sqlalchemy import cast, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +30,10 @@ logger = logging.getLogger(__name__)
 CLOSURE_REASON_MISSING_LESSONS_LEARNT = "MISSING_LESSONS_LEARNT"
 CLOSURE_REASON_OPEN_ACTIONS_REMAIN = "OPEN_ACTIONS_REMAIN"
 CLOSURE_REASON_TENANT_SCOPE_UNRESOLVED = "TENANT_SCOPE_UNRESOLVED"
+# Deliberately the same string as StateTransitionError.default_code: the write
+# path already refuses an illegal close under this code, so reporting readiness
+# under any other name would be the two paths disagreeing in a new place.
+CLOSURE_REASON_INVALID_STATE_TRANSITION = "INVALID_STATE_TRANSITION"
 
 CASE_TYPE_INCIDENT = "incident"
 CASE_TYPE_COMPLAINT = "complaint"
@@ -60,6 +64,20 @@ class CaseOpenWorkItem:
 
 
 @dataclass(frozen=True)
+class CaseTransitionCheck:
+    """Whether this case's current status may legally move to its closed status.
+
+    ``allowed_next_statuses`` is only populated when the move is refused: it is
+    the register's own list of legal next steps, so the operator is told what
+    would actually get them closer to closing rather than being sent to fix
+    something that cannot resolve the refusal.
+    """
+
+    allowed: bool
+    allowed_next_statuses: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class CaseClosureValidation:
     """Closure readiness for a single case, as served by ``…/closure-validation``."""
 
@@ -68,6 +86,8 @@ class CaseClosureValidation:
     open_work: list[CaseOpenWorkItem]
     lessons_present: bool
     summary: dict[str, Any]
+    transition_allowed: bool = True
+    allowed_next_statuses: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -105,6 +125,39 @@ _ACTION_MODEL_LOADERS = {
     CASE_TYPE_INCIDENT: _incident_action_model,
     CASE_TYPE_COMPLAINT: _complaint_action_model,
     CASE_TYPE_RTA: _rta_action_model,
+}
+
+
+def _incident_transition_validator():
+    from src.domain.services.incident_service import validate_incident_transition
+
+    return validate_incident_transition
+
+
+def _complaint_transition_validator():
+    from src.domain.services.complaint_service import validate_complaint_transition
+
+    return validate_complaint_transition
+
+
+def _near_miss_transition_validator():
+    from src.domain.services.near_miss_service import validate_near_miss_transition
+
+    return validate_near_miss_transition
+
+
+def _rta_transition_validator():
+    from src.domain.services.rta_service import validate_rta_transition
+
+    return validate_rta_transition
+
+
+# Imported lazily: every one of these services imports this module for its gate.
+_TRANSITION_VALIDATOR_LOADERS: dict[str, Callable[[], Callable[[Any, Any], None]]] = {
+    CASE_TYPE_INCIDENT: _incident_transition_validator,
+    CASE_TYPE_COMPLAINT: _complaint_transition_validator,
+    CASE_TYPE_NEAR_MISS: _near_miss_transition_validator,
+    CASE_TYPE_RTA: _rta_transition_validator,
 }
 
 CASE_CONFIGS: dict[str, _CaseConfig] = {
@@ -199,6 +252,32 @@ def resolve_case_tenant_id(case: Any) -> int:
             details={"reasons": [CLOSURE_REASON_TENANT_SCOPE_UNRESOLVED]},
         )
     return int(tenant_id)
+
+
+def check_close_transition(case_type: str, status: Any) -> CaseTransitionCheck:
+    """Ask this register whether ``status`` may move straight to closed.
+
+    The verdict comes from the very function the update path calls before it
+    reaches the gate — not from a second copy of the transition map — so
+    ``…/closure-validation`` cannot say "supply lessons learnt and you are done"
+    about a case whose next PATCH will be refused as an illegal transition. Any
+    future change to a register's lifecycle is picked up here for free.
+
+    An unrecognised status label is left to the register's own judgement: each
+    validator waves legacy labels through, and the gate must agree with that
+    rather than invent a stricter rule of its own.
+    """
+    config = _config(case_type)
+    validator = _TRANSITION_VALIDATOR_LOADERS[case_type]()
+    try:
+        validator(status_value(status), config.closed_status)
+    except StateTransitionError as exc:
+        allowed = exc.details.get("allowed") if isinstance(exc.details, dict) else None
+        return CaseTransitionCheck(
+            allowed=False,
+            allowed_next_statuses=[str(item) for item in (allowed or [])],
+        )
+    return CaseTransitionCheck(allowed=True)
 
 
 def lessons_are_present(lessons_learnt: Any) -> bool:
@@ -456,6 +535,8 @@ async def evaluate_case_closure(
     effective_lessons = getattr(case, "lessons_learnt", None) if lessons_learnt is _UNSET else lessons_learnt
     lessons_present = lessons_are_present(effective_lessons)
 
+    transition = check_close_transition(case_type, getattr(case, "status", ""))
+
     open_work, tally = await fetch_open_work_for_case(
         db,
         case_type=case_type,
@@ -463,7 +544,11 @@ async def evaluate_case_closure(
         tenant_id=tenant_id,
     )
 
+    # Transition first: it is what the update path refuses first, so leading with
+    # it keeps the primary reason code the same on both sides of the contract.
     reasons: list[str] = []
+    if not transition.allowed:
+        reasons.append(CLOSURE_REASON_INVALID_STATE_TRANSITION)
     if not lessons_present:
         reasons.append(CLOSURE_REASON_MISSING_LESSONS_LEARNT)
     if open_work:
@@ -505,6 +590,8 @@ async def evaluate_case_closure(
         open_work=open_work,
         lessons_present=lessons_present,
         summary=summary,
+        transition_allowed=transition.allowed,
+        allowed_next_statuses=transition.allowed_next_statuses,
     )
 
 
@@ -526,6 +613,8 @@ def validation_to_payload(validation: CaseClosureValidation) -> dict[str, Any]:
         "open_work": open_work_to_payload(validation.open_work),
         "open_work_count": len(validation.open_work),
         "lessons_present": validation.lessons_present,
+        "transition_allowed": validation.transition_allowed,
+        "allowed_next_statuses": validation.allowed_next_statuses,
         "summary": validation.summary,
     }
 
@@ -554,7 +643,13 @@ async def assert_case_can_close(
         return
 
     config = _config(case_type)
-    if CLOSURE_REASON_MISSING_LESSONS_LEARNT in validation.reasons:
+    if CLOSURE_REASON_INVALID_STATE_TRANSITION in validation.reasons:
+        message = (
+            f"Cannot close {config.label} from '{status_value(getattr(case, 'status', ''))}': "
+            "this status cannot move straight to closed"
+        )
+        code = CLOSURE_REASON_INVALID_STATE_TRANSITION
+    elif CLOSURE_REASON_MISSING_LESSONS_LEARNT in validation.reasons:
         message = f"Cannot close {config.label} without lessons learnt"
         code = CLOSURE_REASON_MISSING_LESSONS_LEARNT
     else:
@@ -567,6 +662,8 @@ async def assert_case_can_close(
         details={
             "reasons": validation.reasons,
             "lessons_present": validation.lessons_present,
+            "transition_allowed": validation.transition_allowed,
+            "allowed_next_statuses": validation.allowed_next_statuses,
             "open_work": open_work_to_payload(validation.open_work),
             "open_work_count": len(validation.open_work),
         },

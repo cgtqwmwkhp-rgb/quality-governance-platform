@@ -155,6 +155,89 @@ describe('CaseCloseSummaryDialog', () => {
     expect(screen.getByTestId('incident-close-summary-confirm')).toBeDisabled()
   })
 
+  it('keeps confirm disabled when the status cannot move to closed, and names the next step', async () => {
+    getValidation.mockResolvedValue({
+      data: validation({
+        can_close: false,
+        reasons: ['INVALID_STATE_TRANSITION'],
+        transition_allowed: false,
+        allowed_next_statuses: ['acknowledged', 'escalated'],
+        summary: { ...validation().summary, status: 'received' },
+      }),
+    })
+
+    render(
+      <CaseCloseSummaryDialog
+        open
+        caseType="complaint"
+        caseId={5}
+        onConfirm={vi.fn()}
+        onOpenChange={vi.fn()}
+        testIdPrefix="complaint"
+      />,
+    )
+
+    const blocked = await screen.findByTestId('complaint-close-summary-transition-blocked')
+    expect(blocked).toHaveTextContent('Received')
+    expect(blocked).toHaveTextContent('Acknowledged or Escalated')
+    // Lessons are already on the record, so lessons are not what is holding it.
+    expect(screen.getByTestId('complaint-close-summary-confirm')).toBeDisabled()
+  })
+
+  it('says so plainly when there is no route from this status to closed', async () => {
+    getValidation.mockResolvedValue({
+      data: validation({
+        can_close: false,
+        reasons: ['INVALID_STATE_TRANSITION'],
+        transition_allowed: false,
+        allowed_next_statuses: [],
+      }),
+    })
+
+    render(
+      <CaseCloseSummaryDialog
+        open
+        caseType="near_miss"
+        caseId={5}
+        onConfirm={vi.fn()}
+        onOpenChange={vi.fn()}
+        testIdPrefix="near-miss"
+      />,
+    )
+
+    const blocked = await screen.findByTestId('near-miss-close-summary-transition-blocked')
+    expect(blocked).toHaveTextContent('No route from this status to closed')
+    expect(screen.getByTestId('near-miss-close-summary-confirm')).toBeDisabled()
+  })
+
+  it('degrades to its old behaviour on a reason code it does not know', async () => {
+    // The dialog never enumerates reason codes, so an unrecognised one must not
+    // render blank or silently disable the close. Legality is read from the
+    // dedicated field, which an older server simply omits.
+    getValidation.mockResolvedValue({
+      data: validation({ can_close: false, reasons: ['SOME_FUTURE_REASON'] }),
+    })
+    const onConfirm = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <CaseCloseSummaryDialog
+        open
+        caseType="incident"
+        caseId={5}
+        onConfirm={onConfirm}
+        onOpenChange={vi.fn()}
+        testIdPrefix="incident"
+      />,
+    )
+
+    await screen.findByText('INC-5')
+    expect(screen.queryByText('SOME_FUTURE_REASON')).not.toBeInTheDocument()
+    expect(
+      screen.queryByTestId('incident-close-summary-transition-blocked'),
+    ).not.toBeInTheDocument()
+    expect(screen.getByTestId('incident-close-summary-confirm')).toBeEnabled()
+  })
+
   it('surfaces a failed readiness check instead of implying the case is ready', async () => {
     getValidation.mockRejectedValue(new Error('boom'))
 

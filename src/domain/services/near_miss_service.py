@@ -6,7 +6,7 @@ Raises domain exceptions instead of HTTPException.
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -75,20 +75,49 @@ async def resolve_near_miss_contract(
     return resolved_contract_id, resolved_contract
 
 
+NEAR_MISS_TRANSITIONS: dict[str, set[str]] = {
+    "REPORTED": {"UNDER_REVIEW", "CLOSED"},
+    "UNDER_REVIEW": {"ACTION_REQUIRED", "IN_PROGRESS", "CLOSED"},
+    "ACTION_REQUIRED": {"IN_PROGRESS", "CLOSED"},
+    "IN_PROGRESS": {"CLOSED", "ACTION_REQUIRED"},
+    # Reopen is a single controlled reverse edge, not a free jump back into the lifecycle.
+    "CLOSED": {"UNDER_REVIEW"},
+}
+
+
+def validate_near_miss_transition(current: Any, target: Any) -> None:
+    """Validate a status transition for a near miss.
+
+    Raises StateTransitionError if the transition is not allowed.
+    Same-status updates are a no-op (PATCH edit forms always re-send status).
+    Near misses store status as an uppercase VARCHAR, so an unrecognised label
+    has no allowed edges at all and is refused — unlike the enum-backed
+    registers, which wave legacy labels through.
+
+    Lifted out of ``NearMissService.update_near_miss`` so the closure gate can
+    ask the same question the write path asks, instead of holding a second copy
+    of this map.
+    """
+    current_raw = str(getattr(current, "value", current))
+    target_raw = str(getattr(target, "value", target))
+    if current_raw == target_raw:
+        return
+    allowed = NEAR_MISS_TRANSITIONS.get(current_raw, set())
+    if target_raw not in allowed:
+        raise StateTransitionError(
+            f"Cannot transition from '{current_raw}' to '{target_raw}'",
+            details={"allowed": sorted(allowed)},
+        )
+
+
 class NearMissService:
     """Handles near-miss CRUD, reference number generation, and status transitions."""
 
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    VALID_TRANSITIONS: dict[str, set[str]] = {
-        "REPORTED": {"UNDER_REVIEW", "CLOSED"},
-        "UNDER_REVIEW": {"ACTION_REQUIRED", "IN_PROGRESS", "CLOSED"},
-        "ACTION_REQUIRED": {"IN_PROGRESS", "CLOSED"},
-        "IN_PROGRESS": {"CLOSED", "ACTION_REQUIRED"},
-        # Reopen is a single controlled reverse edge, not a free jump back into the lifecycle.
-        "CLOSED": {"UNDER_REVIEW"},
-    }
+    # Kept as a class attribute for callers that still reach for it.
+    VALID_TRANSITIONS: dict[str, set[str]] = NEAR_MISS_TRANSITIONS
 
     async def create_near_miss(
         self,
@@ -232,13 +261,8 @@ class NearMissService:
         new_status = update_dict.get("status")
         was_closed = is_closed_status(CASE_TYPE_NEAR_MISS, old_status)
         closing = False
-        if new_status and new_status != old_status:
-            allowed = self.VALID_TRANSITIONS.get(old_status, set())
-            if new_status not in allowed:
-                raise StateTransitionError(
-                    f"Cannot transition from '{old_status}' to '{new_status}'",
-                    details={"allowed": sorted(allowed)},
-                )
+        if new_status:
+            validate_near_miss_transition(old_status, new_status)
             closing = not was_closed and is_closed_status(CASE_TYPE_NEAR_MISS, new_status)
 
         if closing:

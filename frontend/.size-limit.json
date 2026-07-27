@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "185.5 kB",
+    "limit": "186 kB",
     "gzip": true,
-    "name": "index: 184.5→185.5 kB — case closure 360: shared Close/Reopen lifecycle controls + i18n strings pulled into the shell (+~705 B measured). Detail-page dialogs stay on route chunks; budget +1 kB with ~300 B headroom."
+    "name": "index: 185.5→186 kB — closure-gate parity: the transition-blocked strings must live in en.json and cy.json (the i18n key check is blocking and both locales are statically imported into the shell), which measures +190 B on top of main's 185.44 kB. Note main had ~60 B headroom, not the ~300 B the previous note claimed. Now 185.63 kB with ~370 B headroom; the dialog itself stays on route chunks."
   },
   {
     "path": "dist/assets/vendor-*.js",

@@ -81,6 +81,10 @@ export interface CaseClosureValidation {
   open_work: CaseClosureBlockingItem[]
   open_work_count: number
   lessons_present: boolean
+  /** False when this status cannot move straight to closed. Absent on older servers. */
+  transition_allowed?: boolean
+  /** Legal next statuses, sent only when the close transition is refused. */
+  allowed_next_statuses?: string[]
   summary: CaseClosureSummary
 }
 
