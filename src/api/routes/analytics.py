@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.api.routes.actions import _compute_actions_summary
 from src.domain.models.user import User
 from src.domain.services.analytics_service import analytics_service
 from src.domain.services.audit_analytics_service import AuditAnalyticsService
@@ -250,6 +251,12 @@ async def get_kpi_summary(
     risks = dash.get("risks") or {}
     compliance = dash.get("compliance") or {}
 
+    # Actions come from the unified actions aggregate, not a static stub. `overdue`
+    # here is the same value /actions/summary and /actions/view-counts return, so the
+    # analytics tile cannot contradict the Actions page filter chip (PX-149/PX-178).
+    actions_summary = await _compute_actions_summary(db, current_user.tenant_id)
+    by_display = actions_summary.by_display_status
+
     audits_summary = dict(analytics_service.get_kpi_summary(time_range).get("audits") or {})
     if current_user.tenant_id is not None:
         try:
@@ -297,10 +304,21 @@ async def get_kpi_summary(
             "open": rtas.get("open", 0),
             "closed": rtas.get("closed", 0),
         },
-        "actions": analytics_service.get_kpi_summary(time_range).get("actions"),
+        "actions": {
+            "total": actions_summary.total,
+            "open": int(by_display.get("open", 0)) + int(by_display.get("in_progress", 0)),
+            "overdue": actions_summary.overdue,
+            # Not derivable from the unified aggregate; None means "not measured"
+            # rather than a fabricated 0.
+            "completed_on_time_rate": None,
+            "trend": None,
+        },
         "audits": audits_summary,
+        # `total` is the whole visible register so it reconciles with
+        # /risk-register/; `high`/`medium`/`low` describe the not-closed subset.
         "risks": {
-            "total": risks.get("total_active", 0),
+            "total": risks.get("register_total"),
+            "total_active": risks.get("total_active", 0),
             "high": risks.get("high_critical", 0),
             "medium": (risks.get("by_level") or {}).get("medium", 0),
             "low": (risks.get("by_level") or {}).get("low", 0),

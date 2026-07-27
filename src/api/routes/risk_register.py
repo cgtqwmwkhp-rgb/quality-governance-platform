@@ -54,6 +54,8 @@ from src.domain.services.risk_service import (
     RiskScoringEngine,
     RiskService,
     read_score_trend_from_tags,
+    register_active_clause,
+    register_visibility_clause,
 )
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 
@@ -99,14 +101,6 @@ async def _batch_resolve_user_emails(db: DbSession, user_ids: set[int]) -> dict[
 async def _resolve_user_email(db: DbSession, user_id: int) -> Optional[str]:
     result = await db.execute(select(User.email).where(User.id == user_id))
     return result.scalar_one_or_none()
-
-
-def _register_visibility_clause():
-    """Omit import-sourced risks that are still awaiting triage from headline views."""
-    return or_(
-        EnterpriseRisk.suggestion_triage_status.is_(None),
-        EnterpriseRisk.suggestion_triage_status == "accepted",
-    )
 
 
 # ============ Pydantic Schemas ============
@@ -239,7 +233,7 @@ async def list_risks(
     elif suggestion_triage == "all":
         pass
     else:
-        base_stmt = base_stmt.where(_register_visibility_clause())
+        base_stmt = base_stmt.where(register_visibility_clause())
 
     if category:
         base_stmt = base_stmt.where(EnterpriseRisk.category == category)
@@ -773,8 +767,8 @@ async def get_risk_summary(
 ) -> dict[str, Any]:
     """Get overall risk register summary (canonical bands aligned with RiskScoringEngine)."""
     tenant_filter = EnterpriseRisk.tenant_id == current_user.tenant_id
-    vis = _register_visibility_clause()
-    status_clause = EnterpriseRisk.status == status if status else EnterpriseRisk.status != "closed"
+    vis = register_visibility_clause()
+    status_clause = EnterpriseRisk.status == status if status else register_active_clause()
     base = [status_clause, tenant_filter, vis]
     if category:
         base.append(EnterpriseRisk.category == category)
