@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 CLOSURE_REASON_MISSING_LESSONS_LEARNT = "MISSING_LESSONS_LEARNT"
 CLOSURE_REASON_OPEN_ACTIONS_REMAIN = "OPEN_ACTIONS_REMAIN"
+CLOSURE_REASON_TENANT_SCOPE_UNRESOLVED = "TENANT_SCOPE_UNRESOLVED"
 
 CASE_TYPE_INCIDENT = "incident"
 CASE_TYPE_COMPLAINT = "complaint"
@@ -168,21 +169,34 @@ def _config(case_type: str) -> _CaseConfig:
         raise ValueError(f"Unknown case type '{case_type}'") from None
 
 
-def resolve_case_tenant_id(case: Any, fallback: Optional[int]) -> int:
-    """Tenant to scope the closure probes to.
+def resolve_case_tenant_id(case: Any) -> int:
+    """Tenant to scope the closure probes to, taken from the case and nowhere else.
 
-    The case's own tenant wins over the caller's, so a superuser editing across
-    tenants still gets that case's real open work. Probing with no tenant would
-    silently match nothing and report a clean close, so that is refused.
+    Deriving the scope from the row is what stops ``…/closure-validation`` and the
+    close itself from ever disagreeing: both read this one attribute instead of
+    each being handed a tenant by its own caller. It is also the only scope that
+    is correct for a superuser editing across tenants, who must still be shown
+    that case's real open work rather than their own tenant's.
+
+    Every register declares ``tenant_id`` NOT NULL, so a case without one is a
+    corrupt row, not a caller problem. Substituting the caller's tenant would
+    probe a different tenant's actions, find none belonging to this case, and
+    close it over work nobody can see — so this refuses instead, and says why.
     """
     tenant_id = getattr(case, "tenant_id", None)
     if tenant_id is None:
-        tenant_id = fallback
-    if tenant_id is None:
+        logger.error(
+            "closure_tenant_scope_unresolved",
+            extra={
+                "case_id": getattr(case, "id", None),
+                "reference_number": getattr(case, "reference_number", None),
+            },
+        )
         raise StateTransitionError(
-            "Cannot verify closure readiness without a tenant scope",
-            code=CLOSURE_REASON_OPEN_ACTIONS_REMAIN,
-            details={"reasons": [CLOSURE_REASON_OPEN_ACTIONS_REMAIN]},
+            "Cannot verify closure readiness: this record has no tenant. "
+            "An administrator must repair the record before it can be closed.",
+            code=CLOSURE_REASON_TENANT_SCOPE_UNRESOLVED,
+            details={"reasons": [CLOSURE_REASON_TENANT_SCOPE_UNRESOLVED]},
         )
     return int(tenant_id)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -15,6 +16,7 @@ from src.domain.services.case_closure import (
     CASE_TYPE_RTA,
     CLOSURE_REASON_MISSING_LESSONS_LEARNT,
     CLOSURE_REASON_OPEN_ACTIONS_REMAIN,
+    CLOSURE_REASON_TENANT_SCOPE_UNRESOLVED,
     apply_close_stamps,
     assert_case_can_close,
     clear_close_stamps,
@@ -264,15 +266,29 @@ class TestAssertCaseCanClose:
 
 
 class TestTenantResolution:
-    def test_case_tenant_wins_over_caller(self):
-        assert resolve_case_tenant_id(_case(tenant_id=9), 1) == 9
+    def test_scope_is_the_cases_own_tenant(self):
+        assert resolve_case_tenant_id(_case(tenant_id=9)) == 9
 
-    def test_falls_back_to_caller_tenant(self):
-        assert resolve_case_tenant_id(_case(tenant_id=None), 4) == 4
+    def test_signature_admits_no_caller_tenant(self):
+        """Validation and enforcement cannot disagree on scope if neither can supply one."""
+        assert list(inspect.signature(resolve_case_tenant_id).parameters) == ["case"]
 
-    def test_refuses_to_probe_without_any_tenant(self):
-        with pytest.raises(StateTransitionError):
-            resolve_case_tenant_id(_case(tenant_id=None), None)
+    def test_refuses_to_probe_a_case_with_no_tenant(self):
+        with pytest.raises(StateTransitionError) as exc_info:
+            resolve_case_tenant_id(_case(tenant_id=None))
+
+        err = exc_info.value
+        assert err.code == CLOSURE_REASON_TENANT_SCOPE_UNRESOLVED
+        assert err.details["reasons"] == [CLOSURE_REASON_TENANT_SCOPE_UNRESOLVED]
+
+    def test_missing_tenant_is_not_reported_as_open_work(self):
+        """The operator must be able to tell "no tenant" from "actions remain":
+        the second is fixable from the Actions tab, the first is a corrupt row."""
+        with pytest.raises(StateTransitionError) as exc_info:
+            resolve_case_tenant_id(_case(tenant_id=None))
+
+        assert exc_info.value.code != CLOSURE_REASON_OPEN_ACTIONS_REMAIN
+        assert CLOSURE_REASON_OPEN_ACTIONS_REMAIN not in exc_info.value.details["reasons"]
 
 
 class TestCloseStamps:

@@ -301,7 +301,7 @@ class ComplaintService:
                 self.db,
                 case_type=CASE_TYPE_COMPLAINT,
                 case=complaint,
-                tenant_id=resolve_case_tenant_id(complaint, tenant_id),
+                tenant_id=resolve_case_tenant_id(complaint),
                 lessons_learnt=(
                     raw_update["lessons_learnt"] if "lessons_learnt" in raw_update else complaint.lessons_learnt
                 ),

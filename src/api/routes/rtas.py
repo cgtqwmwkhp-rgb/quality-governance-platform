@@ -305,16 +305,16 @@ async def update_rta(
     Status moves through ``RTA_TRANSITIONS`` in the service rather than being
     rejected outright: closure is a gated transition, not a forbidden field.
     """
-    existing = await _get_rta_or_404(db, rta_id, current_user)
+    # Resolves the 404 envelope before the service can raise a bare LookupError.
+    await _get_rta_or_404(db, rta_id, current_user)
 
-    # Scope the update to the RTA's own tenant so a superuser editing across
-    # tenants still passes the service's isolation check.
     rta = await RTAService(db).update_rta(
         rta_id,
         rta_in,
         user_id=current_user.id,
-        tenant_id=existing.tenant_id,
+        tenant_id=current_user.tenant_id,
         request_id=request_id,
+        skip_tenant_check=current_user.is_superuser,
     )
 
     await _trigger_operational_standards_assess(db, rta, current_user)
@@ -530,7 +530,7 @@ async def get_rta_closure_validation(
         db,
         case_type=CASE_TYPE_RTA,
         case=rta,
-        tenant_id=resolve_case_tenant_id(rta, current_user.tenant_id),
+        tenant_id=resolve_case_tenant_id(rta),
     )
     return validation_to_payload(validation)
 

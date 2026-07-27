@@ -285,6 +285,10 @@ async def update_near_miss(
 ) -> NearMiss:
     """Update a near miss.
 
+    Superusers are exempted from the tenant filter here for the same reason they
+    are on the read path: a register that lists and opens a record must also be
+    able to save it, or the Close dialog offers a close that returns 404.
+
     StateTransitionError propagates to the global domain handler so the closure
     gate codes reach the client instead of collapsing into a bare 409 string.
     """
@@ -296,6 +300,7 @@ async def update_near_miss(
             user_id=current_user.id,
             tenant_id=current_user.tenant_id,
             request_id=request_id,
+            skip_tenant_check=current_user.is_superuser,
         )
     except LookupError:
         raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Near miss not found"))
@@ -346,7 +351,7 @@ async def get_near_miss_closure_validation(
         db,
         case_type=CASE_TYPE_NEAR_MISS,
         case=near_miss,
-        tenant_id=resolve_case_tenant_id(near_miss, current_user.tenant_id),
+        tenant_id=resolve_case_tenant_id(near_miss),
     )
     return validation_to_payload(validation)
 
