@@ -28,6 +28,10 @@ class ExportCapabilities(BaseModel):
     max_sync_rows: int
 
 
+def _default_csv_formats() -> list[ExportFormat]:
+    return ["csv"]
+
+
 class ExportModuleCatalogItem(BaseModel):
     """One exportable module with a live tenant-scoped row count."""
 
@@ -35,7 +39,7 @@ class ExportModuleCatalogItem(BaseModel):
     name: str
     description: str
     record_count: int = Field(ge=0)
-    formats: list[ExportFormat] = Field(default_factory=lambda: ["csv"])
+    formats: list[ExportFormat] = Field(default_factory=_default_csv_formats)
     sync_available: bool = True
 
 

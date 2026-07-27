@@ -57,6 +57,13 @@ def _enum_str(value: Any) -> str:
     return str(getattr(value, "value", value))
 
 
+def _s(value: object | None) -> str:
+    """Coerce ORM/column-ish values to plain str for CSV cells."""
+    if value is None:
+        return ""
+    return str(value)
+
+
 def _dt_str(value: datetime | None) -> str:
     if value is None:
         return ""
@@ -68,8 +75,8 @@ def _dt_str(value: datetime | None) -> str:
 def _incident_row(row: Incident) -> list[str]:
     return [
         str(row.id),
-        row.reference_number or "",
-        row.title or "",
+        _s(row.reference_number),
+        _s(row.title),
         _enum_str(row.incident_type),
         _enum_str(row.severity),
         _enum_str(row.status),
@@ -81,8 +88,8 @@ def _incident_row(row: Incident) -> list[str]:
 def _rta_row(row: RoadTrafficCollision) -> list[str]:
     return [
         str(row.id),
-        row.reference_number or "",
-        row.title or "",
+        _s(row.reference_number),
+        _s(row.title),
         _enum_str(row.severity),
         _enum_str(row.status),
         _dt_str(row.collision_date),
@@ -94,8 +101,8 @@ def _rta_row(row: RoadTrafficCollision) -> list[str]:
 def _complaint_row(row: Complaint) -> list[str]:
     return [
         str(row.id),
-        row.reference_number or "",
-        row.title or "",
+        _s(row.reference_number),
+        _s(row.title),
         _enum_str(getattr(row, "complaint_type", None)),
         _enum_str(getattr(row, "priority", None)),
         _enum_str(row.status),
@@ -106,8 +113,8 @@ def _complaint_row(row: Complaint) -> list[str]:
 def _risk_row(row: Risk) -> list[str]:
     return [
         str(row.id),
-        row.reference_number or "",
-        row.title or "",
+        _s(row.reference_number),
+        _s(row.title),
         _enum_str(getattr(row, "risk_level", None)),
         _enum_str(row.status),
         _dt_str(getattr(row, "created_at", None)),
@@ -117,8 +124,8 @@ def _risk_row(row: Risk) -> list[str]:
 def _audit_row(row: AuditRun) -> list[str]:
     return [
         str(row.id),
-        row.reference_number or "",
-        row.title or "",
+        _s(row.reference_number),
+        _s(row.title),
         _enum_str(row.status),
         str(row.template_id) if row.template_id is not None else "",
         _dt_str(getattr(row, "created_at", None)),
@@ -128,8 +135,8 @@ def _audit_row(row: AuditRun) -> list[str]:
 def _action_row(row: CAPAAction) -> list[str]:
     return [
         str(row.id),
-        row.reference_number or "",
-        row.title or "",
+        _s(row.reference_number),
+        _s(row.title),
         _enum_str(row.status),
         _enum_str(getattr(row, "priority", None)),
         _enum_str(getattr(row, "capa_type", None)),
@@ -141,10 +148,10 @@ def _action_row(row: CAPAAction) -> list[str]:
 def _document_row(row: Document) -> list[str]:
     return [
         str(row.id),
-        row.reference_number or "",
-        row.title or "",
+        _s(row.reference_number),
+        _s(row.title),
         _enum_str(row.status),
-        row.file_name or "",
+        _s(row.file_name),
         _dt_str(getattr(row, "created_at", None)),
     ]
 
