@@ -8,6 +8,7 @@ Provides endpoints for:
 - Statistics and analytics
 """
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Annotated, Any, Optional
 
@@ -15,9 +16,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import set_committed_value
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.domain.exceptions import NotFoundError
+from src.domain.models.audit_log import AuditLogEntry
 from src.domain.models.user import User
 from src.domain.services.audit_log_service import AuditLogService
 
@@ -28,6 +31,31 @@ def _tid(user: CurrentUser) -> int:
     tid = user.tenant_id
     assert tid is not None, "Tenant context required"
     return tid
+
+
+async def _name_legacy_actors(db: AsyncSession, entries: Sequence[AuditLogEntry]) -> None:
+    """Fill in actor identity on entries written before it was denormalised.
+
+    Those rows carry only ``user_id``, so the trail renders an opaque number
+    where a person should be — unusable as ISO 9001/45001 evidence. The resolved
+    values are applied with ``set_committed_value`` so SQLAlchemy treats them as
+    already-persisted state: the projection gains a name, and the immutable audit
+    rows are never marked dirty and so are never rewritten on request-end commit.
+    """
+    unnamed: dict[int, list[AuditLogEntry]] = {}
+    for entry in entries:
+        user_id = entry.user_id
+        if user_id is None or entry.user_name or entry.user_email:
+            continue
+        unnamed.setdefault(user_id, []).append(entry)
+    if not unnamed:
+        return
+
+    result = await db.execute(select(User).where(User.id.in_(unnamed)))
+    for user in result.scalars().all():
+        for entry in unnamed.get(user.id, []):
+            set_committed_value(entry, "user_email", user.email)
+            set_committed_value(entry, "user_name", user.full_name.strip() or user.email)
 
 
 # ============================================================================
@@ -117,6 +145,7 @@ async def list_audit_logs(
         offset=(page - 1) * per_page,
     )
 
+    await _name_legacy_actors(db, entries)
     return entries
 
 
@@ -137,6 +166,7 @@ async def get_entity_history(
         entity_id=entity_id,
     )
 
+    await _name_legacy_actors(db, entries)
     return entries
 
 
@@ -157,6 +187,7 @@ async def get_user_activity(
         days=days,
     )
 
+    await _name_legacy_actors(db, entries)
     return entries
 
 
@@ -167,8 +198,6 @@ async def get_audit_entry(
     db: DbSession,
 ) -> Any:
     """Get a single audit log entry with full details."""
-    from src.domain.models.audit_log import AuditLogEntry
-
     result = await db.execute(
         select(AuditLogEntry).where(
             AuditLogEntry.id == entry_id,
@@ -180,6 +209,7 @@ async def get_audit_entry(
     if not entry:
         raise NotFoundError("Audit entry not found")
 
+    await _name_legacy_actors(db, [entry])
     return entry
 
 
