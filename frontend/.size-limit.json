@@ -1,9 +1,9 @@
 [
   {
     "path": "dist/assets/index-*.js",
-    "limit": "184.5 kB",
+    "limit": "185.5 kB",
     "gzip": true,
-    "name": "index: 183\u2192184.5 kB \u2014 Run021 Lane H session warning + drawer inertness + offline retry; Lane F then measures 184.17 kB on top of Lane H's 184.02 kB (+~150 B of Rollup chunk-graph glue from the PX-151 assignee helper now shared by Actions and ActionDetail; the investigation UI is already route-split). Budget unchanged, ~330 B headroom left."
+    "name": "index: 184.5→185.5 kB — case closure 360: shared Close/Reopen lifecycle controls + i18n strings pulled into the shell (+~705 B measured). Detail-page dialogs stay on route chunks; budget +1 kB with ~300 B headroom."
   },
   {
     "path": "dist/assets/vendor-*.js",
