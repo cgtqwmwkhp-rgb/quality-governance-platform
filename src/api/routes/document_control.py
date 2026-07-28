@@ -17,6 +17,7 @@ from typing import Annotated, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
@@ -42,10 +43,11 @@ logger = logging.getLogger(__name__)
 
 # ============ Tables this module reads that production does not have ============
 #
-# Seven of the tables backing this router have no create migration. They exist in
-# every test database — both CI harnesses build their schema with
-# ``Base.metadata.create_all`` — and in no deployment, which is why nothing here
-# ever failed a gate while four of these endpoints returned 500s in production.
+# Seven of the tables backing this router have no create migration; their absence
+# from production was read from ``information_schema`` there. They exist in every
+# test database — both CI harnesses build their schema with
+# ``Base.metadata.create_all`` — and in no deployment, which is why no gate here
+# has ever failed on endpoints that cannot have been working.
 # All seven are on the deferral register at
 # ``docs/governance/alembic_check_excluded_tables.md`` marked "migration coverage
 # pending", so the honest statement is not "temporarily broken" but "never built".
@@ -68,7 +70,7 @@ ACCESS_LOG_TABLES: tuple[str, ...] = (DocumentAccessLog.__tablename__,)
 OBSOLETE_RECORD_TABLES: tuple[str, ...] = (ObsoleteDocumentRecord.__tablename__,)
 
 
-async def _refuse_write_if_unprovisioned(db: DbSession, tables: tuple[str, ...], what: str) -> None:
+async def _refuse_write_if_unprovisioned(db: AsyncSession, tables: tuple[str, ...], what: str) -> None:
     """Refuse a write whose table is absent, before the transaction is poisoned.
 
     Raises :class:`FeatureNotProvisionedError` rather than letting the INSERT
@@ -92,7 +94,7 @@ async def _refuse_write_if_unprovisioned(db: DbSession, tables: tuple[str, ...],
     )
 
 
-async def _refuse_read_if_unmeasurable(db: DbSession, tables: tuple[str, ...], what: str) -> None:
+async def _refuse_read_if_unmeasurable(db: AsyncSession, tables: tuple[str, ...], what: str) -> None:
     """Refuse a read whose only source is absent, rather than answering ``[]``.
 
     An empty list is reserved for a table that was read and found empty. For a
@@ -773,12 +775,6 @@ async def submit_for_approval(
     submission failed while the register showed the document awaiting an approval
     that no table can hold.
     """
-    await _refuse_write_if_unprovisioned(
-        db,
-        APPROVAL_WORKFLOW_TABLES + APPROVAL_INSTANCE_TABLES,
-        "A submission for approval",
-    )
-
     tenant_id = _tenant_id(current_user)
     result = await db.execute(
         apply_tenant_filter(
@@ -790,6 +786,14 @@ async def submit_for_approval(
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document not found")
+
+    # After the 404, and still before both the first query against an absent
+    # table and the status change staged alongside its INSERT.
+    await _refuse_write_if_unprovisioned(
+        db,
+        APPROVAL_WORKFLOW_TABLES + APPROVAL_INSTANCE_TABLES,
+        "A submission for approval",
+    )
 
     result = await db.execute(
         apply_tenant_filter(
@@ -940,8 +944,6 @@ async def distribute_document(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Distribute document to recipients"""
-    await _refuse_write_if_unprovisioned(db, DISTRIBUTION_TABLES, "A controlled-copy distribution")
-
     tenant_id = _tenant_id(current_user)
     result = await db.execute(
         apply_tenant_filter(
@@ -953,6 +955,8 @@ async def distribute_document(
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document not found")
+
+    await _refuse_write_if_unprovisioned(db, DISTRIBUTION_TABLES, "A controlled-copy distribution")
 
     dist = DocumentDistribution(
         tenant_id=tenant_id,
@@ -1023,8 +1027,6 @@ async def mark_document_obsolete(
     the reason the record exists. So while the retention table is absent, the
     honest outcome is that the document stays current and the caller is told why.
     """
-    await _refuse_write_if_unprovisioned(db, OBSOLETE_RECORD_TABLES, "An obsolete-document record")
-
     tenant_id = _tenant_id(current_user)
     result = await db.execute(
         apply_tenant_filter(
@@ -1036,6 +1038,9 @@ async def mark_document_obsolete(
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document not found")
+
+    # After the 404, before the status change below.
+    await _refuse_write_if_unprovisioned(db, OBSOLETE_RECORD_TABLES, "An obsolete-document record")
 
     # Update document
     document.status = "obsolete"
@@ -1297,10 +1302,6 @@ async def get_document(
     human auditor needs to see it in the payload, not only in the logs.
     """
     tenant_id = _tenant_id(current_user)
-    unavailable_reads = await absent_tables(db, DISTRIBUTION_TABLES + ACCESS_LOG_TABLES)
-    distributions_unavailable = DocumentDistribution.__tablename__ in unavailable_reads
-    access_log_unavailable = DocumentAccessLog.__tablename__ in unavailable_reads
-
     result = await db.execute(
         apply_tenant_filter(
             select(ControlledDocument).where(ControlledDocument.id == document_id),
@@ -1311,6 +1312,13 @@ async def get_document(
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document not found")
+
+    # Asked after the document is known to exist and to belong to this tenant, so
+    # a request for a document that is not there still answers 404 and spends no
+    # catalog round-trip discovering what it could not have shown anyway.
+    unavailable_reads = await absent_tables(db, DISTRIBUTION_TABLES + ACCESS_LOG_TABLES)
+    distributions_unavailable = DocumentDistribution.__tablename__ in unavailable_reads
+    access_log_unavailable = DocumentAccessLog.__tablename__ in unavailable_reads
 
     # Get version history
     result = await db.execute(
