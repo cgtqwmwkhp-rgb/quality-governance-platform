@@ -253,21 +253,44 @@ class QGPUser(HttpUser):
         """Get portal statistics."""
         self.client.get("/api/v1/portal/stats/", headers=self.auth_headers)
 
+    # 201 is the only correct answer to a valid submission. 429 is allowed because
+    # portal endpoints are rate limited at 30 req/min per client and a load test
+    # against a non-TESTING host legitimately hits that; CI runs with TESTING=1 and
+    # never does. Nothing else is accepted — a 4xx here is either a broken payload
+    # in this task or a regression on the public intake path, and either way it must
+    # spend the error budget visibly rather than be tolerated.
+    SUBMIT_EXPECTED_STATUSES = frozenset({201, 429})
+
     @task(4)
     def submit_quick_report(self):
         """Submit a quick report via portal."""
+        # A named submission must carry a name: portal intake refuses a
+        # non-anonymous report with no reporter_name / complainant_name with 422
+        # (ACT-025), and complaints and near misses store that name in a NOT NULL
+        # column. Anonymous submissions deliberately send no name.
+        is_anonymous = random.choice([True, False])
         report_data = {
             "report_type": random.choice(["incident", "complaint"]),
             "title": f"Test Report {random_string(8)}",
             "description": "This is a test report submitted during load testing.",
             "severity": random.choice(["low", "medium", "high"]),
-            "is_anonymous": random.choice([True, False]),
+            "is_anonymous": is_anonymous,
         }
-        self.client.post(
+        if not is_anonymous:
+            report_data["reporter_name"] = f"Load Test Reporter {random.randint(1, 100)}"
+        with self.client.post(
             "/api/v1/portal/reports/",
             json=report_data,
             name="/api/v1/portal/reports/",
-        )
+            catch_response=True,
+        ) as response:
+            if response.status_code in self.SUBMIT_EXPECTED_STATUSES:
+                response.success()
+            else:
+                response.failure(
+                    f"portal submission should be accepted with 201 "
+                    f"(or 429 when rate limited), got {response.status_code}: {response.text[:400]}"
+                )
 
     # PX-315 gave the track endpoint one status per failure mode. This task
     # sends a junk 12-character code, and a valid code is a 24-hex-character
