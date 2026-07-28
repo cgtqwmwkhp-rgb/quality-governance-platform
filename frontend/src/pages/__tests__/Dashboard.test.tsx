@@ -219,7 +219,11 @@ describe('Dashboard (role-aware living dashboard)', () => {
       expect(toolComplianceValue).not.toHaveTextContent('0')
     })
 
-    it('empty asset registry shows 100% tool compliance (not unavailable)', async () => {
+    // Superseded 28/07/2026: this previously asserted 100% for an empty registry.
+    // David's decision is that zero registered assets is an unpopulated registry
+    // rather than a compliant fleet, so it must read unavailable — matching the
+    // training tile, which had the same empty denominator rendered as 0%.
+    it('empty asset registry shows an unavailable dash, not 100% tool compliance', async () => {
       authMocks.hasRole.mockReturnValue(true)
       assetHealthAnalyticsApi.getSummary.mockResolvedValue({
         data: {
@@ -240,7 +244,32 @@ describe('Dashboard (role-aware living dashboard)', () => {
       await screen.findByRole('heading', { name: 'Dashboard' })
 
       const toolComplianceValue = await screen.findByTestId('pulse-tool-compliance-value')
-      expect(toolComplianceValue).toHaveTextContent('100%')
+      expect(toolComplianceValue).toHaveTextContent('—')
+      expect(toolComplianceValue).not.toHaveTextContent('100')
+    })
+
+    it('shows a real tool-compliance percentage once the registry has assets', async () => {
+      authMocks.hasRole.mockReturnValue(true)
+      assetHealthAnalyticsApi.getSummary.mockResolvedValue({
+        data: {
+          total: 20,
+          expiry_bands: { overdue: 3, due_30: 0, due_60: 0, due_90: 0, in_date: 17 },
+          by_type: {},
+          by_status: { quarantined: 1 },
+          generated_at: '2026-07-21T00:00:00Z',
+        },
+      })
+
+      const Dashboard = (await import('../Dashboard')).default
+      render(
+        <BrowserRouter>
+          <Dashboard />
+        </BrowserRouter>,
+      )
+      await screen.findByRole('heading', { name: 'Dashboard' })
+
+      const toolComplianceValue = await screen.findByTestId('pulse-tool-compliance-value')
+      expect(toolComplianceValue).toHaveTextContent('80%')
     })
 
     it('no training requirements defined shows an unavailable dash, not 0% compliance', async () => {
