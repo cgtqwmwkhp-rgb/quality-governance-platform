@@ -25,10 +25,27 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ALEMBIC_ENV = REPO_ROOT / "alembic" / "env.py"
+TENANT_NOT_NULL_MIGRATION = REPO_ROOT / "alembic" / "versions" / "20260901_case_action_tenant_id_not_null.py"
 
 
 def _env_ast() -> ast.Module:
     return ast.parse(ALEMBIC_ENV.read_text(encoding="utf-8"))
+
+
+def migration_target_tables() -> tuple[str, ...]:
+    """``TARGET_TABLES`` as declared by the tenant NOT NULL migration.
+
+    Parsed rather than restated. The remediation scripts must act on exactly the
+    tables the migration will refuse over — a script that cleans nine of ten
+    leaves the deploy failing for a reason the operator has just been told is
+    fixed.
+    """
+    tree = ast.parse(TENANT_NOT_NULL_MIGRATION.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            if node.target.id == "TARGET_TABLES" and node.value is not None:
+                return tuple(ast.literal_eval(node.value))
+    raise RuntimeError(f"could not find TARGET_TABLES in {TENANT_NOT_NULL_MIGRATION}")
 
 
 def side_effect_model_modules() -> tuple[str, ...]:
