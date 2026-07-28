@@ -771,3 +771,59 @@ def pytest_collection_modifyitems(config, items):
     New quarantine entries must include a valid future expiry date.
     """
     pass
+
+
+# ---------------------------------------------------------------------------
+#  Policy-acknowledgment honesty suites: a database with a genuinely absent table
+# ---------------------------------------------------------------------------
+# Named ``ack_scratch`` rather than ``scratch`` because two migration-repair
+# suites already define a local fixture called ``scratch``; a conftest fixture of
+# that name would be shadowed in some modules and not others, which is exactly
+# the sort of thing nobody notices until it misleads them.
+
+
+@pytest.fixture
+async def ack_scratch(tmp_path):
+    """A database carrying the app's declared schema, owned by one test.
+
+    See ``tests/integration/_policy_ack_scratch`` for why the shared harness
+    cannot be used to observe a missing table.
+    """
+    import src.domain.models  # noqa: F401  — registers models on Base.metadata
+    from src.infrastructure.database import Base
+    from tests.integration._policy_ack_scratch import ScratchDatabase, drop_scratch_database, make_scratch_engine
+
+    engine, created_name = await make_scratch_engine(tmp_path)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    try:
+        yield ScratchDatabase(engine)
+    finally:
+        await engine.dispose()
+        if created_name is not None:
+            await drop_scratch_database(created_name)
+
+
+@pytest.fixture
+async def ack_scratch_client(ack_scratch):
+    """An authenticated client whose requests read the scratch database."""
+    from src.infrastructure.database import get_db
+    from src.main import app
+    from tests.integration._policy_ack_scratch import TENANT_ID, USER_ID
+
+    async def _get_scratch_db():
+        async with ack_scratch.sessions() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = _get_scratch_db
+    token = _generate_test_jwt(user_id=str(USER_ID), tenant_id=TENANT_ID, role="admin")
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers={"Authorization": f"Bearer {token}"},
+        ) as client:
+            yield client
+    finally:
+        app.dependency_overrides.pop(get_db, None)

@@ -22,7 +22,13 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.domain.exceptions import AuditNotRecordableError, NotFoundError, StateTransitionError, ValidationError
+from src.domain.exceptions import (
+    AuditNotRecordableError,
+    BadRequestError,
+    NotFoundError,
+    StateTransitionError,
+    ValidationError,
+)
 from src.domain.models.asset import AssetType, TemplateAssetType
 from src.domain.models.audit import (
     AuditFinding,
@@ -232,6 +238,55 @@ class RunDetail:
     run: AuditRun
     template_name: str | None
     completion_percentage: float
+
+
+# ---------------------------------------------------------------------------
+# Tenancy of rows owned by an audit run
+# ---------------------------------------------------------------------------
+
+
+def require_run_tenant_id(run: AuditRun) -> int:
+    """Return the tenant to stamp on a row owned by *run*.
+
+    The run is the authority, not the caller. The caller's own tenant is the
+    wrong source even where the two agree today: it attributes the row to
+    whoever happened to write it, so the day a run is reachable by someone
+    outside its tenant, the child row is silently relabelled to match the writer
+    instead of standing out as misattributed.
+
+    ``audit_runs.tenant_id`` is declared ``nullable=False`` here but is still
+    NULLABLE in the migrated schema, so this can be ``None`` at runtime.
+    Refusing is the only option that neither writes an unattributed row (the
+    defect this replaces) nor invents an attribution that no authorisation
+    decision supports.
+    """
+    tenant_id = run.tenant_id
+    if tenant_id is None:
+        raise BadRequestError(
+            "Audit run is not attributed to a tenant and cannot accept new records. "
+            "The run needs a tenant before it can be executed.",
+            details={"run_id": run.id},
+        )
+    return tenant_id
+
+
+def question_belongs_to_run(run: AuditRun, question: AuditQuestion) -> bool:
+    """Whether *question* is part of the template *run* is executing.
+
+    Both response write paths fetched the question by bare primary key, so a
+    caller could attach an answer to any question in the system — including one
+    from another tenant's private template, whose text is then rendered back in
+    the run. Zero of the 315 existing rows do this, so it is latent rather than
+    an active leak.
+
+    ``run.template_id`` is already how a run's questions are resolved
+    everywhere else, including the scorer (``complete_run``) and the completion
+    percentage: a response outside it is not counted towards the run at all.
+    This makes the write path agree with the read path rather than introducing a
+    new rule. Template versions are JSON snapshots and cloning produces a
+    separate template with its own runs, so neither repoints a run's questions.
+    """
+    return question.template_id == run.template_id
 
 
 # ---------------------------------------------------------------------------
@@ -2122,11 +2177,11 @@ class AuditService:
             raise ValidationError("Response already exists for this question in this run")
 
         question = await self.db.get(AuditQuestion, data["question_id"])
-        if not question:
+        if not question or not question_belongs_to_run(run, question):
             raise NotFoundError(f"AuditQuestion {data['question_id']} not found")
         payload = AuditScoringService.apply_derived_scores(question, data)
 
-        response = AuditResponse(run_id=run_id, **payload)
+        response = AuditResponse(run_id=run_id, tenant_id=require_run_tenant_id(run), **payload)
         self.db.add(response)
         await self.db.flush()
         await self.db.refresh(response)

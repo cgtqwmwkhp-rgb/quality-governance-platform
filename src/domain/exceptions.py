@@ -111,3 +111,28 @@ class AuditNotRecordableError(DomainError):
 
     http_status = 500
     default_code = "INTERNAL_ERROR"
+
+
+class MeasurementUnavailableError(DomainError):
+    """A figure could not be measured because a table it reads is absent.
+
+    503 rather than 500: the request is well-formed and the code is not broken,
+    the database simply does not currently carry what the answer is made of.
+
+    Raised rather than returned. A list endpoint's empty payload is ``[]``, and
+    every consumer of one defends with ``items ?? []``, so an "unmeasurable"
+    value handed back in-band gets coerced to "nothing to show" by the very
+    idiom that makes clients robust. An exception has no such coercion: the
+    caller either reports it or the request fails, and neither outcome can be
+    mistaken for a measurement of zero.
+    """
+
+    http_status = 503
+    default_code = "MEASUREMENT_UNAVAILABLE"
+
+    def __init__(self, message: str, missing_tables: list[str] | tuple[str, ...]) -> None:
+        super().__init__(
+            message,
+            details={"missing_tables": list(missing_tables)},
+        )
+        self.missing_tables = tuple(missing_tables)

@@ -86,6 +86,7 @@ async def _inspection_run(
             AuditResponse(
                 run_id=run.id,
                 question_id=question.id,
+                tenant_id=run.tenant_id,
                 response_value="no",
                 notes="Operator observed without gloves",
             )
