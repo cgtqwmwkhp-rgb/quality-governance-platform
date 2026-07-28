@@ -243,7 +243,17 @@ async def get_kpi_summary(
 ):
     """Get summary KPIs across all modules from live executive dashboard aggregates."""
     days = _period_days_from_time_range(time_range)
-    service = ExecutiveDashboardService(db, tenant_id=current_user.tenant_id)
+
+    # Read every attribute we need off `current_user` before delegating the session.
+    # `get_current_user` loads the User on *this* request's session, and the services
+    # below roll that session back when a sub-query fails, so that one failed
+    # statement cannot poison the rest of the request (#1388). A rollback expires
+    # every instance in the session, so reading `current_user.tenant_id` afterwards
+    # makes SQLAlchemy issue a lazy refresh — synchronous IO on an async session,
+    # which raises MissingGreenlet and 500s the endpoint. A plain int cannot expire.
+    tenant_id = current_user.tenant_id
+
+    service = ExecutiveDashboardService(db, tenant_id=tenant_id)
     dash = await service.get_full_dashboard(days)
     incidents = dash.get("incidents") or {}
     complaints = dash.get("complaints") or {}
@@ -254,13 +264,13 @@ async def get_kpi_summary(
     # Actions come from the unified actions aggregate, not a static stub. `overdue`
     # here is the same value /actions/summary and /actions/view-counts return, so the
     # analytics tile cannot contradict the Actions page filter chip (PX-149/PX-178).
-    actions_summary = await _compute_actions_summary(db, current_user.tenant_id)
+    actions_summary = await _compute_actions_summary(db, tenant_id)
     by_display = actions_summary.by_display_status
 
     audits_summary = dict(analytics_service.get_kpi_summary(time_range).get("audits") or {})
-    if current_user.tenant_id is not None:
+    if tenant_id is not None:
         try:
-            audit_stats = await AuditAnalyticsService(db).get_summary(current_user.tenant_id, days=days)
+            audit_stats = await AuditAnalyticsService(db).get_summary(tenant_id, days=days)
             audits_summary.update(
                 {
                     "total": audit_stats["totals"],
