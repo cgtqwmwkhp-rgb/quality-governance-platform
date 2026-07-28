@@ -42,7 +42,7 @@ const sampleAction = {
 
 async function installPortalWorkMocks(
   page: Page,
-  options?: { unlinked?: boolean; emptyActions?: boolean },
+  options?: { unlinked?: boolean; emptyActions?: boolean; readingUnmeasurable?: boolean },
 ) {
   const seen: { assignedToMe?: boolean; byUserMe?: boolean } = {}
 
@@ -65,6 +65,28 @@ async function installPortalWorkMocks(
     }
 
     if (path.includes('/policy-acknowledgments/my-pending') && method === 'GET') {
+      // Default: an empty reading queue that the server actually read. This is a
+      // real state — policy_acknowledgments exists and holds no rows — so it is
+      // left exactly as it was. It is not the fabricated payload the endpoint
+      // used to return on a missing table; that one now arrives as the 503 below.
+      if (options?.readingUnmeasurable) {
+        await json(
+          route,
+          {
+            error: {
+              code: 'MEASUREMENT_UNAVAILABLE',
+              error_class: 'MEASUREMENT_UNAVAILABLE',
+              message:
+                'Pending acknowledgments cannot be listed because policy_acknowledgments ' +
+                'is absent from the database. This is not a report that you have nothing to read.',
+              details: { missing_tables: ['policy_acknowledgments'] },
+              request_id: 'e2e-unmeasurable',
+            },
+          },
+          503,
+        )
+        return
+      }
       await json(route, { items: [], total: 0 })
       return
     }
@@ -134,5 +156,27 @@ test.describe('CUJ-P10 Portal Field Work Inbox', () => {
     await expect(page.getByTestId('portal-work-passport-unlinked')).toBeVisible()
     await expect(page.getByText(/Contact your supervisor/i)).toBeVisible()
     await expect(page.getByText(/No actions assigned to you/i)).toBeVisible()
+  })
+
+  test('an empty reading queue that was read shows the empty state', async ({ page }) => {
+    await installPortalWorkMocks(page)
+    await page.goto('/portal/work')
+    await expect(page.getByTestId('portal-work-reading')).toBeVisible()
+    await expect(page.getByText(/No pending reads/i)).toBeVisible()
+    await expect(page.getByTestId('portal-work-reading-error')).toBeHidden()
+  })
+
+  test('a reading queue that could not be read shows an error, not an empty inbox', async ({
+    page,
+  }) => {
+    await installPortalWorkMocks(page, { readingUnmeasurable: true })
+    await page.goto('/portal/work')
+
+    const readingError = page.getByTestId('portal-work-reading-error')
+    await expect(readingError).toBeVisible()
+    await expect(readingError).toContainText(/policy_acknowledgments/)
+    // The distinction that matters: "nothing to read" must not be on screen when
+    // the server could not tell us whether there is anything to read.
+    await expect(page.getByText(/No pending reads/i)).toBeHidden()
   })
 })

@@ -284,6 +284,39 @@ describe('PortalWork CUJ-P10', () => {
     expect(mockToastError).toHaveBeenCalled()
   })
 
+  it('shows an unreadable reading queue as an error, never as "No pending reads"', async () => {
+    // What /my-pending now sends when policy_acknowledgments is absent: a 503,
+    // rather than the {items: [], total: 0} it used to fabricate. The two must
+    // not land on the same screen, because an empty queue is acted on by doing
+    // nothing at all.
+    mockListMyPending.mockRejectedValue(
+      new Error(
+        'Server error: Pending acknowledgments cannot be listed because ' +
+          'policy_acknowledgments is absent from the database.',
+      ),
+    )
+
+    renderPage()
+
+    const readingError = await screen.findByTestId('portal-work-reading-error')
+    expect(readingError).toBeInTheDocument()
+    expect(readingError).toHaveTextContent(/policy_acknowledgments is absent/)
+    expect(screen.queryByText(/No pending reads/i)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('portal-work-reading-count')).not.toBeInTheDocument()
+    expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it('still shows "No pending reads" when the queue was read and was empty', async () => {
+    // The honest empty state, which is what production returns today. The fix
+    // narrows what an empty list is allowed to mean, so this must keep working.
+    mockListMyPending.mockResolvedValue({ data: { items: [], total: 0 } })
+
+    renderPage()
+
+    expect(await screen.findByText(/No pending reads/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('portal-work-reading-error')).not.toBeInTheDocument()
+  })
+
   it('shows pending campaign assignments with continue link', async () => {
     mockListMyAssignments.mockResolvedValue({
       data: {
