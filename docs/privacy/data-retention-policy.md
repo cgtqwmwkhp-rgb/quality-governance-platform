@@ -24,8 +24,13 @@ This policy defines how long categories of records are retained in QGP, the lega
 | **Vehicle checks / driver profiles** | Aligned to fleet policy (often 6–7 years for safety evidence) | Legitimate interest / legal obligation | Anonymise driver links where possible; purge obsolete checks |
 | **Witness statements / photos** | Follows parent incident / case | As per incident retention | Delete with parent record or redact in place |
 | **Tokens / session artefacts** | Operational minimum (hours–days) | Security | Automated cleanup (e.g. token blacklist housekeeping) |
+| **Library document vectors held by a third-party index** (Pinecone `qgp-documents`: embeddings + verbatim 200-char chunk previews + tenant/document identifiers) | No independent horizon — follows the source library document | Legitimate interest (search / evidence retrieval) | Delete by vector ID on reindex supersession (`IndexJobService.delete_pending_stale_vectors`) or library disposal (`document_library_disposal_service`). **A failed delete is logged as an error and not retried**, so third-party erasure is not currently guaranteed by code |
 
 > **Legal basis** column is indicative — each controller must confirm against legal advice and the ROPA.
+
+> **Third-party retention.** The vector-index row above is the only record class in this policy held
+> **outside** platform infrastructure. Its region and transfer safeguard are not established in this
+> repository — see [`../compliance/dpia-ocr-ai-import.md`](../compliance/dpia-ocr-ai-import.md) §2.0a.
 
 ---
 
@@ -80,6 +85,7 @@ For records **beyond active operational retention** but still within legal hold 
 | **Audit trail** | High-risk disposal actions should generate `AuditLogEntry` rows (action e.g. `retention_purge`) **before** destructive steps where feasible. |
 | **Export hash** | Pre-disposal exports recorded in `audit_log_exports.file_hash` provide evidence of what left the system. |
 | **Monitoring** | Alert on retention job failures or zero-run streaks; quarterly sample verification of row counts vs policy. |
+| **Third-party index (gap)** | Vector deletions in the Pinecone index are best-effort: failures are logged (`Stale vector cleanup incomplete…`) but not retried or reconciled. There is no verification that content deleted from PostgreSQL has left the vendor index. |
 
 ---
 
