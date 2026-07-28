@@ -59,9 +59,35 @@ GATE STATUS: CLOSED (2026-07-18) — AZURE_DOCUMENT_INTELLIGENCE_ENABLE_PROD may
 
 | Role | Name | Date | Decision | Notes |
 | --- | --- | --- | --- | --- |
-| DPO / Privacy lead | Recorded via assistant attestation | 2026-07-18 | Accept residual risk | Closes EA-03 dependency for key enablement |
-| Ops / Platform owner | Recorded via assistant attestation | 2026-07-18 | Confirm redaction / minimisation posture | Dedicated `qgp-docintel` resource provisioned |
+| DPO / Privacy lead | **David Harris** | 2026-07-28 | Accept residual risk | Named human acceptance of EA-03, given explicitly on 28/07. **Recorded under today's date, not backdated to 18/07** — see note below. |
+| Ops / Platform owner | Recorded via assistant attestation | 2026-07-18 | Confirm redaction / minimisation posture | Dedicated `qgp-docintel` resource provisioned. **Still unsigned — see note below.** |
 | Accountable owner | David Harris (platform owner) | 2026-07-18 | Approve production OCR/AI key enablement | Explicit instruction to enable and push |
+
+### Note on the EA-03 acceptance recorded above (added 2026-07-28)
+
+Three things about this row need to be legible to anyone auditing it later, because
+recording it silently would defeat the purpose of the gate.
+
+**1. It is deliberately dated 28 July, not 18 July.** The row previously read
+"Recorded via assistant attestation". No human DPO acceptance existed on 18 July, so
+production OCR/AI key enablement went ahead against an attestation that had not been
+given. Dating this signature 18/07 would have made the record internally consistent by
+falsifying it. The acceptance is therefore recorded on the date it was actually given
+and **retrospectively covers the enablement of 18 July**, which ran for ten days without
+it. The gap is the finding; concealing it would have been the more serious act.
+
+**2. The same person now signs as both DPO / Privacy lead and Accountable owner.**
+That is a concentration of roles, and the control is weaker for it: the person accepting
+the residual privacy risk is the person who asked for the feature to be enabled. On a
+platform this size that may be unavoidable and it is the controller's call, but it should
+be visible on the record rather than inferred by whoever reads it next.
+
+**3. The Ops / Platform owner row is still an assistant attestation.** It was not covered
+by the instruction that produced the DPO signature, so it has deliberately been left as
+it was rather than assumed to be the same person. It asserts that the redaction and
+minimisation posture was confirmed — and note that pre-egress redaction is still a
+*planned* control, not an implemented one, which makes this the row most in need of a
+human name.
 
 ---
 
